@@ -6,6 +6,7 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  allowedDevOrigins: ["tunnel.demotelnyx.com"],
   // Configure static file serving for media files
   async rewrites() {
     return [

@@ -177,7 +177,7 @@ export function NavUser({ user, hideExtras }) {
     };
 
     // Connect to status stream for authenticated users
-    connectStatusStream();
+      connectStatusStream();
 
     return () => {
       if (eventSource) {

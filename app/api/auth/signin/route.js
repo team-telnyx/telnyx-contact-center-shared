@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth";
 import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
+import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 
 export async function POST(request) {
   try {
@@ -30,6 +31,43 @@ export async function POST(request) {
         { error: "User account not verified yet!", verified: false },
         { status: 403 }
       );
+    }
+
+    // Check if user has telephony credentials, create if missing
+    if (!user.telephony_credentials_id && !user.telephonyCredentialsId) {
+      try {
+        const credential = await createUserTelephonyCredentials({
+          email: user.username || username,
+          firstName: user.first_name || user.firstName || "",
+          lastName: user.last_name || user.lastName || "",
+        });
+
+        if (credential) {
+          // Update user with telephony credentials
+          await PgDb.updateUserById(String(user.id || user._id), {
+            telephonyCredentialsId: credential.id,
+            telephonyUserName: credential.username || credential.sip_username,
+          });
+          console.log(
+            "[Signin] Created missing telephony credentials for user:",
+            username,
+            credential.id
+          );
+          // Refresh user object to include new credentials
+          const updatedUser = await PgDb.findUserById(
+            String(user.id || user._id)
+          );
+          if (updatedUser) {
+            Object.assign(user, updatedUser);
+          }
+        }
+      } catch (credErr) {
+        console.error(
+          "[Signin] Failed to create telephony credentials:",
+          credErr.message
+        );
+        // Continue login even if credential creation fails
+      }
     }
 
     const accessToken = await signAccessToken(

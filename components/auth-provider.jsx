@@ -59,7 +59,7 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    refresh();
+      refresh();
   }, [pathname]);
 
   return (

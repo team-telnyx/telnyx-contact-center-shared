@@ -15,6 +15,37 @@ export async function loginAction(prevState, formData) {
   if (!user) {
     return { ok: false, error: "Invalid credentials" };
   }
+
+  // Check if user has telephony credentials, create if missing
+  if (!user.telephony_credentials_id && !user.telephonyCredentialsId) {
+    try {
+      const credential = await createUserTelephonyCredentials({
+        email: user.username || username,
+        firstName: user.first_name || user.firstName || "",
+        lastName: user.last_name || user.lastName || "",
+      });
+
+      if (credential) {
+        // Update user with telephony credentials
+        await PgDb.updateUserById(String(user.id || user._id), {
+          telephonyCredentialsId: credential.id,
+          telephonyUserName: credential.username || credential.sip_username,
+        });
+        console.log(
+          "[Login] Created missing telephony credentials for user:",
+          username,
+          credential.id
+        );
+      }
+    } catch (credErr) {
+      console.error(
+        "[Login] Failed to create telephony credentials:",
+        credErr.message
+      );
+      // Continue login even if credential creation fails
+    }
+  }
+
   const accessToken = await signAccessToken(
     {
       sub: String(user.id || user._id),
@@ -142,6 +173,34 @@ export async function signupAction(formData) {
       activationToken,
       activationTokenExpires: activationExpires.toISOString(),
     });
+
+    // Create Telnyx telephony credentials for the user
+    try {
+      const credential = await createUserTelephonyCredentials({
+        email: username,
+        firstName,
+        lastName,
+      });
+
+      if (credential) {
+        // Update user with telephony credentials
+        await PgDb.updateUserById(String(id), {
+          telephonyCredentialsId: credential.id,
+          telephonyUserName: credential.username || credential.sip_username,
+        });
+        console.log(
+          "[Signup] Created telephony credentials for user:",
+          username,
+          credential.id
+        );
+      }
+    } catch (credErr) {
+      console.error(
+        "[Signup] Failed to create telephony credentials:",
+        credErr.message
+      );
+      // Continue even if credential creation fails (user signup should still succeed)
+    }
 
     // Send activation email
     try {

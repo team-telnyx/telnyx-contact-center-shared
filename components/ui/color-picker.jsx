@@ -33,8 +33,8 @@ function convertOklchToHexSync(oklchStr) {
   return null;
 }
 
-export function ColorPicker({ value, onChange, label, className }) {
-  const [hexValue, setHexValue] = useState("#000000");
+export function ColorPicker({ value, onChange, label, className, initialHex }) {
+  const [hexValue, setHexValue] = useState(initialHex || "#000000");
   const [oklchValue, setOklchValue] = useState(value || "");
 
   // Convert OKLCH to hex helper
@@ -55,6 +55,12 @@ export function ColorPicker({ value, onChange, label, className }) {
   useEffect(() => {
     if (value && value.trim()) {
       setOklchValue(value);
+
+      // If initialHex is provided, use it (from database)
+      if (initialHex && initialHex !== "#000000") {
+        setHexValue(initialHex);
+        return;
+      }
 
       // Function to attempt conversion with retries
       const attemptConversion = (retryCount = 0) => {
@@ -95,9 +101,9 @@ export function ColorPicker({ value, onChange, label, className }) {
       }
     } else {
       setOklchValue("");
-      setHexValue("#000000");
+      setHexValue(initialHex || "#000000");
     }
-  }, [value, convertOklchToHex]);
+  }, [value, initialHex, convertOklchToHex]);
 
   const handleHexChange = (e) => {
     const hex = e.target.value;
@@ -107,7 +113,7 @@ export function ColorPicker({ value, onChange, label, className }) {
       if (rgb) {
         const oklch = rgbToOklch(rgb.r, rgb.g, rgb.b, oklchValue);
         setOklchValue(oklch);
-        onChange?.(oklch);
+        onChange?.(oklch, hex);
       }
     }
   };
@@ -125,7 +131,7 @@ export function ColorPicker({ value, onChange, label, className }) {
       ) {
         const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
         setHexValue(hex);
-        onChange?.(newValue);
+        onChange?.(newValue, hex);
       }
     } catch (e) {
       // Invalid OKLCH, but allow typing
@@ -160,8 +166,8 @@ export function ColorPicker({ value, onChange, label, className }) {
                 // Use accurate conversion without original OKLCH to get exact color
                 const oklch = rgbToOklch(rgb.r, rgb.g, rgb.b, null);
                 setOklchValue(oklch);
-                // Trigger onChange immediately to apply the color
-                onChange?.(oklch);
+                // Trigger onChange immediately to apply the color with hex value
+                onChange?.(oklch, hex);
               }
             }}
             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"

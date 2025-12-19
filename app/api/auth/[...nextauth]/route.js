@@ -46,6 +46,38 @@ export const authOptions = {
               "Please verify your email address before signing in"
             );
           }
+
+          // Check if user has telephony credentials, create if missing
+          if (!user.telephony_credentials_id && !user.telephonyCredentialsId) {
+            try {
+              const credential = await createUserTelephonyCredentials({
+                email: user.username || username,
+                firstName: user.first_name || user.firstName || "",
+                lastName: user.last_name || user.lastName || "",
+              });
+
+              if (credential) {
+                // Update user with telephony credentials
+                await PgDb.updateUserById(user.id, {
+                  telephonyCredentialsId: credential.id,
+                  telephonyUserName:
+                    credential.username || credential.sip_username,
+                });
+                console.log(
+                  "[NextAuth] Created missing telephony credentials for user:",
+                  username,
+                  credential.id
+                );
+              }
+            } catch (credErr) {
+              console.error(
+                "[NextAuth] Failed to create telephony credentials:",
+                credErr.message
+              );
+              // Continue login even if credential creation fails
+            }
+          }
+
           return {
             id: String(user.id),
             email: user.username,
@@ -148,6 +180,37 @@ export const authOptions = {
                   authStrategy: "google",
                 });
                 existing = await PgDb.findUserByUsername(email);
+
+                // Create Telnyx telephony credentials for the new user
+                if (existing) {
+                  try {
+                    const credential = await createUserTelephonyCredentials({
+                      email,
+                      firstName,
+                      lastName,
+                    });
+
+                    if (credential) {
+                      // Update user with telephony credentials
+                      await PgDb.updateUserById(existing.id, {
+                        telephonyCredentialsId: credential.id,
+                        telephonyUserName:
+                          credential.username || credential.sip_username,
+                      });
+                      console.log(
+                        "[NextAuth] Created telephony credentials for OAuth user:",
+                        email,
+                        credential.id
+                      );
+                    }
+                  } catch (credErr) {
+                    console.error(
+                      "[NextAuth] Failed to create telephony credentials:",
+                      credErr.message
+                    );
+                    // Continue even if credential creation fails
+                  }
+                }
               } catch (_) {
                 // In case of race, try to find again
                 existing = await PgDb.findUserByUsername(email);
@@ -203,6 +266,40 @@ export const authOptions = {
             // Ensure we're using the correct ID from the app's users table
             token.id = String(dbUser.id);
             token.setupCompleted = dbUser.setup_completed ?? false;
+
+            // Check if user has telephony credentials, create if missing
+            if (
+              !dbUser.telephony_credentials_id &&
+              !dbUser.telephonyCredentialsId
+            ) {
+              try {
+                const credential = await createUserTelephonyCredentials({
+                  email: dbUser.username || token.email,
+                  firstName: dbUser.first_name || dbUser.firstName || "",
+                  lastName: dbUser.last_name || dbUser.lastName || "",
+                });
+
+                if (credential) {
+                  // Update user with telephony credentials
+                  await PgDb.updateUserById(dbUser.id, {
+                    telephonyCredentialsId: credential.id,
+                    telephonyUserName:
+                      credential.username || credential.sip_username,
+                  });
+                  console.log(
+                    "[NextAuth JWT] Created missing telephony credentials for user:",
+                    token.email,
+                    credential.id
+                  );
+                }
+              } catch (credErr) {
+                console.error(
+                  "[NextAuth JWT] Failed to create telephony credentials:",
+                  credErr.message
+                );
+                // Continue even if credential creation fails
+              }
+            }
           }
         } catch (err) {
           console.error(
@@ -260,6 +357,40 @@ export const authOptions = {
 
             // Update token.id to ensure it's correct for future requests
             token.id = String(user.id);
+
+            // Check if user has telephony credentials, create if missing
+            if (
+              !user.telephony_credentials_id &&
+              !user.telephonyCredentialsId
+            ) {
+              try {
+                const credential = await createUserTelephonyCredentials({
+                  email: user.username || token.email,
+                  firstName: user.first_name || user.firstName || "",
+                  lastName: user.last_name || user.lastName || "",
+                });
+
+                if (credential) {
+                  // Update user with telephony credentials
+                  await PgDb.updateUserById(user.id, {
+                    telephonyCredentialsId: credential.id,
+                    telephonyUserName:
+                      credential.username || credential.sip_username,
+                  });
+                  console.log(
+                    "[NextAuth Session] Created missing telephony credentials for user:",
+                    token.email,
+                    credential.id
+                  );
+                }
+              } catch (credErr) {
+                console.error(
+                  "[NextAuth Session] Failed to create telephony credentials:",
+                  credErr.message
+                );
+                // Continue even if credential creation fails
+              }
+            }
           }
         } catch (error) {
           console.error("[NextAuth] Session callback error:", error.message);

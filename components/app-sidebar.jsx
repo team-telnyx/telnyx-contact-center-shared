@@ -22,9 +22,9 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-import Image from "next/image";
 import menuConfig from "@/config/menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SidebarLogo } from "@/components/sidebar-logo";
 
 const data = {
   user: { name: "Loading...", email: "", avatar: "" },
@@ -38,11 +38,11 @@ export function AppSidebar({ hideNav, ...props }) {
 
   const fetchUserData = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me", { cache: "no-store" });
-      const data = await res.json();
-      if (data?.isAuth && data?.user) {
-        setUser(data.user);
-        setRole(data.user.role || "user");
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        if (data?.isAuth && data?.user) {
+          setUser(data.user);
+          setRole(data.user.role || "user");
       }
     } catch (_) {
     } finally {
@@ -73,15 +73,7 @@ export function AppSidebar({ hideNav, ...props }) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Image
-              src="/telnyx_green_transparent.png"
-              alt="Telnyx LLC"
-              width={250}
-              height={50}
-              priority
-              style={{ width: "auto", height: "auto" }}
-              className="brightness-0 dark:brightness-100"
-            />
+            <SidebarLogo />
             <SidebarMenuButton
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
