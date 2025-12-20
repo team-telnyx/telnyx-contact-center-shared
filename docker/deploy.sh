@@ -52,9 +52,30 @@ fi
 
 # Load environment variables from .env file
 echo "📋 Loading environment variables from .env file..."
-set -a  # automatically export all variables
-source .env
-set +a  # stop automatically exporting
+# Safely load .env file, handling comments, empty lines, and special characters
+line_num=0
+while IFS= read -r line || [ -n "$line" ]; do
+    line_num=$((line_num + 1))
+    # Remove leading/trailing whitespace
+    line=$(echo "$line" | xargs)
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^# ]] && continue
+    # Check if line contains =
+    if [[ "$line" == *"="* ]]; then
+        # Extract key and value
+        key="${line%%=*}"
+        value="${line#*=}"
+        # Remove quotes if present
+        value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+        # Remove leading/trailing whitespace from key and value
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+        # Export the variable
+        export "$key=$value"
+    else
+        echo "⚠️  Warning: Skipping malformed line $line_num in .env: $line"
+    fi
+done < .env
 
 echo "📦 Building and starting services..."
 
