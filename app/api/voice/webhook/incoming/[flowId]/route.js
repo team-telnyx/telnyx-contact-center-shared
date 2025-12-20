@@ -80,7 +80,7 @@ export async function POST(request, { params }) {
     // Store webhook in memory for monitoring
     const callControlId = body?.data?.payload?.call_control_id;
     if (callControlId) {
-      addWebhookEvent(callControlId, event, body);
+      addWebhookEvent(callControlId, event, body, flowId);
     }
 
     // Extract webhook data into variables (needed for call.enqueued handling)

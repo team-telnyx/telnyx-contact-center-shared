@@ -164,6 +164,10 @@ import {
   CodeBlock,
   CodeBlockCopyButton,
 } from "@/components/ai-elements/code-block";
+import useCallFlowMonitorStore, {
+  useFlowEvents,
+  useFlowCurrentCallControlId,
+} from "@/lib/stores/call-flow-monitor-store";
 
 // Icon mapping for node types
 const iconMap = {
@@ -1205,9 +1209,20 @@ export default function FlowBuilderPage() {
   const [contextMenuPosition, setContextMenuPosition] = useState(null);
   const [contextMenuSearchQuery, setContextMenuSearchQuery] = useState("");
   const [showMonitor, setShowMonitor] = useState(false);
-  const [monitorData, setMonitorData] = useState([]);
-  const [currentCallControlId, setCurrentCallControlId] = useState(null);
   const prevShowMonitorRef = useRef(false);
+  const lastCallControlIdRef = useRef(null);
+
+  // Use Zustand store for monitoring data
+  // Use the exported hooks which handle SSR properly
+  const monitorData = useFlowEvents(flowId);
+  const currentCallControlId = useFlowCurrentCallControlId(flowId);
+  const setFlowEvents = useCallFlowMonitorStore((state) => state.setFlowEvents);
+  const setCurrentCallControlId = useCallFlowMonitorStore(
+    (state) => state.setCurrentCallControlId
+  );
+  const clearFlowEvents = useCallFlowMonitorStore(
+    (state) => state.clearFlowEvents
+  );
   const [aiAssistants, setAiAssistants] = useState([]);
   const [assistantSearchQuery, setAssistantSearchQuery] = useState("");
   const [copiedField, setCopiedField] = useState(null);
@@ -1593,28 +1608,17 @@ export default function FlowBuilderPage() {
     );
   }, [nodes]);
 
-  // SSE connection for real-time monitoring (works for both incoming_call and http_request flows)
+  // SSE connection for real-time monitoring (works for all flows with initiators)
   useEffect(() => {
-    // For incoming_call flows, only monitor if flow is activated (isFlowDefault)
-    // For http_request flows, monitoring is always available
-    const canMonitor =
-      hasInitiator &&
-      (nodes.some((node) => node.data?.nodeType === "http_request") ||
-        isFlowDefault);
-
-    if (!canMonitor || !showMonitor) {
-      // Close existing connection if monitor is hidden or flow cannot be monitored
+    // In contact center, all flows with initiators can be monitored
+    if (!hasInitiator || !showMonitor) {
+      // Close existing connection if monitor is hidden or flow has no initiator
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
         setActiveNodes(new Set());
         setActiveEdges(new Set());
       }
-      return;
-    }
-
-    // Open SSE connection when monitor is shown
-    if (!showMonitor) {
       return;
     }
 
@@ -1685,7 +1689,7 @@ export default function FlowBuilderPage() {
         eventSource.close();
       }
     };
-  }, [flowId, isFlowDefault, showMonitor, hasInitiator, nodes]);
+  }, [flowId, showMonitor, hasInitiator, nodes]);
 
   // Update nodes with active state
   useEffect(() => {
@@ -1751,6 +1755,159 @@ export default function FlowBuilderPage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasUnsavedChanges]);
+
+  // Load existing monitoring data from server on mount (if any)
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const res = await fetch(`/api/voice/flows/${flowId}/monitor/webhooks`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.ok && data.webhooks && data.webhooks.length > 0) {
+            const webhooks = data.webhooks;
+            const latestWebhook = webhooks[webhooks.length - 1];
+            const newCallControlId = latestWebhook?.call_control_id || null;
+            // Restore from server if we have data but Zustand store is empty
+            const storeState = useCallFlowMonitorStore.getState();
+            const existingData = storeState.flowData[flowId];
+            if (!existingData || existingData.events.length === 0) {
+              storeState.setFlowEvents(flowId, webhooks, newCallControlId);
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - this is just for restoring state
+      }
+    };
+
+    loadInitialData();
+  }, [flowId]);
+
+  // Fetch monitoring data when monitor panel is opened
+  useEffect(() => {
+    if (!showMonitor) {
+      // Reset tracking when monitor is closed
+      lastCallControlIdRef.current = null;
+      return;
+    }
+
+    // Initialize ref with current call control ID if available
+    if (currentCallControlId && !lastCallControlIdRef.current) {
+      lastCallControlIdRef.current = currentCallControlId;
+    }
+
+    const fetchMonitorData = async () => {
+      try {
+        const res = await fetch(`/api/voice/flows/${flowId}/monitor/webhooks`);
+        if (!res.ok) {
+          console.warn(
+            "Monitor API returned non-OK status:",
+            res.status,
+            res.statusText
+          );
+          return;
+        }
+
+        const data = await res.json();
+        if (data && data.ok) {
+          const webhooks = data.webhooks || [];
+
+          // Find the latest call.initiated event to detect new calls
+          const latestInitiated = webhooks
+            .filter((w) => w.event_type === "call.initiated")
+            .pop();
+
+          const newCallControlId =
+            latestInitiated?.call_control_id ||
+            latestInitiated?.payload?.data?.payload?.call_control_id ||
+            webhooks[webhooks.length - 1]?.call_control_id ||
+            null;
+
+          // Detect if this is a new call (different call_control_id)
+          let webhooksToStore = webhooks;
+          if (
+            newCallControlId &&
+            lastCallControlIdRef.current &&
+            newCallControlId !== lastCallControlIdRef.current
+          ) {
+            // New call detected - filter to only include events from the new call
+            console.log(
+              "[Monitor] New call detected, clearing previous events"
+            );
+            clearFlowEvents(flowId);
+            // Filter webhooks to only include events from the new call
+            webhooksToStore = webhooks.filter(
+              (w) => w.call_control_id === newCallControlId
+            );
+            // Also clear server-side data for the previous call
+            await fetch(`/api/voice/flows/${flowId}/monitor/clear`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callControlId: lastCallControlIdRef.current,
+              }),
+            }).catch((err) =>
+              console.error("Error clearing previous call data:", err)
+            );
+          }
+
+          // Update the ref with the new call control ID
+          if (newCallControlId) {
+            lastCallControlIdRef.current = newCallControlId;
+          }
+
+          // Update Zustand store - this will persist across navigation
+          setFlowEvents(flowId, webhooksToStore, newCallControlId);
+        }
+      } catch (error) {
+        // Only log as warning to avoid console spam during network issues
+        console.warn(
+          "Monitor data fetch failed (this may be normal during network issues):",
+          error.message
+        );
+      }
+    };
+
+    fetchMonitorData();
+    // Poll every 2 seconds
+    const interval = setInterval(fetchMonitorData, 2000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [
+    showMonitor,
+    flowId,
+    setFlowEvents,
+    clearFlowEvents,
+    currentCallControlId,
+  ]);
+
+  // Handle monitor panel state changes (track for other purposes if needed)
+  useEffect(() => {
+    // Update ref to current value
+    prevShowMonitorRef.current = showMonitor;
+  }, [showMonitor]);
+
+  // Handler to clear monitor data (called by clear button)
+  const handleClearMonitor = useCallback(async () => {
+    // Clear server-side data
+    try {
+      await fetch(`/api/voice/flows/${flowId}/monitor/clear`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clearAll: true }),
+      });
+    } catch (err) {
+      console.error("Error clearing monitor data:", err);
+    }
+
+    // Clear Zustand store for this flow
+    clearFlowEvents(flowId);
+
+    // Reset call control ID tracking
+    lastCallControlIdRef.current = null;
+  }, [flowId, clearFlowEvents]);
 
   async function handleSave() {
     // Check if flow has an initiator node before saving
@@ -1917,173 +2074,6 @@ export default function FlowBuilderPage() {
     setShowDescriptionDialog(false);
     setTempDescription("");
   }, []);
-
-  // Fetch monitoring data when monitor panel is opened
-  useEffect(() => {
-    if (!showMonitor) {
-      // Clear local state
-      setMonitorData([]);
-      setCurrentCallControlId(null);
-      return;
-    }
-
-    // Track by call_session_id instead of call_control_id
-    // This allows viewing events for all call legs (e.g., after transfer) in the same session
-    let lastCallSessionId = null;
-    let isInitialLoad = true;
-
-    const fetchMonitorData = async () => {
-      try {
-        // On initial load, clear all old monitoring data to start fresh
-        if (isInitialLoad) {
-          try {
-            await fetch("/api/voice/monitor/clear", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ clearAll: true }),
-            });
-          } catch (err) {
-            console.warn(
-              "Could not clear monitor data (this is normal if no previous data exists):",
-              err.message
-            );
-          }
-          isInitialLoad = false;
-        }
-
-        const res = await fetch("/api/voice/monitor/webhooks");
-        if (!res.ok) {
-          console.warn(
-            "Monitor API returned non-OK status:",
-            res.status,
-            res.statusText
-          );
-          return;
-        }
-
-        const data = await res.json();
-        if (data && data.ok) {
-          const webhooks = data.webhooks || [];
-
-          // Check if there's a new call.initiated event
-          const latestInitiated = webhooks
-            .filter((w) => w.event_type === "call.initiated")
-            .pop();
-
-          // Extract call_session_id and call_control_id from the call.initiated event payload
-          let extractedCallSessionId = null;
-          let extractedCallControlId = null;
-          if (latestInitiated) {
-            extractedCallSessionId =
-              latestInitiated.payload?.data?.payload?.call_session_id || null;
-            extractedCallControlId =
-              latestInitiated.call_control_id ||
-              latestInitiated.payload?.data?.payload?.call_control_id ||
-              null;
-          }
-
-          if (
-            extractedCallSessionId &&
-            extractedCallSessionId !== lastCallSessionId
-          ) {
-            // New call session detected (different session ID)
-            // Clear events from the previous call session
-            if (lastCallSessionId) {
-              // Find all call_control_ids from the previous session and clear them
-              const oldSessionCallControlIds = new Set();
-              webhooks.forEach((w) => {
-                const sessionId = w.payload?.data?.payload?.call_session_id;
-                if (sessionId === lastCallSessionId && w.call_control_id) {
-                  oldSessionCallControlIds.add(w.call_control_id);
-                }
-              });
-
-              // Clear each old call control id
-              for (const oldCallControlId of oldSessionCallControlIds) {
-                await fetch("/api/voice/monitor/clear", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ callControlId: oldCallControlId }),
-                }).catch((err) =>
-                  console.error("Error clearing old call:", err)
-                );
-              }
-            }
-
-            lastCallSessionId = extractedCallSessionId;
-            setCurrentCallControlId(extractedCallControlId);
-
-            // Collect all call_control_ids for this session
-            const sessionCallControlIds = new Set();
-            webhooks.forEach((w) => {
-              const sessionId = w.payload?.data?.payload?.call_session_id;
-              if (sessionId === extractedCallSessionId && w.call_control_id) {
-                sessionCallControlIds.add(w.call_control_id);
-              }
-            });
-
-            // Show all events for this call session:
-            // - For received webhooks: filter by call_session_id
-            // - For sent commands and executed nodes: filter by call_control_id (they don't have session_id)
-            const filteredWebhooks = webhooks.filter((w) => {
-              // If it's a sent command or executed node, check if call_control_id belongs to this session
-              if (w.direction === "sent" || w.direction === "executed") {
-                return sessionCallControlIds.has(w.call_control_id);
-              }
-              // For received webhooks, filter by call_session_id
-              const sessionId = w.payload?.data?.payload?.call_session_id;
-              return sessionId === extractedCallSessionId;
-            });
-            setMonitorData(filteredWebhooks);
-          } else if (lastCallSessionId) {
-            // Collect all call_control_ids for this session
-            const sessionCallControlIds = new Set();
-            webhooks.forEach((w) => {
-              const sessionId = w.payload?.data?.payload?.call_session_id;
-              if (sessionId === lastCallSessionId && w.call_control_id) {
-                sessionCallControlIds.add(w.call_control_id);
-              }
-            });
-
-            // Same call session, show all events for this session (including all call legs)
-            const filteredWebhooks = webhooks.filter((w) => {
-              // If it's a sent command or executed node, check if call_control_id belongs to this session
-              if (w.direction === "sent" || w.direction === "executed") {
-                return sessionCallControlIds.has(w.call_control_id);
-              }
-              // For received webhooks, filter by call_session_id
-              const sessionId = w.payload?.data?.payload?.call_session_id;
-              return sessionId === lastCallSessionId;
-            });
-            setMonitorData(filteredWebhooks);
-
-            // Update current call control ID to the latest one
-            if (extractedCallControlId) {
-              setCurrentCallControlId(extractedCallControlId);
-            }
-          } else {
-            // No call yet, show all (but don't set call_control_id)
-            setCurrentCallControlId(null);
-            setMonitorData(webhooks);
-          }
-        }
-      } catch (error) {
-        // Only log as warning to avoid console spam during network issues
-        console.warn(
-          "Monitor data fetch failed (this may be normal during network issues):",
-          error.message
-        );
-      }
-    };
-
-    fetchMonitorData();
-    // Poll every 2 seconds
-    const interval = setInterval(fetchMonitorData, 2000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [showMonitor]);
 
   // Clear server data when monitor is closed
   useEffect(() => {
@@ -2527,20 +2517,15 @@ export default function FlowBuilderPage() {
                   </div>
 
                   {(() => {
-                    // Show Monitor button for:
-                    // 1. Flows with incoming_call initiator that are activated (isFlowDefault)
-                    // 2. Flows with http_request initiator (always available)
-                    const hasIncomingCall = nodes.some(
-                      (node) => node.data?.nodeType === "incoming_call"
-                    );
-                    const hasHttpRequest = nodes.some(
-                      (node) => node.data?.nodeType === "http_request"
+                    // Show Monitor button for all flows with an initiator
+                    // In contact center, all flows are active and can be monitored
+                    const hasInitiator = nodes.some(
+                      (node) =>
+                        node.data?.nodeType === "incoming_call" ||
+                        node.data?.nodeType === "http_request"
                     );
 
-                    const canMonitor =
-                      (hasIncomingCall && isFlowDefault) || hasHttpRequest;
-
-                    if (!canMonitor) {
+                    if (!hasInitiator) {
                       return null;
                     }
 
@@ -4184,6 +4169,135 @@ export default function FlowBuilderPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Monitor Panel */}
+      {showMonitor && (
+        <div className="fixed inset-y-0 right-0 w-[32rem] bg-background dark:bg-zinc-900 border-l shadow-2xl z-50 flex flex-col animate-in slide-in-from-right">
+          {/* Panel Header */}
+          <div className="border-b p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <IconActivity className="h-5 w-5" />
+                <h2 className="font-semibold text-lg">Call Monitor</h2>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClearMonitor}
+                  title="Clear monitor data"
+                >
+                  <IconTrash className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowMonitor(false)}
+                >
+                  <IconX className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            {currentCallControlId && (
+              <div className="flex items-center gap-2">
+                <code className="text-xs bg-muted px-2 py-1 rounded font-mono flex-1 truncate">
+                  {currentCallControlId}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 flex-shrink-0"
+                  onClick={() => {
+                    if (currentCallControlId) {
+                      navigator.clipboard.writeText(currentCallControlId);
+                      setCopiedField("call_control_id");
+                      notify({
+                        title: "Copied",
+                        description: "Call Control ID copied to clipboard",
+                        variant: "success",
+                      });
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }
+                  }}
+                >
+                  {copiedField === "call_control_id" ? (
+                    <IconCheck className="h-3.5 w-3.5" />
+                  ) : (
+                    <IconCopy className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Panel Content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {monitorData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                <IconActivity className="h-12 w-12 mb-4 opacity-50" />
+                <p className="text-sm">No webhook events yet</p>
+                <p className="text-xs mt-1">
+                  Webhook events will appear here when calls are received for
+                  this flow
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {monitorData.map((item) => {
+                  // Check if this is a node execution event
+                  const isNodeExecution =
+                    item.event_type?.startsWith("node_execution:");
+
+                  if (isNodeExecution) {
+                    const nodeType = item.payload?.node_type;
+                    const nodeLabel = item.payload?.node_label;
+                    const success = item.payload?.success;
+                    const details = item.payload?.details;
+
+                    return (
+                      <Tool key={item.id} defaultOpen={false}>
+                        <NodeExecutionToolHeader
+                          nodeType={nodeType}
+                          nodeLabel={nodeLabel}
+                          success={success}
+                          timestamp={item.timestamp}
+                        />
+                        <ToolContent>
+                          {/* Render specific details based on node type */}
+                          {renderNodeExecutionDetails(
+                            nodeType,
+                            details,
+                            success
+                          )}
+                        </ToolContent>
+                      </Tool>
+                    );
+                  }
+
+                  // Regular webhook event
+                  return (
+                    <Tool key={item.id} defaultOpen={false}>
+                      <WebhookToolHeader
+                        eventType={item.event_type}
+                        direction={item.direction}
+                        timestamp={item.timestamp}
+                      />
+                      <ToolContent>
+                        <CodeBlock
+                          code={JSON.stringify(item.payload, null, 2)}
+                          language="json"
+                        >
+                          <CodeBlockCopyButton />
+                        </CodeBlock>
+                      </ToolContent>
+                    </Tool>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
