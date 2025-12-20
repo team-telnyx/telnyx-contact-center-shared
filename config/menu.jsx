@@ -8,6 +8,9 @@ import {
   IconList,
   IconActivity,
   IconTag,
+  IconGitBranch,
+  IconKey,
+  IconAddressBook,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -56,6 +59,12 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
+          title: "Contacts",
+          url: "/admin/contacts",
+          icon: IconAddressBook,
+          role_access: ["admin", "owner"],
+        },
+        {
           title: "Queues",
           url: "/admin/queues",
           icon: IconList,
@@ -65,6 +74,18 @@ export const menuConfig = {
           title: "Statuses",
           url: "/admin/statuses",
           icon: IconTag,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Call Flows",
+          url: "/admin/call-flows",
+          icon: IconGitBranch,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Secrets",
+          url: "/admin/secrets",
+          icon: IconKey,
           role_access: ["admin", "owner"],
         },
         {
