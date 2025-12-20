@@ -1,0 +1,149 @@
+# High-security .cursorignore for Next.js/Node projects (Cursor uses gitignore syntax)
+# Blocks secrets, credentials, VCS history, caches, build artifacts, and bulky binaries
+
+############################
+# 1) Secrets & credentials #
+############################
+# Never send any environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Allow examples/templates (commonly safe)
+!.env.example
+!**/.env.example
+
+# Package/token configs that may contain tokens
+.npmrc
+.npmrc*
+.yarnrc
+.yarnrc*
+.pnpmrc
+.pnpmrc*
+.pnp.*
+.netrc
+
+# Common secret directories or patterns
+secrets/
+secret/
+keys/
+certs/
+private/
+**/secrets/
+**/secret/
+**/keys/
+**/certs/
+**/private/
+
+# Credentials, keys, and certificates
+*.pem
+*-key.pem
+*.key
+*.pub
+*.crt
+*.cer
+*.p12
+*.pfx
+*.der
+*.jks
+*.keystore
+*.kdb
+*.p8
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# Provider-specific files that often contain secrets
+firebase*.json
+GoogleService-Info.plist
+google-services.json
+amplify/.config/local-aws-info.json
+amplify/team-provider-info.json
+
+# Google Cloud service account credentials
+config/telnyx-demo-portal.json
+telnyx-demo-portal.json
+*-service-account*.json
+
+########################
+# 2) VCS & git history #
+########################
+.git/
+.git-*/
+
+####################################
+# 3) Dependencies & build artifacts #
+####################################
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+.cache/
+.parcel-cache/
+.eslintcache
+
+########################################
+# 4) Logs, debug output, and temp files #
+########################################
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+tmp/
+temp/
+*.pid
+
+######################
+# 5) Test artifacts  #
+######################
+coverage/
+cypress/
+.cypress/
+playwright-report/
+test-results/
+
+###########################
+# 6) IDE/editor junk files #
+###########################
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+#########################
+# 7) Local data & DBs   #
+#########################
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+*.rdb
+dump.rdb
+
+#############################
+# 8) Large/binary artifacts #
+#############################
+*.zip
+*.tar
+*.gz
+*.bz2
+*.7z
+*.rar
+*.bin
+*.iso
+*.dmg
+*.exe
+*.dll
+
+# End of .cursorignore
+

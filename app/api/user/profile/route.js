@@ -1,11 +1,29 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { USER_STATUS_OPTIONS } from "@/config/user";
 import { broadcastToKey } from "@/lib/sse";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 
 const ALLOWED_THEMES = ["light", "dark", "system"];
-const ALLOWED_STATUSES = USER_STATUS_OPTIONS.map((opt) => opt.value);
+
+// Get allowed statuses from database
+async function getAllowedStatuses() {
+  try {
+    const pool = getPostgresPool();
+    if (!pool) {
+      // Fallback to default statuses if DB not available
+      return ["Available", "Busy", "Away", "Offline"];
+    }
+    const result = await pool.query(
+      `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
+    );
+    return result.rows.map((row) => row.name);
+  } catch (error) {
+    console.error("[Profile] Error fetching allowed statuses:", error);
+    // Fallback to default statuses
+    return ["Available", "Busy", "Away", "Offline"];
+  }
+}
 
 /**
  * GET /api/user/profile
@@ -90,10 +108,11 @@ export async function PUT(request) {
       update.theme = payload.theme;
     }
 
-    // Status - validate against allowed statuses
+    // Status - validate against allowed statuses from database
     if (typeof payload.status === "string" && payload.status.trim()) {
       const trimmedStatus = payload.status.trim();
-      if (ALLOWED_STATUSES.includes(trimmedStatus)) {
+      const allowedStatuses = await getAllowedStatuses();
+      if (allowedStatuses.includes(trimmedStatus)) {
         update.status = trimmedStatus;
       }
     }
@@ -133,9 +152,109 @@ export async function PUT(request) {
 
     await PgDb.updateUserById(String(userId), update);
 
-    // If status was updated, broadcast to web clients via SSE and send push to mobile
+    // If status was updated, also update agent_status and state manager
     if (update.status) {
+      const previousStatus = user.status || user.agent_status || "Unknown";
       const sseKey = `user:status:${userId}`;
+
+      // Update agent_status to match status for contact center
+      try {
+        const { getPostgresPool } = await import("@/lib/postgres.mjs");
+        const pool = getPostgresPool();
+        if (pool) {
+          await pool.query(
+            `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
+            [update.status, userId]
+          );
+          // Also update cc_agent_state table
+          await pool.query(
+            `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity)
+             VALUES ($1, $2, $3, NOW(), NOW())
+             ON CONFLICT (user_id) DO UPDATE SET
+               agent_status = EXCLUDED.agent_status,
+               last_status_change = NOW(),
+               last_activity = NOW()`,
+            [userId, user.username, update.status]
+          );
+        }
+
+        // Update state manager
+        const { updateAgentStatus } = await import(
+          "@/lib/contact-center/state-manager"
+        );
+        updateAgentStatus(userId, update.status, user.username);
+
+        // Broadcast to monitor streams
+        try {
+          const { broadcastToKey } = await import("@/lib/sse");
+          // Broadcast to all monitor streams
+          const { getPostgresPool: getPool } = await import(
+            "@/lib/postgres.mjs"
+          );
+          const monitorPool = getPool();
+          if (monitorPool) {
+            const supervisors = await monitorPool.query(
+              `SELECT id FROM users WHERE 'supervisor' = ANY(roles) OR 'admin' = ANY(roles) OR role IN ('supervisor', 'admin', 'owner')`
+            );
+            for (const supervisor of supervisors.rows || []) {
+              await broadcastToKey(
+                `monitor:${supervisor.id}`,
+                {
+                  type: "status_changed",
+                  status: update.status,
+                  userId: String(userId),
+                  username: user.username,
+                  timestamp: new Date().toISOString(),
+                },
+                "status_changed"
+              );
+            }
+          }
+        } catch (monitorError) {
+          console.error(
+            "[Status] Failed to broadcast to monitors:",
+            monitorError
+          );
+        }
+      } catch (stateError) {
+        console.error("[Status] Failed to update agent status:", stateError);
+      }
+
+      // Log status change activity
+      try {
+        // Find the last status change activity to calculate duration
+        const lastStatusActivity = await PgDb.getUserActivityLog(
+          String(userId),
+          {
+            activityType: "status_change",
+            pageSize: 1,
+          }
+        );
+
+        let previousActivityStartedAt = null;
+        if (lastStatusActivity.rows.length > 0) {
+          const lastActivity = lastStatusActivity.rows[0];
+          if (
+            lastActivity.activity_value === previousStatus &&
+            lastActivity.started_at
+          ) {
+            previousActivityStartedAt = lastActivity.started_at;
+          }
+        }
+
+        // Log the status change
+        await PgDb.logUserActivity({
+          userId: String(userId),
+          activityType: "status_change",
+          activityValue: update.status,
+          previousValue: previousStatus,
+          startedAt: previousActivityStartedAt || new Date().toISOString(),
+          endedAt: new Date().toISOString(),
+        });
+      } catch (activityError) {
+        console.error("[Status] Failed to log activity:", activityError);
+        // Don't fail the request if activity logging fails
+      }
 
       // Broadcast to web clients via SSE
       try {
@@ -163,7 +282,7 @@ export async function PUT(request) {
         await broadcastToKey(`contact-center:agent:${user.username}`, {
           type: "status_changed",
           status: update.status,
-          previousStatus: user.status,
+          previousStatus: previousStatus,
         });
       } catch (ccError) {
         console.error(

@@ -33,16 +33,27 @@ const data = {
 
 export function AppSidebar({ hideNav, ...props }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState("guest");
+  const [role, setRole] = useState("agent");
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchUserData = React.useCallback(async () => {
     try {
-        const res = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = await res.json();
-        if (data?.isAuth && data?.user) {
-          setUser(data.user);
-          setRole(data.user.role || "user");
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const data = await res.json();
+      if (data?.isAuth && data?.user) {
+        setUser(data.user);
+        // Support both roles array and legacy role field
+        const userRoles =
+          data.user.roles &&
+          Array.isArray(data.user.roles) &&
+          data.user.roles.length > 0
+            ? data.user.roles
+            : data.user.role
+            ? [data.user.role]
+            : ["agent"];
+        setRoles(userRoles);
+        setRole(userRoles[0] || "agent"); // Keep role for backward compatibility
       }
     } catch (_) {
     } finally {
@@ -97,7 +108,11 @@ export function AppSidebar({ hideNav, ...props }) {
               ))}
             </div>
           ) : (
-            <NavMain groups={data.navGroups} userRole={role} />
+            <NavMain
+              groups={data.navGroups}
+              userRole={role}
+              userRoles={roles}
+            />
           ))}
       </SidebarContent>
       <SidebarFooter>

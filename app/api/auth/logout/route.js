@@ -28,6 +28,71 @@ export async function POST(request) {
       const hashed = await hashToken(refreshToRevoke);
       const newList = list.filter((t) => t?.refreshToken !== hashed);
       await PgDb.updateUserById(String(userId), { refresh_tokens: newList });
+
+      // Track logout activity
+      try {
+        // Find the most recent login session that hasn't been logged out
+        const pool = await import("@/lib/postgres.mjs").then((m) =>
+          m.getPostgresPool()
+        );
+        if (pool) {
+          const sessionRes = await pool.query(
+            `SELECT id, login_at, session_token FROM cc_user_sessions 
+             WHERE user_id = $1 AND logout_at IS NULL 
+             ORDER BY login_at DESC LIMIT 1`,
+            [String(userId)]
+          );
+
+          if (sessionRes.rows.length > 0) {
+            const session = sessionRes.rows[0];
+            const logoutTime = new Date().toISOString();
+            let durationSeconds = null;
+            if (session.login_at) {
+              durationSeconds = Math.floor(
+                (new Date(logoutTime) - new Date(session.login_at)) / 1000
+              );
+            }
+
+            // Update session with logout time (use session_token if available, otherwise use id)
+            if (session.session_token) {
+              await PgDb.updateUserSessionLogout(
+                session.session_token,
+                logoutTime
+              );
+            } else {
+              // Fallback: update by ID
+              await pool.query(
+                `UPDATE cc_user_sessions 
+                 SET logout_at = $1, 
+                     duration_seconds = $2,
+                     updated_at = NOW()
+                 WHERE id = $3`,
+                [logoutTime, durationSeconds, session.id]
+              );
+            }
+
+            // Log logout activity
+            await PgDb.logUserActivity({
+              userId: String(userId),
+              activityType: "logout",
+              startedAt: session.login_at || logoutTime,
+              endedAt: logoutTime,
+              durationSeconds: durationSeconds,
+            });
+          } else {
+            // No active session found, just log the logout activity
+            await PgDb.logUserActivity({
+              userId: String(userId),
+              activityType: "logout",
+              startedAt: new Date().toISOString(),
+              endedAt: new Date().toISOString(),
+            });
+          }
+        }
+      } catch (activityError) {
+        console.error("[Logout] Failed to log logout activity:", activityError);
+        // Don't fail logout if activity logging fails
+      }
     }
   } catch (_) {}
 

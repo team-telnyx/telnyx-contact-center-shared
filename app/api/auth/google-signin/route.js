@@ -101,7 +101,7 @@ export async function POST(request) {
       lastName: existing.last_name || existing.lastName || "",
       mobile: existing.mobile || "",
       verified: existing.verified || false,
-      role: existing.role || "user",
+      role: existing.role || "agent",
       theme: existing.theme || "system",
       language: existing.language || null,
       profilePictureUri:

@@ -15,9 +15,24 @@ import { IconHome, IconChevronDown } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function NavMain({ groups = [], userRole = "guest" }) {
+export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
   const pathname = usePathname();
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+
+  // Normalize userRoles - support both single role and roles array
+  const normalizedRoles =
+    Array.isArray(userRoles) && userRoles.length > 0
+      ? userRoles.map((r) => String(r).toLowerCase())
+      : userRole
+      ? [String(userRole).toLowerCase()]
+      : ["guest"];
+
+  const hasRole = (requiredRoles) => {
+    if (!Array.isArray(requiredRoles)) requiredRoles = [requiredRoles];
+    return requiredRoles.some((role) =>
+      normalizedRoles.includes(String(role).toLowerCase())
+    );
+  };
 
   const isActiveUrl = (url) => {
     try {
@@ -65,18 +80,18 @@ export function NavMain({ groups = [], userRole = "guest" }) {
           .filter((group) => {
             // First check if the group itself has role_access restrictions
             if (group.role_access) {
-              if (!group.role_access.includes(userRole)) {
-                return false; // Hide entire group if user role not in group role_access
+              if (!hasRole(group.role_access)) {
+                return false; // Hide entire group if user doesn't have any required role
               }
             }
-            return true; // Show group if no role_access or user role matches
+            return true; // Show group if no role_access or user has required role
           })
           .map((group) => {
             // Filter items within each group based on role access
             const visibleItems =
               group.items?.filter((item) => {
                 if (!item.role_access) return true; // If no role_access specified, show to all
-                return item.role_access.includes(userRole);
+                return hasRole(item.role_access);
               }) || [];
 
             // Return group with filtered items

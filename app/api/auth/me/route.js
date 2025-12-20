@@ -26,8 +26,13 @@ export async function GET(request) {
       user.profile_picture_uri || user.profilePictureUri || null;
     const imageFromSession = session?.user?.image || null;
     const theme = user.theme || "system";
-    const role = user.role || "user";
-    const status = user.status || "Available - ACD";
+    const role = user.role || "agent";
+    // Support both roles array and legacy role field
+    const roles =
+      user.roles && Array.isArray(user.roles) && user.roles.length > 0
+        ? user.roles
+        : [role];
+    const status = user.status || "Available";
     const language =
       user.language || session?.user?.language || session?.user?.locale || null;
 
@@ -40,7 +45,8 @@ export async function GET(request) {
         email,
         language,
         theme,
-        role,
+        role, // Keep for backward compatibility
+        roles, // New roles array
         status,
         profilePictureUri: profilePictureUri || imageFromSession || null,
         smsNumber: user.sms_number || user.smsNumber || "Telnyx",

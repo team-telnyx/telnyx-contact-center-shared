@@ -131,6 +131,9 @@ export const authOptions = {
     },
     async signIn({ user, account, profile }) {
       try {
+        // Track login activity (deferred to session callback where we have user ID)
+        // We'll track it in the session callback instead
+
         if (account?.provider === "google") {
           const email = String(
             user?.email || profile?.email || ""
@@ -312,7 +315,7 @@ export const authOptions = {
 
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token, trigger }) {
       if (token?.id) {
         session.user.id = token.id;
       }
@@ -357,6 +360,48 @@ export const authOptions = {
 
             // Update token.id to ensure it's correct for future requests
             token.id = String(user.id);
+
+            // Track login activity on first session creation (when token doesn't have login tracked)
+            if (!token.loginTracked && user.id) {
+              try {
+                // Check if there's already a recent login session (within last minute) to avoid duplicates
+                const pool = await import("@/lib/postgres.mjs").then((m) =>
+                  m.getPostgresPool()
+                );
+                if (pool) {
+                  const recentSession = await pool.query(
+                    `SELECT id FROM cc_user_sessions 
+                     WHERE user_id = $1 AND login_at > NOW() - INTERVAL '1 minute'
+                     ORDER BY login_at DESC LIMIT 1`,
+                    [String(user.id)]
+                  );
+
+                  if (recentSession.rows.length === 0) {
+                    // Log user session (login)
+                    await PgDb.logUserSession({
+                      userId: String(user.id),
+                      loginAt: new Date().toISOString(),
+                    });
+
+                    // Log login activity
+                    await PgDb.logUserActivity({
+                      userId: String(user.id),
+                      activityType: "login",
+                      activityValue: "session_created",
+                    });
+
+                    // Mark token as having login tracked to avoid duplicates
+                    token.loginTracked = true;
+                  }
+                }
+              } catch (activityError) {
+                console.error(
+                  "[NextAuth] Failed to log login activity:",
+                  activityError
+                );
+                // Don't fail session creation if activity logging fails
+              }
+            }
 
             // Check if user has telephony credentials, create if missing
             if (

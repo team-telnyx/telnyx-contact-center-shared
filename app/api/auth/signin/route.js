@@ -118,7 +118,7 @@ export async function POST(request) {
       lastName: user.last_name || user.lastName || "",
       mobile: user.mobile || "",
       verified: user.verified || false,
-      role: user.role || "user",
+      role: user.role || "agent",
       theme: user.theme || "system",
       language: user.language || null,
       profilePictureUri:

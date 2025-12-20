@@ -177,7 +177,7 @@ export function NavUser({ user, hideExtras }) {
     };
 
     // Connect to status stream for authenticated users
-      connectStatusStream();
+    connectStatusStream();
 
     return () => {
       if (eventSource) {
@@ -316,10 +316,10 @@ export function NavUser({ user, hideExtras }) {
                         value={value}
                         className="pl-2"
                       >
-                        <Icon />
+                        <Icon className="h-4 w-4" />
                         {value}
                         {status === value ? (
-                          <IconCheck className="ml-auto text-brand-primary" />
+                          <IconCheck className="ml-auto text-primary" />
                         ) : null}
                       </DropdownMenuRadioItem>
                     ))}

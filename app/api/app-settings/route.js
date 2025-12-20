@@ -98,8 +98,14 @@ export async function PUT(request) {
     }
 
     // Check if user is admin or owner
-    const userRole = session.user.role;
-    if (userRole !== "admin" && userRole !== "owner") {
+    // Get user from database to access roles
+    const { PgDb } = await import("@/lib/pgdb");
+    const dbUser = await PgDb.findUserById(session.user.id);
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    const { isAdmin } = await import("@/lib/role-utils");
+    if (!isAdmin(dbUser)) {
       return NextResponse.json(
         { error: "Forbidden: Admin access required" },
         { status: 403 }

@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import { TelnyxRTC } from "@telnyx/webrtc";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 
 const WEBRTC_REGION = process.env.NEXT_PUBLIC_TELNYX_WEBRTC_REGION || "auto";
 
@@ -339,19 +339,23 @@ export function TelephonyProvider({ children }) {
       setStatus("disconnected");
       setError(err?.message || "Failed to connect");
 
-      // Show toast notification for missing environment variables
+      // Show notification for missing environment variables
       if (err.code === "MISSING_SIP_CONNECTION_ID") {
-        toast.error("Configuration Error", {
+        notify({
+          title: "Configuration Error",
           description:
             "TELNYX_SIP_CONNECTION_ID environment variable is not configured. Please contact your administrator to set up the required Telnyx connection ID.",
-          duration: 10000,
+          variant: "error",
+          autoCloseMs: 10000,
         });
       } else if (err.code === "SESSION_EXPIRED") {
         // Session expired - redirect to signin
         clearTokenCache();
-        toast.error("Session Expired", {
+        notify({
+          title: "Session Expired",
           description: "Your session has expired. Please sign in again.",
-          duration: 5000,
+          variant: "error",
+          autoCloseMs: 5000,
         });
         // Redirect to signin after a short delay
         setTimeout(() => {
@@ -363,10 +367,12 @@ export function TelephonyProvider({ children }) {
       ) {
         // Clear cache on token/credential errors to force fresh token
         clearTokenCache();
-        toast.error("Authentication Error", {
+        notify({
+          title: "Authentication Error",
           description:
             "Token authentication failed. Cache cleared, please try again.",
-          duration: 5000,
+          variant: "error",
+          autoCloseMs: 5000,
         });
       }
 
