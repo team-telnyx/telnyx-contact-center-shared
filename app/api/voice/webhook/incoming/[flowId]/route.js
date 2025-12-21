@@ -11,6 +11,10 @@ import { addWebhookEvent } from "@/lib/call-monitor-store.js";
 import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
+import {
+  addTimelineEvent,
+  TimelineEventTypes,
+} from "@/lib/contact-center/call-timeline-tracker.js";
 
 // Track executed transitions to prevent duplicate execution
 // Key: `${call_control_id}:${from_node_id}:${to_node_id}`
@@ -89,20 +93,174 @@ export async function POST(request, { params }) {
     // Get the flow (without username filter to allow any user's flow to be triggered)
     const flow = await VoiceFlowDb.getFlowById(flowId, null);
 
-    // Handle call.initiated (incoming) - Register all incoming calls to cc_interactions
-    if (event === "call.initiated" && payload.direction === "incoming") {
-      try {
-        const { PgDb } = await import("@/lib/pgdb.js");
+    // Handle call.initiated - Check for transfer legs (both incoming and outbound directions)
+    // Transfer legs to WebRTC clients can be either direction
+    if (event === "call.initiated") {
+      // Check if this is a transfer leg first (before checking direction)
+      const toField = payload.to || "";
+      const isTransferLeg =
+        toField.startsWith("sip:") && toField.includes("@sip.telnyx.com");
 
-        // Check if this is a transfer leg (TO field is a SIP URI like sip:username@sip.telnyx.com)
-        // Transfer legs should NOT be presented in Interactions panel
-        const toField = payload.to || "";
-        const isTransferLeg =
-          toField.startsWith("sip:") && toField.includes("@sip.telnyx.com");
+      console.log(`[IncomingFlowWebhook] call.initiated received:`, {
+        callControlId: payload.call_control_id,
+        direction: payload.direction,
+        to: payload.to,
+        from: payload.from,
+        isTransferLeg,
+      });
 
-        if (isTransferLeg) {
-          // This is a transfer leg - insert into cc_interactions for call flow management
-          // but mark it as not visible to agents
+      if (isTransferLeg) {
+        console.log(
+          `[IncomingFlowWebhook] ✅ Detected transfer leg (direction: ${payload.direction}): ${payload.call_control_id}, to: ${payload.to}, from: ${payload.from}`
+        );
+        // Handle transfer leg regardless of direction
+        try {
+          const { PgDb } = await import("@/lib/pgdb.js");
+          // This is a transfer leg to an agent's WebRTC client
+          // Find the original interaction using custom headers or call_session_id
+          let originalInteraction = null;
+
+          // Try to find by custom headers first (from transfer)
+          const customHeaders = payload.custom_headers || [];
+          const originalCallControlIdHeader = customHeaders.find(
+            (h) => h.name === "X-Original-Call-Control-Id"
+          );
+          const originalCallSessionIdHeader = customHeaders.find(
+            (h) => h.name === "X-Original-Call-Session-Id"
+          );
+
+          if (originalCallControlIdHeader?.value) {
+            originalInteraction = await PgDb.findInteractionByCallControlId(
+              originalCallControlIdHeader.value
+            );
+          }
+
+          // Fallback: try by call_session_id (both legs share the same session)
+          if (!originalInteraction && payload.call_session_id) {
+            originalInteraction = await PgDb.findInteractionByCallSessionId(
+              payload.call_session_id
+            );
+          }
+
+          if (originalInteraction) {
+            // Update the original interaction with the agent's call_control_id
+            const metadata = originalInteraction.metadata || {};
+            metadata.agent_call_control_id = payload.call_control_id;
+
+            // Store the ORIGINAL queued call's call_control_id (before transfer)
+            // This is needed for issuing commands to the original call leg
+            // If original_call_control_id is not already set, use the interaction's current call_control_id
+            if (!metadata.original_call_control_id) {
+              metadata.original_call_control_id =
+                originalInteraction.call_control_id;
+            }
+
+            await PgDb.updateInteractionById(originalInteraction.id, {
+              metadata,
+              // Update call_control_id to the agent's leg so subsequent webhooks match
+              callControlId: payload.call_control_id,
+            });
+
+            console.log(
+              `[IncomingFlowWebhook] ✅ Linked transfer leg ${payload.call_control_id} to interaction ${originalInteraction.id}, original_call_control_id: ${metadata.original_call_control_id}`
+            );
+
+            // Broadcast incoming_call_info to WebRTC client now that we have the agent's call_control_id
+            // This is critical for the WebRTC client to show the ringing state
+            if (originalInteraction.agent_username) {
+              try {
+                const { broadcastToKey } = await import("@/lib/sse");
+                const { storeIncomingCallData } = await import(
+                  "@/lib/incoming-call-store"
+                );
+                const { PgDb: PgDbForUser } = await import("@/lib/pgdb.js");
+
+                // Get agent user ID for SSE broadcast
+                const agent = await PgDbForUser.findUserByUsername(
+                  originalInteraction.agent_username
+                );
+
+                if (agent?.id) {
+                  // Get caller info from interaction
+                  const fromNumber = originalInteraction.from_number;
+                  const fromName = originalInteraction.from_name;
+
+                  console.log(
+                    `[IncomingFlowWebhook] Preparing to broadcast incoming_call_info:`,
+                    {
+                      agentUsername: originalInteraction.agent_username,
+                      agentId: agent.id,
+                      callControlId: payload.call_control_id,
+                      fromNumber,
+                      fromName,
+                      originalCallControlId: metadata.original_call_control_id,
+                    }
+                  );
+
+                  // Store caller info for WebRTC client lookup
+                  if (payload.call_session_id) {
+                    storeIncomingCallData(
+                      `session:${payload.call_session_id}`,
+                      {
+                        fromNumber: fromNumber,
+                        fromName: fromName,
+                        callControlId: payload.call_control_id,
+                        originalCallControlId:
+                          metadata.original_call_control_id,
+                        callSessionId: payload.call_session_id,
+                        interactionId: originalInteraction.id,
+                      }
+                    );
+                  }
+
+                  storeIncomingCallData(payload.call_control_id, {
+                    fromNumber: fromNumber,
+                    fromName: fromName,
+                    callControlId: payload.call_control_id,
+                    originalCallControlId: metadata.original_call_control_id,
+                    callSessionId: payload.call_session_id,
+                    interactionId: originalInteraction.id,
+                  });
+
+                  // Broadcast to WebRTC client via SSE
+                  broadcastToKey(`user:status:${agent.id}`, {
+                    type: "incoming_call_info",
+                    callControlId: payload.call_control_id,
+                    fromNumber: fromNumber,
+                    fromName: fromName,
+                    originalCallControlId: metadata.original_call_control_id,
+                    callSessionId: payload.call_session_id,
+                    interactionId: originalInteraction.id,
+                    contactCenter: {
+                      interactionId: originalInteraction.id,
+                      queueName: originalInteraction.queue_name,
+                      queuedAt:
+                        originalInteraction.enqueued_at ||
+                        originalInteraction.created_at,
+                      assignedAt:
+                        originalInteraction.assigned_at ||
+                        new Date().toISOString(),
+                    },
+                  });
+
+                  console.log(
+                    `[IncomingFlowWebhook] ✅ Broadcasted incoming_call_info to agent ${originalInteraction.agent_username} (call_control_id: ${payload.call_control_id})`
+                  );
+                }
+              } catch (err) {
+                console.error(
+                  "[IncomingFlowWebhook] Error broadcasting incoming_call_info:",
+                  err
+                );
+              }
+            }
+          } else {
+            console.warn(
+              `[IncomingFlowWebhook] Transfer leg ${payload.call_control_id} but could not find original interaction`
+            );
+          }
+
+          // Register transfer leg for tracking (not visible to agents)
           const existingTransferLeg = await PgDb.findInteractionByCallControlId(
             payload.call_control_id
           );
@@ -115,7 +273,7 @@ export async function POST(request, { params }) {
               callSessionId: payload.call_session_id || null,
               callLegId: payload.call_leg_id || null,
               direction: "inbound",
-              state: "initiated",
+              state: "queued", // Use valid state
               isContactCenter: false, // Not visible to agents
               fromNumber: payload.from || null,
               toNumber: payload.to || null,
@@ -124,6 +282,7 @@ export async function POST(request, { params }) {
                 flow_owner: flow?.username || null,
                 initiated_at: payload.occurred_at || new Date().toISOString(),
                 is_transfer_leg: true, // Mark as transfer leg
+                original_interaction_id: originalInteraction?.id || null,
               },
             });
 
@@ -131,51 +290,78 @@ export async function POST(request, { params }) {
               `[IncomingFlowWebhook] ✅ Registered transfer leg ${payload.call_control_id} (not visible to agents)`
             );
           }
+
           // Don't process transfer legs further - they're just for tracking
           return NextResponse.json({
             ok: true,
             message: "Transfer leg registered (not visible to agents)",
           });
-        }
-
-        // Check if interaction already exists for this call_control_id
-        const existingInteraction = await PgDb.findInteractionByCallControlId(
-          payload.call_control_id
-        );
-
-        if (!existingInteraction) {
-          // Create interaction record for incoming call
-          // This will be updated when call.enqueued is received
-          // For now, mark it as not visible to agents (is_contact_center: false, state: "initiated")
-          // queue_name is required by DB schema, so we use "PENDING" as placeholder until enqueued
-          const interactionId = await PgDb.insertInteraction({
-            interactionType: "voice",
-            queueName: "PENDING", // Placeholder, will be updated when call.enqueued is received
-            callControlId: payload.call_control_id,
-            callSessionId: payload.call_session_id || null,
-            callLegId: payload.call_leg_id || null,
-            direction: "inbound",
-            state: "initiated",
-            isContactCenter: false, // Not yet enqueued, so not visible to agents
-            fromNumber: payload.from || null,
-            toNumber: payload.to || null,
-            flowId: flowId,
-            metadata: {
-              flow_owner: flow?.username || null,
-              initiated_at: payload.occurred_at || new Date().toISOString(),
-            },
-          });
-
-          console.log(
-            `[IncomingFlowWebhook] ✅ Registered incoming call ${payload.call_control_id} to cc_interactions (ID: ${interactionId})`
+        } catch (err) {
+          console.error(
+            "[IncomingFlowWebhook] Error handling transfer leg:",
+            err
           );
+          // Don't fail the webhook, just log the error
         }
-      } catch (err) {
-        console.error(
-          "[IncomingFlowWebhook] Error registering incoming call:",
-          err
-        );
-        // Don't fail the webhook, just log the error
+      }
+
+      // Handle regular incoming calls (not transfer legs)
+      if (payload.direction === "incoming" && !isTransferLeg) {
+        try {
+          const { PgDb } = await import("@/lib/pgdb.js");
+
+          // Check if interaction already exists for this call_control_id
+          const existingInteraction = await PgDb.findInteractionByCallControlId(
+            payload.call_control_id
+          );
+
+          if (!existingInteraction) {
+            // Add timeline event for initiated
+            const routingMetadata = addTimelineEvent(
+              null,
+              TimelineEventTypes.INITIATED,
+              {
+                from: payload.from,
+                to: payload.to,
+                direction: payload.direction,
+                flowId: flowId,
+              }
+            );
+
+            // Create interaction record for incoming call
+            // This will be updated when call.enqueued is received
+            // For now, mark it as not visible to agents (is_contact_center: false, state: "initiated")
+            // queue_name is required by DB schema, so we use "PENDING" as placeholder until enqueued
+            const interactionId = await PgDb.insertInteraction({
+              interactionType: "voice",
+              queueName: "PENDING", // Placeholder, will be updated when call.enqueued is received
+              callControlId: payload.call_control_id,
+              callSessionId: payload.call_session_id || null,
+              callLegId: payload.call_leg_id || null,
+              direction: "inbound",
+              state: "queued", // Use valid state (will be updated when enqueued)
+              isContactCenter: false, // Not yet enqueued, so not visible to agents
+              fromNumber: payload.from || null,
+              toNumber: payload.to || null,
+              flowId: flowId,
+              routingMetadata: routingMetadata,
+              metadata: {
+                flow_owner: flow?.username || null,
+                initiated_at: payload.occurred_at || new Date().toISOString(),
+              },
+            });
+
+            console.log(
+              `[IncomingFlowWebhook] ✅ Registered incoming call ${payload.call_control_id} to cc_interactions (ID: ${interactionId})`
+            );
+          }
+        } catch (err) {
+          console.error(
+            "[IncomingFlowWebhook] Error registering incoming call:",
+            err
+          );
+          // Don't fail the webhook, just log the error
+        }
       }
     }
 
@@ -188,13 +374,43 @@ export async function POST(request, { params }) {
       try {
         const queueName = payload.queue;
         if (queueName) {
-          // Contact center queue handling - simplified for contact center app
-          // The contact center app has its own webhook handler for enqueued calls
           try {
-            const { handleContactCenterEvent } = await import(
+            const { handleContactCenterEnqueue } = await import(
               "@/lib/contact-center/webhook-handler.js"
             );
-            await handleContactCenterEvent("call.enqueued", payload);
+            const { isContactCenterQueue } = await import(
+              "@/lib/contact-center/queue-utils.js"
+            );
+
+            if (isContactCenterQueue(queueName)) {
+              // Get flow owner username
+              const flow = await VoiceFlowDb.getFlowById(flowId, null);
+              const flowOwner = flow?.username || null;
+
+              console.log("[IncomingFlowWebhook] call.enqueued payload:", {
+                call_control_id: payload.call_control_id,
+                call_session_id: payload.call_session_id,
+                from: payload.from,
+                to: payload.to,
+                direction: payload.direction,
+                queue: queueName,
+              });
+
+              await handleContactCenterEnqueue({
+                callControlId: payload.call_control_id,
+                callSessionId: payload.call_session_id,
+                callLegId: payload.call_leg_id,
+                queueName,
+                currentPosition: payload.current_position,
+                queueAvgWaitTimeSecs: payload.queue_avg_wait_time_secs,
+                clientState: payload.client_state,
+                flowId,
+                flowOwnerUsername: flowOwner,
+                fromNumber: payload.from,
+                toNumber: payload.to,
+                direction: payload.direction,
+              });
+            }
           } catch (err) {
             console.error(
               "[IncomingFlowWebhook] Error handling contact center enqueue:",
@@ -206,6 +422,29 @@ export async function POST(request, { params }) {
       } catch (err) {
         console.error(
           "[IncomingFlowWebhook] Error handling contact center enqueue:",
+          err
+        );
+        // Don't fail the webhook, just log the error
+      }
+    }
+
+    // Handle other Contact Center events (call.answered, call.bridged, call.dequeued, call.held, call.unheld, call.hangup)
+    if (
+      event === "call.answered" ||
+      event === "call.bridged" ||
+      event === "call.dequeued" ||
+      event === "call.held" ||
+      event === "call.unheld" ||
+      event === "call.hangup"
+    ) {
+      try {
+        const { handleContactCenterEvent } = await import(
+          "@/lib/contact-center/webhook-handler.js"
+        );
+        await handleContactCenterEvent(event, payload);
+      } catch (err) {
+        console.error(
+          `[IncomingFlowWebhook] Error handling contact center event ${event}:`,
           err
         );
         // Don't fail the webhook, just log the error
@@ -516,9 +755,9 @@ export async function POST(request, { params }) {
             const pool = getPostgresPool();
 
             if (pool) {
-              // Find all call legs in this session
+              // Find all call legs in this session from cc_interactions table
               const calls = await pool.query(
-                "SELECT call_control_id, direction, state FROM calls WHERE call_session_id = $1 ORDER BY created_at ASC",
+                "SELECT call_control_id, direction, state FROM cc_interactions WHERE call_session_id = $1 ORDER BY created_at ASC",
                 [callSessionId]
               );
 
@@ -550,6 +789,7 @@ export async function POST(request, { params }) {
 
                 // Hangup the original call leg
                 const result = await callTelnyxAction(
+                  flowId,
                   "hangup",
                   originalCall.call_control_id,
                   {}
@@ -570,18 +810,23 @@ export async function POST(request, { params }) {
                 );
               }
 
-              // Update the WebRTC call leg state to "completed"
+              // Update the interaction state instead of calls table
               try {
-                await pool.query(
-                  "UPDATE calls SET state = $1, updated_at = NOW() WHERE call_control_id = $2",
-                  ["completed", callControlId]
+                const { PgDb } = await import("@/lib/pgdb.js");
+                const interaction = await PgDb.findInteractionByCallControlId(
+                  callControlId
                 );
-                console.log(
-                  `[IncomingFlowWebhook] Updated WebRTC call leg state to completed: ${callControlId}`
-                );
+                if (interaction) {
+                  await PgDb.updateInteractionById(interaction.id, {
+                    state: "completed",
+                  });
+                  console.log(
+                    `[IncomingFlowWebhook] Updated interaction state to completed: ${interaction.id}`
+                  );
+                }
               } catch (err) {
                 console.error(
-                  "[IncomingFlowWebhook] Error updating WebRTC call leg state:",
+                  "[IncomingFlowWebhook] Error updating interaction state:",
                   err
                 );
               }
@@ -597,99 +842,8 @@ export async function POST(request, { params }) {
           }
         }
 
-        if (callControlId) {
-          // Find interaction by call_control_id
-          let interaction = await PgDb.findInteractionByCallControlId(
-            callControlId
-          );
-
-          // Fallback: Also try to find by agent_call_control_id in metadata
-          // This handles the case where the agent's WebRTC leg hangs up after transfer
-          if (!interaction) {
-            try {
-              const { getPostgresPool } = await import("@/lib/postgres.mjs");
-              const pool = getPostgresPool();
-              if (pool) {
-                const result = await pool.query(
-                  "SELECT * FROM cc_interactions WHERE metadata->>'agent_call_control_id' = $1 AND is_contact_center = true ORDER BY created_at DESC LIMIT 1",
-                  [callControlId]
-                );
-                if (result.rows?.[0]) {
-                  const row = result.rows[0];
-                  // Parse JSON fields
-                  const safeParse = (value) => {
-                    if (!value) return null;
-                    if (typeof value === "object") return value;
-                    if (typeof value === "string") {
-                      try {
-                        return JSON.parse(value);
-                      } catch {
-                        return value;
-                      }
-                    }
-                    return value;
-                  };
-                  interaction = {
-                    ...row,
-                    required_skills: safeParse(row.required_skills),
-                    routing_metadata: safeParse(row.routing_metadata),
-                    transfer_history: safeParse(row.transfer_history),
-                    tags: safeParse(row.tags),
-                    metadata: safeParse(row.metadata),
-                  };
-                  console.log(
-                    `[IncomingFlowWebhook] Found interaction by agent_call_control_id: ${callControlId}`
-                  );
-                }
-              }
-            } catch (err) {
-              console.warn(
-                "[IncomingFlowWebhook] Error looking up by agent_call_control_id:",
-                err
-              );
-            }
-          }
-
-          if (interaction && interaction.is_contact_center) {
-            // Update interaction state to completed/abandoned
-            const updates = {
-              state: interaction.state === "queued" ? "abandoned" : "completed",
-            };
-
-            if (updates.state === "completed") {
-              updates.completedAt = new Date().toISOString();
-              // Calculate handle time and talk time
-              if (interaction.answered_at) {
-                const handleTime = Math.floor(
-                  (new Date().getTime() -
-                    new Date(interaction.answered_at).getTime()) /
-                    1000
-                );
-                updates.handleTimeSeconds = handleTime;
-              }
-            } else {
-              updates.abandonedAt = new Date().toISOString();
-            }
-
-            await PgDb.updateInteractionById(interaction.id, updates);
-
-            // Notify agent to remove from Interactions list
-            if (interaction.agent_username) {
-              broadcastToKey(
-                `contact-center:agent:${interaction.agent_username}`,
-                {
-                  type: "interaction_ended",
-                  interactionId: interaction.id,
-                  callControlId: callControlId,
-                }
-              );
-            }
-
-            console.log(
-              `[IncomingFlowWebhook] ✅ Handled call.hangup for interaction ${interaction.id}`
-            );
-          }
-        }
+        // Note: The actual interaction update, timeline event, and SSE broadcast
+        // are all handled by handleContactCenterEvent which is called above.
       } catch (err) {
         console.error("[IncomingFlowWebhook] Error handling call.hangup:", err);
         // Don't fail the webhook, just log the error
@@ -700,6 +854,39 @@ export async function POST(request, { params }) {
         message: "Call ended",
         variables,
       });
+    }
+
+    // Handle call.recording.saved - store recording URL
+    if (event === "call.recording.saved") {
+      try {
+        const { PgDb } = await import("@/lib/pgdb.js");
+        const callControlId = payload.call_control_id;
+        const interaction = await PgDb.findInteractionByCallControlId(
+          callControlId
+        );
+
+        if (interaction && interaction.is_contact_center) {
+          const recordingUrl =
+            payload?.recording_urls?.public_recording_urls?.[0] ||
+            payload?.recording_urls?.recording_urls?.[0] ||
+            payload?.public_recording_urls?.[0] ||
+            payload?.recording_url ||
+            null;
+          if (recordingUrl) {
+            await PgDb.updateInteractionById(interaction.id, {
+              recordingUrl,
+            });
+            console.log(
+              `[IncomingFlowWebhook] ✅ Stored recording URL for interaction ${interaction.id}: ${recordingUrl}`
+            );
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[IncomingFlowWebhook] Error handling call.recording.saved:",
+          err
+        );
+      }
     }
 
     // Try to decode client_state to get current execution info

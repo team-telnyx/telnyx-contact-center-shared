@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/auth-server";
+import { PgDb } from "@/lib/pgdb";
+
+/**
+ * GET /api/contact-center/agent/interactions
+ * List active interactions assigned to agent from cc_interactions table
+ */
+export async function GET(request) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const state = searchParams.get("state");
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
+
+    // Fetch only active interactions (not completed/abandoned) from database
+    const activeInteractions = await PgDb.listAgentInteractions(user.username, {
+      state, // If state filter is provided, use it
+      activeOnly: true, // Only fetch non-completed interactions
+      limit,
+    });
+
+    // Only return interactions from cc_interactions table
+    return NextResponse.json({ ok: true, interactions: activeInteractions });
+  } catch (err) {
+    console.error("[ContactCenter] Interactions list error:", err);
+    return NextResponse.json(
+      { ok: false, error: "Server error" },
+      { status: 500 }
+    );
+  }
+}
+

@@ -9,16 +9,25 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const handleTransfer = async (number) => {
     // Allow transfer even without interaction (for direct WebRTC calls)
     let interactionId = interaction?.id;
-    let callControlId = interaction?.call_control_id;
+    // For inbound calls transferred to agents, use metadata.original_call_control_id if available
+    // Otherwise use interaction.call_control_id
+    let callControlId =
+      interaction?.metadata?.original_call_control_id ||
+      interaction?.call_control_id;
 
     if (!interactionId && !callControlId) {
       // Get call control ID from active call store
       let storeState;
       try {
-        const { default: useActiveCallStore } = await import("@/lib/stores/active-call-store");
+        const { default: useActiveCallStore } = await import(
+          "@/lib/stores/active-call-store"
+        );
         storeState = useActiveCallStore.getState();
       } catch (importErr) {
-        console.error("[TransferModal] Error importing active-call-store:", importErr);
+        console.error(
+          "[TransferModal] Error importing active-call-store:",
+          importErr
+        );
         alert("Failed to access call state. Please try again.");
         return;
       }
@@ -31,20 +40,30 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // For outbound WebRTC calls, fetch PSTN leg's call_control_id
       // Try using rtcCallId first, then fall back to WebRTC call_control_id
       const webrtcCallControlId = storeState.callControlId;
-      
+
       if (storeState.rtcCallId || webrtcCallControlId) {
         try {
           // Use rtcCallId if available, otherwise use WebRTC call_control_id
           const lookupId = storeState.rtcCallId || webrtcCallControlId;
-          console.log("[TransferModal] 🔍 Fetching PSTN leg call_control_id for:", lookupId);
-          const res = await fetch(`/api/voice/call-leg/${encodeURIComponent(lookupId)}`);
+          console.log(
+            "[TransferModal] 🔍 Fetching PSTN leg call_control_id for:",
+            lookupId
+          );
+          const res = await fetch(
+            `/api/voice/call-leg/${encodeURIComponent(lookupId)}`
+          );
           const data = await res.json();
-          
+
           if (data.ok && data.call_control_id) {
             callControlId = data.call_control_id;
-            console.log("[TransferModal] ✅ Using PSTN leg call_control_id:", callControlId);
+            console.log(
+              "[TransferModal] ✅ Using PSTN leg call_control_id:",
+              callControlId
+            );
           } else {
-            console.warn("[TransferModal] ⚠️ No mapping found, using originalCallControlId as fallback");
+            console.warn(
+              "[TransferModal] ⚠️ No mapping found, using originalCallControlId as fallback"
+            );
             callControlId = storeState.originalCallControlId;
           }
         } catch (err) {
@@ -60,11 +79,16 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           console.error(
             "[TransferModal] No originalCallControlId found in store. This should have been extracted from X-Original-Call-Control-Id header."
           );
-          alert("Cannot determine call control ID for transfer. Missing X-Original-Call-Control-Id header.");
+          alert(
+            "Cannot determine call control ID for transfer. Missing X-Original-Call-Control-Id header."
+          );
           return;
         }
 
-        console.log("[TransferModal] Using originalCallControlId from store:", callControlId);
+        console.log(
+          "[TransferModal] Using originalCallControlId from store:",
+          callControlId
+        );
       }
     }
 
@@ -105,6 +129,25 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
       const data = await res.json();
       if (data.ok) {
+        // Record transfer in active call store
+        try {
+          const { default: useActiveCallStore } = await import(
+            "@/lib/stores/active-call-store"
+          );
+          const store = useActiveCallStore.getState();
+          store.recordTransfer({
+            to: target,
+            type: type,
+            callControlId: callControlId,
+          });
+        } catch (storeErr) {
+          console.error(
+            "[TransferModal] Error recording transfer in store:",
+            storeErr
+          );
+          // Don't fail the transfer if store update fails
+        }
+
         // Close modal first
         onOpenChange(false);
         // Then call onTransfer callback (which may trigger reload if needed)
@@ -112,7 +155,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         try {
           onTransfer?.();
         } catch (callbackErr) {
-          console.error("[TransferModal] Error in onTransfer callback:", callbackErr);
+          console.error(
+            "[TransferModal] Error in onTransfer callback:",
+            callbackErr
+          );
           // Don't throw - transfer succeeded, just callback failed
         }
       } else {

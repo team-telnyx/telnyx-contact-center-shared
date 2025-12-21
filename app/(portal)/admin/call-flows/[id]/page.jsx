@@ -1225,6 +1225,7 @@ export default function FlowBuilderPage() {
   );
   const [aiAssistants, setAiAssistants] = useState([]);
   const [assistantSearchQuery, setAssistantSearchQuery] = useState("");
+  const [queues, setQueues] = useState([]);
   const [copiedField, setCopiedField] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -1589,6 +1590,23 @@ export default function FlowBuilderPage() {
     }
 
     loadUserProfile();
+  }, []);
+
+  // Load enabled and active queues for enqueue node
+  useEffect(() => {
+    async function loadQueues() {
+      try {
+        const res = await fetch("/api/contact-center/queues/list");
+        const data = await res.json();
+        if (res.ok && data?.queues) {
+          setQueues(data.queues);
+        }
+      } catch (error) {
+        console.error("Error loading queues:", error);
+      }
+    }
+
+    loadQueues();
   }, []);
 
   // AI assistants not available in contact center - leave empty
@@ -3469,7 +3487,7 @@ export default function FlowBuilderPage() {
                                   ) : paramDef.type === "select" ? (
                                     (() => {
                                       // Special handling for enqueue node's queue_name field
-                                      // Replace {{username}} with actual private queue name
+                                      // Use queues fetched from database instead of hardcoded options
                                       const isQueueNameField =
                                         selectedNodeDef.id === "enqueue" &&
                                         key === "queue_name";
@@ -3477,22 +3495,23 @@ export default function FlowBuilderPage() {
                                         ? userEmail.split("@")[0].toUpperCase()
                                         : null;
 
-                                      // Process options: replace {{username}} with actual queue name
-                                      const processedOptions =
-                                        paramDef.options?.map((opt) => {
-                                          if (
-                                            isQueueNameField &&
-                                            opt.value === "{{username}}" &&
-                                            privateQueueName
-                                          ) {
-                                            return {
-                                              ...opt,
-                                              value: privateQueueName,
-                                              label: privateQueueName,
-                                            };
-                                          }
-                                          return opt;
-                                        }) || [];
+                                      // For enqueue queue_name, use fetched queues; otherwise use paramDef options
+                                      let processedOptions = [];
+                                      if (isQueueNameField) {
+                                        // Convert fetched queues to options format
+                                        // Only show queues from cc_queues table (enabled and active)
+                                        processedOptions = queues.map(
+                                          (queue) => ({
+                                            value: queue.name,
+                                            label:
+                                              queue.display_name || queue.name,
+                                          })
+                                        );
+                                      } else {
+                                        // For other select fields, use paramDef options
+                                        processedOptions =
+                                          paramDef.options || [];
+                                      }
 
                                       // Get current value
                                       let currentValue =
@@ -3551,27 +3570,22 @@ export default function FlowBuilderPage() {
                                             </SelectValue>
                                           </SelectTrigger>
                                           <SelectContent>
-                                            {processedOptions.map((opt) => {
-                                              // Special handling for {{username}} option - show actual username
-                                              let displayLabel = opt.label;
-                                              if (
-                                                opt.value === "{{username}}" &&
-                                                userEmail
-                                              ) {
-                                                const username = userEmail
-                                                  .split("@")[0]
-                                                  .toUpperCase();
-                                                displayLabel = username;
-                                              }
-                                              return (
+                                            {processedOptions.length > 0 ? (
+                                              processedOptions.map((opt) => (
                                                 <SelectItem
                                                   key={opt.value}
                                                   value={opt.value}
                                                 >
-                                                  {displayLabel}
+                                                  {opt.label}
                                                 </SelectItem>
-                                              );
-                                            })}
+                                              ))
+                                            ) : (
+                                              <SelectItem value="" disabled>
+                                                {isQueueNameField
+                                                  ? "No enabled queues available"
+                                                  : "No options available"}
+                                              </SelectItem>
+                                            )}
                                           </SelectContent>
                                         </Select>
                                       );
