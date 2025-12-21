@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
-import { getUserIdFromSession } from "@/lib/auth-server";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -21,13 +21,14 @@ export async function POST(request, { params }) {
     }
 
     // Verify authentication
-    const userId = await getUserIdFromSession(request);
-    if (!userId) {
+    const user = await getAuthenticatedUser();
+    if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
+    const userId = user.id;
 
     const body = await request.json();
     const {
