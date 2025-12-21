@@ -6,6 +6,7 @@ import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
 import { Info } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import useCallsStore from "@/lib/stores/calls-store";
 
 export function AgentDesktop() {
   const [selectedInteraction, setSelectedInteraction] = useState(null);
@@ -15,36 +16,62 @@ export function AgentDesktop() {
   // Get WebRTC call state for real-time updates (hold, mute, status)
   const webrtcCallState = useActiveCallStore();
 
+  // Get calls from calls store
+  const callsStore = useCallsStore();
+  const storedCalls = callsStore.getAllCalls();
+
+  // Initialize calls store on mount (ensures it's visible in dev tools)
+  useEffect(() => {
+    // Access the store to ensure it's initialized
+    callsStore.getAllCalls();
+  }, [callsStore]);
+
   // Load interactions immediately on mount (always, even when navigating back)
   useEffect(() => {
     const loadInteractionsOnMount = async () => {
       try {
-        console.log("[AgentDesktop] Loading interactions on mount...");
         const res = await fetch(
           "/api/contact-center/agent/interactions?limit=10&activeOnly=true"
         );
         const data = await res.json();
         if (data.ok) {
           const dbInteractions = data.interactions || [];
-          console.log(
-            "[AgentDesktop] Loaded interactions on mount:",
-            dbInteractions.length,
-            dbInteractions
-          );
-          setInteractions(dbInteractions);
-          if (dbInteractions.length > 0) {
+
+          // Merge with calls from store (for calls that might not be in DB yet)
+          const storeCallMap = new Map();
+          storedCalls.forEach((call) => {
+            if (call.interactionId) {
+              storeCallMap.set(call.interactionId, call);
+            }
+          });
+
+          // Enhance DB interactions with store data
+          const enhancedInteractions = dbInteractions.map((interaction) => {
+            const storeCall = storeCallMap.get(interaction.id);
+            if (storeCall) {
+              return {
+                ...interaction,
+                // Override with store data if available
+                from_name: storeCall.callerName || interaction.from_name,
+                from_number: storeCall.callerNumber || interaction.from_number,
+                queue_name: storeCall.queueName || interaction.queue_name,
+              };
+            }
+            return interaction;
+          });
+
+          setInteractions(enhancedInteractions);
+          if (enhancedInteractions.length > 0) {
             setSelectedInteraction((current) => {
               if (!current) {
-                return dbInteractions[0];
+                return enhancedInteractions[0];
               }
               return current;
             });
           }
-        } else {
-          console.warn("[AgentDesktop] Failed to load interactions:", data);
         }
       } catch (err) {
-        console.error("Failed to load interactions on mount:", err);
+        // Silently handle errors
       }
     };
 
@@ -59,11 +86,34 @@ export function AgentDesktop() {
         const data = await res.json();
         if (data.ok) {
           const dbInteractions = data.interactions || [];
+
+          // Merge with calls from store
+          const storeCallMap = new Map();
+          callsStore.getAllCalls().forEach((call) => {
+            if (call.interactionId) {
+              storeCallMap.set(call.interactionId, call);
+            }
+          });
+
+          // Enhance DB interactions with store data
+          const enhancedInteractions = dbInteractions.map((interaction) => {
+            const storeCall = storeCallMap.get(interaction.id);
+            if (storeCall) {
+              return {
+                ...interaction,
+                from_name: storeCall.callerName || interaction.from_name,
+                from_number: storeCall.callerNumber || interaction.from_number,
+                queue_name: storeCall.queueName || interaction.queue_name,
+              };
+            }
+            return interaction;
+          });
+
           setInteractions((prev) => {
             // Merge with existing interactions to preserve temporary ones from SSE
-            const merged = [...dbInteractions];
+            const merged = [...enhancedInteractions];
             prev.forEach((existing) => {
-              const existsInDb = dbInteractions.find(
+              const existsInDb = enhancedInteractions.find(
                 (db) =>
                   (db.id && db.id === existing.id) ||
                   (db.call_control_id &&
@@ -87,24 +137,26 @@ export function AgentDesktop() {
           // Auto-select first active if none selected
           setSelectedInteraction((current) => {
             if (!current) {
-              return dbInteractions.length > 0 ? dbInteractions[0] : null;
+              return enhancedInteractions.length > 0
+                ? enhancedInteractions[0]
+                : null;
             }
             // Update selected interaction if it exists in the new list
             if (current) {
-              const updated = dbInteractions.find(
+              const updated = enhancedInteractions.find(
                 (i) =>
                   i.id === current.id ||
                   i.call_control_id === current.call_control_id
               );
               if (updated) {
-                return updated; // Return updated version
+                return updated;
               }
             }
             return current;
           });
         }
       } catch (err) {
-        console.error("Failed to reload interactions:", err);
+        // Silently handle errors
       }
     };
 
@@ -123,7 +175,7 @@ export function AgentDesktop() {
           setCurrentUsername(data.user.email);
         }
       } catch (err) {
-        console.error("Failed to load username:", err);
+        // Silently handle errors
       }
     };
     loadUsername();
@@ -136,21 +188,13 @@ export function AgentDesktop() {
 
     const connectContactCenterStream = () => {
       try {
-        console.log(
-          "[AgentDesktop] Connecting to contact center SSE stream..."
-        );
         contactCenterEventSource = new EventSource(
           "/api/contact-center/agent/stream"
         );
 
-        contactCenterEventSource.onopen = () => {
-          console.log("[AgentDesktop] Contact center SSE stream connected");
-        };
-
         contactCenterEventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("[AgentDesktop] Received SSE event:", data.type);
 
             if (data.type === "new_interaction") {
               // New interaction from queue - immediately add to list
@@ -163,14 +207,40 @@ export function AgentDesktop() {
                   call_session_id: data.interaction.callSessionId,
                   direction: "inbound",
                   state: data.interaction.state || "ringing",
-                  from_number: data.interaction.fromNumber || "",
+                  from_number:
+                    data.interaction.fromNumber ||
+                    data.interaction.callerNumber ||
+                    "",
                   to_number: data.interaction.toNumber || "",
-                  from_name: data.interaction.fromName || null,
+                  from_name:
+                    data.interaction.fromName ||
+                    data.interaction.callerName ||
+                    null,
                   queue_name: data.interaction.queueName || "",
                   interaction_type: "voice",
                   is_contact_center: true,
                   created_at: new Date().toISOString(),
                 };
+
+                // Add to calls store
+                if (data.interaction.callControlId) {
+                  callsStore.addCall({
+                    callControlId: data.interaction.callControlId,
+                    callSessionId: data.interaction.callSessionId,
+                    interactionId: data.interaction.id,
+                    callerName:
+                      data.interaction.fromName || data.interaction.callerName,
+                    callerNumber:
+                      data.interaction.fromNumber ||
+                      data.interaction.callerNumber,
+                    queueName: data.interaction.queueName,
+                    queueId: data.interaction.queueId,
+                    queuedAt: data.interaction.queuedAt,
+                    assignedAt: data.interaction.assignedAt,
+                    direction: "inbound",
+                    status: "ringing",
+                  });
+                }
 
                 setInteractions((prev) => {
                   const exists = prev.find(
@@ -190,7 +260,6 @@ export function AgentDesktop() {
                 });
 
                 setSelectedInteraction((current) => {
-                  // Auto-select new interaction if none selected
                   if (!current) {
                     return tempInteraction;
                   }
@@ -210,6 +279,21 @@ export function AgentDesktop() {
                   return i;
                 })
               );
+
+              // Update calls store if we have callControlId
+              if (data.callControlId && data.updates) {
+                const callData = callsStore.getCall(data.callControlId);
+                if (callData) {
+                  callsStore.updateCall(data.callControlId, {
+                    status: data.updates.state || callData.status,
+                    callerName: data.updates.from_name || callData.callerName,
+                    callerNumber:
+                      data.updates.from_number || callData.callerNumber,
+                    queueName: data.updates.queue_name || callData.queueName,
+                  });
+                }
+              }
+
               // Update selected interaction if it's the one being updated
               setSelectedInteraction((current) => {
                 if (
@@ -222,6 +306,17 @@ export function AgentDesktop() {
                 return current;
               });
             } else if (data.type === "interaction_ended") {
+              // Update calls store - mark call as ended
+              if (data.callControlId) {
+                const callData = callsStore.getCall(data.callControlId);
+                if (callData) {
+                  callsStore.updateCall(data.callControlId, {
+                    status: "ended",
+                    disconnectedTime: Date.now(),
+                  });
+                }
+              }
+
               // Remove interaction from list when call ends
               setInteractions((prev) =>
                 prev.filter((i) => {
@@ -234,6 +329,7 @@ export function AgentDesktop() {
                   return true;
                 })
               );
+
               // Clear selection if it was the selected interaction
               setSelectedInteraction((current) => {
                 if (
@@ -247,35 +343,23 @@ export function AgentDesktop() {
               });
             }
           } catch (err) {
-            console.error("Failed to parse contact center SSE message:", err);
+            // Silently handle parse errors
           }
         };
 
         contactCenterEventSource.onerror = (error) => {
-          console.warn(
-            "[AgentDesktop] Contact center stream error, will reconnect:",
-            error
-          );
           if (contactCenterEventSource) {
             contactCenterEventSource.close();
             contactCenterEventSource = null;
           }
-          // Clear any existing reconnect timeout
           if (reconnectTimeout) {
             clearTimeout(reconnectTimeout);
           }
-          // Reconnect after a delay
           reconnectTimeout = setTimeout(() => {
-            console.log("[AgentDesktop] Reconnecting to SSE stream...");
             connectContactCenterStream();
           }, 3000);
         };
       } catch (err) {
-        console.error(
-          "[AgentDesktop] Failed to connect to contact center stream:",
-          err
-        );
-        // Retry connection
         reconnectTimeout = setTimeout(() => {
           connectContactCenterStream();
         }, 3000);

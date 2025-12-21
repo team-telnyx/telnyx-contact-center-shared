@@ -87,15 +87,21 @@ export function Softphone() {
 
   // Check if call is connected/answered (CTI buttons should only show when connected)
   // Check both store status and call object state to handle all cases (inbound/outbound, direct/contact center)
-  const callObjectState = activeCall?.state
-    ? String(activeCall.state).toLowerCase()
-    : null;
-  const storeStatus = callStatus ? String(callStatus).toLowerCase() : null;
-  const connectedStates = ["active", "connected", "answered", "held"];
-  const isCallConnected =
-    activeCall &&
-    ((storeStatus && connectedStates.includes(storeStatus)) ||
-      (callObjectState && connectedStates.includes(callObjectState)));
+  // Memoized to prevent rapid re-computation when status changes rapidly during answer
+  const isCallConnected = useMemo(() => {
+    if (!activeCall) return false;
+
+    const callObjectState = activeCall?.state
+      ? String(activeCall.state).toLowerCase()
+      : null;
+    const storeStatus = callStatus ? String(callStatus).toLowerCase() : null;
+    const connectedStates = ["active", "connected", "answered", "held"];
+
+    return (
+      (storeStatus && connectedStates.includes(storeStatus)) ||
+      (callObjectState && connectedStates.includes(callObjectState))
+    );
+  }, [activeCall, callStatus]);
 
   // Local UI state
   const [dtmfBuffer, setDtmfBuffer] = useState("");

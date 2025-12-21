@@ -10,6 +10,7 @@ import useActiveCallStore, {
   useCallUI,
 } from "@/lib/stores/active-call-store";
 import useDialStore from "@/lib/stores/dial-store";
+import useCallsStore from "@/lib/stores/calls-store";
 import {
   lookupCallMetadata,
   lookupCustomerName,
@@ -391,6 +392,29 @@ export default function SoftphoneMini() {
                   // Set active call in store
                   setActiveCall(call, metadata);
 
+                  // Also add to calls store for multi-call management
+                  useCallsStore.getState().addCall({
+                    callControlId,
+                    callSessionId: call.callSessionId || call.call_session_id,
+                    originalCallControlId: metadata.originalCallControlId,
+                    originalCallSessionId: metadata.originalCallSessionId,
+                    rtcCallId: metadata.rtcCallId,
+                    interactionId: metadata.interactionId,
+                    callerName: metadata.fromName,
+                    callerNumber: metadata.fromNumber || fromNumber,
+                    queueName: metadata.queueName,
+                    queueId: metadata.queueId,
+                    direction: metadata.direction || "inbound",
+                    status: "ringing",
+                    fromName: metadata.fromName,
+                    fromNumber: metadata.fromNumber || fromNumber,
+                    toNumber: metadata.toNumber,
+                    queuedAt: metadata.queuedAt,
+                    assignedAt: metadata.assignedAt || Date.now(),
+                    customerId: metadata.customerId,
+                    customerData: metadata.customerData,
+                  });
+
                   // Wire up call events
                   wireCall(call);
 
@@ -630,6 +654,41 @@ export default function SoftphoneMini() {
             }
           } catch (_) {}
 
+          // Sync to calls store
+          try {
+            const callControlId =
+              call.callControlId || call.call_control_id || call.id;
+            const callsStore = useCallsStore.getState();
+            const callData = callsStore.getCall(callControlId);
+
+            if (callData) {
+              const updates = {
+                status: s,
+                isMuted: call.muted !== undefined ? call.muted : call.isMuted,
+                isHeld: call.held !== undefined ? call.held : call.isHeld,
+              };
+
+              // Set answerTime when call becomes active/connected/answered
+              if (
+                (s === "active" || s === "connected" || s === "answered") &&
+                !callData.answerTime
+              ) {
+                updates.answerTime = Date.now();
+                updates.connectedTime = Date.now();
+                updates.isRinging = false;
+              }
+
+              // Update duration if call is active
+              if (callData.answerTime && !callData.disconnectedTime) {
+                updates.duration = Math.floor(
+                  (Date.now() - callData.answerTime) / 1000
+                );
+              }
+
+              callsStore.updateCall(callControlId, updates);
+            }
+          } catch (_) {}
+
           attachAudio(call);
         } catch (_) {}
       };
@@ -825,6 +884,28 @@ export default function SoftphoneMini() {
   async function handleCallEnd() {
     try {
       const storeState = useActiveCallStore.getState();
+
+      // Get callControlId for calls store
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
+
+      // Update calls store before clearing
+      if (callControlId) {
+        const callsStore = useCallsStore.getState();
+        const callData = callsStore.getCall(callControlId);
+
+        if (callData) {
+          // Update final status and disconnected time
+          callsStore.updateCall(callControlId, {
+            status: "ended",
+            disconnectedTime: Date.now(),
+            isRinging: false,
+          });
+        }
+      }
 
       // Sync call data to database before clearing store
       // Only for inbound contact center calls (not outbound calls)

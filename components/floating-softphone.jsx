@@ -200,27 +200,59 @@ export default function FloatingSoftphone() {
 }
 
 // Phone Status Component
+// Optimized to prevent unnecessary re-renders when answering calls
+// Uses ref to track last displayed value and only updates state when it changes
 function PhoneStatus() {
-  // Use active call store instead of old call-store
-  const callStatus = useActiveCallStore((state) => state.status);
-  const activeCall = useActiveCallStore((state) => state.call);
-  const callUI = useActiveCallStore((state) => state.ui);
+  // Subscribe to store values
+  const status = useActiveCallStore((state) => state.status);
+  const call = useActiveCallStore((state) => state.call);
+  const isHeld = useActiveCallStore((state) => state.ui.isHeld);
 
-  // Use shared utility function for consistent status display
-  const statusDisplay = getStatusDisplay(callStatus, !!activeCall);
-
-  // Override to "On Hold" if held (priority over other statuses)
-  const finalText = callUI.isHeld ? "On Hold" : statusDisplay.text;
-  const finalColor = callUI.isHeld
+  // Compute the current displayed value
+  const statusDisplay = useMemo(
+    () => getStatusDisplay(status, !!call),
+    [status, call]
+  );
+  const currentText = isHeld ? "On Hold" : statusDisplay.text;
+  const currentColor = isHeld
     ? "border-orange-600 bg-orange-600/20 text-orange-400"
     : statusDisplay.color;
 
+  // Use ref to track the last rendered value (initialized once)
+  const lastRenderedRef = useRef(null);
+
+  // Local state that only updates when the displayed value actually changes
+  const [displayValue, setDisplayValue] = useState(() => ({
+    text: currentText,
+    color: currentColor,
+  }));
+
+  // Initialize ref on first render
+  if (lastRenderedRef.current === null) {
+    lastRenderedRef.current = { text: currentText, color: currentColor };
+  }
+
+  // Update state only when the displayed value actually changes
+  // This prevents rapid re-renders when status changes rapidly (answered -> connected -> active)
+  useEffect(() => {
+    if (
+      lastRenderedRef.current === null ||
+      lastRenderedRef.current.text !== currentText ||
+      lastRenderedRef.current.color !== currentColor
+    ) {
+      lastRenderedRef.current = { text: currentText, color: currentColor };
+      setDisplayValue({ text: currentText, color: currentColor });
+    }
+  }, [currentText, currentColor]);
+
   return (
-    <div className={clsx(
-      "flex items-center gap-1.5 border px-2 py-0.5 rounded-md text-xs font-medium",
-      finalColor
-    )}>
-      {finalText}
+    <div
+      className={clsx(
+        "flex items-center gap-1.5 border px-2 py-0.5 rounded-md text-xs font-medium",
+        displayValue.color
+      )}
+    >
+      {displayValue.text}
     </div>
   );
 }

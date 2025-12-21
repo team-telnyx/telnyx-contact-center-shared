@@ -112,23 +112,6 @@ function getWebRTCStatus(interaction, webrtcCallState) {
   const interactionIdsMatch =
     webrtcCallState.contactCenter?.interactionId === interactionId;
 
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV === "development") {
-    console.log("[InteractionsList] Matching WebRTC status:", {
-      interactionId,
-      callControlId,
-      webrtcCallId,
-      storeInteractionId: webrtcCallState.contactCenter?.interactionId,
-      idsMatch,
-      interactionIdsMatch,
-      isInbound,
-      isOutbound,
-      webrtcStatus: webrtcCallState.status,
-      isMuted: webrtcCallState.ui?.isMuted,
-      isHeld: webrtcCallState.ui?.isHeld,
-    });
-  }
-
   // For contact center calls (inbound), prioritize matching by interaction ID
   // This is important because inbound calls transferred to agents have different
   // call_control_id values (original PSTN leg vs agent's WebRTC leg)
@@ -136,15 +119,6 @@ function getWebRTCStatus(interaction, webrtcCallState) {
     const isMuted = webrtcCallState.ui?.isMuted || false;
     const isHeld = webrtcCallState.ui?.isHeld || false;
     const webrtcStatus = webrtcCallState.status || call.state || null;
-
-    if (process.env.NODE_ENV === "development") {
-      console.log("[InteractionsList] ✅ Matched by interactionId:", {
-        interactionId,
-        status: webrtcStatus,
-        isMuted,
-        isHeld,
-      });
-    }
 
     return {
       status: webrtcStatus,
@@ -158,15 +132,6 @@ function getWebRTCStatus(interaction, webrtcCallState) {
     const isMuted = webrtcCallState.ui?.isMuted || false;
     const isHeld = webrtcCallState.ui?.isHeld || false;
     const webrtcStatus = webrtcCallState.status || call.state || null;
-
-    if (process.env.NODE_ENV === "development") {
-      console.log("[InteractionsList] ✅ Matched by call_control_id:", {
-        callControlId,
-        status: webrtcStatus,
-        isMuted,
-        isHeld,
-      });
-    }
 
     return {
       status: webrtcStatus,
@@ -221,35 +186,10 @@ function getWebRTCStatus(interaction, webrtcCallState) {
       "queued",
     ].includes(interaction.state?.toLowerCase());
 
-    if (process.env.NODE_ENV === "development") {
-      console.log("[InteractionsList] Fallback check:", {
-        isInbound,
-        hasCall: !!webrtcCallState.call,
-        isActive,
-        isActiveState,
-        interactionState: interaction.state,
-        completed_at: interaction.completed_at,
-        abandoned_at: interaction.abandoned_at,
-      });
-    }
-
     if (isActive && isActiveState) {
       const isMuted = webrtcCallState.ui?.isMuted || false;
       const isHeld = webrtcCallState.ui?.isHeld || false;
       const webrtcStatus = webrtcCallState.status || call.state || null;
-
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          "[InteractionsList] ✅ Matched by fallback (active inbound call + active interaction):",
-          {
-            interactionId,
-            status: webrtcStatus,
-            isMuted,
-            isHeld,
-            interactionState: interaction.state,
-          }
-        );
-      }
 
       return {
         status: webrtcStatus,
@@ -277,18 +217,6 @@ function InteractionCard({
   const webrtcStatus = webrtcState?.status || null;
   const isMuted = webrtcState?.isMuted || false;
   const isHeld = webrtcState?.isHeld || false;
-
-  // Debug logging
-  if (process.env.NODE_ENV === "development") {
-    console.log("[InteractionCard] Status check:", {
-      interactionId: interaction.id,
-      webrtcState: webrtcState ? "found" : "null",
-      webrtcStatus,
-      isMuted,
-      isHeld,
-      dbState: interaction.state,
-    });
-  }
 
   // ALWAYS use WebRTC status if available (real-time), otherwise fall back to database status
   // BUT: if call is on hold, show "held" status regardless of other status

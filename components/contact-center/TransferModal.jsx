@@ -16,18 +16,21 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       interaction?.call_control_id;
 
     if (!interactionId && !callControlId) {
-      // Get call control ID from active call store
+      // Get call control ID from stores - prioritize calls store, then active call store
       let storeState;
+      let callsStoreState;
+
       try {
         const { default: useActiveCallStore } = await import(
           "@/lib/stores/active-call-store"
         );
-        storeState = useActiveCallStore.getState();
-      } catch (importErr) {
-        console.error(
-          "[TransferModal] Error importing active-call-store:",
-          importErr
+        const { default: useCallsStore } = await import(
+          "@/lib/stores/calls-store"
         );
+        storeState = useActiveCallStore.getState();
+        callsStoreState = useCallsStore.getState();
+      } catch (importErr) {
+        console.error("[TransferModal] Error importing stores:", importErr);
         alert("Failed to access call state. Please try again.");
         return;
       }
@@ -37,18 +40,24 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         return;
       }
 
-      // For outbound WebRTC calls, fetch PSTN leg's call_control_id
-      // Try using rtcCallId first, then fall back to WebRTC call_control_id
+      // Priority 1: Check calls store for originalCallControlId
       const webrtcCallControlId = storeState.callControlId;
+      if (webrtcCallControlId) {
+        const callData = callsStoreState.getCall(webrtcCallControlId);
+        if (callData?.originalCallControlId) {
+          callControlId = callData.originalCallControlId;
+        }
+      }
 
-      if (storeState.rtcCallId || webrtcCallControlId) {
+      // Priority 2: Use originalCallControlId from active call store (for inbound calls)
+      if (!callControlId && storeState.originalCallControlId) {
+        callControlId = storeState.originalCallControlId;
+      }
+
+      // Priority 3: For outbound WebRTC calls, fetch PSTN leg's call_control_id
+      if (!callControlId && (storeState.rtcCallId || webrtcCallControlId)) {
         try {
-          // Use rtcCallId if available, otherwise use WebRTC call_control_id
           const lookupId = storeState.rtcCallId || webrtcCallControlId;
-          console.log(
-            "[TransferModal] 🔍 Fetching PSTN leg call_control_id for:",
-            lookupId
-          );
           const res = await fetch(
             `/api/voice/call-leg/${encodeURIComponent(lookupId)}`
           );
@@ -56,39 +65,22 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
           if (data.ok && data.call_control_id) {
             callControlId = data.call_control_id;
-            console.log(
-              "[TransferModal] ✅ Using PSTN leg call_control_id:",
-              callControlId
-            );
-          } else {
-            console.warn(
-              "[TransferModal] ⚠️ No mapping found, using originalCallControlId as fallback"
-            );
-            callControlId = storeState.originalCallControlId;
           }
         } catch (err) {
-          console.error("[TransferModal] ❌ Error fetching PSTN leg:", err);
-          callControlId = storeState.originalCallControlId;
+          // Silently handle error, will fall back to WebRTC ID
         }
-      } else {
-        // For incoming calls, use the original call control ID from custom headers
-        // This is the PSTN incoming call leg's ID, which is what we need for transfer
-        callControlId = storeState.originalCallControlId;
+      }
 
-        if (!callControlId) {
-          console.error(
-            "[TransferModal] No originalCallControlId found in store. This should have been extracted from X-Original-Call-Control-Id header."
-          );
-          alert(
-            "Cannot determine call control ID for transfer. Missing X-Original-Call-Control-Id header."
-          );
-          return;
-        }
+      // Last resort: Use WebRTC call control ID (should not happen for inbound calls)
+      if (!callControlId) {
+        callControlId = webrtcCallControlId;
+      }
 
-        console.log(
-          "[TransferModal] Using originalCallControlId from store:",
-          callControlId
+      if (!callControlId) {
+        alert(
+          "Cannot determine call control ID for transfer. Missing call information."
         );
+        return;
       }
     }
 

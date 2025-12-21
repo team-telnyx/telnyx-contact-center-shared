@@ -55,9 +55,10 @@ export async function POST(request) {
       }`
     );
 
-    // If not found, check incoming call store
+    // If not found, check incoming call store and calls store
     if (!interaction) {
       try {
+        // First check incoming call store
         const { getIncomingCallData } = await import(
           "@/lib/incoming-call-store"
         );
@@ -65,7 +66,7 @@ export async function POST(request) {
 
         if (callData?.originalCallControlId) {
           console.log(
-            `[Transfer] Found originalCallControlId in store: ${callData.originalCallControlId}`
+            `[Transfer] Found originalCallControlId in incoming call store: ${callData.originalCallControlId}`
           );
           interaction = await PgDb.findInteractionByCallControlId(
             callData.originalCallControlId
@@ -79,7 +80,7 @@ export async function POST(request) {
 
         if (!interaction && callData?.interactionId) {
           console.log(
-            `[Transfer] Found interactionId in store: ${callData.interactionId}`
+            `[Transfer] Found interactionId in incoming call store: ${callData.interactionId}`
           );
           interaction = await PgDb.findInteractionById(callData.interactionId);
           console.log(
@@ -88,6 +89,10 @@ export async function POST(request) {
             }`
           );
         }
+
+        // Also check calls store (client-side store, but we can check if callControlId matches)
+        // The calls store is client-side only, so we can't directly access it here
+        // But we can try looking up by the originalCallControlId if we find it in metadata
       } catch (err) {
         console.warn("[Transfer] Error checking incoming call store:", err);
       }
@@ -111,7 +116,19 @@ export async function POST(request) {
           );
 
           if (!result.rows?.[0]) {
-            // Fallback: lookup by call_session_id
+            // Also try lookup by metadata.original_call_control_id (in case it's stored there)
+            result = await pool.query(
+              `SELECT * FROM cc_interactions 
+               WHERE metadata->>'original_call_control_id' = $1 
+               AND is_contact_center = true
+               ORDER BY created_at DESC
+               LIMIT 1`,
+              [callControlId]
+            );
+          }
+
+          if (!result.rows?.[0]) {
+            // Fallback: lookup by call_session_id using subquery
             result = await pool.query(
               `SELECT * FROM cc_interactions 
                WHERE call_session_id IN (
@@ -333,7 +350,7 @@ export async function POST(request) {
         transferCount: (interaction.transfer_count || 0) + 1,
         transferHistory,
         routingMetadata: updatedRoutingMetadata,
-        state: "transferred",
+        state: "completed", // Use "completed" instead of "transferred" (not a valid state)
         completedAt: new Date().toISOString(),
       });
 
@@ -429,7 +446,7 @@ export async function POST(request) {
       transferCount: (interaction.transfer_count || 0) + 1,
       transferHistory,
       routingMetadata: updatedRoutingMetadata,
-      state: "transferred",
+      state: "completed", // Use "completed" instead of "transferred" (not a valid state)
       completedAt: new Date().toISOString(),
     });
 
