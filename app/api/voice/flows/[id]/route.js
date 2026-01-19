@@ -8,12 +8,15 @@ import {
   getVoiceApplication,
 } from "@/lib/telnyx-voice-apps";
 import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
+import { PgDb } from "@/lib/pgdb";
+import { isAdmin } from "@/lib/role-utils";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/voice/flows/[id]
  * Get a single flow by ID
+ * Admin users can access any flow
  */
 export async function GET(request, { params }) {
   try {
@@ -25,10 +28,19 @@ export async function GET(request, { params }) {
       );
     }
 
-    const username = session.user.email;
-    const { id } = await params;
+    // Check if user is admin
+    const id = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (id) user = await PgDb.findUserById(id);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
+    const { id: flowId } = await params;
 
-    const flow = await VoiceFlowDb.getFlowById(id, username);
+    const flow = await VoiceFlowDb.getFlowById(flowId, username);
 
     if (!flow) {
       return NextResponse.json(
@@ -59,6 +71,7 @@ export async function GET(request, { params }) {
 /**
  * PUT /api/voice/flows/[id]
  * Update a flow
+ * Admin users can update any flow
  */
 export async function PUT(request, { params }) {
   try {
@@ -70,12 +83,21 @@ export async function PUT(request, { params }) {
       );
     }
 
-    const username = session.user.email;
-    const { id } = await params;
+    // Check if user is admin
+    const id = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (id) user = await PgDb.findUserById(id);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
+    const { id: flowId } = await params;
     const body = await request.json();
 
     // Get existing flow
-    const existingFlow = await VoiceFlowDb.getFlowById(id, username);
+    const existingFlow = await VoiceFlowDb.getFlowById(flowId, username);
     if (!existingFlow) {
       return NextResponse.json(
         { ok: false, error: "Flow not found" },
@@ -96,8 +118,10 @@ export async function PUT(request, { params }) {
     // Update voice application name if flow name changed
     if (body.name !== undefined && existingFlow.telnyx_voice_app_id) {
       try {
+        // Ensure name is unique for Telnyx by appending a portion of the flow ID
+        const telnyxAppName = `${body.name} (${flowId.substring(0, 8)})`;
         await updateVoiceApplication(existingFlow.telnyx_voice_app_id, {
-          application_name: body.name,
+          application_name: telnyxAppName,
         });
       } catch (error) {
         console.error("[API] Failed to update voice application name:", error);
@@ -105,7 +129,7 @@ export async function PUT(request, { params }) {
       }
     }
 
-    const flow = await VoiceFlowDb.updateFlow(id, username, updates);
+    const flow = await VoiceFlowDb.updateFlow(flowId, username, updates);
 
     if (!flow) {
       return NextResponse.json(
@@ -136,6 +160,7 @@ export async function PUT(request, { params }) {
 /**
  * DELETE /api/voice/flows/[id]
  * Delete a flow
+ * Admin users can delete any flow
  */
 export async function DELETE(request, { params }) {
   try {
@@ -147,11 +172,20 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const username = session.user.email;
-    const { id } = await params;
+    // Check if user is admin
+    const id = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (id) user = await PgDb.findUserById(id);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
+    const { id: flowId } = await params;
 
     // Get flow to retrieve voice app ID and phone numbers
-    const flow = await VoiceFlowDb.getFlowById(id, username);
+    const flow = await VoiceFlowDb.getFlowById(flowId, username);
     if (!flow) {
       return NextResponse.json(
         { ok: false, error: "Flow not found" },
@@ -161,13 +195,13 @@ export async function DELETE(request, { params }) {
 
     // Unassign all phone numbers from the voice application
     if (flow.telnyx_voice_app_id) {
-      const phoneNumbers = await VoiceFlowDb.getFlowPhoneNumbers(id);
+      const phoneNumbers = await VoiceFlowDb.getFlowPhoneNumbers(flowId);
 
       for (const phoneNumber of phoneNumbers) {
         try {
           await unassignPhoneNumberFromApp(phoneNumber.phone_number_id);
           console.log(
-            `[API] Unassigned phone number ${phoneNumber.phone_number} from flow ${id}`
+            `[API] Unassigned phone number ${phoneNumber.phone_number} from flow ${flowId}`
           );
         } catch (error) {
           console.error(
@@ -182,7 +216,7 @@ export async function DELETE(request, { params }) {
       try {
         await deleteVoiceApplication(flow.telnyx_voice_app_id);
         console.log(
-          `[API] Deleted voice application ${flow.telnyx_voice_app_id} for flow ${id}`
+          `[API] Deleted voice application ${flow.telnyx_voice_app_id} for flow ${flowId}`
         );
       } catch (error) {
         console.error(
@@ -194,7 +228,7 @@ export async function DELETE(request, { params }) {
     }
 
     // Delete flow from database (cascades to phone number assignments)
-    const result = await VoiceFlowDb.deleteFlow(id, username);
+    const result = await VoiceFlowDb.deleteFlow(flowId, username);
 
     if (!result) {
       return NextResponse.json(

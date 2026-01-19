@@ -3,12 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
+import { PgDb } from "@/lib/pgdb";
+import { isAdmin } from "@/lib/role-utils";
 
 export const dynamic = "force-dynamic";
 
 /**
  * DELETE /api/voice/flows/[id]/phone-numbers/[phoneNumberId]
  * Unassign a phone number from a flow
+ * Admin users can unassign phone numbers from any flow
  */
 export async function DELETE(request, { params }) {
   try {
@@ -20,10 +23,19 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const username = session.user.email;
+    // Check if user is admin
+    const userId = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (userId) user = await PgDb.findUserById(userId);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
     const { id, phoneNumberId } = await params;
 
-    // Verify flow exists and belongs to user
+    // Verify flow exists and belongs to user (or admin can access any)
     const flow = await VoiceFlowDb.getFlowById(id, username);
     if (!flow) {
       return NextResponse.json(

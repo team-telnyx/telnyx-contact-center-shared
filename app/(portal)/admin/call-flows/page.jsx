@@ -38,6 +38,12 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function CallFlowsPage() {
   const router = useRouter();
@@ -49,6 +55,56 @@ export default function CallFlowsPage() {
   const [filterName, setFilterName] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [flowToDelete, setFlowToDelete] = useState(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if user is admin/owner
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        
+        if (!data?.isAuth || !data?.user) {
+          router.push("/signin");
+          return;
+        }
+
+        // Check if user has admin or owner role
+        const userRoles =
+          data.user.roles &&
+          Array.isArray(data.user.roles) &&
+          data.user.roles.length > 0
+            ? data.user.roles.map((r) => String(r).toLowerCase())
+            : data.user.role
+            ? [String(data.user.role).toLowerCase()]
+            : ["agent"];
+
+        const hasAdminAccess = userRoles.some(
+          (role) => role === "admin" || role === "owner"
+        );
+
+        if (!hasAdminAccess) {
+          notify({
+            title: "Access Denied",
+            description: "You do not have permission to access this page.",
+            variant: "error",
+          });
+          router.push("/");
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (error) {
+        console.error("Error checking authorization:", error);
+        router.push("/signin");
+      } finally {
+        setCheckingAuth(false);
+      }
+    }
+
+    checkAuth();
+  }, [router]);
 
   async function loadFlows() {
     setLoading(true);
@@ -81,8 +137,10 @@ export default function CallFlowsPage() {
   }
 
   useEffect(() => {
-    loadFlows();
-  }, [page, filterName]);
+    if (isAuthorized) {
+      loadFlows();
+    }
+  }, [page, filterName, isAuthorized]);
 
   async function handleCreate() {
     try {
@@ -210,6 +268,23 @@ export default function CallFlowsPage() {
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
 
+  // Show loading state while checking authorization
+  if (checkingAuth || !isAuthorized) {
+    return (
+      <div className="px-4 lg:px-6">
+        <Card className="w-full">
+          <CardContent className="space-y-4 pt-6">
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="px-4 lg:px-6">
       <Card className="w-full">
@@ -328,10 +403,54 @@ export default function CallFlowsPage() {
                         })()}
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <IconPhone className="h-4 w-4 text-muted-foreground" />
-                          <span>{flow.phone_numbers_count || 0}</span>
-                        </div>
+                        {(() => {
+                          const phoneNumbers = Array.isArray(flow.phone_numbers)
+                            ? flow.phone_numbers
+                            : [];
+                          const count =
+                            flow.phone_numbers_count ||
+                            phoneNumbers.length ||
+                            0;
+
+                          if (count > 0 && phoneNumbers.length > 0) {
+                            return (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center justify-center gap-1 cursor-help">
+                                      <IconPhone className="h-4 w-4 text-muted-foreground" />
+                                      <span>{count}</span>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent className="max-w-md">
+                                    <div className="space-y-1">
+                                      <p className="font-semibold text-sm mb-2">
+                                        Assigned Phone Numbers:
+                                      </p>
+                                      <div className="space-y-1 max-h-60 overflow-y-auto">
+                                        {phoneNumbers.map((phoneNumber, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="text-xs font-mono text-left"
+                                          >
+                                            {phoneNumber}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            );
+                          }
+
+                          return (
+                            <div className="flex items-center justify-center gap-1">
+                              <IconPhone className="h-4 w-4 text-muted-foreground" />
+                              <span>{count}</span>
+                            </div>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         {Array.isArray(flow.nodes) ? flow.nodes.length : 0}

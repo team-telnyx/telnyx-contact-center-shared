@@ -50,6 +50,7 @@
   --color-brand-primary: var(--brand-primary);
   --color-brand-secondary: var(--brand-secondary);
   --color-brand-background: var(--brand-background);
+  --color-telnyx-green: var(--telnyx-green);
 }
 
 :root {
@@ -94,6 +95,7 @@
   --brand-primary: oklch(81.25% 0.167 166.68);
   --brand-secondary: oklch(90.63% 0.008 90.09);
   --brand-background: oklch(1 0 0);
+  --telnyx-green: oklch(81.25% 0.167 166.68);
 }
 
 .dark {
@@ -137,6 +139,7 @@
   --brand-primary: oklch(81.25% 0.167 166.68);
   --brand-secondary: oklch(90.63% 0.008 90.09);
   --brand-background: oklch(0.18 0 0);
+  --telnyx-green: oklch(81.25% 0.167 166.68);
 }
 
 @layer base {

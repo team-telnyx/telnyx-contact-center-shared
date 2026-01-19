@@ -11,6 +11,7 @@ import {
   IconGitBranch,
   IconKey,
   IconAddressBook,
+  IconPhone,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -62,6 +63,12 @@ export const menuConfig = {
           title: "Contacts",
           url: "/admin/contacts",
           icon: IconAddressBook,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Numbers",
+          url: "/admin/numbers",
+          icon: IconPhone,
           role_access: ["admin", "owner"],
         },
         {

@@ -6,6 +6,8 @@ import {
   createVoiceApplication,
   deleteVoiceApplication,
 } from "@/lib/telnyx-voice-apps";
+import { PgDb } from "@/lib/pgdb";
+import { isAdmin } from "@/lib/role-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,7 @@ function getBaseUrl() {
 /**
  * GET /api/voice/flows
  * List flows for authenticated user
+ * Admin users can see all flows across the organization
  */
 export async function GET(request) {
   try {
@@ -39,7 +42,17 @@ export async function GET(request) {
       );
     }
 
-    const username = session.user.email;
+    // Check if user is admin
+    const id = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (id) user = await PgDb.findUserById(id);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can see all flows (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
+    
     const { searchParams } = new URL(request.url);
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -56,9 +69,85 @@ export async function GET(request) {
 
     const result = await VoiceFlowDb.listFlows(username, filters, pagination);
 
+    // For each flow, query Telnyx to get phone numbers assigned to the voice application
+    // Use filter[connection_id] where connection_id is the telnyx_voice_app_id
+    const itemsWithPhoneNumbers = await Promise.all(
+      result.items.map(async (flow) => {
+        if (!flow.telnyx_voice_app_id) {
+          return {
+            ...flow,
+            phone_numbers_count: 0,
+            phone_numbers: [],
+          };
+        }
+
+        try {
+          // Query Telnyx API for phone numbers assigned to this voice application
+          // Use connection_id filter as that's how Telnyx filters by call control application
+          const basePath =
+            process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
+          
+          let allPhoneNumbers = [];
+          let page = 1;
+          const pageSize = 250;
+          let hasMore = true;
+
+          while (hasMore) {
+            const params = new URLSearchParams();
+            params.set("page[number]", String(page));
+            params.set("page[size]", String(pageSize));
+            params.set("filter[connection_id]", flow.telnyx_voice_app_id);
+            params.set("sort", "-purchased_at");
+
+            const telnyxUrl = `${basePath}/v2/phone_numbers?${params.toString()}`;
+            const res = await fetch(telnyxUrl, {
+              headers: {
+                Authorization: `Bearer ${process.env.TELNYX_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (!res.ok) {
+              const errorText = await res.text();
+              console.error(
+                `[API] Failed to fetch phone numbers for voice app ${flow.telnyx_voice_app_id}:`,
+                errorText
+              );
+              break;
+            }
+
+            const data = await res.json();
+            const phoneNumbers = data.data || [];
+            allPhoneNumbers.push(...phoneNumbers);
+
+            // Check if there are more pages
+            const totalPages = data.meta?.total_pages || 1;
+            hasMore = page < totalPages;
+            page++;
+          }
+
+          return {
+            ...flow,
+            phone_numbers_count: allPhoneNumbers.length,
+            phone_numbers: allPhoneNumbers.map((pn) => pn.phone_number),
+          };
+        } catch (error) {
+          console.error(
+            `[API] Error fetching phone numbers for voice app ${flow.telnyx_voice_app_id}:`,
+            error
+          );
+          return {
+            ...flow,
+            phone_numbers_count: 0,
+            phone_numbers: [],
+          };
+        }
+      })
+    );
+
     return NextResponse.json({
       ok: true,
-      items: result.items,
+      items: itemsWithPhoneNumbers,
       total: result.total,
       page,
       pageSize,
@@ -106,7 +195,9 @@ export async function POST(request) {
     // Create Telnyx Voice Application
     let voiceApp = null;
     try {
-      voiceApp = await createVoiceApplication(flowData.name, webhookUrl);
+      // Ensure name is unique for Telnyx by appending a portion of the flow ID
+      const telnyxAppName = `${flowData.name} (${flowId.substring(0, 8)})`;
+      voiceApp = await createVoiceApplication(telnyxAppName, webhookUrl);
     } catch (error) {
       console.error("[API] Failed to create voice application:", error);
       return NextResponse.json(

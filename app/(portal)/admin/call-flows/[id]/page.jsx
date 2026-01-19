@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -1190,6 +1191,56 @@ export default function FlowBuilderPage() {
   const [userVoiceAppName, setUserVoiceAppName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Check if user is admin/owner
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        
+        if (!data?.isAuth || !data?.user) {
+          router.push("/signin");
+          return;
+        }
+
+        // Check if user has admin or owner role
+        const userRoles =
+          data.user.roles &&
+          Array.isArray(data.user.roles) &&
+          data.user.roles.length > 0
+            ? data.user.roles.map((r) => String(r).toLowerCase())
+            : data.user.role
+            ? [String(data.user.role).toLowerCase()]
+            : ["agent"];
+
+        const hasAdminAccess = userRoles.some(
+          (role) => role === "admin" || role === "owner"
+        );
+
+        if (!hasAdminAccess) {
+          notify({
+            title: "Access Denied",
+            description: "You do not have permission to access this page.",
+            variant: "error",
+          });
+          router.push("/");
+          return;
+        }
+
+        setIsAuthorized(true);
+      } catch (error) {
+        console.error("Error checking authorization:", error);
+        router.push("/signin");
+      } finally {
+        setCheckingAuth(false);
+      }
+    }
+
+    checkAuth();
+  }, [router]);
   const [saving, setSaving] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeConfig, setNodeConfig] = useState({});
@@ -2359,6 +2410,22 @@ export default function FlowBuilderPage() {
   }, [contextMenuPosition, closeContextMenu]);
 
   const nodesByCategory = getNodesByCategory();
+
+  // Show loading state while checking authorization
+  if (checkingAuth || !isAuthorized) {
+    return (
+      <div className="px-4 lg:px-6">
+        <Card className="w-full">
+          <CardContent className="space-y-4 pt-6">
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-96 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

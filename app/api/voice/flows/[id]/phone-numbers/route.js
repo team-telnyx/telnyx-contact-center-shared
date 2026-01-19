@@ -6,12 +6,15 @@ import {
   assignPhoneNumberToApp,
   unassignPhoneNumberFromApp,
 } from "@/lib/telnyx-voice-apps";
+import { PgDb } from "@/lib/pgdb";
+import { isAdmin } from "@/lib/role-utils";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/voice/flows/[id]/phone-numbers
  * List phone numbers assigned to a flow
+ * Admin users can access any flow
  */
 export async function GET(request, { params }) {
   try {
@@ -23,10 +26,19 @@ export async function GET(request, { params }) {
       );
     }
 
-    const username = session.user.email;
+    // Check if user is admin
+    const userId = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (userId) user = await PgDb.findUserById(userId);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
     const { id } = await params;
 
-    // Verify flow exists and belongs to user
+    // Verify flow exists and belongs to user (or admin can access any)
     const flow = await VoiceFlowDb.getFlowById(id, username);
     if (!flow) {
       return NextResponse.json(
@@ -53,6 +65,7 @@ export async function GET(request, { params }) {
 /**
  * POST /api/voice/flows/[id]/phone-numbers
  * Assign a phone number to a flow
+ * Admin users can assign phone numbers to any flow
  */
 export async function POST(request, { params }) {
   try {
@@ -64,7 +77,16 @@ export async function POST(request, { params }) {
       );
     }
 
-    const username = session.user.email;
+    // Check if user is admin
+    const userId = session?.user?.id || null;
+    const email = session.user.email;
+    let user = null;
+    if (userId) user = await PgDb.findUserById(userId);
+    if (!user && email) user = await PgDb.findUserByUsername(email);
+    
+    // Admin users can access any flow (pass null username)
+    // Non-admin users only see their own flows
+    const username = user && isAdmin(user) ? null : email;
     const { id } = await params;
     const body = await request.json();
 
@@ -77,7 +99,7 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Verify flow exists and belongs to user
+    // Verify flow exists and belongs to user (or admin can access any)
     const flow = await VoiceFlowDb.getFlowById(id, username);
     if (!flow) {
       return NextResponse.json(
@@ -112,11 +134,12 @@ export async function POST(request, { params }) {
     }
 
     // Create record in database
+    // Use the actual email for assignment tracking, not null
     const assignment = await VoiceFlowDb.assignPhoneNumber(
       id,
       phone_number_id,
       phone_number,
-      username
+      email
     );
 
     return NextResponse.json({
