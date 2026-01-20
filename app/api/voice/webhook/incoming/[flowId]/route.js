@@ -450,6 +450,22 @@ export async function POST(request, { params }) {
         // Don't fail the webhook, just log the error
       }
     }
+
+    // Handle call.transcription for Agent Assist
+    if (event === "call.transcription") {
+      try {
+        const { handleTranscriptionEvent } = await import(
+          "@/lib/contact-center/webhook-handler.js"
+        );
+        await handleTranscriptionEvent(payload);
+      } catch (err) {
+        console.error(
+          "[IncomingFlowWebhook] Error handling transcription event:",
+          err
+        );
+        // Don't fail the webhook, just log the error
+      }
+    }
     if (!flow) {
       return NextResponse.json(
         { ok: false, error: "Flow not found" },

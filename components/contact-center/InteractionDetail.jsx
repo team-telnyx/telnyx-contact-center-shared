@@ -1,5 +1,7 @@
 "use client";
 
+import { AgentAssist } from "./AgentAssist";
+
 export function InteractionDetail({ interaction }) {
   if (!interaction) {
     return (
@@ -10,10 +12,8 @@ export function InteractionDetail({ interaction }) {
   }
 
   return (
-    <div className="p-4">
-      <p className="text-sm text-muted-foreground">
-        Interaction details panel - coming soon
-      </p>
+    <div className="flex flex-col h-full overflow-hidden">
+      <AgentAssist interactionId={interaction.id} interaction={interaction} />
     </div>
   );
 }

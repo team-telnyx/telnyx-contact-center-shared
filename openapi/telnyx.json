@@ -306,6 +306,10 @@
       "description": "Opt-Out Management"
     },
     {
+      "name": "Organization Users",
+      "description": "Operations related to users in your organization"
+    },
+    {
       "name": "Outbound Voice Profiles",
       "description": "Outbound voice profiles operations"
     },
@@ -1347,6 +1351,63 @@
       }
     },
     "/10dlc/brand/{brandId}/smsOtp": {
+      "get": {
+        "tags": [
+          "Brands"
+        ],
+        "summary": "Get Brand SMS OTP Status by Brand ID",
+        "description": "Query the status of an SMS OTP (One-Time Password) for Sole Proprietor brand verification using the Brand ID.\n\nThis endpoint allows you to check the delivery and verification status of an OTP sent during the Sole Proprietor brand verification process by looking it up with the brand ID.\n\nThe response includes delivery status, verification dates, and detailed delivery information.\n\n**Note:** This is an alternative to the `/10dlc/brand/smsOtp/{referenceId}` endpoint when you have the Brand ID but not the reference ID.",
+        "operationId": "GetBrandSmsOtpStatusByBrandId",
+        "parameters": [
+          {
+            "required": true,
+            "schema": {
+              "title": "Brandid",
+              "type": "string",
+              "example": "4b20019b-043a-78f8-0657-b3be3f4b4002"
+            },
+            "name": "brandId",
+            "in": "path",
+            "description": "The Brand ID for which to query OTP status"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandSmsOtpStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "OTP status not found for this brand",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "$ref": "#/components/responses/10dlc_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
       "post": {
         "tags": [
           "Brands"
@@ -2180,7 +2241,7 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "description": "Before creating a campaign, use the [Qualify By Usecase endpoint](https://developers.telnyx.com/api/messaging/10dlc/get-usecase-qualification) to ensure that the brand you want to assign a new campaign to is qualified for the desired use case of that campaign. **Please note:** After campaign creation, you'll only be able to edit the campaign's sample messages. Creating a campaign will entail an upfront, non-refundable three month's cost that will depend on the campaign's use case ([see 10DLC Costs section for details](https://developers.telnyx.com/docs/messaging/10dlc/concepts#10dlc-costs)).",
+        "description": "Before creating a campaign, use the [Qualify By Usecase endpoint](https://developers.telnyx.com/api-reference/campaign/qualify-by-usecase) to ensure that the brand you want to assign a new campaign to is qualified for the desired use case of that campaign. **Please note:** After campaign creation, you'll only be able to edit the campaign's sample messages. Creating a campaign will entail an upfront, non-refundable three month's cost that will depend on the campaign's use case ([see 10DLC Costs section for details](https://developers.telnyx.com/api-reference/campaign/get-campaign-cost)).",
         "x-latency-category": "responsive"
       }
     },
@@ -5163,7 +5224,7 @@
           "Assistants"
         ],
         "summary": "Assistant Chat (BETA)",
-        "description": "This endpoint allows a client to send a chat message to a specific AI Assistant. The assistant processes the message and returns a relevant reply based on the current conversation context. Refer to the Conversation API to [create a conversation](https://developers.telnyx.com/api/inference/inference-embedding/create-new-conversation-public-conversations-post), [filter existing conversations](https://developers.telnyx.com/api/inference/inference-embedding/get-conversations-public-conversations-get), [fetch messages for a conversation](https://developers.telnyx.com/api/inference/inference-embedding/get-conversations-public-conversation-id-messages-get), and [manually add messages to a conversation](https://developers.telnyx.com/api/inference/inference-embedding/add-new-message).",
+        "description": "This endpoint allows a client to send a chat message to a specific AI Assistant. The assistant processes the message and returns a relevant reply based on the current conversation context. Refer to the Conversation API to [create a conversation](https://developers.telnyx.com/api-reference/conversations/create-a-conversation), [filter existing conversations](https://developers.telnyx.com/api-reference/conversations/list-conversations), [fetch messages for a conversation](https://developers.telnyx.com/api-reference/conversations/get-conversation-messages), and [manually add messages to a conversation](https://developers.telnyx.com/api-reference/conversations/create-message).",
         "operationId": "assistant_chat_public_assistants__assistant_id__chat_post",
         "parameters": [
           {
@@ -6084,7 +6145,7 @@
           "Clusters"
         ],
         "summary": "Compute new clusters",
-        "description": "Starts a background task to compute how the data in an [embedded storage bucket](https://developers.telnyx.com/api/inference/inference-embedding/post-embedding) is clustered. This helps identify common themes and patterns in the data.",
+        "description": "Starts a background task to compute how the data in an [embedded storage bucket](https://developers.telnyx.com/api-reference/embeddings/embed-documents) is clustered. This helps identify common themes and patterns in the data.",
         "operationId": "compute_new_cluster_public_text_clusters_post",
         "requestBody": {
           "required": true,
@@ -7597,7 +7658,7 @@
           "Embeddings"
         ],
         "summary": "Embed URL content",
-        "description": "Embed website content from a specified URL, including child pages up to 5 levels deep within the same domain. The process crawls and loads content from the main URL and its linked pages into a Telnyx Cloud Storage bucket. As soon as each webpage is added to the bucket, its content is immediately processed for embeddings, that can be used for [similarity search](https://developers.telnyx.com/api/inference/inference-embedding/post-embedding-similarity-search) and [clustering](https://developers.telnyx.com/docs/inference/clusters).",
+        "description": "Embed website content from a specified URL, including child pages up to 5 levels deep within the same domain. The process crawls and loads content from the main URL and its linked pages into a Telnyx Cloud Storage bucket. As soon as each webpage is added to the bucket, its content is immediately processed for embeddings, that can be used for [similarity search](https://developers.telnyx.com/api-reference/embeddings/search-for-documents) and [clustering](https://developers.telnyx.com/docs/inference/clusters).",
         "operationId": "PostEmbeddingUrl",
         "requestBody": {
           "content": {
@@ -9319,7 +9380,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -20207,7 +20268,7 @@
       },
       "get": {
         "summary": "Retrieve a message",
-        "description": "Note: This API endpoint can only retrieve messages that are no older than 10 days since their creation. If you require messages older than this, please generate an [MDR report.](https://developers.telnyx.com/api/v1/mission-control/add-mdr-request)",
+        "description": "Note: This API endpoint can only retrieve messages that are no older than 10 days since their creation. If you require messages older than this, please generate an [MDR report.](https://developers.telnyx.com/api-reference/mdr-usage-reports/create-mdr-usage-report)",
         "operationId": "GetMessage",
         "tags": [
           "Messages"
@@ -21829,7 +21890,7 @@
         "summary": "List mobile phone numbers with messaging settings",
         "operationId": "ListMobilePhoneNumbersWithMessagingSettings",
         "tags": [
-          "Mobile Number Configurations"
+          "Mobile Number Settings"
         ],
         "x-group-parameters": "true",
         "parameters": [
@@ -21853,7 +21914,7 @@
         "summary": "Retrieve a mobile phone number with messaging settings",
         "operationId": "GetMobilePhoneNumberMessagingSettings",
         "tags": [
-          "Mobile Number Configurations"
+          "Mobile Number Settings"
         ],
         "parameters": [
           {
@@ -25231,7 +25292,7 @@
     "/operator_connect/actions/refresh": {
       "post": {
         "summary": "Refresh Operator Connect integration",
-        "description": "This endpoint will make an asynchronous request to refresh the Operator Connect integration with Microsoft Teams for the current user. This will create new external connections on the user's account if needed, and/or report the integration results as [log messages](https://developers.telnyx.com/api/external-voice-integrations/list-external-connection-log-messages).",
+        "description": "This endpoint will make an asynchronous request to refresh the Operator Connect integration with Microsoft Teams for the current user. This will create new external connections on the user's account if needed, and/or report the integration results as [log messages](https://developers.telnyx.com/api-reference/external-connections/list-all-log-messages#list-all-log-messages).",
         "operationId": "OperatorConnectRefresh",
         "tags": [
           "External Connections"
@@ -25288,6 +25349,178 @@
           }
         },
         "x-latency-category": "responsive"
+      }
+    },
+    "/organizations/users": {
+      "get": {
+        "description": "Returns a list of the users in your organization.",
+        "summary": "List organization users",
+        "operationId": "ListOrganizationUsers",
+        "tags": [
+          "Organization Users"
+        ],
+        "x-group-parameters": "true",
+        "x-endpoint-cost": "medium",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageNumber"
+          },
+          {
+            "$ref": "#/components/parameters/users_PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/FilterOrganizationUserStatus"
+          },
+          {
+            "$ref": "#/components/parameters/FilterOrganizationUserEmail"
+          },
+          {
+            "$ref": "#/components/parameters/IncludeGroups"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ListOrganizationUsersResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/users_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/users_UnauthorizedResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/organizations/users/users_groups_report": {
+      "get": {
+        "description": "Returns a report of all users in your organization with their group memberships. This endpoint returns all users without pagination and always includes group information. The report can be retrieved in JSON or CSV format by sending specific content-type headers.",
+        "summary": "Get organization users groups report",
+        "operationId": "GetOrganizationUsersGroupsReport",
+        "tags": [
+          "Organization Users"
+        ],
+        "x-group-parameters": "true",
+        "x-endpoint-cost": "medium",
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "description": "Specify the response format. Use 'application/json' for JSON format or 'text/csv' for CSV format.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "application/json",
+                "text/csv"
+              ],
+              "default": "application/json"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UsersGroupsReportResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/users_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/users_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/organizations/users/{id}": {
+      "get": {
+        "description": "Returns a user in your organization.",
+        "summary": "Get organization user",
+        "operationId": "GetOrganizationUser",
+        "tags": [
+          "Organization Users"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Organization User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/IncludeGroups"
+          }
+        ],
+        "x-group-parameters": "true",
+        "x-endpoint-cost": "medium",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrganizationUserResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/users_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/users_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/users_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/organizations/users/{id}/actions/remove": {
+      "post": {
+        "description": "Deletes a user in your organization.",
+        "summary": "Delete organization user",
+        "operationId": "DeleteOrganizationUser",
+        "tags": [
+          "Organization Users"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Organization User ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-group-parameters": "true",
+        "x-endpoint-cost": "medium",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/OrganizationUserResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/users_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/users_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/users_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "interactive"
       }
     },
     "/ota_updates": {
@@ -30833,7 +31066,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -34691,7 +34924,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -34870,7 +35103,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -34946,7 +35179,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -35455,7 +35688,7 @@
       "post": {
         "x-latency-category": "background",
         "summary": "Request bulk setting SIM card public IPs.",
-        "description": "This API triggers an asynchronous operation to set a public IP for each of the specified SIM cards.<br/>\nFor each SIM Card a SIM Card Action will be generated. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API.\n",
+        "description": "This API triggers an asynchronous operation to set a public IP for each of the specified SIM cards.<br/>\nFor each SIM Card a SIM Card Action will be generated. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API.\n",
         "operationId": "SetPublicIPsBulk",
         "tags": [
           "SIM Cards"
@@ -35661,7 +35894,7 @@
       "post": {
         "x-latency-category": "background",
         "summary": "Request a SIM card disable",
-        "description": "This API disables a SIM card, disconnecting it from the network and making it impossible to consume data.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the disabled state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API.\n",
+        "description": "This API disables a SIM card, disconnecting it from the network and making it impossible to consume data.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the disabled state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API.\n",
         "operationId": "DisableSimCard",
         "tags": [
           "SIM Cards"
@@ -35688,7 +35921,7 @@
       "post": {
         "x-latency-category": "background",
         "summary": "Request a SIM card enable",
-        "description": "This API enables a SIM card, connecting it to the network and making it possible to consume data.<br/>\nTo enable a SIM card, it must be associated with a SIM card group.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the enabled state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API.\n",
+        "description": "This API enables a SIM card, connecting it to the network and making it possible to consume data.<br/>\nTo enable a SIM card, it must be associated with a SIM card group.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the enabled state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API.\n",
         "operationId": "EnableSimCard",
         "tags": [
           "SIM Cards"
@@ -35714,7 +35947,7 @@
     "/sim_cards/{id}/actions/remove_public_ip": {
       "post": {
         "summary": "Request removing a SIM card public IP",
-        "description": "This API removes an existing public IP from a SIM card. <br/><br/>\n The API will trigger an asynchronous operation called a SIM Card Action. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API.",
+        "description": "This API removes an existing public IP from a SIM card. <br/><br/>\n The API will trigger an asynchronous operation called a SIM Card Action. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API.",
         "operationId": "RemoveSimCardPublicIp",
         "tags": [
           "SIM Cards"
@@ -35742,7 +35975,7 @@
       "post": {
         "x-latency-category": "background",
         "summary": "Request setting a SIM card public IP",
-        "description": "This API makes a SIM card reachable on the public internet by mapping a random public IP to the SIM card. <br/><br/>\n The API will trigger an asynchronous operation called a SIM Card Action. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API. <br/><br/>\n Setting a Public IP to a SIM Card incurs a charge and will only succeed if the account has sufficient funds.",
+        "description": "This API makes a SIM card reachable on the public internet by mapping a random public IP to the SIM card. <br/><br/>\n The API will trigger an asynchronous operation called a SIM Card Action. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API. <br/><br/>\n Setting a Public IP to a SIM Card incurs a charge and will only succeed if the account has sufficient funds.",
         "operationId": "SetSimCardPublicIp",
         "tags": [
           "SIM Cards"
@@ -35779,7 +36012,7 @@
       "post": {
         "x-latency-category": "background",
         "summary": "Request setting a SIM card to standby",
-        "description": "The SIM card will be able to connect to the network once the process to set it to standby has been completed, thus making it possible to consume data.<br/>\nTo set a SIM card to standby, it must be associated with SIM card group.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the standby state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api/wireless/list-sim-card-actions) API.\n",
+        "description": "The SIM card will be able to connect to the network once the process to set it to standby has been completed, thus making it possible to consume data.<br/>\nTo set a SIM card to standby, it must be associated with SIM card group.<br/>\nThe API will trigger an asynchronous operation called a SIM Card Action. Transitioning to the standby state may take a period of time. The status of the SIM Card Action can be followed through the [List SIM Card Action](https://developers.telnyx.com/api-reference/sim-card-actions/list-sim-card-actions) API.\n",
         "operationId": "SetSimCardStandby",
         "tags": [
           "SIM Cards"
@@ -35893,7 +36126,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -38213,6 +38446,43 @@
       }
     },
     "/texml/Accounts/{account_sid}/Queues": {
+      "get": {
+        "summary": "List queue resources",
+        "description": "Lists queue resources.",
+        "x-latency-category": "responsive",
+        "operationId": "GetTexmlQueues",
+        "tags": [
+          "TeXML REST Commands"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AccountSid"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/PageSize"
+          },
+          {
+            "$ref": "#/components/parameters/PageToken"
+          },
+          {
+            "$ref": "#/components/parameters/DateCreated"
+          },
+          {
+            "$ref": "#/components/parameters/DateUpdated"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GetQueuesResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/call-scripting_NotFoundResponse"
+          }
+        }
+      },
       "post": {
         "summary": "Create a new queue",
         "description": "Creates a new queue resource.",
@@ -41602,7 +41872,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -41839,7 +42109,7 @@
         ],
         "parameters": [
           {
-            "$ref": "#/components/parameters/PageNumber"
+            "$ref": "#/components/parameters/wireless_PageNumber"
           },
           {
             "$ref": "#/components/parameters/wireless_PageSize"
@@ -42808,6 +43078,27 @@
           }
         }
       },
+      "FilterOrganizationUserEmail": {
+        "name": "filter[email]",
+        "in": "query",
+        "description": "Filter by email address (partial match)",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "FilterOrganizationUserStatus": {
+        "name": "filter[user_status]",
+        "in": "query",
+        "description": "Filter by user status",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "enabled",
+            "disabled",
+            "blocked"
+          ]
+        }
+      },
       "FilterPhoneNumbersConsolidated": {
         "name": "filter",
         "in": "query",
@@ -43320,6 +43611,15 @@
           "default": false
         }
       },
+      "IncludeGroups": {
+        "name": "include_groups",
+        "in": "query",
+        "description": "When set to true, includes the groups array for each user in the response. The groups array contains objects with id and name for each group the user belongs to.",
+        "schema": {
+          "type": "boolean",
+          "default": false
+        }
+      },
       "IncludeICCIDs": {
         "name": "include_iccids",
         "in": "query",
@@ -43431,7 +43731,7 @@
       "PageNumber": {
         "name": "page[number]",
         "in": "query",
-        "description": "The page number to load.",
+        "description": "The page number to load",
         "schema": {
           "type": "integer",
           "minimum": 1,
@@ -45270,6 +45570,17 @@
           }
         }
       },
+      "users_PageSize": {
+        "name": "page[size]",
+        "in": "query",
+        "description": "The size of the page",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 250,
+          "default": 250
+        }
+      },
       "video_PageConsolidated": {
         "name": "page",
         "in": "query",
@@ -45343,6 +45654,16 @@
               "description": "The size of the page."
             }
           }
+        }
+      },
+      "wireless_PageNumber": {
+        "name": "page[number]",
+        "in": "query",
+        "description": "The page number to load.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
         }
       },
       "wireless_PageSize": {
@@ -48139,6 +48460,16 @@
           }
         }
       },
+      "GetQueuesResponse": {
+        "description": "Multiple queue resources.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/QueueResourceIndex"
+            }
+          }
+        }
+      },
       "GetReleaseResponse": {
         "description": "Successful response",
         "content": {
@@ -49568,6 +49899,28 @@
           }
         }
       },
+      "ListOrganizationUsersResponse": {
+        "description": "Successful response with a list of organization users.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "List Organization Users Response",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationUser"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/users_PaginationMeta"
+                }
+              }
+            }
+          }
+        }
+      },
       "ListOutboundVoiceProfilesResponse": {
         "description": "Successful response",
         "content": {
@@ -50931,6 +51284,22 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/CompleteOTAUpdate"
+                }
+              }
+            }
+          }
+        }
+      },
+      "OrganizationUserResponse": {
+        "description": "Successful response with details about an Organization User.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "Organization User Response",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/OrganizationUser"
                 }
               }
             }
@@ -52889,6 +53258,65 @@
           }
         }
       },
+      "UsersGroupsReportResponse": {
+        "description": "Successful response with a list of organization users and their group memberships.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "Users Groups Report Response",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationUserWithGroups"
+                  }
+                }
+              }
+            },
+            "example": {
+              "data": [
+                {
+                  "id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+                  "record_type": "organization_sub_user",
+                  "email": "user@example.com",
+                  "user_status": "enabled",
+                  "organization_user_bypasses_sso": false,
+                  "created_at": "2018-02-02T22:25:27.521Z",
+                  "last_sign_in_at": "2018-02-02T22:25:27.521Z",
+                  "groups": [
+                    {
+                      "id": "7b09cdc3-8948-47f0-aa62-74ac943d6c59",
+                      "name": "Engineering"
+                    },
+                    {
+                      "id": "8c09cdc3-8948-47f0-aa62-74ac943d6c60",
+                      "name": "Sales"
+                    }
+                  ]
+                },
+                {
+                  "id": "9d09cdc3-8948-47f0-aa62-74ac943d6c61",
+                  "record_type": "organization_owner",
+                  "email": "owner@example.com",
+                  "user_status": "enabled",
+                  "organization_user_bypasses_sso": false,
+                  "created_at": "2018-01-01T00:00:00.000Z",
+                  "last_sign_in_at": "2018-02-02T22:25:27.521Z",
+                  "groups": []
+                }
+              ]
+            }
+          },
+          "text/csv": {
+            "schema": {
+              "type": "string",
+              "description": "CSV formatted report of users and their groups. Columns: id, email, user_status, created_at, last_sign_in_at, groups (comma-separated list of group names)."
+            },
+            "example": "id,email,user_status,created_at,last_sign_in_at,groups\n6a09cdc3-8948-47f0-aa62-74ac943d6c58,user@example.com,enabled,2018-02-02T22:25:27.521Z,2018-02-02T22:25:27.521Z,\"Engineering, Sales\""
+          }
+        }
+      },
       "ValidateAddressResponse": {
         "description": "Action response",
         "content": {
@@ -54332,6 +54760,93 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/toll-free-verification_Errors"
+            }
+          }
+        }
+      },
+      "users_BadRequestResponse": {
+        "description": "Bad request, the request was unacceptable, often due to missing a required parameter.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "examples": {
+              "missingParameter": {
+                "value": {
+                  "errors": [
+                    {
+                      "code": "10015",
+                      "title": "Bad Request",
+                      "detail": "The request failed because it was not well-formed.",
+                      "source": {
+                        "pointer": "/"
+                      },
+                      "meta": {
+                        "url": "https://developers.telnyx.com/docs/overview/errors/10015"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "users_NotFoundResponse": {
+        "description": "The requested resource doesn't exist.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "examples": {
+              "notFound": {
+                "value": {
+                  "errors": [
+                    {
+                      "code": "10005",
+                      "title": "Resource not found",
+                      "detail": "The requested resource or URL could not be found.",
+                      "meta": {
+                        "url": "https://developers.telnyx.com/docs/overview/errors/10005"
+                      },
+                      "source": {
+                        "pointer": "/"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "users_UnauthorizedResponse": {
+        "description": "The user doesn't have the required permissions to perform the requested action.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "examples": {
+              "notAuthorized": {
+                "value": {
+                  "errors": [
+                    {
+                      "code": "10010",
+                      "title": "Not authorized",
+                      "detail": "You are not authorized to access the requested resource.",
+                      "meta": {
+                        "url": "https://developers.telnyx.com/docs/overview/errors/10010"
+                      },
+                      "source": {
+                        "pointer": "/"
+                      }
+                    }
+                  ]
+                }
+              }
             }
           }
         }
@@ -55832,8 +56347,7 @@
         "type": "object",
         "required": [
           "from",
-          "to",
-          "text"
+          "to"
         ],
         "title": "AssistantSmsChatReq"
       },
@@ -55969,6 +56483,9 @@
             },
             {
               "$ref": "#/components/schemas/DTMFTool"
+            },
+            {
+              "$ref": "#/components/schemas/SendMessageTool"
             }
           ]
         }
@@ -56084,6 +56601,28 @@
           "end",
           "text"
         ]
+      },
+      "AudioVisualizerConfig": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string",
+            "enum": [
+              "verdant",
+              "twilight",
+              "bloom",
+              "mystic",
+              "flare",
+              "glacier"
+            ],
+            "description": "The color theme for the audio visualizer."
+          },
+          "preset": {
+            "type": "string",
+            "description": "The preset style for the audio visualizer."
+          }
+        },
+        "title": "AudioVisualizerConfig"
       },
       "AuditEventChanges": {
         "type": "object",
@@ -63456,7 +63995,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/registry/enum/usecase` operation to retrieve list of valid sub-usecases"
+            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/10dlc/enum/usecase` operation to retrieve list of valid sub-usecases"
           },
           "subscriberHelp": {
             "title": "Subscriberhelp",
@@ -63505,7 +64044,7 @@
           "usecase": {
             "title": "Usecase",
             "type": "string",
-            "description": "Campaign usecase. Must be of defined valid types. Use `/registry/enum/usecase` operation to retrieve usecases available for given brand."
+            "description": "Campaign usecase. Must be of defined valid types. Use `/10dlc/enum/usecase` operation to retrieve usecases available for given brand."
           },
           "webhookURL": {
             "title": "WebhookURL",
@@ -64314,7 +64853,7 @@
               ]
             },
             "type": "array",
-            "description": "The `function` tool type follows the same schema as the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat). The `retrieval` tool type is unique to Telnyx. You may pass a list of [embedded storage buckets](https://developers.telnyx.com/api/inference/inference-embedding/post-embedding) for retrieval-augmented generation."
+            "description": "The `function` tool type follows the same schema as the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat). The `retrieval` tool type is unique to Telnyx. You may pass a list of [embedded storage buckets](https://developers.telnyx.com/api-reference/embeddings/embed-documents) for retrieval-augmented generation."
           },
           "tool_choice": {
             "type": "string",
@@ -67391,6 +67930,46 @@
         "description": "A user-assigned name to help manage the connection.",
         "example": "office-connection"
       },
+      "ConnectionNoiseSuppression": {
+        "type": "string",
+        "description": "Controls when noise suppression is applied to calls. When set to 'inbound', noise suppression is applied to incoming audio. When set to 'outbound', it's applied to outgoing audio. When set to 'both', it's applied in both directions. When set to 'disabled', noise suppression is turned off.",
+        "enum": [
+          "inbound",
+          "outbound",
+          "both",
+          "disabled"
+        ],
+        "example": "both"
+      },
+      "ConnectionNoiseSuppressionDetails": {
+        "type": "object",
+        "description": "Configuration options for noise suppression. These settings are stored regardless of the noise_suppression value, but only take effect when noise_suppression is not 'disabled'. If you disable noise suppression and later re-enable it, the previously configured settings will be used.",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "description": "The noise suppression engine to use. 'denoiser' is the default engine. 'deep_filter_net' and 'deep_filter_net_large' are alternative engines with different performance characteristics. Krisp engines ('krisp_viva_tel', 'krisp_viva_tel_lite', 'krisp_viva_promodel', 'krisp_viva_ss') provide advanced noise suppression capabilities.",
+            "enum": [
+              "denoiser",
+              "deep_filter_net",
+              "deep_filter_net_large",
+              "krisp_viva_tel",
+              "krisp_viva_tel_lite",
+              "krisp_viva_promodel",
+              "krisp_viva_ss"
+            ],
+            "default": "denoiser",
+            "example": "deep_filter_net"
+          },
+          "attenuation_limit": {
+            "type": "integer",
+            "description": "The attenuation limit value for the selected engine. Default values vary by engine: 0 for 'denoiser', 80 for 'deep_filter_net', 'deep_filter_net_large', and all Krisp engines ('krisp_viva_tel', 'krisp_viva_tel_lite', 'krisp_viva_promodel', 'krisp_viva_ss').",
+            "minimum": 0,
+            "maximum": 100,
+            "multipleOf": 10,
+            "example": 80
+          }
+        }
+      },
       "ConnectionRtcpSettings": {
         "type": "object",
         "title": "Connection RTCP Settings",
@@ -68003,7 +68582,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api/inference/inference-embedding/get-models-public-models-get) to see all of your available models,"
+            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see all of your available models,"
           },
           "instructions": {
             "type": "string",
@@ -68017,11 +68596,11 @@
           },
           "greeting": {
             "type": "string",
-            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables)"
+            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables). Use an empty string to have the assistant wait for the user to speak first. Use the special value `<assistant-speaks-first-with-model-generated-message>` to have the assistant generate the greeting based on the system instructions."
           },
           "llm_api_key_ref": {
             "type": "string",
-            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
+            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
           },
           "voice_settings": {
             "$ref": "#/components/schemas/VoiceSettings"
@@ -68055,6 +68634,9 @@
             "type": "object",
             "description": "Map of dynamic variables and their default values",
             "additionalProperties": true
+          },
+          "widget_settings": {
+            "$ref": "#/components/schemas/WidgetSettings"
           }
         },
         "type": "object",
@@ -68717,6 +69299,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/CredentialOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -68769,6 +69357,11 @@
             "localization": "US",
             "t38_reinvite_source": "customer",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         }
       },
@@ -69173,6 +69766,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundFqdn"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -69236,6 +69835,11 @@
             "encrypted_media": "SRTP",
             "timeout_1xx_secs": 10,
             "timeout_2xx_secs": 10
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         },
         "type": "object"
@@ -69683,6 +70287,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundIp"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -69744,6 +70354,11 @@
             "ip_authentication_method": "token",
             "ip_authentication_token": "string",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         },
         "type": "object"
@@ -70145,6 +70760,11 @@
           },
           "mobile_only": {
             "description": "Send messages only to mobile phone numbers.",
+            "type": "boolean",
+            "default": false
+          },
+          "smart_encoding": {
+            "description": "Enables automatic character encoding optimization for SMS messages. When enabled, the system automatically selects the most efficient encoding (GSM-7 or UCS-2) based on message content to maximize character limits and minimize costs.",
             "type": "boolean",
             "default": false
           }
@@ -71883,6 +72503,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/CredentialOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -71943,6 +72569,11 @@
             "localization": "string",
             "t38_reinvite_source": "customer",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         }
       },
@@ -76134,8 +76765,7 @@
             "description": "Indicates whether call cost calculation is enabled."
           },
           "noise_suppression": {
-            "type": "boolean",
-            "description": "Indicates whether noise suppression is enabled."
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
           },
           "send_normalized_timestamps": {
             "type": "boolean",
@@ -76199,6 +76829,9 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundFqdn"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -76263,6 +76896,11 @@
             "outbound_voice_profile_id": "1293384261075731499",
             "t38_reinvite_source": "customer",
             "tech_prefix": "string"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         }
       },
@@ -78086,6 +78724,13 @@
           "api_key_ref": {
             "type": "string",
             "description": "Integration secret pointer that refers to the API key for the external provider. This should be an identifier for an integration secret created via /v2/integration_secrets."
+          },
+          "import_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of assistant IDs to import from the external provider. If not provided, all assistants will be imported."
           }
         },
         "type": "object",
@@ -80399,6 +81044,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundIp"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -80466,6 +81117,11 @@
             "ip_authentication_method": "token",
             "ip_authentication_token": "string",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         }
       },
@@ -82551,6 +83207,11 @@
             "description": "Send messages only to mobile phone numbers.",
             "type": "boolean",
             "default": false
+          },
+          "smart_encoding": {
+            "description": "Enables automatic character encoding optimization for SMS messages. When enabled, the system automatically selects the most efficient encoding (GSM-7 or UCS-2) based on message content to maximize character limits and minimize costs.",
+            "type": "boolean",
+            "default": false
           }
         },
         "example": {
@@ -82599,6 +83260,12 @@
           "delivery_status_webhook_url": {
             "type": "string",
             "description": "The URL where webhooks related to delivery statused for assistant messages will be sent."
+          },
+          "conversation_inactivity_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000,
+            "description": "If more than this many minutes have passed since the last message, the assistant will start a new conversation instead of continuing the existing one."
           }
         },
         "type": "object"
@@ -83954,10 +84621,11 @@
       "NoiseSuppressionEngine": {
         "type": "string",
         "title": "Noise Suppression Engine",
-        "description": "The engine to use for noise suppression.\nFor backward compatibility, engines A and B are also supported, but are deprecated:\n A - Denoiser\n B - DeepFilterNet",
+        "description": "The engine to use for noise suppression.\nFor backward compatibility, engines A, B, and C are also supported, but are deprecated:\n A - Denoiser\n B - DeepFilterNet\n C - Krisp",
         "enum": [
           "Denoiser",
-          "DeepFilterNet"
+          "DeepFilterNet",
+          "Krisp"
         ],
         "default": "Denoiser",
         "example": "Denoiser"
@@ -85607,6 +86275,155 @@
             "type": "string",
             "description": "Identifies the vetting classification."
           }
+        }
+      },
+      "OrganizationUser": {
+        "type": "object",
+        "title": "OrganizationUser",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifies the specific resource.",
+            "example": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
+          },
+          "record_type": {
+            "type": "string",
+            "description": "Identifies the type of the resource. Can be 'organization_owner' or 'organization_sub_user'.",
+            "example": "organization_sub_user"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "The email address of the user.",
+            "example": "user@example.com"
+          },
+          "user_status": {
+            "description": "The status of the account.",
+            "type": "string",
+            "enum": [
+              "enabled",
+              "disabled",
+              "blocked"
+            ],
+            "default": "enabled",
+            "example": "enabled"
+          },
+          "organization_user_bypasses_sso": {
+            "type": "boolean",
+            "description": "Indicates whether this user is allowed to bypass SSO and use password authentication.",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 formatted date indicating when the resource was created.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "last_sign_in_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 formatted date indicating when the resource last signed into the portal. Null if the user has never signed in.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "groups": {
+            "type": "array",
+            "description": "The groups the user belongs to. Only included when include_groups parameter is true.",
+            "items": {
+              "$ref": "#/components/schemas/UserGroupReference"
+            }
+          }
+        },
+        "example": {
+          "id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+          "record_type": "organization_sub_user",
+          "email": "user@example.com",
+          "user_status": "enabled",
+          "organization_user_bypasses_sso": false,
+          "created_at": "2018-02-02T22:25:27.521Z",
+          "last_sign_in_at": "2018-02-02T22:25:27.521Z"
+        }
+      },
+      "OrganizationUserWithGroups": {
+        "type": "object",
+        "title": "OrganizationUserWithGroups",
+        "description": "An organization user with their group memberships always included.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifies the specific resource.",
+            "example": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
+          },
+          "record_type": {
+            "type": "string",
+            "description": "Identifies the type of the resource. Can be 'organization_owner' or 'organization_sub_user'.",
+            "example": "organization_sub_user"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "The email address of the user.",
+            "example": "user@example.com"
+          },
+          "user_status": {
+            "description": "The status of the account.",
+            "type": "string",
+            "enum": [
+              "enabled",
+              "disabled",
+              "blocked"
+            ],
+            "default": "enabled",
+            "example": "enabled"
+          },
+          "organization_user_bypasses_sso": {
+            "type": "boolean",
+            "description": "Indicates whether this user is allowed to bypass SSO and use password authentication.",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 formatted date indicating when the resource was created.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "last_sign_in_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 formatted date indicating when the resource last signed into the portal. Null if the user has never signed in.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "groups": {
+            "type": "array",
+            "description": "The groups the user belongs to.",
+            "items": {
+              "$ref": "#/components/schemas/UserGroupReference"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "record_type",
+          "email",
+          "user_status",
+          "created_at",
+          "groups"
+        ],
+        "example": {
+          "id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+          "record_type": "organization_sub_user",
+          "email": "user@example.com",
+          "user_status": "enabled",
+          "organization_user_bypasses_sso": false,
+          "created_at": "2018-02-02T22:25:27.521Z",
+          "last_sign_in_at": "2018-02-02T22:25:27.521Z",
+          "groups": [
+            {
+              "id": "7b09cdc3-8948-47f0-aa62-74ac943d6c59",
+              "name": "Engineering"
+            }
+          ]
         }
       },
       "OriginalMediaUrl": {
@@ -92616,6 +93433,63 @@
           }
         }
       },
+      "QueueResourceIndex": {
+        "type": "object",
+        "title": "Multiple queue resources",
+        "example": {
+          "queues": [],
+          "end": 0,
+          "first_page_uri": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=0&PageSize=1",
+          "next_page_uri": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=1&PageSize=1&PageToken=MTY4AjgyNDkwNzIxMQ",
+          "page": 0,
+          "page_size": 1,
+          "start": 0,
+          "uri": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=0&PageSize=1"
+        },
+        "properties": {
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QueueResource"
+            }
+          },
+          "end": {
+            "type": "integer",
+            "description": "The number of the last element on the page, zero-indexed.",
+            "example": 19
+          },
+          "first_page_uri": {
+            "type": "string",
+            "description": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=0&PageSize=1",
+            "example": "accepted"
+          },
+          "next_page_uri": {
+            "type": "string",
+            "description": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=1&PageSize=1&PageToken=MTY4AjgyNDkwNzIxMQ",
+            "example": "accepted"
+          },
+          "page": {
+            "type": "integer",
+            "description": "Current page number, zero-indexed.",
+            "example": 0
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "The number of items on the page",
+            "example": 20
+          },
+          "start": {
+            "type": "integer",
+            "description": "The number of the first element on the page, zero-indexed.",
+            "example": 0
+          },
+          "uri": {
+            "type": "string",
+            "description": "The URI of the current page.",
+            "example": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Queues.json?Page=0&PageSize=1"
+          }
+        }
+      },
       "RCSAction": {
         "type": "object",
         "description": "When tapped, initiates the corresponding native action on the device.",
@@ -96439,6 +97313,13 @@
             "type": "boolean",
             "default": false
           },
+          "black_threshold": {
+            "description": "The black threshold percentage for monochrome faxes. Only applicable if `monochrome` is set to `true`.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 95
+          },
           "store_media": {
             "description": "Should fax media be stored on temporary URL. It does not support media_name, they can't be submitted together.",
             "type": "boolean",
@@ -96469,6 +97350,27 @@
             "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
           }
         }
+      },
+      "SendMessageTool": {
+        "description": "The send_message tool allows the assistant to send SMS or MMS messages to the end user. The 'to' and 'from' addresses are automatically determined from the conversation context, and the message text is generated by the assistant.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "send_message"
+            ]
+          },
+          "send_message": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "send_message"
+        ],
+        "title": "SendMessageTool"
       },
       "SendRecordingUrl": {
         "type": "boolean",
@@ -96591,7 +97493,7 @@
           "usecase": {
             "title": "Usecase",
             "type": "string",
-            "description": "Campaign usecase. Must be of defined valid types. Use `/registry/enum/usecase` operation to retrieve usecases available for given brand."
+            "description": "Campaign usecase. Must be of defined valid types. Use `/10dlc/enum/usecase` operation to retrieve usecases available for given brand."
           }
         },
         "description": "Campaign is generated by the 10DLC registry once the corresponding campaign request is approved. Each campaign is assigned a unique identifier - **campaignId**. Once a campaign is activated, limited information is published to the NetNumber OSR service for consumption by members of the ecosystem. When a campaign is suspended(reversible) or expired(non-reversible), campaign data is deleted from the OSR service. Most attributes of campaignare immutable, including **usecase**, **vertical**, **brandId** and **cspId**."
@@ -99348,6 +100250,16 @@
             "maxLength": 500,
             "description": "Keywords used to collect and process consumer opt-ins",
             "example": "START, YES, SUBSCRIBE"
+          },
+          "campaignVerifyAuthorizationToken": {
+            "title": "Campaignverifyauthorizationtoken",
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Campaign Verify Authorization Token required for Political use case submissions starting February 17, 2026. This token is validated by Zipwhip and must be provided for all Political use case verifications after the deadline.",
+            "example": "cv_token_abc123xyz"
           }
         },
         "description": "The body of a tollfree verification request"
@@ -99730,6 +100642,91 @@
           "supports_unauthenticated_web_calls": {
             "type": "boolean",
             "description": "When enabled, allows users to interact with your AI assistant directly from your website without requiring authentication. This is required for FE widgets that work with assistants that have telephony enabled."
+          },
+          "noise_suppression": {
+            "type": "string",
+            "enum": [
+              "krisp",
+              "deepfilternet",
+              "disabled"
+            ],
+            "description": "The noise suppression engine to use. Use 'disabled' to turn off noise suppression."
+          },
+          "noise_suppression_config": {
+            "type": "object",
+            "description": "Configuration for noise suppression. Only applicable when noise_suppression is 'deepfilternet'.",
+            "properties": {
+              "attenuation_limit": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "default": 100,
+                "description": "Attenuation limit for noise suppression. Range: 0-100."
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "advanced"
+                ],
+                "description": "Mode for noise suppression configuration."
+              }
+            }
+          },
+          "time_limit_secs": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 14400,
+            "default": 1800,
+            "description": "Maximum duration in seconds for the AI assistant to participate on the call. When this limit is reached the assistant will be stopped. This limit does not apply to portions of a call without an active assistant (for instance, a call transferred to a human representative)."
+          },
+          "user_idle_timeout_secs": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 14400,
+            "description": "Maximum duration in seconds of end user silence on the call. When this limit is reached the assistant will be stopped. This limit does not apply to portions of a call without an active assistant (for instance, a call transferred to a human representative)."
+          },
+          "voicemail_detection": {
+            "type": "object",
+            "description": "Configuration for voicemail detection (AMD - Answering Machine Detection) on outgoing calls.",
+            "properties": {
+              "on_voicemail_detected": {
+                "type": "object",
+                "description": "Action to take when voicemail is detected.",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "stop_assistant",
+                      "leave_message_and_stop_assistant",
+                      "continue_assistant"
+                    ],
+                    "description": "The action to take when voicemail is detected."
+                  },
+                  "voicemail_message": {
+                    "type": "object",
+                    "description": "Configuration for the voicemail message to leave. Only applicable when action is 'leave_message_and_stop_assistant'.",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "prompt",
+                          "message"
+                        ],
+                        "description": "The type of voicemail message. Use 'prompt' to have the assistant generate a message based on a prompt, or 'message' to leave a specific message."
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "description": "The prompt to use for generating the voicemail message. Only applicable when type is 'prompt'."
+                      },
+                      "message": {
+                        "type": "string",
+                        "description": "The specific message to leave as voicemail. Only applicable when type is 'message'."
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "type": "object",
@@ -100181,7 +101178,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/registry/enum/usecase` operation to retrieve list of valid sub-usecases"
+            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/10dlc/enum/usecase` operation to retrieve list of valid sub-usecases"
           },
           "subscriberHelp": {
             "title": "Subscriberhelp",
@@ -100206,7 +101203,7 @@
           "usecase": {
             "title": "Usecase",
             "type": "string",
-            "description": "Campaign usecase. Must be of defined valid types. Use `/registry/enum/usecase` operation to retrieve usecases available for given brand."
+            "description": "Campaign usecase. Must be of defined valid types. Use `/10dlc/enum/usecase` operation to retrieve usecases available for given brand."
           },
           "vertical": {
             "title": "Vertical",
@@ -100484,7 +101481,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/registry/enum/usecase` operation to retrieve list of valid sub-usecases"
+            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/10dlc/enum/usecase` operation to retrieve list of valid sub-usecases"
           },
           "subscriberHelp": {
             "title": "Subscriberhelp",
@@ -100509,7 +101506,7 @@
           "usecase": {
             "title": "Usecase",
             "type": "string",
-            "description": "Campaign usecase. Must be of defined valid types. Use `/registry/enum/usecase` operation to retrieve usecases available for given brand."
+            "description": "Campaign usecase. Must be of defined valid types. Use `/10dlc/enum/usecase` operation to retrieve usecases available for given brand."
           },
           "vertical": {
             "title": "Vertical",
@@ -100735,7 +101732,7 @@
           "usecase": {
             "title": "Usecase",
             "type": "string",
-            "description": "Campaign usecase. Must be of defined valid types. Use `/registry/enum/usecase` operation to retrieve usecases available for given brand."
+            "description": "Campaign usecase. Must be of defined valid types. Use `/10dlc/enum/usecase` operation to retrieve usecases available for given brand."
           },
           "sample1": {
             "title": "Sample1",
@@ -100769,7 +101766,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/registry/enum/usecase` operation to retrieve list of valid sub-usecases"
+            "description": "Campaign sub-usecases. Must be of defined valid sub-usecase types. Use `/10dlc/enum/usecase` operation to retrieve list of valid sub-usecases"
           },
           "subscriberOptin": {
             "title": "Subscriberoptin",
@@ -102861,6 +103858,14 @@
             "title": "Eot Timeout Ms",
             "type": "integer",
             "description": "Available only for deepgram/flux. Maximum milliseconds of silence before forcing an end of turn, regardless of confidence."
+          },
+          "eager_eot_threshold": {
+            "title": "Eager Eot Threshold",
+            "type": "number",
+            "minimum": 0.3,
+            "maximum": 0.9,
+            "default": 0.3,
+            "description": "Available only for deepgram/flux. Confidence threshold for eager end of turn detection. Must be lower than or equal to eot_threshold. Setting this equal to eot_threshold effectively disables eager end of turn."
           }
         },
         "type": "object",
@@ -103637,7 +104642,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api/inference/inference-embedding/get-models-public-models-get) to see all of your available models,"
+            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see all of your available models,"
           },
           "instructions": {
             "type": "string",
@@ -103651,11 +104656,11 @@
           },
           "greeting": {
             "type": "string",
-            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables)"
+            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables). Use an empty string to have the assistant wait for the user to speak first. Use the special value `<assistant-speaks-first-with-model-generated-message>` to have the assistant generate the greeting based on the system instructions."
           },
           "llm_api_key_ref": {
             "type": "string",
-            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
+            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
           },
           "voice_settings": {
             "$ref": "#/components/schemas/VoiceSettings"
@@ -103690,6 +104695,9 @@
             "type": "object",
             "description": "Map of dynamic variables and their default values",
             "additionalProperties": true
+          },
+          "widget_settings": {
+            "$ref": "#/components/schemas/WidgetSettings"
           }
         },
         "type": "object",
@@ -104563,6 +105571,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/CredentialOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -104619,6 +105633,11 @@
             "localization": "US",
             "t38_reinvite_source": "customer",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         }
       },
@@ -104900,6 +105919,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundFqdn"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -104946,6 +105971,11 @@
             "timeout_1xx_secs": 10,
             "timeout_2xx_secs": 10,
             "shaken_stir_enabled": true
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         },
         "type": "object"
@@ -105096,6 +106126,12 @@
           },
           "outbound": {
             "$ref": "#/components/schemas/OutboundIp"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
           }
         },
         "example": {
@@ -105157,6 +106193,11 @@
             "ip_authentication_method": "token",
             "ip_authentication_token": "string",
             "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
           }
         },
         "type": "object"
@@ -105427,6 +106468,11 @@
           },
           "mobile_only": {
             "description": "Send messages only to mobile phone numbers.",
+            "type": "boolean",
+            "default": false
+          },
+          "smart_encoding": {
+            "description": "Enables automatic character encoding optimization for SMS messages. When enabled, the system automatically selects the most efficient encoding (GSM-7 or UCS-2) based on message content to maximize character limits and minimize costs.",
             "type": "boolean",
             "default": false
           }
@@ -107051,6 +108097,31 @@
         ],
         "title": "UserEmbeddedBucketsData"
       },
+      "UserGroupReference": {
+        "type": "object",
+        "title": "UserGroupReference",
+        "description": "A reference to a group that a user belongs to.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The unique identifier of the group.",
+            "example": "7b09cdc3-8948-47f0-aa62-74ac943d6c59"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the group.",
+            "example": "Engineering"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "example": {
+          "id": "7b09cdc3-8948-47f0-aa62-74ac943d6c59",
+          "name": "Engineering"
+        }
+      },
       "UserId": {
         "description": "Identifier of the user to whom the fax belongs",
         "type": "string",
@@ -107597,6 +108668,16 @@
             "type": "string",
             "example": "START, YES, SUBSCRIBE"
           },
+          "campaignVerifyAuthorizationToken": {
+            "title": "Campaignverifyauthorizationtoken",
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Campaign Verify Authorization Token required for Political use case submissions starting February 17, 2026",
+            "example": "cv_token_abc123xyz"
+          },
           "id": {
             "title": "Id",
             "type": "string",
@@ -107833,6 +108914,16 @@
             "title": "Optinkeywords",
             "type": "string",
             "example": "START, YES, SUBSCRIBE"
+          },
+          "campaignVerifyAuthorizationToken": {
+            "title": "Campaignverifyauthorizationtoken",
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500,
+            "description": "Campaign Verify Authorization Token required for Political use case submissions starting February 17, 2026",
+            "example": "cv_token_abc123xyz"
           },
           "id": {
             "title": "Id",
@@ -108627,7 +109718,7 @@
         "properties": {
           "voice": {
             "type": "string",
-            "description": "The voice to be used by the voice assistant. Check the full list of [available voices](https://developers.telnyx.com/api/call-control/list-text-to-speech-voices) via our voices API.\nTo use ElevenLabs, you must reference your ElevenLabs API key as an integration secret under the `api_key_ref` field. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. For Telnyx voices, use `Telnyx.<model_id>.<voice_id>` (e.g. Telnyx.KokoroTTS.af_heart)"
+            "description": "The voice to be used by the voice assistant. Check the full list of [available voices](https://developers.telnyx.com/api/call-control/list-text-to-speech-voices) via our voices API.\nTo use ElevenLabs, you must reference your ElevenLabs API key as an integration secret under the `api_key_ref` field. See [integration secrets documentation](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) for details. For Telnyx voices, use `Telnyx.<model_id>.<voice_id>` (e.g. Telnyx.KokoroTTS.af_heart)"
           },
           "voice_speed": {
             "type": "number",
@@ -108637,6 +109728,31 @@
           "api_key_ref": {
             "type": "string",
             "description": "The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) that refers to your ElevenLabs API key. Warning: Free plans are unlikely to work with this integration."
+          },
+          "temperature": {
+            "type": "number",
+            "default": 0.5,
+            "description": "Determines how stable the voice is and the randomness between each generation. Lower values create a broader emotional range; higher values produce more consistent, monotonous output. Only applicable when using ElevenLabs."
+          },
+          "similarity_boost": {
+            "type": "number",
+            "default": 0.75,
+            "description": "Determines how closely the AI should adhere to the original voice when attempting to replicate it. Only applicable when using ElevenLabs."
+          },
+          "use_speaker_boost": {
+            "type": "boolean",
+            "default": true,
+            "description": "Amplifies similarity to the original speaker voice. Increases computational load and latency slightly. Only applicable when using ElevenLabs."
+          },
+          "style": {
+            "type": "number",
+            "default": 0,
+            "description": "Determines the style exaggeration of the voice. Amplifies speaker style but consumes additional resources when set above 0. Only applicable when using ElevenLabs."
+          },
+          "speed": {
+            "type": "number",
+            "default": 1.0,
+            "description": "Adjusts speech velocity. 1.0 is default speed; values less than 1.0 slow speech; values greater than 1.0 accelerate it. Only applicable when using ElevenLabs."
           },
           "background_audio": {
             "description": "Optional background audio to play on the call. Use a predefined media bed, or supply a looped MP3 URL. If a media URL is chosen in the portal, customers can preview it before saving.",
@@ -109919,6 +111035,80 @@
             }
           }
         }
+      },
+      "WidgetSettings": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ],
+            "description": "The visual theme for the widget."
+          },
+          "audio_visualizer_config": {
+            "$ref": "#/components/schemas/AudioVisualizerConfig"
+          },
+          "start_call_text": {
+            "type": "string",
+            "description": "Custom text displayed on the start call button."
+          },
+          "default_state": {
+            "type": "string",
+            "enum": [
+              "expanded",
+              "collapsed"
+            ],
+            "description": "The default state of the widget."
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "static"
+            ],
+            "description": "The positioning style for the widget."
+          },
+          "view_history_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to view conversation history."
+          },
+          "report_issue_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL for users to report issues."
+          },
+          "give_feedback_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL for users to give feedback."
+          },
+          "agent_thinking_text": {
+            "type": "string",
+            "description": "Text displayed while the agent is processing."
+          },
+          "speak_to_interrupt_text": {
+            "type": "string",
+            "description": "Text prompting users to speak to interrupt."
+          },
+          "logo_icon_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "URL to a custom logo icon for the widget."
+          }
+        },
+        "title": "WidgetSettings",
+        "description": "Configuration settings for the assistant's web widget."
       },
       "WireguardInterface": {
         "allOf": [
@@ -111798,7 +112988,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api/inference/inference-embedding/get-models-public-models-get) to see all of your available models,"
+            "description": "ID of the model to use. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see all of your available models,"
           },
           "instructions": {
             "type": "string",
@@ -111809,11 +112999,11 @@
           },
           "greeting": {
             "type": "string",
-            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables)"
+            "description": "Text that the assistant will use to start the conversation. This may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables). Use an empty string to have the assistant wait for the user to speak first. Use the special value `<assistant-speaks-first-with-model-generated-message>` to have the assistant generate the greeting based on the system instructions."
           },
           "llm_api_key_ref": {
             "type": "string",
-            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
+            "description": "This is only needed when using third-party inference providers. The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) that refers to your LLM provider's API key. Warning: Free plans are unlikely to work with this integration."
           },
           "voice_settings": {
             "$ref": "#/components/schemas/VoiceSettings"
@@ -111852,6 +113042,9 @@
           },
           "import_metadata": {
             "$ref": "#/components/schemas/ImportMetadata"
+          },
+          "widget_settings": {
+            "$ref": "#/components/schemas/WidgetSettings"
           }
         },
         "type": "object",
@@ -111870,7 +113063,7 @@
               "type": "string"
             },
             "type": "array",
-            "description": "List of [embedded storage buckets](https://developers.telnyx.com/api/inference/inference-embedding/post-embedding) to use for retrieval-augmented generation."
+            "description": "List of [embedded storage buckets](https://developers.telnyx.com/api-reference/embeddings/embed-documents) to use for retrieval-augmented generation."
           },
           "max_num_results": {
             "description": "The maximum number of results to retrieve as context for the language model.",
@@ -112093,6 +113286,17 @@
               ],
               "type": "object"
             }
+          },
+          "async": {
+            "type": "boolean",
+            "default": false,
+            "description": "If async, the assistant will move forward without waiting for your server to respond."
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 10000,
+            "description": "The maximum number of milliseconds to wait for the webhook to respond. Only applicable when async is false."
           }
         },
         "type": "object",
@@ -113313,6 +114517,28 @@
         "type": "string",
         "description": "The primary street address information about the user address.",
         "example": "600 Congress Avenue"
+      },
+      "users_PaginationMeta": {
+        "title": "Pagination Meta",
+        "type": "object",
+        "properties": {
+          "total_pages": {
+            "type": "integer",
+            "example": 3
+          },
+          "total_results": {
+            "type": "integer",
+            "example": 55
+          },
+          "page_number": {
+            "type": "integer",
+            "example": 2
+          },
+          "page_size": {
+            "type": "integer",
+            "example": 25
+          }
+        }
       },
       "validate_address": {
         "type": "boolean",
@@ -116848,156 +118074,6 @@
           }
         ],
         "operationId": "ReplacedLinkClick",
-        "tags": [
-          "Callbacks"
-        ]
-      }
-    },
-    "streamingFailed": {
-      "post": {
-        "summary": "Streaming Failed",
-        "description": "\n\nThis webhook uses Telnyx headers (telnyx-timestamp, telnyx-signature-ed25519) that are compatible with Standard Webhooks specification for SDK generation. Custom validation logic can map these to standard webhook-timestamp and webhook-signature equivalents. See https://github.com/standard-webhooks/standard-webhooks for details.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CallStreamingFailedEvent"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The server must return an HTTP 200, otherwise we will reattempt delivery at the failover webhook URL."
-          }
-        },
-        "parameters": [
-          {
-            "name": "telnyx-timestamp",
-            "in": "header",
-            "required": true,
-            "description": "Unix timestamp (seconds since epoch) of when the webhook was sent - compatible with webhook-timestamp",
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "description": "Unix timestamp for replay attack prevention"
-            },
-            "x-webhook-equivalent": "webhook-timestamp"
-          },
-          {
-            "name": "telnyx-signature-ed25519",
-            "in": "header",
-            "required": true,
-            "description": "Base64 encoded Ed25519 signature for webhook verification - compatible with webhook-signature",
-            "schema": {
-              "type": "string",
-              "description": "Ed25519 signature of timestamp|payload for verification"
-            },
-            "x-webhook-equivalent": "webhook-signature"
-          }
-        ],
-        "operationId": "StreamingFailed",
-        "tags": [
-          "Callbacks"
-        ]
-      }
-    },
-    "streamingStarted": {
-      "post": {
-        "summary": "Streaming Started",
-        "description": "\n\nThis webhook uses Telnyx headers (telnyx-timestamp, telnyx-signature-ed25519) that are compatible with Standard Webhooks specification for SDK generation. Custom validation logic can map these to standard webhook-timestamp and webhook-signature equivalents. See https://github.com/standard-webhooks/standard-webhooks for details.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CallStreamingStartedEvent"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The server must return an HTTP 200, otherwise we will reattempt delivery at the failover webhook URL."
-          }
-        },
-        "parameters": [
-          {
-            "name": "telnyx-timestamp",
-            "in": "header",
-            "required": true,
-            "description": "Unix timestamp (seconds since epoch) of when the webhook was sent - compatible with webhook-timestamp",
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "description": "Unix timestamp for replay attack prevention"
-            },
-            "x-webhook-equivalent": "webhook-timestamp"
-          },
-          {
-            "name": "telnyx-signature-ed25519",
-            "in": "header",
-            "required": true,
-            "description": "Base64 encoded Ed25519 signature for webhook verification - compatible with webhook-signature",
-            "schema": {
-              "type": "string",
-              "description": "Ed25519 signature of timestamp|payload for verification"
-            },
-            "x-webhook-equivalent": "webhook-signature"
-          }
-        ],
-        "operationId": "StreamingStarted",
-        "tags": [
-          "Callbacks"
-        ]
-      }
-    },
-    "streamingStopped": {
-      "post": {
-        "summary": "Streaming Stopped",
-        "description": "\n\nThis webhook uses Telnyx headers (telnyx-timestamp, telnyx-signature-ed25519) that are compatible with Standard Webhooks specification for SDK generation. Custom validation logic can map these to standard webhook-timestamp and webhook-signature equivalents. See https://github.com/standard-webhooks/standard-webhooks for details.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CallStreamingStoppedEvent"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The server must return an HTTP 200, otherwise we will reattempt delivery at the failover webhook URL."
-          }
-        },
-        "parameters": [
-          {
-            "name": "telnyx-timestamp",
-            "in": "header",
-            "required": true,
-            "description": "Unix timestamp (seconds since epoch) of when the webhook was sent - compatible with webhook-timestamp",
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "description": "Unix timestamp for replay attack prevention"
-            },
-            "x-webhook-equivalent": "webhook-timestamp"
-          },
-          {
-            "name": "telnyx-signature-ed25519",
-            "in": "header",
-            "required": true,
-            "description": "Base64 encoded Ed25519 signature for webhook verification - compatible with webhook-signature",
-            "schema": {
-              "type": "string",
-              "description": "Ed25519 signature of timestamp|payload for verification"
-            },
-            "x-webhook-equivalent": "webhook-signature"
-          }
-        ],
-        "operationId": "StreamingStopped",
         "tags": [
           "Callbacks"
         ]

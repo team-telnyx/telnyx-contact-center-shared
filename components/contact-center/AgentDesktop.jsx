@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ export function AgentDesktop() {
   const [selectedInteraction, setSelectedInteraction] = useState(null);
   const [interactions, setInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
+  const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
 
   // Get WebRTC call state for real-time updates (hold, mute, status)
   const webrtcCallState = useActiveCallStore();
@@ -151,6 +152,55 @@ export function AgentDesktop() {
               if (updated) {
                 return updated;
               }
+              // If not found in active list (e.g., completed) OR if from_number is missing/empty, try to refresh it from DB
+              const needsRefresh =
+                !current.from_number || current.from_number.trim() === "";
+              const interactionId = current.id;
+              const callControlId = current.call_control_id;
+              const lastAttempt =
+                lastRefreshAttemptRef.current.get(interactionId);
+              const now = Date.now();
+
+              // Only refresh if we haven't tried in the last 5 seconds (avoid infinite loops)
+              if (
+                needsRefresh &&
+                callControlId &&
+                (!lastAttempt || now - lastAttempt > 5000)
+              ) {
+                lastRefreshAttemptRef.current.set(interactionId, now);
+
+                fetch(
+                  `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
+                    callControlId
+                  )}`
+                )
+                  .then((res) => res.json())
+                  .then((data) => {
+                    if (data.ok && data.interaction) {
+                      // Only update if we got a better from_number or if it's the same interaction
+                      if (
+                        data.interaction.id === interactionId ||
+                        data.interaction.call_control_id === callControlId
+                      ) {
+                        console.log(
+                          "[AgentDesktop] Refreshed interaction from DB:",
+                          {
+                            id: data.interaction.id,
+                            from_number: data.interaction.from_number,
+                            had_from_number: current.from_number,
+                          }
+                        );
+                        setSelectedInteraction(data.interaction);
+                      }
+                    }
+                  })
+                  .catch((err) => {
+                    console.warn(
+                      "[AgentDesktop] Failed to refresh selected interaction:",
+                      err
+                    );
+                  });
+              }
             }
             return current;
           });
@@ -180,6 +230,68 @@ export function AgentDesktop() {
     };
     loadUsername();
   }, []);
+
+  // Auto-refresh selected interaction if from_number is missing
+  useEffect(() => {
+    if (!selectedInteraction) return;
+
+    const needsRefresh =
+      !selectedInteraction.from_number ||
+      selectedInteraction.from_number.trim() === "";
+    if (!needsRefresh) return;
+
+    const interactionId = selectedInteraction.id;
+    const callControlId = selectedInteraction.call_control_id;
+    if (!callControlId) return;
+
+    const lastAttempt = lastRefreshAttemptRef.current.get(interactionId);
+    const now = Date.now();
+
+    // Only refresh if we haven't tried in the last 5 seconds (avoid infinite loops)
+    if (!lastAttempt || now - lastAttempt > 5000) {
+      lastRefreshAttemptRef.current.set(interactionId, now);
+
+      console.log(
+        "[AgentDesktop] Auto-refreshing interaction with missing from_number:",
+        {
+          id: interactionId,
+          call_control_id: callControlId,
+        }
+      );
+
+      fetch(
+        `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
+          callControlId
+        )}`
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.ok && data.interaction) {
+            if (
+              data.interaction.id === interactionId ||
+              data.interaction.call_control_id === callControlId
+            ) {
+              console.log("[AgentDesktop] Auto-refreshed interaction:", {
+                id: data.interaction.id,
+                from_number: data.interaction.from_number,
+                had_from_number: selectedInteraction.from_number,
+              });
+              setSelectedInteraction(data.interaction);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn(
+            "[AgentDesktop] Failed to auto-refresh interaction:",
+            err
+          );
+        });
+    }
+  }, [
+    selectedInteraction?.id,
+    selectedInteraction?.from_number,
+    selectedInteraction?.call_control_id,
+  ]);
 
   // Set up SSE connection for real-time updates
   useEffect(() => {
@@ -265,6 +377,41 @@ export function AgentDesktop() {
                   }
                   return current;
                 });
+              }
+            } else if (data.type === "transcription") {
+              // Handle transcription events for Agent Assist (same as demo portal)
+              console.log("[AgentDesktop] Received transcription:", data);
+
+              // Add transcription to active call store
+              const addTranscription =
+                useActiveCallStore.getState().addTranscription;
+              if (addTranscription && data.transcription) {
+                addTranscription({
+                  transcript: data.transcription.transcript,
+                  is_final: data.transcription.is_final,
+                  transcription_track: data.transcription.track,
+                  call_control_id: data.callControlId,
+                });
+
+                // Update with analysis results
+                const updateTranscriptionAnalysis =
+                  useActiveCallStore.getState().updateTranscriptionAnalysis;
+                if (updateTranscriptionAnalysis && data.transcription.intent) {
+                  // Find the last transcription (the one we just added)
+                  const transcriptions =
+                    useActiveCallStore.getState().transcriptions;
+                  const lastTranscription =
+                    transcriptions[transcriptions.length - 1];
+
+                  if (lastTranscription) {
+                    updateTranscriptionAnalysis(lastTranscription.id, {
+                      intent: data.transcription.intent,
+                      sentiment: data.transcription.sentiment,
+                      sentimentScore: data.transcription.sentimentScore,
+                      tags: data.transcription.tags || [],
+                    });
+                  }
+                }
               }
             } else if (data.type === "interaction_updated") {
               // Update interaction metadata

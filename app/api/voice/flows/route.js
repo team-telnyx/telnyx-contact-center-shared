@@ -48,11 +48,11 @@ export async function GET(request) {
     let user = null;
     if (id) user = await PgDb.findUserById(id);
     if (!user && email) user = await PgDb.findUserByUsername(email);
-    
+
     // Admin users can see all flows (pass null username)
     // Non-admin users only see their own flows
     const username = user && isAdmin(user) ? null : email;
-    
+
     const { searchParams } = new URL(request.url);
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
@@ -86,7 +86,7 @@ export async function GET(request) {
           // Use connection_id filter as that's how Telnyx filters by call control application
           const basePath =
             process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
-          
+
           let allPhoneNumbers = [];
           let page = 1;
           const pageSize = 250;
@@ -197,7 +197,12 @@ export async function POST(request) {
     try {
       // Ensure name is unique for Telnyx by appending a portion of the flow ID
       const telnyxAppName = `${flowData.name} (${flowId.substring(0, 8)})`;
-      voiceApp = await createVoiceApplication(telnyxAppName, webhookUrl);
+      // Pass flowId as SIP subdomain
+      voiceApp = await createVoiceApplication(
+        telnyxAppName,
+        webhookUrl,
+        flowId
+      );
     } catch (error) {
       console.error("[API] Failed to create voice application:", error);
       return NextResponse.json(

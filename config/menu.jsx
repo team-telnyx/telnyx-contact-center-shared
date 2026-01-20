@@ -25,13 +25,7 @@ export const menuConfig = {
           title: "Desktop",
           url: "/agent/desktop",
           icon: IconDeviceDesktop,
-          role_access: ["user", "admin", "owner"], // All authenticated users can access agent features
-        },
-        {
-          title: "Configuration",
-          url: "/agent/configuration",
-          icon: IconSettings,
-          role_access: ["user", "admin", "owner"], // All authenticated users can access agent features
+          role_access: ["agent", "supervisor", "admin", "owner"], // All authenticated users can access agent features
         },
       ],
     },

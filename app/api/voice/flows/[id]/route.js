@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
     let user = null;
     if (id) user = await PgDb.findUserById(id);
     if (!user && email) user = await PgDb.findUserByUsername(email);
-    
+
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
     const username = user && isAdmin(user) ? null : email;
@@ -89,7 +89,7 @@ export async function PUT(request, { params }) {
     let user = null;
     if (id) user = await PgDb.findUserById(id);
     if (!user && email) user = await PgDb.findUserByUsername(email);
-    
+
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
     const username = user && isAdmin(user) ? null : email;
@@ -115,16 +115,29 @@ export async function PUT(request, { params }) {
     else if (body.variables !== undefined) updates.variables = body.variables;
     if (body.metadata !== undefined) updates.metadata = body.metadata;
 
-    // Update voice application name if flow name changed
-    if (body.name !== undefined && existingFlow.telnyx_voice_app_id) {
+    // Update voice application if name changed or SIP subdomain needs to be set
+    if (existingFlow.telnyx_voice_app_id) {
       try {
-        // Ensure name is unique for Telnyx by appending a portion of the flow ID
-        const telnyxAppName = `${body.name} (${flowId.substring(0, 8)})`;
-        await updateVoiceApplication(existingFlow.telnyx_voice_app_id, {
-          application_name: telnyxAppName,
-        });
+        const voiceAppUpdates = {};
+
+        // Update name if it changed
+        if (body.name !== undefined) {
+          // Ensure name is unique for Telnyx by appending a portion of the flow ID
+          voiceAppUpdates.application_name = `${body.name} (${flowId.substring(
+            0,
+            8
+          )})`;
+        }
+
+        // Always ensure SIP subdomain is set to flow ID
+        voiceAppUpdates.sip_subdomain = flowId;
+
+        await updateVoiceApplication(
+          existingFlow.telnyx_voice_app_id,
+          voiceAppUpdates
+        );
       } catch (error) {
-        console.error("[API] Failed to update voice application name:", error);
+        console.error("[API] Failed to update voice application:", error);
         // Don't fail the flow update if voice app update fails
       }
     }
@@ -178,7 +191,7 @@ export async function DELETE(request, { params }) {
     let user = null;
     if (id) user = await PgDb.findUserById(id);
     if (!user && email) user = await PgDb.findUserByUsername(email);
-    
+
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
     const username = user && isAdmin(user) ? null : email;

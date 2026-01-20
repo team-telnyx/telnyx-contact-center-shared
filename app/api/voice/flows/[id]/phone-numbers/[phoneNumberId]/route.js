@@ -29,7 +29,7 @@ export async function DELETE(request, { params }) {
     let user = null;
     if (userId) user = await PgDb.findUserById(userId);
     if (!user && email) user = await PgDb.findUserByUsername(email);
-    
+
     // Admin users can access any flow (pass null username)
     // Non-admin users only see their own flows
     const username = user && isAdmin(user) ? null : email;
