@@ -33,6 +33,8 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import useCallsStore from "@/lib/stores/calls-store";
+import useActiveCallStore from "@/lib/stores/active-call-store";
 // No Link: SPA-style selection via hash
 
 // Helper function to get user initials
@@ -187,7 +189,7 @@ export function NavUser({ user, hideExtras }) {
         clearTimeout(reconnectTimeout);
       }
     };
-  }, [status]);
+  }, []);
 
   async function updateStatusOnServer(nextStatus) {
     // Persist status to database
@@ -207,6 +209,17 @@ export function NavUser({ user, hideExtras }) {
     if (logoutInFlightRef.v) return;
     logoutInFlightRef.v = true;
     try {
+      try {
+        updateStatusOnServer("Offline");
+      } catch (_) {}
+
+      try {
+        useCallsStore.getState().clearAllCalls();
+        useActiveCallStore.getState().clearActiveCall();
+        localStorage.removeItem("calls-store");
+        localStorage.removeItem("active-call-store");
+      } catch (_) {}
+
       // Clear local storage
       try {
         localStorage.removeItem("nav-main.selected");

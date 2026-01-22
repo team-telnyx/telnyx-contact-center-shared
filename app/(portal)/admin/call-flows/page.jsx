@@ -64,7 +64,7 @@ export default function CallFlowsPage() {
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
         const data = await res.json();
-        
+
         if (!data?.isAuth || !data?.user) {
           router.push("/signin");
           return;
@@ -76,8 +76,6 @@ export default function CallFlowsPage() {
           Array.isArray(data.user.roles) &&
           data.user.roles.length > 0
             ? data.user.roles.map((r) => String(r).toLowerCase())
-            : data.user.role
-            ? [String(data.user.role).toLowerCase()]
             : ["agent"];
 
         const hasAdminAccess = userRoles.some(
@@ -428,14 +426,16 @@ export default function CallFlowsPage() {
                                         Assigned Phone Numbers:
                                       </p>
                                       <div className="space-y-1 max-h-60 overflow-y-auto">
-                                        {phoneNumbers.map((phoneNumber, idx) => (
-                                          <div
-                                            key={idx}
-                                            className="text-xs font-mono text-left"
-                                          >
-                                            {phoneNumber}
-                                          </div>
-                                        ))}
+                                        {phoneNumbers.map(
+                                          (phoneNumber, idx) => (
+                                            <div
+                                              key={idx}
+                                              className="text-xs font-mono text-left"
+                                            >
+                                              {phoneNumber}
+                                            </div>
+                                          )
+                                        )}
                                       </div>
                                     </div>
                                   </TooltipContent>

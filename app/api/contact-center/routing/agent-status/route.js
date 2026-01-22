@@ -10,6 +10,7 @@ import {
   updateAgentStatus,
   updateAgentQueues,
 } from "@/lib/contact-center/state-manager";
+import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
 export async function POST(request) {
@@ -45,6 +46,7 @@ export async function POST(request) {
     const username = user.username;
 
     // Update agent status if provided
+    const effectiveStatus = status || user.agent_status;
     if (status) {
       // Validate status
       // Get valid statuses from database
@@ -105,6 +107,24 @@ export async function POST(request) {
          WHERE user_id = $2`,
         [queueIds, userId]
       );
+    }
+
+    const shouldOfferQueuedCalls =
+      ["Available", "Busy"].includes(effectiveStatus) &&
+      (Boolean(status) || (Array.isArray(queueIds) && isActive !== false));
+
+    if (shouldOfferQueuedCalls) {
+      try {
+        await offerQueuedCallForAgent({
+          userId,
+          queueIds: status ? null : queueIds,
+        });
+      } catch (error) {
+        console.error(
+          "[AgentStatus] Failed to offer queued calls after status change:",
+          error
+        );
+      }
     }
 
     return NextResponse.json({

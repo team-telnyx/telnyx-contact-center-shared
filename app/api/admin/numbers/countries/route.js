@@ -67,10 +67,25 @@ const countryNames = {
   UA: "Ukraine",
 };
 
+import { PgDb } from "@/lib/pgdb";
+import { isAdmin } from "@/lib/role-utils";
+
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return null;
+  const userId = session.user.id;
+  const email = session.user.email;
+  let user = null;
+  if (userId) user = await PgDb.findUserById(userId);
+  if (!user && email) user = await PgDb.findUserByUsername(email);
+  if (!user || !isAdmin(user)) return null;
+  return user;
+}
+
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || !["admin", "owner"].includes(session.user.role)) {
+    const user = await requireAdmin();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

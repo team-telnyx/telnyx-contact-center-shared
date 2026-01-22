@@ -1212,8 +1212,6 @@ export default function FlowBuilderPage() {
           Array.isArray(data.user.roles) &&
           data.user.roles.length > 0
             ? data.user.roles.map((r) => String(r).toLowerCase())
-            : data.user.role
-            ? [String(data.user.role).toLowerCase()]
             : ["agent"];
 
         const hasAdminAccess = userRoles.some(

@@ -141,8 +141,6 @@ export default function AdminUsersPage() {
       const userRoles =
         u.roles && Array.isArray(u.roles) && u.roles.length > 0
           ? u.roles
-          : u.role
-          ? [u.role]
           : ["user"];
       userRoles.forEach((r) => roleSet.add(String(r).toLowerCase()));
     });

@@ -49,11 +49,8 @@ export function AppSidebar({ hideNav, ...props }) {
           Array.isArray(data.user.roles) &&
           data.user.roles.length > 0
             ? data.user.roles
-            : data.user.role
-            ? [data.user.role]
             : ["agent"];
         setRoles(userRoles);
-        setRole(userRoles[0] || "agent"); // Keep role for backward compatibility
       }
     } catch (_) {
     } finally {

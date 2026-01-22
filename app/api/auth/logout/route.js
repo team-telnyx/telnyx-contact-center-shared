@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
+import { setUserStatus } from "@/lib/contact-center/user-status";
 
 export async function POST(request) {
   const res = NextResponse.json({ ok: true });
@@ -28,6 +29,18 @@ export async function POST(request) {
       const hashed = await hashToken(refreshToRevoke);
       const newList = list.filter((t) => t?.refreshToken !== hashed);
       await PgDb.updateUserById(String(userId), { refresh_tokens: newList });
+
+      // Set user status to Offline on logout
+      if (user) {
+        try {
+          await setUserStatus({
+            userId: String(userId),
+            username: user.username,
+            status: "Offline",
+            previousStatus: user.status,
+          });
+        } catch (_) {}
+      }
 
       // Track logout activity
       try {

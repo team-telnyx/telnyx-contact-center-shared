@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
 
 /**
  * POST /api/contact-center/agent/queues/activate
@@ -158,6 +159,20 @@ export async function POST(request) {
               targetUser.agent_status,
               targetUser.username
             );
+          }
+
+          if (["Available", "Busy"].includes(targetUser.agent_status)) {
+            try {
+              await offerQueuedCallForAgent({
+                userId: targetUserIdFinal,
+                queueIds: activated,
+              });
+            } catch (error) {
+              console.error(
+                "[Queue] Failed to offer queued calls after activation:",
+                error
+              );
+            }
           }
         }
       } catch (stateError) {

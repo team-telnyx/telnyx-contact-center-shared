@@ -7,6 +7,7 @@ import { useThemeColors } from "@/hooks/use-theme-colors";
 import { TelephonyProvider } from "@/components/telephony-provider";
 import { PhoneUiProvider } from "@/components/phone-ui-provider";
 import FloatingSoftphone from "@/components/floating-softphone";
+import { ContactCenterStreamProvider } from "@/components/contact-center/ContactCenterStreamProvider";
 
 export default function PortalLayout({ children }) {
   useThemeColors();
@@ -21,18 +22,20 @@ export default function PortalLayout({ children }) {
     >
       <TelephonyProvider>
         <PhoneUiProvider>
-          <AppSidebar variant="inset" />
-          <SidebarInset className="flex flex-col overflow-hidden">
-            <SiteHeader />
-            <div className="flex flex-1 flex-col overflow-auto">
-              <div className="@container/main flex flex-1 flex-col">
-                <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-                  {children}
+          <ContactCenterStreamProvider>
+            <AppSidebar variant="inset" />
+            <SidebarInset className="flex flex-col overflow-hidden">
+              <SiteHeader />
+              <div className="flex flex-1 flex-col overflow-auto">
+                <div className="@container/main flex flex-1 flex-col">
+                  <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+                    {children}
+                  </div>
                 </div>
               </div>
-            </div>
-          </SidebarInset>
-          <FloatingSoftphone />
+            </SidebarInset>
+            <FloatingSoftphone />
+          </ContactCenterStreamProvider>
         </PhoneUiProvider>
       </TelephonyProvider>
     </SidebarProvider>

@@ -74,10 +74,6 @@ export async function PUT(request, { params }) {
     "voiceNumber",
     body.voiceNumber != null ? String(body.voiceNumber) : undefined
   );
-  maybeSet(
-    "role",
-    body.role != null ? String(body.role).toLowerCase() : undefined
-  );
   if (body.roles !== undefined) {
     set.roles = Array.isArray(body.roles) ? body.roles : [body.roles];
   }
@@ -124,14 +120,14 @@ export async function DELETE(request, { params }) {
   const id = resolvedParams?.id;
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  const targetRes = await pool.query(`SELECT role FROM users WHERE id=$1`, [
+  const targetRes = await pool.query(`SELECT roles FROM users WHERE id=$1`, [
     id,
   ]);
   const target = targetRes.rows?.[0] || null;
   if (!target)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const targetRole = String(target.role || "agent").toLowerCase();
-  if (targetRole === "owner") {
+  const targetRoles = target.roles || ["agent"];
+  if (targetRoles.includes("owner")) {
     return NextResponse.json(
       { error: "Owner accounts cannot be deleted" },
       { status: 400 }

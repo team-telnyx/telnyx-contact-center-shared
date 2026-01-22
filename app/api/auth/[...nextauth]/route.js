@@ -352,7 +352,7 @@ export const authOptions = {
           if (user) {
             // Always use the ID from the app's users table, not from NextAuth's auth_users table
             session.user.id = String(user.id);
-            session.user.role = user.role;
+            session.user.roles = user.roles || ["agent"];
             session.user.username = user.username;
             session.user.firstName = user.first_name;
             session.user.lastName = user.last_name;
@@ -454,7 +454,7 @@ export const authOptions = {
 
           if (user) {
             session.user.id = String(user.id);
-            session.user.role = user.role;
+            session.user.roles = user.roles || ["agent"];
             session.user.username = user.username;
             session.user.firstName = user.first_name;
             session.user.lastName = user.last_name;

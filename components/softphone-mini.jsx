@@ -52,6 +52,9 @@ export default function SoftphoneMini() {
   const callerInfo = useCallerInfo();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
+  const activeCallsCount = useCallsStore(
+    (state) => state.getActiveCalls().length
+  );
 
   // Zustand stores - dial state
   const { toNumber, setToNumber: setDialToNumber } = useDialStore();
@@ -94,6 +97,39 @@ export default function SoftphoneMini() {
   const [interaction, setInteraction] = useState(null);
   const fromRef = useRef("");
   const audioRef = useRef(null);
+  const autoStatusRef = useRef({
+    lastSent: null,
+    forcedBusy: false,
+  });
+
+  const updateUserStatus = async (nextStatus) => {
+    if (autoStatusRef.current.lastSent === nextStatus) return;
+    autoStatusRef.current.lastSent = nextStatus;
+    try {
+      await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+    } catch (_) {}
+    try {
+      localStorage.setItem("user.status", nextStatus);
+    } catch (_) {}
+  };
+
+  // Auto-set agent status based on call activity
+  useEffect(() => {
+    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
+    if (hasActiveCall) {
+      autoStatusRef.current.forcedBusy = true;
+      updateUserStatus("Busy");
+      return;
+    }
+    if (autoStatusRef.current.forcedBusy) {
+      autoStatusRef.current.forcedBusy = false;
+      updateUserStatus("Available");
+    }
+  }, [activeCall, activeCallsCount]);
 
   // Fetch interaction when call is active
   // This works for BOTH contact center calls AND by looking up any incoming call
@@ -360,6 +396,16 @@ export default function SoftphoneMini() {
                   const storedInfo = await getStoredCallerInfo(fromNumber);
                   if (storedInfo?.fromName) {
                     metadata.fromName = storedInfo.fromName;
+                  }
+                  if (storedInfo?.originalCallControlId) {
+                    metadata.originalCallControlId =
+                      storedInfo.originalCallControlId;
+                  }
+                  if (storedInfo?.callSessionId) {
+                    metadata.originalCallSessionId = storedInfo.callSessionId;
+                  }
+                  if (storedInfo?.interactionId && !metadata.interactionId) {
+                    metadata.interactionId = storedInfo.interactionId;
                   }
 
                   // Populate contact center metadata from SSE if available

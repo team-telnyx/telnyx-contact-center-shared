@@ -220,7 +220,6 @@ export default function EditSheet({
         lastName,
         nick,
         roles, // Send roles array
-        role: roles[0] || "agent", // Keep role for backward compatibility
         verified,
         active,
         status,

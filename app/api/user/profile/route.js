@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { broadcastToKey } from "@/lib/sse";
+import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
 const ALLOWED_THEMES = ["light", "dark", "system"];
@@ -57,7 +58,7 @@ export async function GET(request) {
       voice_number: user.voice_number,
       sms_number: user.sms_number,
       voice_app_id: user.voice_app_id,
-      role: user.role,
+      roles: user.roles || ["agent"],
       theme: user.theme,
       status: user.status,
       language: user.language,
@@ -156,6 +157,13 @@ export async function PUT(request) {
     if (update.status) {
       const previousStatus = user.status || user.agent_status || "Unknown";
       const sseKey = `user:status:${userId}`;
+      console.log("[Profile] Status update requested:", {
+        userId: String(userId),
+        username: user.username,
+        previousStatus,
+        status: update.status,
+        timestamp: new Date().toISOString(),
+      });
 
       // Update agent_status to match status for contact center
       try {
@@ -184,6 +192,25 @@ export async function PUT(request) {
         );
         updateAgentStatus(userId, update.status, user.username);
 
+        if (["Available", "Busy"].includes(update.status)) {
+          try {
+            console.log(
+              "[Profile] Offering queued call after status update:",
+              {
+                userId: String(userId),
+                username: user.username,
+                status: update.status,
+              }
+            );
+            await offerQueuedCallForAgent({ userId: String(userId) });
+          } catch (offerError) {
+            console.error(
+              "[Profile] Failed to offer queued calls after status update:",
+              offerError
+            );
+          }
+        }
+
         // Broadcast to monitor streams
         try {
           const { broadcastToKey } = await import("@/lib/sse");
@@ -194,7 +221,7 @@ export async function PUT(request) {
           const monitorPool = getPool();
           if (monitorPool) {
             const supervisors = await monitorPool.query(
-              `SELECT id FROM users WHERE 'supervisor' = ANY(roles) OR 'admin' = ANY(roles) OR role IN ('supervisor', 'admin', 'owner')`
+              `SELECT id FROM users WHERE 'supervisor' = ANY(roles) OR 'admin' = ANY(roles) OR 'owner' = ANY(roles)`
             );
             for (const supervisor of supervisors.rows || []) {
               await broadcastToKey(

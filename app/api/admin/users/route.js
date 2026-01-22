@@ -54,8 +54,8 @@ export async function GET(request) {
     i += 1;
   }
   if (role && role !== "all") {
-    // Check both role field and roles array
-    where.push(`(LOWER(role)=LOWER($${i}) OR $${i} = ANY(roles))`);
+    // Check roles array only
+    where.push(`$${i} = ANY(roles)`);
     vals.push(role);
     i += 1;
   }
@@ -71,7 +71,7 @@ export async function GET(request) {
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const rowsSql = `SELECT id, username, first_name, last_name, nick, mobile, role, roles, verified, status, created_at, updated_at FROM users ${whereSql} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+  const rowsSql = `SELECT id, username, first_name, last_name, nick, mobile, roles, verified, status, created_at, updated_at FROM users ${whereSql} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
   const [rowsRes, countRes] = await Promise.all([
     pool.query(rowsSql, vals),
     pool.query(`SELECT COUNT(*) AS c FROM users ${whereSql}`, vals),
@@ -100,8 +100,7 @@ export async function POST(request) {
     mobile: body.mobile || null,
     smsNumber: body.smsNumber || "Telnyx",
     voiceNumber: body.voiceNumber || null,
-    role: body.role || "agent", // Legacy field
-    roles: body.roles || (body.role ? [body.role] : ["agent"]), // New roles array
+    roles: body.roles || ["agent"], // Roles array
     verified: Boolean(body.verified),
     authStrategy: body.authStrategy || "local",
     telephonyCredentialsId: body.telephonyCredentialsId || null,

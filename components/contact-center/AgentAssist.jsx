@@ -123,7 +123,6 @@ export function AgentAssist({ interactionId, interaction }) {
     }
   };
 
-
   // Handle article selection
   const handleArticleClick = (article) => {
     setSelectedArticle(article);
@@ -131,8 +130,9 @@ export function AgentAssist({ interactionId, interaction }) {
 
   const handleSendSMS = async (customMessageBody = null) => {
     // Get caller number from interaction (try multiple field names)
-    const callerNumber = interaction?.from_number || interaction?.fromNumber || interaction?.from;
-    
+    const callerNumber =
+      interaction?.from_number || interaction?.fromNumber || interaction?.from;
+
     if (!callerNumber) {
       notify({
         title: "Cannot send SMS",
@@ -146,7 +146,8 @@ export function AgentAssist({ interactionId, interaction }) {
     if (!customMessageBody && !selectedArticle) {
       notify({
         title: "Cannot send SMS",
-        description: "No content to send. Select an article or enable LLM to generate a response.",
+        description:
+          "No content to send. Select an article or enable LLM to generate a response.",
         variant: "error",
       });
       return;
@@ -235,7 +236,8 @@ export function AgentAssist({ interactionId, interaction }) {
     if (!customSpeakText && !selectedArticle) {
       notify({
         title: "Cannot play content",
-        description: "No content to play. Select an article or enable LLM to generate a response.",
+        description:
+          "No content to play. Select an article or enable LLM to generate a response.",
         variant: "error",
       });
       return;
@@ -634,13 +636,21 @@ function KbArticleCard({ article, isSelected, onSelect }) {
 /**
  * Article Viewer Component
  */
-function ArticleViewer({ article, transcription, interaction, callControlId, onSendSMS, onSpeak }) {
+function ArticleViewer({
+  article,
+  transcription,
+  interaction,
+  callControlId,
+  onSendSMS,
+  onSpeak,
+}) {
   const [useLLM, setUseLLM] = useState(false);
   const [llmResponse, setLlmResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Get caller number from interaction (try multiple field names)
-  const callerNumber = interaction?.from_number || interaction?.fromNumber || interaction?.from;
+  const callerNumber =
+    interaction?.from_number || interaction?.fromNumber || interaction?.from;
 
   // Debug: Log caller number detection
   useEffect(() => {
@@ -751,7 +761,11 @@ function ArticleViewer({ article, transcription, interaction, callControlId, onS
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-500" />
-            {useLLM && llmResponse ? "AI Generated Response" : article ? "Article Content" : "Content"}
+            {useLLM && llmResponse
+              ? "AI Generated Response"
+              : article
+              ? "Article Content"
+              : "Content"}
           </h3>
           <div className="flex items-center gap-2">
             <Switch
@@ -801,10 +815,16 @@ function ArticleViewer({ article, transcription, interaction, callControlId, onS
                       <p className="text-xs leading-relaxed mb-2" {...props} />
                     ),
                     ul: ({ node, ...props }) => (
-                      <ul className="list-disc list-inside mb-2 text-xs" {...props} />
+                      <ul
+                        className="list-disc list-inside mb-2 text-xs"
+                        {...props}
+                      />
                     ),
                     ol: ({ node, ...props }) => (
-                      <ol className="list-decimal list-inside mb-2 text-xs" {...props} />
+                      <ol
+                        className="list-decimal list-inside mb-2 text-xs"
+                        {...props}
+                      />
                     ),
                     li: ({ node, ...props }) => (
                       <li className="mb-1" {...props} />
@@ -847,13 +867,22 @@ function ArticleViewer({ article, transcription, interaction, callControlId, onS
                         />
                       ),
                       p: ({ node, ...props }) => (
-                        <p className="text-xs leading-relaxed mb-2" {...props} />
+                        <p
+                          className="text-xs leading-relaxed mb-2"
+                          {...props}
+                        />
                       ),
                       ul: ({ node, ...props }) => (
-                        <ul className="list-disc list-inside mb-2 text-xs space-y-1 ml-2" {...props} />
+                        <ul
+                          className="list-disc list-inside mb-2 text-xs space-y-1 ml-2"
+                          {...props}
+                        />
                       ),
                       ol: ({ node, ...props }) => (
-                        <ol className="list-decimal list-inside mb-2 text-xs space-y-1 ml-2" {...props} />
+                        <ol
+                          className="list-decimal list-inside mb-2 text-xs space-y-1 ml-2"
+                          {...props}
+                        />
                       ),
                       li: ({ node, ...props }) => (
                         <li className="mb-1" {...props} />
@@ -865,13 +894,22 @@ function ArticleViewer({ article, transcription, interaction, callControlId, onS
                         <em className="italic" {...props} />
                       ),
                       code: ({ node, ...props }) => (
-                        <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props} />
+                        <code
+                          className="bg-muted px-1 py-0.5 rounded text-xs font-mono"
+                          {...props}
+                        />
                       ),
                       pre: ({ node, ...props }) => (
-                        <pre className="bg-muted p-2 rounded text-xs font-mono overflow-x-auto mb-2" {...props} />
+                        <pre
+                          className="bg-muted p-2 rounded text-xs font-mono overflow-x-auto mb-2"
+                          {...props}
+                        />
                       ),
                       blockquote: ({ node, ...props }) => (
-                        <blockquote className="border-l-2 border-green-500 pl-2 italic text-muted-foreground mb-2" {...props} />
+                        <blockquote
+                          className="border-l-2 border-green-500 pl-2 italic text-muted-foreground mb-2"
+                          {...props}
+                        />
                       ),
                     }}
                   >
@@ -1004,9 +1042,7 @@ function calculateAggregateStats(transcriptions) {
   for (let i = transcriptions.length - 1; i >= 0; i--) {
     if (transcriptions[i].intent) {
       topIntent = transcriptions[i].intent;
-      intentCount = transcriptions.filter(
-        (t) => t.intent === topIntent
-      ).length;
+      intentCount = transcriptions.filter((t) => t.intent === topIntent).length;
       break;
     }
   }
@@ -1040,17 +1076,17 @@ function calculateAggregateStats(transcriptions) {
  */
 function convertPlainTextToMarkdown(text) {
   if (!text) return "";
-  
+
   // Split into lines
   const lines = text.split("\n");
   const result = [];
   let inNumberedList = false;
   let inBulletList = false;
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
-    
+
     // Check if line is a numbered list item (starts with number and period)
     const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
     if (numberedMatch) {
@@ -1065,7 +1101,7 @@ function convertPlainTextToMarkdown(text) {
       inNumberedList = true;
       continue;
     }
-    
+
     // Check if line is a bullet point (starts with dash, possibly indented)
     const bulletMatch = line.match(/^(\s*)-\s+(.+)$/);
     if (bulletMatch) {
@@ -1083,7 +1119,7 @@ function convertPlainTextToMarkdown(text) {
       inBulletList = true;
       continue;
     }
-    
+
     // Regular line - preserve as-is
     if (trimmed === "") {
       if (inNumberedList || inBulletList) {
@@ -1104,7 +1140,7 @@ function convertPlainTextToMarkdown(text) {
       result.push(line);
     }
   }
-  
+
   return result.join("\n");
 }
 
@@ -1123,4 +1159,3 @@ function stripMarkdown(text) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-
