@@ -37,6 +37,7 @@ export async function POST(request, { params }) {
       transferCount,
       transferHistory,
       talkTimeSeconds,
+      answeredAt,
       holdEvents, // Array of {type: 'hold'|'resume', timestamp} from client store
     } = body;
 
@@ -76,9 +77,22 @@ export async function POST(request, { params }) {
     const updates = {};
     let updatedRoutingMetadata = interaction.routing_metadata || {};
 
-    // Add timeline events for hold/resume if provided
+    // Add timeline events for hold/resume if provided (dedupe by type+timestamp)
     if (holdEvents && Array.isArray(holdEvents)) {
+      const existingTimeline = Array.isArray(updatedRoutingMetadata?.timeline)
+        ? updatedRoutingMetadata.timeline
+        : [];
+      const existingKeys = new Set(
+        existingTimeline.map(
+          (event) => `${event.type}:${event.timestamp || ""}`
+        )
+      );
+
       holdEvents.forEach((event) => {
+        if (!event?.type || !event?.timestamp) return;
+        const key = `${event.type}:${event.timestamp}`;
+        if (existingKeys.has(key)) return;
+
         if (event.type === "hold") {
           updatedRoutingMetadata = addTimelineEvent(
             updatedRoutingMetadata,
@@ -98,6 +112,7 @@ export async function POST(request, { params }) {
             }
           );
         }
+        existingKeys.add(key);
       });
     }
 
@@ -109,6 +124,9 @@ export async function POST(request, { params }) {
       updates.transferHistory = transferHistory;
     if (talkTimeSeconds !== undefined)
       updates.talkTimeSeconds = talkTimeSeconds;
+    if (answeredAt && !interaction.answered_at) {
+      updates.answeredAt = answeredAt;
+    }
     if (Object.keys(updatedRoutingMetadata).length > 0) {
       updates.routingMetadata = updatedRoutingMetadata;
     }

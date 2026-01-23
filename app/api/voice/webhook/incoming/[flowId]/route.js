@@ -144,6 +144,7 @@ export async function POST(request, { params }) {
 
           if (originalInteraction) {
             // Update the original interaction with the agent's call_control_id
+            // Keep call_control_id as the original incoming leg.
             const metadata = originalInteraction.metadata || {};
             metadata.agent_call_control_id = payload.call_control_id;
 
@@ -157,8 +158,6 @@ export async function POST(request, { params }) {
 
             await PgDb.updateInteractionById(originalInteraction.id, {
               metadata,
-              // Update call_control_id to the agent's leg so subsequent webhooks match
-              callControlId: payload.call_control_id,
             });
 
             console.log(
@@ -260,41 +259,10 @@ export async function POST(request, { params }) {
             );
           }
 
-          // Register transfer leg for tracking (not visible to agents)
-          const existingTransferLeg = await PgDb.findInteractionByCallControlId(
-            payload.call_control_id
-          );
-
-          if (!existingTransferLeg) {
-            await PgDb.insertInteraction({
-              interactionType: "voice",
-              queueName: "TRANSFER_LEG", // Special marker for transfer legs
-              callControlId: payload.call_control_id,
-              callSessionId: payload.call_session_id || null,
-              callLegId: payload.call_leg_id || null,
-              direction: "inbound",
-              state: "queued", // Use valid state
-              isContactCenter: false, // Not visible to agents
-              fromNumber: payload.from || null,
-              toNumber: payload.to || null,
-              flowId: flowId,
-              metadata: {
-                flow_owner: flow?.username || null,
-                initiated_at: payload.occurred_at || new Date().toISOString(),
-                is_transfer_leg: true, // Mark as transfer leg
-                original_interaction_id: originalInteraction?.id || null,
-              },
-            });
-
-            console.log(
-              `[IncomingFlowWebhook] ✅ Registered transfer leg ${payload.call_control_id} (not visible to agents)`
-            );
-          }
-
-          // Don't process transfer legs further - they're just for tracking
+          // Don't process transfer legs further
           return NextResponse.json({
             ok: true,
-            message: "Transfer leg registered (not visible to agents)",
+            message: "Transfer leg ignored",
           });
         } catch (err) {
           console.error(

@@ -135,6 +135,18 @@ export default function SoftphoneMini() {
   // This works for BOTH contact center calls AND by looking up any incoming call
   // Track the last interaction we fetched to prevent repeated API calls
   const lastFetchedInteractionIdRef = useRef(null);
+  const applyContactCenterMetadata = (interaction) => {
+    if (!interaction?.id) return;
+    useActiveCallStore.getState().setContactCenterMetadata({
+      interactionId: interaction.id,
+      queueName: interaction.queue_name || interaction.queueName || null,
+      queuedAt: interaction.enqueued_at || interaction.queuedAt || null,
+      assignedAt: interaction.assigned_at || interaction.assignedAt || null,
+      customerId: interaction.customer_id || interaction.customerId || null,
+      customerData:
+        interaction.customer_data || interaction.customerData || null,
+    });
+  };
 
   useEffect(() => {
     // Fetch full interaction data for any call that might have an interaction
@@ -211,6 +223,7 @@ export default function SoftphoneMini() {
 
                 if (data.ok && data.interaction) {
                   setInteraction(data.interaction);
+                  applyContactCenterMetadata(data.interaction);
                 } else {
                   setInteraction(null);
                 }
@@ -241,6 +254,7 @@ export default function SoftphoneMini() {
 
               if (data.ok && data.interaction) {
                 setInteraction(data.interaction);
+                applyContactCenterMetadata(data.interaction);
               } else {
                 setInteraction(null);
               }
@@ -272,6 +286,7 @@ export default function SoftphoneMini() {
 
             if (data.ok && data.interaction) {
               setInteraction(data.interaction);
+              applyContactCenterMetadata(data.interaction);
             } else {
               setInteraction(null);
             }
@@ -953,66 +968,14 @@ export default function SoftphoneMini() {
         }
       }
 
-      // Sync call data to database before clearing store
-      // Only for inbound contact center calls (not outbound calls)
-      // This captures answered_at, hold metrics, timestamps, and state history
-      const interactionId = storeState.contactCenter?.interactionId;
-      const isInboundCall =
-        storeState.direction === "inbound" ||
-        storeState.direction === "incoming";
-
-      if (interactionId && isInboundCall) {
-        try {
-          await fetch("/api/contact-center/interactions/sync-call-data", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              interactionId,
-              originalCallSessionId: storeState.originalCallSessionId,
-              originalCallControlId: storeState.originalCallControlId,
-              answerTime: storeState.answerTime,
-              connectedTime: storeState.connectedTime,
-              disconnectedTime: storeState.disconnectedTime || Date.now(),
-              holdCount: storeState.holdCount,
-              totalHoldDuration: storeState.totalHoldDuration,
-              stateHistory: storeState.stateHistory || [],
-            }),
-          });
-          console.log("[Mini Phone] Synced call data to database");
-        } catch (err) {
-          console.error("[Mini Phone] Failed to sync call data:", err);
-          // Don't throw - call already ended, just log failure
-        }
-      } else {
-        console.log(
-          "[Mini Phone] Skipping sync-call-data (not an inbound contact center call)"
-        );
+      // Ensure hold/transfer metrics are synced before clearing
+      try {
+        await useActiveCallStore.getState().syncCallMetricsToDb();
+      } catch (err) {
+        console.error("[Mini Phone] Failed to sync metrics:", err);
       }
 
-      // If this is a contact center call, finalize the interaction
-      if (isContactCenterCall()) {
-        const interactionId = storeState.contactCenter?.interactionId;
-        const duration = getCallDuration();
-
-        if (interactionId) {
-          try {
-            await fetch(
-              `/api/contact-center/interactions/${interactionId}/finalize`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  completedAt: new Date().toISOString(),
-                  handleTimeSeconds: duration,
-                }),
-              }
-            );
-          } catch (err) {
-            console.error("[Mini Phone] Failed to finalize interaction:", err);
-            // Don't throw - call already ended, just log failure
-          }
-        }
-      }
+      // Metrics are synced via /api/contact-center/interactions/:id/metrics
 
       // Clear active call from store
       clearActiveCall();

@@ -124,7 +124,7 @@ export async function POST(request) {
     });
 
     // Update state manager
-    enqueueCall(queueId, interactionId, enqueuedAt);
+    enqueueCall(queueId, interactionId, enqueuedAt, queue.name);
 
     // Attempt to route the call
     const routingResult = await routeCall(queueId, {

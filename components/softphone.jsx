@@ -118,6 +118,18 @@ export function Softphone() {
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
+  const applyContactCenterMetadata = (interaction) => {
+    if (!interaction?.id) return;
+    useActiveCallStore.getState().setContactCenterMetadata({
+      interactionId: interaction.id,
+      queueName: interaction.queue_name || interaction.queueName || null,
+      queuedAt: interaction.enqueued_at || interaction.queuedAt || null,
+      assignedAt: interaction.assigned_at || interaction.assignedAt || null,
+      customerId: interaction.customer_id || interaction.customerId || null,
+      customerData:
+        interaction.customer_data || interaction.customerData || null,
+    });
+  };
 
   const hydrateRemoteAudio = useCallback(() => {
     try {
@@ -211,6 +223,7 @@ export function Softphone() {
                 const data = await res.json();
                 if (data.ok && data.interaction) {
                   setInteraction(data.interaction);
+                  applyContactCenterMetadata(data.interaction);
                 } else {
                   setInteraction(null);
                 }
@@ -238,6 +251,7 @@ export function Softphone() {
               const data = await res.json();
               if (data.ok && data.interaction) {
                 setInteraction(data.interaction);
+                applyContactCenterMetadata(data.interaction);
               } else {
                 setInteraction(null);
               }
@@ -266,6 +280,7 @@ export function Softphone() {
             const data = await res.json();
             if (data.ok && data.interaction) {
               setInteraction(data.interaction);
+              applyContactCenterMetadata(data.interaction);
             } else {
               setInteraction(null);
             }
@@ -341,64 +356,14 @@ export function Softphone() {
     try {
       const storeState = useActiveCallStore.getState();
 
-      // Sync call data to database before clearing store
-      // Only for inbound contact center calls (not outbound calls)
-      // This captures answered_at, hold metrics, timestamps, and state history
-      const interactionId = storeState.contactCenter?.interactionId;
-      const isInboundCall =
-        storeState.direction === "inbound" ||
-        storeState.direction === "incoming";
-
-      if (interactionId && isInboundCall) {
-        try {
-          await fetch("/api/contact-center/interactions/sync-call-data", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              interactionId,
-              originalCallSessionId: storeState.originalCallSessionId,
-              originalCallControlId: storeState.originalCallControlId,
-              answerTime: storeState.answerTime,
-              connectedTime: storeState.connectedTime,
-              disconnectedTime: storeState.disconnectedTime || Date.now(),
-              holdCount: storeState.holdCount,
-              totalHoldDuration: storeState.totalHoldDuration,
-              stateHistory: storeState.stateHistory || [],
-            }),
-          });
-          console.log("[Softphone] Synced call data to database");
-        } catch (err) {
-          console.error("[Softphone] Failed to sync call data:", err);
-          // Don't throw - call already ended, just log failure
-        }
-      } else {
-        console.log(
-          "[Softphone] Skipping sync-call-data (not an inbound contact center call)"
-        );
+      // Ensure hold/transfer metrics are synced before clearing
+      try {
+        await useActiveCallStore.getState().syncCallMetricsToDb();
+      } catch (err) {
+        console.error("[Softphone] Failed to sync metrics:", err);
       }
 
-      if (isContactCenterCall()) {
-        const interactionId = storeState.contactCenter?.interactionId;
-        const duration = getCallDuration();
-
-        if (interactionId) {
-          try {
-            await fetch(
-              `/api/contact-center/interactions/${interactionId}/finalize`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  completedAt: new Date().toISOString(),
-                  handleTimeSeconds: duration,
-                }),
-              }
-            );
-          } catch (err) {
-            console.error("[Softphone] Failed to finalize interaction:", err);
-          }
-        }
-      }
+      // Metrics are synced via /api/contact-center/interactions/:id/metrics
 
       clearActiveCall();
     } catch (err) {
