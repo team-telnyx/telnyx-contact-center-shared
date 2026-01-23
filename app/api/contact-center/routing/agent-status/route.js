@@ -22,7 +22,7 @@ export async function POST(request) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { status, queueIds, isActive } = body;
+    const { status, queueIds, isActive, system } = body;
 
     const pool = getPostgresPool();
     if (!pool) {
@@ -54,7 +54,9 @@ export async function POST(request) {
       if (pool) {
         try {
           const statusResult = await pool.query(
-            `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
+            system
+              ? `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
+              : `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
           );
           if (statusResult.rows.length > 0) {
             validStatuses = statusResult.rows.map((row) => row.name);

@@ -64,7 +64,16 @@ export async function PUT(request, { params }) {
 
   try {
     const body = await request.json();
-    const { name, type, isActive, displayOrder, description } = body;
+    const {
+      name,
+      type,
+      isActive,
+      userSelectable,
+      icon,
+      color,
+      displayOrder,
+      description,
+    } = body;
 
     if (!name || !type) {
       return NextResponse.json(
@@ -82,12 +91,15 @@ export async function PUT(request, { params }) {
 
     await pool.query(
       `UPDATE cc_user_statuses
-       SET name = $1, type = $2, is_active = $3, display_order = $4, description = $5, updated_at = NOW()
-       WHERE id = $6`,
+       SET name = $1, type = $2, is_active = $3, user_selectable = $4, icon = $5, color = $6, display_order = $7, description = $8, updated_at = NOW()
+       WHERE id = $9`,
       [
         name.trim(),
         type,
         isActive !== undefined ? Boolean(isActive) : true,
+        userSelectable !== undefined ? Boolean(userSelectable) : true,
+        icon || null,
+        color || null,
         displayOrder !== undefined ? Number(displayOrder) : 0,
         description || null,
         id,

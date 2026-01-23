@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconEdit, IconPlus } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  STATUS_ICON_OPTIONS,
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+  DEFAULT_STATUS_COLOR,
+  STATUS_COLOR_OPTIONS,
+} from "@/config/status-icons";
 
 const STATUS_TYPES = [
   { value: "active", label: "Active" },
@@ -40,6 +49,9 @@ export default function StatusEditSheet({
   const [name, setName] = useState("");
   const [type, setType] = useState("active");
   const [isActive, setIsActive] = useState(true);
+  const [userSelectable, setUserSelectable] = useState(true);
+  const [icon, setIcon] = useState(DEFAULT_STATUS_ICON);
+  const [color, setColor] = useState(DEFAULT_STATUS_COLOR);
   const [displayOrder, setDisplayOrder] = useState(0);
   const [description, setDescription] = useState("");
 
@@ -52,6 +64,9 @@ export default function StatusEditSheet({
         setName("");
         setType("active");
         setIsActive(true);
+        setUserSelectable(true);
+        setIcon(DEFAULT_STATUS_ICON);
+        setColor(DEFAULT_STATUS_COLOR);
         setDisplayOrder(0);
         setDescription("");
       }
@@ -71,11 +86,16 @@ export default function StatusEditSheet({
         throw new Error("Failed to load status");
       }
       const data = await res.json();
-      if (data.ok && data.status) {
-        const s = data.status;
+      const s = data?.status || data;
+      if (s) {
         setName(s.name || "");
         setType(s.type || "active");
         setIsActive(s.is_active !== undefined ? s.is_active : true);
+        setUserSelectable(
+          s.user_selectable !== undefined ? s.user_selectable : true
+        );
+        setIcon(s.icon || DEFAULT_STATUS_ICON);
+        setColor(s.color || DEFAULT_STATUS_COLOR);
         setDisplayOrder(s.display_order || 0);
         setDescription(s.description || "");
       }
@@ -107,6 +127,9 @@ export default function StatusEditSheet({
         name: name.trim(),
         type,
         isActive,
+        userSelectable,
+        icon,
+        color,
         displayOrder: Number(displayOrder),
         description: description.trim(),
       };
@@ -214,6 +237,20 @@ export default function StatusEditSheet({
                     />
                   </div>
 
+                  <div className="flex items-center justify-between pb-4 border-b">
+                    <Label
+                      htmlFor="userSelectable"
+                      className="text-sm font-medium"
+                    >
+                      User selectable
+                    </Label>
+                    <Switch
+                      id="userSelectable"
+                      checked={userSelectable}
+                      onCheckedChange={setUserSelectable}
+                    />
+                  </div>
+
                   <div className="grid gap-2">
                     <Label htmlFor="name">Name *</Label>
                     <Input
@@ -234,6 +271,61 @@ export default function StatusEditSheet({
                         {STATUS_TYPES.map((t) => (
                           <SelectItem key={t.value} value={t.value}>
                             {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="icon">Icon</Label>
+                    <Combobox
+                      value={icon}
+                      onChange={setIcon}
+                      options={STATUS_ICON_OPTIONS.map((opt) => ({
+                        value: opt.value,
+                        label: opt.label,
+                        Icon: opt.Icon,
+                      }))}
+                      placeholder="Select icon"
+                      searchable
+                      contentClassName="w-[--radix-dropdown-menu-trigger-width]"
+                      renderSelected={(selected) => {
+                        const Icon =
+                          STATUS_ICON_MAP[selected?.value] ||
+                          STATUS_NAME_ICON_FALLBACK[name] ||
+                          STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                        return (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon
+                              className="size-4 shrink-0"
+                              style={color ? { color } : undefined}
+                            />
+                            <span className="truncate">
+                              {selected?.label || "Select icon"}
+                            </span>
+                          </div>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="color">Icon Color</Label>
+                    <Select value={color} onValueChange={setColor}>
+                      <SelectTrigger id="color">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_COLOR_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                className="inline-block size-3 rounded-full border"
+                                style={{ backgroundColor: opt.value }}
+                              />
+                              <span>{opt.label}</span>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -36,6 +36,7 @@ export async function GET(request) {
   const offset = (page - 1) * pageSize;
   const typeFilter = searchParams.get("type");
   const activeFilter = searchParams.get("active");
+  const selectableFilter = searchParams.get("userSelectable");
   const searchQuery = searchParams.get("q") || "";
 
   try {
@@ -53,6 +54,12 @@ export async function GET(request) {
     if (activeFilter && activeFilter !== "all") {
       whereConditions.push(`is_active = $${paramIndex}`);
       queryParams.push(activeFilter === "true");
+      paramIndex++;
+    }
+
+    if (selectableFilter && selectableFilter !== "all") {
+      whereConditions.push(`user_selectable = $${paramIndex}`);
+      queryParams.push(selectableFilter === "true");
       paramIndex++;
     }
 
@@ -79,7 +86,7 @@ export async function GET(request) {
     // Get items
     queryParams.push(pageSize, offset);
     const itemsRes = await pool.query(
-      `SELECT id, name, type, is_active, display_order, description, created_at, updated_at
+      `SELECT id, name, type, is_active, user_selectable, icon, color, display_order, description, created_at, updated_at
        FROM cc_user_statuses
        ${whereClause}
        ORDER BY display_order ASC, name ASC
@@ -112,7 +119,16 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { name, type, isActive, displayOrder, description } = body;
+    const {
+      name,
+      type,
+      isActive,
+      userSelectable,
+      icon,
+      color,
+      displayOrder,
+      description,
+    } = body;
 
     if (!name || !type) {
       return NextResponse.json(
@@ -130,13 +146,16 @@ export async function POST(request) {
 
     const id = randomUUID();
     await pool.query(
-      `INSERT INTO cc_user_statuses (id, name, type, is_active, display_order, description, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+      `INSERT INTO cc_user_statuses (id, name, type, is_active, user_selectable, icon, color, display_order, description, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
       [
         id,
         name.trim(),
         type,
         isActive !== undefined ? Boolean(isActive) : true,
+        userSelectable !== undefined ? Boolean(userSelectable) : true,
+        icon || null,
+        color || null,
         displayOrder !== undefined ? Number(displayOrder) : 0,
         description || null,
       ]

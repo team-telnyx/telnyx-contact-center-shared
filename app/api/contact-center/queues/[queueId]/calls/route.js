@@ -81,6 +81,8 @@ export async function GET(request, { params }) {
       FROM cc_interactions i
       LEFT JOIN users u ON i.agent_username = u.username
       WHERE i.queue_id = $1
+        AND i.completed_at IS NULL
+        AND i.abandoned_at IS NULL
       ORDER BY i.created_at DESC
       LIMIT 1000`,
       [queueId]

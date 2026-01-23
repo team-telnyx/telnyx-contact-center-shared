@@ -19,16 +19,17 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const state = searchParams.get("state");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const activeOnly = searchParams.get("activeOnly") !== "false";
 
-    // Fetch only active interactions (not completed/abandoned) from database
-    const activeInteractions = await PgDb.listAgentInteractions(user.username, {
+    // Fetch interactions from database
+    const interactions = await PgDb.listAgentInteractions(user.username, {
       state, // If state filter is provided, use it
-      activeOnly: true, // Only fetch non-completed interactions
+      activeOnly, // Only fetch non-completed interactions if activeOnly is true
       limit,
     });
 
     // Only return interactions from cc_interactions table
-    return NextResponse.json({ ok: true, interactions: activeInteractions });
+    return NextResponse.json({ ok: true, interactions });
   } catch (err) {
     console.error("[ContactCenter] Interactions list error:", err);
     return NextResponse.json(

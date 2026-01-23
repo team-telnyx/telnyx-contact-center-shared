@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
+import WrapupCodesSheet from "./WrapupCodesSheet";
 import { Card } from "@/components/ui/card";
 import { Info, PhoneCall } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
@@ -14,22 +15,44 @@ export function AgentDesktop() {
   const [dbInteractions, setDbInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
+  const lastWrapupInteractionRef = useRef(null);
+  const lastInteractionSnapshotRef = useRef(null);
+  const lastStatusRef = useRef(null);
+  const lastTranscriptionsRef = useRef([]);
+  const [wrapupOpen, setWrapupOpen] = useState(false);
+  const [wrapupInteractionId, setWrapupInteractionId] = useState(null);
+  const [wrapupTranscriptions, setWrapupTranscriptions] = useState([]);
 
   // Get WebRTC call state for real-time updates (hold, mute, status)
   const webrtcCallState = useActiveCallStore();
+  const callStatus = webrtcCallState.status;
+  const callInteractionId =
+    webrtcCallState?.contactCenter?.interactionId || null;
+  const callTranscriptions = webrtcCallState?.transcriptions || [];
 
-  // Get calls from calls store
+  // Get calls from calls store - subscribe to changes
+  // Subscribe to calls object to avoid infinite loop (getActiveCalls returns new array each time)
+  const calls = useCallsStore((state) => state.calls);
   const callsStore = useCallsStore();
 
-  const buildInteractionsWithStore = useCallback(
-    (dbInteractions) => {
-      const activeCalls = callsStore
-        .getActiveCalls()
-        .filter(
-          (call) =>
-            call.interactionId || call.originalCallControlId || call.queueName
-        );
+  // Compute active calls from calls object with memoization
+  const activeCalls = useMemo(() => {
+    const allCalls = Object.values(calls);
+    return allCalls.filter(
+      (call) =>
+        call.status !== "completed" &&
+        call.status !== "abandoned" &&
+        call.status !== "ended" &&
+        call.status !== "hangup" &&
+        call.status !== "idle" &&
+        call.status !== "terminated" &&
+        !call.disconnectedTime &&
+        (call.interactionId || call.originalCallControlId || call.queueName)
+    );
+  }, [calls]);
 
+  const buildInteractionsWithStore = useCallback(
+    (dbInteractions = []) => {
       const storeCallMap = new Map();
       activeCalls.forEach((call) => {
         if (call.interactionId) {
@@ -60,8 +83,32 @@ export function AgentDesktop() {
         if (storeCall) {
           return {
             ...interaction,
-            from_name: storeCall.callerName || interaction.from_name,
-            from_number: storeCall.callerNumber || interaction.from_number,
+            call_control_id:
+              interaction.call_control_id || storeCall.callControlId || null,
+            call_session_id:
+              interaction.call_session_id ||
+              storeCall.callSessionId ||
+              storeCall.originalCallSessionId ||
+              null,
+            metadata: {
+              ...(interaction.metadata || {}),
+              ...(storeCall.aiCallControlId
+                ? { ai_call_control_id: storeCall.aiCallControlId }
+                : {}),
+            },
+            ai_call_control_id:
+              interaction.ai_call_control_id ||
+              storeCall.aiCallControlId ||
+              null,
+            from_name:
+              interaction.from_name ||
+              storeCall.callerName ||
+              storeCall.fromName,
+            from_number:
+              interaction.from_number ||
+              interaction.from ||
+              storeCall.callerNumber ||
+              storeCall.fromNumber,
             queue_name: storeCall.queueName || interaction.queue_name,
             state: storeCall.status || interaction.state,
           };
@@ -113,6 +160,10 @@ export function AgentDesktop() {
           created_at: new Date(call.callStartTime || Date.now()).toISOString(),
           assigned_at: call.assignedAt || null,
           queued_at: call.queuedAt || null,
+          metadata: call.aiCallControlId
+            ? { ai_call_control_id: call.aiCallControlId }
+            : {},
+          ai_call_control_id: call.aiCallControlId || null,
         }));
 
       const merged = [...enhancedInteractions, ...storeOnlyInteractions];
@@ -124,7 +175,7 @@ export function AgentDesktop() {
         return true;
       });
     },
-    [callsStore]
+    [activeCalls]
   );
 
   // Initialize calls store on mount (ensures it's visible in dev tools)
@@ -210,7 +261,26 @@ export function AgentDesktop() {
     [setInteractions, setSelectedInteraction]
   );
 
-  // No polling or initial fetch; rely on store updates for interactions
+  // Load interactions from database on mount and periodically
+  useEffect(() => {
+    const loadInteractions = async () => {
+      try {
+        const res = await fetch(
+          "/api/contact-center/agent/interactions?limit=50&activeOnly=true"
+        );
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.interactions)) {
+          setDbInteractions(data.interactions);
+        }
+      } catch (err) {
+        console.error("[AgentDesktop] Failed to load interactions:", err);
+      }
+    };
+    loadInteractions();
+    // Reload every 5 seconds to catch new interactions
+    const interval = setInterval(loadInteractions, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Rebuild interactions from store updates without polling
   useEffect(() => {
@@ -309,6 +379,157 @@ export function AgentDesktop() {
     }
   }, [interactions, selectedInteraction]);
 
+  useEffect(() => {
+    if (callInteractionId) {
+      lastInteractionSnapshotRef.current = callInteractionId;
+    }
+    if (Array.isArray(callTranscriptions)) {
+      lastTranscriptionsRef.current = callTranscriptions;
+    }
+  }, [callInteractionId, callTranscriptions]);
+
+  useEffect(() => {
+    const endedStatuses = [
+      "hangup",
+      "ended",
+      "destroy",
+      "terminated",
+      "failed",
+    ];
+    const isEnded = endedStatuses.includes(callStatus);
+    const wasActive = lastStatusRef.current && lastStatusRef.current !== "idle";
+    const isCleared = callStatus === "idle" && wasActive;
+    lastStatusRef.current = callStatus;
+
+    if (!isEnded && !isCleared) return;
+
+    const interactionId =
+      callInteractionId || lastInteractionSnapshotRef.current;
+    if (!interactionId) return;
+    if (lastWrapupInteractionRef.current === interactionId) return;
+
+    // Check if call was answered and not abandoned before opening wrapup sheet
+    const checkAndOpenWrapup = async (retryCount = 0) => {
+      try {
+        // Add a small delay on retry to allow database to update
+        if (retryCount > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        // First, try to find interaction in local state
+        let interaction = interactions.find((i) => i.id === interactionId);
+
+        // If not found locally, try to fetch from API
+        if (!interaction) {
+          try {
+            const res = await fetch(
+              `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
+                callInteractionId || ""
+              )}`
+            );
+            const data = await res.json();
+            if (data.ok && data.interaction) {
+              interaction = data.interaction;
+            }
+          } catch (apiErr) {
+            console.warn(
+              "[AgentDesktop] Could not fetch interaction for wrapup check:",
+              apiErr
+            );
+          }
+        }
+
+        // If still no interaction found and we haven't retried, try once more
+        if (!interaction && retryCount === 0) {
+          return checkAndOpenWrapup(1);
+        }
+
+        // If still no interaction found after retry, skip wrapup
+        if (!interaction) {
+          console.log(
+            "[AgentDesktop] Could not find interaction for wrapup check:",
+            interactionId
+          );
+          return;
+        }
+
+        // Check metadata for hangup cause and timeline events
+        const metadata = interaction.metadata || {};
+        const routingMetadata = metadata.routing_metadata || {};
+        const timeline = routingMetadata.timeline || [];
+
+        // Check if call was answered - look for answered_at or answered event in timeline
+        const hasAnsweredEvent = timeline.some(
+          (e) =>
+            e.type === "answered" ||
+            e.type === "connected" ||
+            e.type === "bridged"
+        );
+        const wasAnswered =
+          Boolean(interaction.answered_at) || hasAnsweredEvent;
+
+        // Check if call was abandoned or rejected
+        const isAbandoned = interaction.state === "abandoned";
+        const disconnectedEvent = timeline.find(
+          (e) => e.type === "disconnected"
+        );
+        const hangupCause =
+          disconnectedEvent?.hangupCause || metadata.hangup_cause;
+        const wasRejected =
+          hangupCause === "CALL_REJECTED" ||
+          hangupCause === "NO_ANSWER" ||
+          hangupCause === "user_busy" ||
+          hangupCause === "timeout";
+
+        // Check if call was in "queued" state when it ended (abandoned)
+        const wasQueuedWhenEnded = interaction.state === "queued";
+
+        // Only open wrapup sheet if call was answered and not abandoned/rejected
+        // Be lenient: if call was active and ended, assume it was answered unless we have evidence otherwise
+        const shouldOpenWrapup =
+          wasAnswered && !isAbandoned && !wasRejected && !wasQueuedWhenEnded;
+
+        if (shouldOpenWrapup) {
+          lastWrapupInteractionRef.current = interactionId;
+          setWrapupInteractionId(interactionId);
+          setWrapupTranscriptions(lastTranscriptionsRef.current || []);
+          setWrapupOpen(true);
+        } else {
+          // If we don't have enough info yet and haven't retried, try once more
+          if (
+            retryCount === 0 &&
+            !wasAnswered &&
+            !isAbandoned &&
+            !wasRejected
+          ) {
+            return checkAndOpenWrapup(1);
+          }
+
+          console.log(
+            "[AgentDesktop] Skipping wrapup sheet - call not answered or was abandoned/rejected:",
+            {
+              interactionId,
+              wasAnswered,
+              isAbandoned,
+              wasRejected,
+              wasQueuedWhenEnded,
+              hangupCause,
+              state: interaction.state,
+              hasAnsweredEvent,
+            }
+          );
+        }
+      } catch (err) {
+        console.error(
+          "[AgentDesktop] Error checking interaction for wrapup:",
+          err
+        );
+      }
+    };
+
+    checkAndOpenWrapup();
+  }, [callStatus, callInteractionId, interactions]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Main Content */}
@@ -329,13 +550,15 @@ export function AgentDesktop() {
         {/* Right Panel - Interaction Details */}
         <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <div className="px-4 py-3 bg-muted/50 border-b -mt-6 rounded-t-xl">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-md bg-primary/10">
-                <Info className="h-4 w-4 text-primary" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-md bg-primary/10">
+                  <Info className="h-4 w-4 text-primary" />
+                </div>
+                <h2 className="text-base font-semibold text-foreground">
+                  Interaction Details
+                </h2>
               </div>
-              <h2 className="text-base font-semibold text-foreground">
-                Interaction Details
-              </h2>
             </div>
           </div>
           {selectedInteraction ? (
@@ -348,6 +571,14 @@ export function AgentDesktop() {
           )}
         </Card>
       </div>
+
+      <WrapupCodesSheet
+        open={wrapupOpen}
+        onOpenChange={setWrapupOpen}
+        interactionId={wrapupInteractionId}
+        transcriptions={wrapupTranscriptions}
+        callStatus={callStatus}
+      />
     </div>
   );
 }

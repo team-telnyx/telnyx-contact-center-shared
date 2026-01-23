@@ -18,7 +18,7 @@ export async function GET(request) {
 
     // Get all active statuses, ordered by display_order and name
     const result = await pool.query(
-      `SELECT id, name, type, is_active, display_order, description
+      `SELECT id, name, type, is_active, user_selectable, icon, color, display_order, description
        FROM cc_user_statuses
        WHERE is_active = true
        ORDER BY display_order ASC, name ASC`

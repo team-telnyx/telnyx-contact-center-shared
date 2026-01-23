@@ -18,6 +18,8 @@ import { IconEdit, IconPlus, IconTrash } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const ROUTING_STRATEGIES = [
   { value: "FIFO", label: "FIFO" },
@@ -62,6 +64,8 @@ export default function EditSheet({
   const [userAssignments, setUserAssignments] = React.useState([]);
   const [availableQueues, setAvailableQueues] = React.useState([]);
   const [availableUsers, setAvailableUsers] = React.useState([]);
+  const [availableWrapupCodes, setAvailableWrapupCodes] = React.useState([]);
+  const [selectedWrapupCodes, setSelectedWrapupCodes] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
@@ -86,6 +90,7 @@ export default function EditSheet({
           setSkillRequirements({});
           setPriorityRules([]);
           setUserAssignments([]);
+          setSelectedWrapupCodes([]);
         }
         return;
       }
@@ -135,6 +140,11 @@ export default function EditSheet({
               enabled: ua.enabled !== undefined ? ua.enabled : true,
             }))
           );
+          setSelectedWrapupCodes(
+            (d.wrapupCodes || [])
+              .map((code) => code.wrapup_code_id)
+              .filter(Boolean)
+          );
         } else {
           notify({
             title: "Failed to load queue",
@@ -173,6 +183,17 @@ export default function EditSheet({
           setAvailableQueues(
             (queuesData.rows || []).filter((q) => q.id !== queueId)
           );
+        }
+
+        const wrapupRes = await fetch(
+          "/api/admin/wrapup-codes?pageSize=1000&active=true",
+          {
+            cache: "no-store",
+          }
+        );
+        if (wrapupRes.ok) {
+          const wrapupData = await wrapupRes.json();
+          setAvailableWrapupCodes(wrapupData.items || []);
         }
 
         // Load users for assignments
@@ -223,6 +244,15 @@ export default function EditSheet({
     setUserAssignments(updated);
   }
 
+  function toggleWrapupCode(codeId) {
+    setSelectedWrapupCodes((prev) => {
+      if (prev.includes(codeId)) {
+        return prev.filter((id) => id !== codeId);
+      }
+      return [...prev, codeId];
+    });
+  }
+
   async function onSave() {
     if (!name.trim()) {
       notify({
@@ -249,6 +279,7 @@ export default function EditSheet({
         active,
         skillRequirements,
         priorityRules,
+        wrapupCodes: selectedWrapupCodes,
         userAssignments: userAssignments.map((ua) => ({
           userId: ua.userId,
           priority: Number(ua.priority),
@@ -482,6 +513,44 @@ export default function EditSheet({
                         />
                       </div>
                     </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Wrapup Codes */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Wrapup Codes
+                    </h3>
+                    {availableWrapupCodes.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No wrapup codes available.
+                      </p>
+                    ) : (
+                      <ScrollArea className="max-h-48 rounded border p-3">
+                        <div className="space-y-2">
+                          {availableWrapupCodes.map((code) => (
+                            <label
+                              key={code.id}
+                              className="flex items-start gap-2 text-sm"
+                            >
+                              <Checkbox
+                                checked={selectedWrapupCodes.includes(code.id)}
+                                onCheckedChange={() => toggleWrapupCode(code.id)}
+                              />
+                              <span className="leading-tight">
+                                <span className="font-medium">{code.name}</span>
+                                {code.description ? (
+                                  <span className="block text-xs text-muted-foreground">
+                                    {code.description}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
                   </div>
 
                   <div className="border-t" />

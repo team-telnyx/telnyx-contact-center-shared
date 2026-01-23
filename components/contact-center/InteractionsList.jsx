@@ -7,6 +7,7 @@ import { Phone, PhoneIncoming, Clock, Mic, MicOff, Pause } from "lucide-react";
 import { IconPhone } from "@tabler/icons-react";
 import { getStatusDisplay } from "@/lib/call-status-utils";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import AiConversationSheet from "./AiConversationSheet";
 
 // Format duration in seconds to MM:SS or HH:MM:SS
 function formatDuration(seconds) {
@@ -253,6 +254,22 @@ function InteractionCard({
   const hasActiveCall = webrtcState && webrtcState.status && !isEnded;
   const statusDisplay = getStatusDisplay(displayState, hasActiveCall);
 
+  const callerName =
+    interaction.from_name ||
+    interaction.fromName ||
+    interaction.caller_name ||
+    interaction.callerName ||
+    null;
+  const callerNumber =
+    interaction.from_number ||
+    interaction.fromNumber ||
+    interaction.from ||
+    interaction.caller_number ||
+    interaction.callerNumber ||
+    null;
+  const callerNumberLabel = callerNumber || "Unknown number";
+  const callerNameLabel = callerName || null;
+
   return (
     <div
       onClick={() => onSelect(interaction)}
@@ -268,7 +285,7 @@ function InteractionCard({
       <div className="flex items-start gap-2 mb-2">
         <div
           className={cn(
-            "p-2 rounded-lg flex-shrink-0 shadow-sm",
+            "p-2 rounded-lg shrink-0 shadow-sm",
             isActive
               ? "bg-orange-500 text-white"
               : isEnded
@@ -285,15 +302,13 @@ function InteractionCard({
                 {interaction.queue_name || "Contact Center"}
               </div>
               <div className="font-bold text-sm text-orange-600 truncate">
-                {interaction.from_name || interaction.from_number || "Unknown"}
+                {callerNameLabel || callerNumberLabel}
               </div>
-              {interaction.from_name && interaction.from_number && (
-                <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {interaction.from_number}
-                </div>
-              )}
+              <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                {callerNumberLabel}
+              </div>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               {(isMuted || isHeld) && (
                 <div className="flex items-center gap-0.5">
                   {isMuted && (
@@ -327,11 +342,19 @@ function InteractionCard({
             <span className="text-orange-500 animate-pulse text-xs">●</span>
           )}
         </div>
-        {interaction.to_number && (
-          <div className="text-[10px] text-gray-600 font-medium bg-gray-100 px-1.5 py-0.5 rounded">
-            {interaction.to_number}
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {interaction.to_number && (
+            <div className="text-[10px] text-gray-600 font-medium bg-gray-100 px-1.5 py-0.5 rounded">
+              {interaction.to_number}
+            </div>
+          )}
+          <AiConversationSheet
+            interaction={interaction}
+            triggerClassName="h-6 w-6"
+            iconClassName="h-3.5 w-3.5"
+            stopPropagation
+          />
+        </div>
       </div>
 
       {/* All calls are controlled from WebRTC mini/floating phones */}

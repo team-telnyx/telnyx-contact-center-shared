@@ -371,7 +371,7 @@ export async function POST(request) {
       }
     }
 
-    // Handle call.recording.saved - store recording URL for outbound calls
+    // Handle call.recording.saved - store recording payload for outbound calls
     if (eventType === "call.recording.saved" && callControlId) {
       try {
         const { PgDb } = await import("@/lib/pgdb.js");
@@ -381,15 +381,32 @@ export async function POST(request) {
 
         if (interaction && interaction.metadata?.is_outbound_call) {
           const recordingUrl =
+            payload?.recording_urls?.mp3 ||
             payload?.recording_urls?.public_recording_urls?.[0] ||
             payload?.recording_urls?.recording_urls?.[0] ||
             payload?.public_recording_urls?.[0] ||
             payload?.recording_url ||
             null;
+          const updatedMetadata = {
+            ...(interaction.metadata || {}),
+            recording: {
+              recording_id: payload?.recording_id || null,
+              call_leg_id: payload?.call_leg_id || null,
+              call_session_id: payload?.call_session_id || null,
+              format: payload?.format || null,
+              channels: payload?.channels || null,
+              recording_started_at: payload?.recording_started_at || null,
+              recording_ended_at: payload?.recording_ended_at || null,
+              recording_urls: payload?.recording_urls || null,
+              public_recording_urls: payload?.public_recording_urls || null,
+              recording_url: recordingUrl,
+            },
+          };
+          await PgDb.updateInteractionById(interaction.id, {
+            recordingUrl: recordingUrl || interaction.recording_url || null,
+            metadata: updatedMetadata,
+          });
           if (recordingUrl) {
-            await PgDb.updateInteractionById(interaction.id, {
-              recordingUrl,
-            });
             console.log(
               `[voice-webhook] ✅ Stored recording URL for outbound interaction ${interaction.id}: ${recordingUrl}`
             );

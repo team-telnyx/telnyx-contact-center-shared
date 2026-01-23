@@ -9,25 +9,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  IconCheck,
-  IconClock,
-  IconX,
-  IconCircleOff,
-} from "@tabler/icons-react";
-
-// Icon mapping for common status names
-const STATUS_ICON_MAP = {
-  Available: IconCheck,
-  "On Queue": IconClock,
-  Busy: IconX,
-  Away: IconCircleOff,
-  "Off Queue": IconCircleOff,
-  Offline: IconCircleOff,
-  Break: IconClock,
-};
-
-// Default icon if status name doesn't match
-const DefaultIcon = IconCircleOff;
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+} from "@/config/status-icons";
 
 export function StatusSelector({ value, onChange }) {
   const [statuses, setStatuses] = useState([]);
@@ -69,19 +54,56 @@ export function StatusSelector({ value, onChange }) {
     loadStatuses();
   }, []);
 
+  useEffect(() => {
+    if (!value) return;
+    setStatuses((prev) => {
+      if (prev.some((status) => status.name === value)) return prev;
+      return [
+        ...prev,
+        {
+          name: value,
+          user_selectable: false,
+        },
+      ];
+    });
+  }, [value]);
+
+  const statusesByName = statuses.reduce((acc, status) => {
+    if (status?.name) acc[status.name] = status;
+    return acc;
+  }, {});
+
   return (
     <div className="flex items-center gap-2">
-      <Select value={value} onValueChange={onChange} disabled={loading}>
+      <Select
+        value={value}
+        onValueChange={(nextValue) => {
+          const nextStatus = statusesByName[nextValue];
+          if (nextStatus && nextStatus.user_selectable === false) return;
+          onChange?.(nextValue);
+        }}
+        disabled={loading}
+      >
         <SelectTrigger className="w-[280px]">
           <SelectValue placeholder={loading ? "Loading..." : "Select status"} />
         </SelectTrigger>
         <SelectContent>
           {statuses.map((status) => {
-            const Icon = STATUS_ICON_MAP[status.name] || DefaultIcon;
+            const Icon =
+              STATUS_ICON_MAP[status.icon] ||
+              STATUS_NAME_ICON_FALLBACK[status.name] ||
+              STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
             return (
-              <SelectItem key={status.name} value={status.name}>
+              <SelectItem
+                key={status.name}
+                value={status.name}
+                disabled={status.user_selectable === false}
+              >
                 <div className="flex items-center gap-2">
-                  <Icon className="h-4 w-4" />
+                  <Icon
+                    className="h-4 w-4"
+                    style={status.color ? { color: status.color } : undefined}
+                  />
                   <span>{status.name}</span>
                 </div>
               </SelectItem>

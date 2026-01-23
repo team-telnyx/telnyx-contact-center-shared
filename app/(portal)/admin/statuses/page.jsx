@@ -23,6 +23,11 @@ import {
   IconPlus,
 } from "@tabler/icons-react";
 import {
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+} from "@/config/status-icons";
+import {
   Table,
   TableBody,
   TableCell,
@@ -52,6 +57,7 @@ export default function AdminStatusesPage() {
   const [filters, setFilters] = useState({
     type: "all",
     active: "all",
+    userSelectable: "all",
     q: "",
   });
   const [loading, setLoading] = useState(false);
@@ -70,6 +76,8 @@ export default function AdminStatusesPage() {
     if (filters.type && filters.type !== "all") sp.set("type", filters.type);
     if (filters.active && filters.active !== "all")
       sp.set("active", filters.active);
+    if (filters.userSelectable && filters.userSelectable !== "all")
+      sp.set("userSelectable", filters.userSelectable);
     if (filters.q) sp.set("q", filters.q);
     return sp.toString();
   }, [page, pageSize, filters]);
@@ -140,7 +148,12 @@ export default function AdminStatusesPage() {
               <Button
                 variant="secondary"
                 onClick={() =>
-                  setFilters({ type: "all", active: "all", q: "" })
+                  setFilters({
+                    type: "all",
+                    active: "all",
+                    userSelectable: "all",
+                    q: "",
+                  })
                 }
               >
                 Clear
@@ -200,7 +213,24 @@ export default function AdminStatusesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div></div>
+            <div>
+              <label className="text-xs">User selectable</label>
+              <Select
+                value={filters.userSelectable || "all"}
+                onValueChange={(value) =>
+                  setFilters((f) => ({ ...f, userSelectable: value }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="true">Yes</SelectItem>
+                  <SelectItem value="false">No</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div></div>
             <div></div>
           </div>
@@ -220,6 +250,8 @@ export default function AdminStatusesPage() {
                     <TableHead className="px-[10px]">Name</TableHead>
                     <TableHead className="px-[10px]">Type</TableHead>
                     <TableHead className="px-[10px]">Active</TableHead>
+                    <TableHead className="px-[10px]">User Selectable</TableHead>
+                    <TableHead className="px-[10px]">Icon</TableHead>
                     <TableHead className="px-[10px]">Display Order</TableHead>
                     <TableHead className="px-[10px]">Description</TableHead>
                     <TableHead className="px-[10px] text-right">
@@ -247,7 +279,51 @@ export default function AdminStatusesPage() {
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
-                            {status.is_active ? "YES" : "NO"}
+                            <Badge
+                              variant="outline"
+                              className={
+                                status.is_active
+                                  ? "border-green-500 text-green-600 min-w-[56px] justify-center"
+                                  : "border-red-500 text-red-600 min-w-[56px] justify-center"
+                              }
+                            >
+                              {status.is_active ? "YES" : "NO"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-[10px] text-xs">
+                            <Badge
+                              variant="outline"
+                              className={
+                                status.user_selectable
+                                  ? "border-green-500 text-green-600 min-w-[56px] justify-center"
+                                  : "border-red-500 text-red-600 min-w-[56px] justify-center"
+                              }
+                            >
+                              {status.user_selectable ? "YES" : "NO"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="px-[10px] text-xs">
+                            {(() => {
+                              const Icon =
+                                STATUS_ICON_MAP[status.icon] ||
+                                STATUS_NAME_ICON_FALLBACK[status.name] ||
+                                STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                              return (
+                                <div className="inline-flex items-center gap-2">
+                                  <Icon
+                                    className="size-4"
+                                    style={
+                                      status.color
+                                        ? { color: status.color }
+                                        : undefined
+                                    }
+                                  />
+                                  <span className="text-muted-foreground">
+                                    {status.icon || "—"}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {status.display_order || 0}
@@ -311,7 +387,7 @@ export default function AdminStatusesPage() {
                   {items.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={8}
                         className="text-center py-8 text-sm text-muted-foreground"
                       >
                         No statuses

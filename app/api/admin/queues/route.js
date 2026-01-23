@@ -124,6 +124,20 @@ export async function POST(request) {
       }
     }
 
+    // Add wrapup code assignments if provided
+    if (body.wrapupCodes && Array.isArray(body.wrapupCodes)) {
+      const { randomUUID } = await import("crypto");
+      for (const wrapupCodeId of body.wrapupCodes) {
+        if (!wrapupCodeId) continue;
+        await pool.query(
+          `INSERT INTO cc_queue_wrapup_codes (id, queue_id, wrapup_code_id, created_at, updated_at)
+           VALUES ($1, $2, $3, NOW(), NOW())
+           ON CONFLICT (queue_id, wrapup_code_id) DO NOTHING`,
+          [randomUUID(), id, wrapupCodeId]
+        );
+      }
+    }
+
     // Broadcast queue created event to all agent users
     try {
       const { broadcastToAllAgents } = await import("@/lib/sse");

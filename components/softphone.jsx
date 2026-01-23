@@ -10,6 +10,7 @@ import useActiveCallStore, {
   useCallUI,
 } from "@/lib/stores/active-call-store";
 import useDialStore from "@/lib/stores/dial-store";
+import useCallsStore from "@/lib/stores/calls-store";
 import {
   Phone as IconPhone,
   PhoneOff as IconPhoneOff,
@@ -65,6 +66,9 @@ export function Softphone() {
   const isRinging = useIsRinging();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
+  const activeCallsCount = useCallsStore(
+    (state) => state.getActiveCalls().length
+  );
 
   // Zustand stores - dial state
   const {
@@ -118,6 +122,46 @@ export function Softphone() {
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
+  const autoStatusRef = useRef({
+    lastSent: null,
+    forcedBusy: false,
+  });
+
+  const updateUserStatus = async (nextStatus) => {
+    if (autoStatusRef.current.lastSent === nextStatus) return;
+    autoStatusRef.current.lastSent = nextStatus;
+    try {
+      await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus, system: true }),
+      });
+    } catch (_) {}
+    try {
+      localStorage.setItem("user.status", nextStatus);
+    } catch (_) {}
+  };
+
+  // Auto-set agent status based on call activity
+  useEffect(() => {
+    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
+    if (hasActiveCall) {
+      autoStatusRef.current.forcedBusy = true;
+      updateUserStatus("Busy");
+      return;
+    }
+    let wrapupOpen = false;
+    try {
+      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
+    } catch (_) {}
+    if (wrapupOpen) {
+      return;
+    }
+    if (autoStatusRef.current.forcedBusy) {
+      autoStatusRef.current.forcedBusy = false;
+      updateUserStatus("Available");
+    }
+  }, [activeCall, activeCallsCount]);
   const applyContactCenterMetadata = (interaction) => {
     if (!interaction?.id) return;
     useActiveCallStore.getState().setContactCenterMetadata({
@@ -579,6 +623,20 @@ export function Softphone() {
       hydrateRemoteAudio();
       activeCall.answer?.();
       updateStatus("answered");
+      if (interaction?.id) {
+        fetch(
+          `/api/contact-center/interactions/${encodeURIComponent(
+            interaction.id
+          )}/answer`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answeredAt: new Date().toISOString() }),
+          }
+        ).catch((err) => {
+          console.warn("[Softphone] Failed to mark answered:", err);
+        });
+      }
 
       const retryDelays = [100, 300, 500, 1000];
       retryDelays.forEach((delay) => {

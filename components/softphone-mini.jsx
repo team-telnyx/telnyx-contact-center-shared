@@ -109,7 +109,7 @@ export default function SoftphoneMini() {
       await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: nextStatus, system: true }),
       });
     } catch (_) {}
     try {
@@ -123,6 +123,13 @@ export default function SoftphoneMini() {
     if (hasActiveCall) {
       autoStatusRef.current.forcedBusy = true;
       updateUserStatus("Busy");
+      return;
+    }
+    let wrapupOpen = false;
+    try {
+      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
+    } catch (_) {}
+    if (wrapupOpen) {
       return;
     }
     if (autoStatusRef.current.forcedBusy) {
@@ -1089,6 +1096,20 @@ export default function SoftphoneMini() {
 
       // Update status
       updateStatus("answered");
+      if (interaction?.id) {
+        fetch(
+          `/api/contact-center/interactions/${encodeURIComponent(
+            interaction.id
+          )}/answer`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answeredAt: new Date().toISOString() }),
+          }
+        ).catch((err) => {
+          console.warn("[Mini Phone] Failed to mark answered:", err);
+        });
+      }
 
       // Force audio attachment with multiple retries
       // This ensures the remote stream is available after the answer

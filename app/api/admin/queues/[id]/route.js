@@ -47,9 +47,19 @@ export async function GET(request, { params }) {
     [id]
   );
 
+  const wrapupRes = await pool.query(
+    `SELECT qwc.wrapup_code_id, w.name, w.is_active, w.is_default, w.display_order, w.description
+     FROM cc_queue_wrapup_codes qwc
+     JOIN cc_wrapup_codes w ON qwc.wrapup_code_id = w.id
+     WHERE qwc.queue_id = $1
+     ORDER BY w.display_order ASC, w.name ASC`,
+    [id]
+  );
+
   return NextResponse.json({
     ...queue,
     userAssignments: assignmentsRes.rows || [],
+    wrapupCodes: wrapupRes.rows || [],
   });
 }
 
@@ -199,6 +209,25 @@ export async function PUT(request, { params }) {
           );
           // Don't fail the request if SSE fails
         }
+      }
+    }
+
+    // Update wrapup code assignments if provided
+    if (body.wrapupCodes && Array.isArray(body.wrapupCodes)) {
+      await pool.query(
+        `DELETE FROM cc_queue_wrapup_codes WHERE queue_id = $1`,
+        [id]
+      );
+
+      const { randomUUID } = await import("crypto");
+      for (const wrapupCodeId of body.wrapupCodes) {
+        if (!wrapupCodeId) continue;
+        await pool.query(
+          `INSERT INTO cc_queue_wrapup_codes (id, queue_id, wrapup_code_id, created_at, updated_at)
+           VALUES ($1, $2, $3, NOW(), NOW())
+           ON CONFLICT (queue_id, wrapup_code_id) DO NOTHING`,
+          [randomUUID(), id, wrapupCodeId]
+        );
       }
     }
 

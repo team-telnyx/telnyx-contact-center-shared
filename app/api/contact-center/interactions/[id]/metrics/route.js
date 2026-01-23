@@ -126,6 +126,45 @@ export async function POST(request, { params }) {
       updates.talkTimeSeconds = talkTimeSeconds;
     if (answeredAt && !interaction.answered_at) {
       updates.answeredAt = answeredAt;
+      const existingTimeline = Array.isArray(updatedRoutingMetadata?.timeline)
+        ? updatedRoutingMetadata.timeline
+        : [];
+      const hasAnswered = existingTimeline.some(
+        (event) => event.type === TimelineEventTypes.ANSWERED
+      );
+      if (!hasAnswered) {
+        if (interaction.assigned_at) {
+          const assignedAtMs = new Date(interaction.assigned_at).getTime();
+          const answeredAtMs = new Date(answeredAt).getTime();
+          if (!Number.isNaN(assignedAtMs) && !Number.isNaN(answeredAtMs)) {
+            const durationSeconds = Math.max(
+              0,
+              Math.floor((answeredAtMs - assignedAtMs) / 1000)
+            );
+            const hasAlerting = existingTimeline.some(
+              (event) => event.type === TimelineEventTypes.ALERTING
+            );
+            if (!hasAlerting) {
+              updatedRoutingMetadata = addTimelineEvent(
+                updatedRoutingMetadata,
+                TimelineEventTypes.ALERTING,
+                {
+                  timestamp: interaction.assigned_at,
+                  alertingDurationSeconds: durationSeconds,
+                }
+              );
+            }
+          }
+        }
+        updatedRoutingMetadata = addTimelineEvent(
+          updatedRoutingMetadata,
+          TimelineEventTypes.ANSWERED,
+          {
+            timestamp: new Date(answeredAt).toISOString(),
+            agentUsername: interaction.agent_username || null,
+          }
+        );
+      }
     }
     if (Object.keys(updatedRoutingMetadata).length > 0) {
       updates.routingMetadata = updatedRoutingMetadata;

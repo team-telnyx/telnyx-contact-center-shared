@@ -68,6 +68,7 @@ export async function GET(request) {
               routing_metadata: safeParse(row.routing_metadata),
               transfer_history: safeParse(row.transfer_history),
               tags: safeParse(row.tags),
+              wrapup_codes: safeParse(row.wrapup_codes),
               metadata: safeParse(row.metadata),
             };
           }
@@ -140,6 +141,7 @@ export async function GET(request) {
               routing_metadata: safeParse(row.routing_metadata),
               transfer_history: safeParse(row.transfer_history),
               tags: safeParse(row.tags),
+              wrapup_codes: safeParse(row.wrapup_codes),
               metadata: safeParse(row.metadata),
             };
           }
@@ -195,6 +197,7 @@ export async function GET(request) {
               routing_metadata: safeParse(row.routing_metadata),
               transfer_history: safeParse(row.transfer_history),
               tags: safeParse(row.tags),
+              wrapup_codes: safeParse(row.wrapup_codes),
               metadata: safeParse(row.metadata),
             };
           }

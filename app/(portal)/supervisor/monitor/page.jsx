@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +36,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+} from "@/config/status-icons";
 
 export default function MonitorPage() {
   // Helper function to format seconds into hours and minutes
@@ -62,10 +67,18 @@ export default function MonitorPage() {
   const [agentActiveCalls, setAgentActiveCalls] = useState([]);
   const [loadingAgentCalls, setLoadingAgentCalls] = useState(false);
   const [agentTimeTracking, setAgentTimeTracking] = useState(null);
+  const [statusMeta, setStatusMeta] = useState({});
+  const selectedQueueRef = useRef(null);
+  const loadQueueCallsRef = useRef(null);
+
+  useEffect(() => {
+    selectedQueueRef.current = selectedQueue;
+  }, [selectedQueue]);
 
   useEffect(() => {
     // Initial load
     loadDashboard();
+    loadStatuses();
 
     // Set up SSE stream for real-time updates
     const eventSource = new EventSource("/api/contact-center/monitor/stream");
@@ -81,6 +94,33 @@ export default function MonitorPage() {
         const prevData = data;
         setData(update);
         setLoading(false);
+
+        const selectedQueue = selectedQueueRef.current;
+        if (
+          prevData &&
+          update &&
+          selectedQueue?.id &&
+          loadQueueCallsRef.current
+        ) {
+          const prevQueue = (prevData.queues?.stats || []).find(
+            (queue) => String(queue.queueId) === String(selectedQueue.id)
+          );
+          const nextQueue = (update.queues?.stats || []).find(
+            (queue) => String(queue.queueId) === String(selectedQueue.id)
+          );
+          const queueChanged =
+            !prevQueue ||
+            !nextQueue ||
+            prevQueue.realtime?.waitingCalls !==
+              nextQueue.realtime?.waitingCalls ||
+            prevQueue.realtime?.activeCalls !==
+              nextQueue.realtime?.activeCalls ||
+            prevQueue.realtime?.longestWaitSeconds !==
+              nextQueue.realtime?.longestWaitSeconds;
+          if (queueChanged) {
+            loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+          }
+        }
 
         // Highlight cells that changed
         if (prevData && update) {
@@ -186,6 +226,27 @@ export default function MonitorPage() {
       eventSource.close();
     };
   }, []);
+
+  async function loadStatuses() {
+    try {
+      const res = await fetch("/api/user/statuses", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      const items = Array.isArray(data.statuses) ? data.statuses : [];
+      const next = {};
+      items.forEach((item) => {
+        if (item?.name) {
+          next[item.name] = {
+            icon: item.icon || null,
+            color: item.color || null,
+          };
+        }
+      });
+      setStatusMeta(next);
+    } catch (error) {
+      console.error("[Monitor] Failed to load statuses:", error);
+    }
+  }
 
   async function loadDashboard() {
     try {
@@ -322,9 +383,49 @@ export default function MonitorPage() {
     }
   }
 
-  async function loadQueueCalls(queueId) {
+  function getQueueCallId(call) {
+    return call?.id || call?.callControlId || call?.callSessionId || null;
+  }
+
+  function isQueueCallDifferent(prevCall, nextCall) {
+    return (
+      prevCall?.fromNumber !== nextCall?.fromNumber ||
+      prevCall?.toNumber !== nextCall?.toNumber ||
+      prevCall?.state !== nextCall?.state ||
+      prevCall?.agentName !== nextCall?.agentName ||
+      prevCall?.agentUsername !== nextCall?.agentUsername ||
+      prevCall?.enqueuedAt !== nextCall?.enqueuedAt ||
+      prevCall?.answeredAt !== nextCall?.answeredAt ||
+      prevCall?.waitSeconds !== nextCall?.waitSeconds ||
+      prevCall?.talkSeconds !== nextCall?.talkSeconds
+    );
+  }
+
+  function mergeQueueCalls(prevCalls, nextCalls) {
+    const prevMap = new Map(
+      (prevCalls || []).map((call) => [getQueueCallId(call), call])
+    );
+    let changed = (prevCalls || []).length !== (nextCalls || []).length;
+    const merged = (nextCalls || []).map((call) => {
+      const callId = getQueueCallId(call);
+      const prev = prevMap.get(callId);
+      if (!prev) {
+        changed = true;
+        return call;
+      }
+      if (isQueueCallDifferent(prev, call)) {
+        changed = true;
+        return call;
+      }
+      return prev;
+    });
+    return changed ? merged : prevCalls;
+  }
+
+  async function loadQueueCalls(queueId, options = {}) {
+    const { silent = false } = options;
     try {
-      setLoadingQueueCalls(true);
+      if (!silent) setLoadingQueueCalls(true);
       const res = await fetch(`/api/contact-center/queues/${queueId}/calls`, {
         cache: "no-store",
       });
@@ -333,22 +434,28 @@ export default function MonitorPage() {
       }
       const data = await res.json();
       if (data.ok) {
-        setQueueCalls(data.calls || []);
-        setSelectedQueue(data.queue);
+        setQueueCalls((prev) => mergeQueueCalls(prev, data.calls || []));
+        if (!silent) setSelectedQueue(data.queue);
       } else {
         throw new Error(data.error || "Failed to load queue calls");
       }
     } catch (error) {
       console.error("[Monitor] Error loading queue calls:", error);
-      notify({
-        title: "Failed to load queue calls",
-        description: error.message,
-        variant: "error",
-      });
+      if (!silent) {
+        notify({
+          title: "Failed to load queue calls",
+          description: error.message,
+          variant: "error",
+        });
+      }
     } finally {
-      setLoadingQueueCalls(false);
+      if (!silent) setLoadingQueueCalls(false);
     }
   }
+
+  useEffect(() => {
+    loadQueueCallsRef.current = loadQueueCalls;
+  });
 
   async function loadAgentCalls(userId) {
     try {
@@ -464,9 +571,8 @@ export default function MonitorPage() {
               loadDashboard();
             }}
             disabled={loading}
-            variant="outline"
             size="sm"
-            className="flex items-center gap-2 border-2 border-blue-500 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 hover:border-blue-600 dark:hover:border-blue-400 disabled:opacity-50"
+            className="flex items-center gap-2"
           >
             <IconRefresh
               className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -643,14 +749,12 @@ export default function MonitorPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Call ID</TableHead>
                         <TableHead>From</TableHead>
                         <TableHead>To</TableHead>
                         <TableHead>State</TableHead>
                         <TableHead>Agent</TableHead>
                         <TableHead>Enqueued</TableHead>
                         <TableHead>Answered</TableHead>
-                        <TableHead>Completed</TableHead>
                         <TableHead>Wait Time</TableHead>
                         <TableHead>Talk Time</TableHead>
                       </TableRow>
@@ -670,11 +774,6 @@ export default function MonitorPage() {
 
                         return (
                           <TableRow key={call.id}>
-                            <TableCell className="font-mono text-xs">
-                              {call.callControlId?.slice(0, 8) ||
-                                call.id?.slice(0, 8) ||
-                                "—"}
-                            </TableCell>
                             <TableCell>{call.fromNumber || "—"}</TableCell>
                             <TableCell>{call.toNumber || "—"}</TableCell>
                             <TableCell>
@@ -695,13 +794,6 @@ export default function MonitorPage() {
                             <TableCell className="text-xs">
                               {call.answeredAt
                                 ? new Date(call.answeredAt).toLocaleString()
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {call.completedAt
-                                ? new Date(call.completedAt).toLocaleString()
-                                : call.abandonedAt
-                                ? new Date(call.abandonedAt).toLocaleString()
                                 : "—"}
                             </TableCell>
                             <TableCell>
@@ -1076,6 +1168,7 @@ export default function MonitorPage() {
                         } else {
                           displayName = "Unknown";
                         }
+                        const statusInfo = statusMeta[agent.status] || {};
                         const statusColor =
                           agent.status === "Available"
                             ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
@@ -1084,6 +1177,16 @@ export default function MonitorPage() {
                             : agent.status === "Away"
                             ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
                             : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                        const StatusIcon =
+                          STATUS_ICON_MAP[statusInfo.icon] ||
+                          STATUS_NAME_ICON_FALLBACK[agent.status] ||
+                          STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                        const statusStyle = statusInfo.color
+                          ? {
+                              color: statusInfo.color,
+                              borderColor: statusInfo.color,
+                            }
+                          : undefined;
 
                         return (
                           <TableRow key={agent.userId}>
@@ -1097,8 +1200,19 @@ export default function MonitorPage() {
                             </TableCell>
                             <TableCell>
                               <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${statusColor} bg-transparent`}
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
+                                  statusInfo.color ? "" : statusColor
+                                } bg-transparent`}
+                                style={statusStyle}
                               >
+                                <StatusIcon
+                                  className="h-3.5 w-3.5"
+                                  style={
+                                    statusInfo.color
+                                      ? { color: statusInfo.color }
+                                      : undefined
+                                  }
+                                />
                                 {agent.status}
                               </span>
                             </TableCell>

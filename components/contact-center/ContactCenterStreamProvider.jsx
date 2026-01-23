@@ -32,6 +32,10 @@ export function ContactCenterStreamProvider({ children }) {
                     data.interaction.callerNumber,
                   queueName: data.interaction.queueName,
                   queueId: data.interaction.queueId,
+                  aiCallControlId:
+                    data.interaction.aiCallControlId ||
+                    data.interaction.metadata?.ai_call_control_id ||
+                    null,
                   queuedAt: data.interaction.queuedAt,
                   assignedAt: data.interaction.assignedAt,
                   direction: "inbound",
@@ -78,6 +82,10 @@ export function ContactCenterStreamProvider({ children }) {
                     callerNumber:
                       data.updates.from_number || callData.callerNumber,
                     queueName: data.updates.queue_name || callData.queueName,
+                    aiCallControlId:
+                      data.updates.metadata?.ai_call_control_id ||
+                      callData.aiCallControlId ||
+                      null,
                   });
                 }
               }

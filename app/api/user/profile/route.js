@@ -16,13 +16,28 @@ async function getAllowedStatuses() {
       return ["Available", "Busy", "Away", "Offline"];
     }
     const result = await pool.query(
-      `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
+      `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
     );
     return result.rows.map((row) => row.name);
   } catch (error) {
     console.error("[Profile] Error fetching allowed statuses:", error);
     // Fallback to default statuses
     return ["Available", "Busy", "Away", "Offline"];
+  }
+}
+
+async function getStatusMetaByName(statusName) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool) return null;
+    const result = await pool.query(
+      `SELECT name, user_selectable FROM cc_user_statuses WHERE is_active = true AND name = $1 LIMIT 1`,
+      [statusName]
+    );
+    return result.rows?.[0] || null;
+  } catch (error) {
+    console.error("[Profile] Error fetching status meta:", error);
+    return null;
   }
 }
 
@@ -112,9 +127,15 @@ export async function PUT(request) {
     // Status - validate against allowed statuses from database
     if (typeof payload.status === "string" && payload.status.trim()) {
       const trimmedStatus = payload.status.trim();
+      const allowSystemStatus = payload.system === true;
       const allowedStatuses = await getAllowedStatuses();
       if (allowedStatuses.includes(trimmedStatus)) {
         update.status = trimmedStatus;
+      } else if (allowSystemStatus) {
+        const meta = await getStatusMetaByName(trimmedStatus);
+        if (meta?.name) {
+          update.status = trimmedStatus;
+        }
       }
     }
 
@@ -194,14 +215,11 @@ export async function PUT(request) {
 
         if (["Available", "Busy"].includes(update.status)) {
           try {
-            console.log(
-              "[Profile] Offering queued call after status update:",
-              {
-                userId: String(userId),
-                username: user.username,
-                status: update.status,
-              }
-            );
+            console.log("[Profile] Offering queued call after status update:", {
+              userId: String(userId),
+              username: user.username,
+              status: update.status,
+            });
             await offerQueuedCallForAgent({ userId: String(userId) });
           } catch (offerError) {
             console.error(

@@ -308,39 +308,7 @@ export function NavUser({ user, hideExtras }) {
                 </div>
               </div>
             </DropdownMenuLabel>
-            {!hideExtras && (
-              <>
-                <DropdownMenuSeparator />
-
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">
-                    Status
-                  </DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={status}
-                    onValueChange={(val) => {
-                      setStatus(val);
-                      updateStatusOnServer(val);
-                    }}
-                  >
-                    {USER_STATUS_OPTIONS.map(({ value, Icon }) => (
-                      <DropdownMenuRadioItem
-                        key={value}
-                        value={value}
-                        className="pl-2"
-                      >
-                        <Icon className="h-4 w-4" />
-                        {value}
-                        {status === value ? (
-                          <IconCheck className="ml-auto text-primary" />
-                        ) : null}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-              </>
-            )}
+            {!hideExtras && <DropdownMenuSeparator />}
             <DropdownMenuGroup>
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground">
                 Theme

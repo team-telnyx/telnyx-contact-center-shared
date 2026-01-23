@@ -10,6 +10,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { addWebhookEvent } from "@/lib/call-monitor-store.js";
 import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
+import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
 import {
   addTimelineEvent,
@@ -25,6 +26,75 @@ const executedTransitions = new Map();
 // Key: `${call_control_id}:${flowId}`
 // Value: timestamp
 const completedFlows = new Map();
+
+const AI_CALL_ID_HEADER = "X-AI-Call-ID";
+
+function findCustomHeader(headers, name) {
+  if (!Array.isArray(headers)) return null;
+  return headers.find(
+    (header) =>
+      String(header?.name || "").toLowerCase() === String(name).toLowerCase()
+  );
+}
+
+async function updateConversationMetadata(conversationId, metadata) {
+  const apiKey = process.env.TELNYX_API_KEY;
+  if (!apiKey || !conversationId) return null;
+  const baseUrl = buildTelnyxV2Url(
+    `/ai/conversations/${encodeURIComponent(conversationId)}`
+  );
+  try {
+    const currentRes = await fetch(baseUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!currentRes.ok) {
+      const text = await currentRes.text();
+      console.warn(
+        "[IncomingFlowWebhook] Failed to fetch conversation metadata:",
+        currentRes.status,
+        text
+      );
+      return null;
+    }
+    const currentData = await currentRes.json();
+    const currentMetadata =
+      currentData?.data?.metadata && typeof currentData.data.metadata === "object"
+        ? currentData.data.metadata
+        : {};
+    const merged = {
+      ...currentMetadata,
+      ...metadata,
+    };
+    const updateRes = await fetch(baseUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ metadata: merged }),
+    });
+    if (!updateRes.ok) {
+      const text = await updateRes.text();
+      console.warn(
+        "[IncomingFlowWebhook] Failed to update conversation metadata:",
+        updateRes.status,
+        text
+      );
+      return null;
+    }
+    return await updateRes.json();
+  } catch (err) {
+    console.warn(
+      "[IncomingFlowWebhook] Error updating conversation metadata:",
+      err
+    );
+    return null;
+  }
+}
 
 /**
  * Incoming Call Webhook Handler
@@ -277,6 +347,11 @@ export async function POST(request, { params }) {
       if (payload.direction === "incoming" && !isTransferLeg) {
         try {
           const { PgDb } = await import("@/lib/pgdb.js");
+          const aiCallHeader = findCustomHeader(
+            payload.custom_headers || [],
+            AI_CALL_ID_HEADER
+          );
+          const aiCallControlId = aiCallHeader?.value || null;
 
           // Check if interaction already exists for this call_control_id
           const existingInteraction = await PgDb.findInteractionByCallControlId(
@@ -316,12 +391,28 @@ export async function POST(request, { params }) {
               metadata: {
                 flow_owner: flow?.username || null,
                 initiated_at: payload.occurred_at || new Date().toISOString(),
+                ...(aiCallControlId
+                  ? { ai_call_control_id: aiCallControlId }
+                  : {}),
               },
             });
 
             console.log(
               `[IncomingFlowWebhook] ✅ Registered incoming call ${payload.call_control_id} to cc_interactions (ID: ${interactionId})`
             );
+          }
+          if (
+            existingInteraction &&
+            aiCallControlId &&
+            !existingInteraction?.metadata?.ai_call_control_id
+          ) {
+            const metadata = {
+              ...(existingInteraction.metadata || {}),
+              ai_call_control_id: aiCallControlId,
+            };
+            await PgDb.updateInteractionById(existingInteraction.id, {
+              metadata,
+            });
           }
         } catch (err) {
           console.error(
@@ -330,6 +421,59 @@ export async function POST(request, { params }) {
           );
           // Don't fail the webhook, just log the error
         }
+      }
+    }
+
+    if (event === "call.conversation.created") {
+      try {
+        const conversationId =
+          payload.conversation_id ||
+          payload.conversationId ||
+          payload?.conversation?.id ||
+          null;
+        if (conversationId) {
+          const { PgDb } = await import("@/lib/pgdb.js");
+          let interaction = null;
+          if (payload.call_control_id) {
+            interaction = await PgDb.findInteractionByCallControlId(
+              payload.call_control_id
+            );
+          }
+          if (!interaction && payload.call_session_id) {
+            interaction = await PgDb.findInteractionByCallSessionId(
+              payload.call_session_id
+            );
+          }
+          if (!interaction && payload.call_leg_id) {
+            interaction = await PgDb.findInteractionByCallLegId(
+              payload.call_leg_id
+            );
+          }
+          const aiCallControlId =
+            interaction?.metadata?.ai_call_control_id || null;
+
+          if (aiCallControlId) {
+            await updateConversationMetadata(conversationId, {
+              call_control_id: String(aiCallControlId),
+            });
+
+            if (interaction?.id) {
+              const metadata = {
+                ...(interaction?.metadata || {}),
+                ai_call_control_id: aiCallControlId,
+                ai_conversation_id: conversationId,
+              };
+              await PgDb.updateInteractionById(interaction.id, {
+                metadata,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[IncomingFlowWebhook] Error linking conversation metadata:",
+          err
+        );
       }
     }
 
@@ -840,31 +984,13 @@ export async function POST(request, { params }) {
       });
     }
 
-    // Handle call.recording.saved - store recording URL
+    // Handle call.recording.saved - store recording payload in metadata
     if (event === "call.recording.saved") {
       try {
-        const { PgDb } = await import("@/lib/pgdb.js");
-        const callControlId = payload.call_control_id;
-        const interaction = await PgDb.findInteractionByCallControlId(
-          callControlId
+        const { handleContactCenterEvent } = await import(
+          "@/lib/contact-center/webhook-handler.js"
         );
-
-        if (interaction && interaction.is_contact_center) {
-          const recordingUrl =
-            payload?.recording_urls?.public_recording_urls?.[0] ||
-            payload?.recording_urls?.recording_urls?.[0] ||
-            payload?.public_recording_urls?.[0] ||
-            payload?.recording_url ||
-            null;
-          if (recordingUrl) {
-            await PgDb.updateInteractionById(interaction.id, {
-              recordingUrl,
-            });
-            console.log(
-              `[IncomingFlowWebhook] ✅ Stored recording URL for interaction ${interaction.id}: ${recordingUrl}`
-            );
-          }
-        }
+        await handleContactCenterEvent(event, payload);
       } catch (err) {
         console.error(
           "[IncomingFlowWebhook] Error handling call.recording.saved:",

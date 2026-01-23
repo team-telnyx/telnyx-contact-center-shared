@@ -12,6 +12,7 @@ import {
   IconKey,
   IconAddressBook,
   IconPhone,
+  IconHistory,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -38,6 +39,12 @@ export const menuConfig = {
           title: "Monitor",
           url: "/supervisor/monitor",
           icon: IconActivity,
+          role_access: ["supervisor", "admin", "owner"],
+        },
+        {
+          title: "Call History",
+          url: "/supervisor/call-history",
+          icon: IconHistory,
           role_access: ["supervisor", "admin", "owner"],
         },
       ],
@@ -74,6 +81,12 @@ export const menuConfig = {
         {
           title: "Statuses",
           url: "/admin/statuses",
+          icon: IconTag,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Wrapup Codes",
+          url: "/admin/wrapup-codes",
           icon: IconTag,
           role_access: ["admin", "owner"],
         },
