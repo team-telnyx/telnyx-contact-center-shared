@@ -57,6 +57,8 @@ export default function MonitorPage() {
   const [agentQueues, setAgentQueues] = useState([]);
   const [loadingQueues, setLoadingQueues] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
   const [activeTab, setActiveTab] = useState("agents");
   const [selectedQueue, setSelectedQueue] = useState(null);
@@ -91,73 +93,124 @@ export default function MonitorPage() {
     eventSource.addEventListener("monitor_update", (event) => {
       try {
         const update = JSON.parse(event.data);
-        const prevData = data;
-        setData(update);
-        setLoading(false);
-
-        const selectedQueue = selectedQueueRef.current;
-        if (
-          prevData &&
-          update &&
-          selectedQueue?.id &&
-          loadQueueCallsRef.current
-        ) {
-          const prevQueue = (prevData.queues?.stats || []).find(
-            (queue) => String(queue.queueId) === String(selectedQueue.id)
-          );
-          const nextQueue = (update.queues?.stats || []).find(
-            (queue) => String(queue.queueId) === String(selectedQueue.id)
-          );
-          const queueChanged =
-            !prevQueue ||
-            !nextQueue ||
-            prevQueue.realtime?.waitingCalls !==
-              nextQueue.realtime?.waitingCalls ||
-            prevQueue.realtime?.activeCalls !==
-              nextQueue.realtime?.activeCalls ||
-            prevQueue.realtime?.longestWaitSeconds !==
-              nextQueue.realtime?.longestWaitSeconds;
-          if (queueChanged) {
-            loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+        
+        setData((currentData) => {
+          if (!currentData) {
+            setLoading(false);
+            return update;
           }
-        }
-
-        // Highlight cells that changed
-        if (prevData && update) {
-          // Check agent status changes
-          const prevAgents = prevData.agents?.stats || [];
-          const newAgents = update.agents?.stats || [];
-          newAgents.forEach((newAgent) => {
-            const prevAgent = prevAgents.find(
-              (a) => a.userId === newAgent.userId
+          
+          // Store previous data for comparison
+          const prevAgents = currentData.agents?.stats || [];
+          const prevQueues = currentData.queues?.stats || [];
+          const updateAgents = update.agents?.stats || [];
+          const updateQueues = update.queues?.stats || [];
+          
+          // Check for changes and highlight BEFORE updating
+          prevAgents.forEach((prevAgent) => {
+            const updatedAgent = updateAgents.find(
+              (a) => String(a.userId) === String(prevAgent.userId)
             );
-            if (prevAgent) {
-              if (prevAgent.activeQueues !== newAgent.activeQueues) {
-                highlightCell(`agent-${newAgent.userId}-queues`);
+            if (updatedAgent) {
+              if (prevAgent.activeQueues !== updatedAgent.activeQueues) {
+                highlightCell(`agent-${String(prevAgent.userId)}-queues`);
               }
-              if (prevAgent.currentCalls !== newAgent.currentCalls) {
-                highlightCell(`agent-${newAgent.userId}-calls`);
+              if (prevAgent.currentCalls !== updatedAgent.currentCalls) {
+                highlightCell(`agent-${String(prevAgent.userId)}-calls`);
               }
             }
           });
-
-          // Check queue changes
-          const prevQueues = prevData.queues?.stats || [];
-          const newQueues = update.queues?.stats || [];
-          newQueues.forEach((newQueue) => {
-            const prevQueue = prevQueues.find(
-              (q) => q.queueId === newQueue.queueId
+          
+          prevQueues.forEach((prevQueue) => {
+            const updatedQueue = updateQueues.find(
+              (q) => String(q.queueId) === String(prevQueue.queueId)
             );
-            if (prevQueue) {
+            if (updatedQueue) {
               if (
                 prevQueue.realtime?.activeCalls !==
-                newQueue.realtime?.activeCalls
+                updatedQueue.realtime?.activeCalls
               ) {
-                highlightCell(`queue-${newQueue.queueId}-active`);
+                highlightCell(`queue-${String(prevQueue.queueId)}-active`);
               }
             }
           });
-        }
+          
+          // Merge agents stats - update only changed agents
+          const currentAgents = currentData.agents?.stats || [];
+          const mergedAgents = currentAgents.map((currentAgent) => {
+            const updatedAgent = updateAgents.find(
+              (a) => String(a.userId) === String(currentAgent.userId)
+            );
+            return updatedAgent || currentAgent;
+          });
+          
+          // Add any new agents that weren't in the current list
+          const currentAgentIds = new Set(
+            currentAgents.map((a) => String(a.userId))
+          );
+          const newAgents = updateAgents.filter(
+            (a) => !currentAgentIds.has(String(a.userId))
+          );
+          
+          // Merge queues stats - update only changed queues
+          const currentQueues = currentData.queues?.stats || [];
+          const mergedQueues = currentQueues.map((currentQueue) => {
+            const updatedQueue = updateQueues.find(
+              (q) => String(q.queueId) === String(currentQueue.queueId)
+            );
+            return updatedQueue || currentQueue;
+          });
+          
+          // Add any new queues that weren't in the current list
+          const currentQueueIds = new Set(
+            currentQueues.map((q) => String(q.queueId))
+          );
+          const newQueues = updateQueues.filter(
+            (q) => !currentQueueIds.has(String(q.queueId))
+          );
+
+          const mergedData = {
+            ...update,
+            agents: {
+              ...update.agents,
+              stats: [...mergedAgents, ...newAgents],
+            },
+            queues: {
+              ...update.queues,
+              stats: [...mergedQueues, ...newQueues],
+            },
+          };
+
+          // Check if selected queue needs to be refreshed
+          const selectedQueue = selectedQueueRef.current;
+          if (
+            selectedQueue?.id &&
+            loadQueueCallsRef.current
+          ) {
+            const prevQueue = prevQueues.find(
+              (queue) => String(queue.queueId) === String(selectedQueue.id)
+            );
+            const nextQueue = updateQueues.find(
+              (queue) => String(queue.queueId) === String(selectedQueue.id)
+            );
+            const queueChanged =
+              prevQueue &&
+              nextQueue &&
+              (prevQueue.realtime?.waitingCalls !==
+                nextQueue.realtime?.waitingCalls ||
+              prevQueue.realtime?.activeCalls !==
+                nextQueue.realtime?.activeCalls ||
+              prevQueue.realtime?.longestWaitSeconds !==
+                nextQueue.realtime?.longestWaitSeconds);
+            if (queueChanged) {
+              setTimeout(() => {
+                loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+              }, 0);
+            }
+          }
+
+          return mergedData;
+        });
       } catch (error) {
         console.error("[Monitor] Error parsing update:", error);
       }
@@ -243,6 +296,7 @@ export default function MonitorPage() {
         }
       });
       setStatusMeta(next);
+      setAvailableStatuses(items);
     } catch (error) {
       console.error("[Monitor] Failed to load statuses:", error);
     }
@@ -522,6 +576,46 @@ export default function MonitorPage() {
       updateAgentQueues(selectedAgent?.userId, [queueId], !currentlyActivated);
     } catch (error) {
       console.error("[Monitor] Error toggling queue:", error);
+      notify({
+        title: "Update failed",
+        description: error.message,
+        variant: "error",
+      });
+    }
+  }
+
+  async function changeAgentStatus(newStatus) {
+    try {
+      if (!selectedAgent) {
+        throw new Error("No agent selected");
+      }
+
+      const res = await fetch("/api/contact-center/agent/status", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: newStatus,
+          userId: selectedAgent.userId, // Pass the target user's ID
+        }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update status");
+      }
+
+      // Update the agent's status in the main list
+      updateAgentStatus(selectedAgent.userId, newStatus);
+
+      notify({
+        title: "Status updated",
+        description: `Agent status changed to ${newStatus}`,
+        variant: "success",
+      });
+
+      // Close dialog
+      setStatusDialogOpen(false);
+    } catch (error) {
+      console.error("[Monitor] Error changing status:", error);
       notify({
         title: "Update failed",
         description: error.message,
@@ -1199,27 +1293,39 @@ export default function MonitorPage() {
                               </button>
                             </TableCell>
                             <TableCell>
-                              <span
-                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
-                                  statusInfo.color ? "" : statusColor
-                                } bg-transparent`}
-                                style={statusStyle}
-                              >
-                                <StatusIcon
-                                  className="h-3.5 w-3.5"
-                                  style={
-                                    statusInfo.color
-                                      ? { color: statusInfo.color }
-                                      : undefined
-                                  }
-                                />
-                                {agent.status}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
+                                    statusInfo.color ? "" : statusColor
+                                  } bg-transparent`}
+                                  style={statusStyle}
+                                >
+                                  <StatusIcon
+                                    className="h-3.5 w-3.5"
+                                    style={
+                                      statusInfo.color
+                                        ? { color: statusInfo.color }
+                                        : undefined
+                                    }
+                                  />
+                                  {agent.status}
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    setSelectedAgent(agent);
+                                    setStatusDialogOpen(true);
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground transition-colors"
+                                  title="Change status"
+                                >
+                                  <IconInfoCircle className="h-4 w-4" />
+                                </button>
+                              </div>
                             </TableCell>
                             <TableCell
                               className={
                                 highlightedCells.has(
-                                  `agent-${agent.userId}-calls`
+                                  `agent-${String(agent.userId)}-calls`
                                 )
                                   ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                   : ""
@@ -1230,7 +1336,7 @@ export default function MonitorPage() {
                             <TableCell
                               className={
                                 highlightedCells.has(
-                                  `agent-${agent.userId}-queues`
+                                  `agent-${String(agent.userId)}-queues`
                                 )
                                   ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                   : ""
@@ -1394,6 +1500,109 @@ export default function MonitorPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Status Change Dialog */}
+      <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <DialogContent
+          className="max-w-md"
+          style={{
+            backgroundColor: "var(--sheet, var(--muted))",
+            color: "var(--sheet-foreground, var(--foreground))",
+            borderColor: "var(--sheet-border, var(--border))",
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              Change Agent Status
+              {selectedAgent && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  {selectedAgent.firstName || selectedAgent.first_name
+                    ? `${selectedAgent.firstName || selectedAgent.first_name} ${
+                        selectedAgent.lastName || selectedAgent.last_name || ""
+                      }`.trim()
+                    : selectedAgent.username}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Select a new status for this agent.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {availableStatuses.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Loading statuses...
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {availableStatuses.map((status) => {
+                  const statusInfo = statusMeta[status.name] || {};
+                  const StatusIcon =
+                    STATUS_ICON_MAP[statusInfo.icon] ||
+                    STATUS_NAME_ICON_FALLBACK[status.name] ||
+                    STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                  const isCurrentStatus =
+                    selectedAgent?.status === status.name;
+                  const statusColor =
+                    status.name === "Available"
+                      ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
+                      : status.name === "Busy"
+                      ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                      : status.name === "Away"
+                      ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                  const statusStyle = statusInfo.color
+                    ? {
+                        color: statusInfo.color,
+                        borderColor: statusInfo.color,
+                      }
+                    : undefined;
+
+                  return (
+                    <button
+                      key={status.name}
+                      onClick={() => changeAgentStatus(status.name)}
+                      disabled={isCurrentStatus}
+                      className={`w-full flex items-center justify-between p-3 border rounded-lg transition-colors ${
+                        isCurrentStatus
+                          ? "bg-muted cursor-not-allowed opacity-60"
+                          : "hover:bg-accent cursor-pointer"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <StatusIcon
+                          className="h-5 w-5"
+                          style={
+                            statusInfo.color
+                              ? { color: statusInfo.color }
+                              : undefined
+                          }
+                        />
+                        <div className="text-left">
+                          <div className="font-medium">{status.name}</div>
+                          {status.description && (
+                            <div className="text-xs text-muted-foreground">
+                              {status.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {isCurrentStatus && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs"
+                        >
+                          Current
+                        </Badge>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Queue Management Dialog */}
       <Dialog open={queueDialogOpen} onOpenChange={setQueueDialogOpen}>

@@ -400,6 +400,23 @@ export function Softphone() {
     try {
       const storeState = useActiveCallStore.getState();
 
+      // Set status to "ended" before clearing to allow wrapup logic to detect it
+      if (storeState.status !== "ended" && storeState.status !== "idle") {
+        // Try updateStatus first (requires call object for proper state tracking)
+        if (storeState.call) {
+          useActiveCallStore.getState().updateStatus("ended");
+        } else {
+          // If call is null, set status directly
+          useActiveCallStore.setState(
+            { status: "ended" },
+            false,
+            "setStatusEnded"
+          );
+        }
+        // Small delay to allow wrapup logic to detect the "ended" status
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
       // Ensure hold/transfer metrics are synced before clearing
       try {
         await useActiveCallStore.getState().syncCallMetricsToDb();

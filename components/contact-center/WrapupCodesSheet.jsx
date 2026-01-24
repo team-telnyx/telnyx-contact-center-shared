@@ -347,22 +347,22 @@ export default function WrapupCodesSheet({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto">
-          <Card className="mx-5 my-4">
-            <CardContent className="p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-5 py-4">
+          <Card className="flex-1 flex flex-col overflow-hidden">
+            <CardContent className="p-6 flex-1 flex flex-col min-h-0">
               {loading ? (
-                <>
+                <div className="space-y-4">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-9 w-full" />
                   <Skeleton className="h-9 w-full" />
-                </>
+                </div>
               ) : codes.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-6">
                   No wrapup codes assigned to this queue.
                 </div>
               ) : (
-                <ScrollArea className="max-h-[360px]">
-                  <div className="space-y-2">
+                <ScrollArea className="flex-1">
+                  <div className="space-y-2 pr-4">
                     {codes.map((code) => {
                       const IconComponent =
                         STATUS_ICON_MAP[code.icon] ||
@@ -372,13 +372,14 @@ export default function WrapupCodesSheet({
                       return (
                         <label
                           key={code.id}
-                          className="flex items-start gap-2 text-sm"
+                          className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors"
                         >
                           <Checkbox
                             checked={selectedCodes.includes(code.id)}
                             onCheckedChange={() => toggleCode(code.id)}
+                            className="mt-0.5 shrink-0"
                           />
-                          <span className="leading-tight flex items-start gap-2 flex-1">
+                          <span className="leading-tight flex items-start gap-2 flex-1 min-w-0">
                             {IconComponent && (
                               <IconComponent
                                 className="size-4 mt-0.5 shrink-0"
@@ -387,15 +388,17 @@ export default function WrapupCodesSheet({
                                 }
                               />
                             )}
-                            <span className="flex-1">
-                              <span className="font-medium">{code.name}</span>
-                              {code.is_default ? (
-                                <Badge variant="outline" className="ml-2 text-xs">
-                                  Default
-                                </Badge>
-                              ) : null}
+                            <span className="flex-1 min-w-0">
+                              <span className="font-medium block break-words">
+                                {code.name}
+                                {code.is_default ? (
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    Default
+                                  </Badge>
+                                ) : null}
+                              </span>
                               {code.description ? (
-                                <span className="block text-xs text-muted-foreground">
+                                <span className="block text-xs text-muted-foreground mt-0.5 break-words">
                                   {code.description}
                                 </span>
                               ) : null}
