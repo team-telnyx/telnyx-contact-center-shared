@@ -16,6 +16,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconEdit, IconPlus } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  STATUS_ICON_OPTIONS,
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+  DEFAULT_STATUS_COLOR,
+  STATUS_COLOR_OPTIONS,
+} from "@/config/status-icons";
 
 export default function WrapupCodeEditSheet({
   open,
@@ -30,6 +46,8 @@ export default function WrapupCodeEditSheet({
   const [isDefault, setIsDefault] = useState(false);
   const [displayOrder, setDisplayOrder] = useState(0);
   const [description, setDescription] = useState("");
+  const [icon, setIcon] = useState(DEFAULT_STATUS_ICON);
+  const [color, setColor] = useState(DEFAULT_STATUS_COLOR);
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +59,8 @@ export default function WrapupCodeEditSheet({
       setIsDefault(false);
       setDisplayOrder(0);
       setDescription("");
+      setIcon(DEFAULT_STATUS_ICON);
+      setColor(DEFAULT_STATUS_COLOR);
     }
   }, [open, wrapupCodeId]);
 
@@ -60,6 +80,8 @@ export default function WrapupCodeEditSheet({
       setIsDefault(data.is_default !== undefined ? data.is_default : false);
       setDisplayOrder(data.display_order || 0);
       setDescription(data.description || "");
+      setIcon(data.icon || DEFAULT_STATUS_ICON);
+      setColor(data.color || DEFAULT_STATUS_COLOR);
     } catch (error) {
       console.error("[WrapupCodeEditSheet] Load error:", error);
       notify({
@@ -90,6 +112,8 @@ export default function WrapupCodeEditSheet({
         isDefault,
         displayOrder: Number(displayOrder),
         description: description.trim(),
+        icon,
+        color,
       };
 
       const url = wrapupCodeId
@@ -201,6 +225,63 @@ export default function WrapupCodeEditSheet({
                       placeholder="e.g., Resolved, Escalated"
                     />
                   </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="icon">Icon</Label>
+                    <Combobox
+                      value={icon}
+                      onChange={setIcon}
+                      options={STATUS_ICON_OPTIONS.map((opt) => ({
+                        value: opt.value,
+                        label: opt.label,
+                        Icon: opt.Icon,
+                      }))}
+                      placeholder="Select icon"
+                      searchable
+                      contentClassName="w-[--radix-dropdown-menu-trigger-width]"
+                      renderSelected={(selected) => {
+                        const Icon =
+                          STATUS_ICON_MAP[selected?.value] ||
+                          STATUS_NAME_ICON_FALLBACK[name] ||
+                          STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                        return (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Icon
+                              className="size-4 shrink-0"
+                              style={color ? { color } : undefined}
+                            />
+                            <span className="truncate">
+                              {selected?.label || "Select icon"}
+                            </span>
+                          </div>
+                        );
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="color">Icon Color</Label>
+                    <Select value={color} onValueChange={setColor}>
+                      <SelectTrigger id="color">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_COLOR_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            <span className="flex items-center gap-2">
+                              <span
+                                className="inline-block size-3 rounded-full border"
+                                style={{ backgroundColor: opt.value }}
+                              />
+                              <span>{opt.label}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="border-t" />
 
                   <div className="grid gap-2">
                     <Label htmlFor="displayOrder">Display Order</Label>

@@ -69,7 +69,7 @@ export async function GET(request) {
 
     queryParams.push(pageSize, offset);
     const itemsRes = await pool.query(
-      `SELECT id, name, is_active, is_default, display_order, description, created_at, updated_at
+      `SELECT id, name, is_active, is_default, display_order, description, icon, color, created_at, updated_at
        FROM cc_wrapup_codes
        ${whereClause}
        ORDER BY display_order ASC, name ASC
@@ -102,7 +102,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { name, isActive, isDefault, displayOrder, description } = body;
+    const { name, isActive, isDefault, displayOrder, description, icon, color } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -110,8 +110,8 @@ export async function POST(request) {
 
     const id = randomUUID();
     await pool.query(
-      `INSERT INTO cc_wrapup_codes (id, name, is_active, is_default, display_order, description, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+      `INSERT INTO cc_wrapup_codes (id, name, is_active, is_default, display_order, description, icon, color, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
       [
         id,
         name.trim(),
@@ -119,6 +119,8 @@ export async function POST(request) {
         isDefault !== undefined ? Boolean(isDefault) : false,
         displayOrder !== undefined ? Number(displayOrder) : 0,
         description || null,
+        icon || null,
+        color || null,
       ]
     );
 

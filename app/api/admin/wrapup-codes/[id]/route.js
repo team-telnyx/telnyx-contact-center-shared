@@ -64,7 +64,7 @@ export async function PUT(request, { params }) {
 
   try {
     const body = await request.json();
-    const { name, isActive, isDefault, displayOrder, description } = body;
+    const { name, isActive, isDefault, displayOrder, description, icon, color } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -72,14 +72,16 @@ export async function PUT(request, { params }) {
 
     await pool.query(
       `UPDATE cc_wrapup_codes
-       SET name = $1, is_active = $2, is_default = $3, display_order = $4, description = $5, updated_at = NOW()
-       WHERE id = $6`,
+       SET name = $1, is_active = $2, is_default = $3, display_order = $4, description = $5, icon = $6, color = $7, updated_at = NOW()
+       WHERE id = $8`,
       [
         name.trim(),
         isActive !== undefined ? Boolean(isActive) : true,
         isDefault !== undefined ? Boolean(isDefault) : false,
         displayOrder !== undefined ? Number(displayOrder) : 0,
         description || null,
+        icon || null,
+        color || null,
         id,
       ]
     );

@@ -19,7 +19,7 @@ async function getQueueWrapupCodes(queueId) {
 
   const [codesRes, defaultRes] = await Promise.all([
     pool.query(
-      `SELECT w.id, w.name, w.is_default, w.description
+      `SELECT w.id, w.name, w.is_default, w.description, w.icon, w.color
        FROM cc_queue_wrapup_codes qwc
        JOIN cc_wrapup_codes w ON qwc.wrapup_code_id = w.id
        WHERE qwc.queue_id = $1 AND w.is_active = true
@@ -27,7 +27,7 @@ async function getQueueWrapupCodes(queueId) {
       [queueId]
     ),
     pool.query(
-      `SELECT id, name
+      `SELECT id, name, icon, color
        FROM cc_wrapup_codes
        WHERE is_active = true AND is_default = true
        ORDER BY display_order ASC, name ASC

@@ -52,6 +52,12 @@ import {
   IconRun,
   IconBattery,
   IconBatteryCharging,
+  IconPlane,
+  IconHeart,
+  IconHeartbeat,
+  IconSchool,
+  IconBook,
+  IconCertificate,
 } from "@tabler/icons-react";
 
 export const STATUS_ICON_OPTIONS = [
@@ -112,6 +118,12 @@ export const STATUS_ICON_OPTIONS = [
     label: "Battery Charging",
     Icon: IconBatteryCharging,
   },
+  { value: "plane", label: "Plane", Icon: IconPlane },
+  { value: "heart", label: "Heart", Icon: IconHeart },
+  { value: "heartbeat", label: "Heartbeat", Icon: IconHeartbeat },
+  { value: "school", label: "School", Icon: IconSchool },
+  { value: "book", label: "Book", Icon: IconBook },
+  { value: "certificate", label: "Certificate", Icon: IconCertificate },
 ];
 
 export const STATUS_ICON_MAP = STATUS_ICON_OPTIONS.reduce((acc, item) => {
@@ -127,6 +139,10 @@ export const STATUS_NAME_ICON_FALLBACK = {
   "Off Queue": IconCircleOff,
   Offline: IconCircleOff,
   Break: IconClock,
+  Lunch: IconCoffee,
+  Vacation: IconPlane,
+  Sick: IconHeartbeat,
+  Training: IconSchool,
 };
 
 export const DEFAULT_STATUS_ICON = "circle-off";

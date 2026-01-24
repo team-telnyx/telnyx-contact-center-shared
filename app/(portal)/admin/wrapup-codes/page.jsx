@@ -22,6 +22,11 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import {
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+} from "@/config/status-icons";
+import {
   Table,
   TableBody,
   TableCell,
@@ -190,6 +195,7 @@ export default function AdminWrapupCodesPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="px-[10px]">Name</TableHead>
+                    <TableHead className="px-[10px]">Icon</TableHead>
                     <TableHead className="px-[10px]">Active</TableHead>
                     <TableHead className="px-[10px]">Default</TableHead>
                     <TableHead className="px-[10px]">Display Order</TableHead>
@@ -207,6 +213,29 @@ export default function AdminWrapupCodesPage() {
                         <TableRow>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {code.name}
+                          </TableCell>
+                          <TableCell className="px-[10px] text-xs">
+                            {(() => {
+                              const Icon =
+                                STATUS_ICON_MAP[code.icon] ||
+                                STATUS_NAME_ICON_FALLBACK[code.name] ||
+                                STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                              return (
+                                <div className="inline-flex items-center gap-2">
+                                  <Icon
+                                    className="size-4"
+                                    style={
+                                      code.color
+                                        ? { color: code.color }
+                                        : undefined
+                                    }
+                                  />
+                                  <span className="text-muted-foreground">
+                                    {code.icon || "—"}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
                             <Badge
@@ -294,7 +323,7 @@ export default function AdminWrapupCodesPage() {
                   {items.length === 0 && (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="text-center py-8 text-sm text-muted-foreground"
                       >
                         No wrapup codes
