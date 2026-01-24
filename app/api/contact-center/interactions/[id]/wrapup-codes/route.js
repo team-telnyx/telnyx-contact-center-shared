@@ -99,6 +99,8 @@ export async function GET(request, { params }) {
         name: defaultCode.name,
         is_default: true,
         description: "",
+        icon: defaultCode.icon || null,
+        color: defaultCode.color || null,
       });
     }
 

@@ -444,12 +444,17 @@ export function AgentDesktop() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, skip wrapup
+        // If still no interaction found after retry, default to opening wrapup sheet
+        // (call was active and ended, so assume it was answered unless we have evidence otherwise)
         if (!interaction) {
           console.log(
-            "[AgentDesktop] Could not find interaction for wrapup check:",
+            "[AgentDesktop] No interaction found, opening wrapup sheet by default:",
             interactionId
           );
+          lastWrapupInteractionRef.current = interactionId;
+          setWrapupInteractionId(interactionId);
+          setWrapupTranscriptions(lastTranscriptionsRef.current || []);
+          setWrapupOpen(true);
           return;
         }
 
@@ -481,32 +486,26 @@ export function AgentDesktop() {
           hangupCause === "user_busy" ||
           hangupCause === "timeout";
 
-        // Check if call was in "queued" state when it ended (abandoned)
+        // Check if call was in "queued" state when it ended (abandoned before answer)
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Only open wrapup sheet if call was answered and not abandoned/rejected
-        // Be lenient: if call was active and ended, assume it was answered unless we have evidence otherwise
-        const shouldOpenWrapup =
-          wasAnswered && !isAbandoned && !wasRejected && !wasQueuedWhenEnded;
+        // Default to opening wrapup sheet - only skip if we have clear evidence it was abandoned/rejected
+        // Skip wrapup if:
+        // 1. Call was still in queued state when it ended (abandoned before answer), OR
+        // 2. Call was explicitly marked as abandoned, OR
+        // 3. Call was never answered AND was rejected (user_busy, timeout, etc.)
+        const shouldSkip =
+          wasQueuedWhenEnded || isAbandoned || (!wasAnswered && wasRejected);
 
-        if (shouldOpenWrapup) {
+        if (!shouldSkip) {
+          // Open wrapup sheet - call was connected and ended normally
           lastWrapupInteractionRef.current = interactionId;
           setWrapupInteractionId(interactionId);
           setWrapupTranscriptions(lastTranscriptionsRef.current || []);
           setWrapupOpen(true);
         } else {
-          // If we don't have enough info yet and haven't retried, try once more
-          if (
-            retryCount === 0 &&
-            !wasAnswered &&
-            !isAbandoned &&
-            !wasRejected
-          ) {
-            return checkAndOpenWrapup(1);
-          }
-
           console.log(
-            "[AgentDesktop] Skipping wrapup sheet - call not answered or was abandoned/rejected:",
+            "[AgentDesktop] Skipping wrapup sheet - call was abandoned/rejected:",
             {
               interactionId,
               wasAnswered,

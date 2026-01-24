@@ -253,6 +253,21 @@ export default function EditSheet({
     });
   }
 
+  function toggleAllWrapupCodes() {
+    const allSelected =
+      availableWrapupCodes.length > 0 &&
+      availableWrapupCodes.every((code) =>
+        selectedWrapupCodes.includes(code.id)
+      );
+    if (allSelected) {
+      // Deselect all
+      setSelectedWrapupCodes([]);
+    } else {
+      // Select all
+      setSelectedWrapupCodes(availableWrapupCodes.map((code) => code.id));
+    }
+  }
+
   async function onSave() {
     if (!name.trim()) {
       notify({
@@ -519,37 +534,57 @@ export default function EditSheet({
 
                   {/* Wrapup Codes */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Wrapup Codes
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground">
+                        Wrapup Codes
+                      </h3>
+                      {availableWrapupCodes.length > 0 && (
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <Checkbox
+                            checked={
+                              availableWrapupCodes.length > 0 &&
+                              availableWrapupCodes.every((code) =>
+                                selectedWrapupCodes.includes(code.id)
+                              )
+                            }
+                            onCheckedChange={toggleAllWrapupCodes}
+                          />
+                          <span className="text-xs text-muted-foreground">
+                            Select All
+                          </span>
+                        </label>
+                      )}
+                    </div>
                     {availableWrapupCodes.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No wrapup codes available.
                       </p>
                     ) : (
-                      <ScrollArea className="max-h-48 rounded border p-3">
-                        <div className="space-y-2">
-                          {availableWrapupCodes.map((code) => (
-                            <label
-                              key={code.id}
-                              className="flex items-start gap-2 text-sm"
-                            >
-                              <Checkbox
-                                checked={selectedWrapupCodes.includes(code.id)}
-                                onCheckedChange={() => toggleWrapupCode(code.id)}
-                              />
-                              <span className="leading-tight">
-                                <span className="font-medium">{code.name}</span>
-                                {code.description ? (
-                                  <span className="block text-xs text-muted-foreground">
-                                    {code.description}
-                                  </span>
-                                ) : null}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      </ScrollArea>
+                      <div className="rounded border overflow-hidden">
+                        <ScrollArea className="h-[300px]">
+                          <div className="p-3 space-y-2">
+                            {availableWrapupCodes.map((code) => (
+                              <label
+                                key={code.id}
+                                className="flex items-start gap-2 text-sm"
+                              >
+                                <Checkbox
+                                  checked={selectedWrapupCodes.includes(code.id)}
+                                  onCheckedChange={() => toggleWrapupCode(code.id)}
+                                />
+                                <span className="leading-tight">
+                                  <span className="font-medium">{code.name}</span>
+                                  {code.description ? (
+                                    <span className="block text-xs text-muted-foreground">
+                                      {code.description}
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      </div>
                     )}
                   </div>
 

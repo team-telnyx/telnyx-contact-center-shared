@@ -16,6 +16,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { notify } from "@/components/ToastNotify";
 import { IconChecklist } from "@tabler/icons-react";
+import {
+  STATUS_ICON_MAP,
+  STATUS_NAME_ICON_FALLBACK,
+  DEFAULT_STATUS_ICON,
+} from "@/config/status-icons";
 
 const DEFAULT_COUNTDOWN_SECONDS = 30;
 const END_STATUSES = ["hangup", "ended", "destroy", "idle", "terminated"];
@@ -358,30 +363,47 @@ export default function WrapupCodesSheet({
               ) : (
                 <ScrollArea className="max-h-[360px]">
                   <div className="space-y-2">
-                    {codes.map((code) => (
-                      <label
-                        key={code.id}
-                        className="flex items-start gap-2 text-sm"
-                      >
-                        <Checkbox
-                          checked={selectedCodes.includes(code.id)}
-                          onCheckedChange={() => toggleCode(code.id)}
-                        />
-                        <span className="leading-tight">
-                          <span className="font-medium">{code.name}</span>
-                          {code.is_default ? (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              Default
-                            </Badge>
-                          ) : null}
-                          {code.description ? (
-                            <span className="block text-xs text-muted-foreground">
-                              {code.description}
+                    {codes.map((code) => {
+                      const IconComponent =
+                        STATUS_ICON_MAP[code.icon] ||
+                        STATUS_NAME_ICON_FALLBACK[code.name] ||
+                        STATUS_ICON_MAP[DEFAULT_STATUS_ICON] ||
+                        STATUS_ICON_MAP["circle-off"];
+                      return (
+                        <label
+                          key={code.id}
+                          className="flex items-start gap-2 text-sm"
+                        >
+                          <Checkbox
+                            checked={selectedCodes.includes(code.id)}
+                            onCheckedChange={() => toggleCode(code.id)}
+                          />
+                          <span className="leading-tight flex items-start gap-2 flex-1">
+                            {IconComponent && (
+                              <IconComponent
+                                className="size-4 mt-0.5 shrink-0"
+                                style={
+                                  code.color ? { color: code.color } : undefined
+                                }
+                              />
+                            )}
+                            <span className="flex-1">
+                              <span className="font-medium">{code.name}</span>
+                              {code.is_default ? (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  Default
+                                </Badge>
+                              ) : null}
+                              {code.description ? (
+                                <span className="block text-xs text-muted-foreground">
+                                  {code.description}
+                                </span>
+                              ) : null}
                             </span>
-                          ) : null}
-                        </span>
-                      </label>
-                    ))}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               )}
