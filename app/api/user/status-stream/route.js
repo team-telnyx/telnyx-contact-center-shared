@@ -64,15 +64,9 @@ export async function GET(request) {
       const handleDisconnect = async () => {
         // Prevent multiple calls
         if (disconnectHandled) {
-          console.log("[SSE] Disconnect already handled, skipping");
           return;
         }
         disconnectHandled = true;
-
-        console.log("[SSE] Disconnect handler triggered for user:", {
-          userId,
-          username: user.username,
-        });
 
         if (pingInterval) {
           clearInterval(pingInterval);
@@ -96,14 +90,6 @@ export async function GET(request) {
         const agentStreamKey = `contact-center:agent:${user.username}`;
         const stillHasAgentConnection = hasActiveClients(agentStreamKey);
 
-        console.log("[SSE] Connection status check:", {
-          userId,
-          username: user.username,
-          stillHasStatusConnection,
-          stillHasQueueConnection,
-          stillHasAgentConnection,
-        });
-
         // Only set to offline if no active connections remain
         if (
           !stillHasStatusConnection &&
@@ -117,24 +103,11 @@ export async function GET(request) {
             );
             const currentUser = await PgDb.findUserById(userId);
             if (currentUser && currentUser.status !== "Offline") {
-              console.log(
-                "[SSE] All connections lost, setting user status to Offline:",
-                {
-                  userId,
-                  username: user.username,
-                  previousStatus: currentUser.status,
-                }
-              );
               await setUserStatus({
                 userId,
                 username: user.username,
                 status: "Offline",
                 previousStatus: currentUser.status,
-              });
-            } else {
-              console.log("[SSE] User already offline or not found:", {
-                userId,
-                currentStatus: currentUser?.status,
               });
             }
           } catch (error) {
@@ -143,15 +116,6 @@ export async function GET(request) {
               error
             );
           }
-        } else {
-          console.log(
-            "[SSE] Connection lost but other connections still active, not setting offline:",
-            {
-              stillHasStatusConnection,
-              stillHasQueueConnection,
-              stillHasAgentConnection,
-            }
-          );
         }
       };
 
@@ -164,7 +128,6 @@ export async function GET(request) {
           consecutiveFailures = 0;
         } catch (error) {
           consecutiveFailures++;
-          console.log("[SSE] Ping failed, consecutive failures:", consecutiveFailures);
           // If ping fails, connection is likely dead - trigger cleanup
           if (consecutiveFailures >= 2) {
             clearInterval(pingInterval);
