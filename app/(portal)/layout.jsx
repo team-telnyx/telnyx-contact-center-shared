@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -8,9 +9,16 @@ import { TelephonyProvider } from "@/components/telephony-provider";
 import { PhoneUiProvider } from "@/components/phone-ui-provider";
 import FloatingSoftphone from "@/components/floating-softphone";
 import { ContactCenterStreamProvider } from "@/components/contact-center/ContactCenterStreamProvider";
+import { setupSessionMonitor } from "@/lib/session-monitor";
 
 export default function PortalLayout({ children }) {
   useThemeColors();
+
+  useEffect(() => {
+    // Set up session monitoring for automatic offline detection
+    const cleanup = setupSessionMonitor();
+    return cleanup;
+  }, []);
 
   return (
     <SidebarProvider

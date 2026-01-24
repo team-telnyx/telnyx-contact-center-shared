@@ -208,6 +208,12 @@ export function NavUser({ user, hideExtras }) {
   async function handleLogout() {
     if (logoutInFlightRef.v) return;
     logoutInFlightRef.v = true;
+
+    // Mark that we're logging out to prevent automatic offline status
+    if (typeof window !== "undefined" && window.__markLoggingOut) {
+      window.__markLoggingOut();
+    }
+
     try {
       try {
         updateStatusOnServer("Offline");

@@ -10,6 +10,9 @@ import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
 import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
 
+// Disable timeout for SSE streams (they should stay open indefinitely)
+export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

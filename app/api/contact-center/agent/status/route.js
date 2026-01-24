@@ -55,11 +55,15 @@ export async function PUT(request) {
     }
 
     // Validate status against database
+    // If supervisor is changing another agent's status, only allow user-selectable statuses
+    // Otherwise (self-update), allow all active statuses
+    const isSupervisorChangingOtherUser = targetUserIdFinal !== user.id;
     let validStatuses = ["Available", "Busy", "Away", "Offline"];
     try {
-      const statusResult = await pool.query(
-        `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
-      );
+      const query = isSupervisorChangingOtherUser
+        ? `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
+        : `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`;
+      const statusResult = await pool.query(query);
       if (statusResult.rows.length > 0) {
         validStatuses = statusResult.rows.map((row) => row.name);
       }

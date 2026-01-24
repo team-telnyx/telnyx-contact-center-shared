@@ -20,12 +20,12 @@ const nextConfig = {
   serverExternalPackages: ["pg", "pgpass", "pg-connection-string"],
   // Empty turbopack config to silence warning (serverExternalPackages handles externals)
   turbopack: {},
-  // Reduce automatic reloads in dev mode
-  // This helps prevent modals/sheets from closing during testing
+  // Completely disable automatic reloads in dev mode
+  // This prevents modals/sheets from closing during testing
   onDemandEntries: {
-    // Keep pages in memory longer to reduce reloads
-    maxInactiveAge: 60 * 1000, // 60 seconds
-    pagesBufferLength: 5,
+    // Keep pages in memory indefinitely to prevent reloads
+    maxInactiveAge: 25 * 60 * 60 * 1000, // 25 hours (effectively never)
+    pagesBufferLength: 100, // Keep many pages in memory
   },
   // Webpack configuration (only used when --webpack flag is explicitly set)
   webpack: (config, { isServer, dev }) => {
@@ -43,27 +43,16 @@ const nextConfig = {
         };
       }
     }
-    // In dev mode, configure file watching to be less aggressive
+    // In dev mode, disable HMR to prevent auto-reloads
+    // Note: This only applies when using --webpack flag
+    // For Turbopack (default), FAST_REFRESH=false in package.json handles it
     if (dev && !isServer) {
-      config.watchOptions = {
-        ...config.watchOptions,
-        // Ignore common files that shouldn't trigger reloads
-        ignored: [
-          "**/node_modules/**",
-          "**/.git/**",
-          "**/.next/**",
-          "**/dist/**",
-          "**/build/**",
-          "**/*.log",
-          "**/.env*",
-          "**/coverage/**",
-          "**/.cache/**",
-        ],
-        // Add a small delay before triggering reloads
-        aggregateTimeout: 300,
-        // Poll less frequently (only if polling is enabled)
-        poll: false,
-      };
+      // Disable HMR (Hot Module Replacement) plugin
+      if (config.plugins) {
+        config.plugins = config.plugins.filter(
+          (plugin) => !plugin.constructor || plugin.constructor.name !== "HotModuleReplacementPlugin"
+        );
+      }
     }
     return config;
   },

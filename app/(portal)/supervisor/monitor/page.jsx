@@ -286,8 +286,12 @@ export default function MonitorPage() {
       if (!res.ok) return;
       const data = await res.json();
       const items = Array.isArray(data.statuses) ? data.statuses : [];
+      // Filter to only user-selectable statuses for supervisor status changes
+      const userSelectableStatuses = items.filter(
+        (item) => item.user_selectable !== false
+      );
       const next = {};
-      items.forEach((item) => {
+      userSelectableStatuses.forEach((item) => {
         if (item?.name) {
           next[item.name] = {
             icon: item.icon || null,
@@ -296,7 +300,7 @@ export default function MonitorPage() {
         }
       });
       setStatusMeta(next);
-      setAvailableStatuses(items);
+      setAvailableStatuses(userSelectableStatuses);
     } catch (error) {
       console.error("[Monitor] Failed to load statuses:", error);
     }
