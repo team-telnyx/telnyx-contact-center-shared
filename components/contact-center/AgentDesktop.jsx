@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
-import WrapupCodesSheet from "./WrapupCodesSheet";
 import { Card } from "@/components/ui/card";
 import { Info, PhoneCall } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
@@ -19,16 +18,20 @@ export function AgentDesktop() {
   const lastInteractionSnapshotRef = useRef(null);
   const lastStatusRef = useRef(null);
   const lastTranscriptionsRef = useRef([]);
-  const [wrapupOpen, setWrapupOpen] = useState(false);
-  const [wrapupInteractionId, setWrapupInteractionId] = useState(null);
-  const [wrapupTranscriptions, setWrapupTranscriptions] = useState([]);
+  const lastDisconnectedTimeRef = useRef(null);
 
   // Get WebRTC call state for real-time updates (hold, mute, status)
-  const webrtcCallState = useActiveCallStore();
-  const callStatus = webrtcCallState.status;
-  const callInteractionId =
-    webrtcCallState?.contactCenter?.interactionId || null;
-  const callTranscriptions = webrtcCallState?.transcriptions || [];
+  // Use selectors to ensure re-renders when these specific values change
+  const callStatus = useActiveCallStore((state) => state.status);
+  const callInteractionId = useActiveCallStore(
+    (state) => state?.contactCenter?.interactionId || null
+  );
+  const callTranscriptions = useActiveCallStore(
+    (state) => state?.transcriptions || []
+  );
+  const disconnectedTime = useActiveCallStore(
+    (state) => state.disconnectedTime
+  );
 
   // Get calls from calls store - subscribe to changes
   // Subscribe to calls object to avoid infinite loop (getActiveCalls returns new array each time)
@@ -389,6 +392,12 @@ export function AgentDesktop() {
   }, [callInteractionId, callTranscriptions]);
 
   useEffect(() => {
+    console.log("[AgentDesktop] useEffect triggered:", {
+      callStatus,
+      disconnectedTime,
+      callInteractionId,
+    });
+
     const endedStatuses = [
       "hangup",
       "ended",
@@ -399,14 +408,51 @@ export function AgentDesktop() {
     const isEnded = endedStatuses.includes(callStatus);
     const wasActive = lastStatusRef.current && lastStatusRef.current !== "idle";
     const isCleared = callStatus === "idle" && wasActive;
+    const wasDisconnected =
+      disconnectedTime &&
+      disconnectedTime > 0 &&
+      disconnectedTime !== lastDisconnectedTimeRef.current;
     lastStatusRef.current = callStatus;
+    if (wasDisconnected) {
+      lastDisconnectedTimeRef.current = disconnectedTime;
+    }
 
-    if (!isEnded && !isCleared) return;
+    // Debug logging - always log when disconnectedTime changes or status changes
+    if (disconnectedTime || callStatus) {
+      console.log("[AgentDesktop] Status/Disconnect check:", {
+        callStatus,
+        isEnded,
+        isCleared,
+        wasDisconnected,
+        disconnectedTime,
+        lastDisconnectedTime: lastDisconnectedTimeRef.current,
+        wasActive,
+        callInteractionId,
+        lastInteractionSnapshot: lastInteractionSnapshotRef.current,
+      });
+    }
+
+    // Trigger wrapup check if call ended, cleared, or disconnected
+    if (!isEnded && !isCleared && !wasDisconnected) {
+      console.log("[AgentDesktop] Skipping wrapup - conditions not met");
+      return;
+    }
 
     const interactionId =
       callInteractionId || lastInteractionSnapshotRef.current;
-    if (!interactionId) return;
-    if (lastWrapupInteractionRef.current === interactionId) return;
+    if (!interactionId) {
+      console.log(
+        "[AgentDesktop] No interactionId found, skipping wrapup check"
+      );
+      return;
+    }
+    if (lastWrapupInteractionRef.current === interactionId) {
+      console.log(
+        "[AgentDesktop] Wrapup already shown for this interaction:",
+        interactionId
+      );
+      return;
+    }
 
     // Check if call was answered and not abandoned before opening wrapup sheet
     const checkAndOpenWrapup = async (retryCount = 0) => {
@@ -452,9 +498,12 @@ export function AgentDesktop() {
             interactionId
           );
           lastWrapupInteractionRef.current = interactionId;
-          setWrapupInteractionId(interactionId);
-          setWrapupTranscriptions(lastTranscriptionsRef.current || []);
-          setWrapupOpen(true);
+          // Use global wrapup sheet store
+          import("@/lib/stores/wrapup-sheet-store").then((module) => {
+            module.default
+              .getState()
+              .openWrapup(interactionId, lastTranscriptionsRef.current || []);
+          });
           return;
         }
 
@@ -489,32 +538,49 @@ export function AgentDesktop() {
         // Check if call was in "queued" state when it ended (abandoned before answer)
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Default to opening wrapup sheet - only skip if we have clear evidence it was abandoned/rejected
-        // Skip wrapup if:
+        // Always open wrapup sheet for disconnected calls (including agent disconnects)
+        // Skip wrapup ONLY if:
         // 1. Call was still in queued state when it ended (abandoned before answer), OR
-        // 2. Call was explicitly marked as abandoned, OR
-        // 3. Call was never answered AND was rejected (user_busy, timeout, etc.)
-        const shouldSkip =
-          wasQueuedWhenEnded || isAbandoned || (!wasAnswered && wasRejected);
+        // 2. Call was explicitly marked as abandoned AND was never answered
+        // This ensures agent disconnects (which are answered calls) always show wrapup
+        //
+        // Note: If call was answered (has answered_at or answered event), always show wrapup
+        // even if state is "abandoned" (might be a timing issue or incorrect state update)
+        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+
+        console.log("[AgentDesktop] Wrapup check result:", {
+          interactionId,
+          wasAnswered,
+          isAbandoned,
+          wasQueuedWhenEnded,
+          shouldSkip,
+          state: interaction.state,
+          answered_at: interaction.answered_at,
+        });
 
         if (!shouldSkip) {
-          // Open wrapup sheet - call was connected and ended normally
+          // Open wrapup sheet - call was connected and ended (including agent disconnects)
+          console.log(
+            "[AgentDesktop] Opening wrapup sheet for interaction:",
+            interactionId
+          );
           lastWrapupInteractionRef.current = interactionId;
-          setWrapupInteractionId(interactionId);
-          setWrapupTranscriptions(lastTranscriptionsRef.current || []);
-          setWrapupOpen(true);
+          // Use global wrapup sheet store
+          import("@/lib/stores/wrapup-sheet-store").then((module) => {
+            module.default
+              .getState()
+              .openWrapup(interactionId, lastTranscriptionsRef.current || []);
+          });
         } else {
           console.log(
-            "[AgentDesktop] Skipping wrapup sheet - call was abandoned/rejected:",
+            "[AgentDesktop] Skipping wrapup sheet - call was abandoned:",
             {
               interactionId,
-              wasAnswered,
-              isAbandoned,
-              wasRejected,
               wasQueuedWhenEnded,
-              hangupCause,
+              isAbandoned,
+              wasAnswered,
+              answered_at: interaction.answered_at,
               state: interaction.state,
-              hasAnsweredEvent,
             }
           );
         }
@@ -527,7 +593,131 @@ export function AgentDesktop() {
     };
 
     checkAndOpenWrapup();
-  }, [callStatus, callInteractionId, interactions]);
+  }, [callStatus, callInteractionId, interactions, disconnectedTime]);
+
+  // Also watch for interactions changing to "completed" state
+  // This catches cases where callStatus doesn't update but interaction state does
+  // Track which completed interactions we've already processed
+  const processedCompletedInteractionsRef = useRef(new Set());
+
+  useEffect(() => {
+    // Find interactions that just became completed and haven't been processed
+    const completedInteractions = interactions.filter(
+      (interaction) =>
+        interaction.state === "completed" &&
+        interaction.id !== lastWrapupInteractionRef.current &&
+        !processedCompletedInteractionsRef.current.has(interaction.id)
+    );
+
+    for (const interaction of completedInteractions) {
+      // Mark as processed immediately to avoid duplicate processing
+      processedCompletedInteractionsRef.current.add(interaction.id);
+
+      // Check if this interaction was answered
+      const wasAnswered = Boolean(interaction.answered_at);
+      const metadata = interaction.metadata || {};
+      const routingMetadata = metadata.routing_metadata || {};
+      const timeline = routingMetadata.timeline || [];
+      const hasAnsweredEvent = timeline.some(
+        (e) =>
+          e.type === "answered" ||
+          e.type === "connected" ||
+          e.type === "bridged"
+      );
+      const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
+
+      const isAbandoned = interaction.state === "abandoned";
+      const wasQueuedWhenEnded = interaction.state === "queued";
+
+      // Skip if abandoned and never answered
+      const shouldSkip =
+        wasQueuedWhenEnded || (isAbandoned && !wasActuallyAnswered);
+
+      if (!shouldSkip && wasActuallyAnswered) {
+        console.log(
+          "[AgentDesktop] Interaction completed (from state change), opening wrapup sheet:",
+          interaction.id
+        );
+        lastWrapupInteractionRef.current = interaction.id;
+        // Use global wrapup sheet store
+        import("@/lib/stores/wrapup-sheet-store").then((module) => {
+          module.default
+            .getState()
+            .openWrapup(interaction.id, lastTranscriptionsRef.current || []);
+        });
+        break; // Only open for the first completed interaction
+      }
+    }
+  }, [interactions]);
+
+  // Listen for manual disconnect events and open global wrapup sheet
+  useEffect(() => {
+    const handleCallDisconnected = async (event) => {
+      const { interactionId, transcriptions } = event.detail || {};
+      if (!interactionId) return;
+
+      // Check if we've already shown wrapup for this interaction
+      if (lastWrapupInteractionRef.current === interactionId) {
+        console.log(
+          "[AgentDesktop] Wrapup already shown for this interaction:",
+          interactionId
+        );
+        return;
+      }
+
+      console.log(
+        "[AgentDesktop] Received call-disconnected event, opening wrapup:",
+        interactionId
+      );
+
+      // Find the interaction to check if it was answered
+      const interaction = interactions.find((i) => i.id === interactionId);
+      if (interaction) {
+        const wasAnswered = Boolean(interaction.answered_at);
+        const isAbandoned = interaction.state === "abandoned";
+        const wasQueuedWhenEnded = interaction.state === "queued";
+
+        // Skip wrapup only if abandoned and never answered
+        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+
+        if (!shouldSkip) {
+          lastWrapupInteractionRef.current = interactionId;
+          // Use global wrapup sheet store
+          const { openWrapup } = await import(
+            "@/lib/stores/wrapup-sheet-store"
+          );
+          openWrapup(interactionId, transcriptions || []);
+        } else {
+          console.log(
+            "[AgentDesktop] Skipping wrapup for abandoned call:",
+            interactionId
+          );
+        }
+      } else {
+        // If interaction not found, assume it was answered and show wrapup
+        lastWrapupInteractionRef.current = interactionId;
+        // Use global wrapup sheet store
+        const { default: useWrapupSheetStore } = await import(
+          "@/lib/stores/wrapup-sheet-store"
+        );
+        useWrapupSheetStore
+          .getState()
+          .openWrapup(interactionId, transcriptions || []);
+      }
+    };
+
+    window.addEventListener(
+      "contact-center:call-disconnected",
+      handleCallDisconnected
+    );
+
+    return () => {
+      window.removeEventListener(
+        "contact-center:call-disconnected",
+        handleCallDisconnected
+      );
+    };
+  }, [interactions]);
 
   return (
     <div className="flex flex-col h-full">
@@ -541,7 +731,7 @@ export function AgentDesktop() {
             }
             selectedId={selectedInteraction?.id}
             onSelect={setSelectedInteraction}
-            webrtcCallState={webrtcCallState}
+            webrtcCallState={useActiveCallStore()}
             currentUsername={currentUsername}
           />
         </Card>
@@ -570,14 +760,6 @@ export function AgentDesktop() {
           )}
         </Card>
       </div>
-
-      <WrapupCodesSheet
-        open={wrapupOpen}
-        onOpenChange={setWrapupOpen}
-        interactionId={wrapupInteractionId}
-        transcriptions={wrapupTranscriptions}
-        callStatus={callStatus}
-      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { TelephonyProvider } from "@/components/telephony-provider";
 import { PhoneUiProvider } from "@/components/phone-ui-provider";
 import FloatingSoftphone from "@/components/floating-softphone";
 import { ContactCenterStreamProvider } from "@/components/contact-center/ContactCenterStreamProvider";
+import { GlobalWrapupSheet } from "@/components/contact-center/GlobalWrapupSheet";
 import { setupSessionMonitor } from "@/lib/session-monitor";
 
 export default function PortalLayout({ children }) {
@@ -43,6 +44,7 @@ export default function PortalLayout({ children }) {
               </div>
             </SidebarInset>
             <FloatingSoftphone />
+            <GlobalWrapupSheet />
           </ContactCenterStreamProvider>
         </PhoneUiProvider>
       </TelephonyProvider>

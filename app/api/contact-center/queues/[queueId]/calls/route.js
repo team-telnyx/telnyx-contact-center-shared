@@ -75,6 +75,8 @@ export async function GET(request, { params }) {
         i.updated_at,
         i.wait_time_seconds,
         i.talk_time_seconds,
+        i.required_skills,
+        i.routing_metadata,
         u.first_name,
         u.last_name,
         u.id as agent_user_id
@@ -87,6 +89,19 @@ export async function GET(request, { params }) {
       LIMIT 1000`,
       [queueId]
     );
+
+    // Helper function to safely parse JSONB fields
+    const safeParse = (value) => {
+      if (!value) return null;
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      }
+      return value;
+    };
 
     const calls = callsResult.rows.map((call) => ({
       id: call.id,
@@ -109,6 +124,8 @@ export async function GET(request, { params }) {
       updatedAt: call.updated_at,
       waitSeconds: call.wait_time_seconds || 0,
       talkSeconds: call.talk_time_seconds || 0,
+      requiredSkills: safeParse(call.required_skills),
+      routingMetadata: safeParse(call.routing_metadata),
     }));
 
     return NextResponse.json({

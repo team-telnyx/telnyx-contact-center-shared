@@ -267,23 +267,13 @@ export default function EnqueueNodeEditor({
         });
         if (Object.keys(requiredSkills).length > 0) {
           clientStateObj.required_skills = requiredSkills;
-          console.log(
-            "[EnqueueNodeEditor] Added required_skills to client_state:",
-            requiredSkills
-          );
         } else {
           // If no valid skills, remove required_skills
           delete clientStateObj.required_skills;
-          console.log(
-            "[EnqueueNodeEditor] No valid skills found, removing required_skills"
-          );
         }
       } else {
         // If skills array is empty, remove required_skills
         delete clientStateObj.required_skills;
-        console.log(
-          "[EnqueueNodeEditor] Skills array is empty, removing required_skills"
-        );
       }
     }
 

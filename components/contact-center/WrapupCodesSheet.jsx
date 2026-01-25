@@ -319,16 +319,27 @@ export default function WrapupCodesSheet({
     <Sheet
       open={open}
       onOpenChange={(nextOpen) => {
+        // Prevent closing by clicking outside or pressing escape
+        // Only allow closing via the save button
         if (!nextOpen && open) {
           handleAutoSubmit();
-        } else {
-          onOpenChange?.(nextOpen);
         }
+        // Don't call onOpenChange to prevent external close triggers
       }}
+      modal={true}
     >
       <SheetContent
         side="right"
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
+        showCloseButton={false}
+        onInteractOutside={(e) => {
+          // Prevent closing when clicking outside
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          // Prevent closing when pressing escape
+          e.preventDefault();
+        }}
       >
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">

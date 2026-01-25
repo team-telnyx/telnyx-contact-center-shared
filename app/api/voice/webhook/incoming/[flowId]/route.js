@@ -1116,18 +1116,10 @@ export async function POST(request, { params }) {
                     const existing = JSON.parse(decoded);
                     // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
                     mergedClientState = { ...existing, ...flowTracking };
-                    
-                    // Debug logging for enqueue nodes
-                    if (nextNode.data?.nodeType === "enqueue") {
-                      console.log("[FlowWebhook] Enqueue node - existing client_state:", existing);
-                      console.log("[FlowWebhook] Enqueue node - merged client_state:", mergedClientState);
-                    }
                   } catch (err) {
                     console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
                     // If decode fails, just use flow tracking
                   }
-                } else if (nextNode.data?.nodeType === "enqueue") {
-                  console.log("[FlowWebhook] Enqueue node - no existing client_state in config");
                 }
                 
                 const configuredNextNode = {
@@ -1352,18 +1344,10 @@ async function executeNodeChain(
         const existing = JSON.parse(decoded);
         // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
         mergedClientState = { ...existing, ...flowTracking };
-        
-        // Debug logging for enqueue nodes
-        if (nextNode.data?.nodeType === "enqueue") {
-          console.log("[FlowWebhook] Enqueue node - existing client_state:", existing);
-          console.log("[FlowWebhook] Enqueue node - merged client_state:", mergedClientState);
-        }
       } catch (err) {
         console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
         // If decode fails, just use flow tracking
       }
-    } else if (nextNode.data?.nodeType === "enqueue") {
-      console.log("[FlowWebhook] Enqueue node - no existing client_state in config");
     }
     
     const configuredNode = {

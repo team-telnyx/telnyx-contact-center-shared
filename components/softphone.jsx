@@ -742,12 +742,30 @@ export function Softphone() {
 
   function hangup() {
     try {
+      // Check if this is a contact center call and trigger wrapup sheet
+      const storeState = useActiveCallStore.getState();
+      const interactionId = storeState?.contactCenter?.interactionId;
+      if (interactionId) {
+        // Dispatch custom event to trigger wrapup sheet in AgentDesktop
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              transcriptions: storeState.transcriptions || [],
+            },
+          })
+        );
+        console.log(
+          "[Softphone] Dispatched wrapup event for interaction:",
+          interactionId
+        );
+      }
+
       if (!activeCall) {
         clearActiveCall();
         return;
       }
 
-      const storeState = useActiveCallStore.getState();
       const status = storeState.status;
       if (
         ["hangup", "ended", "destroy", "idle", "terminated"].includes(status)

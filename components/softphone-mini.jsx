@@ -1217,6 +1217,24 @@ export default function SoftphoneMini() {
   }
 
   function hangup() {
+    // Check if this is a contact center call and trigger wrapup sheet
+    const storeState = useActiveCallStore.getState();
+    const interactionId = storeState?.contactCenter?.interactionId;
+    if (interactionId) {
+      // Dispatch custom event to trigger wrapup sheet in AgentDesktop
+      window.dispatchEvent(
+        new CustomEvent("contact-center:call-disconnected", {
+          detail: {
+            interactionId,
+            transcriptions: storeState.transcriptions || [],
+          },
+        })
+      );
+      console.log(
+        "[Mini Phone] Dispatched wrapup event for interaction:",
+        interactionId
+      );
+    }
     try {
       if (!activeCall) {
         clearActiveCall();
