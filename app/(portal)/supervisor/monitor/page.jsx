@@ -25,6 +25,7 @@ import {
   IconRefresh,
   IconArrowLeft,
   IconFilter,
+  IconEye,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -51,6 +52,7 @@ import {
   STATUS_NAME_ICON_FALLBACK,
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
+import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
 
 export default function MonitorPage() {
   // Helper function to format seconds into hours and minutes
@@ -86,6 +88,8 @@ export default function MonitorPage() {
   const [agentNameFilter, setAgentNameFilter] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedQueues, setSelectedQueues] = useState([]);
+  const [supervisionModalOpen, setSupervisionModalOpen] = useState(false);
+  const [selectedCallForSupervision, setSelectedCallForSupervision] = useState(null);
   const selectedQueueRef = useRef(null);
   const loadQueueCallsRef = useRef(null);
 
@@ -963,13 +967,14 @@ export default function MonitorPage() {
                         <TableHead>Wait Time</TableHead>
                         <TableHead>Talk Time</TableHead>
                         <TableHead>Waiting Reason</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {queueCalls.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={7}
+                            colSpan={8}
                             className="text-center text-muted-foreground py-4"
                           >
                             No calls found for this queue
@@ -1109,6 +1114,18 @@ export default function MonitorPage() {
                               ) : (
                                 "—"
                               )}
+                            </TableCell>
+                            <TableCell>
+                              <button
+                                onClick={() => {
+                                  setSelectedCallForSupervision(call);
+                                  setSupervisionModalOpen(true);
+                                }}
+                                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                                title="Supervise this call"
+                              >
+                                <IconEye className="h-4 w-4" />
+                              </button>
                             </TableCell>
                           </TableRow>
                         );
@@ -2187,6 +2204,13 @@ export default function MonitorPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Supervision Modal */}
+      <SupervisionModal
+        open={supervisionModalOpen}
+        onOpenChange={setSupervisionModalOpen}
+        call={selectedCallForSupervision}
+      />
     </div>
   );
 }

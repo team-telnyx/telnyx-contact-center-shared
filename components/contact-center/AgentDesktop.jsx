@@ -107,11 +107,15 @@ export function AgentDesktop() {
               interaction.from_name ||
               storeCall.callerName ||
               storeCall.fromName,
+            // Always prioritize database value for from_number - it's the source of truth
             from_number:
               interaction.from_number ||
               interaction.from ||
-              storeCall.callerNumber ||
-              storeCall.fromNumber,
+              (storeCall.callerNumber && storeCall.callerNumber.trim() !== "")
+                ? storeCall.callerNumber
+                : (storeCall.fromNumber && storeCall.fromNumber.trim() !== "")
+                ? storeCall.fromNumber
+                : null,
             queue_name: storeCall.queueName || interaction.queue_name,
             state: storeCall.status || interaction.state,
           };

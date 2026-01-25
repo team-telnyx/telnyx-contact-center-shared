@@ -260,13 +260,31 @@ function InteractionCard({
     interaction.caller_name ||
     interaction.callerName ||
     null;
-  const callerNumber =
-    interaction.from_number ||
-    interaction.fromNumber ||
-    interaction.from ||
-    interaction.caller_number ||
-    interaction.callerNumber ||
-    null;
+  // Prioritize from_number (database field) - it's the source of truth
+  // Check for both truthiness and non-empty string
+  let callerNumber =
+    (interaction.from_number && interaction.from_number.trim() !== "")
+      ? interaction.from_number
+      : (interaction.fromNumber && interaction.fromNumber.trim() !== "")
+      ? interaction.fromNumber
+      : (interaction.from && interaction.from.trim() !== "")
+      ? interaction.from
+      : (interaction.caller_number && interaction.caller_number.trim() !== "")
+      ? interaction.caller_number
+      : (interaction.callerNumber && interaction.callerNumber.trim() !== "")
+      ? interaction.callerNumber
+      : null;
+  
+  // Fallback: try to extract from routing_metadata timeline if still missing
+  if (!callerNumber && interaction.routing_metadata?.timeline) {
+    const initiatedEvent = interaction.routing_metadata.timeline.find(
+      (e) => e.type === "initiated" && e.from
+    );
+    if (initiatedEvent?.from && initiatedEvent.from.trim() !== "") {
+      callerNumber = initiatedEvent.from;
+    }
+  }
+  
   const callerNumberLabel = callerNumber || "Unknown number";
   const callerNameLabel = callerName || null;
 

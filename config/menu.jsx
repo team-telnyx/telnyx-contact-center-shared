@@ -15,6 +15,7 @@ import {
   IconHistory,
   IconFileMusic,
   IconAward,
+  IconBook,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -66,6 +67,12 @@ export const menuConfig = {
           title: "Contacts",
           url: "/admin/contacts",
           icon: IconAddressBook,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "KB Articles",
+          url: "/admin/kb-articles",
+          icon: IconBook,
           role_access: ["admin", "owner"],
         },
         {

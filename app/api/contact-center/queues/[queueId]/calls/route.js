@@ -77,6 +77,7 @@ export async function GET(request, { params }) {
         i.talk_time_seconds,
         i.required_skills,
         i.routing_metadata,
+        i.metadata,
         u.first_name,
         u.last_name,
         u.id as agent_user_id
@@ -103,30 +104,40 @@ export async function GET(request, { params }) {
       return value;
     };
 
-    const calls = callsResult.rows.map((call) => ({
-      id: call.id,
-      callControlId: call.call_control_id,
-      callSessionId: call.call_session_id,
-      fromNumber: call.from_number,
-      toNumber: call.to_number,
-      state: call.state,
-      agentUsername: call.agent_username,
-      agentUserId: call.agent_user_id,
-      agentName:
-        call.first_name || call.last_name
-          ? `${call.first_name || ""} ${call.last_name || ""}`.trim()
-          : call.agent_username || null,
-      enqueuedAt: call.enqueued_at,
-      answeredAt: call.answered_at,
-      completedAt: call.completed_at,
-      abandonedAt: call.abandoned_at,
-      createdAt: call.created_at,
-      updatedAt: call.updated_at,
-      waitSeconds: call.wait_time_seconds || 0,
-      talkSeconds: call.talk_time_seconds || 0,
-      requiredSkills: safeParse(call.required_skills),
-      routingMetadata: safeParse(call.routing_metadata),
-    }));
+    const calls = callsResult.rows.map((call) => {
+      const metadata = safeParse(call.metadata) || {};
+      // For supervision, we need the original inbound call's call_control_id
+      // If the call was transferred to an agent, use original_call_control_id from metadata
+      // Otherwise, use the interaction's call_control_id
+      const originalCallControlId = metadata.original_call_control_id || call.call_control_id;
+      
+      return {
+        id: call.id,
+        callControlId: call.call_control_id,
+        originalCallControlId: originalCallControlId, // Use this for supervision
+        callSessionId: call.call_session_id,
+        fromNumber: call.from_number,
+        toNumber: call.to_number,
+        state: call.state,
+        agentUsername: call.agent_username,
+        agentUserId: call.agent_user_id,
+        agentName:
+          call.first_name || call.last_name
+            ? `${call.first_name || ""} ${call.last_name || ""}`.trim()
+            : call.agent_username || null,
+        enqueuedAt: call.enqueued_at,
+        answeredAt: call.answered_at,
+        completedAt: call.completed_at,
+        abandonedAt: call.abandoned_at,
+        createdAt: call.created_at,
+        updatedAt: call.updated_at,
+        waitSeconds: call.wait_time_seconds || 0,
+        talkSeconds: call.talk_time_seconds || 0,
+        requiredSkills: safeParse(call.required_skills),
+        routingMetadata: safeParse(call.routing_metadata),
+        metadata: metadata,
+      };
+    });
 
     return NextResponse.json({
       ok: true,
