@@ -151,6 +151,7 @@ import ReferNodeEditor from "@/components/voice-flow/ReferNodeEditor";
 import DialNodeEditor from "@/components/voice-flow/DialNodeEditor";
 import BridgeNodeEditor from "@/components/voice-flow/BridgeNodeEditor";
 import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
+import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
@@ -1660,11 +1661,11 @@ export default function FlowBuilderPage() {
 
   // AI assistants not available in contact center - leave empty
 
-  // Validate flow whenever nodes/edges change
+  // Validate flow whenever nodes/edges or queues change
   useEffect(() => {
-    const result = validateFlow({ nodes, edges });
+    const result = validateFlow({ nodes, edges }, queues);
     setValidation(result);
-  }, [nodes, edges]);
+  }, [nodes, edges, queues]);
 
   // Check if flow has an initiator (incoming_call or http_request)
   const hasInitiator = useMemo(() => {
@@ -1992,6 +1993,59 @@ export default function FlowBuilderPage() {
         variant: "error",
       });
       return;
+    }
+
+    // Check for enqueue nodes with skill-based queues that have no skills
+    const enqueueNodes = nodes.filter(
+      (node) => node.data?.nodeType === "enqueue"
+    );
+    for (const node of enqueueNodes) {
+      const config = node.data?.config || {};
+      const queueName = config.queue_name;
+
+      if (queueName) {
+        // Find the queue to check its routing strategy
+        const queue = queues.find((q) => q.name === queueName);
+        if (queue && queue.routing_strategy === "Skill-based") {
+          // Check if skills are defined
+          const routingSkills = config.routing_skills || [];
+          const hasSkills =
+            Array.isArray(routingSkills) &&
+            routingSkills.length > 0 &&
+            routingSkills.some((skill) => skill.name && skill.proficiency);
+
+          // Also check client_state for required_skills
+          let hasSkillsInClientState = false;
+          if (!hasSkills && config.client_state) {
+            try {
+              const decoded = atob(config.client_state);
+              const clientStateObj = JSON.parse(decoded);
+              if (
+                clientStateObj.required_skills &&
+                typeof clientStateObj.required_skills === "object" &&
+                Object.keys(clientStateObj.required_skills).length > 0
+              ) {
+                hasSkillsInClientState = true;
+              }
+            } catch {
+              // Ignore decode errors
+            }
+          }
+
+          if (!hasSkills && !hasSkillsInClientState) {
+            notify({
+              title: "Error",
+              description: `Cannot save flow: The "Enqueue Call" node "${
+                node.data?.label || node.id
+              }" uses a skill-based queue ("${
+                queue.display_name || queueName
+              }") but no required skills are defined. Please add at least one skill with a proficiency level.`,
+              variant: "error",
+            });
+            return;
+          }
+        }
+      }
     }
 
     setSaving(true);
@@ -2855,9 +2909,12 @@ export default function FlowBuilderPage() {
                       {/* Scrollable Content Section */}
                       <div className="flex-1 overflow-y-auto p-4 pt-0">
                         <div className="space-y-3">
-                          <h4 className="text-sm font-semibold">
-                            Configuration
-                          </h4>
+                          {selectedNodeDef.customEditor !==
+                            "EnqueueNodeEditor" && (
+                            <h4 className="text-sm font-semibold">
+                              Configuration
+                            </h4>
+                          )}
 
                           {/* Use custom editor if defined */}
                           {selectedNodeDef.customEditor ===
@@ -3315,6 +3372,30 @@ export default function FlowBuilderPage() {
                                 edges,
                                 globalVariables,
                               })}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "EnqueueNodeEditor" ? (
+                            <EnqueueNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node
+                                    )
+                                  );
+                                }
+                              }}
+                              queues={queues}
                             />
                           ) : (
                             Object.entries(selectedNodeDef.config || {}).map(

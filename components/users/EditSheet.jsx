@@ -12,10 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Combobox } from "@/components/ui/combobox";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEdit, IconCheck } from "@tabler/icons-react";
+import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -24,12 +23,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   USER_STATUS_OPTIONS,
   DEFAULT_USER_STATUS,
   USER_ROLES,
 } from "@/config/user";
-import { Moon, Sun, Monitor } from "lucide-react";
-import { listLanguagesAction } from "@/app/actions/user";
 
 /**
  * Multi-select component for roles
@@ -107,12 +112,11 @@ export default function EditSheet({
   const [mobile, setMobile] = React.useState("");
   const [smsNumber, setSmsNumber] = React.useState("");
   const [voiceNumber, setVoiceNumber] = React.useState("");
-  const [language, setLanguage] = React.useState("en-US");
-  const [theme, setTheme] = React.useState("system");
-  const [langs, setLangs] = React.useState([]);
-  const [langsLoading, setLangsLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [availableSkills, setAvailableSkills] = React.useState([]);
+  const [userSkills, setUserSkills] = React.useState({}); // { skillId: proficiency (1-5) }
+  const [skillsLoading, setSkillsLoading] = React.useState(false);
 
   // Load user data when userId changes
   React.useEffect(() => {
@@ -147,8 +151,9 @@ export default function EditSheet({
           setMobile(d.mobile || "");
           setSmsNumber(d.sms_number || "");
           setVoiceNumber(d.voice_number || "");
-          setLanguage(d.language || "en-US");
-          setTheme(d.theme || "system");
+          // Load user skills - skills is stored as JSONB object { skillId: proficiency }
+          const skills = d.skills || {};
+          setUserSkills(typeof skills === 'string' ? JSON.parse(skills) : skills);
         } else {
           notify({
             title: "Failed to load user",
@@ -172,36 +177,31 @@ export default function EditSheet({
     }
   }, [userId, open]);
 
-  // Load languages
+
+  // Load available skills
   React.useEffect(() => {
-    async function loadLanguages() {
-      setLangsLoading(true);
+    async function loadSkills() {
+      setSkillsLoading(true);
       try {
-        const out = await listLanguagesAction();
-        if (out?.ok) setLangs(out.languages || []);
+        const res = await fetch("/api/admin/skills?active=true&pageSize=1000", {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableSkills(data.items || []);
+        }
       } catch (err) {
-        console.error("Failed to load languages:", err);
+        console.error("Failed to load skills:", err);
       } finally {
-        setLangsLoading(false);
+        setSkillsLoading(false);
       }
     }
 
     if (open) {
-      loadLanguages();
+      loadSkills();
     }
   }, [open]);
 
-  function countryCodeToFlagEmoji(code) {
-    try {
-      if (!code) return "";
-      const cc = String(code).trim().toUpperCase();
-      if (cc.length !== 2 || /[^A-Z]/.test(cc)) return "";
-      const codePoints = [...cc].map((c) => 127397 + c.charCodeAt(0));
-      return String.fromCodePoint(...codePoints);
-    } catch (_) {
-      return "";
-    }
-  }
 
   async function onSave() {
     if (!userId) {
@@ -222,12 +222,10 @@ export default function EditSheet({
         roles, // Send roles array
         verified,
         active,
-        status,
         mobile,
-        language,
         smsNumber,
         voiceNumber,
-        theme,
+        skills: userSkills, // Send skills object { skillId: proficiency }
       };
 
       const r = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
@@ -473,73 +471,87 @@ export default function EditSheet({
                       Settings
                     </h3>
                     <div className="space-y-3">
-                      <div className="grid gap-3 grid-cols-2">
-                        <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Roles</Label>
-                          <RolesMultiSelect
-                            value={roles}
-                            onChange={setRoles}
-                            options={USER_ROLES}
-                          />
-                        </div>
-                        <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Status</Label>
-                          <Combobox
-                            value={status}
-                            onChange={(v) => setStatus(v)}
-                            options={USER_STATUS_OPTIONS.map(
-                              ({ value, Icon }) => ({
-                                value,
-                                label: value,
-                                Icon,
-                              })
-                            )}
-                            placeholder="Select status"
-                            searchable={false}
-                            contentClassName="w-[--radix-dropdown-menu-trigger-width]"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid gap-3 grid-cols-2">
-                        <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Language</Label>
-                          <Combobox
-                            value={language}
-                            onChange={(v) => setLanguage(v)}
-                            options={(Array.isArray(langs) ? langs : []).map(
-                              (l) => ({
-                                value: l.value,
-                                label: `${countryCodeToFlagEmoji(l.flag)} ${
-                                  l.language
-                                }`,
-                              })
-                            )}
-                            placeholder="Select language"
-                            searchable={false}
-                            contentClassName="w-[--radix-dropdown-menu-trigger-width]"
-                          />
-                        </div>
-                        <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Theme</Label>
-                          <Combobox
-                            value={theme}
-                            onChange={(v) => setTheme(v)}
-                            options={[
-                              { value: "light", label: "Light", Icon: Sun },
-                              { value: "dark", label: "Dark", Icon: Moon },
-                              {
-                                value: "system",
-                                label: "System",
-                                Icon: Monitor,
-                              },
-                            ]}
-                            placeholder="Select theme"
-                            searchable={false}
-                            contentClassName="w-[--radix-dropdown-menu-trigger-width]"
-                          />
-                        </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Roles</Label>
+                        <RolesMultiSelect
+                          value={roles}
+                          onChange={setRoles}
+                          options={USER_ROLES}
+                        />
                       </div>
                     </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Skills Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Skills & Proficiency
+                    </h3>
+                    {skillsLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {availableSkills.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No skills available. Create skills in the Skills management page.
+                          </p>
+                        ) : (
+                          availableSkills.map((skill) => {
+                            const proficiency = userSkills[skill.id] || 0;
+                            return (
+                              <div
+                                key={skill.id}
+                                className="flex items-center justify-between p-3 border rounded-md"
+                              >
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {skill.name}
+                                  </div>
+                                  {skill.description && (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      {skill.description}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 ml-4">
+                                  {[1, 2, 3, 4, 5].map((level) => (
+                                    <button
+                                      key={level}
+                                      type="button"
+                                      onClick={() => {
+                                        const newSkills = { ...userSkills };
+                                        if (proficiency === level) {
+                                          // Clicking the same level removes it
+                                          delete newSkills[skill.id];
+                                        } else {
+                                          newSkills[skill.id] = level;
+                                        }
+                                        setUserSkills(newSkills);
+                                      }}
+                                      className="focus:outline-none"
+                                      title={`Proficiency level ${level}`}
+                                    >
+                                      {proficiency >= level ? (
+                                        <IconStarFilled
+                                          className="size-5 text-yellow-500"
+                                        />
+                                      ) : (
+                                        <IconStar className="size-5 text-gray-300" />
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

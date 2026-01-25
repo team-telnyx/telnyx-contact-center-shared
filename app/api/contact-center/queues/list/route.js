@@ -21,7 +21,7 @@ export async function GET(request) {
   try {
     // Fetch only enabled and active queues, ordered by priority and name
     const result = await pool.query(
-      `SELECT id, name, display_name 
+      `SELECT id, name, display_name, routing_strategy 
        FROM cc_queues 
        WHERE enabled = true AND active = true 
        ORDER BY priority DESC, name ASC`

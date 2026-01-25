@@ -77,17 +77,37 @@ export async function updateProfileAction(formData) {
 
 async function updateProfileWithId(idForQuery, formData, current) {
   try {
-    const firstName = (formData.get("firstName") || "").toString();
-    const lastName = (formData.get("lastName") || "").toString();
-    const nick = (formData.get("nick") || "").toString();
-    const language = (formData.get("language") || "en-US").toString();
-    const mobile = (formData.get("mobile") || "").toString();
-    const smsNumber = (formData.get("smsNumber") || "").toString();
-    const voiceNumber = (formData.get("voiceNumber") || "").toString();
-    const profilePictureUri = (
-      formData.get("profilePictureUri") || ""
-    ).toString();
-    const status = (formData.get("status") || current?.status || "").toString();
+    const update = {};
+    
+    // Only update fields that are provided in formData
+    if (formData.has("firstName")) {
+      update.firstName = (formData.get("firstName") || "").toString();
+    }
+    if (formData.has("lastName")) {
+      update.lastName = (formData.get("lastName") || "").toString();
+    }
+    if (formData.has("nick")) {
+      update.nick = (formData.get("nick") || "").toString();
+    }
+    if (formData.has("language")) {
+      update.language = (formData.get("language") || "en-US").toString();
+    }
+    if (formData.has("mobile")) {
+      update.mobile = (formData.get("mobile") || "").toString();
+    }
+    if (formData.has("smsNumber")) {
+      update.smsNumber = (formData.get("smsNumber") || "").toString();
+    }
+    if (formData.has("voiceNumber")) {
+      update.voiceNumber = (formData.get("voiceNumber") || "").toString();
+    }
+    if (formData.has("profilePictureUri")) {
+      update.profilePictureUri = (formData.get("profilePictureUri") || "").toString();
+    }
+    if (formData.has("status")) {
+      update.status = (formData.get("status") || current?.status || "").toString();
+    }
+    
     let theme;
     if (formData.has("theme")) {
       const themeRaw = (formData.get("theme") || "").toString();
@@ -95,19 +115,12 @@ async function updateProfileWithId(idForQuery, formData, current) {
     } else if (!current?.theme) {
       theme = "system";
     }
-
-    const update = {
-      firstName,
-      lastName,
-      nick,
-      language,
-      status,
-      mobile,
-      smsNumber,
-      voiceNumber,
-      profilePictureUri,
-    };
     if (typeof theme !== "undefined") update.theme = theme;
+
+    // Only update if there are fields to update
+    if (Object.keys(update).length === 0) {
+      return { ok: true };
+    }
 
     // Ensure ID is a string
     const userId = String(idForQuery);

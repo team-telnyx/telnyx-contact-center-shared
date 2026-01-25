@@ -1035,6 +1035,7 @@ export const VOICE_FLOW_NODES = {
     outputLabels: ["Enqueued"],
     outputEvents: ["call.enqueued"],
     outputDescriptions: ["Call was successfully enqueued (call.enqueued)"],
+    customEditor: "EnqueueNodeEditor",
     config: {
       queue_name: {
         type: "select",

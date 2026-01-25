@@ -1104,19 +1104,41 @@ export async function POST(request, { params }) {
             const results = await Promise.all(
               nodesToExecute.map(async (nextNode) => {
                 // Prepare node with client_state for flow tracking
+                // Merge existing client_state (may contain routing params) with flow tracking
                 const existingConfig = nextNode.data?.config || {};
+                const flowTracking = { flowId, currentNodeId: nextNode.id };
+                
+                // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
+                let mergedClientState = flowTracking;
+                if (existingConfig.client_state) {
+                  try {
+                    const decoded = Buffer.from(existingConfig.client_state, "base64").toString();
+                    const existing = JSON.parse(decoded);
+                    // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
+                    mergedClientState = { ...existing, ...flowTracking };
+                    
+                    // Debug logging for enqueue nodes
+                    if (nextNode.data?.nodeType === "enqueue") {
+                      console.log("[FlowWebhook] Enqueue node - existing client_state:", existing);
+                      console.log("[FlowWebhook] Enqueue node - merged client_state:", mergedClientState);
+                    }
+                  } catch (err) {
+                    console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
+                    // If decode fails, just use flow tracking
+                  }
+                } else if (nextNode.data?.nodeType === "enqueue") {
+                  console.log("[FlowWebhook] Enqueue node - no existing client_state in config");
+                }
+                
                 const configuredNextNode = {
                   ...nextNode,
                   data: {
                     ...nextNode.data,
                     config: {
                       ...existingConfig,
-                      // Always set client_state for flow tracking
+                      // Merge client_state: preserve routing params, add flow tracking
                       client_state: Buffer.from(
-                        JSON.stringify({
-                          flowId,
-                          currentNodeId: nextNode.id,
-                        })
+                        JSON.stringify(mergedClientState)
                       ).toString("base64"),
                     },
                   },
@@ -1318,19 +1340,41 @@ async function executeNodeChain(
     executedTransitions.set(transitionKey, Date.now());
 
     // Configure node with client_state for flow tracking
+    // Merge existing client_state (may contain routing params) with flow tracking
     const existingConfig = nextNode.data?.config || {};
+    const flowTracking = { flowId, currentNodeId: nextNode.id };
+    
+    // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
+    let mergedClientState = flowTracking;
+    if (existingConfig.client_state) {
+      try {
+        const decoded = Buffer.from(existingConfig.client_state, "base64").toString();
+        const existing = JSON.parse(decoded);
+        // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
+        mergedClientState = { ...existing, ...flowTracking };
+        
+        // Debug logging for enqueue nodes
+        if (nextNode.data?.nodeType === "enqueue") {
+          console.log("[FlowWebhook] Enqueue node - existing client_state:", existing);
+          console.log("[FlowWebhook] Enqueue node - merged client_state:", mergedClientState);
+        }
+      } catch (err) {
+        console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
+        // If decode fails, just use flow tracking
+      }
+    } else if (nextNode.data?.nodeType === "enqueue") {
+      console.log("[FlowWebhook] Enqueue node - no existing client_state in config");
+    }
+    
     const configuredNode = {
       ...nextNode,
       data: {
         ...nextNode.data,
         config: {
           ...existingConfig,
-          // Set client_state so webhooks can route back to this node
+          // Merge client_state: preserve routing params, add flow tracking
           client_state: Buffer.from(
-            JSON.stringify({
-              flowId,
-              currentNodeId: nextNode.id,
-            })
+            JSON.stringify(mergedClientState)
           ).toString("base64"),
         },
       },

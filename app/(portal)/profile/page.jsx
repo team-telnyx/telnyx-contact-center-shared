@@ -13,12 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import {
   IconUser,
   IconCheck,
   IconKey,
@@ -29,20 +23,7 @@ import {
   updateProfileAction,
   uploadProfilePictureAction,
   getProfileAction,
-  listLanguagesAction,
 } from "@/app/actions/user";
-
-function countryCodeToFlagEmoji(code) {
-  try {
-    if (!code) return "";
-    const cc = String(code).trim().toUpperCase();
-    if (cc.length !== 2 || /[^A-Z]/.test(cc)) return "";
-    const codePoints = [...cc].map((c) => 127397 + c.charCodeAt(0));
-    return String.fromCodePoint(...codePoints);
-  } catch (_) {
-    return "";
-  }
-}
 
 export default function ProfilePage() {
   const { theme } = useTheme();
@@ -50,14 +31,10 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     nick: "",
-    language: "en-US",
     mobile: "",
-    smsNumber: "",
     voiceNumber: "",
   });
   const [saving, setSaving] = useState(false);
-  const [langs, setLangs] = useState([]);
-  const [langsLoading, setLangsLoading] = useState(true);
   const [avatar, setAvatar] = useState("/avatar.jpeg");
   const [profileLoading, setProfileLoading] = useState(true);
   const [authStrategy, setAuthStrategy] = useState("local");
@@ -79,15 +56,7 @@ export default function ProfilePage() {
           setForm((prev) => ({ ...prev, ...data }));
           if (data?.profilePictureUri) setAvatar(data.profilePictureUri);
 
-          // Show warning if mobile is missing
-          if (!data?.mobile || !data.mobile.trim()) {
-            notify({
-              title: "Mobile number required",
-              description: "Please add your mobile number to use all features",
-              variant: "warning",
-              autoCloseMs: 5000,
-            });
-          }
+          // Mobile is optional, no warning needed
 
           // Fetch auth strategy info
           const authResp = await fetch("/api/user/auth-methods");
@@ -102,18 +71,6 @@ export default function ProfilePage() {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      setLangsLoading(true);
-      try {
-        const resp = await listLanguagesAction();
-        if (resp?.ok) {
-          setLangs(Array.isArray(resp.languages) ? resp.languages : []);
-        }
-      } catch (_) {}
-      setLangsLoading(false);
-    })();
-  }, []);
 
   function setField(name, value) {
     setForm((p) => ({ ...p, [name]: value }));
@@ -123,16 +80,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setSaving(true);
 
-    // Validate mobile number is provided
-    if (!form.mobile || !form.mobile.trim()) {
-      notify({
-        title: "Mobile number is required",
-        description: "Please provide your mobile number to continue",
-        variant: "error",
-      });
-      setSaving(false);
-      return;
-    }
+    // Mobile is optional, no validation needed
 
     try {
       let uploadedProfilePictureUri = form.profilePictureUri || "";
@@ -168,17 +116,10 @@ export default function ProfilePage() {
         // Continue with profile update even if picture upload fails
       }
 
-      // Prepare FormData with all profile fields
+      // Prepare FormData - only nick and mobile can be changed by user
       const fd = new FormData();
-      fd.set("firstName", (form.firstName || "").trim());
-      fd.set("lastName", (form.lastName || "").trim());
       fd.set("nick", (form.nick || "").trim());
-      fd.set("language", form.language || "en-US");
       fd.set("mobile", (form.mobile || "").trim());
-      fd.set("smsNumber", (form.smsNumber || "").trim());
-      fd.set("voiceNumber", (form.voiceNumber || "").trim());
-      fd.set("profilePictureUri", uploadedProfilePictureUri || "");
-      fd.set("theme", theme || "system");
 
       const result = await updateProfileAction(fd);
       if (!result?.ok) {
@@ -289,9 +230,6 @@ export default function ProfilePage() {
     }
   }
 
-  const selectedLang = Array.isArray(langs)
-    ? langs.find((l) => l.value === form.language)
-    : null;
 
   return (
     <div className="px-4 lg:px-6">
@@ -370,15 +308,15 @@ export default function ProfilePage() {
                     />
                   </div>
                   <form onSubmit={onSubmit} className={cn("space-y-4")}>
+                    {/* Read-only fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="firstName">First name</Label>
                         <Input
                           id="firstName"
                           value={form.firstName}
-                          onChange={(e) =>
-                            setField("firstName", e.target.value)
-                          }
+                          disabled
+                          className="bg-muted"
                         />
                       </div>
                       <div className="grid gap-2">
@@ -386,7 +324,8 @@ export default function ProfilePage() {
                         <Input
                           id="lastName"
                           value={form.lastName}
-                          onChange={(e) => setField("lastName", e.target.value)}
+                          disabled
+                          className="bg-muted"
                         />
                       </div>
                     </div>
@@ -399,102 +338,23 @@ export default function ProfilePage() {
                           onChange={(e) => setField("nick", e.target.value)}
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="language">Language</Label>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              id="language"
-                              variant="outline"
-                              className="h-9 justify-between px-3"
-                              disabled={langsLoading}
-                            >
-                              <span className="truncate">
-                                {selectedLang
-                                  ? `${countryCodeToFlagEmoji(
-                                      selectedLang.flag
-                                    )} ${selectedLang.language}`
-                                  : langsLoading
-                                  ? "Loading..."
-                                  : "Select language"}
-                              </span>
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="w-64 max-h-80 overflow-auto">
-                            {langsLoading ? (
-                              <DropdownMenuItem disabled>
-                                Loading...
-                              </DropdownMenuItem>
-                            ) : langs.length ? (
-                              langs.map((l) => (
-                                <DropdownMenuItem
-                                  key={l.value}
-                                  onClick={() => setField("language", l.value)}
-                                  className="flex items-center justify-between gap-2"
-                                >
-                                  <span>{`${countryCodeToFlagEmoji(l.flag)} ${
-                                    l.language
-                                  }`}</span>
-                                  {form.language === l.value ? (
-                                    <IconCheck className="ml-auto text-brand-primary" />
-                                  ) : null}
-                                </DropdownMenuItem>
-                              ))
-                            ) : (
-                              <DropdownMenuItem disabled>
-                                No languages
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label
-                          htmlFor="mobile"
-                          className="flex items-center gap-1"
-                        >
-                          Mobile
-                          <span className="text-red-500">*</span>
-                        </Label>
+                        <Label htmlFor="mobile">Mobile</Label>
                         <Input
                           id="mobile"
                           value={form.mobile}
                           onChange={(e) => setField("mobile", e.target.value)}
-                          required
-                          className={cn(
-                            !form.mobile &&
-                              "border-red-500 focus-visible:ring-red-500"
-                          )}
-                        />
-                        {!form.mobile && (
-                          <p className="text-xs text-red-500">
-                            Mobile number is required to use all Demo Portal
-                            features
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="smsNumber">SMS number</Label>
-                        <Input
-                          id="smsNumber"
-                          value={form.smsNumber}
-                          onChange={(e) =>
-                            setField("smsNumber", e.target.value)
-                          }
                         />
                       </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="voiceNumber">Voice number</Label>
                         <Input
                           id="voiceNumber"
                           value={form.voiceNumber}
-                          onChange={(e) =>
-                            setField("voiceNumber", e.target.value)
-                          }
+                          disabled
+                          className="bg-muted"
                         />
                       </div>
                     </div>

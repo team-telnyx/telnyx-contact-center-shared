@@ -71,7 +71,7 @@ export async function GET(request) {
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const rowsSql = `SELECT id, username, first_name, last_name, nick, mobile, roles, verified, status, created_at, updated_at FROM users ${whereSql} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+  const rowsSql = `SELECT id, username, first_name, last_name, nick, mobile, roles, verified, status, skills, created_at, updated_at FROM users ${whereSql} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
   const [rowsRes, countRes] = await Promise.all([
     pool.query(rowsSql, vals),
     pool.query(`SELECT COUNT(*) AS c FROM users ${whereSql}`, vals),

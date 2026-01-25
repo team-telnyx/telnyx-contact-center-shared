@@ -14,6 +14,7 @@ import {
   IconPhone,
   IconHistory,
   IconFileMusic,
+  IconAward,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -89,6 +90,12 @@ export const menuConfig = {
           title: "Wrapup Codes",
           url: "/admin/wrapup-codes",
           icon: IconTag,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Skills",
+          url: "/admin/skills",
+          icon: IconAward,
           role_access: ["admin", "owner"],
         },
         {

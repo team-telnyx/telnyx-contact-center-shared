@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,9 @@ import {
   IconUsers,
   IconEdit,
   IconTrash,
+  IconInfoCircle,
+  IconStar,
+  IconStarFilled,
 } from "@tabler/icons-react";
 import {
   Table,
@@ -42,6 +45,114 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import EditSheet from "@/components/users/EditSheet";
+
+function SkillsInfoCell({ user }) {
+  const skills = user.skills || {};
+  let skillsObj = {};
+  try {
+    if (typeof skills === 'string') {
+      skillsObj = skills ? JSON.parse(skills) : {};
+    } else if (skills && typeof skills === 'object') {
+      skillsObj = skills;
+    }
+  } catch (e) {
+    console.error("Failed to parse skills:", e);
+    skillsObj = {};
+  }
+  const skillCount = Object.keys(skillsObj).length;
+  const [allSkills, setAllSkills] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    async function loadSkills() {
+      setLoading(true);
+      try {
+        const res = await fetch("/api/admin/skills?active=true&pageSize=1000", {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAllSkills(data.items || []);
+        }
+      } catch (err) {
+        console.error("Failed to load skills:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSkills();
+  }, []);
+
+  const skillEntries = Object.entries(skillsObj).map(([skillId, proficiency]) => {
+    const skill = allSkills.find(s => s.id === skillId);
+    return { skill, proficiency };
+  }).filter(entry => entry.skill);
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs">{skillCount}</span>
+      {skillCount > 0 && (
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center text-muted-foreground hover:text-foreground"
+              title="View skills"
+            >
+              <IconInfoCircle className="size-3" />
+            </button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>User Skills</DialogTitle>
+              <DialogDescription>
+                Skills assigned to {user.first_name} {user.last_name || user.username}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 mt-4">
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Loading...</p>
+              ) : skillEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No skills assigned</p>
+              ) : (
+                skillEntries.map(({ skill, proficiency }) => (
+                  <div
+                    key={skill.id}
+                    className="flex items-center justify-between p-2 border rounded"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{skill.name}</div>
+                      {skill.description && (
+                        <div className="text-xs text-muted-foreground">
+                          {skill.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 ml-4">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        proficiency >= level ? (
+                          <IconStarFilled
+                            key={level}
+                            className="size-4 text-yellow-500"
+                          />
+                        ) : (
+                          <IconStar
+                            key={level}
+                            className="size-4 text-gray-300"
+                          />
+                        )
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
 
 export default function AdminUsersPage() {
   const [items, setItems] = useState([]);
@@ -218,19 +329,19 @@ export default function AdminUsersPage() {
               <Table className="table-fixed">
                 <colgroup>
                   <col style={{ width: "20%" }} />
+                  <col style={{ width: "20%" }} />
                   <col style={{ width: "30%" }} />
-                  <col style={{ width: "15%" }} />
                   <col style={{ width: "10%" }} />
                   <col style={{ width: "10%" }} />
-                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "10%" }} />
                 </colgroup>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="px-[10px]">Name</TableHead>
-                    <TableHead className="px-[10px]">Role</TableHead>
                     <TableHead className="px-[10px]">Username</TableHead>
+                    <TableHead className="px-[10px]">Roles</TableHead>
+                    <TableHead className="px-[10px]">Skills</TableHead>
                     <TableHead className="px-[10px]">Verified</TableHead>
-                    <TableHead className="px-[10px]">Status</TableHead>
                     <TableHead className="px-[10px] text-right">
                       Actions
                     </TableHead>
@@ -247,6 +358,9 @@ export default function AdminUsersPage() {
                         <TableRow>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
                             {fullName || u.nick || "—"}
+                          </TableCell>
+                          <TableCell className="px-[10px] text-xs whitespace-nowrap">
+                            {u.username}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
                             <div className="flex flex-wrap gap-1">
@@ -270,14 +384,20 @@ export default function AdminUsersPage() {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className="px-[10px] text-xs whitespace-nowrap">
-                            {u.username}
+                          <TableCell className="px-[10px] text-xs">
+                            <SkillsInfoCell user={u} />
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
-                            {u.verified ? "YES" : "NO"}
-                          </TableCell>
-                          <TableCell className="px-[10px] text-xs whitespace-nowrap">
-                            {u.status || "—"}
+                            <Badge
+                              variant="outline"
+                              className={
+                                u.verified
+                                  ? "border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20 dark:text-green-400 min-w-[56px] justify-center"
+                                  : "border-red-500 text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 min-w-[56px] justify-center"
+                              }
+                            >
+                              {u.verified ? "YES" : "NO"}
+                            </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap text-right">
                             <div className="inline-flex items-center gap-2 justify-end">

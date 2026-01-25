@@ -100,6 +100,11 @@ export async function PUT(request, { params }) {
     "profilePictureUri",
     body.profilePictureUri != null ? String(body.profilePictureUri) : undefined
   );
+  if (body.skills !== undefined) {
+    // Skills is stored as JSONB object { skillId: proficiency }
+    // Pass as object, PgDb will handle JSONB conversion
+    set.skills = body.skills;
+  }
 
   try {
     await PgDb.updateUserById(id, set);
