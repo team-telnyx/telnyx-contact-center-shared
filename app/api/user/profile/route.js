@@ -352,3 +352,125 @@ export async function PUT(request) {
     );
   }
 }
+
+/**
+ * POST /api/user/profile
+ * Handle profile updates (used by sendBeacon which always sends POST)
+ * Delegates to the same logic as PUT
+ */
+export async function POST(request) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    let payload = {};
+    try {
+      // Handle sendBeacon (sends Blob) and regular JSON
+      const contentType = request.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const body = await request.json();
+        if (body?.data && typeof body.data === "object") {
+          payload = body.data;
+        } else if (body && typeof body === "object") {
+          payload = body;
+        }
+      } else {
+        // Handle sendBeacon blob (text/plain or application/octet-stream)
+        const text = await request.text();
+        try {
+          payload = JSON.parse(text);
+        } catch (_) {
+          // If parsing fails, try to extract JSON from the text
+          const jsonMatch = text.match(/\{.*\}/);
+          if (jsonMatch) {
+            payload = JSON.parse(jsonMatch[0]);
+          }
+        }
+      }
+    } catch (_) {}
+
+    const update = {};
+
+    // Only handle status updates for POST (sendBeacon is typically used for status)
+    if (typeof payload.status === "string" && payload.status.trim()) {
+      const trimmedStatus = payload.status.trim();
+      const allowedStatuses = await getAllowedStatuses();
+      if (allowedStatuses.includes(trimmedStatus)) {
+        update.status = trimmedStatus;
+      }
+    }
+
+    if (Object.keys(update).length === 0) {
+      // If no valid update, return success (sendBeacon doesn't expect response)
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+
+    await PgDb.updateUserById(String(userId), update);
+
+    // If status was updated, also update agent_status and state manager
+    if (update.status) {
+      const previousStatus = user.status || user.agent_status || "Unknown";
+      const sseKey = `user:status:${userId}`;
+      
+      // Update agent_status to match status for contact center
+      try {
+        const { getPostgresPool } = await import("@/lib/postgres.mjs");
+        const pool = getPostgresPool();
+        if (pool) {
+          await pool.query(
+            `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
+            [update.status, userId]
+          );
+          await pool.query(
+            `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity)
+             VALUES ($1, $2, $3, NOW(), NOW())
+             ON CONFLICT (user_id) DO UPDATE SET
+               agent_status = EXCLUDED.agent_status,
+               last_status_change = NOW(),
+               last_activity = NOW()`,
+            [userId, user.username, update.status]
+          );
+        }
+
+        const { updateAgentStatus } = await import(
+          "@/lib/contact-center/state-manager"
+        );
+        updateAgentStatus(userId, update.status, user.username);
+
+        // Broadcast to web clients via SSE
+        try {
+          await broadcastToKey(
+            sseKey,
+            {
+              type: "status_changed",
+              status: update.status,
+              userId: String(userId),
+              username: user.username,
+              timestamp: new Date().toISOString(),
+            },
+            "status_changed"
+          );
+        } catch (sseError) {
+          console.error("[Status] Failed to broadcast via SSE:", sseError);
+        }
+      } catch (stateError) {
+        console.error("[Status] Failed to update agent status:", stateError);
+      }
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (err) {
+    console.error("[USER] Profile POST error", err);
+    return NextResponse.json(
+      { ok: false, error: "Server error" },
+      { status: 500 }
+    );
+  }
+}
