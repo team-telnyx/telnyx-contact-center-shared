@@ -116,6 +116,42 @@ export async function PUT(request, { params }) {
   );
   maybeSet("enabled", body.enabled != null ? Boolean(body.enabled) : undefined);
   maybeSet("active", body.active != null ? Boolean(body.active) : undefined);
+  maybeSet(
+    "queue_audio_media_name",
+    body.queueAudioMediaName != null
+      ? body.queueAudioMediaName
+        ? String(body.queueAudioMediaName).trim()
+        : null
+      : undefined
+  );
+  maybeSet(
+    "queue_audio_enable_position",
+    body.queueAudioEnablePosition != null
+      ? Boolean(body.queueAudioEnablePosition)
+      : undefined
+  );
+  maybeSet(
+    "queue_audio_position_interval_secs",
+    body.queueAudioPositionIntervalSecs != null
+      ? Number(body.queueAudioPositionIntervalSecs)
+      : undefined
+  );
+  maybeSet(
+    "queue_audio_tts_voice",
+    body.queueAudioTtsVoice != null
+      ? body.queueAudioTtsVoice
+        ? String(body.queueAudioTtsVoice).trim()
+        : null
+      : undefined
+  );
+  maybeSet(
+    "queue_audio_tts_voice_api_key_ref",
+    body.queueAudioTtsVoiceApiKeyRef != null
+      ? body.queueAudioTtsVoiceApiKeyRef
+        ? String(body.queueAudioTtsVoiceApiKeyRef).trim()
+        : null
+      : undefined
+  );
   if (body.skillRequirements !== undefined) {
     set.skill_requirements = JSON.stringify(body.skillRequirements);
   }

@@ -11,12 +11,8 @@ import {
   IconPlayerSkipForward,
   IconVolume,
   IconVolumeOff,
-  IconFileText,
-  IconLoader2,
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
-import TranscriptionSheet from "./TranscriptionSheet";
-import { toast } from "sonner";
 
 function formatDuration(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return "00:00";
@@ -26,16 +22,7 @@ function formatDuration(seconds) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export default function RecordingPlayer({
-  src,
-  recordingId,
-  format,
-  channels,
-  transcriptionText,
-  transcriptionSegments,
-  transcriptionSummary,
-  interactionId,
-}) {
+export default function MediaPlayer({ mediaName, onClose }) {
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const [duration, setDuration] = useState(0);
@@ -43,22 +30,14 @@ export default function RecordingPlayer({
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.6);
-  const [transcriptionSheetOpen, setTranscriptionSheetOpen] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [localTranscriptionText, setLocalTranscriptionText] =
-    useState(transcriptionText);
-  const [localTranscriptionSegments, setLocalTranscriptionSegments] =
-    useState(transcriptionSegments);
-  const [localTranscriptionSummary, setLocalTranscriptionSummary] =
-    useState(transcriptionSummary);
 
   useEffect(() => {
-    if ((!src && !recordingId) || !waveformRef.current) return;
+    if (!mediaName || !waveformRef.current) return;
 
     const timer = setTimeout(() => {
-      const loadUrl = recordingId
-        ? `/api/voice/recordings/${encodeURIComponent(recordingId)}/stream`
-        : src;
+      const loadUrl = `/api/admin/media-library/${encodeURIComponent(
+        mediaName
+      )}/stream`;
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
         waveColor: "#6b7280",
@@ -96,13 +75,13 @@ export default function RecordingPlayer({
       });
 
       wavesurfer.on("error", (error) => {
-        console.error("[RecordingPlayer] WaveSurfer error:", error);
+        console.error("[MediaPlayer] WaveSurfer error:", error);
       });
 
       try {
         wavesurfer.load(loadUrl);
       } catch (error) {
-        console.error("[RecordingPlayer] Error loading recording:", error);
+        console.error("[MediaPlayer] Error loading media:", error);
       }
     }, 100);
 
@@ -116,7 +95,7 @@ export default function RecordingPlayer({
         wavesurferRef.current = null;
       }
     };
-  }, [src, recordingId]);
+  }, [mediaName]);
 
   useEffect(() => {
     if (wavesurferRef.current) {
@@ -129,55 +108,6 @@ export default function RecordingPlayer({
       wavesurferRef.current.setMuted(muted);
     }
   }, [muted]);
-
-  useEffect(() => {
-    setLocalTranscriptionText(transcriptionText);
-    setLocalTranscriptionSegments(transcriptionSegments);
-    setLocalTranscriptionSummary(transcriptionSummary);
-  }, [transcriptionText, transcriptionSegments, transcriptionSummary]);
-
-  const handleTranscribe = async () => {
-    if (!recordingId || !interactionId) {
-      toast.error("Recording ID and Interaction ID are required");
-      return;
-    }
-
-    setIsTranscribing(true);
-    try {
-      const response = await fetch(
-        `/api/voice/recordings/${encodeURIComponent(recordingId)}/transcribe`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            interactionId,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to transcribe recording");
-      }
-
-      if (data.transcription_text) {
-        setLocalTranscriptionText(data.transcription_text);
-        setLocalTranscriptionSegments(data.transcription_segments || null);
-        setLocalTranscriptionSummary(data.transcription_summary || null);
-        toast.success("Transcription completed successfully");
-      } else {
-        throw new Error("No transcription text received");
-      }
-    } catch (error) {
-      console.error("[RecordingPlayer] Transcription error:", error);
-      toast.error(error.message || "Failed to transcribe recording");
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
 
   const togglePlay = () => {
     if (!wavesurferRef.current) return;
@@ -197,77 +127,15 @@ export default function RecordingPlayer({
     }
   };
 
-  const formatLabel = format ? String(format).toUpperCase() : null;
-  const channelLabel = (() => {
-    if (channels === null || channels === undefined) return null;
-    if (typeof channels === "number") {
-      return channels > 1 ? "Dual" : "Single";
-    }
-    const normalized = String(channels).toLowerCase();
-    if (normalized.includes("dual") || normalized === "stereo") return "Dual";
-    if (normalized.includes("single") || normalized === "mono")
-      return "Single";
-    return String(channels);
-  })();
-
   return (
     <Card>
       <CardHeader className="text-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 font-semibold text-base">
             <IconPlayerPlay className="h-5 w-5 text-telnyx-green" />
-            Call Recording
+            {mediaName}
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {localTranscriptionText ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setTranscriptionSheetOpen(true)}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80"
-              >
-                <IconFileText className="h-3 w-3 mr-1" />
-                Show Transcription
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleTranscribe}
-                disabled={isTranscribing || !recordingId || !interactionId}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50"
-              >
-                {isTranscribing ? (
-                  <>
-                    <IconLoader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Transcribing...
-                  </>
-                ) : (
-                  <>
-                    <IconFileText className="h-3 w-3 mr-1" />
-                    Transcribe Recording
-                  </>
-                )}
-              </Button>
-            )}
-            {formatLabel ? <span>Format:</span> : null}
-            {formatLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
-                {formatLabel}
-              </Badge>
-            ) : null}
-            {channelLabel ? <span>Channels:</span> : null}
-            {channelLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
-                {channelLabel}
-              </Badge>
-            ) : null}
             <span>Duration:</span>
             <Badge
               variant="outline"
@@ -283,7 +151,7 @@ export default function RecordingPlayer({
           <div ref={waveformRef} className="w-full" />
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>0:00</span>
+          <span>{formatDuration(currentTime)}</span>
           <span>{formatDuration(duration)}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -346,13 +214,6 @@ export default function RecordingPlayer({
           </Button>
         </div>
       </CardContent>
-      <TranscriptionSheet
-        transcriptionText={localTranscriptionText}
-        transcriptionSegments={localTranscriptionSegments}
-        transcriptionSummary={localTranscriptionSummary}
-        open={transcriptionSheetOpen}
-        onOpenChange={setTranscriptionSheetOpen}
-      />
     </Card>
   );
 }

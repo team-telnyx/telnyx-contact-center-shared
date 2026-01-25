@@ -13,6 +13,7 @@ import {
   IconAddressBook,
   IconPhone,
   IconHistory,
+  IconFileMusic,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -88,6 +89,12 @@ export const menuConfig = {
           title: "Wrapup Codes",
           url: "/admin/wrapup-codes",
           icon: IconTag,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Media Library",
+          url: "/admin/media-library",
+          icon: IconFileMusic,
           role_access: ["admin", "owner"],
         },
         {

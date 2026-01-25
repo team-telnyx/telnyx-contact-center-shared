@@ -114,6 +114,9 @@ export default function SupervisorCallHistoryDetailPage() {
   const recordingId = recordingMetadata?.recording_id || null;
   const recordingFormat = recordingMetadata?.format || null;
   const recordingChannels = recordingMetadata?.channels || null;
+  const transcriptionText = interaction?.metadata?.transcription_text || null;
+  const transcriptionSegments = interaction?.metadata?.transcription_segments || null;
+  const transcriptionSummary = interaction?.metadata?.transcription_summary || null;
   const aiCallControlId = interaction?.metadata?.ai_call_control_id || null;
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
 
@@ -392,6 +395,10 @@ export default function SupervisorCallHistoryDetailPage() {
                       recordingId={recordingId}
                       format={recordingFormat}
                       channels={recordingChannels}
+                      transcriptionText={transcriptionText}
+                      transcriptionSegments={transcriptionSegments}
+                      transcriptionSummary={transcriptionSummary}
+                      interactionId={interaction?.id || null}
                     />
                   ) : (
                     <Card>

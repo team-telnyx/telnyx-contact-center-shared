@@ -540,14 +540,16 @@ export async function POST(request, { params }) {
       }
     }
 
-    // Handle other Contact Center events (call.answered, call.bridged, call.dequeued, call.held, call.unheld, call.hangup)
+    // Handle other Contact Center events (call.answered, call.bridged, call.dequeued, call.held, call.unheld, call.hangup, call.speak.ended, call.recording.transcription.saved)
     if (
       event === "call.answered" ||
       event === "call.bridged" ||
       event === "call.dequeued" ||
       event === "call.held" ||
       event === "call.unheld" ||
-      event === "call.hangup"
+      event === "call.hangup" ||
+      event === "call.speak.ended" ||
+      event === "call.recording.transcription.saved"
     ) {
       try {
         const { handleContactCenterEvent } = await import(

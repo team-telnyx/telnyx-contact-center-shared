@@ -98,6 +98,58 @@ export async function POST(request) {
       priorityRules: body.priorityRules || [],
     });
 
+    // Update queue audio settings if provided
+    if (
+      body.queueAudioMediaName !== undefined ||
+      body.queueAudioEnablePosition !== undefined ||
+      body.queueAudioPositionIntervalSecs !== undefined ||
+      body.queueAudioTtsVoice !== undefined ||
+      body.queueAudioTtsVoiceApiKeyRef !== undefined
+    ) {
+      const updateFields = [];
+      const updateValues = [];
+      let paramIndex = 1;
+
+      if (body.queueAudioMediaName !== undefined) {
+        updateFields.push(`queue_audio_media_name=$${paramIndex++}`);
+        updateValues.push(
+          body.queueAudioMediaName ? String(body.queueAudioMediaName).trim() : null
+        );
+      }
+      if (body.queueAudioEnablePosition !== undefined) {
+        updateFields.push(`queue_audio_enable_position=$${paramIndex++}`);
+        updateValues.push(Boolean(body.queueAudioEnablePosition));
+      }
+      if (body.queueAudioPositionIntervalSecs !== undefined) {
+        updateFields.push(`queue_audio_position_interval_secs=$${paramIndex++}`);
+        updateValues.push(Number(body.queueAudioPositionIntervalSecs));
+      }
+      if (body.queueAudioTtsVoice !== undefined) {
+        updateFields.push(`queue_audio_tts_voice=$${paramIndex++}`);
+        updateValues.push(
+          body.queueAudioTtsVoice ? String(body.queueAudioTtsVoice).trim() : null
+        );
+      }
+      if (body.queueAudioTtsVoiceApiKeyRef !== undefined) {
+        updateFields.push(`queue_audio_tts_voice_api_key_ref=$${paramIndex++}`);
+        updateValues.push(
+          body.queueAudioTtsVoiceApiKeyRef
+            ? String(body.queueAudioTtsVoiceApiKeyRef).trim()
+            : null
+        );
+      }
+
+      if (updateFields.length > 0) {
+        updateFields.push(`updated_at=$${paramIndex++}`);
+        updateValues.push(new Date().toISOString());
+        updateValues.push(id);
+        await pool.query(
+          `UPDATE cc_queues SET ${updateFields.join(", ")} WHERE id=$${paramIndex}`,
+          updateValues
+        );
+      }
+    }
+
     // Add user assignments if provided
     if (body.userAssignments && Array.isArray(body.userAssignments)) {
       const { randomUUID } = await import("crypto");
