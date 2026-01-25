@@ -20,6 +20,7 @@ import {
   IconPhone,
   IconPhoneOff,
   IconMicrophoneOff,
+  IconX,
 } from "@tabler/icons-react";
 import { Pause as IconPause, Play as IconPlay } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
@@ -866,280 +867,285 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   };
 
   const renderAudioFlow = (role) => {
+    // If no role is active, don't show any lines
+    if (!role) {
+      const circleRadius = 32;
+      const supervisorPos = { x: 200, y: 60 };
+      const callerPos = { x: 100, y: 240 };
+      const agentPos = { x: 300, y: 240 };
+
+      return (
+        <div className="space-y-4">
+          <div className="relative h-64 bg-muted/30 rounded-lg p-4">
+            <svg
+              className="absolute inset-0 w-full h-full"
+              viewBox="0 0 400 300"
+            >
+              {/* Supervisor - Top middle */}
+              <circle
+                cx={supervisorPos.x}
+                cy={supervisorPos.y}
+                r={circleRadius}
+                fill="#a855f7"
+              />
+              <text
+                x={supervisorPos.x}
+                y={supervisorPos.y + 6}
+                textAnchor="middle"
+                className="text-base fill-white font-semibold"
+              >
+                You
+              </text>
+
+              {/* Caller - Bottom left */}
+              <circle
+                cx={callerPos.x}
+                cy={callerPos.y}
+                r={circleRadius}
+                fill="#3b82f6"
+              />
+              <text
+                x={callerPos.x}
+                y={callerPos.y + 6}
+                textAnchor="middle"
+                className="text-base fill-white font-semibold"
+              >
+                Caller
+              </text>
+
+              {/* Agent - Bottom right */}
+              <circle
+                cx={agentPos.x}
+                cy={agentPos.y}
+                r={circleRadius}
+                fill={isCallInQueue ? "transparent" : "#10b981"}
+                stroke={isCallInQueue ? "#10b981" : "none"}
+                strokeWidth="2"
+                strokeDasharray={isCallInQueue ? "5,5" : "none"}
+              />
+              <text
+                x={agentPos.x}
+                y={agentPos.y + 6}
+                textAnchor="middle"
+                className={cn(
+                  "text-base font-semibold",
+                  isCallInQueue ? "fill-gray-500" : "fill-white"
+                )}
+              >
+                Agent
+              </text>
+              {/* No lines when no role is active */}
+            </svg>
+          </div>
+        </div>
+      );
+    }
+
     const flow = SUPERVISOR_ROLES[role].audioFlow;
     const agentLabel = call?.agentName || call?.agentUsername || "Agent";
-    const parties = [
-      { id: "caller", label: "Caller", color: "blue" },
-      {
-        id: "agent",
-        label: isCallInQueue ? "Waiting for Agent" : agentLabel,
-        color: "green",
-      },
-      { id: "supervisor", label: "You", color: "purple" },
-    ];
+
+    // Triangle layout: Supervisor top middle, Caller bottom left, Agent bottom right
+    // SVG coordinates: 400x300 viewBox
+    const circleRadius = 32; // Bigger circles
+    const supervisorPos = { x: 200, y: 60 }; // Top middle
+    const callerPos = { x: 100, y: 240 }; // Bottom left
+    const agentPos = { x: 300, y: 240 }; // Bottom right
+
+    // Helper to calculate point on circle edge for line connection
+    const getPointOnCircle = (centerX, centerY, targetX, targetY, radius) => {
+      const dx = targetX - centerX;
+      const dy = targetY - centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance === 0) return { x: centerX, y: centerY };
+      const ratio = radius / distance;
+      return {
+        x: centerX + dx * ratio,
+        y: centerY + dy * ratio,
+      };
+    };
+
+    // Helper to determine line style based on connection type
+    const getLineStyle = (fromParty, toParty) => {
+      const fromFlow = flow[fromParty];
+      const toFlow = flow[toParty];
+
+      // Check if both can hear and speak to each other (bidirectional communication)
+      const canHearEachOther =
+        fromFlow.canHear.includes(toParty) &&
+        toFlow.canHear.includes(fromParty);
+      const canSpeakToEachOther =
+        fromFlow.canSpeak.includes(toParty) &&
+        toFlow.canSpeak.includes(fromParty);
+
+      if (canHearEachOther && canSpeakToEachOther) {
+        // Both can listen & speak - thick green line
+        return { stroke: "#10b981", strokeWidth: 4, strokeDasharray: "none" };
+      } else if (
+        canHearEachOther ||
+        fromFlow.canHear.includes(toParty) ||
+        toFlow.canHear.includes(fromParty)
+      ) {
+        // Listen only (monitor) - orange dashed line with width 4
+        return { stroke: "#f97316", strokeWidth: 4, strokeDasharray: "8,4" };
+      }
+      return null; // No connection
+    };
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4">
-          {parties.map((party) => {
-            const partyFlow = flow[party.id];
-            return (
-              <div key={party.id} className="space-y-2">
-                <div
-                  className={cn(
-                    "p-3 rounded-lg border-2 text-center",
-                    party.id === "supervisor"
-                      ? "bg-purple-50 dark:bg-purple-950/20 border-purple-300 dark:border-purple-700"
-                      : party.id === "caller"
-                      ? "bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700"
-                      : "bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-700"
-                  )}
-                >
-                  <div className="font-semibold text-sm mb-2">
-                    {party.label}
-                  </div>
-                  <div className="text-xs space-y-1">
-                    <div className="text-muted-foreground">
-                      Can hear:{" "}
-                      {partyFlow.canHear.length > 0
-                        ? partyFlow.canHear
-                            .map(
-                              (p) => parties.find((pt) => pt.id === p)?.label
-                            )
-                            .join(", ")
-                        : "nobody"}
-                    </div>
-                    <div className="text-muted-foreground">
-                      Can speak to:{" "}
-                      {partyFlow.canSpeak.length > 0
-                        ? partyFlow.canSpeak
-                            .map(
-                              (p) => parties.find((pt) => pt.id === p)?.label
-                            )
-                            .join(", ")
-                        : "nobody"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Visual representation with arrows */}
-        <div className="relative h-32 bg-muted/30 rounded-lg p-4">
-          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 120">
-            {/* Caller */}
-            <circle cx="80" cy="60" r="20" fill="#3b82f6" />
+        {/* Visual representation with triangle layout */}
+        <div className="relative h-64 bg-muted/30 rounded-lg p-4">
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 300">
+            {/* Supervisor - Top middle */}
+            <circle
+              cx={supervisorPos.x}
+              cy={supervisorPos.y}
+              r={circleRadius}
+              fill="#a855f7"
+            />
             <text
-              x="80"
-              y="65"
+              x={supervisorPos.x}
+              y={supervisorPos.y + 6}
               textAnchor="middle"
-              className="text-xs fill-white"
+              className="text-base fill-white font-semibold"
             >
-              C
+              You
             </text>
 
-            {/* Agent - show as dashed if call is in queue */}
+            {/* Caller - Bottom left */}
             <circle
-              cx="200"
-              cy="60"
-              r="20"
+              cx={callerPos.x}
+              cy={callerPos.y}
+              r={circleRadius}
+              fill="#3b82f6"
+            />
+            <text
+              x={callerPos.x}
+              y={callerPos.y + 6}
+              textAnchor="middle"
+              className="text-base fill-white font-semibold"
+            >
+              Caller
+            </text>
+
+            {/* Agent - Bottom right */}
+            <circle
+              cx={agentPos.x}
+              cy={agentPos.y}
+              r={circleRadius}
               fill={isCallInQueue ? "transparent" : "#10b981"}
               stroke={isCallInQueue ? "#10b981" : "none"}
               strokeWidth="2"
               strokeDasharray={isCallInQueue ? "5,5" : "none"}
             />
             <text
-              x="200"
-              y="65"
+              x={agentPos.x}
+              y={agentPos.y + 6}
               textAnchor="middle"
               className={cn(
-                "text-xs",
+                "text-base font-semibold",
                 isCallInQueue ? "fill-gray-500" : "fill-white"
               )}
             >
-              A
+              Agent
             </text>
 
-            {/* Supervisor */}
-            <circle cx="320" cy="60" r="20" fill="#a855f7" />
-            <text
-              x="320"
-              y="65"
-              textAnchor="middle"
-              className="text-xs fill-white"
-            >
-              S
-            </text>
+            {/* Connection lines based on role and flow - from circle edges */}
+            {/* Caller <-> Agent */}
+            {!isCallInQueue &&
+              (() => {
+                const style = getLineStyle("caller", "agent");
+                if (style) {
+                  const start = getPointOnCircle(
+                    callerPos.x,
+                    callerPos.y,
+                    agentPos.x,
+                    agentPos.y,
+                    circleRadius
+                  );
+                  const end = getPointOnCircle(
+                    agentPos.x,
+                    agentPos.y,
+                    callerPos.x,
+                    callerPos.y,
+                    circleRadius
+                  );
+                  return (
+                    <line
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      {...style}
+                    />
+                  );
+                }
+                return null;
+              })()}
 
-            {/* Arrows based on role */}
-            {role === "monitor" && (
-              <>
-                {/* Caller <-> Agent (only if call is answered) */}
-                {!isCallInQueue && (
-                  <>
-                    <line
-                      x1="100"
-                      y1="60"
-                      x2="180"
-                      y2="60"
-                      stroke="#3b82f6"
-                      strokeWidth="2"
-                    />
-                    <line
-                      x1="100"
-                      y1="60"
-                      x2="180"
-                      y2="60"
-                      stroke="#10b981"
-                      strokeWidth="2"
-                    />
-                  </>
-                )}
-                {/* Supervisor hears caller (and agent if answered) */}
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="300"
-                  y2={isCallInQueue ? "60" : "50"}
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                  strokeDasharray="5,5"
-                  opacity="0.5"
-                />
-                {!isCallInQueue && (
+            {/* Supervisor <-> Caller */}
+            {(() => {
+              const style = getLineStyle("supervisor", "caller");
+              if (style) {
+                const start = getPointOnCircle(
+                  supervisorPos.x,
+                  supervisorPos.y,
+                  callerPos.x,
+                  callerPos.y,
+                  circleRadius
+                );
+                const end = getPointOnCircle(
+                  callerPos.x,
+                  callerPos.y,
+                  supervisorPos.x,
+                  supervisorPos.y,
+                  circleRadius
+                );
+                return (
                   <line
-                    x1="180"
-                    y1="60"
-                    x2="300"
-                    y2="70"
-                    stroke="#a855f7"
-                    strokeWidth="2"
-                    strokeDasharray="5,5"
-                    opacity="0.5"
+                    x1={start.x}
+                    y1={start.y}
+                    x2={end.x}
+                    y2={end.y}
+                    {...style}
                   />
-                )}
-              </>
-            )}
-            {role === "whisper" && !isCallInQueue && (
-              <>
-                {/* Caller <-> Agent */}
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="180"
-                  y2="60"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="180"
-                  y2="60"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                />
-                {/* Supervisor hears both (dashed) */}
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="300"
-                  y2="50"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                  strokeDasharray="5,5"
-                  opacity="0.5"
-                />
-                <line
-                  x1="180"
-                  y1="60"
-                  x2="300"
-                  y2="70"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                  strokeDasharray="5,5"
-                  opacity="0.5"
-                />
-                {/* Supervisor <-> Agent (solid) */}
-                <line
-                  x1="300"
-                  y1="60"
-                  x2="220"
-                  y2="60"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="300"
-                  y1="60"
-                  x2="220"
-                  y2="60"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                />
-              </>
-            )}
-            {role === "barge" && !isCallInQueue && (
-              <>
-                {/* All parties connected */}
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="180"
-                  y2="60"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="180"
-                  y2="60"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="300"
-                  y2="50"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="100"
-                  y1="60"
-                  x2="300"
-                  y2="50"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="180"
-                  y1="60"
-                  x2="300"
-                  y2="70"
-                  stroke="#10b981"
-                  strokeWidth="2"
-                />
-                <line
-                  x1="180"
-                  y1="60"
-                  x2="300"
-                  y2="70"
-                  stroke="#a855f7"
-                  strokeWidth="2"
-                />
-              </>
-            )}
+                );
+              }
+              return null;
+            })()}
+
+            {/* Supervisor <-> Agent */}
+            {!isCallInQueue &&
+              (() => {
+                const style = getLineStyle("supervisor", "agent");
+                if (style) {
+                  const start = getPointOnCircle(
+                    supervisorPos.x,
+                    supervisorPos.y,
+                    agentPos.x,
+                    agentPos.y,
+                    circleRadius
+                  );
+                  const end = getPointOnCircle(
+                    agentPos.x,
+                    agentPos.y,
+                    supervisorPos.x,
+                    supervisorPos.y,
+                    circleRadius
+                  );
+                  return (
+                    <line
+                      x1={start.x}
+                      y1={start.y}
+                      x2={end.x}
+                      y2={end.y}
+                      {...style}
+                    />
+                  );
+                }
+                return null;
+              })()}
           </svg>
-          <div className="absolute bottom-2 left-0 right-0 flex justify-around text-xs text-muted-foreground">
-            <span>C = Caller</span>
-            <span>A = {isCallInQueue ? "Agent (Waiting)" : "Agent"}</span>
-            <span>S = Supervisor</span>
-          </div>
         </div>
       </div>
     );
@@ -1184,123 +1190,121 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Show message for unanswered calls */}
-          {isCallInQueue && (
-            <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Call in Queue:</strong> This call is waiting to be
-              answered. Only Monitor mode is available for unanswered calls.
-            </div>
-          )}
-
           {/* Mode Selection Cards */}
-          <div
-            className={cn(
-              "grid gap-4",
-              isCallInQueue ? "grid-cols-1" : "grid-cols-3"
-            )}
-          >
-            {Object.entries(SUPERVISOR_ROLES)
-              .filter(([role]) => {
-                // For unanswered calls, only show monitor mode
-                if (isCallInQueue) {
-                  return role === "monitor";
-                }
-                return true;
-              })
-              .map(([role, config]) => {
-                const Icon = config.icon;
-                const isActive = activeRole === role;
-                const colorClasses = {
-                  blue: isActive
-                    ? "bg-blue-500 text-white border-blue-600"
-                    : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
-                  purple: isActive
-                    ? "bg-purple-500 text-white border-purple-600"
-                    : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
-                  green: isActive
-                    ? "bg-green-500 text-white border-green-600"
-                    : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20",
-                };
+          <div className="grid gap-4 grid-cols-3">
+            {Object.entries(SUPERVISOR_ROLES).map(([role, config]) => {
+              const Icon = config.icon;
+              // For unanswered calls, monitor is the default/active option
+              const isActive =
+                activeRole === role ||
+                (isCallInQueue && role === "monitor" && !activeRole);
+              // For unanswered calls, only monitor is available (whisper and barge are disabled)
+              const isDisabled = isCallInQueue && role !== "monitor";
+              const colorClasses = {
+                blue: isActive
+                  ? "bg-blue-500 text-white border-blue-600"
+                  : isDisabled
+                  ? "bg-blue-500/5 text-blue-600/50 border-blue-500/10 cursor-not-allowed"
+                  : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
+                purple: isActive
+                  ? "bg-purple-500 text-white border-purple-600"
+                  : isDisabled
+                  ? "bg-purple-500/5 text-purple-600/50 border-purple-500/10 cursor-not-allowed"
+                  : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
+                green: isActive
+                  ? "bg-green-500 text-white border-green-600"
+                  : isDisabled
+                  ? "bg-green-500/5 text-green-600/50 border-green-500/10 cursor-not-allowed"
+                  : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20",
+              };
 
-                return (
-                  <Card
-                    key={role}
-                    className={cn(
-                      "cursor-pointer transition-all border-2",
-                      colorClasses[config.color],
-                      isActive && "ring-2 ring-offset-2",
-                      loading && "opacity-50 cursor-not-allowed"
-                    )}
-                    onClick={async () => {
-                      if (loading) return;
-                      if (isActive) {
-                        // Already active, do nothing
-                        return;
-                      }
+              return (
+                <Card
+                  key={role}
+                  className={cn(
+                    "transition-all border-2 relative",
+                    colorClasses[config.color],
+                    isActive && "ring-2 ring-offset-2",
+                    loading && "opacity-50 cursor-not-allowed",
+                    isDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                  )}
+                  onClick={async () => {
+                    if (loading || isDisabled) return;
+                    if (isActive) {
+                      // Already active, do nothing
+                      return;
+                    }
 
-                      // Use refs to get current state immediately (avoid stale closure)
-                      const currentActiveRole = activeRoleRef.current;
-                      const currentSupervisorCallControlId =
-                        supervisorCallControlIdRef.current;
+                    // Use refs to get current state immediately (avoid stale closure)
+                    const currentActiveRole = activeRoleRef.current;
+                    const currentSupervisorCallControlId =
+                      supervisorCallControlIdRef.current;
 
-                      console.log("[SupervisionModal] Tile clicked:", {
-                        role,
+                    console.log("[SupervisionModal] Tile clicked:", {
+                      role,
+                      currentActiveRole,
+                      currentSupervisorCallControlId,
+                      isActive,
+                      stateActiveRole: activeRole,
+                      stateSupervisorCallControlId: supervisorCallControlId,
+                      isCallConnected,
+                    });
+
+                    // If we have an active role OR supervisorCallControlId, switch role
+                    // Otherwise, start new supervision
+                    if (currentActiveRole || currentSupervisorCallControlId) {
+                      console.log(
+                        "[SupervisionModal] Switching role from",
                         currentActiveRole,
-                        currentSupervisorCallControlId,
-                        isActive,
-                        stateActiveRole: activeRole,
-                        stateSupervisorCallControlId: supervisorCallControlId,
-                        isCallConnected,
-                      });
-
-                      // If we have an active role OR supervisorCallControlId, switch role
-                      // Otherwise, start new supervision
-                      if (currentActiveRole || currentSupervisorCallControlId) {
-                        console.log(
-                          "[SupervisionModal] Switching role from",
-                          currentActiveRole,
-                          "to",
-                          role
-                        );
-                        await handleSwitchRole(role);
-                      } else {
-                        console.log(
-                          "[SupervisionModal] Starting new supervision with role",
-                          role
-                        );
-                        await handleStartSupervision(role);
-                      }
-                    }}
-                  >
-                    <CardContent className="p-4 flex flex-col items-center gap-3">
-                      <div className="relative">
-                        <Icon className="h-8 w-8" />
-                        {isActive && (
-                          <div className="absolute -top-1 -right-1">
-                            <IconCheck className="h-5 w-5 bg-white rounded-full text-green-600" />
+                        "to",
+                        role
+                      );
+                      await handleSwitchRole(role);
+                    } else {
+                      console.log(
+                        "[SupervisionModal] Starting new supervision with role",
+                        role
+                      );
+                      await handleStartSupervision(role);
+                    }
+                  }}
+                >
+                  <CardContent className="p-4 flex flex-col items-center gap-3">
+                    <div className="relative">
+                      <Icon className="h-8 w-8" />
+                      {/* Status indicator in top right corner */}
+                      <div className="absolute -top-1 -right-1">
+                        {isActive ? (
+                          <div className="bg-white rounded-full p-0.5">
+                            <IconCheck className="h-4 w-4 text-green-600" />
                           </div>
-                        )}
+                        ) : isDisabled ? (
+                          <div className="bg-white rounded-full p-0.5">
+                            <IconX className="h-4 w-4 text-red-600" />
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="text-center">
-                        <div className="font-semibold text-sm">
-                          {config.label}
-                        </div>
-                        <div className="text-xs mt-1 opacity-90">
-                          {config.description}
-                        </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold text-sm">
+                        {config.label}
                       </div>
-                      {isActive && (
-                        <Badge variant="outline" className="text-xs">
-                          Active
-                        </Badge>
-                      )}
-                      {loading && !isActive && (
-                        <IconLoader className="h-4 w-4 animate-spin" />
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      <div className="text-xs mt-1 opacity-90">
+                        {config.description}
+                      </div>
+                    </div>
+                    {isActive && (
+                      <Badge variant="outline" className="text-xs">
+                        Active
+                      </Badge>
+                    )}
+                    {loading && !isActive && (
+                      <IconLoader className="h-4 w-4 animate-spin" />
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
 
           {/* Audio Flow Visualization - Always visible, never dimmed */}
@@ -1308,7 +1312,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
             <div className="font-semibold text-sm">
               {activeRole ? `Current Audio Flow (${activeRole})` : "Audio Flow"}
             </div>
-            {renderAudioFlow(activeRole || "monitor")}
+            {renderAudioFlow(activeRole)}
           </div>
 
           {/* Call Control Buttons - Mini Phone Interface - Always visible */}
