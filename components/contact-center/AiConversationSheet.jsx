@@ -24,7 +24,9 @@ import AiConversationDynamicVariablesTab from "./AiConversationDynamicVariablesT
 const AI_HEADER_NAME = "x-ai-call-id";
 
 function normalizeHeaderName(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function getAiCallIdFromEvents(events) {
@@ -108,7 +110,18 @@ export default function AiConversationSheet({
     interaction?.aiCallControlId,
   ]);
 
-  const [aiCallControlId, setAiCallControlId] = useState(initialAiCallControlId);
+  // Check if we have a conversation_id directly (for scheduled events)
+  const conversationId = useMemo(() => {
+    return (
+      interaction?.conversation_id ||
+      interaction?.metadata?.conversation_id ||
+      null
+    );
+  }, [interaction?.conversation_id, interaction?.metadata?.conversation_id]);
+
+  const [aiCallControlId, setAiCallControlId] = useState(
+    initialAiCallControlId
+  );
   const [conversation, setConversation] = useState(null);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -172,24 +185,47 @@ export default function AiConversationSheet({
   }, [interaction?.call_session_id, initialAiCallControlId, isInbound]);
 
   useEffect(() => {
-    if (!isOpen || !aiCallControlId) return;
+    if (!isOpen) return;
+    if (!aiCallControlId && !conversationId) return;
+
     let cancelled = false;
     async function loadConversation() {
       setLoadingConversation(true);
       try {
-        const params = new URLSearchParams();
-        params.set("metadata->call_control_id", `eq.${aiCallControlId}`);
-        params.set("limit", "1");
-        params.set("order", "created_at.desc");
-        const res = await fetch(`/api/ai/conversations?${params.toString()}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (!cancelled && res.ok && data?.ok) {
-          const items = Array.isArray(data?.items) ? data.items : [];
-          setConversation(items[0] || null);
-        } else if (!cancelled) {
-          setConversation(null);
+        let res;
+
+        // If we have conversation_id, load directly by ID
+        if (conversationId) {
+          res = await fetch(
+            `/api/ai/conversations/${encodeURIComponent(conversationId)}`,
+            {
+              cache: "no-store",
+            }
+          );
+          if (!cancelled && res.ok) {
+            const data = await res.json();
+            // Handle API response format: { ok: true, data: {...} }
+            const conversation = data?.data || data;
+            setConversation(conversation || null);
+          } else if (!cancelled) {
+            setConversation(null);
+          }
+        } else if (aiCallControlId) {
+          // Otherwise, load by filtering with call_control_id
+          const params = new URLSearchParams();
+          params.set("metadata->call_control_id", `eq.${aiCallControlId}`);
+          params.set("limit", "1");
+          params.set("order", "created_at.desc");
+          res = await fetch(`/api/ai/conversations?${params.toString()}`, {
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (!cancelled && res.ok && data?.ok) {
+            const items = Array.isArray(data?.items) ? data.items : [];
+            setConversation(items[0] || null);
+          } else if (!cancelled) {
+            setConversation(null);
+          }
         }
       } catch {
         if (!cancelled) setConversation(null);
@@ -201,7 +237,7 @@ export default function AiConversationSheet({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, aiCallControlId]);
+  }, [isOpen, aiCallControlId, conversationId]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -219,7 +255,62 @@ export default function AiConversationSheet({
 
     const fetchRecording = async () => {
       try {
-        // First, check interaction metadata for recording (like in call history)
+        // PRIORITY 1: Try to fetch recording associated with AI Call Control (conversation call_session_id)
+        // Check if this is a phone call conversation
+        const isPhoneCall =
+          conversation?.metadata?.telnyx_conversation_channel === "phone_call";
+
+        if (isPhoneCall && conversation?.id) {
+          // Get the call_session_id from conversation metadata (this is the AI Call Control call session)
+          let aiCallSessionId =
+            conversation?.metadata?.call_session_id ||
+            conversation?.metadata?.telnyx_call_session_id ||
+            null;
+
+          // If not in metadata, try to fetch from webhook logs
+          if (!aiCallSessionId && conversation?.id) {
+            const webhookRes = await fetch(
+              `/api/ai/conversations/${encodeURIComponent(
+                conversation.id
+              )}/webhook-logs?page[size]=50`,
+              { cache: "no-store" }
+            );
+            const webhookData = await webhookRes.json();
+
+            if (webhookData.ok && webhookData.data?.data) {
+              for (const log of webhookData.data.data) {
+                const payload = log?.payload;
+                if (payload?.call_session_id) {
+                  aiCallSessionId = payload.call_session_id;
+                  break;
+                }
+              }
+            }
+          }
+
+          // Fetch recordings for the AI Call Control call session
+          if (aiCallSessionId) {
+            const recordingsRes = await fetch(
+              `/api/voice/recordings?call_session_id=${encodeURIComponent(
+                aiCallSessionId
+              )}`,
+              { cache: "no-store" }
+            );
+            const recordingsData = await recordingsRes.json();
+
+            if (
+              recordingsData.ok &&
+              recordingsData.data &&
+              recordingsData.data.length > 0
+            ) {
+              // Found AI Call Control recording - use it
+              setRecording(recordingsData.data[0]);
+              return;
+            }
+          }
+        }
+
+        // PRIORITY 2: Fall back to interaction recording (agent conversation) if no AI Call Control recording found
         const recordingMetadata = interaction?.metadata?.recording || null;
         const recordingUrl =
           interaction?.recording_url ||
@@ -229,10 +320,11 @@ export default function AiConversationSheet({
         const recordingId = recordingMetadata?.recording_id || null;
 
         if (recordingUrl) {
-          // Use recording from interaction metadata (like in call history)
+          // Use recording from interaction metadata (agent conversation)
           setRecording({
             id: recordingId || recordingMetadata?.recording_id || null,
-            recording_id: recordingId || recordingMetadata?.recording_id || null,
+            recording_id:
+              recordingId || recordingMetadata?.recording_id || null,
             recording_url: recordingUrl,
             format: recordingMetadata?.format || null,
             channels: recordingMetadata?.channels || null,
@@ -244,55 +336,28 @@ export default function AiConversationSheet({
           return;
         }
 
-        // If no recording in metadata, try to fetch by call_session_id
-        // Check if this is a phone call conversation
-        const isPhoneCall =
-          conversation?.metadata?.telnyx_conversation_channel === "phone_call";
-        if (!isPhoneCall && conversation?.id) return;
-
-        let callSessionId =
-          conversation?.metadata?.call_session_id ||
-          conversation?.metadata?.telnyx_call_session_id ||
+        // PRIORITY 3: Last resort - try to fetch by interaction call_session_id
+        const interactionCallSessionId =
           interaction?.call_session_id ||
           interaction?.metadata?.call_session_id ||
           null;
 
-        if (!callSessionId && conversation?.id) {
-          const webhookRes = await fetch(
-            `/api/ai/conversations/${encodeURIComponent(
-              conversation.id
-            )}/webhook-logs?page[size]=50`,
+        if (interactionCallSessionId) {
+          const recordingsRes = await fetch(
+            `/api/voice/recordings?call_session_id=${encodeURIComponent(
+              interactionCallSessionId
+            )}`,
             { cache: "no-store" }
           );
-          const webhookData = await webhookRes.json();
+          const recordingsData = await recordingsRes.json();
 
-          if (webhookData.ok && webhookData.data?.data) {
-            for (const log of webhookData.data.data) {
-              const payload = log?.payload;
-              if (payload?.call_session_id) {
-                callSessionId = payload.call_session_id;
-                break;
-              }
-            }
+          if (
+            recordingsData.ok &&
+            recordingsData.data &&
+            recordingsData.data.length > 0
+          ) {
+            setRecording(recordingsData.data[0]);
           }
-        }
-
-        if (!callSessionId) return;
-
-        const recordingsRes = await fetch(
-          `/api/voice/recordings?call_session_id=${encodeURIComponent(
-            callSessionId
-          )}`,
-          { cache: "no-store" }
-        );
-        const recordingsData = await recordingsRes.json();
-
-        if (
-          recordingsData.ok &&
-          recordingsData.data &&
-          recordingsData.data.length > 0
-        ) {
-          setRecording(recordingsData.data[0]);
         }
       } catch (error) {
         console.error("Error fetching recording:", error);
@@ -303,6 +368,9 @@ export default function AiConversationSheet({
   }, [
     isOpen,
     conversation?.id,
+    conversation?.metadata?.call_session_id,
+    conversation?.metadata?.telnyx_call_session_id,
+    conversation?.metadata?.telnyx_conversation_channel,
     interaction?.call_session_id,
     interaction?.recording_url,
     interaction?.metadata?.recording,
@@ -354,11 +422,27 @@ export default function AiConversationSheet({
       });
 
       try {
-        // Use proxy endpoint if we have a recording ID, otherwise use recording URL directly
-        const audioUrl = recording.id
-          ? `/api/voice/recordings/${recording.id}/stream`
-          : recording.recording_url || null;
-        
+        // Always use proxy endpoint to avoid CORS issues
+        let audioUrl = null;
+        if (recording.id || recording.recording_id) {
+          // Use recording ID proxy endpoint (preferred)
+          const recordingId = recording.id || recording.recording_id;
+          audioUrl = `/api/voice/recordings/${encodeURIComponent(
+            recordingId
+          )}/stream`;
+        } else if (recording.recording_url) {
+          const url = recording.recording_url;
+          if (url.startsWith("http://") || url.startsWith("https://")) {
+            // Use URL proxy endpoint for direct URLs to avoid CORS
+            audioUrl = `/api/voice/recordings/proxy?url=${encodeURIComponent(
+              url
+            )}`;
+          } else {
+            // Fallback to relative URL
+            audioUrl = url;
+          }
+        }
+
         if (audioUrl) {
           wavesurfer.load(audioUrl);
         } else {
@@ -452,7 +536,7 @@ export default function AiConversationSheet({
     };
   }, [latencyMetrics]);
 
-  if (!aiCallControlId) return null;
+  if (!aiCallControlId && !conversationId) return null;
 
   return (
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
@@ -477,8 +561,11 @@ export default function AiConversationSheet({
       )}
       <SheetContent side="right">
         <SheetHeader className="gap-1">
-          <SheetTitle className="truncate">
-            {conversation?.name || "Voice Assistant Conversation"}
+          <SheetTitle className="flex items-center gap-2">
+            <IconRobot className="h-5 w-5 text-violet-500 shrink-0" />
+            <span className="truncate">
+              {conversation?.name || "Voice Assistant Conversation"}
+            </span>
           </SheetTitle>
           <SheetDescription asChild>
             <div className="space-y-2">
@@ -546,7 +633,7 @@ export default function AiConversationSheet({
             </div>
           </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 min-h-0 flex flex-col px-4">
+        <div className="flex-1 min-h-0 flex flex-col px-4 pb-4">
           <Tabs
             value={activeTab}
             onValueChange={setActiveTab}
@@ -561,7 +648,7 @@ export default function AiConversationSheet({
 
             <TabsContent
               value="conversation"
-              className="flex-1 min-h-0 flex flex-col"
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
               {!loadingConversation && !conversation && (
                 <div className="text-sm text-muted-foreground p-2">
@@ -663,4 +750,3 @@ export default function AiConversationSheet({
     </Sheet>
   );
 }
-

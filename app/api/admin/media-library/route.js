@@ -80,10 +80,12 @@ export async function GET(request) {
       const items = data.data || [];
       if (items.length === 0) break; // No more items
       allItems = allItems.concat(items);
-      
+
       // Log for debugging
       if (currentPage === 1) {
-        console.log(`[Media Library] Fetched ${items.length} items from page ${currentPage}`);
+        console.log(
+          `[Media Library] Fetched ${items.length} items from page ${currentPage}`
+        );
       }
 
       const meta = data.meta || {};
@@ -97,11 +99,11 @@ export async function GET(request) {
     const audioItems = allItems.filter((item) => {
       const contentType = (item.content_type || "").toLowerCase();
       const mediaName = (item.media_name || "").toLowerCase();
-      
+
       // Check content type - match the same logic as media library page display
       // Check for MIME types and also check for format names (mp3, mpeg, wav)
       // Also check for common audio-related strings
-      const isAudioContentType = 
+      const isAudioContentType =
         contentType.includes("audio/mpeg") ||
         contentType.includes("audio/mp3") ||
         contentType.includes("audio/wav") ||
@@ -111,40 +113,49 @@ export async function GET(request) {
         contentType.includes("mpeg") ||
         contentType.includes("mp3") ||
         contentType.includes("wav") ||
-        contentType === "mp3" ||  // Sometimes content_type might just be "MP3"
+        contentType === "mp3" || // Sometimes content_type might just be "MP3"
         contentType === "wav";
-      
+
       // Fallback: check file extension from media_name
-      const hasAudioExtension = 
+      const hasAudioExtension =
         mediaName.endsWith(".mp3") ||
         mediaName.endsWith(".wav") ||
         mediaName.endsWith(".m4a") ||
         mediaName.endsWith(".ogg");
-      
+
       // Exclude clearly non-audio types
-      const isNonAudio = 
+      const isNonAudio =
         contentType.includes("image/") ||
         contentType.includes("video/") ||
         contentType.includes("text/") ||
         contentType.includes("application/pdf") ||
         contentType.includes("application/json") ||
         contentType.includes("application/xml");
-      
+
       const isAudio = (isAudioContentType || hasAudioExtension) && !isNonAudio;
-      
+
       // Log items that are being filtered out for debugging (first few items)
       if (!isAudio && allItems.length <= 10) {
-        console.log(`[Media Library] Filtered out: ${item.media_name}, content_type: "${item.content_type || 'none'}"`);
+        console.log(
+          `[Media Library] Filtered out: ${item.media_name}, content_type: "${
+            item.content_type || "none"
+          }"`
+        );
       }
-      
+
       return isAudio;
     });
-    
+
     // Log filtering results for debugging
-    console.log(`[Media Library] Total items: ${allItems.length}, Audio items: ${audioItems.length}`);
+    console.log(
+      `[Media Library] Total items: ${allItems.length}, Audio items: ${audioItems.length}`
+    );
     if (allItems.length > 0 && audioItems.length === 0) {
-      console.log(`[Media Library] Warning: No audio items found. Sample content_types:`, 
-        allItems.slice(0, 3).map(item => ({ name: item.media_name, type: item.content_type }))
+      console.log(
+        `[Media Library] Warning: No audio items found. Sample content_types:`,
+        allItems
+          .slice(0, 3)
+          .map((item) => ({ name: item.media_name, type: item.content_type }))
       );
     }
 
@@ -178,10 +189,7 @@ export async function POST(request) {
     const file = formData.get("file");
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No file provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
     // Validate file type - only allow mp3 and wav
@@ -293,8 +301,7 @@ export async function POST(request) {
       ) {
         return NextResponse.json(
           {
-            error:
-              "Media name already exists. Please choose a different name.",
+            error: "Media name already exists. Please choose a different name.",
           },
           { status: 409 }
         );
@@ -316,4 +323,3 @@ export async function POST(request) {
     );
   }
 }
-

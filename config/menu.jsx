@@ -16,6 +16,7 @@ import {
   IconFileMusic,
   IconAward,
   IconBook,
+  IconCalendar,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -48,6 +49,12 @@ export const menuConfig = {
           title: "Call History",
           url: "/supervisor/call-history",
           icon: IconHistory,
+          role_access: ["supervisor", "admin", "owner"],
+        },
+        {
+          title: "Scheduled Events",
+          url: "/supervisor/scheduled-events",
+          icon: IconCalendar,
           role_access: ["supervisor", "admin", "owner"],
         },
       ],

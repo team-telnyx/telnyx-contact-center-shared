@@ -139,7 +139,8 @@ export default function AiConversationMessagesTab({
   const currentMessageIndex = useMemo(() => {
     if (!isPlaying || !recording || messageTimeline.length === 0) return -1;
 
-    const adjustedTime = currentTime + 0.3;
+    // Account for 500ms offset to match seek behavior when clicking messages
+    const adjustedTime = currentTime + 1;
 
     for (let i = messageTimeline.length - 1; i >= 0; i--) {
       const item = messageTimeline[i];
@@ -197,7 +198,7 @@ export default function AiConversationMessagesTab({
 
   return (
     <Conversation
-      className="flex-1 min-h-0 bg-muted rounded-lg overflow-hidden"
+      className="flex-1 min-h-0 bg-muted rounded-lg overflow-y-auto"
       ref={conversationRef}
     >
       <ConversationContent>
@@ -292,9 +293,10 @@ export default function AiConversationMessagesTab({
                             (t) => t.index === originalIdx
                           );
                           if (item) {
+                            // Subtract 500ms to start slightly before the message to avoid speech cut off
                             const seekTime = Math.max(
                               0,
-                              item.relativeStart - 0.3
+                              item.relativeStart - 1
                             );
                             onSeek(seekTime);
                           }
@@ -403,7 +405,8 @@ export default function AiConversationMessagesTab({
                               <>
                                 <span className="text-muted-foreground">=</span>
                                 <span className="px-1 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20 font-semibold">
-                                  TURN:{m.metadata.end_user_perceived_latency_ms}
+                                  TURN:
+                                  {m.metadata.end_user_perceived_latency_ms}
                                   ms
                                 </span>
                               </>
@@ -422,4 +425,3 @@ export default function AiConversationMessagesTab({
     </Conversation>
   );
 }
-

@@ -53,12 +53,24 @@ export default function RecordingPlayer({
     useState(transcriptionSummary);
 
   useEffect(() => {
-    if ((!src && !recordingId) || !waveformRef.current) return;
+    // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
+    const hasRecordingId = recordingId && String(recordingId).trim() !== "";
+    if ((!src && !hasRecordingId) || !waveformRef.current) return;
 
     const timer = setTimeout(() => {
-      const loadUrl = recordingId
-        ? `/api/voice/recordings/${encodeURIComponent(recordingId)}/stream`
-        : src;
+      // Always use proxy endpoint to avoid CORS issues
+      let loadUrl;
+      if (hasRecordingId) {
+        // Use recording ID proxy endpoint (preferred)
+        loadUrl = `/api/voice/recordings/${encodeURIComponent(recordingId)}/stream`;
+      } else if (src && (src.startsWith("http://") || src.startsWith("https://"))) {
+        // Use URL proxy endpoint for direct URLs to avoid CORS
+        loadUrl = `/api/voice/recordings/proxy?url=${encodeURIComponent(src)}`;
+      } else {
+        // Fallback to src if it's a relative URL
+        loadUrl = src;
+      }
+
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
         waveColor: "#6b7280",
@@ -97,12 +109,21 @@ export default function RecordingPlayer({
 
       wavesurfer.on("error", (error) => {
         console.error("[RecordingPlayer] WaveSurfer error:", error);
+        const errorMessage = error?.message || String(error) || "";
+        const errorString = errorMessage.toLowerCase();
+        
+        if (errorString.includes("failed to fetch") || errorString.includes("cors") || errorString.includes("networkerror")) {
+          toast.error("Failed to load recording. The recording may be unavailable, expired, or there was a network error.");
+        } else {
+          toast.error(`Failed to load recording: ${errorMessage || "Unknown error"}`);
+        }
       });
 
       try {
         wavesurfer.load(loadUrl);
       } catch (error) {
         console.error("[RecordingPlayer] Error loading recording:", error);
+        toast.error("Failed to initialize recording player");
       }
     }, 100);
 

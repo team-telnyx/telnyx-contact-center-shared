@@ -27,7 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconFileMusic, IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
+import {
+  IconFileMusic,
+  IconPlayerPlay,
+  IconPlayerStop,
+} from "@tabler/icons-react";
 
 const ROUTING_STRATEGIES = [
   { value: "FIFO", label: "FIFO" },
@@ -110,23 +114,34 @@ export default function EditSheet({
   const [selectedWrapupCodes, setSelectedWrapupCodes] = React.useState([]);
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
-  
+
   // Queue Audio Settings
   const [queueAudioMediaName, setQueueAudioMediaName] = React.useState("");
-  const [queueAudioEnablePosition, setQueueAudioEnablePosition] = React.useState(false);
-  const [queueAudioPositionInterval, setQueueAudioPositionInterval] = React.useState(60);
-  const [queueAudioTtsVoice, setQueueAudioTtsVoice] = React.useState("AWS.Polly.Joanna");
-  const [queueAudioTtsVoiceApiKeyRef, setQueueAudioTtsVoiceApiKeyRef] = React.useState("");
+  const [queueAudioEnablePosition, setQueueAudioEnablePosition] =
+    React.useState(false);
+  const [queueAudioPositionInterval, setQueueAudioPositionInterval] =
+    React.useState(60);
+  const [queueAudioTtsVoice, setQueueAudioTtsVoice] =
+    React.useState("AWS.Polly.Joanna");
+  const [queueAudioTtsVoiceApiKeyRef, setQueueAudioTtsVoiceApiKeyRef] =
+    React.useState("");
   const [mediaFiles, setMediaFiles] = React.useState([]);
-  
+
   // Debug: Track mediaFiles changes
   React.useEffect(() => {
-    console.log("[Queue EditSheet] mediaFiles state changed:", mediaFiles.length, "files");
+    console.log(
+      "[Queue EditSheet] mediaFiles state changed:",
+      mediaFiles.length,
+      "files"
+    );
     if (mediaFiles.length > 0) {
-      console.log("[Queue EditSheet] Media file names:", mediaFiles.map(f => f.media_name));
+      console.log(
+        "[Queue EditSheet] Media file names:",
+        mediaFiles.map((f) => f.media_name)
+      );
     }
   }, [mediaFiles]);
-  
+
   const [ttsProviders, setTtsProviders] = React.useState([]);
   const [ttsSecrets, setTtsSecrets] = React.useState([]);
   const [ttsLoading, setTtsLoading] = React.useState(false);
@@ -222,14 +237,18 @@ export default function EditSheet({
               .map((code) => code.wrapup_code_id)
               .filter(Boolean)
           );
-          
+
           // Load queue audio settings
           setQueueAudioMediaName(d.queue_audio_media_name || "");
           setQueueAudioEnablePosition(d.queue_audio_enable_position || false);
-          setQueueAudioPositionInterval(d.queue_audio_position_interval_secs || 60);
+          setQueueAudioPositionInterval(
+            d.queue_audio_position_interval_secs || 60
+          );
           setQueueAudioTtsVoice(d.queue_audio_tts_voice || "AWS.Polly.Joanna");
-          setQueueAudioTtsVoiceApiKeyRef(d.queue_audio_tts_voice_api_key_ref || "");
-          
+          setQueueAudioTtsVoiceApiKeyRef(
+            d.queue_audio_tts_voice_api_key_ref || ""
+          );
+
           // Parse TTS voice string
           if (d.queue_audio_tts_voice) {
             const parts = d.queue_audio_tts_voice.split(".");
@@ -299,38 +318,58 @@ export default function EditSheet({
 
         // Load media files for queue audio
         try {
-          const mediaRes = await fetch("/api/admin/media-library?pageSize=1000", {
-            cache: "no-store",
-          });
+          const mediaRes = await fetch(
+            "/api/admin/media-library?pageSize=1000",
+            {
+              cache: "no-store",
+            }
+          );
           if (mediaRes.ok) {
             const mediaData = await mediaRes.json();
             console.log("[Queue EditSheet] Media files response:", {
               itemsCount: mediaData.items?.length || 0,
               total: mediaData.total,
-              sampleItems: mediaData.items?.slice(0, 3).map(item => ({
+              sampleItems: mediaData.items?.slice(0, 3).map((item) => ({
                 media_name: item.media_name,
-                content_type: item.content_type
-              }))
+                content_type: item.content_type,
+              })),
             });
-            const files = (mediaData.items || []).filter(file => file && file.media_name);
-            console.log("[Queue EditSheet] Setting mediaFiles state with:", files.length, "files", files.map(f => f.media_name));
+            const files = (mediaData.items || []).filter(
+              (file) => file && file.media_name
+            );
+            console.log(
+              "[Queue EditSheet] Setting mediaFiles state with:",
+              files.length,
+              "files",
+              files.map((f) => f.media_name)
+            );
             if (files.length > 0) {
               setMediaFiles(files);
             } else {
-              console.warn("[Queue EditSheet] No valid media files after filtering");
+              console.warn(
+                "[Queue EditSheet] No valid media files after filtering"
+              );
               setMediaFiles([]);
             }
-            
+
             // Debug: Log after state update attempt
             setTimeout(() => {
-              console.log("[Queue EditSheet] mediaFiles state check (after setState):", files.length);
+              console.log(
+                "[Queue EditSheet] mediaFiles state check (after setState):",
+                files.length
+              );
             }, 100);
             if (mediaData.items && mediaData.items.length === 0) {
-              console.warn("[Queue EditSheet] No media files found. Check if files are uploaded and have audio content type or extension.");
+              console.warn(
+                "[Queue EditSheet] No media files found. Check if files are uploaded and have audio content type or extension."
+              );
             }
           } else {
             const errorData = await mediaRes.json().catch(() => ({}));
-            console.error("[Queue EditSheet] Failed to load media files:", errorData.error || mediaRes.statusText);
+            console.error(
+              "[Queue EditSheet] Failed to load media files:",
+              errorData.error || mediaRes.statusText
+            );
           }
         } catch (err) {
           console.error("[Queue EditSheet] Error loading media files:", err);
@@ -775,11 +814,17 @@ export default function EditSheet({
                                 className="flex items-start gap-2 text-sm"
                               >
                                 <Checkbox
-                                  checked={selectedWrapupCodes.includes(code.id)}
-                                  onCheckedChange={() => toggleWrapupCode(code.id)}
+                                  checked={selectedWrapupCodes.includes(
+                                    code.id
+                                  )}
+                                  onCheckedChange={() =>
+                                    toggleWrapupCode(code.id)
+                                  }
                                 />
                                 <span className="leading-tight">
-                                  <span className="font-medium">{code.name}</span>
+                                  <span className="font-medium">
+                                    {code.name}
+                                  </span>
                                   {code.description ? (
                                     <span className="block text-xs text-muted-foreground">
                                       {code.description}
@@ -810,7 +855,8 @@ export default function EditSheet({
                             key={`media-select-${mediaFiles.length}`}
                             value={queueAudioMediaName || "__none__"}
                             onValueChange={(value) => {
-                              const actualValue = value === "__none__" ? "" : value;
+                              const actualValue =
+                                value === "__none__" ? "" : value;
                               setQueueAudioMediaName(actualValue);
                               // Enable position announcements when media is selected
                               if (actualValue && !queueAudioEnablePosition) {
@@ -827,7 +873,10 @@ export default function EditSheet({
                                 mediaFiles
                                   .filter((file) => file && file.media_name)
                                   .map((file) => (
-                                    <SelectItem key={file.media_name} value={file.media_name}>
+                                    <SelectItem
+                                      key={file.media_name}
+                                      value={file.media_name}
+                                    >
                                       <div className="flex items-center gap-2">
                                         <IconFileMusic className="size-4 text-telnyx-green" />
                                         {file.media_name}
@@ -836,7 +885,9 @@ export default function EditSheet({
                                   ))
                               ) : (
                                 <SelectItem value="__loading__" disabled>
-                                  {loading ? "Loading media files..." : "No media files available"}
+                                  {loading
+                                    ? "Loading media files..."
+                                    : "No media files available"}
                                 </SelectItem>
                               )}
                             </SelectContent>
@@ -860,11 +911,16 @@ export default function EditSheet({
                                   // Start playback
                                   try {
                                     setIsPlayingMedia(true);
-                                    const streamUrl = `/api/admin/media-library/${encodeURIComponent(queueAudioMediaName)}/stream`;
+                                    const streamUrl = `/api/admin/media-library/${encodeURIComponent(
+                                      queueAudioMediaName
+                                    )}/stream`;
                                     const audio = new Audio(streamUrl);
                                     audio.loop = true;
                                     audio.play().catch((err) => {
-                                      console.error("Failed to play audio:", err);
+                                      console.error(
+                                        "Failed to play audio:",
+                                        err
+                                      );
                                       setIsPlayingMedia(false);
                                     });
                                     audio.addEventListener("ended", () => {
@@ -890,7 +946,8 @@ export default function EditSheet({
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Audio file to play on loop while call is waiting in queue
+                          Audio file to play on loop while call is waiting in
+                          queue
                         </p>
                       </div>
 
@@ -953,7 +1010,8 @@ export default function EditSheet({
                                 {/* Provider */}
                                 <div className="grid gap-2">
                                   <Label className="text-sm">
-                                    Provider <span className="text-red-500">*</span>
+                                    Provider{" "}
+                                    <span className="text-red-500">*</span>
                                   </Label>
                                   <Select
                                     value={ttsProvider}
@@ -977,10 +1035,19 @@ export default function EditSheet({
                                       {ttsProviders
                                         .map((p) => {
                                           const providerKey =
-                                            p?.id || p?.provider || p?.name || "";
+                                            p?.id ||
+                                            p?.provider ||
+                                            p?.name ||
+                                            "";
                                           const providerLabel =
-                                            p?.name || p?.provider || p?.id || "";
-                                          if (!providerKey || providerKey.trim() === "")
+                                            p?.name ||
+                                            p?.provider ||
+                                            p?.id ||
+                                            "";
+                                          if (
+                                            !providerKey ||
+                                            providerKey.trim() === ""
+                                          )
                                             return null;
                                           return (
                                             <SelectItem
@@ -1019,7 +1086,10 @@ export default function EditSheet({
                                     return (
                                       <div className="grid gap-2">
                                         <Label className="text-sm">
-                                          Model <span className="text-red-500">*</span>
+                                          Model{" "}
+                                          <span className="text-red-500">
+                                            *
+                                          </span>
                                         </Label>
                                         <Select
                                           value={
@@ -1029,7 +1099,9 @@ export default function EditSheet({
                                           }
                                           onValueChange={(value) => {
                                             const actualModel =
-                                              value === "__default__" ? "" : value;
+                                              value === "__default__"
+                                                ? ""
+                                                : value;
                                             setTtsModel(actualModel);
                                             setTtsVoiceName("");
                                           }}
@@ -1047,7 +1119,10 @@ export default function EditSheet({
                                               </SelectItem>
                                             )}
                                             {models.map((m) => (
-                                              <SelectItem key={m.id} value={m.id}>
+                                              <SelectItem
+                                                key={m.id}
+                                                value={m.id}
+                                              >
                                                 {m.name}
                                               </SelectItem>
                                             ))}
@@ -1068,7 +1143,10 @@ export default function EditSheet({
                                   );
                                   const allVoices = [];
                                   if (selectedProvider?.models) {
-                                    if (!ttsModel || ttsModel === "__default__") {
+                                    if (
+                                      !ttsModel ||
+                                      ttsModel === "__default__"
+                                    ) {
                                       for (const m of selectedProvider.models) {
                                         const modelVoices =
                                           typeof m === "object" && m.voices
@@ -1077,12 +1155,13 @@ export default function EditSheet({
                                         allVoices.push(...modelVoices);
                                       }
                                     } else {
-                                      const modelObj = selectedProvider.models.find(
-                                        (m) =>
-                                          (typeof m === "object"
-                                            ? m.id || m.name
-                                            : m) === ttsModel
-                                      );
+                                      const modelObj =
+                                        selectedProvider.models.find(
+                                          (m) =>
+                                            (typeof m === "object"
+                                              ? m.id || m.name
+                                              : m) === ttsModel
+                                        );
                                       if (
                                         modelObj &&
                                         typeof modelObj === "object" &&
@@ -1098,7 +1177,10 @@ export default function EditSheet({
                                     return (
                                       <div className="grid gap-2">
                                         <Label className="text-sm">
-                                          Voice <span className="text-red-500">*</span>
+                                          Voice{" "}
+                                          <span className="text-red-500">
+                                            *
+                                          </span>
                                         </Label>
                                         <div className="flex items-center gap-2">
                                           <div className="flex-1">
@@ -1106,11 +1188,12 @@ export default function EditSheet({
                                               value={ttsVoiceName}
                                               onChange={(value) => {
                                                 setTtsVoiceName(value);
-                                                const voiceStr = buildVoiceString(
-                                                  ttsProvider,
-                                                  ttsModel,
-                                                  value
-                                                );
+                                                const voiceStr =
+                                                  buildVoiceString(
+                                                    ttsProvider,
+                                                    ttsModel,
+                                                    value
+                                                  );
                                                 setQueueAudioTtsVoice(voiceStr);
                                               }}
                                               options={voices
@@ -1123,101 +1206,153 @@ export default function EditSheet({
                                               searchable={true}
                                             />
                                           </div>
-                                          {ttsVoiceName && queueAudioTtsVoice && (
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="icon"
-                                              className="h-9 w-9 shrink-0"
-                                              onClick={async () => {
-                                                if (isTestingTts && ttsTestAudioRef.current) {
-                                                  // Stop playback
-                                                  ttsTestAudioRef.current.pause();
-                                                  ttsTestAudioRef.current.currentTime = 0;
-                                                  ttsTestAudioRef.current = null;
-                                                  setIsTestingTts(false);
-                                                  return;
-                                                }
-
-                                                // Generate random position between 1 and 20
-                                                const randomPosition = Math.floor(Math.random() * 20) + 1;
-                                                const testMessage = `your current position in a queue is ${randomPosition}`;
-
-                                                try {
-                                                  setIsTestingTts(true);
-
-                                                  const response = await fetch("/api/tts/speech", {
-                                                    method: "POST",
-                                                    headers: {
-                                                      "Content-Type": "application/json",
-                                                      "Cache-Control": "no-cache, no-store, must-revalidate",
-                                                    },
-                                                    cache: "no-store",
-                                                    body: JSON.stringify({
-                                                      text: testMessage,
-                                                      voice: queueAudioTtsVoice,
-                                                      voice_api_key_ref: queueAudioTtsVoiceApiKeyRef || "",
-                                                    }),
-                                                  });
-
-                                                  if (!response.ok) {
-                                                    const errorData = await response.json().catch(() => ({}));
-                                                    let errorMessage = "Failed to generate speech";
-                                                    if (errorData?.error) {
-                                                      errorMessage = errorData.error;
-                                                    } else if (
-                                                      errorData?.errors &&
-                                                      Array.isArray(errorData.errors) &&
-                                                      errorData.errors.length > 0
-                                                    ) {
-                                                      const firstError = errorData.errors[0];
-                                                      errorMessage = firstError.detail || firstError.title || errorMessage;
-                                                    }
-                                                    throw new Error(errorMessage);
+                                          {ttsVoiceName &&
+                                            queueAudioTtsVoice && (
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-9 w-9 shrink-0"
+                                                onClick={async () => {
+                                                  if (
+                                                    isTestingTts &&
+                                                    ttsTestAudioRef.current
+                                                  ) {
+                                                    // Stop playback
+                                                    ttsTestAudioRef.current.pause();
+                                                    ttsTestAudioRef.current.currentTime = 0;
+                                                    ttsTestAudioRef.current =
+                                                      null;
+                                                    setIsTestingTts(false);
+                                                    return;
                                                   }
 
-                                                  const audioBlob = await response.blob();
-                                                  const audioUrl = URL.createObjectURL(audioBlob);
-                                                  const audioElement = new Audio(audioUrl);
+                                                  // Generate random position between 1 and 20
+                                                  const randomPosition =
+                                                    Math.floor(
+                                                      Math.random() * 20
+                                                    ) + 1;
+                                                  const testMessage = `your current position in a queue is ${randomPosition}`;
 
-                                                  audioElement.onended = () => {
-                                                    setIsTestingTts(false);
-                                                    ttsTestAudioRef.current = null;
-                                                    URL.revokeObjectURL(audioUrl);
-                                                  };
+                                                  try {
+                                                    setIsTestingTts(true);
 
-                                                  audioElement.onerror = () => {
-                                                    setIsTestingTts(false);
-                                                    ttsTestAudioRef.current = null;
-                                                    URL.revokeObjectURL(audioUrl);
+                                                    const response =
+                                                      await fetch(
+                                                        "/api/tts/speech",
+                                                        {
+                                                          method: "POST",
+                                                          headers: {
+                                                            "Content-Type":
+                                                              "application/json",
+                                                            "Cache-Control":
+                                                              "no-cache, no-store, must-revalidate",
+                                                          },
+                                                          cache: "no-store",
+                                                          body: JSON.stringify({
+                                                            text: testMessage,
+                                                            voice:
+                                                              queueAudioTtsVoice,
+                                                            voice_api_key_ref:
+                                                              queueAudioTtsVoiceApiKeyRef ||
+                                                              "",
+                                                          }),
+                                                        }
+                                                      );
+
+                                                    if (!response.ok) {
+                                                      const errorData =
+                                                        await response
+                                                          .json()
+                                                          .catch(() => ({}));
+                                                      let errorMessage =
+                                                        "Failed to generate speech";
+                                                      if (errorData?.error) {
+                                                        errorMessage =
+                                                          errorData.error;
+                                                      } else if (
+                                                        errorData?.errors &&
+                                                        Array.isArray(
+                                                          errorData.errors
+                                                        ) &&
+                                                        errorData.errors
+                                                          .length > 0
+                                                      ) {
+                                                        const firstError =
+                                                          errorData.errors[0];
+                                                        errorMessage =
+                                                          firstError.detail ||
+                                                          firstError.title ||
+                                                          errorMessage;
+                                                      }
+                                                      throw new Error(
+                                                        errorMessage
+                                                      );
+                                                    }
+
+                                                    const audioBlob =
+                                                      await response.blob();
+                                                    const audioUrl =
+                                                      URL.createObjectURL(
+                                                        audioBlob
+                                                      );
+                                                    const audioElement =
+                                                      new Audio(audioUrl);
+
+                                                    audioElement.onended =
+                                                      () => {
+                                                        setIsTestingTts(false);
+                                                        ttsTestAudioRef.current =
+                                                          null;
+                                                        URL.revokeObjectURL(
+                                                          audioUrl
+                                                        );
+                                                      };
+
+                                                    audioElement.onerror =
+                                                      () => {
+                                                        setIsTestingTts(false);
+                                                        ttsTestAudioRef.current =
+                                                          null;
+                                                        URL.revokeObjectURL(
+                                                          audioUrl
+                                                        );
+                                                        notify({
+                                                          title: "Error",
+                                                          description:
+                                                            "Error playing audio",
+                                                          variant: "error",
+                                                        });
+                                                      };
+
+                                                    ttsTestAudioRef.current =
+                                                      audioElement;
+                                                    await audioElement.play();
+                                                  } catch (error) {
+                                                    console.error(
+                                                      "Error testing TTS:",
+                                                      error
+                                                    );
                                                     notify({
                                                       title: "Error",
-                                                      description: "Error playing audio",
+                                                      description:
+                                                        error.message ||
+                                                        "Failed to generate speech",
                                                       variant: "error",
                                                     });
-                                                  };
-
-                                                  ttsTestAudioRef.current = audioElement;
-                                                  await audioElement.play();
-                                                } catch (error) {
-                                                  console.error("Error testing TTS:", error);
-                                                  notify({
-                                                    title: "Error",
-                                                    description: error.message || "Failed to generate speech",
-                                                    variant: "error",
-                                                  });
-                                                  setIsTestingTts(false);
-                                                  ttsTestAudioRef.current = null;
-                                                }
-                                              }}
-                                            >
-                                              {isTestingTts ? (
-                                                <IconPlayerStop className="size-4" />
-                                              ) : (
-                                                <IconPlayerPlay className="size-4" />
-                                              )}
-                                            </Button>
-                                          )}
+                                                    setIsTestingTts(false);
+                                                    ttsTestAudioRef.current =
+                                                      null;
+                                                  }
+                                                }}
+                                              >
+                                                {isTestingTts ? (
+                                                  <IconPlayerStop className="size-4" />
+                                                ) : (
+                                                  <IconPlayerPlay className="size-4" />
+                                                )}
+                                              </Button>
+                                            )}
                                         </div>
                                       </div>
                                     );
@@ -1232,17 +1367,25 @@ export default function EditSheet({
                                       Voice API Key Reference
                                     </Label>
                                     <Select
-                                      value={queueAudioTtsVoiceApiKeyRef || "__none__"}
+                                      value={
+                                        queueAudioTtsVoiceApiKeyRef ||
+                                        "__none__"
+                                      }
                                       onValueChange={(value) => {
-                                        const actualValue = value === "__none__" ? "" : value;
-                                        setQueueAudioTtsVoiceApiKeyRef(actualValue);
+                                        const actualValue =
+                                          value === "__none__" ? "" : value;
+                                        setQueueAudioTtsVoiceApiKeyRef(
+                                          actualValue
+                                        );
                                       }}
                                     >
                                       <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select API key" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="__none__">None</SelectItem>
+                                        <SelectItem value="__none__">
+                                          None
+                                        </SelectItem>
                                         {ttsSecrets.map((secret) => (
                                           <SelectItem
                                             key={secret.id}
@@ -1254,7 +1397,8 @@ export default function EditSheet({
                                       </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                      API key reference for ElevenLabs voice provider
+                                      API key reference for ElevenLabs voice
+                                      provider
                                     </p>
                                   </div>
                                 )}
