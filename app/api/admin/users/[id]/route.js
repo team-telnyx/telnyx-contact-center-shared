@@ -30,7 +30,17 @@ export async function GET(request, { params }) {
   const r = await pool.query(`SELECT * FROM users WHERE id=$1`, [id]);
   if (!r.rows?.[0])
     return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(r.rows[0]);
+
+  // Get queue assignments for this user
+  const queueAssignmentsRes = await pool.query(
+    `SELECT * FROM cc_queue_user_assignments WHERE user_id = $1`,
+    [id]
+  );
+
+  const userData = r.rows[0];
+  userData.queue_assignments = queueAssignmentsRes.rows || [];
+
+  return NextResponse.json(userData);
 }
 
 export async function PUT(request, { params }) {
@@ -108,7 +118,59 @@ export async function PUT(request, { params }) {
 
   try {
     const skillsChanged = body.skills !== undefined;
+    const queueIdsChanged = body.queueIds !== undefined;
+
     await PgDb.updateUserById(id, set);
+
+    // Handle queue assignments
+    if (queueIdsChanged && Array.isArray(body.queueIds)) {
+      const pool = getPostgresPool();
+      if (pool) {
+        // Get current assignments
+        const currentAssignmentsRes = await pool.query(
+          `SELECT queue_id FROM cc_queue_user_assignments WHERE user_id = $1`,
+          [id]
+        );
+        const currentQueueIds = new Set(
+          currentAssignmentsRes.rows.map((row) => row.queue_id)
+        );
+        const newQueueIds = new Set(body.queueIds);
+
+        // Find queues to add
+        const queuesToAdd = body.queueIds.filter(
+          (queueId) => !currentQueueIds.has(queueId)
+        );
+        // Find queues to remove
+        const queuesToRemove = Array.from(currentQueueIds).filter(
+          (queueId) => !newQueueIds.has(queueId)
+        );
+
+        // Add new queue assignments
+        const { randomUUID } = await import("crypto");
+        for (const queueId of queuesToAdd) {
+          await pool.query(
+            `INSERT INTO cc_queue_user_assignments (id, queue_id, user_id, priority, enabled, activated_at, created_at, updated_at)
+             VALUES ($1, $2, $3, 0, true, NOW(), NOW(), NOW())
+             ON CONFLICT (queue_id, user_id) DO UPDATE SET
+               enabled = true,
+               activated_at = NOW(),
+               deactivated_at = NULL,
+               updated_at = NOW()`,
+            [randomUUID(), queueId, id]
+          );
+        }
+
+        // Remove/deactivate queue assignments
+        if (queuesToRemove.length > 0) {
+          await pool.query(
+            `UPDATE cc_queue_user_assignments 
+             SET enabled = false, deactivated_at = NOW(), updated_at = NOW()
+             WHERE user_id = $1 AND queue_id = ANY($2::text[])`,
+            [id, queuesToRemove]
+          );
+        }
+      }
+    }
 
     // If skills were changed, re-evaluate waiting interactions
     if (skillsChanged) {

@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Combobox } from "@/components/ui/combobox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEdit, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconEdit } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +107,7 @@ export default function EditSheet({
   const [active, setActive] = React.useState(true);
   const [skillRequirements, setSkillRequirements] = React.useState({});
   const [priorityRules, setPriorityRules] = React.useState([]);
-  const [userAssignments, setUserAssignments] = React.useState([]);
+  const [assignedUserIds, setAssignedUserIds] = React.useState([]); // Array of user IDs
   const [availableQueues, setAvailableQueues] = React.useState([]);
   const [availableUsers, setAvailableUsers] = React.useState([]);
   const [availableWrapupCodes, setAvailableWrapupCodes] = React.useState([]);
@@ -173,7 +173,7 @@ export default function EditSheet({
           setActive(true);
           setSkillRequirements({});
           setPriorityRules([]);
-          setUserAssignments([]);
+          setAssignedUserIds([]);
           setSelectedWrapupCodes([]);
           setQueueAudioMediaName("");
           setQueueAudioEnablePosition(false);
@@ -220,17 +220,12 @@ export default function EditSheet({
               ? JSON.parse(d.priority_rules)
               : d.priority_rules || []
           );
-          setUserAssignments(
-            (d.userAssignments || []).map((ua) => ({
-              userId: ua.user_id,
-              username: ua.username,
-              name:
-                [ua.first_name, ua.last_name].filter(Boolean).join(" ") ||
-                ua.nick ||
-                ua.username,
-              priority: ua.priority || 0,
-              enabled: ua.enabled !== undefined ? ua.enabled : true,
-            }))
+          // Extract user IDs from assignments
+          setAssignedUserIds(
+            (d.userAssignments || [])
+              .filter((ua) => ua.enabled !== false)
+              .map((ua) => ua.user_id)
+              .filter(Boolean)
           );
           setSelectedWrapupCodes(
             (d.wrapupCodes || [])
@@ -454,36 +449,6 @@ export default function EditSheet({
     };
   }, []);
 
-  function addUserAssignment() {
-    if (availableUsers.length === 0) return;
-    const firstUser = availableUsers[0];
-    setUserAssignments([
-      ...userAssignments,
-      {
-        userId: firstUser.id,
-        username: firstUser.username,
-        name:
-          [firstUser.first_name, firstUser.last_name]
-            .filter(Boolean)
-            .join(" ") ||
-          firstUser.nick ||
-          firstUser.username,
-        priority: 0,
-        enabled: true,
-      },
-    ]);
-  }
-
-  function removeUserAssignment(index) {
-    setUserAssignments(userAssignments.filter((_, i) => i !== index));
-  }
-
-  function updateUserAssignment(index, field, value) {
-    const updated = [...userAssignments];
-    updated[index] = { ...updated[index], [field]: value };
-    setUserAssignments(updated);
-  }
-
   function toggleWrapupCode(codeId) {
     setSelectedWrapupCodes((prev) => {
       if (prev.includes(codeId)) {
@@ -535,10 +500,10 @@ export default function EditSheet({
         skillRequirements,
         priorityRules,
         wrapupCodes: selectedWrapupCodes,
-        userAssignments: userAssignments.map((ua) => ({
-          userId: ua.userId,
-          priority: Number(ua.priority),
-          enabled: ua.enabled,
+        userAssignments: assignedUserIds.map((userId) => ({
+          userId,
+          priority: 0,
+          enabled: true,
         })),
         queueAudioMediaName: queueAudioMediaName || null,
         queueAudioEnablePosition: queueAudioEnablePosition,
@@ -1414,85 +1379,67 @@ export default function EditSheet({
 
                   {/* User Assignments */}
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-sm font-semibold text-muted-foreground">
-                        User Assignments
-                      </h3>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addUserAssignment}
-                      >
-                        <IconPlus className="size-4 mr-1" />
-                        Add User
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {userAssignments.map((ua, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-2 p-2 border rounded"
-                        >
-                          <div className="flex-1 grid grid-cols-3 gap-2">
-                            <Combobox
-                              value={ua.userId}
-                              onChange={(v) =>
-                                updateUserAssignment(index, "userId", v)
-                              }
-                              options={availableUsers.map((u) => ({
-                                value: u.id,
-                                label:
-                                  [u.first_name, u.last_name]
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      User Assignments
+                    </h3>
+                    {loading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableUsers.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No users available.
+                          </p>
+                        ) : (
+                          <div className="rounded border overflow-hidden">
+                            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+                              {availableUsers.map((user) => {
+                                const isAssigned = assignedUserIds.includes(
+                                  user.id
+                                );
+                                const userName =
+                                  [user.first_name, user.last_name]
                                     .filter(Boolean)
-                                    .join(" ") ||
-                                  u.nick ||
-                                  u.username,
-                              }))}
-                              placeholder="Select user"
-                              searchable={true}
-                              contentClassName="w-[300px]"
-                            />
-                            <Input
-                              type="number"
-                              placeholder="Priority"
-                              value={ua.priority}
-                              onChange={(e) =>
-                                updateUserAssignment(
-                                  index,
-                                  "priority",
-                                  Number(e.target.value)
-                                )
-                              }
-                              className="w-20"
-                            />
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                checked={ua.enabled}
-                                onCheckedChange={(v) =>
-                                  updateUserAssignment(index, "enabled", v)
-                                }
-                              />
-                              <Label className="text-xs">Enabled</Label>
+                                    .join(" ") || user.username;
+                                return (
+                                  <label
+                                    key={user.id}
+                                    className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors"
+                                  >
+                                    <Checkbox
+                                      checked={isAssigned}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setAssignedUserIds([
+                                            ...assignedUserIds,
+                                            user.id,
+                                          ]);
+                                        } else {
+                                          setAssignedUserIds(
+                                            assignedUserIds.filter(
+                                              (id) => id !== user.id
+                                            )
+                                          );
+                                        }
+                                      }}
+                                      className="mt-0.5 shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium">
+                                        {userName}
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
                             </div>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeUserAssignment(index)}
-                          >
-                            <IconTrash className="size-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                      {userAssignments.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          No users assigned. Click "Add User" to assign users to
-                          this queue.
-                        </p>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

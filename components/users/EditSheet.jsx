@@ -117,6 +117,9 @@ export default function EditSheet({
   const [availableSkills, setAvailableSkills] = React.useState([]);
   const [userSkills, setUserSkills] = React.useState({}); // { skillId: proficiency (1-5) }
   const [skillsLoading, setSkillsLoading] = React.useState(false);
+  const [availableQueues, setAvailableQueues] = React.useState([]);
+  const [userQueueIds, setUserQueueIds] = React.useState([]); // Array of queue IDs
+  const [queuesLoading, setQueuesLoading] = React.useState(false);
 
   // Load user data when userId changes
   React.useEffect(() => {
@@ -154,6 +157,12 @@ export default function EditSheet({
           // Load user skills - skills is stored as JSONB object { skillId: proficiency }
           const skills = d.skills || {};
           setUserSkills(typeof skills === 'string' ? JSON.parse(skills) : skills);
+          // Load user queue assignments
+          if (d.queue_assignments && Array.isArray(d.queue_assignments)) {
+            setUserQueueIds(d.queue_assignments.map((qa) => qa.queue_id).filter(Boolean));
+          } else {
+            setUserQueueIds([]);
+          }
         } else {
           notify({
             title: "Failed to load user",
@@ -202,6 +211,30 @@ export default function EditSheet({
     }
   }, [open]);
 
+  // Load available queues
+  React.useEffect(() => {
+    async function loadQueues() {
+      setQueuesLoading(true);
+      try {
+        const res = await fetch("/api/admin/queues?enabled=true&pageSize=1000", {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableQueues(data.rows || []);
+        }
+      } catch (err) {
+        console.error("Failed to load queues:", err);
+      } finally {
+        setQueuesLoading(false);
+      }
+    }
+
+    if (open) {
+      loadQueues();
+    }
+  }, [open]);
+
 
   async function onSave() {
     if (!userId) {
@@ -226,6 +259,7 @@ export default function EditSheet({
         smsNumber,
         voiceNumber,
         skills: userSkills, // Send skills object { skillId: proficiency }
+        queueIds: userQueueIds, // Send array of queue IDs
       };
 
       const r = await fetch(`/api/admin/users/${encodeURIComponent(userId)}`, {
@@ -480,6 +514,67 @@ export default function EditSheet({
                         />
                       </div>
                     </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Queue Assignments Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Queue Assignments
+                    </h3>
+                    {queuesLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {availableQueues.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No queues available. Create queues in the Queues management page.
+                          </p>
+                        ) : (
+                          <div className="rounded border overflow-hidden">
+                            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+                              {availableQueues.map((queue) => {
+                                const isAssigned = userQueueIds.includes(queue.id);
+                                return (
+                                  <label
+                                    key={queue.id}
+                                    className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors"
+                                  >
+                                    <Checkbox
+                                      checked={isAssigned}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setUserQueueIds([...userQueueIds, queue.id]);
+                                        } else {
+                                          setUserQueueIds(
+                                            userQueueIds.filter((id) => id !== queue.id)
+                                          );
+                                        }
+                                      }}
+                                      className="mt-0.5 shrink-0"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium">
+                                        {queue.display_name || queue.name}
+                                      </div>
+                                      {queue.description && (
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                          {queue.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="border-t" />
