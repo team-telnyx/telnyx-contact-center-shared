@@ -116,7 +116,6 @@ export function TelephonyProvider({ children }) {
   function clearTokenCache() {
     try {
       localStorage.removeItem("webrtc.token.cache");
-      console.log("[webrtc] Cleared token cache");
     } catch (_) {}
   }
 
@@ -182,29 +181,10 @@ export function TelephonyProvider({ children }) {
             token = String(cached.token);
             tokenRef.current = token;
             tokenFetchedAtRef.current = Number(cached.ts || now);
-            console.log(
-              "[webrtc] Using cached token from same environment:",
-              currentEnv
-            );
-          } else {
-            console.log(
-              "[webrtc] Forcing token refresh:",
-              forceRefresh ? "scheduled refresh" : "expired"
-            );
           }
-        } else {
-          console.log(
-            "[webrtc] Invalid cache - env mismatch or version change:",
-            {
-              cachedEnv: cached?.env,
-              currentEnv,
-              cachedVersion: cached?.version,
-              currentVersion: CACHE_VERSION,
-            }
-          );
         }
       } catch (_) {
-        console.log("[webrtc] Cache parse error, fetching fresh token");
+        // Cache parse error, fetching fresh token
       }
 
       if (!token) {
@@ -217,9 +197,6 @@ export function TelephonyProvider({ children }) {
 
         // If auth error, try refreshing the session token first
         if (resp.status === 401 || resp.status === 403) {
-          console.log(
-            "[webrtc] Auth error fetching voice token, attempting token refresh"
-          );
           try {
             const refreshResp = await fetch("/api/auth/refresh", {
               method: "POST",
@@ -244,7 +221,6 @@ export function TelephonyProvider({ children }) {
               throw refreshErr;
             }
             // If refresh fails, continue with original error
-            console.warn("[webrtc] Token refresh failed:", refreshErr);
           }
         }
 
@@ -284,10 +260,6 @@ export function TelephonyProvider({ children }) {
               env: currentEnv,
               version: CACHE_VERSION,
             })
-          );
-          console.log(
-            "[webrtc] Stored fresh token for environment:",
-            currentEnv
           );
         } catch (_) {}
       }

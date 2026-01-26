@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Phone, PhoneIncoming, Clock, Mic, MicOff, Pause } from "lucide-react";
-import { IconPhone } from "@tabler/icons-react";
+import { IconPhone, IconRobot } from "@tabler/icons-react";
 import { getStatusDisplay } from "@/lib/call-status-utils";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import AiConversationSheet from "./AiConversationSheet";
@@ -263,18 +263,18 @@ function InteractionCard({
   // Prioritize from_number (database field) - it's the source of truth
   // Check for both truthiness and non-empty string
   let callerNumber =
-    (interaction.from_number && interaction.from_number.trim() !== "")
+    interaction.from_number && interaction.from_number.trim() !== ""
       ? interaction.from_number
-      : (interaction.fromNumber && interaction.fromNumber.trim() !== "")
+      : interaction.fromNumber && interaction.fromNumber.trim() !== ""
       ? interaction.fromNumber
-      : (interaction.from && interaction.from.trim() !== "")
+      : interaction.from && interaction.from.trim() !== ""
       ? interaction.from
-      : (interaction.caller_number && interaction.caller_number.trim() !== "")
+      : interaction.caller_number && interaction.caller_number.trim() !== ""
       ? interaction.caller_number
-      : (interaction.callerNumber && interaction.callerNumber.trim() !== "")
+      : interaction.callerNumber && interaction.callerNumber.trim() !== ""
       ? interaction.callerNumber
       : null;
-  
+
   // Fallback: try to extract from routing_metadata timeline if still missing
   if (!callerNumber && interaction.routing_metadata?.timeline) {
     const initiatedEvent = interaction.routing_metadata.timeline.find(
@@ -284,9 +284,26 @@ function InteractionCard({
       callerNumber = initiatedEvent.from;
     }
   }
-  
+
   const callerNumberLabel = callerNumber || "Unknown number";
   const callerNameLabel = callerName || null;
+
+  // Check if this is an AI-transferred call
+  // Handle both parsed metadata object and string metadata
+  const metadata =
+    typeof interaction.metadata === "string"
+      ? (() => {
+          try {
+            return JSON.parse(interaction.metadata);
+          } catch {
+            return {};
+          }
+        })()
+      : interaction.metadata || {};
+
+  const isAiCall = !!(
+    metadata?.ai_call_control_id || interaction.ai_call_control_id
+  );
 
   return (
     <div
@@ -303,7 +320,7 @@ function InteractionCard({
       <div className="flex items-start gap-2 mb-2">
         <div
           className={cn(
-            "p-2 rounded-lg shrink-0 shadow-sm",
+            "p-2 rounded-lg shrink-0 shadow-sm relative",
             isActive
               ? "bg-orange-500 text-white"
               : isEnded
@@ -312,12 +329,27 @@ function InteractionCard({
           )}
         >
           <PhoneIncoming className="h-4 w-4" />
+          {isAiCall && (
+            <div className="absolute -top-1 -right-1 bg-violet-500 rounded-full p-0.5">
+              <IconRobot className="h-2.5 w-2.5 text-white" />
+            </div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide mb-0.5">
-                {interaction.queue_name || "Contact Center"}
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <div className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">
+                  {interaction.queue_name || "Contact Center"}
+                </div>
+                {isAiCall && (
+                  <div
+                    className="flex items-center gap-1 text-violet-600"
+                    title="AI-transferred call"
+                  >
+                    <IconRobot className="h-3 w-3" />
+                  </div>
+                )}
               </div>
               <div className="font-bold text-sm text-orange-600 truncate">
                 {callerNameLabel || callerNumberLabel}

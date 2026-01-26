@@ -173,11 +173,8 @@ export async function POST(request, { params }) {
     // Update interaction
     await PgDb.updateInteractionById(id, updates);
 
-    console.log(`[Metrics] ✅ Updated metrics for interaction ${id}:`, updates);
-
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Metrics] Error updating interaction metrics:", err);
     return NextResponse.json(
       { ok: false, error: "Internal server error" },
       { status: 500 }

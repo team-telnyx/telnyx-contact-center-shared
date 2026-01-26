@@ -107,7 +107,31 @@ export async function PUT(request, { params }) {
   }
 
   try {
+    const skillsChanged = body.skills !== undefined;
     await PgDb.updateUserById(id, set);
+    
+    // If skills were changed, re-evaluate waiting interactions
+    if (skillsChanged) {
+      try {
+        const { reEvaluateWaitingInteractionsForUser } = await import(
+          "@/lib/contact-center/skills-re-evaluator.js"
+        );
+        // Run asynchronously - don't wait for it to complete
+        reEvaluateWaitingInteractionsForUser(id).catch((error) => {
+          console.error(
+            "[UserUpdate] Error re-evaluating waiting interactions:",
+            error
+          );
+        });
+      } catch (reEvalError) {
+        // Log but don't fail the user update
+        console.error(
+          "[UserUpdate] Failed to trigger re-evaluation:",
+          reEvalError
+        );
+      }
+    }
+    
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err?.message || String(err);

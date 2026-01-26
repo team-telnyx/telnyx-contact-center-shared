@@ -19,7 +19,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const callControlId = searchParams.get("callControlId");
 
-    if (!callControlId) {
+    if (!callControlId || callControlId.trim() === "") {
       return NextResponse.json(
         { ok: false, error: "callControlId is required" },
         { status: 400 }

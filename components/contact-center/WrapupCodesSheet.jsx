@@ -103,9 +103,7 @@ export default function WrapupCodesSheet({
     if (!Array.isArray(transcriptions)) return [];
     return Array.from(
       new Set(
-        transcriptions
-          .map((t) => t?.intent)
-          .filter((intent) => Boolean(intent))
+        transcriptions.map((t) => t?.intent).filter((intent) => Boolean(intent))
       )
     );
   }, [transcriptions]);
@@ -299,21 +297,30 @@ export default function WrapupCodesSheet({
     }
   }
 
+  async function handleManualSubmit() {
+    if (selectedCodes.length === 0) {
+      notify({
+        title: "Please select a wrapup code",
+        description: "You must select at least one wrapup code before saving.",
+        variant: "warning",
+      });
+      return;
+    }
+    await handleSubmit(selectedCodes);
+  }
+
   async function handleAutoSubmit() {
     if (hasSubmittedRef.current) return;
     const fallback = selectedCodes.length > 0 ? selectedCodes : [];
     const finalCodes =
-      fallback.length > 0
-        ? fallback
-        : defaultCodeId
-          ? [defaultCodeId]
-          : [];
+      fallback.length > 0 ? fallback : defaultCodeId ? [defaultCodeId] : [];
     await handleSubmit(finalCodes);
   }
 
-  const timerLabel = `${String(Math.floor(timeLeft / 60)).padStart(2, "0")}:${String(
-    timeLeft % 60
-  ).padStart(2, "0")}`;
+  const timerLabel = `${String(Math.floor(timeLeft / 60)).padStart(
+    2,
+    "0"
+  )}:${String(timeLeft % 60).padStart(2, "0")}`;
 
   return (
     <Sheet
@@ -347,7 +354,7 @@ export default function WrapupCodesSheet({
             Wrapup Codes
           </SheetTitle>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-base font-semibold">
               Auto-save in {timerLabel}
             </Badge>
             {queueName ? (
@@ -403,7 +410,10 @@ export default function WrapupCodesSheet({
                               <span className="font-medium block break-words">
                                 {code.name}
                                 {code.is_default ? (
-                                  <Badge variant="outline" className="ml-2 text-xs">
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-2 text-xs"
+                                  >
                                     Default
                                   </Badge>
                                 ) : null}
@@ -426,7 +436,7 @@ export default function WrapupCodesSheet({
         </div>
 
         <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
-          <Button onClick={() => handleAutoSubmit()} disabled={saving}>
+          <Button onClick={() => handleManualSubmit()} disabled={saving}>
             {saving ? "Saving..." : "Save & Close"}
           </Button>
         </SheetFooter>
@@ -434,4 +444,3 @@ export default function WrapupCodesSheet({
     </Sheet>
   );
 }
-

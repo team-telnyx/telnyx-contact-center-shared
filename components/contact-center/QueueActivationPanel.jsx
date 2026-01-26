@@ -34,7 +34,6 @@ export function QueueActivationPanel({ queues, onUpdate }) {
         queueEventSource.addEventListener("queue_changed", (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("[QueueActivation] Queue changed via SSE:", data);
             if (
               data.type === "queue_created" ||
               data.type === "queue_updated" ||
@@ -46,19 +45,15 @@ export function QueueActivationPanel({ queues, onUpdate }) {
               }
             }
           } catch (err) {
-            console.error(
-              "[QueueActivation] Failed to parse queue SSE message:",
-              err
-            );
+            // Failed to parse queue SSE message
           }
         });
 
         queueEventSource.addEventListener("connected", () => {
-          console.log("[QueueActivation] Connected to queue stream");
+          // Connected to queue stream
         });
 
         queueEventSource.onerror = (error) => {
-          console.warn("[QueueActivation] Queue stream error:", error);
           if (queueEventSource) {
             queueEventSource.close();
             queueEventSource = null;
@@ -66,10 +61,6 @@ export function QueueActivationPanel({ queues, onUpdate }) {
           setTimeout(connectQueueStream, 5000);
         };
       } catch (err) {
-        console.error(
-          "[QueueActivation] Failed to connect to queue stream:",
-          err
-        );
         setTimeout(connectQueueStream, 5000);
       }
     };
@@ -85,20 +76,12 @@ export function QueueActivationPanel({ queues, onUpdate }) {
   }, [onUpdate]);
 
   const handleToggle = async (queueId, checked) => {
-    console.log("[QueueActivation] Toggling queue:", queueId, "to", checked);
     setLoading((prev) => ({ ...prev, [queueId]: true }));
 
     try {
       const endpoint = checked
         ? "/api/contact-center/agent/queues/activate"
         : "/api/contact-center/agent/queues/deactivate";
-
-      console.log(
-        "[QueueActivation] Calling endpoint:",
-        endpoint,
-        "with queueIds:",
-        [queueId]
-      );
 
       const res = await fetch(endpoint, {
         method: "POST",
@@ -107,7 +90,6 @@ export function QueueActivationPanel({ queues, onUpdate }) {
       });
 
       const data = await res.json();
-      console.log("[QueueActivation] Response:", data);
 
       if (data.ok) {
         // Optimistically update local state
@@ -119,13 +101,11 @@ export function QueueActivationPanel({ queues, onUpdate }) {
           await onUpdate();
         }
       } else {
-        console.error("[QueueActivation] Failed to toggle queue:", data.error);
         alert(data.error || "Failed to toggle queue");
         // Revert optimistic update
         setLocalQueues(queues);
       }
     } catch (err) {
-      console.error("[QueueActivation] Error toggling queue:", err);
       alert("Failed to toggle queue: " + (err.message || "Unknown error"));
       // Revert optimistic update
       setLocalQueues(queues);
@@ -159,11 +139,6 @@ export function QueueActivationPanel({ queues, onUpdate }) {
                 <Checkbox
                   checked={queue.activated || false}
                   onCheckedChange={(checked) => {
-                    console.log(
-                      "[QueueActivation] Checkbox changed:",
-                      queue.id,
-                      checked
-                    );
                     handleToggle(queue.id, checked === true);
                   }}
                   disabled={loading[queue.id]}
@@ -177,11 +152,6 @@ export function QueueActivationPanel({ queues, onUpdate }) {
                   onClick={(e) => {
                     e.preventDefault();
                     if (!loading[queue.id]) {
-                      console.log(
-                        "[QueueActivation] Label clicked:",
-                        queue.id,
-                        !queue.activated
-                      );
                       handleToggle(queue.id, !queue.activated);
                     }
                   }}

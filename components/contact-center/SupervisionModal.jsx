@@ -1194,24 +1194,25 @@ export function SupervisionModal({ open, onOpenChange, call }) {
           <div className="grid gap-4 grid-cols-3">
             {Object.entries(SUPERVISOR_ROLES).map(([role, config]) => {
               const Icon = config.icon;
-              // For unanswered calls, monitor is the default/active option
-              const isActive =
-                activeRole === role ||
-                (isCallInQueue && role === "monitor" && !activeRole);
+              // Tile is truly active only if activeRole matches (supervision is actually started)
+              const isActive = activeRole === role;
               // For unanswered calls, only monitor is available (whisper and barge are disabled)
               const isDisabled = isCallInQueue && role !== "monitor";
+              // Only show as active if supervision has actually started (has activeRole and supervisorCallControlId)
+              // Don't show as active just because call is in queue - user needs to click to start
+              const showAsActive = isActive && supervisorCallControlId;
               const colorClasses = {
-                blue: isActive
+                blue: showAsActive
                   ? "bg-blue-500 text-white border-blue-600"
                   : isDisabled
                   ? "bg-blue-500/5 text-blue-600/50 border-blue-500/10 cursor-not-allowed"
                   : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
-                purple: isActive
+                purple: showAsActive
                   ? "bg-purple-500 text-white border-purple-600"
                   : isDisabled
                   ? "bg-purple-500/5 text-purple-600/50 border-purple-500/10 cursor-not-allowed"
                   : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
-                green: isActive
+                green: showAsActive
                   ? "bg-green-500 text-white border-green-600"
                   : isDisabled
                   ? "bg-green-500/5 text-green-600/50 border-green-500/10 cursor-not-allowed"
@@ -1224,12 +1225,13 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                   className={cn(
                     "transition-all border-2 relative",
                     colorClasses[config.color],
-                    isActive && "ring-2 ring-offset-2",
+                    showAsActive && "ring-2 ring-offset-2",
                     loading && "opacity-50 cursor-not-allowed",
                     isDisabled ? "cursor-not-allowed" : "cursor-pointer"
                   )}
                   onClick={async () => {
                     if (loading || isDisabled) return;
+                    // Only prevent clicking if truly active (supervision already started)
                     if (isActive) {
                       // Already active, do nothing
                       return;
@@ -1274,7 +1276,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                       <Icon className="h-8 w-8" />
                       {/* Status indicator in top right corner */}
                       <div className="absolute -top-1 -right-1">
-                        {isActive ? (
+                        {showAsActive ? (
                           <div className="bg-white rounded-full p-0.5">
                             <IconCheck className="h-4 w-4 text-green-600" />
                           </div>
@@ -1298,7 +1300,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                         Active
                       </Badge>
                     )}
-                    {loading && !isActive && (
+                    {loading && !showAsActive && (
                       <IconLoader className="h-4 w-4 animate-spin" />
                     )}
                   </CardContent>

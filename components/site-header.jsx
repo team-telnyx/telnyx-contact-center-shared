@@ -89,21 +89,16 @@ export function SiteHeader() {
           try {
             const data = JSON.parse(event.data);
             if (data.status) {
-              console.log("[SiteHeader] Status updated via SSE:", data.status);
               setStatus(data.status);
             }
           } catch (err) {
-            console.error(
-              "[SiteHeader] Failed to parse status SSE message:",
-              err
-            );
+            // Failed to parse status SSE message
           }
         });
 
         statusEventSource.addEventListener("queue_changed", async (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("[SiteHeader] Queue changed via SSE:", data);
             if (data.type === "queue_created") {
               // Notify user about new queue
               notify({
@@ -150,10 +145,7 @@ export function SiteHeader() {
                   });
                 }
               } catch (fetchErr) {
-                console.error(
-                  "[SiteHeader] Failed to fetch current user:",
-                  fetchErr
-                );
+                // Failed to fetch current user
               }
               // Reload queues to update activation status
               if (loadQueuesRef.current) {
@@ -161,19 +153,15 @@ export function SiteHeader() {
               }
             }
           } catch (err) {
-            console.error(
-              "[SiteHeader] Failed to parse queue SSE message:",
-              err
-            );
+            // Failed to parse queue SSE message
           }
         });
 
         statusEventSource.addEventListener("connected", () => {
-          console.log("[SiteHeader] Connected to status stream");
+          // Connected to status stream
         });
 
         statusEventSource.onerror = (error) => {
-          console.warn("[SiteHeader] Status stream error:", error);
           if (statusEventSource) {
             statusEventSource.close();
             statusEventSource = null;
@@ -181,7 +169,6 @@ export function SiteHeader() {
           setTimeout(connectStatusStream, 5000);
         };
       } catch (err) {
-        console.error("[SiteHeader] Failed to connect to status stream:", err);
         setTimeout(connectStatusStream, 5000);
       }
     };
@@ -200,22 +187,18 @@ export function SiteHeader() {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      console.log("[SiteHeader] Updating status to:", newStatus);
       const res = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
       const data = await res.json();
-      console.log("[SiteHeader] Status update response:", data);
       if (data.ok) {
         setStatus(newStatus);
       } else {
-        console.error("[SiteHeader] Status update failed:", data.error);
         alert(data.error || "Failed to update status");
       }
     } catch (err) {
-      console.error("[SiteHeader] Failed to update status:", err);
       alert("Failed to update status. Please try again.");
     }
   };
@@ -241,14 +224,9 @@ export function SiteHeader() {
                     const data = await res.json();
                     if (data.ok) {
                       setQueues(data.queues || []);
-                    } else {
-                      console.error(
-                        "[SiteHeader] Failed to reload queues:",
-                        data.error
-                      );
                     }
                   } catch (err) {
-                    console.error("[SiteHeader] Error reloading queues:", err);
+                    // Error reloading queues
                   }
                 }}
               />

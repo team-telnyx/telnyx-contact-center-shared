@@ -52,7 +52,6 @@ export async function GET() {
 
     return NextResponse.json({ ok: true, queues });
   } catch (err) {
-    console.error("[ContactCenter] Queues list error:", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

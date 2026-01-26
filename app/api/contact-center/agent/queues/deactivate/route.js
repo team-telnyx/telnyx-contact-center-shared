@@ -64,7 +64,6 @@ export async function POST(request) {
       const queue = queueRes.rows?.[0];
 
       if (!queue) {
-        console.warn(`[ContactCenter] Queue not found: ${queueId}`);
         continue;
       }
 
@@ -210,7 +209,6 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, deactivated });
   } catch (err) {
-    console.error("[ContactCenter] Queue deactivation error:", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

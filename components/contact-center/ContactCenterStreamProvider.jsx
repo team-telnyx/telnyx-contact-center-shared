@@ -15,6 +15,12 @@ export function ContactCenterStreamProvider({ children }) {
           "/api/contact-center/agent/stream"
         );
 
+        // Listen for connection event to refresh interactions list
+        contactCenterEventSource.addEventListener("connected", () => {
+          // Refresh interactions list when SSE connects/reconnects to ensure latest state
+          window.dispatchEvent(new CustomEvent('contact-center:refresh-interactions'));
+        });
+
         contactCenterEventSource.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
@@ -42,6 +48,8 @@ export function ContactCenterStreamProvider({ children }) {
                   status: data.interaction.state || "ringing",
                 });
               }
+              // Dispatch event to trigger interaction list refresh
+              window.dispatchEvent(new CustomEvent('contact-center:refresh-interactions'));
             } else if (data.type === "transcription") {
               const addTranscription =
                 useActiveCallStore.getState().addTranscription;
@@ -89,6 +97,8 @@ export function ContactCenterStreamProvider({ children }) {
                   });
                 }
               }
+              // Dispatch event to trigger interaction list refresh
+              window.dispatchEvent(new CustomEvent('contact-center:refresh-interactions'));
             } else if (data.type === "interaction_ended") {
               if (data.callControlId) {
                 useCallsStore
@@ -98,6 +108,8 @@ export function ContactCenterStreamProvider({ children }) {
               if (data.interactionId) {
                 useCallsStore.getState().removeCall(data.interactionId);
               }
+              // Dispatch event to trigger interaction list refresh
+              window.dispatchEvent(new CustomEvent('contact-center:refresh-interactions'));
             }
           } catch (_) {
             // Silently handle parse errors

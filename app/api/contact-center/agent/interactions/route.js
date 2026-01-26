@@ -31,7 +31,6 @@ export async function GET(request) {
     // Only return interactions from cc_interactions table
     return NextResponse.json({ ok: true, interactions });
   } catch (err) {
-    console.error("[ContactCenter] Interactions list error:", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

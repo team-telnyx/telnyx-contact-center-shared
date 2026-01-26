@@ -139,7 +139,6 @@ export async function PUT(request) {
       previousStatus,
     });
   } catch (err) {
-    console.error("[ContactCenter] Status update error:", err);
     return NextResponse.json(
       { ok: false, error: err.message || "Server error" },
       { status: 500 }

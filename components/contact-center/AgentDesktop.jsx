@@ -113,7 +113,7 @@ export function AgentDesktop() {
               interaction.from ||
               (storeCall.callerNumber && storeCall.callerNumber.trim() !== "")
                 ? storeCall.callerNumber
-                : (storeCall.fromNumber && storeCall.fromNumber.trim() !== "")
+                : storeCall.fromNumber && storeCall.fromNumber.trim() !== ""
                 ? storeCall.fromNumber
                 : null,
             queue_name: storeCall.queueName || interaction.queue_name,
@@ -242,23 +242,12 @@ export function AgentDesktop() {
                     data.interaction.id === interactionId ||
                     data.interaction.call_control_id === callControlId
                   ) {
-                    console.log(
-                      "[AgentDesktop] Refreshed interaction from DB:",
-                      {
-                        id: data.interaction.id,
-                        from_number: data.interaction.from_number,
-                        had_from_number: current.from_number,
-                      }
-                    );
                     setSelectedInteraction(data.interaction);
                   }
                 }
               })
               .catch((err) => {
-                console.warn(
-                  "[AgentDesktop] Failed to refresh selected interaction:",
-                  err
-                );
+                // Failed to refresh selected interaction
               });
           }
         }
@@ -268,7 +257,8 @@ export function AgentDesktop() {
     [setInteractions, setSelectedInteraction]
   );
 
-  // Load interactions from database on mount and periodically
+  // Load interactions from database on mount and via SSE-triggered refreshes
+  // No polling - SSE handles all real-time updates
   useEffect(() => {
     const loadInteractions = async () => {
       try {
@@ -280,13 +270,30 @@ export function AgentDesktop() {
           setDbInteractions(data.interactions);
         }
       } catch (err) {
-        console.error("[AgentDesktop] Failed to load interactions:", err);
+        // Failed to load interactions
       }
     };
+
+    // Initial load on mount
     loadInteractions();
-    // Reload every 5 seconds to catch new interactions
-    const interval = setInterval(loadInteractions, 5000);
-    return () => clearInterval(interval);
+
+    // Listen to SSE events to trigger immediate refresh when interactions change
+    const handleSSEEvent = () => {
+      loadInteractions();
+    };
+
+    // Listen for custom events from ContactCenterStreamProvider
+    window.addEventListener(
+      "contact-center:refresh-interactions",
+      handleSSEEvent
+    );
+
+    return () => {
+      window.removeEventListener(
+        "contact-center:refresh-interactions",
+        handleSSEEvent
+      );
+    };
   }, []);
 
   // Rebuild interactions from store updates without polling
@@ -331,14 +338,6 @@ export function AgentDesktop() {
     if (!lastAttempt || now - lastAttempt > 5000) {
       lastRefreshAttemptRef.current.set(interactionId, now);
 
-      console.log(
-        "[AgentDesktop] Auto-refreshing interaction with missing from_number:",
-        {
-          id: interactionId,
-          call_control_id: callControlId,
-        }
-      );
-
       fetch(
         `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
           callControlId
@@ -351,20 +350,12 @@ export function AgentDesktop() {
               data.interaction.id === interactionId ||
               data.interaction.call_control_id === callControlId
             ) {
-              console.log("[AgentDesktop] Auto-refreshed interaction:", {
-                id: data.interaction.id,
-                from_number: data.interaction.from_number,
-                had_from_number: selectedInteraction.from_number,
-              });
               setSelectedInteraction(data.interaction);
             }
           }
         })
         .catch((err) => {
-          console.warn(
-            "[AgentDesktop] Failed to auto-refresh interaction:",
-            err
-          );
+          // Failed to auto-refresh interaction
         });
     }
   }, [
@@ -396,12 +387,6 @@ export function AgentDesktop() {
   }, [callInteractionId, callTranscriptions]);
 
   useEffect(() => {
-    console.log("[AgentDesktop] useEffect triggered:", {
-      callStatus,
-      disconnectedTime,
-      callInteractionId,
-    });
-
     const endedStatuses = [
       "hangup",
       "ended",
@@ -421,40 +406,17 @@ export function AgentDesktop() {
       lastDisconnectedTimeRef.current = disconnectedTime;
     }
 
-    // Debug logging - always log when disconnectedTime changes or status changes
-    if (disconnectedTime || callStatus) {
-      console.log("[AgentDesktop] Status/Disconnect check:", {
-        callStatus,
-        isEnded,
-        isCleared,
-        wasDisconnected,
-        disconnectedTime,
-        lastDisconnectedTime: lastDisconnectedTimeRef.current,
-        wasActive,
-        callInteractionId,
-        lastInteractionSnapshot: lastInteractionSnapshotRef.current,
-      });
-    }
-
     // Trigger wrapup check if call ended, cleared, or disconnected
     if (!isEnded && !isCleared && !wasDisconnected) {
-      console.log("[AgentDesktop] Skipping wrapup - conditions not met");
       return;
     }
 
     const interactionId =
       callInteractionId || lastInteractionSnapshotRef.current;
     if (!interactionId) {
-      console.log(
-        "[AgentDesktop] No interactionId found, skipping wrapup check"
-      );
       return;
     }
     if (lastWrapupInteractionRef.current === interactionId) {
-      console.log(
-        "[AgentDesktop] Wrapup already shown for this interaction:",
-        interactionId
-      );
       return;
     }
 
@@ -470,11 +432,11 @@ export function AgentDesktop() {
         let interaction = interactions.find((i) => i.id === interactionId);
 
         // If not found locally, try to fetch from API
-        if (!interaction) {
+        if (!interaction && callInteractionId) {
           try {
             const res = await fetch(
               `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callInteractionId || ""
+                callInteractionId
               )}`
             );
             const data = await res.json();
@@ -482,10 +444,7 @@ export function AgentDesktop() {
               interaction = data.interaction;
             }
           } catch (apiErr) {
-            console.warn(
-              "[AgentDesktop] Could not fetch interaction for wrapup check:",
-              apiErr
-            );
+            // Could not fetch interaction for wrapup check
           }
         }
 
@@ -497,10 +456,6 @@ export function AgentDesktop() {
         // If still no interaction found after retry, default to opening wrapup sheet
         // (call was active and ended, so assume it was answered unless we have evidence otherwise)
         if (!interaction) {
-          console.log(
-            "[AgentDesktop] No interaction found, opening wrapup sheet by default:",
-            interactionId
-          );
           lastWrapupInteractionRef.current = interactionId;
           // Use global wrapup sheet store
           import("@/lib/stores/wrapup-sheet-store").then((module) => {
@@ -552,22 +507,8 @@ export function AgentDesktop() {
         // even if state is "abandoned" (might be a timing issue or incorrect state update)
         const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
 
-        console.log("[AgentDesktop] Wrapup check result:", {
-          interactionId,
-          wasAnswered,
-          isAbandoned,
-          wasQueuedWhenEnded,
-          shouldSkip,
-          state: interaction.state,
-          answered_at: interaction.answered_at,
-        });
-
         if (!shouldSkip) {
           // Open wrapup sheet - call was connected and ended (including agent disconnects)
-          console.log(
-            "[AgentDesktop] Opening wrapup sheet for interaction:",
-            interactionId
-          );
           lastWrapupInteractionRef.current = interactionId;
           // Use global wrapup sheet store
           import("@/lib/stores/wrapup-sheet-store").then((module) => {
@@ -575,24 +516,9 @@ export function AgentDesktop() {
               .getState()
               .openWrapup(interactionId, lastTranscriptionsRef.current || []);
           });
-        } else {
-          console.log(
-            "[AgentDesktop] Skipping wrapup sheet - call was abandoned:",
-            {
-              interactionId,
-              wasQueuedWhenEnded,
-              isAbandoned,
-              wasAnswered,
-              answered_at: interaction.answered_at,
-              state: interaction.state,
-            }
-          );
         }
       } catch (err) {
-        console.error(
-          "[AgentDesktop] Error checking interaction for wrapup:",
-          err
-        );
+        // Error checking interaction for wrapup
       }
     };
 
@@ -638,10 +564,6 @@ export function AgentDesktop() {
         wasQueuedWhenEnded || (isAbandoned && !wasActuallyAnswered);
 
       if (!shouldSkip && wasActuallyAnswered) {
-        console.log(
-          "[AgentDesktop] Interaction completed (from state change), opening wrapup sheet:",
-          interaction.id
-        );
         lastWrapupInteractionRef.current = interaction.id;
         // Use global wrapup sheet store
         import("@/lib/stores/wrapup-sheet-store").then((module) => {
@@ -662,17 +584,8 @@ export function AgentDesktop() {
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === interactionId) {
-        console.log(
-          "[AgentDesktop] Wrapup already shown for this interaction:",
-          interactionId
-        );
         return;
       }
-
-      console.log(
-        "[AgentDesktop] Received call-disconnected event, opening wrapup:",
-        interactionId
-      );
 
       // Find the interaction to check if it was answered
       const interaction = interactions.find((i) => i.id === interactionId);
@@ -691,11 +604,6 @@ export function AgentDesktop() {
             "@/lib/stores/wrapup-sheet-store"
           );
           openWrapup(interactionId, transcriptions || []);
-        } else {
-          console.log(
-            "[AgentDesktop] Skipping wrapup for abandoned call:",
-            interactionId
-          );
         }
       } else {
         // If interaction not found, assume it was answered and show wrapup

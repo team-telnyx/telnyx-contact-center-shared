@@ -20,7 +20,6 @@ async function getAllowedStatuses() {
     );
     return result.rows.map((row) => row.name);
   } catch (error) {
-    console.error("[Profile] Error fetching allowed statuses:", error);
     // Fallback to default statuses
     return ["Available", "Busy", "Away", "Offline"];
   }
@@ -36,7 +35,6 @@ async function getStatusMetaByName(statusName) {
     );
     return result.rows?.[0] || null;
   } catch (error) {
-    console.error("[Profile] Error fetching status meta:", error);
     return null;
   }
 }
@@ -178,13 +176,6 @@ export async function PUT(request) {
     if (update.status) {
       const previousStatus = user.status || user.agent_status || "Unknown";
       const sseKey = `user:status:${userId}`;
-      console.log("[Profile] Status update requested:", {
-        userId: String(userId),
-        username: user.username,
-        previousStatus,
-        status: update.status,
-        timestamp: new Date().toISOString(),
-      });
 
       // Update agent_status to match status for contact center
       try {
@@ -215,17 +206,9 @@ export async function PUT(request) {
 
         if (["Available", "Busy"].includes(update.status)) {
           try {
-            console.log("[Profile] Offering queued call after status update:", {
-              userId: String(userId),
-              username: user.username,
-              status: update.status,
-            });
             await offerQueuedCallForAgent({ userId: String(userId) });
           } catch (offerError) {
-            console.error(
-              "[Profile] Failed to offer queued calls after status update:",
-              offerError
-            );
+            // Failed to offer queued calls after status update
           }
         }
 

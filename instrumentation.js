@@ -16,6 +16,25 @@ export async function register() {
       } else {
         console.warn("[Instrumentation] Failed to ensure PostgreSQL schema");
       }
+
+      // Clean up ghost calls after schema is ensured
+      try {
+        const { cleanupGhostCalls } = await import(
+          "./lib/contact-center/ghost-call-cleanup.mjs"
+        );
+        console.log("[Instrumentation] Starting ghost call cleanup...");
+        const cleanupResult = await cleanupGhostCalls();
+        console.log(
+          `[Instrumentation] Ghost call cleanup completed:`,
+          cleanupResult
+        );
+      } catch (cleanupError) {
+        // Don't fail startup if cleanup fails
+        console.warn(
+          "[Instrumentation] Ghost call cleanup failed:",
+          cleanupError.message
+        );
+      }
     } catch (error) {
       // Don't fail startup if schema initialization fails
       // It might fail if PostgreSQL is not available yet

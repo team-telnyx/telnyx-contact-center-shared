@@ -30,16 +30,43 @@ export async function GET(request) {
       start(controller) {
         const encoder = new TextEncoder();
         const key = `monitor:${session.user.id}`;
+        let closed = false;
+        let updateInterval = null;
+
+        // Cleanup function
+        const cleanup = () => {
+          if (closed) return;
+          closed = true;
+          
+          if (updateInterval) {
+            clearInterval(updateInterval);
+            updateInterval = null;
+          }
+          
+          removeSseClient(key, writer);
+          
+          try {
+            controller.close();
+          } catch (error) {
+            // Ignore close errors
+          }
+        };
 
         // Send initial connection message
         const send = (data, eventType = null) => {
+          if (closed) return;
           try {
             const message = eventType
               ? `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`
               : `data: ${JSON.stringify(data)}\n\n`;
             controller.enqueue(encoder.encode(message));
           } catch (error) {
-            console.error("[MonitorStream] Error sending message:", error);
+            // Controller might be closed, cleanup if needed
+            if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+              cleanup();
+            } else {
+              console.error("[MonitorStream] Error sending message:", error);
+            }
           }
         };
 
@@ -49,10 +76,16 @@ export async function GET(request) {
         // Store writer for broadcasting
         const writer = {
           write: (data) => {
+            if (closed) return;
             try {
               controller.enqueue(data);
             } catch (error) {
-              console.error("[MonitorStream] Error writing:", error);
+              // Controller might be closed, cleanup if needed
+              if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+                cleanup();
+              } else {
+                console.error("[MonitorStream] Error writing:", error);
+              }
             }
           },
         };
@@ -61,6 +94,7 @@ export async function GET(request) {
 
         // Function to send monitor update
         const sendMonitorUpdate = async () => {
+          if (closed) return;
           try {
             const {
               getQueueStatistics,
@@ -76,6 +110,9 @@ export async function GET(request) {
               getAgentStatistics(),
               getOverallStatistics(),
             ]);
+
+            // Check again before sending (might have closed during async operations)
+            if (closed) return;
 
             send(
               {
@@ -98,7 +135,12 @@ export async function GET(request) {
               "monitor_update"
             );
           } catch (error) {
-            console.error("[MonitorStream] Error in update:", error);
+            // If error is due to closed controller, cleanup
+            if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+              cleanup();
+            } else {
+              console.error("[MonitorStream] Error in update:", error);
+            }
           }
         };
 
@@ -106,18 +148,10 @@ export async function GET(request) {
         sendMonitorUpdate();
 
         // Send periodic updates
-        const updateInterval = setInterval(sendMonitorUpdate, 3000); // Update every 3 seconds for more responsive updates
+        updateInterval = setInterval(sendMonitorUpdate, 3000); // Update every 3 seconds for more responsive updates
 
         // Cleanup on close
-        request.signal.addEventListener("abort", () => {
-          clearInterval(updateInterval);
-          removeSseClient(key, writer);
-          try {
-            controller.close();
-          } catch (error) {
-            // Ignore close errors
-          }
-        });
+        request.signal.addEventListener("abort", cleanup);
       },
     });
 

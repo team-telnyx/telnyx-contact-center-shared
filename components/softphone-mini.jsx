@@ -238,10 +238,7 @@ export default function SoftphoneMini() {
               return;
             }
           } catch (err) {
-            console.warn(
-              "[Mini Phone] Error checking incoming call store:",
-              err
-            );
+            // Error checking incoming call store
           }
 
           // Fallback: Fetch interaction by looking up this call in the database
@@ -266,10 +263,6 @@ export default function SoftphoneMini() {
                 setInteraction(null);
               }
             } catch (err) {
-              console.error(
-                "[Mini Phone] Failed to fetch interaction by call_control_id:",
-                err
-              );
               setInteraction(null);
             }
           }
@@ -298,7 +291,6 @@ export default function SoftphoneMini() {
               setInteraction(null);
             }
           } catch (err) {
-            console.error("[Mini Phone] Failed to fetch interaction:", err);
             setInteraction(null);
           }
         };
@@ -324,7 +316,6 @@ export default function SoftphoneMini() {
 
     const onNotification = (notification) => {
       try {
-        console.log("[Mini Phone] Received notification:", notification);
         if (notification.type === "callUpdate" || notification?.call) {
           const call = notification?.call || null;
           const callState = call?.state || notification?.call?.state || "";
@@ -442,18 +433,11 @@ export default function SoftphoneMini() {
                       storedInfo.contactCenter.customerData;
                     metadata.isContactCenter =
                       !!storedInfo.contactCenter.interactionId;
-                    console.log(
-                      "[Mini Phone] Populated contact center metadata from SSE:",
-                      metadata
-                    );
                   }
 
                   // Double-check before setting - avoid race condition
                   const stateBeforeSet = useActiveCallStore.getState();
                   if (stateBeforeSet.call) {
-                    console.log(
-                      "[Mini Phone] Active call set during async operation, aborting"
-                    );
                     return;
                   }
 
@@ -494,10 +478,7 @@ export default function SoftphoneMini() {
                     }
                   }
                 } catch (err) {
-                  console.error(
-                    "[Mini Phone] Error setting up incoming call:",
-                    err
-                  );
+                  // Error setting up incoming call
                 }
               })();
             } else if (activeCall && callDirection === "outbound") {
@@ -555,7 +536,7 @@ export default function SoftphoneMini() {
           }
         }
       } catch (err) {
-        console.error("[Mini Phone] Notification handler error:", err);
+        // Notification handler error
       }
     };
 
@@ -659,7 +640,7 @@ export default function SoftphoneMini() {
         // Explicitly play audio after attaching
         try {
           el.play?.()?.catch((err) => {
-            console.warn("[Mini Phone] Audio playback failed:", err);
+            // Audio playback failed
           });
         } catch (_) {}
         return;
@@ -674,12 +655,12 @@ export default function SoftphoneMini() {
         // Explicitly play audio after setting stream
         try {
           el.play?.()?.catch((err) => {
-            console.warn("[Mini Phone] Audio playback failed:", err);
+            // Audio playback failed
           });
         } catch (_) {}
       }
     } catch (err) {
-      console.error("[Mini Phone] attachAudio error:", err);
+      // attachAudio error
     }
   }
 
@@ -875,10 +856,6 @@ export default function SoftphoneMini() {
         call.on("destroy", onDestroy);
         call.on("ended", onEnded);
         call.on("purge", onPurge);
-      } else {
-        console.warn(
-          "[Mini Phone] call.on is not a function, cannot register hangup listeners"
-        );
       }
 
       // Listen to stateChanged for all state transitions
@@ -942,10 +919,7 @@ export default function SoftphoneMini() {
       // Initial state sync
       syncCallState();
     } catch (err) {
-      console.error(
-        "[Mini Phone] wireCall: Error setting up event listeners:",
-        err
-      );
+      // wireCall: Error setting up event listeners
     }
   }
 
@@ -996,7 +970,7 @@ export default function SoftphoneMini() {
       try {
         await useActiveCallStore.getState().syncCallMetricsToDb();
       } catch (err) {
-        console.error("[Mini Phone] Failed to sync metrics:", err);
+        // Failed to sync metrics
       }
 
       // Metrics are synced via /api/contact-center/interactions/:id/metrics
@@ -1004,7 +978,6 @@ export default function SoftphoneMini() {
       // Clear active call from store
       clearActiveCall();
     } catch (err) {
-      console.error("[Mini Phone] Error in handleCallEnd:", err);
       // Always clear call even if finalization fails
       clearActiveCall();
     }
@@ -1055,7 +1028,6 @@ export default function SoftphoneMini() {
         }, delay);
       });
     } catch (err) {
-      console.error("[Mini Phone] Failed to start call:", err);
       clearActiveCall();
     }
   }
@@ -1074,7 +1046,7 @@ export default function SoftphoneMini() {
         storeSetMuted(false);
       }
     } catch (err) {
-      console.error("[Mini Phone] Toggle mute error:", err);
+      // Toggle mute error
     }
   }
 
@@ -1094,14 +1066,13 @@ export default function SoftphoneMini() {
         updateStatus("held");
       }
     } catch (err) {
-      console.error("[Mini Phone] Toggle hold error:", err);
+      // Toggle hold error
     }
   }
 
   function handleAnswerCall() {
     try {
       if (!activeCall) {
-        console.error("[Mini Phone] No call to answer");
         return;
       }
 
@@ -1124,7 +1095,7 @@ export default function SoftphoneMini() {
             body: JSON.stringify({ answeredAt: new Date().toISOString() }),
           }
         ).catch((err) => {
-          console.warn("[Mini Phone] Failed to mark answered:", err);
+          // Failed to mark answered
         });
       }
 
@@ -1139,14 +1110,13 @@ export default function SoftphoneMini() {
         }, delay);
       });
     } catch (err) {
-      console.error("[Mini Phone] Error answering call:", err);
+      // Error answering call
     }
   }
 
   async function handleRejectCall() {
     try {
       if (!activeCall) {
-        console.error("[Mini Phone] No call to reject");
         return;
       }
 
@@ -1157,10 +1127,6 @@ export default function SoftphoneMini() {
 
       // If we have the original call control ID, use it for hangup
       if (originalCallControlId) {
-        console.log(
-          "[Mini Phone] Using originalCallControlId from store:",
-          originalCallControlId
-        );
         try {
           // Hangup the original call leg using Telnyx API
           const response = await fetch(`/api/voice/call-action`, {
@@ -1174,15 +1140,10 @@ export default function SoftphoneMini() {
 
           const result = await response.json();
           if (!response.ok) {
-            console.error(
-              "[Mini Phone] Failed to hangup original call leg:",
-              result
-            );
-          } else {
-            console.log("[Mini Phone] Successfully hung up original call leg");
+            // Failed to hangup original call leg
           }
         } catch (err) {
-          console.error("[Mini Phone] Error calling hangup API:", err);
+          // Error calling hangup API
         }
       } else if (interaction?.id) {
         // Fallback: If we have an interaction, hangup via API
@@ -1197,13 +1158,10 @@ export default function SoftphoneMini() {
 
           const result = await response.json();
           if (!response.ok) {
-            console.error(
-              "[Mini Phone] Failed to hangup original call leg:",
-              result
-            );
+            // Failed to hangup original call leg
           }
         } catch (err) {
-          console.error("[Mini Phone] Error calling hangup API:", err);
+          // Error calling hangup API
         }
       }
 
@@ -1212,7 +1170,7 @@ export default function SoftphoneMini() {
 
       // handleCallEnd will be called by the hangup event
     } catch (err) {
-      console.error("[Mini Phone] Error rejecting call:", err);
+      // Error rejecting call
     }
   }
 
@@ -1229,10 +1187,6 @@ export default function SoftphoneMini() {
             transcriptions: storeState.transcriptions || [],
           },
         })
-      );
-      console.log(
-        "[Mini Phone] Dispatched wrapup event for interaction:",
-        interactionId
       );
     }
     try {
@@ -1265,20 +1219,14 @@ export default function SoftphoneMini() {
             }
           }, 2000);
         } else {
-          console.warn("[Mini Phone] No hangup method on call object");
           handleCallEnd();
           return;
         }
       } catch (err) {
-        console.warn(
-          "[Mini Phone] Hangup error (call may already be ended):",
-          err
-        );
         // Clear state even if hangup fails
         handleCallEnd();
       }
     } catch (err) {
-      console.error("[Mini Phone] Hangup error:", err);
       // Clear state on any error
       try {
         clearActiveCall();

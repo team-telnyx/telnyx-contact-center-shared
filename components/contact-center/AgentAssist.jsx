@@ -42,15 +42,7 @@ export function AgentAssist({ interactionId, interaction }) {
 
   // Debug: Log interaction data to help troubleshoot from_number issue
   useEffect(() => {
-    if (interaction) {
-      console.log("[AgentAssist] Interaction data:", {
-        id: interaction.id,
-        from_number: interaction.from_number,
-        fromNumber: interaction.fromNumber,
-        from: interaction.from,
-        hasFromNumber: !!interaction.from_number,
-      });
-    }
+    // Interaction data loaded
   }, [interaction?.id, interaction?.from_number]);
   const [kbArticles, setKbArticles] = useState([]);
   const [isLoadingKb, setIsLoadingKb] = useState(false);
@@ -652,17 +644,9 @@ function ArticleViewer({
   const callerNumber =
     interaction?.from_number || interaction?.fromNumber || interaction?.from;
 
-  // Debug: Log caller number detection
+  // Caller number detection
   useEffect(() => {
-    console.log("[ArticleViewer] Caller number detection:", {
-      interactionId: interaction?.id,
-      from_number: interaction?.from_number,
-      fromNumber: interaction?.fromNumber,
-      from: interaction?.from,
-      callerNumber,
-      hasCallerNumber: !!callerNumber,
-      interactionKeys: interaction ? Object.keys(interaction) : null,
-    });
+    // Caller number detected
   }, [interaction?.id, interaction?.from_number, callerNumber]);
 
   const generateLLMResponse = useCallback(async () => {

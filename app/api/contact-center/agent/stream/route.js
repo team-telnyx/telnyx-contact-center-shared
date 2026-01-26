@@ -69,10 +69,7 @@ export async function GET(request) {
                 });
               }
             } catch (error) {
-              console.error(
-                "[ContactCenter] Failed to set status to offline on disconnect:",
-                error
-              );
+              // Failed to set status to offline on disconnect
             }
           }
         };
@@ -124,7 +121,6 @@ export async function GET(request) {
       },
     });
   } catch (err) {
-    console.error("[ContactCenter] SSE stream error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

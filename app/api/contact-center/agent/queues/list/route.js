@@ -88,7 +88,6 @@ export async function GET(request) {
       })),
     });
   } catch (err) {
-    console.error("[ContactCenter] Error listing user queues:", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

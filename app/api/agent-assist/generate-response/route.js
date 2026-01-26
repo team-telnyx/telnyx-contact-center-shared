@@ -85,11 +85,6 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(
-        "[AgentAssist] Telnyx AI API error:",
-        response.status,
-        errorText
-      );
       return NextResponse.json(
         {
           ok: false,
@@ -157,7 +152,6 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
       },
     });
   } catch (error) {
-    console.error("[AgentAssist] Error generating response:", error);
     return NextResponse.json(
       { ok: false, error: "Internal server error" },
       { status: 500 }

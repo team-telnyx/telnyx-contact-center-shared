@@ -18,6 +18,8 @@ import {
   IconKey,
   IconShieldCheck,
   IconBrandGoogle,
+  IconStar,
+  IconStarFilled,
 } from "@tabler/icons-react";
 import {
   updateProfileAction,
@@ -46,6 +48,9 @@ export default function ProfilePage() {
   });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const editorRef = useRef(null);
+  const [userSkills, setUserSkills] = useState({});
+  const [allSkills, setAllSkills] = useState([]);
+  const [loadingSkills, setLoadingSkills] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -65,9 +70,38 @@ export default function ProfilePage() {
             setAuthStrategy(authData.hasGoogle ? "google" : "local");
             setHasPassword(authData.hasPassword || false);
           }
+
+          // Fetch user skills
+          const skillsResp = await fetch("/api/user/skills");
+          if (skillsResp.ok) {
+            const skillsData = await skillsResp.json();
+            if (skillsData?.ok && skillsData?.skills) {
+              setUserSkills(skillsData.skills || {});
+            }
+          }
         }
       } catch (_) {}
       setProfileLoading(false);
+    })();
+  }, []);
+
+  // Load all skills for mapping UUIDs to names
+  useEffect(() => {
+    (async () => {
+      setLoadingSkills(true);
+      try {
+        const res = await fetch("/api/admin/skills?active=true&pageSize=1000", {
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAllSkills(data.items || []);
+        }
+      } catch (err) {
+        console.error("Failed to load skills:", err);
+      } finally {
+        setLoadingSkills(false);
+      }
     })();
   }, []);
 
@@ -366,6 +400,76 @@ export default function ProfilePage() {
                   </form>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Skills Section */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconUser className="size-6 text-brand-primary" /> Skills & Proficiency
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              {profileLoading || loadingSkills ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : (() => {
+                // Convert user skills from UUID keys to skill objects with names
+                const skillEntries = Object.entries(userSkills || {})
+                  .map(([skillId, proficiency]) => {
+                    const skill = allSkills.find((s) => s.id === skillId);
+                    return skill ? { skill, proficiency } : null;
+                  })
+                  .filter(Boolean)
+                  .sort((a, b) => a.skill.name.localeCompare(b.skill.name));
+
+                if (skillEntries.length === 0) {
+                  return (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No skills assigned. Contact your administrator to assign skills.
+                    </p>
+                  );
+                }
+
+                return (
+                  <div className="space-y-3">
+                    {skillEntries.map(({ skill, proficiency }) => (
+                      <div
+                        key={skill.id}
+                        className="flex items-center justify-between p-3 border rounded-lg"
+                      >
+                        <div className="flex-1">
+                          <div className="text-sm font-medium">{skill.name}</div>
+                          {skill.description && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {skill.description}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 ml-4">
+                          {[1, 2, 3, 4, 5].map((level) =>
+                            proficiency >= level ? (
+                              <IconStarFilled
+                                key={level}
+                                className="size-5 text-yellow-500"
+                              />
+                            ) : (
+                              <IconStar
+                                key={level}
+                                className="size-5 text-gray-300"
+                              />
+                            )
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>

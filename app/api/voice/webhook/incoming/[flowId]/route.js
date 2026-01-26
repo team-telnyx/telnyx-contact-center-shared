@@ -53,16 +53,12 @@ async function updateConversationMetadata(conversationId, metadata) {
     });
     if (!currentRes.ok) {
       const text = await currentRes.text();
-      console.warn(
-        "[IncomingFlowWebhook] Failed to fetch conversation metadata:",
-        currentRes.status,
-        text
-      );
       return null;
     }
     const currentData = await currentRes.json();
     const currentMetadata =
-      currentData?.data?.metadata && typeof currentData.data.metadata === "object"
+      currentData?.data?.metadata &&
+      typeof currentData.data.metadata === "object"
         ? currentData.data.metadata
         : {};
     const merged = {
@@ -79,19 +75,10 @@ async function updateConversationMetadata(conversationId, metadata) {
     });
     if (!updateRes.ok) {
       const text = await updateRes.text();
-      console.warn(
-        "[IncomingFlowWebhook] Failed to update conversation metadata:",
-        updateRes.status,
-        text
-      );
       return null;
     }
     return await updateRes.json();
   } catch (err) {
-    console.warn(
-      "[IncomingFlowWebhook] Error updating conversation metadata:",
-      err
-    );
     return null;
   }
 }
@@ -171,18 +158,7 @@ export async function POST(request, { params }) {
       const isTransferLeg =
         toField.startsWith("sip:") && toField.includes("@sip.telnyx.com");
 
-      console.log(`[IncomingFlowWebhook] call.initiated received:`, {
-        callControlId: payload.call_control_id,
-        direction: payload.direction,
-        to: payload.to,
-        from: payload.from,
-        isTransferLeg,
-      });
-
       if (isTransferLeg) {
-        console.log(
-          `[IncomingFlowWebhook] ✅ Detected transfer leg (direction: ${payload.direction}): ${payload.call_control_id}, to: ${payload.to}, from: ${payload.from}`
-        );
         // Handle transfer leg regardless of direction
         try {
           const { PgDb } = await import("@/lib/pgdb.js");
@@ -213,6 +189,13 @@ export async function POST(request, { params }) {
           }
 
           if (originalInteraction) {
+            // Extract AI call ID from custom headers if present
+            const aiCallHeader = findCustomHeader(
+              customHeaders,
+              AI_CALL_ID_HEADER
+            );
+            const aiCallControlId = aiCallHeader?.value || null;
+
             // Update the original interaction with the agent's call_control_id
             // Keep call_control_id as the original incoming leg.
             const metadata = originalInteraction.metadata || {};
@@ -226,13 +209,14 @@ export async function POST(request, { params }) {
                 originalInteraction.call_control_id;
             }
 
+            // Store AI call control ID if present and not already set
+            if (aiCallControlId && !metadata.ai_call_control_id) {
+              metadata.ai_call_control_id = aiCallControlId;
+            }
+
             await PgDb.updateInteractionById(originalInteraction.id, {
               metadata,
             });
-
-            console.log(
-              `[IncomingFlowWebhook] ✅ Linked transfer leg ${payload.call_control_id} to interaction ${originalInteraction.id}, original_call_control_id: ${metadata.original_call_control_id}`
-            );
 
             // Broadcast incoming_call_info to WebRTC client now that we have the agent's call_control_id
             // This is critical for the WebRTC client to show the ringing state
@@ -253,18 +237,6 @@ export async function POST(request, { params }) {
                   // Get caller info from interaction
                   const fromNumber = originalInteraction.from_number;
                   const fromName = originalInteraction.from_name;
-
-                  console.log(
-                    `[IncomingFlowWebhook] Preparing to broadcast incoming_call_info:`,
-                    {
-                      agentUsername: originalInteraction.agent_username,
-                      agentId: agent.id,
-                      callControlId: payload.call_control_id,
-                      fromNumber,
-                      fromName,
-                      originalCallControlId: metadata.original_call_control_id,
-                    }
-                  );
 
                   // Store caller info for WebRTC client lookup
                   if (payload.call_session_id) {
@@ -311,22 +283,11 @@ export async function POST(request, { params }) {
                         new Date().toISOString(),
                     },
                   });
-
-                  console.log(
-                    `[IncomingFlowWebhook] ✅ Broadcasted incoming_call_info to agent ${originalInteraction.agent_username} (call_control_id: ${payload.call_control_id})`
-                  );
                 }
               } catch (err) {
-                console.error(
-                  "[IncomingFlowWebhook] Error broadcasting incoming_call_info:",
-                  err
-                );
+                // Error broadcasting incoming_call_info
               }
             }
-          } else {
-            console.warn(
-              `[IncomingFlowWebhook] Transfer leg ${payload.call_control_id} but could not find original interaction`
-            );
           }
 
           // Don't process transfer legs further
@@ -335,10 +296,6 @@ export async function POST(request, { params }) {
             message: "Transfer leg ignored",
           });
         } catch (err) {
-          console.error(
-            "[IncomingFlowWebhook] Error handling transfer leg:",
-            err
-          );
           // Don't fail the webhook, just log the error
         }
       }
@@ -396,10 +353,6 @@ export async function POST(request, { params }) {
                   : {}),
               },
             });
-
-            console.log(
-              `[IncomingFlowWebhook] ✅ Registered incoming call ${payload.call_control_id} to cc_interactions (ID: ${interactionId})`
-            );
           }
           if (
             existingInteraction &&
@@ -415,10 +368,6 @@ export async function POST(request, { params }) {
             });
           }
         } catch (err) {
-          console.error(
-            "[IncomingFlowWebhook] Error registering incoming call:",
-            err
-          );
           // Don't fail the webhook, just log the error
         }
       }
@@ -470,10 +419,7 @@ export async function POST(request, { params }) {
           }
         }
       } catch (err) {
-        console.error(
-          "[IncomingFlowWebhook] Error linking conversation metadata:",
-          err
-        );
+        // Error linking conversation metadata
       }
     }
 
@@ -499,14 +445,41 @@ export async function POST(request, { params }) {
               const flow = await VoiceFlowDb.getFlowById(flowId, null);
               const flowOwner = flow?.username || null;
 
-              console.log("[IncomingFlowWebhook] call.enqueued payload:", {
-                call_control_id: payload.call_control_id,
-                call_session_id: payload.call_session_id,
-                from: payload.from,
-                to: payload.to,
-                direction: payload.direction,
-                queue: queueName,
-              });
+              // Try to find existing interaction to extract original caller number from timeline
+              const { PgDb } = await import("@/lib/pgdb.js");
+              let originalFromNumber = payload.from;
+
+              // Check if payload.from is a SIP endpoint (indicates transferred call)
+              const isSipEndpoint =
+                payload.from &&
+                (payload.from.includes("@sip.") ||
+                  payload.from.startsWith("sip:") ||
+                  payload.from.includes("username@"));
+
+              // If it's a SIP endpoint or missing, try to get original number from existing interaction's timeline
+              if (isSipEndpoint || !payload.from) {
+                try {
+                  const existingInteraction =
+                    await PgDb.findInteractionByCallControlId(
+                      payload.call_control_id
+                    );
+
+                  if (existingInteraction?.routing_metadata?.timeline) {
+                    const initiatedEvent =
+                      existingInteraction.routing_metadata.timeline.find(
+                        (e) => e.type === "initiated" && e.from
+                      );
+                    if (
+                      initiatedEvent?.from &&
+                      initiatedEvent.from.trim() !== ""
+                    ) {
+                      originalFromNumber = initiatedEvent.from;
+                    }
+                  }
+                } catch (err) {
+                  // Error extracting original caller number
+                }
+              }
 
               await handleContactCenterEnqueue({
                 callControlId: payload.call_control_id,
@@ -518,24 +491,16 @@ export async function POST(request, { params }) {
                 clientState: payload.client_state,
                 flowId,
                 flowOwnerUsername: flowOwner,
-                fromNumber: payload.from,
+                fromNumber: originalFromNumber || payload.from,
                 toNumber: payload.to,
                 direction: payload.direction,
               });
             }
           } catch (err) {
-            console.error(
-              "[IncomingFlowWebhook] Error handling contact center enqueue:",
-              err
-            );
             // Don't fail the webhook, just log the error
           }
         }
       } catch (err) {
-        console.error(
-          "[IncomingFlowWebhook] Error handling contact center enqueue:",
-          err
-        );
         // Don't fail the webhook, just log the error
       }
     }
@@ -557,10 +522,6 @@ export async function POST(request, { params }) {
         );
         await handleContactCenterEvent(event, payload);
       } catch (err) {
-        console.error(
-          `[IncomingFlowWebhook] Error handling contact center event ${event}:`,
-          err
-        );
         // Don't fail the webhook, just log the error
       }
     }
@@ -573,10 +534,6 @@ export async function POST(request, { params }) {
         );
         await handleTranscriptionEvent(payload);
       } catch (err) {
-        console.error(
-          "[IncomingFlowWebhook] Error handling transcription event:",
-          err
-        );
         // Don't fail the webhook, just log the error
       }
     }
@@ -864,22 +821,12 @@ export async function POST(request, { params }) {
         const callSessionId = payload.call_session_id;
         const hangupCause = payload.hangup_cause;
 
-        console.log("[IncomingFlowWebhook] call.hangup received:", {
-          callControlId,
-          callSessionId,
-          hangupCause,
-        });
-
         // Check if this is a rejected WebRTC call (user_busy or timeout)
         // In this case, we need to hangup the original incoming call leg
         if (
           (hangupCause === "user_busy" || hangupCause === "timeout") &&
           callSessionId
         ) {
-          console.log(
-            "[IncomingFlowWebhook] Detected rejected WebRTC call, looking for original call leg..."
-          );
-
           try {
             const { getPostgresPool } = await import("@/lib/postgres.mjs");
             const pool = getPostgresPool();
@@ -891,21 +838,6 @@ export async function POST(request, { params }) {
                 [callSessionId]
               );
 
-              console.log(
-                `[IncomingFlowWebhook] Found ${
-                  calls.rows?.length || 0
-                } call legs in session:`,
-                {
-                  currentCallControlId: callControlId,
-                  legs: calls.rows?.map((c) => ({
-                    call_control_id: c.call_control_id,
-                    direction: c.direction,
-                    state: c.state,
-                    matches: c.call_control_id !== callControlId,
-                  })),
-                }
-              );
-
               // Find the other call leg (the one that's not the current WebRTC leg that hung up)
               // This works for both incoming and outgoing calls transferred to agents
               const originalCall = calls.rows?.find(
@@ -913,10 +845,6 @@ export async function POST(request, { params }) {
               );
 
               if (originalCall) {
-                console.log(
-                  `[IncomingFlowWebhook] Found original call leg: ${originalCall.call_control_id}, hanging up...`
-                );
-
                 // Hangup the original call leg
                 const result = await callTelnyxAction(
                   flowId,
@@ -925,19 +853,7 @@ export async function POST(request, { params }) {
                   {}
                 );
 
-                if (result.success) {
-                  console.log(
-                    `[IncomingFlowWebhook] ✅ Successfully hung up original call leg: ${originalCall.call_control_id}`
-                  );
-                } else {
-                  console.warn(
-                    `[IncomingFlowWebhook] ⚠️ Failed to hangup original call leg: ${result.error}`
-                  );
-                }
-              } else {
-                console.log(
-                  "[IncomingFlowWebhook] No original call leg found to hangup"
-                );
+                // Hangup result handled
               }
 
               // Update the interaction state instead of calls table
@@ -950,24 +866,12 @@ export async function POST(request, { params }) {
                   await PgDb.updateInteractionById(interaction.id, {
                     state: "completed",
                   });
-                  console.log(
-                    `[IncomingFlowWebhook] Updated interaction state to completed: ${interaction.id}`
-                  );
                 }
               } catch (err) {
-                console.error(
-                  "[IncomingFlowWebhook] Error updating interaction state:",
-                  err
-                );
+                // Error updating interaction state
               }
-            } else {
-              console.warn("[IncomingFlowWebhook] Postgres pool not available");
             }
           } catch (err) {
-            console.error(
-              "[IncomingFlowWebhook] Error hanging up original call leg:",
-              err
-            );
             // Don't fail the webhook processing
           }
         }
@@ -975,7 +879,6 @@ export async function POST(request, { params }) {
         // Note: The actual interaction update, timeline event, and SSE broadcast
         // are all handled by handleContactCenterEvent which is called above.
       } catch (err) {
-        console.error("[IncomingFlowWebhook] Error handling call.hangup:", err);
         // Don't fail the webhook, just log the error
       }
 
@@ -994,10 +897,7 @@ export async function POST(request, { params }) {
         );
         await handleContactCenterEvent(event, payload);
       } catch (err) {
-        console.error(
-          "[IncomingFlowWebhook] Error handling call.recording.saved:",
-          err
-        );
+        // Error handling call.recording.saved
       }
     }
 
@@ -1107,21 +1007,27 @@ export async function POST(request, { params }) {
                 // Merge existing client_state (may contain routing params) with flow tracking
                 const existingConfig = nextNode.data?.config || {};
                 const flowTracking = { flowId, currentNodeId: nextNode.id };
-                
+
                 // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
                 let mergedClientState = flowTracking;
                 if (existingConfig.client_state) {
                   try {
-                    const decoded = Buffer.from(existingConfig.client_state, "base64").toString();
+                    const decoded = Buffer.from(
+                      existingConfig.client_state,
+                      "base64"
+                    ).toString();
                     const existing = JSON.parse(decoded);
                     // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
                     mergedClientState = { ...existing, ...flowTracking };
                   } catch (err) {
-                    console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
+                    console.warn(
+                      "[FlowWebhook] Failed to decode existing client_state:",
+                      err
+                    );
                     // If decode fails, just use flow tracking
                   }
                 }
-                
+
                 const configuredNextNode = {
                   ...nextNode,
                   data: {
@@ -1335,21 +1241,27 @@ async function executeNodeChain(
     // Merge existing client_state (may contain routing params) with flow tracking
     const existingConfig = nextNode.data?.config || {};
     const flowTracking = { flowId, currentNodeId: nextNode.id };
-    
+
     // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
     let mergedClientState = flowTracking;
     if (existingConfig.client_state) {
       try {
-        const decoded = Buffer.from(existingConfig.client_state, "base64").toString();
+        const decoded = Buffer.from(
+          existingConfig.client_state,
+          "base64"
+        ).toString();
         const existing = JSON.parse(decoded);
         // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
         mergedClientState = { ...existing, ...flowTracking };
       } catch (err) {
-        console.warn("[FlowWebhook] Failed to decode existing client_state:", err);
+        console.warn(
+          "[FlowWebhook] Failed to decode existing client_state:",
+          err
+        );
         // If decode fails, just use flow tracking
       }
     }
-    
+
     const configuredNode = {
       ...nextNode,
       data: {
@@ -1357,9 +1269,9 @@ async function executeNodeChain(
         config: {
           ...existingConfig,
           // Merge client_state: preserve routing params, add flow tracking
-          client_state: Buffer.from(
-            JSON.stringify(mergedClientState)
-          ).toString("base64"),
+          client_state: Buffer.from(JSON.stringify(mergedClientState)).toString(
+            "base64"
+          ),
         },
       },
     };

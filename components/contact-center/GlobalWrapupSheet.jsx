@@ -39,6 +39,7 @@ export function GlobalWrapupSheet() {
   }, [callInteractionId, callTranscriptions]);
 
   // Load interactions to check if call was answered
+  // No polling - SSE handles all real-time updates
   useEffect(() => {
     const loadInteractions = async () => {
       try {
@@ -50,13 +51,22 @@ export function GlobalWrapupSheet() {
           setInteractions(data.interactions);
         }
       } catch (err) {
-        console.error("[GlobalWrapupSheet] Failed to load interactions:", err);
+        // Failed to load interactions
       }
     };
+    
+    // Initial load on mount
     loadInteractions();
-    // Refresh interactions periodically to catch state changes
-    const interval = setInterval(loadInteractions, 5000);
-    return () => clearInterval(interval);
+    
+    // Listen to SSE events to trigger immediate refresh when interactions change
+    const handleSSEEvent = () => {
+      loadInteractions();
+    };
+    window.addEventListener('contact-center:refresh-interactions', handleSSEEvent);
+    
+    return () => {
+      window.removeEventListener('contact-center:refresh-interactions', handleSSEEvent);
+    };
   }, []);
 
   // Listen for call status changes and disconnectedTime changes
@@ -100,11 +110,11 @@ export function GlobalWrapupSheet() {
         let interaction = interactions.find((i) => i.id === interactionId);
 
         // If not found locally, try to fetch from API
-        if (!interaction) {
+        if (!interaction && callInteractionId) {
           try {
             const res = await fetch(
               `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callInteractionId || ""
+                callInteractionId
               )}`
             );
             const data = await res.json();
@@ -112,10 +122,7 @@ export function GlobalWrapupSheet() {
               interaction = data.interaction;
             }
           } catch (apiErr) {
-            console.warn(
-              "[GlobalWrapupSheet] Could not fetch interaction for wrapup check:",
-              apiErr
-            );
+            // Could not fetch interaction for wrapup check
           }
         }
 
@@ -126,10 +133,6 @@ export function GlobalWrapupSheet() {
 
         // If still no interaction found after retry, default to opening wrapup sheet
         if (!interaction) {
-          console.log(
-            "[GlobalWrapupSheet] No interaction found, opening wrapup sheet by default:",
-            interactionId
-          );
           lastWrapupInteractionRef.current = interactionId;
           useWrapupSheetStore.getState().openWrapup(
             interactionId,
@@ -161,31 +164,14 @@ export function GlobalWrapupSheet() {
         const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
-          console.log(
-            "[GlobalWrapupSheet] Opening wrapup sheet for interaction:",
-            interactionId
-          );
           lastWrapupInteractionRef.current = interactionId;
           useWrapupSheetStore.getState().openWrapup(
             interactionId,
             callTranscriptions || []
           );
-        } else {
-          console.log(
-            "[GlobalWrapupSheet] Skipping wrapup sheet - call was abandoned:",
-            {
-              interactionId,
-              wasQueuedWhenEnded,
-              isAbandoned,
-              wasAnswered,
-            }
-          );
         }
       } catch (err) {
-        console.error(
-          "[GlobalWrapupSheet] Error checking interaction for wrapup:",
-          err
-        );
+        // Error checking interaction for wrapup
       }
     };
 
@@ -224,10 +210,6 @@ export function GlobalWrapupSheet() {
         wasQueuedWhenEnded || (isAbandoned && !wasActuallyAnswered);
 
       if (!shouldSkip && wasActuallyAnswered) {
-        console.log(
-          "[GlobalWrapupSheet] Interaction completed (from state change), opening wrapup sheet:",
-          interaction.id
-        );
         lastWrapupInteractionRef.current = interaction.id;
         useWrapupSheetStore.getState().openWrapup(
           interaction.id,
@@ -247,17 +229,8 @@ export function GlobalWrapupSheet() {
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === eventInteractionId) {
-        console.log(
-          "[GlobalWrapupSheet] Wrapup already shown for this interaction:",
-          eventInteractionId
-        );
         return;
       }
-
-      console.log(
-        "[GlobalWrapupSheet] Received call-disconnected event, checking interaction:",
-        eventInteractionId
-      );
 
       // Find the interaction to check if it was answered
       const interaction = interactions.find((i) => i.id === eventInteractionId);
@@ -274,11 +247,6 @@ export function GlobalWrapupSheet() {
           useWrapupSheetStore.getState().openWrapup(
             eventInteractionId,
             eventTranscriptions
-          );
-        } else {
-          console.log(
-            "[GlobalWrapupSheet] Skipping wrapup for abandoned call:",
-            eventInteractionId
           );
         }
       } else {
@@ -304,15 +272,6 @@ export function GlobalWrapupSheet() {
     };
   }, [interactions]);
 
-  // Debug logging
-  useEffect(() => {
-    if (open) {
-      console.log("[GlobalWrapupSheet] Wrapup sheet is open:", {
-        interactionId,
-        transcriptionsCount: transcriptions?.length || 0,
-      });
-    }
-  }, [open, interactionId, transcriptions]);
 
   return (
     <WrapupCodesSheet

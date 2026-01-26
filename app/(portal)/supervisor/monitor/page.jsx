@@ -85,6 +85,8 @@ export default function MonitorPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [skillMatchDialogOpen, setSkillMatchDialogOpen] = useState(false);
   const [selectedCallForSkills, setSelectedCallForSkills] = useState(null);
+  const [availableAgentsForSkills, setAvailableAgentsForSkills] = useState([]);
+  const [loadingAgentsForSkills, setLoadingAgentsForSkills] = useState(false);
   const [agentNameFilter, setAgentNameFilter] = useState("");
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedQueues, setSelectedQueues] = useState([]);
@@ -1095,14 +1097,32 @@ export default function MonitorPage() {
                                 <div className="flex items-center gap-2">
                                   <span>
                                     {waitingReason.type === "no_skills_matching"
-                                      ? "No skills matching"
+                                      ? "Skills not matched"
                                       : "No agents available"}
                                   </span>
                                   {waitingReason.type === "no_skills_matching" && (
                                     <button
-                                      onClick={() => {
+                                      onClick={async () => {
                                         setSelectedCallForSkills(call);
                                         setSkillMatchDialogOpen(true);
+                                        // Fetch available agents for the queue
+                                        if (selectedQueue?.id) {
+                                          setLoadingAgentsForSkills(true);
+                                          try {
+                                            const res = await fetch(
+                                              `/api/contact-center/queues/${selectedQueue.id}/agents`,
+                                              { cache: "no-store" }
+                                            );
+                                            if (res.ok) {
+                                              const data = await res.json();
+                                              setAvailableAgentsForSkills(data.agents || []);
+                                            }
+                                          } catch (error) {
+                                            console.error("[Monitor] Error loading agents:", error);
+                                          } finally {
+                                            setLoadingAgentsForSkills(false);
+                                          }
+                                        }
                                       }}
                                       className="text-muted-foreground hover:text-foreground transition-colors"
                                       title="View skill matching details"
@@ -2119,10 +2139,16 @@ export default function MonitorPage() {
       {/* Skill Matching Details Dialog */}
       <Dialog
         open={skillMatchDialogOpen}
-        onOpenChange={setSkillMatchDialogOpen}
+        onOpenChange={(open) => {
+          setSkillMatchDialogOpen(open);
+          if (!open) {
+            setSelectedCallForSkills(null);
+            setAvailableAgentsForSkills([]);
+          }
+        }}
       >
         <DialogContent
-          className="max-w-2xl"
+          className="max-w-3xl max-h-[80vh] overflow-y-auto"
           style={{
             backgroundColor: "var(--sheet, var(--muted))",
             color: "var(--sheet-foreground, var(--foreground))",
@@ -2130,75 +2156,136 @@ export default function MonitorPage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Skill Matching Details</DialogTitle>
+            <DialogTitle>Skills Not Matched</DialogTitle>
             <DialogDescription>
-              Comparison of required skills vs available agent skills
+              Required skills for this call and available agents' skills
             </DialogDescription>
           </DialogHeader>
           {selectedCallForSkills && (
             <div className="space-y-4 py-4">
               <div>
-                <h4 className="font-semibold mb-2">Required Skills</h4>
+                <h4 className="font-semibold mb-2">Required Skills for Call</h4>
                 <div className="space-y-1">
-                  {Object.entries(
-                    selectedCallForSkills.requiredSkills || {}
-                  ).map(([skillName, requiredLevel]) => (
-                    <div
-                      key={skillName}
-                      className="flex items-center justify-between p-2 border rounded"
-                    >
-                      <span className="font-medium">{skillName}</span>
-                      <Badge variant="outline">
-                        Required: {requiredLevel}
-                      </Badge>
-                    </div>
-                  ))}
+                  {Object.keys(selectedCallForSkills.requiredSkills || {}).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No required skills specified</p>
+                  ) : (
+                    Object.entries(
+                      selectedCallForSkills.requiredSkills || {}
+                    ).map(([skillName, requiredLevel]) => (
+                      <div
+                        key={skillName}
+                        className="flex items-center justify-between p-2 border rounded"
+                      >
+                        <span className="font-medium">{skillName}</span>
+                        <Badge variant="outline">
+                          Required: {requiredLevel}
+                        </Badge>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-              {selectedCallForSkills.routingMetadata?.skillMatch && (
-                <div>
-                  <h4 className="font-semibold mb-2">Matching Status</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 border rounded">
-                      <span>Matched Skills</span>
-                      <Badge>
-                        {
-                          selectedCallForSkills.routingMetadata.skillMatch
-                            .matchedSkills
-                        }{" "}
-                        /{" "}
-                        {
-                          selectedCallForSkills.routingMetadata.skillMatch
-                            .totalRequired
-                        }
-                      </Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-2 border rounded">
-                      <span>Match Ratio</span>
-                      <Badge
-                        variant={
-                          selectedCallForSkills.routingMetadata.skillMatch
-                            .matchRatio >= 1
-                            ? "default"
-                            : "destructive"
-                        }
-                      >
-                        {(
-                          selectedCallForSkills.routingMetadata.skillMatch
-                            .matchRatio * 100
-                        ).toFixed(1)}
-                        %
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              )}
+              
               <div>
                 <h4 className="font-semibold mb-2">Available Agents</h4>
-                <p className="text-sm text-muted-foreground">
-                  No agents available with matching skills. The call is waiting
-                  for an agent with the required skill proficiency levels.
-                </p>
+                {loadingAgentsForSkills ? (
+                  <div className="space-y-2 py-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : availableAgentsForSkills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No agents available in this queue
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {availableAgentsForSkills.map((agent) => {
+                      const requiredSkills = selectedCallForSkills.requiredSkills || {};
+                      const agentSkills = agent.skills || {};
+                      
+                      // Calculate which skills are missing or insufficient
+                      const skillAnalysis = Object.entries(requiredSkills).map(
+                        ([skillName, requiredLevel]) => {
+                          const agentLevel = agentSkills[skillName] || 0;
+                          const hasSkill = agentLevel >= requiredLevel;
+                          return {
+                            skillName,
+                            requiredLevel,
+                            agentLevel,
+                            hasSkill,
+                            missing: !hasSkill,
+                          };
+                        }
+                      );
+                      
+                      const missingSkills = skillAnalysis.filter((s) => s.missing);
+                      const hasAllSkills = missingSkills.length === 0;
+                      
+                      // Build agent display name
+                      const agentDisplayName =
+                        agent.firstName || agent.lastName
+                          ? `${agent.firstName || ""} ${agent.lastName || ""}`.trim()
+                          : agent.username || "Unknown";
+                      
+                      return (
+                        <div
+                          key={agent.id}
+                          className="border rounded-lg p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-medium">{agentDisplayName}</span>
+                              <span className="text-sm text-muted-foreground ml-2">
+                                ({agent.username})
+                              </span>
+                            </div>
+                            <Badge
+                              variant={hasAllSkills ? "default" : "destructive"}
+                            >
+                              {hasAllSkills
+                                ? "Has all skills"
+                                : `Missing ${missingSkills.length} skill${missingSkills.length > 1 ? "s" : ""}`}
+                            </Badge>
+                          </div>
+                          
+                          <div className="space-y-1">
+                            {skillAnalysis.map((skill) => (
+                              <div
+                                key={skill.skillName}
+                                className="flex items-center justify-between text-sm"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className="font-medium">
+                                    {skill.skillName}
+                                  </span>
+                                  {skill.hasSkill ? (
+                                    <IconCheck className="h-4 w-4 text-green-600" />
+                                  ) : (
+                                    <IconX className="h-4 w-4 text-red-600" />
+                                  )}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground">
+                                    Required: {skill.requiredLevel}
+                                  </span>
+                                  <span
+                                    className={
+                                      skill.hasSkill
+                                        ? "text-green-600 font-medium"
+                                        : "text-red-600 font-medium"
+                                    }
+                                  >
+                                    Agent: {skill.agentLevel}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
