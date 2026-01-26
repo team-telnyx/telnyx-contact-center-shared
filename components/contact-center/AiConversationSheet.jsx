@@ -11,7 +11,12 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { IconRobot, IconCopy, IconCheck } from "@tabler/icons-react";
+import {
+  IconRobot,
+  IconCopy,
+  IconCheck,
+  IconMessageCircle,
+} from "@tabler/icons-react";
 import { Play, Pause } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import { Card, CardContent } from "@/components/ui/card";
@@ -551,7 +556,7 @@ export default function AiConversationSheet({
               if (stopPropagation) event.stopPropagation();
             }}
           >
-            <IconRobot
+            <IconMessageCircle
               className={["h-4 w-4 text-violet-500", iconClassName]
                 .filter(Boolean)
                 .join(" ")}

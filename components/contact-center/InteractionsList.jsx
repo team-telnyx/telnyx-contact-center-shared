@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Phone, PhoneIncoming, Clock, Mic, MicOff, Pause } from "lucide-react";
-import { IconPhone, IconRobot } from "@tabler/icons-react";
+import { IconPhone, IconRobot, IconMessageCircle } from "@tabler/icons-react";
 import { getStatusDisplay } from "@/lib/call-status-utils";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import AiConversationSheet from "./AiConversationSheet";
@@ -331,7 +331,7 @@ function InteractionCard({
           <PhoneIncoming className="h-4 w-4" />
           {isAiCall && (
             <div className="absolute -top-1 -right-1 bg-violet-500 rounded-full p-0.5">
-              <IconRobot className="h-2.5 w-2.5 text-white" />
+              <IconRobot className="h-3.5 w-3.5 text-white" />
             </div>
           )}
         </div>
@@ -342,14 +342,6 @@ function InteractionCard({
                 <div className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">
                   {interaction.queue_name || "Contact Center"}
                 </div>
-                {isAiCall && (
-                  <div
-                    className="flex items-center gap-1 text-violet-600"
-                    title="AI-transferred call"
-                  >
-                    <IconRobot className="h-3 w-3" />
-                  </div>
-                )}
               </div>
               <div className="font-bold text-sm text-orange-600 truncate">
                 {callerNameLabel || callerNumberLabel}
@@ -400,8 +392,8 @@ function InteractionCard({
           )}
           <AiConversationSheet
             interaction={interaction}
-            triggerClassName="h-6 w-6"
-            iconClassName="h-3.5 w-3.5"
+            triggerClassName="h-7 w-7"
+            iconClassName="h-4.5 w-4.5"
             stopPropagation
           />
         </div>
