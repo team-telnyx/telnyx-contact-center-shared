@@ -106,6 +106,8 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   const supervisorCallControlIdRef = useRef(supervisorCallControlId);
   // Flag to prevent checkSupervisorCall from resetting state after user action
   const userInitiatedSupervisionRef = useRef(false);
+  // Flag to track if we've already attempted to auto-answer the supervisor call
+  const autoAnswerAttemptedRef = useRef(false);
 
   // Update refs when state changes
   useEffect(() => {
@@ -312,6 +314,92 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       } catch (_) {}
     };
   }, [client, supervisorCallControlId, activeCall, setActiveCall]);
+
+  // Auto-answer supervisor call when it arrives after clicking a role tile
+  useEffect(() => {
+    // Only auto-answer if:
+    // 1. We have a supervisorCallControlId (supervision was started)
+    // 2. We have an active call (the supervisor call has arrived)
+    // 3. The call is ringing (not yet answered)
+    // 4. The call is a supervisor call (from +48221811530 or "Supervisor Call")
+    // 5. We haven't already attempted to auto-answer
+    if (
+      !supervisorCallControlId ||
+      !activeCall ||
+      autoAnswerAttemptedRef.current
+    )
+      return;
+
+    const fromNumber = useActiveCallStore.getState().fromNumber;
+    const fromName = useActiveCallStore.getState().fromName;
+    const isSupervisorCall =
+      fromNumber === "+48221811530" || fromName === "Supervisor Call";
+
+    if (!isSupervisorCall) return;
+
+    const callState = activeCall?.state || callStatus || "";
+    const lowerState = String(callState).toLowerCase();
+    const isRingingState =
+      isRinging ||
+      lowerState === "ringing" ||
+      lowerState === "new" ||
+      lowerState === "early";
+
+    // Only auto-answer if call is ringing and not already answered
+    if (isRingingState && !isCallConnected) {
+      // Mark as attempted to prevent multiple attempts
+      autoAnswerAttemptedRef.current = true;
+
+      console.log("[SupervisionModal] Auto-answering supervisor call:", {
+        supervisorCallControlId,
+        callState: lowerState,
+        isRinging,
+        isCallConnected,
+      });
+
+      // Small delay to ensure call object is fully ready
+      const autoAnswerTimer = setTimeout(() => {
+        const currentCall = useActiveCallStore.getState().call;
+        if (currentCall && currentCall.answer) {
+          try {
+            currentCall.answer();
+            updateStatus("answered");
+
+            // Force audio attachment with multiple retries
+            const retryDelays = [100, 300, 500, 1000];
+            retryDelays.forEach((delay) => {
+              setTimeout(() => {
+                const callForAudio = useActiveCallStore.getState().call;
+                if (callForAudio && callForAudio.attachAudio) {
+                  callForAudio.attachAudio();
+                }
+              }, delay);
+            });
+          } catch (err) {
+            console.error("[SupervisionModal] Error auto-answering call:", err);
+            // Reset flag on error so we can retry if needed
+            autoAnswerAttemptedRef.current = false;
+          }
+        }
+      }, 200);
+
+      return () => clearTimeout(autoAnswerTimer);
+    }
+  }, [
+    supervisorCallControlId,
+    activeCall,
+    isRinging,
+    isCallConnected,
+    callStatus,
+    updateStatus,
+  ]);
+
+  // Reset auto-answer flag when supervisor call ends or supervision is cleared
+  useEffect(() => {
+    if (!supervisorCallControlId) {
+      autoAnswerAttemptedRef.current = false;
+    }
+  }, [supervisorCallControlId]);
 
   const loadUserInfo = async () => {
     try {

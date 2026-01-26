@@ -109,7 +109,7 @@ export async function PUT(request, { params }) {
   try {
     const skillsChanged = body.skills !== undefined;
     await PgDb.updateUserById(id, set);
-    
+
     // If skills were changed, re-evaluate waiting interactions
     if (skillsChanged) {
       try {
@@ -131,7 +131,7 @@ export async function PUT(request, { params }) {
         );
       }
     }
-    
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err?.message || String(err);

@@ -71,7 +71,7 @@ export async function GET(request, { params }) {
     `;
 
     const result = await pool.query(query, [queueId]);
-    
+
     // Load skills mapping (UUID to name)
     const skillsResult = await pool.query(
       `SELECT id, name FROM skills WHERE is_active = true`
@@ -80,11 +80,11 @@ export async function GET(request, { params }) {
     skillsResult.rows.forEach((row) => {
       skillsMapping.set(row.id, row.name);
     });
-    
+
     // Helper function to safely parse JSONB skills
     const safeParse = (value) => {
       if (!value) return {};
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         try {
           return JSON.parse(value);
         } catch {
@@ -96,7 +96,7 @@ export async function GET(request, { params }) {
 
     // Helper function to convert agent skills from UUID keys to name keys
     const convertAgentSkillsToNames = (agentSkills) => {
-      if (!agentSkills || typeof agentSkills !== 'object') {
+      if (!agentSkills || typeof agentSkills !== "object") {
         return {};
       }
       const converted = {};
@@ -113,7 +113,7 @@ export async function GET(request, { params }) {
       const { activeCalls } = getRealtimeAgentMetrics(agent.id);
       const agentSkillsRaw = safeParse(agent.skills);
       const agentSkills = convertAgentSkillsToNames(agentSkillsRaw);
-      
+
       return {
         id: agent.id,
         username: agent.username,
@@ -149,4 +149,3 @@ export async function GET(request, { params }) {
     );
   }
 }
-

@@ -7,7 +7,7 @@ import useActiveCallStore from "@/lib/stores/active-call-store";
 
 /**
  * Global Wrapup Sheet Component
- * 
+ *
  * This component renders the wrapup codes sheet globally across the entire application.
  * It listens for events and state changes to open the wrapup sheet when needed.
  */
@@ -21,7 +21,9 @@ export function GlobalWrapupSheet() {
   const callTranscriptions = useActiveCallStore(
     (state) => state?.transcriptions || []
   );
-  const disconnectedTime = useActiveCallStore((state) => state.disconnectedTime);
+  const disconnectedTime = useActiveCallStore(
+    (state) => state.disconnectedTime
+  );
   const [interactions, setInteractions] = useState([]);
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
@@ -54,18 +56,24 @@ export function GlobalWrapupSheet() {
         // Failed to load interactions
       }
     };
-    
+
     // Initial load on mount
     loadInteractions();
-    
+
     // Listen to SSE events to trigger immediate refresh when interactions change
     const handleSSEEvent = () => {
       loadInteractions();
     };
-    window.addEventListener('contact-center:refresh-interactions', handleSSEEvent);
-    
+    window.addEventListener(
+      "contact-center:refresh-interactions",
+      handleSSEEvent
+    );
+
     return () => {
-      window.removeEventListener('contact-center:refresh-interactions', handleSSEEvent);
+      window.removeEventListener(
+        "contact-center:refresh-interactions",
+        handleSSEEvent
+      );
     };
   }, []);
 
@@ -134,10 +142,9 @@ export function GlobalWrapupSheet() {
         // If still no interaction found after retry, default to opening wrapup sheet
         if (!interaction) {
           lastWrapupInteractionRef.current = interactionId;
-          useWrapupSheetStore.getState().openWrapup(
-            interactionId,
-            callTranscriptions || []
-          );
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(interactionId, callTranscriptions || []);
           return;
         }
 
@@ -165,10 +172,9 @@ export function GlobalWrapupSheet() {
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = interactionId;
-          useWrapupSheetStore.getState().openWrapup(
-            interactionId,
-            callTranscriptions || []
-          );
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(interactionId, callTranscriptions || []);
         }
       } catch (err) {
         // Error checking interaction for wrapup
@@ -176,7 +182,13 @@ export function GlobalWrapupSheet() {
     };
 
     checkAndOpenWrapup();
-  }, [callStatus, callInteractionId, interactions, disconnectedTime, callTranscriptions]);
+  }, [
+    callStatus,
+    callInteractionId,
+    interactions,
+    disconnectedTime,
+    callTranscriptions,
+  ]);
 
   // Also watch for interactions changing to "completed" state
   const processedCompletedInteractionsRef = useRef(new Set());
@@ -211,10 +223,9 @@ export function GlobalWrapupSheet() {
 
       if (!shouldSkip && wasActuallyAnswered) {
         lastWrapupInteractionRef.current = interaction.id;
-        useWrapupSheetStore.getState().openWrapup(
-          interaction.id,
-          callTranscriptions || []
-        );
+        useWrapupSheetStore
+          .getState()
+          .openWrapup(interaction.id, callTranscriptions || []);
         break;
       }
     }
@@ -223,8 +234,10 @@ export function GlobalWrapupSheet() {
   // Listen for manual disconnect events from softphone components
   useEffect(() => {
     const handleCallDisconnected = async (event) => {
-      const { interactionId: eventInteractionId, transcriptions: eventTranscriptions } =
-        event.detail || {};
+      const {
+        interactionId: eventInteractionId,
+        transcriptions: eventTranscriptions,
+      } = event.detail || {};
       if (!eventInteractionId) return;
 
       // Check if we've already shown wrapup for this interaction
@@ -244,18 +257,16 @@ export function GlobalWrapupSheet() {
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = eventInteractionId;
-          useWrapupSheetStore.getState().openWrapup(
-            eventInteractionId,
-            eventTranscriptions
-          );
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(eventInteractionId, eventTranscriptions);
         }
       } else {
         // If interaction not found, assume it was answered and show wrapup
         lastWrapupInteractionRef.current = eventInteractionId;
-        useWrapupSheetStore.getState().openWrapup(
-          eventInteractionId,
-          eventTranscriptions
-        );
+        useWrapupSheetStore
+          .getState()
+          .openWrapup(eventInteractionId, eventTranscriptions);
       }
     };
 
@@ -272,7 +283,6 @@ export function GlobalWrapupSheet() {
     };
   }, [interactions]);
 
-
   return (
     <WrapupCodesSheet
       open={open}
@@ -287,4 +297,3 @@ export function GlobalWrapupSheet() {
     />
   );
 }
-

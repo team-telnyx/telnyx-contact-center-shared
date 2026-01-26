@@ -25,10 +25,9 @@ export async function GET(request) {
     }
 
     // Get user's skills from database
-    const result = await pool.query(
-      `SELECT skills FROM users WHERE id = $1`,
-      [user.id]
-    );
+    const result = await pool.query(`SELECT skills FROM users WHERE id = $1`, [
+      user.id,
+    ]);
 
     if (!result.rows || result.rows.length === 0) {
       return NextResponse.json({ ok: true, skills: {} });
@@ -38,13 +37,13 @@ export async function GET(request) {
     let skills = {};
     const skillsRaw = result.rows[0].skills;
     if (skillsRaw) {
-      if (typeof skillsRaw === 'string') {
+      if (typeof skillsRaw === "string") {
         try {
           skills = JSON.parse(skillsRaw);
         } catch {
           skills = {};
         }
-      } else if (typeof skillsRaw === 'object') {
+      } else if (typeof skillsRaw === "object") {
         skills = skillsRaw;
       }
     }
@@ -58,4 +57,3 @@ export async function GET(request) {
     );
   }
 }
-

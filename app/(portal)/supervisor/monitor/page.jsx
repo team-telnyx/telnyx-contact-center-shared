@@ -91,7 +91,8 @@ export default function MonitorPage() {
   const [selectedStatuses, setSelectedStatuses] = useState([]);
   const [selectedQueues, setSelectedQueues] = useState([]);
   const [supervisionModalOpen, setSupervisionModalOpen] = useState(false);
-  const [selectedCallForSupervision, setSelectedCallForSupervision] = useState(null);
+  const [selectedCallForSupervision, setSelectedCallForSupervision] =
+    useState(null);
   const selectedQueueRef = useRef(null);
   const loadQueueCallsRef = useRef(null);
 
@@ -123,19 +124,19 @@ export default function MonitorPage() {
     eventSource.addEventListener("monitor_update", (event) => {
       try {
         const update = JSON.parse(event.data);
-        
+
         setData((currentData) => {
           if (!currentData) {
             setLoading(false);
             return update;
           }
-          
+
           // Store previous data for comparison
           const prevAgents = currentData.agents?.stats || [];
           const prevQueues = currentData.queues?.stats || [];
           const updateAgents = update.agents?.stats || [];
           const updateQueues = update.queues?.stats || [];
-          
+
           // Check for changes and highlight BEFORE updating
           prevAgents.forEach((prevAgent) => {
             const updatedAgent = updateAgents.find(
@@ -150,7 +151,7 @@ export default function MonitorPage() {
               }
             }
           });
-          
+
           prevQueues.forEach((prevQueue) => {
             const updatedQueue = updateQueues.find(
               (q) => String(q.queueId) === String(prevQueue.queueId)
@@ -170,7 +171,7 @@ export default function MonitorPage() {
               }
             }
           });
-          
+
           // Merge agents stats - update only changed agents
           const currentAgents = currentData.agents?.stats || [];
           const mergedAgents = currentAgents.map((currentAgent) => {
@@ -179,7 +180,7 @@ export default function MonitorPage() {
             );
             return updatedAgent || currentAgent;
           });
-          
+
           // Add any new agents that weren't in the current list
           const currentAgentIds = new Set(
             currentAgents.map((a) => String(a.userId))
@@ -187,7 +188,7 @@ export default function MonitorPage() {
           const newAgents = updateAgents.filter(
             (a) => !currentAgentIds.has(String(a.userId))
           );
-          
+
           // Merge queues stats - update only changed queues
           const currentQueues = currentData.queues?.stats || [];
           const mergedQueues = currentQueues.map((currentQueue) => {
@@ -196,7 +197,7 @@ export default function MonitorPage() {
             );
             return updatedQueue || currentQueue;
           });
-          
+
           // Add any new queues that weren't in the current list
           const currentQueueIds = new Set(
             currentQueues.map((q) => String(q.queueId))
@@ -219,10 +220,7 @@ export default function MonitorPage() {
 
           // Check if selected queue needs to be refreshed
           const selectedQueue = selectedQueueRef.current;
-          if (
-            selectedQueue?.id &&
-            loadQueueCallsRef.current
-          ) {
+          if (selectedQueue?.id && loadQueueCallsRef.current) {
             const prevQueue = prevQueues.find(
               (queue) => String(queue.queueId) === String(selectedQueue.id)
             );
@@ -234,10 +232,10 @@ export default function MonitorPage() {
               nextQueue &&
               (prevQueue.realtime?.waitingCalls !==
                 nextQueue.realtime?.waitingCalls ||
-              prevQueue.realtime?.activeCalls !==
-                nextQueue.realtime?.activeCalls ||
-              prevQueue.realtime?.longestWaitSeconds !==
-                nextQueue.realtime?.longestWaitSeconds);
+                prevQueue.realtime?.activeCalls !==
+                  nextQueue.realtime?.activeCalls ||
+                prevQueue.realtime?.longestWaitSeconds !==
+                  nextQueue.realtime?.longestWaitSeconds);
             if (queueChanged) {
               setTimeout(() => {
                 loadQueueCallsRef.current(selectedQueue.id, { silent: true });
@@ -685,9 +683,7 @@ export default function MonitorPage() {
 
   const uniqueQueues = Array.from(
     new Set(
-      allAgents
-        .flatMap((agent) => agent.activeQueueIds || [])
-        .filter(Boolean)
+      allAgents.flatMap((agent) => agent.activeQueueIds || []).filter(Boolean)
     )
   ).sort();
 
@@ -701,7 +697,7 @@ export default function MonitorPage() {
     // Filter by agent name - use same logic as table display
     if (agentNameFilter && agentNameFilter.trim()) {
       const searchTerm = agentNameFilter.trim().toLowerCase();
-      
+
       // Build display name using same logic as table
       let displayName = "";
       const firstName = agent.firstName || agent.first_name || null;
@@ -716,9 +712,9 @@ export default function MonitorPage() {
       } else {
         displayName = "Unknown";
       }
-      
+
       const username = agent.username || "";
-      
+
       // Search in first name, last name, display name, and username separately
       const firstNameStr = (firstName || "").trim();
       const lastNameStr = (lastName || "").trim();
@@ -726,24 +722,34 @@ export default function MonitorPage() {
       const lastNameLower = lastNameStr.toLowerCase();
       const displayNameLower = displayName.toLowerCase();
       const usernameLower = username.toLowerCase();
-      
+
       // Check if search term matches any part (first name, last name, full name, or username)
       // Check first name separately - must have content and match
-      const matchesFirstName = firstNameStr.length > 0 && firstNameLower.includes(searchTerm);
+      const matchesFirstName =
+        firstNameStr.length > 0 && firstNameLower.includes(searchTerm);
       // Check last name separately - must have content and match
-      const matchesLastName = lastNameStr.length > 0 && lastNameLower.includes(searchTerm);
+      const matchesLastName =
+        lastNameStr.length > 0 && lastNameLower.includes(searchTerm);
       // Check full display name
       const matchesDisplayName = displayNameLower.includes(searchTerm);
       // Check username
       const matchesUsername = usernameLower.includes(searchTerm);
-      
-      if (!matchesFirstName && !matchesLastName && !matchesDisplayName && !matchesUsername) {
+
+      if (
+        !matchesFirstName &&
+        !matchesLastName &&
+        !matchesDisplayName &&
+        !matchesUsername
+      ) {
         return false;
       }
     }
 
     // Filter by status
-    if (selectedStatuses.length > 0 && !selectedStatuses.includes(agent.status)) {
+    if (
+      selectedStatuses.length > 0 &&
+      !selectedStatuses.includes(agent.status)
+    ) {
       return false;
     }
 
@@ -984,171 +990,180 @@ export default function MonitorPage() {
                         </TableRow>
                       ) : (
                         queueCalls.map((call) => {
-                        // Calculate real-time wait time
-                        const waitTimeSeconds = call.enqueuedAt
-                          ? Math.max(
-                              0,
-                              Math.floor(
-                                (currentTime.getTime() -
-                                  new Date(call.enqueuedAt).getTime()) /
-                                  1000
+                          // Calculate real-time wait time
+                          const waitTimeSeconds = call.enqueuedAt
+                            ? Math.max(
+                                0,
+                                Math.floor(
+                                  (currentTime.getTime() -
+                                    new Date(call.enqueuedAt).getTime()) /
+                                    1000
+                                )
                               )
-                            )
-                          : call.waitSeconds || 0;
+                            : call.waitSeconds || 0;
 
-                        // Calculate real-time talk time
-                        const talkTimeSeconds = call.answeredAt
-                          ? Math.max(
-                              0,
-                              Math.floor(
-                                (currentTime.getTime() -
-                                  new Date(call.answeredAt).getTime()) /
-                                  1000
+                          // Calculate real-time talk time
+                          const talkTimeSeconds = call.answeredAt
+                            ? Math.max(
+                                0,
+                                Math.floor(
+                                  (currentTime.getTime() -
+                                    new Date(call.answeredAt).getTime()) /
+                                    1000
+                                )
                               )
-                            )
-                          : call.talkSeconds || 0;
+                            : call.talkSeconds || 0;
 
-                        // Determine state - if answered but state is still ringing, show as connected
-                        const displayState =
-                          call.answeredAt &&
-                          (call.state === "ringing" || call.state === "bridging")
-                            ? "connected"
-                            : call.state;
+                          // Determine state - if answered but state is still ringing, show as connected
+                          const displayState =
+                            call.answeredAt &&
+                            (call.state === "ringing" ||
+                              call.state === "bridging")
+                              ? "connected"
+                              : call.state;
 
-                        const stateColor =
-                          displayState === "completed"
-                            ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-                            : displayState === "abandoned"
-                            ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                            : displayState === "answered" ||
-                              displayState === "connected" ||
-                              displayState === "active"
-                            ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                            : displayState === "enqueued" ||
-                              displayState === "queued" ||
-                              displayState === "ringing"
-                            ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                            : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                          const stateColor =
+                            displayState === "completed"
+                              ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
+                              : displayState === "abandoned"
+                              ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                              : displayState === "answered" ||
+                                displayState === "connected" ||
+                                displayState === "active"
+                              ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                              : displayState === "enqueued" ||
+                                displayState === "queued" ||
+                                displayState === "ringing"
+                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
-                        // Determine waiting reason
-                        const getWaitingReason = () => {
-                          if (
-                            !displayState ||
-                            !["queued", "enqueued", "ringing"].includes(
-                              displayState
-                            )
-                          ) {
-                            return null;
-                          }
-
-                          if (!call.agentUsername) {
-                            // Check if it's a skills matching issue
-                            const routingMetadata = call.routingMetadata || {};
-                            const skillMatch = routingMetadata.skillMatch;
-                            const requiredSkills = call.requiredSkills || {};
-
+                          // Determine waiting reason
+                          const getWaitingReason = () => {
                             if (
-                              skillMatch &&
-                              skillMatch.matchRatio !== undefined &&
-                              skillMatch.matchRatio < 1 &&
-                              Object.keys(requiredSkills).length > 0
+                              !displayState ||
+                              !["queued", "enqueued", "ringing"].includes(
+                                displayState
+                              )
                             ) {
-                              return {
-                                type: "no_skills_matching",
-                                skillMatch,
-                                requiredSkills,
-                              };
+                              return null;
                             }
 
-                            return { type: "no_agents_available" };
-                          }
+                            if (!call.agentUsername) {
+                              // Check if it's a skills matching issue
+                              const routingMetadata =
+                                call.routingMetadata || {};
+                              const skillMatch = routingMetadata.skillMatch;
+                              const requiredSkills = call.requiredSkills || {};
 
-                          return null;
-                        };
+                              if (
+                                skillMatch &&
+                                skillMatch.matchRatio !== undefined &&
+                                skillMatch.matchRatio < 1 &&
+                                Object.keys(requiredSkills).length > 0
+                              ) {
+                                return {
+                                  type: "no_skills_matching",
+                                  skillMatch,
+                                  requiredSkills,
+                                };
+                              }
 
-                        const waitingReason = getWaitingReason();
+                              return { type: "no_agents_available" };
+                            }
 
-                        return (
-                          <TableRow key={call.id}>
-                            <TableCell>{call.fromNumber || "—"}</TableCell>
-                            <TableCell>{call.toNumber || "—"}</TableCell>
-                            <TableCell>
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
-                              >
-                                {displayState || "unknown"}
-                              </span>
-                            </TableCell>
-                            <TableCell>
-                              {call.agentName || call.agentUsername || "—"}
-                            </TableCell>
-                            <TableCell>
-                              {waitTimeSeconds > 0
-                                ? `${Math.round(waitTimeSeconds)}s`
-                                : "—"}
-                            </TableCell>
-                            <TableCell>
-                              {talkTimeSeconds > 0
-                                ? `${Math.round(talkTimeSeconds)}s`
-                                : "—"}
-                            </TableCell>
-                            <TableCell>
-                              {waitingReason ? (
-                                <div className="flex items-center gap-2">
-                                  <span>
-                                    {waitingReason.type === "no_skills_matching"
-                                      ? "Skills not matched"
-                                      : "No agents available"}
-                                  </span>
-                                  {waitingReason.type === "no_skills_matching" && (
-                                    <button
-                                      onClick={async () => {
-                                        setSelectedCallForSkills(call);
-                                        setSkillMatchDialogOpen(true);
-                                        // Fetch available agents for the queue
-                                        if (selectedQueue?.id) {
-                                          setLoadingAgentsForSkills(true);
-                                          try {
-                                            const res = await fetch(
-                                              `/api/contact-center/queues/${selectedQueue.id}/agents`,
-                                              { cache: "no-store" }
-                                            );
-                                            if (res.ok) {
-                                              const data = await res.json();
-                                              setAvailableAgentsForSkills(data.agents || []);
+                            return null;
+                          };
+
+                          const waitingReason = getWaitingReason();
+
+                          return (
+                            <TableRow key={call.id}>
+                              <TableCell>{call.fromNumber || "—"}</TableCell>
+                              <TableCell>{call.toNumber || "—"}</TableCell>
+                              <TableCell>
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
+                                >
+                                  {displayState || "unknown"}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                {call.agentName || call.agentUsername || "—"}
+                              </TableCell>
+                              <TableCell>
+                                {waitTimeSeconds > 0
+                                  ? `${Math.round(waitTimeSeconds)}s`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>
+                                {talkTimeSeconds > 0
+                                  ? `${Math.round(talkTimeSeconds)}s`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell>
+                                {waitingReason ? (
+                                  <div className="flex items-center gap-2">
+                                    <span>
+                                      {waitingReason.type ===
+                                      "no_skills_matching"
+                                        ? "Skills not matched"
+                                        : "No agents available"}
+                                    </span>
+                                    {waitingReason.type ===
+                                      "no_skills_matching" && (
+                                      <button
+                                        onClick={async () => {
+                                          setSelectedCallForSkills(call);
+                                          setSkillMatchDialogOpen(true);
+                                          // Fetch available agents for the queue
+                                          if (selectedQueue?.id) {
+                                            setLoadingAgentsForSkills(true);
+                                            try {
+                                              const res = await fetch(
+                                                `/api/contact-center/queues/${selectedQueue.id}/agents`,
+                                                { cache: "no-store" }
+                                              );
+                                              if (res.ok) {
+                                                const data = await res.json();
+                                                setAvailableAgentsForSkills(
+                                                  data.agents || []
+                                                );
+                                              }
+                                            } catch (error) {
+                                              console.error(
+                                                "[Monitor] Error loading agents:",
+                                                error
+                                              );
+                                            } finally {
+                                              setLoadingAgentsForSkills(false);
                                             }
-                                          } catch (error) {
-                                            console.error("[Monitor] Error loading agents:", error);
-                                          } finally {
-                                            setLoadingAgentsForSkills(false);
                                           }
-                                        }
-                                      }}
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
-                                      title="View skill matching details"
-                                    >
-                                      <IconInfoCircle className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                "—"
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <button
-                                onClick={() => {
-                                  setSelectedCallForSupervision(call);
-                                  setSupervisionModalOpen(true);
-                                }}
-                                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
-                                title="Supervise this call"
-                              >
-                                <IconEye className="h-4 w-4" />
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        );
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                        title="View skill matching details"
+                                      >
+                                        <IconInfoCircle className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <button
+                                  onClick={() => {
+                                    setSelectedCallForSupervision(call);
+                                    setSupervisionModalOpen(true);
+                                  }}
+                                  className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                                  title="Supervise this call"
+                                >
+                                  <IconEye className="h-4 w-4" />
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                          );
                         })
                       )}
                     </TableBody>
@@ -1533,7 +1548,10 @@ export default function MonitorPage() {
                               checked={selectedStatuses.includes(status)}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  setSelectedStatuses([...selectedStatuses, status]);
+                                  setSelectedStatuses([
+                                    ...selectedStatuses,
+                                    status,
+                                  ]);
                                 } else {
                                   setSelectedStatuses(
                                     selectedStatuses.filter((s) => s !== status)
@@ -1587,7 +1605,9 @@ export default function MonitorPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-56">
-                        <DropdownMenuLabel>Filter by Active Queues</DropdownMenuLabel>
+                        <DropdownMenuLabel>
+                          Filter by Active Queues
+                        </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {uniqueQueues.length === 0 ? (
                           <div className="px-2 py-1.5 text-sm text-muted-foreground">
@@ -1600,7 +1620,10 @@ export default function MonitorPage() {
                               checked={selectedQueues.includes(queueId)}
                               onCheckedChange={(checked) => {
                                 if (checked) {
-                                  setSelectedQueues([...selectedQueues, queueId]);
+                                  setSelectedQueues([
+                                    ...selectedQueues,
+                                    queueId,
+                                  ]);
                                 } else {
                                   setSelectedQueues(
                                     selectedQueues.filter((q) => q !== queueId)
@@ -1655,154 +1678,156 @@ export default function MonitorPage() {
                   ) : (
                     <div className="overflow-x-auto h-full -mx-6 px-6">
                       <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Agent</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Active Queues</TableHead>
-                        <TableHead>Current Calls</TableHead>
-                        <TableHead>Today: Total</TableHead>
-                        <TableHead>Today: Completed</TableHead>
-                        <TableHead>Avg Talk Time</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {agents.map((agent) => {
-                        // Prefer first/last name, fallback to username but extract name part if it's an email
-                        let displayName = "";
-                        // Check both camelCase and snake_case properties
-                        const firstName =
-                          agent.firstName || agent.first_name || null;
-                        const lastName =
-                          agent.lastName || agent.last_name || null;
-
-                        if (firstName || lastName) {
-                          displayName = `${firstName || ""} ${
-                            lastName || ""
-                          }`.trim();
-                        } else if (agent.username) {
-                          // If username is an email, extract the name part before @
-                          const emailMatch = agent.username.match(/^([^@]+)@/);
-                          displayName = emailMatch
-                            ? emailMatch[1]
-                            : agent.username;
-                        } else {
-                          displayName = "Unknown";
-                        }
-                        const statusInfo = statusMeta[agent.status] || {};
-                        const statusColor =
-                          agent.status === "Available"
-                            ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-                            : agent.status === "Busy"
-                            ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                            : agent.status === "Away"
-                            ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                            : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
-                        const StatusIcon =
-                          STATUS_ICON_MAP[statusInfo.icon] ||
-                          STATUS_NAME_ICON_FALLBACK[agent.status] ||
-                          STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                        const statusStyle = statusInfo.color
-                          ? {
-                              color: statusInfo.color,
-                              borderColor: statusInfo.color,
-                            }
-                          : undefined;
-
-                        return (
-                          <TableRow key={agent.userId}>
-                            <TableCell className="font-medium">
-                              <button
-                                onClick={() => loadAgentCalls(agent.userId)}
-                                className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                              >
-                                {displayName}
-                              </button>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
-                                    statusInfo.color ? "" : statusColor
-                                  } bg-transparent`}
-                                  style={statusStyle}
-                                >
-                                  <StatusIcon
-                                    className="h-3.5 w-3.5"
-                                    style={
-                                      statusInfo.color
-                                        ? { color: statusInfo.color }
-                                        : undefined
-                                    }
-                                  />
-                                  {agent.status}
-                                </span>
-                                <button
-                                  onClick={() => {
-                                    setSelectedAgent(agent);
-                                    setStatusDialogOpen(true);
-                                  }}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                  title="Change status"
-                                >
-                                  <IconInfoCircle className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
-                            <TableCell
-                              className={
-                                highlightedCells.has(
-                                  `agent-${String(agent.userId)}-queues`
-                                )
-                                  ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                  : ""
-                              }
-                            >
-                              <div className="flex items-center gap-2">
-                                <span>{agent.activeQueues || 0}</span>
-                                <button
-                                  onClick={async () => {
-                                    setSelectedAgent(agent);
-                                    setQueueDialogOpen(true);
-                                    await loadAgentQueues(agent.userId);
-                                  }}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                  title="View queue assignments"
-                                >
-                                  <IconInfoCircle className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </TableCell>
-                            <TableCell
-                              className={
-                                highlightedCells.has(
-                                  `agent-${String(agent.userId)}-calls`
-                                )
-                                  ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                  : ""
-                              }
-                            >
-                              {agent.currentCalls} / {agent.maxConcurrentCalls}
-                            </TableCell>
-                            <TableCell>
-                              {agent.today?.totalCalls || 0}
-                            </TableCell>
-                            <TableCell>
-                              {agent.today?.completedCalls || 0}
-                            </TableCell>
-                            <TableCell>
-                              {agent.today?.avgTalkTimeSeconds
-                                ? `${Math.round(
-                                    agent.today.avgTalkTimeSeconds
-                                  )}s`
-                                : "—"}
-                            </TableCell>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Agent</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Active Queues</TableHead>
+                            <TableHead>Current Calls</TableHead>
+                            <TableHead>Today: Total</TableHead>
+                            <TableHead>Today: Completed</TableHead>
+                            <TableHead>Avg Talk Time</TableHead>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                        </TableHeader>
+                        <TableBody>
+                          {agents.map((agent) => {
+                            // Prefer first/last name, fallback to username but extract name part if it's an email
+                            let displayName = "";
+                            // Check both camelCase and snake_case properties
+                            const firstName =
+                              agent.firstName || agent.first_name || null;
+                            const lastName =
+                              agent.lastName || agent.last_name || null;
+
+                            if (firstName || lastName) {
+                              displayName = `${firstName || ""} ${
+                                lastName || ""
+                              }`.trim();
+                            } else if (agent.username) {
+                              // If username is an email, extract the name part before @
+                              const emailMatch =
+                                agent.username.match(/^([^@]+)@/);
+                              displayName = emailMatch
+                                ? emailMatch[1]
+                                : agent.username;
+                            } else {
+                              displayName = "Unknown";
+                            }
+                            const statusInfo = statusMeta[agent.status] || {};
+                            const statusColor =
+                              agent.status === "Available"
+                                ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
+                                : agent.status === "Busy"
+                                ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                                : agent.status === "Away"
+                                ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                            const StatusIcon =
+                              STATUS_ICON_MAP[statusInfo.icon] ||
+                              STATUS_NAME_ICON_FALLBACK[agent.status] ||
+                              STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                            const statusStyle = statusInfo.color
+                              ? {
+                                  color: statusInfo.color,
+                                  borderColor: statusInfo.color,
+                                }
+                              : undefined;
+
+                            return (
+                              <TableRow key={agent.userId}>
+                                <TableCell className="font-medium">
+                                  <button
+                                    onClick={() => loadAgentCalls(agent.userId)}
+                                    className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                                  >
+                                    {displayName}
+                                  </button>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
+                                        statusInfo.color ? "" : statusColor
+                                      } bg-transparent`}
+                                      style={statusStyle}
+                                    >
+                                      <StatusIcon
+                                        className="h-3.5 w-3.5"
+                                        style={
+                                          statusInfo.color
+                                            ? { color: statusInfo.color }
+                                            : undefined
+                                        }
+                                      />
+                                      {agent.status}
+                                    </span>
+                                    <button
+                                      onClick={() => {
+                                        setSelectedAgent(agent);
+                                        setStatusDialogOpen(true);
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      title="Change status"
+                                    >
+                                      <IconInfoCircle className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </TableCell>
+                                <TableCell
+                                  className={
+                                    highlightedCells.has(
+                                      `agent-${String(agent.userId)}-queues`
+                                    )
+                                      ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                      : ""
+                                  }
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span>{agent.activeQueues || 0}</span>
+                                    <button
+                                      onClick={async () => {
+                                        setSelectedAgent(agent);
+                                        setQueueDialogOpen(true);
+                                        await loadAgentQueues(agent.userId);
+                                      }}
+                                      className="text-muted-foreground hover:text-foreground transition-colors"
+                                      title="View queue assignments"
+                                    >
+                                      <IconInfoCircle className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </TableCell>
+                                <TableCell
+                                  className={
+                                    highlightedCells.has(
+                                      `agent-${String(agent.userId)}-calls`
+                                    )
+                                      ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                      : ""
+                                  }
+                                >
+                                  {agent.currentCalls} /{" "}
+                                  {agent.maxConcurrentCalls}
+                                </TableCell>
+                                <TableCell>
+                                  {agent.today?.totalCalls || 0}
+                                </TableCell>
+                                <TableCell>
+                                  {agent.today?.completedCalls || 0}
+                                </TableCell>
+                                <TableCell>
+                                  {agent.today?.avgTalkTimeSeconds
+                                    ? `${Math.round(
+                                        agent.today.avgTalkTimeSeconds
+                                      )}s`
+                                    : "—"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
                   )}
                 </div>
               )}
@@ -1978,8 +2003,7 @@ export default function MonitorPage() {
                     STATUS_ICON_MAP[statusInfo.icon] ||
                     STATUS_NAME_ICON_FALLBACK[status.name] ||
                     STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                  const isCurrentStatus =
-                    selectedAgent?.status === status.name;
+                  const isCurrentStatus = selectedAgent?.status === status.name;
                   const statusColor =
                     status.name === "Available"
                       ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
@@ -2025,10 +2049,7 @@ export default function MonitorPage() {
                         </div>
                       </div>
                       {isCurrentStatus && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs"
-                        >
+                        <Badge variant="outline" className="text-xs">
                           Current
                         </Badge>
                       )}
@@ -2166,8 +2187,11 @@ export default function MonitorPage() {
               <div>
                 <h4 className="font-semibold mb-2">Required Skills for Call</h4>
                 <div className="space-y-1">
-                  {Object.keys(selectedCallForSkills.requiredSkills || {}).length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No required skills specified</p>
+                  {Object.keys(selectedCallForSkills.requiredSkills || {})
+                    .length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No required skills specified
+                    </p>
                   ) : (
                     Object.entries(
                       selectedCallForSkills.requiredSkills || {}
@@ -2185,7 +2209,7 @@ export default function MonitorPage() {
                   )}
                 </div>
               </div>
-              
+
               <div>
                 <h4 className="font-semibold mb-2">Available Agents</h4>
                 {loadingAgentsForSkills ? (
@@ -2200,9 +2224,10 @@ export default function MonitorPage() {
                 ) : (
                   <div className="space-y-3">
                     {availableAgentsForSkills.map((agent) => {
-                      const requiredSkills = selectedCallForSkills.requiredSkills || {};
+                      const requiredSkills =
+                        selectedCallForSkills.requiredSkills || {};
                       const agentSkills = agent.skills || {};
-                      
+
                       // Calculate which skills are missing or insufficient
                       const skillAnalysis = Object.entries(requiredSkills).map(
                         ([skillName, requiredLevel]) => {
@@ -2217,16 +2242,20 @@ export default function MonitorPage() {
                           };
                         }
                       );
-                      
-                      const missingSkills = skillAnalysis.filter((s) => s.missing);
+
+                      const missingSkills = skillAnalysis.filter(
+                        (s) => s.missing
+                      );
                       const hasAllSkills = missingSkills.length === 0;
-                      
+
                       // Build agent display name
                       const agentDisplayName =
                         agent.firstName || agent.lastName
-                          ? `${agent.firstName || ""} ${agent.lastName || ""}`.trim()
+                          ? `${agent.firstName || ""} ${
+                              agent.lastName || ""
+                            }`.trim()
                           : agent.username || "Unknown";
-                      
+
                       return (
                         <div
                           key={agent.id}
@@ -2234,7 +2263,9 @@ export default function MonitorPage() {
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <span className="font-medium">{agentDisplayName}</span>
+                              <span className="font-medium">
+                                {agentDisplayName}
+                              </span>
                               <span className="text-sm text-muted-foreground ml-2">
                                 ({agent.username})
                               </span>
@@ -2244,10 +2275,12 @@ export default function MonitorPage() {
                             >
                               {hasAllSkills
                                 ? "Has all skills"
-                                : `Missing ${missingSkills.length} skill${missingSkills.length > 1 ? "s" : ""}`}
+                                : `Missing ${missingSkills.length} skill${
+                                    missingSkills.length > 1 ? "s" : ""
+                                  }`}
                             </Badge>
                           </div>
-                          
+
                           <div className="space-y-1">
                             {skillAnalysis.map((skill) => (
                               <div

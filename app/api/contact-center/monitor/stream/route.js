@@ -37,14 +37,14 @@ export async function GET(request) {
         const cleanup = () => {
           if (closed) return;
           closed = true;
-          
+
           if (updateInterval) {
             clearInterval(updateInterval);
             updateInterval = null;
           }
-          
+
           removeSseClient(key, writer);
-          
+
           try {
             controller.close();
           } catch (error) {
@@ -62,7 +62,10 @@ export async function GET(request) {
             controller.enqueue(encoder.encode(message));
           } catch (error) {
             // Controller might be closed, cleanup if needed
-            if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+            if (
+              error.code === "ERR_INVALID_STATE" ||
+              error.message?.includes("closed")
+            ) {
               cleanup();
             } else {
               console.error("[MonitorStream] Error sending message:", error);
@@ -81,7 +84,10 @@ export async function GET(request) {
               controller.enqueue(data);
             } catch (error) {
               // Controller might be closed, cleanup if needed
-              if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+              if (
+                error.code === "ERR_INVALID_STATE" ||
+                error.message?.includes("closed")
+              ) {
                 cleanup();
               } else {
                 console.error("[MonitorStream] Error writing:", error);
@@ -136,7 +142,10 @@ export async function GET(request) {
             );
           } catch (error) {
             // If error is due to closed controller, cleanup
-            if (error.code === 'ERR_INVALID_STATE' || error.message?.includes('closed')) {
+            if (
+              error.code === "ERR_INVALID_STATE" ||
+              error.message?.includes("closed")
+            ) {
               cleanup();
             } else {
               console.error("[MonitorStream] Error in update:", error);

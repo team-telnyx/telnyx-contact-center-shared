@@ -105,7 +105,6 @@ export default function ProfilePage() {
     })();
   }, []);
 
-
   function setField(name, value) {
     setForm((p) => ({ ...p, [name]: value }));
   }
@@ -264,7 +263,6 @@ export default function ProfilePage() {
     }
   }
 
-
   return (
     <div className="px-4 lg:px-6">
       <Tabs defaultValue="profile" className="w-full">
@@ -407,7 +405,8 @@ export default function ProfilePage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <IconUser className="size-6 text-brand-primary" /> Skills & Proficiency
+                <IconUser className="size-6 text-brand-primary" /> Skills &
+                Proficiency
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
@@ -417,59 +416,64 @@ export default function ProfilePage() {
                   <Skeleton className="h-16 w-full" />
                   <Skeleton className="h-16 w-full" />
                 </div>
-              ) : (() => {
-                // Convert user skills from UUID keys to skill objects with names
-                const skillEntries = Object.entries(userSkills || {})
-                  .map(([skillId, proficiency]) => {
-                    const skill = allSkills.find((s) => s.id === skillId);
-                    return skill ? { skill, proficiency } : null;
-                  })
-                  .filter(Boolean)
-                  .sort((a, b) => a.skill.name.localeCompare(b.skill.name));
+              ) : (
+                (() => {
+                  // Convert user skills from UUID keys to skill objects with names
+                  const skillEntries = Object.entries(userSkills || {})
+                    .map(([skillId, proficiency]) => {
+                      const skill = allSkills.find((s) => s.id === skillId);
+                      return skill ? { skill, proficiency } : null;
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.skill.name.localeCompare(b.skill.name));
 
-                if (skillEntries.length === 0) {
+                  if (skillEntries.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No skills assigned. Contact your administrator to assign
+                        skills.
+                      </p>
+                    );
+                  }
+
                   return (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No skills assigned. Contact your administrator to assign skills.
-                    </p>
-                  );
-                }
-
-                return (
-                  <div className="space-y-3">
-                    {skillEntries.map(({ skill, proficiency }) => (
-                      <div
-                        key={skill.id}
-                        className="flex items-center justify-between p-3 border rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">{skill.name}</div>
-                          {skill.description && (
-                            <div className="text-xs text-muted-foreground mt-1">
-                              {skill.description}
+                    <div className="space-y-3">
+                      {skillEntries.map(({ skill, proficiency }) => (
+                        <div
+                          key={skill.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex-1">
+                            <div className="text-sm font-medium">
+                              {skill.name}
                             </div>
-                          )}
+                            {skill.description && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {skill.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 ml-4">
+                            {[1, 2, 3, 4, 5].map((level) =>
+                              proficiency >= level ? (
+                                <IconStarFilled
+                                  key={level}
+                                  className="size-5 text-yellow-500"
+                                />
+                              ) : (
+                                <IconStar
+                                  key={level}
+                                  className="size-5 text-gray-300"
+                                />
+                              )
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 ml-4">
-                          {[1, 2, 3, 4, 5].map((level) =>
-                            proficiency >= level ? (
-                              <IconStarFilled
-                                key={level}
-                                className="size-5 text-yellow-500"
-                              />
-                            ) : (
-                              <IconStar
-                                key={level}
-                                className="size-5 text-gray-300"
-                              />
-                            )
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
             </CardContent>
           </Card>
         </TabsContent>
