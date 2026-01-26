@@ -80,6 +80,11 @@ export async function GET(request) {
       const items = data.data || [];
       if (items.length === 0) break; // No more items
       allItems = allItems.concat(items);
+      
+      // Log for debugging
+      if (currentPage === 1) {
+        console.log(`[Media Library] Fetched ${items.length} items from page ${currentPage}`);
+      }
 
       const meta = data.meta || {};
       const totalPages = meta.page?.total_pages || 1;
@@ -87,16 +92,61 @@ export async function GET(request) {
     }
 
     // Filter to only show audio files (mp3, wav)
+    // Check both content_type and file extension as fallback
+    // Be permissive to catch all audio formats
     const audioItems = allItems.filter((item) => {
-      const contentType = item.content_type || "";
-      return (
+      const contentType = (item.content_type || "").toLowerCase();
+      const mediaName = (item.media_name || "").toLowerCase();
+      
+      // Check content type - match the same logic as media library page display
+      // Check for MIME types and also check for format names (mp3, mpeg, wav)
+      // Also check for common audio-related strings
+      const isAudioContentType = 
         contentType.includes("audio/mpeg") ||
         contentType.includes("audio/mp3") ||
         contentType.includes("audio/wav") ||
         contentType.includes("audio/x-wav") ||
-        contentType.includes("audio/wave")
-      );
+        contentType.includes("audio/wave") ||
+        contentType.includes("audio/") ||
+        contentType.includes("mpeg") ||
+        contentType.includes("mp3") ||
+        contentType.includes("wav") ||
+        contentType === "mp3" ||  // Sometimes content_type might just be "MP3"
+        contentType === "wav";
+      
+      // Fallback: check file extension from media_name
+      const hasAudioExtension = 
+        mediaName.endsWith(".mp3") ||
+        mediaName.endsWith(".wav") ||
+        mediaName.endsWith(".m4a") ||
+        mediaName.endsWith(".ogg");
+      
+      // Exclude clearly non-audio types
+      const isNonAudio = 
+        contentType.includes("image/") ||
+        contentType.includes("video/") ||
+        contentType.includes("text/") ||
+        contentType.includes("application/pdf") ||
+        contentType.includes("application/json") ||
+        contentType.includes("application/xml");
+      
+      const isAudio = (isAudioContentType || hasAudioExtension) && !isNonAudio;
+      
+      // Log items that are being filtered out for debugging (first few items)
+      if (!isAudio && allItems.length <= 10) {
+        console.log(`[Media Library] Filtered out: ${item.media_name}, content_type: "${item.content_type || 'none'}"`);
+      }
+      
+      return isAudio;
     });
+    
+    // Log filtering results for debugging
+    console.log(`[Media Library] Total items: ${allItems.length}, Audio items: ${audioItems.length}`);
+    if (allItems.length > 0 && audioItems.length === 0) {
+      console.log(`[Media Library] Warning: No audio items found. Sample content_types:`, 
+        allItems.slice(0, 3).map(item => ({ name: item.media_name, type: item.content_type }))
+      );
+    }
 
     // Apply pagination to filtered results
     const startIndex = (page - 1) * pageSize;

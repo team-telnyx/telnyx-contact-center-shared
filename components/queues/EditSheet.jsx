@@ -118,6 +118,15 @@ export default function EditSheet({
   const [queueAudioTtsVoice, setQueueAudioTtsVoice] = React.useState("AWS.Polly.Joanna");
   const [queueAudioTtsVoiceApiKeyRef, setQueueAudioTtsVoiceApiKeyRef] = React.useState("");
   const [mediaFiles, setMediaFiles] = React.useState([]);
+  
+  // Debug: Track mediaFiles changes
+  React.useEffect(() => {
+    console.log("[Queue EditSheet] mediaFiles state changed:", mediaFiles.length, "files");
+    if (mediaFiles.length > 0) {
+      console.log("[Queue EditSheet] Media file names:", mediaFiles.map(f => f.media_name));
+    }
+  }, [mediaFiles]);
+  
   const [ttsProviders, setTtsProviders] = React.useState([]);
   const [ttsSecrets, setTtsSecrets] = React.useState([]);
   const [ttsLoading, setTtsLoading] = React.useState(false);
@@ -289,12 +298,42 @@ export default function EditSheet({
         }
 
         // Load media files for queue audio
-        const mediaRes = await fetch("/api/admin/media-library?pageSize=1000", {
-          cache: "no-store",
-        });
-        if (mediaRes.ok) {
-          const mediaData = await mediaRes.json();
-          setMediaFiles(mediaData.items || []);
+        try {
+          const mediaRes = await fetch("/api/admin/media-library?pageSize=1000", {
+            cache: "no-store",
+          });
+          if (mediaRes.ok) {
+            const mediaData = await mediaRes.json();
+            console.log("[Queue EditSheet] Media files response:", {
+              itemsCount: mediaData.items?.length || 0,
+              total: mediaData.total,
+              sampleItems: mediaData.items?.slice(0, 3).map(item => ({
+                media_name: item.media_name,
+                content_type: item.content_type
+              }))
+            });
+            const files = (mediaData.items || []).filter(file => file && file.media_name);
+            console.log("[Queue EditSheet] Setting mediaFiles state with:", files.length, "files", files.map(f => f.media_name));
+            if (files.length > 0) {
+              setMediaFiles(files);
+            } else {
+              console.warn("[Queue EditSheet] No valid media files after filtering");
+              setMediaFiles([]);
+            }
+            
+            // Debug: Log after state update attempt
+            setTimeout(() => {
+              console.log("[Queue EditSheet] mediaFiles state check (after setState):", files.length);
+            }, 100);
+            if (mediaData.items && mediaData.items.length === 0) {
+              console.warn("[Queue EditSheet] No media files found. Check if files are uploaded and have audio content type or extension.");
+            }
+          } else {
+            const errorData = await mediaRes.json().catch(() => ({}));
+            console.error("[Queue EditSheet] Failed to load media files:", errorData.error || mediaRes.statusText);
+          }
+        } catch (err) {
+          console.error("[Queue EditSheet] Error loading media files:", err);
         }
 
         // Load TTS providers and voices
@@ -768,6 +807,7 @@ export default function EditSheet({
                         <Label className="text-sm">Queue Hold Music</Label>
                         <div className="flex items-center gap-2">
                           <Select
+                            key={`media-select-${mediaFiles.length}`}
                             value={queueAudioMediaName || "__none__"}
                             onValueChange={(value) => {
                               const actualValue = value === "__none__" ? "" : value;
@@ -783,14 +823,22 @@ export default function EditSheet({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none__">None</SelectItem>
-                              {mediaFiles.map((file) => (
-                                <SelectItem key={file.media_name} value={file.media_name}>
-                                  <div className="flex items-center gap-2">
-                                    <IconFileMusic className="size-4 text-telnyx-green" />
-                                    {file.media_name}
-                                  </div>
+                              {mediaFiles.length > 0 ? (
+                                mediaFiles
+                                  .filter((file) => file && file.media_name)
+                                  .map((file) => (
+                                    <SelectItem key={file.media_name} value={file.media_name}>
+                                      <div className="flex items-center gap-2">
+                                        <IconFileMusic className="size-4 text-telnyx-green" />
+                                        {file.media_name}
+                                      </div>
+                                    </SelectItem>
+                                  ))
+                              ) : (
+                                <SelectItem value="__loading__" disabled>
+                                  {loading ? "Loading media files..." : "No media files available"}
                                 </SelectItem>
-                              ))}
+                              )}
                             </SelectContent>
                           </Select>
                           {queueAudioMediaName && (
