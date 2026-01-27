@@ -100,6 +100,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   const [supervisorCallControlId, setSupervisorCallControlId] = useState(null);
   const [supervisedCallControlId, setSupervisedCallControlId] = useState(null); // Original call being supervised
   const [user, setUser] = useState(null);
+  const [supervisorNumber, setSupervisorNumber] = useState(""); // Default fallback
 
   // Use refs to track current values for immediate access (avoid stale closures)
   const activeRoleRef = useRef(activeRole);
@@ -171,19 +172,19 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   // We just need to detect if the active call is a supervisor call
   const supervisorWebRTCCall = useMemo(() => {
     // If we have an active call, check if it's a supervisor call
-    // Supervisor calls come from "+48221811530" or have "Supervisor Call" as fromName
+    // Supervisor calls come from supervisorNumber or have "Supervisor Call" as fromName
     if (activeCall) {
       const fromNumber = useActiveCallStore.getState().fromNumber;
       const fromName = useActiveCallStore.getState().fromName;
-      if (fromNumber === "+48221811530" || fromName === "Supervisor Call") {
+      if (fromNumber === supervisorNumber || fromName === "Supervisor Call") {
         return activeCall;
       }
     }
     return null;
-  }, [activeCall]);
+  }, [activeCall, supervisorNumber]);
 
   // Determine if supervisor call is active - if supervisorCallControlId is set, we're supervising
-  // OR if there's an active call that's a supervisor call (from +48221811530)
+  // OR if there's an active call that's a supervisor call (from supervisorNumber)
   const isSupervisorCallActive = useMemo(() => {
     // If supervisorCallControlId is set, supervision has been initiated
     if (supervisorCallControlId) return true;
@@ -192,13 +193,13 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     if (activeCall) {
       const fromNumber = useActiveCallStore.getState().fromNumber;
       const fromName = useActiveCallStore.getState().fromName;
-      if (fromNumber === "+48221811530" || fromName === "Supervisor Call") {
+      if (fromNumber === supervisorNumber || fromName === "Supervisor Call") {
         return true;
       }
     }
 
     return false;
-  }, [supervisorCallControlId, activeCall]);
+  }, [supervisorCallControlId, activeCall, supervisorNumber]);
 
   // Determine supervisor call state from store or call object
   const supervisorCallState = useMemo(() => {
@@ -233,6 +234,28 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       call?.state === "ringing" ||
       !call?.state);
 
+  // Fetch supervisor number from config API
+  useEffect(() => {
+    const fetchSupervisorNumber = async () => {
+      try {
+        const res = await fetch("/api/config/supervisor-number");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.supervisorNumber) {
+            setSupervisorNumber(data.supervisorNumber);
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[SupervisionModal] Failed to fetch supervisor number:",
+          err,
+        );
+        // Keep default fallback
+      }
+    };
+    fetchSupervisorNumber();
+  }, []);
+
   useEffect(() => {
     if (open && call) {
       loadUserInfo();
@@ -245,7 +268,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
             userInitiated: userInitiatedSupervisionRef.current,
             activeRoleRef: activeRoleRef.current,
             supervisorCallControlIdRef: supervisorCallControlIdRef.current,
-          }
+          },
         );
         checkSupervisorCall();
       }, 100);
@@ -287,13 +310,13 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     call.callControlId || call.call_control_id || call.id,
                   supervisorCallControlId,
                   state: callState,
-                }
+                },
               );
 
               // Set it in the store so it's synced with mini phone
               setActiveCall(call, {
                 direction: "inbound",
-                fromNumber: "+48221811530",
+                fromNumber: supervisorNumber,
                 fromName: "Supervisor Call",
               });
             }
@@ -321,7 +344,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     // 1. We have a supervisorCallControlId (supervision was started)
     // 2. We have an active call (the supervisor call has arrived)
     // 3. The call is ringing (not yet answered)
-    // 4. The call is a supervisor call (from +48221811530 or "Supervisor Call")
+    // 4. The call is a supervisor call (from supervisorNumber or "Supervisor Call")
     // 5. We haven't already attempted to auto-answer
     if (
       !supervisorCallControlId ||
@@ -333,7 +356,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     const fromNumber = useActiveCallStore.getState().fromNumber;
     const fromName = useActiveCallStore.getState().fromName;
     const isSupervisorCall =
-      fromNumber === "+48221811530" || fromName === "Supervisor Call";
+      fromNumber === supervisorNumber || fromName === "Supervisor Call";
 
     if (!isSupervisorCall) return;
 
@@ -392,6 +415,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     isCallConnected,
     callStatus,
     updateStatus,
+    supervisorNumber,
   ]);
 
   // Reset auto-answer flag when supervisor call ends or supervision is cleared
@@ -420,7 +444,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     // Check if custom_headers is an array (from webhooks)
     if (Array.isArray(call.custom_headers)) {
       return call.custom_headers.some(
-        (h) => h?.name === "X-Supervisor-Call" && h?.value === "true"
+        (h) => h?.name === "X-Supervisor-Call" && h?.value === "true",
       );
     }
 
@@ -456,7 +480,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
           userInitiated,
           activeRole: currentActiveRole,
           supervisorCallControlId: currentSupervisorCallControlId,
-        }
+        },
       );
       return;
     }
@@ -486,7 +510,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     // Check if it's a supervisor call by fromNumber or custom headers
     const isSupervisorCall =
       currentActiveCall &&
-      (fromNumber === "+48221811530" ||
+      (fromNumber === supervisorNumber ||
         fromName === "Supervisor Call" ||
         hasSupervisorCallHeader(currentActiveCall));
 
@@ -657,7 +681,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       console.log(
         "[SupervisionModal] Already in role",
         newRole,
-        "skipping switch"
+        "skipping switch",
       );
       return; // Already in this role
     }
@@ -694,7 +718,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
 
     if (!callControlIdToUse) {
       console.error(
-        "[SupervisionModal] No supervised call control ID found, cannot switch role"
+        "[SupervisionModal] No supervised call control ID found, cannot switch role",
       );
       // If no supervised call ID exists, start supervision with new role
       await handleStartSupervision(newRole);
@@ -718,7 +742,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
           body: JSON.stringify({
             role: newRole, // Telnyx API expects 'role', not 'supervisor_role'
           }),
-        }
+        },
       );
 
       const data = await res.json();
@@ -1017,7 +1041,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                 textAnchor="middle"
                 className={cn(
                   "text-base font-semibold",
-                  isCallInQueue ? "fill-gray-500" : "fill-white"
+                  isCallInQueue ? "fill-gray-500" : "fill-white",
                 )}
               >
                 Agent
@@ -1132,7 +1156,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
               textAnchor="middle"
               className={cn(
                 "text-base font-semibold",
-                isCallInQueue ? "fill-gray-500" : "fill-white"
+                isCallInQueue ? "fill-gray-500" : "fill-white",
               )}
             >
               Agent
@@ -1149,14 +1173,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     callerPos.y,
                     agentPos.x,
                     agentPos.y,
-                    circleRadius
+                    circleRadius,
                   );
                   const end = getPointOnCircle(
                     agentPos.x,
                     agentPos.y,
                     callerPos.x,
                     callerPos.y,
-                    circleRadius
+                    circleRadius,
                   );
                   return (
                     <line
@@ -1180,14 +1204,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                   supervisorPos.y,
                   callerPos.x,
                   callerPos.y,
-                  circleRadius
+                  circleRadius,
                 );
                 const end = getPointOnCircle(
                   callerPos.x,
                   callerPos.y,
                   supervisorPos.x,
                   supervisorPos.y,
-                  circleRadius
+                  circleRadius,
                 );
                 return (
                   <line
@@ -1212,14 +1236,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     supervisorPos.y,
                     agentPos.x,
                     agentPos.y,
-                    circleRadius
+                    circleRadius,
                   );
                   const end = getPointOnCircle(
                     agentPos.x,
                     agentPos.y,
                     supervisorPos.x,
                     supervisorPos.y,
-                    circleRadius
+                    circleRadius,
                   );
                   return (
                     <line
@@ -1293,18 +1317,18 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                 blue: showAsActive
                   ? "bg-blue-500 text-white border-blue-600"
                   : isDisabled
-                  ? "bg-blue-500/5 text-blue-600/50 border-blue-500/10 cursor-not-allowed"
-                  : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
+                    ? "bg-blue-500/5 text-blue-600/50 border-blue-500/10 cursor-not-allowed"
+                    : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
                 purple: showAsActive
                   ? "bg-purple-500 text-white border-purple-600"
                   : isDisabled
-                  ? "bg-purple-500/5 text-purple-600/50 border-purple-500/10 cursor-not-allowed"
-                  : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
+                    ? "bg-purple-500/5 text-purple-600/50 border-purple-500/10 cursor-not-allowed"
+                    : "bg-purple-500/10 text-purple-600 border-purple-500/20 hover:bg-purple-500/20",
                 green: showAsActive
                   ? "bg-green-500 text-white border-green-600"
                   : isDisabled
-                  ? "bg-green-500/5 text-green-600/50 border-green-500/10 cursor-not-allowed"
-                  : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20",
+                    ? "bg-green-500/5 text-green-600/50 border-green-500/10 cursor-not-allowed"
+                    : "bg-green-500/10 text-green-600 border-green-500/20 hover:bg-green-500/20",
               };
 
               return (
@@ -1315,7 +1339,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                     colorClasses[config.color],
                     showAsActive && "ring-2 ring-offset-2",
                     loading && "opacity-50 cursor-not-allowed",
-                    isDisabled ? "cursor-not-allowed" : "cursor-pointer"
+                    isDisabled ? "cursor-not-allowed" : "cursor-pointer",
                   )}
                   onClick={async () => {
                     if (loading || isDisabled) return;
@@ -1347,13 +1371,13 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                         "[SupervisionModal] Switching role from",
                         currentActiveRole,
                         "to",
-                        role
+                        role,
                       );
                       await handleSwitchRole(role);
                     } else {
                       console.log(
                         "[SupervisionModal] Starting new supervision with role",
-                        role
+                        role,
                       );
                       await handleStartSupervision(role);
                     }
@@ -1456,7 +1480,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
                       "h-12 w-12 rounded-full grid place-items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
                       callUI.isMuted
                         ? "bg-zinc-700 hover:bg-zinc-800 text-white"
-                        : "bg-zinc-600 hover:bg-zinc-700 text-white"
+                        : "bg-zinc-600 hover:bg-zinc-700 text-white",
                     )}
                     title={callUI.isMuted ? "Unmute" : "Mute"}
                   >

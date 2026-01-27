@@ -127,6 +127,8 @@ import {
   IconCircuitSwitchOpen,
   IconFlag,
   IconLoader2,
+  IconSettings,
+  IconList,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -152,6 +154,7 @@ import DialNodeEditor from "@/components/voice-flow/DialNodeEditor";
 import BridgeNodeEditor from "@/components/voice-flow/BridgeNodeEditor";
 import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
+import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
@@ -204,6 +207,7 @@ const iconMap = {
   IconFlag,
   IconApi,
   IconX,
+  IconSettings,
 };
 
 // Icon mapping for webhook event types
@@ -3396,6 +3400,38 @@ export default function FlowBuilderPage() {
                                 }
                               }}
                               queues={queues}
+                              nodes={nodes}
+                              edges={edges}
+                              currentNodeId={selectedNode?.id}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "SetQueueOptionsNodeEditor" ? (
+                            <SetQueueOptionsNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node
+                                    )
+                                  );
+                                }
+                              }}
+                              queues={queues}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
                             />
                           ) : (
                             Object.entries(selectedNodeDef.config || {}).map(

@@ -145,6 +145,29 @@ export async function POST(request) {
       }
     }
 
+    // Re-evaluate waiting reasons for queued calls in deactivated queues
+    // This updates the waiting reason display when agents become unavailable
+    if (deactivated.length > 0) {
+      try {
+        const { reEvaluateWaitingReasonsForQueues } = await import(
+          "@/lib/contact-center/waiting-reason-re-evaluator.js"
+        );
+        // Run asynchronously - don't wait for it to complete
+        reEvaluateWaitingReasonsForQueues(deactivated).catch((error) => {
+          console.error(
+            "[Queue] Error re-evaluating waiting reasons:",
+            error
+          );
+        });
+      } catch (reEvalError) {
+        // Log but don't fail the queue deactivation
+        console.error(
+          "[Queue] Failed to trigger waiting reason re-evaluation:",
+          reEvalError
+        );
+      }
+    }
+
     // Broadcast queue deactivation event to all agent users and monitors
     if (deactivated.length > 0) {
       try {

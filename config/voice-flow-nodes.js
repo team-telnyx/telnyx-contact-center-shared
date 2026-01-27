@@ -1021,6 +1021,45 @@ export const VOICE_FLOW_NODES = {
     },
   },
 
+  set_queue_options: {
+    id: "set_queue_options",
+    category: NODE_CATEGORIES.CALL_CONTROL,
+    label: "Set Queue Options",
+    icon: "IconSettings",
+    color: NODE_COLORS[NODE_CATEGORIES.CALL_CONTROL],
+    description: "Set queue name, priority, and skills in client state",
+    telnyxAction: "client_state_update",
+    telnyxEndpoint: "/v2/calls/:call_control_id/actions/client_state_update",
+    inputs: 1,
+    outputs: 1,
+    outputLabels: ["Options Set"],
+    outputEvents: [],
+    outputDescriptions: ["Queue options were successfully set"],
+    customEditor: "SetQueueOptionsNodeEditor",
+    config: {
+      queue_name: {
+        type: "string",
+        label: "Queue Name",
+        required: true,
+        description: "The name of the queue (can use {{variable}} notation)",
+      },
+      priority: {
+        type: "number",
+        label: "Priority",
+        required: true,
+        min: 1,
+        max: 100,
+        description: "Call priority (1-100, can use {{variable}} notation)",
+      },
+      skills: {
+        type: "array",
+        label: "Required Skills",
+        required: false,
+        description: "Skills with minimum proficiency levels (optional)",
+      },
+    },
+  },
+
   enqueue: {
     id: "enqueue",
     category: NODE_CATEGORIES.CALL_CONTROL,

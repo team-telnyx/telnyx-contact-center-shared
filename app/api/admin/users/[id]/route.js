@@ -192,6 +192,62 @@ export async function PUT(request, { params }) {
           reEvalError
         );
       }
+
+      // Also re-evaluate waiting reasons for queued calls
+      try {
+        const { reEvaluateWaitingReasonsForUserQueues } = await import(
+          "@/lib/contact-center/waiting-reason-re-evaluator.js"
+        );
+        // Run asynchronously - don't wait for it to complete
+        reEvaluateWaitingReasonsForUserQueues(id).catch((error) => {
+          console.error(
+            "[UserUpdate] Error re-evaluating waiting reasons:",
+            error
+          );
+        });
+      } catch (reEvalError) {
+        // Log but don't fail the user update
+        console.error(
+          "[UserUpdate] Failed to trigger waiting reason re-evaluation:",
+          reEvalError
+        );
+      }
+    }
+
+    // If queue assignments changed, re-evaluate waiting reasons for affected queues
+    if (queueIdsChanged) {
+      try {
+        const { reEvaluateWaitingReasonsForQueues } = await import(
+          "@/lib/contact-center/waiting-reason-re-evaluator.js"
+        );
+        // Get all affected queue IDs (both added and removed)
+        const pool = getPostgresPool();
+        if (pool) {
+          const affectedQueuesRes = await pool.query(
+            `SELECT DISTINCT queue_id FROM cc_queue_user_assignments WHERE user_id = $1`,
+            [id]
+          );
+          const affectedQueueIds =
+            affectedQueuesRes.rows?.map((row) => row.queue_id) || [];
+          if (affectedQueueIds.length > 0) {
+            // Run asynchronously - don't wait for it to complete
+            reEvaluateWaitingReasonsForQueues(affectedQueueIds).catch(
+              (error) => {
+                console.error(
+                  "[UserUpdate] Error re-evaluating waiting reasons for queues:",
+                  error
+                );
+              }
+            );
+          }
+        }
+      } catch (reEvalError) {
+        // Log but don't fail the user update
+        console.error(
+          "[UserUpdate] Failed to trigger waiting reason re-evaluation for queues:",
+          reEvalError
+        );
+      }
     }
 
     return NextResponse.json({ ok: true });

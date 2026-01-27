@@ -19,6 +19,43 @@ import {
   IconStarFilled,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
+
+// Helper function to check if Set Queue Options node exists before Enqueue node
+function hasSetQueueOptionsNodeBefore(nodeId, nodes, edges) {
+  // Build a graph to find all nodes that can reach this node
+  const incomingEdges = edges.filter((e) => e.target === nodeId);
+  if (incomingEdges.length === 0) {
+    return false;
+  }
+
+  // Use DFS to check all paths leading to this node
+  const visited = new Set();
+  const queue = [...incomingEdges.map((e) => e.source)];
+
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+    if (visited.has(currentNodeId)) {
+      continue;
+    }
+    visited.add(currentNodeId);
+
+    const currentNode = nodes.find((n) => n.id === currentNodeId);
+    if (currentNode?.data?.nodeType === "set_queue_options") {
+      return true;
+    }
+
+    // Add all nodes that lead to this node
+    const prevEdges = edges.filter((e) => e.target === currentNodeId);
+    prevEdges.forEach((e) => {
+      if (!visited.has(e.source)) {
+        queue.push(e.source);
+      }
+    });
+  }
+
+  return false;
+}
 
 // Helper function to get badge color for queue type
 function getQueueTypeBadgeColor(routingStrategy) {
@@ -79,7 +116,22 @@ export default function EnqueueNodeEditor({
   config = {},
   onChange,
   queues = [],
+  nodes = [],
+  edges = [],
+  currentNodeId = null,
 }) {
+  // Check if Set Queue Options node exists before this node
+  const hasSetQueueOptionsBefore = useMemo(() => {
+    if (!currentNodeId) {
+      return false;
+    }
+    return hasSetQueueOptionsNodeBefore(currentNodeId, nodes, edges);
+  }, [currentNodeId, nodes, edges]);
+
+  const [useQueueOptions, setUseQueueOptions] = useState(
+    config.use_queue_options !== undefined ? config.use_queue_options : false
+  );
+
   const [selectedQueueName, setSelectedQueueName] = useState(
     config.queue_name || ""
   );
@@ -189,6 +241,7 @@ export default function EnqueueNodeEditor({
     skills: JSON.stringify(skills),
     priority,
     queueType,
+    useQueueOptions,
   });
 
   // Update config when internal state changes
@@ -200,7 +253,8 @@ export default function EnqueueNodeEditor({
       prev.selectedQueueName !== selectedQueueName ||
       prev.priority !== priority ||
       prev.queueType !== queueType ||
-      prev.skills !== skillsStr;
+      prev.skills !== skillsStr ||
+      prev.useQueueOptions !== useQueueOptions;
 
     if (!hasChanged) {
       return;
@@ -212,86 +266,105 @@ export default function EnqueueNodeEditor({
       skills: skillsStr,
       priority,
       queueType,
+      useQueueOptions,
     };
 
     const newConfig = {
       ...config,
-      queue_name: selectedQueueName,
-      routing_skills: skills,
-      routing_priority: priority,
+      use_queue_options: useQueueOptions,
     };
 
-    // Build client_state by merging routing parameters
-    let clientStateObj = {};
+    // If using queue options from Set Queue Options node, don't set these values
+    // They will be read from client_state at execution time
+    if (!useQueueOptions) {
+      newConfig.queue_name = selectedQueueName;
+      newConfig.routing_skills = skills;
+      newConfig.routing_priority = priority;
+    } else {
+      // Clear these values when using queue options
+      // Set to null explicitly to prevent default value from being applied
+      newConfig.queue_name = null;
+      delete newConfig.routing_skills;
+      delete newConfig.routing_priority;
+    }
 
-    // Parse existing client_state if present
-    if (config.client_state) {
-      try {
-        // Try to decode if it's base64 (browser-compatible)
-        const decoded = atob(config.client_state);
-        clientStateObj = JSON.parse(decoded);
-      } catch {
-        // If not base64, try parsing directly
+    // Build client_state by merging routing parameters (only if not using queue options)
+    if (!useQueueOptions) {
+      let clientStateObj = {};
+
+      // Parse existing client_state if present
+      if (config.client_state) {
         try {
-          clientStateObj = JSON.parse(config.client_state);
+          // Try to decode if it's base64 (browser-compatible)
+          const decoded = atob(config.client_state);
+          clientStateObj = JSON.parse(decoded);
         } catch {
-          // If parsing fails, start fresh but preserve the original as-is
-          // This handles cases where client_state might not be JSON
-          if (queueType === "FIFO" || (!skills.length && !priority)) {
-            newConfig.client_state = config.client_state;
-            onChange?.(newConfig);
-            return;
+          // If not base64, try parsing directly
+          try {
+            clientStateObj = JSON.parse(config.client_state);
+          } catch {
+            // If parsing fails, start fresh but preserve the original as-is
+            // This handles cases where client_state might not be JSON
+            if (queueType === "FIFO" || (!skills.length && !priority)) {
+              newConfig.client_state = config.client_state;
+              onChange?.(newConfig);
+              return;
+            }
+            clientStateObj = {};
           }
-          clientStateObj = {};
         }
       }
-    }
 
-    // Add/update routing parameters based on queue type (merge, don't overwrite)
-    // Clean up routing params that don't apply to current queue type
-    if (queueType !== "Skill-based") {
-      delete clientStateObj.required_skills;
-    }
-    if (queueType !== "Priority-based") {
-      delete clientStateObj.priority;
-    }
-
-    // Add routing parameters for current queue type
-    if (queueType === "Skill-based") {
-      if (skills.length > 0) {
-        const requiredSkills = {};
-        skills.forEach((skill) => {
-          if (skill.name && skill.proficiency) {
-            requiredSkills[skill.name] = skill.proficiency;
-          }
-        });
-        if (Object.keys(requiredSkills).length > 0) {
-          clientStateObj.required_skills = requiredSkills;
-        } else {
-          // If no valid skills, remove required_skills
-          delete clientStateObj.required_skills;
-        }
-      } else {
-        // If skills array is empty, remove required_skills
+      // Add/update routing parameters based on queue type (merge, don't overwrite)
+      // Clean up routing params that don't apply to current queue type
+      if (queueType !== "Skill-based") {
         delete clientStateObj.required_skills;
       }
-    }
+      if (queueType !== "Priority-based") {
+        delete clientStateObj.priority;
+      }
 
-    if (queueType === "Priority-based" && priority) {
-      clientStateObj.priority = priority;
-    }
+      // Add routing parameters for current queue type
+      if (queueType === "Skill-based") {
+        if (skills.length > 0) {
+          const requiredSkills = {};
+          skills.forEach((skill) => {
+            if (skill.name && skill.proficiency) {
+              requiredSkills[skill.name] = skill.proficiency;
+            }
+          });
+          if (Object.keys(requiredSkills).length > 0) {
+            clientStateObj.required_skills = requiredSkills;
+          } else {
+            // If no valid skills, remove required_skills
+            delete clientStateObj.required_skills;
+          }
+        } else {
+          // If skills array is empty, remove required_skills
+          delete clientStateObj.required_skills;
+        }
+      }
 
-    // Encode client_state as base64 JSON (preserve all existing fields)
-    if (Object.keys(clientStateObj).length > 0) {
-      newConfig.client_state = btoa(JSON.stringify(clientStateObj));
-    } else if (config.client_state && queueType === "FIFO") {
-      // Keep existing client_state for FIFO if no routing params were set
-      newConfig.client_state = config.client_state;
+      if (queueType === "Priority-based" && priority) {
+        clientStateObj.priority = priority;
+      }
+
+      // Encode client_state as base64 JSON (preserve all existing fields)
+      if (Object.keys(clientStateObj).length > 0) {
+        newConfig.client_state = btoa(JSON.stringify(clientStateObj));
+      } else if (config.client_state && queueType === "FIFO") {
+        // Keep existing client_state for FIFO if no routing params were set
+        newConfig.client_state = config.client_state;
+      }
+    } else {
+      // When using queue options, clear client_state from enqueue node config
+      // The engine will read from the call's client_state (set by Set Queue Options node)
+      delete newConfig.client_state;
     }
 
     onChange?.(newConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedQueueName, skills, priority, queueType]);
+  }, [selectedQueueName, skills, priority, queueType, useQueueOptions]);
 
   const handleAddSkill = () => {
     setSkills([...skills, { name: "", proficiency: 1 }]);
@@ -309,7 +382,36 @@ export default function EnqueueNodeEditor({
 
   return (
     <div className="space-y-4">
+      {/* Use Queue Options Toggle */}
+      {hasSetQueueOptionsBefore && (
+        <div className="p-4 border rounded-lg bg-muted/50">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <Label htmlFor="use_queue_options" className="text-sm font-semibold">
+                Use Queue Options
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Use queue options (name, priority, skills) set by Set Queue Options node
+              </p>
+            </div>
+            <Switch
+              id="use_queue_options"
+              checked={useQueueOptions}
+              onCheckedChange={(checked) => {
+                setUseQueueOptions(checked);
+                onChange?.({
+                  ...config,
+                  use_queue_options: checked,
+                });
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Queue Name Selector */}
+      {!useQueueOptions && (
+        <>
       <div className="mt-4">
         <Label htmlFor="queue_name">
           Queue Name <span className="text-red-500 mt-0.5">*</span>
@@ -464,6 +566,8 @@ export default function EnqueueNodeEditor({
             routed to agents first.
           </p>
         </div>
+      )}
+        </>
       )}
 
       {/* Other enqueue config fields */}

@@ -28,7 +28,7 @@ export async function POST(request) {
     if (!isSupervisorOrAdmin(user)) {
       return NextResponse.json(
         { error: "Access denied. Supervisor or admin privileges required." },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -48,7 +48,7 @@ export async function POST(request) {
           error:
             "Missing required fields: supervise_call_control_id, supervisor_role",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -59,7 +59,7 @@ export async function POST(request) {
         {
           error: `Invalid supervisor_role. Must be one of: ${validRoles.join(", ")}`,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -68,7 +68,7 @@ export async function POST(request) {
     if (!connectionId) {
       return NextResponse.json(
         { error: "TELNYX_CALL_CONTROL_ID not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -99,7 +99,7 @@ export async function POST(request) {
           error:
             "Supervisor does not have telephony_user_name configured. Please set up your telephony credentials in profile settings.",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -107,8 +107,8 @@ export async function POST(request) {
     // This is where the supervisor will receive the call (their WebRTC endpoint)
     const supervisorSipUri = `sip:${telephonyUserName}@sip.telnyx.com`;
 
-    // Static phone number for 'from' field
-    const fromNumber = "+48221811530";
+    // Phone number for 'from' field - use environment variable or fallback
+    const fromNumber = process.env.TELNYX_SUPERVISOR_FROM_NUMBER || null;
     const fromDisplayName = "Supervisor";
 
     // Create supervisor call using Telnyx API
@@ -122,12 +122,13 @@ export async function POST(request) {
       supervisor_role: role,
       from: fromNumber, // Static phone number
       from_display_name: fromDisplayName, // Display name for caller ID
-      custom_headers: [
-        { name: "X-Supervisor-Call", value: "true" },
-      ],
+      custom_headers: [{ name: "X-Supervisor-Call", value: "true" }],
     };
 
-    console.log("[Supervise] Dial command payload:", JSON.stringify(payload, null, 2));
+    console.log(
+      "[Supervise] Dial command payload:",
+      JSON.stringify(payload, null, 2),
+    );
     console.log("[Supervise] Supervisor credentials:", {
       connectionId: connectionId,
       telephonyUserName: telephonyUserName,
@@ -151,7 +152,7 @@ export async function POST(request) {
       data = JSON.parse(responseText);
     } catch (parseError) {
       throw new Error(
-        `Failed to parse Telnyx response: ${responseText.substring(0, 200)}`
+        `Failed to parse Telnyx response: ${responseText.substring(0, 200)}`,
       );
     }
 
@@ -162,15 +163,18 @@ export async function POST(request) {
         errorData: data,
         payload: payload,
       });
-      
+
       const errorMsg =
         data?.errors?.[0]?.detail ||
         data?.errors?.[0]?.message ||
         data?.message ||
         `HTTP ${response.status}: Failed to create supervisor call`;
-      return NextResponse.json({ error: errorMsg }, { status: response.status });
+      return NextResponse.json(
+        { error: errorMsg },
+        { status: response.status },
+      );
     }
-    
+
     console.log("[Supervise] ✅ Supervisor call created successfully:", {
       supervisorCallControlId: data?.data?.call_control_id,
       role,
@@ -180,7 +184,7 @@ export async function POST(request) {
     if (!supervisorCall || !supervisorCall.call_control_id) {
       return NextResponse.json(
         { error: "Invalid response from Telnyx: missing call_control_id" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -194,8 +198,7 @@ export async function POST(request) {
     console.error("[Supervise] Error:", error);
     return NextResponse.json(
       { error: error.message || "Failed to initiate supervisor call" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-

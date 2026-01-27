@@ -715,12 +715,17 @@ export async function POST(request, { params }) {
               "switch",
               "logic_gate",
               "flow_end",
+              "set_queue_options",
             ];
 
             const isLogical = logicalNodeTypes.includes(nodeType);
 
             if (isLogical) {
               // Logical nodes execute and immediately continue to next node
+              // For set_queue_options, add a small delay to ensure client_state_update is processed
+              if (nodeType === "set_queue_options") {
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              }
 
               await executeNodeChain(
                 node,
@@ -1004,29 +1009,53 @@ export async function POST(request, { params }) {
             const results = await Promise.all(
               nodesToExecute.map(async (nextNode) => {
                 // Prepare node with client_state for flow tracking
-                // Merge existing client_state (may contain routing params) with flow tracking
+                // Merge client_state from webhook payload (set by previous nodes like Set Queue Options),
+                // node config (if any), and flow tracking
                 const existingConfig = nextNode.data?.config || {};
                 const flowTracking = { flowId, currentNodeId: nextNode.id };
 
-                // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
-                let mergedClientState = flowTracking;
+                // Start with client_state from webhook payload (contains queue options from Set Queue Options node)
+                let mergedClientState = {};
+                if (payload?.client_state) {
+                  try {
+                    const decoded = Buffer.from(
+                      payload.client_state,
+                      "base64"
+                    ).toString();
+                    const payloadClientState = JSON.parse(decoded);
+                    // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
+                    mergedClientState = { ...payloadClientState };
+                  } catch (err) {
+                    console.warn(
+                      "[FlowWebhook] Failed to decode payload client_state:",
+                      err
+                    );
+                  }
+                }
+
+                // Merge with node config client_state if it exists (may have additional routing params)
                 if (existingConfig.client_state) {
                   try {
                     const decoded = Buffer.from(
                       existingConfig.client_state,
                       "base64"
                     ).toString();
-                    const existing = JSON.parse(decoded);
-                    // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
-                    mergedClientState = { ...existing, ...flowTracking };
+                    const configClientState = JSON.parse(decoded);
+                    // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
+                    mergedClientState = {
+                      ...mergedClientState,
+                      ...configClientState,
+                    };
                   } catch (err) {
                     console.warn(
-                      "[FlowWebhook] Failed to decode existing client_state:",
+                      "[FlowWebhook] Failed to decode config client_state:",
                       err
                     );
-                    // If decode fails, just use flow tracking
                   }
                 }
+
+                // Finally, merge flow tracking (must be last to ensure correct flowId/currentNodeId)
+                mergedClientState = { ...mergedClientState, ...flowTracking };
 
                 const configuredNextNode = {
                   ...nextNode,
@@ -1089,12 +1118,24 @@ export async function POST(request, { params }) {
                 "switch",
                 "logic_gate",
                 "flow_end",
+                "set_queue_options",
               ];
 
               const isLogical = logicalNodeTypes.includes(nodeType);
 
               if (isLogical) {
                 // Logical nodes execute and immediately continue to next node
+                // For set_queue_options, add a small delay to ensure client_state_update is processed
+                // and update body with the new client_state
+                if (nodeType === "set_queue_options") {
+                  await new Promise((resolve) => setTimeout(resolve, 500));
+
+                  // Update body payload with the new client_state from the result
+                  // This ensures the next node receives the updated client_state
+                  if (result.client_state && body?.data?.payload) {
+                    body.data.payload.client_state = result.client_state;
+                  }
+                }
 
                 await executeNodeChain(
                   node,
@@ -1238,29 +1279,50 @@ async function executeNodeChain(
     executedTransitions.set(transitionKey, Date.now());
 
     // Configure node with client_state for flow tracking
-    // Merge existing client_state (may contain routing params) with flow tracking
+    // Merge client_state from webhook payload (set by previous nodes like Set Queue Options),
+    // node config (if any), and flow tracking
     const existingConfig = nextNode.data?.config || {};
     const flowTracking = { flowId, currentNodeId: nextNode.id };
 
-    // If node has existing client_state (e.g., from EnqueueNodeEditor with routing params), merge it
-    let mergedClientState = flowTracking;
+    // Start with client_state from webhook payload (contains queue options from Set Queue Options node)
+    let mergedClientState = {};
+    if (body?.data?.payload?.client_state) {
+      try {
+        const decoded = Buffer.from(
+          body.data.payload.client_state,
+          "base64"
+        ).toString();
+        const payloadClientState = JSON.parse(decoded);
+        // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
+        mergedClientState = { ...payloadClientState };
+      } catch (err) {
+        console.warn(
+          "[FlowWebhook] Failed to decode payload client_state:",
+          err
+        );
+      }
+    }
+
+    // Merge with node config client_state if it exists (may have additional routing params)
     if (existingConfig.client_state) {
       try {
         const decoded = Buffer.from(
           existingConfig.client_state,
           "base64"
         ).toString();
-        const existing = JSON.parse(decoded);
-        // Merge: existing first (preserves routing params like required_skills, priority), then flow tracking (ensures current flowId/currentNodeId)
-        mergedClientState = { ...existing, ...flowTracking };
+        const configClientState = JSON.parse(decoded);
+        // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
+        mergedClientState = { ...mergedClientState, ...configClientState };
       } catch (err) {
         console.warn(
-          "[FlowWebhook] Failed to decode existing client_state:",
+          "[FlowWebhook] Failed to decode config client_state:",
           err
         );
-        // If decode fails, just use flow tracking
       }
     }
+
+    // Finally, merge flow tracking (must be last to ensure correct flowId/currentNodeId)
+    mergedClientState = { ...mergedClientState, ...flowTracking };
 
     const configuredNode = {
       ...nextNode,
@@ -1303,11 +1365,23 @@ async function executeNodeChain(
       "switch",
       "logic_gate",
       "flow_end",
+      "set_queue_options",
     ];
     const isLogicalNode = logicalNodeTypes.includes(nextNodeType);
 
     if (result.success && isLogicalNode) {
       // Logical node - continue chain immediately after execution
+      // For set_queue_options, add a small delay to ensure client_state_update is processed
+      // and update body with the new client_state
+      if (nextNodeType === "set_queue_options") {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Update body payload with the new client_state from the result
+        // This ensures the next node receives the updated client_state
+        if (result.client_state && body?.data?.payload) {
+          body.data.payload.client_state = result.client_state;
+        }
+      }
 
       // Store variables in database before continuing chain
       await VoiceFlowDb.updateFlowExecution(callControlId, {
