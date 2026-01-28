@@ -497,6 +497,78 @@ export function AgentDesktop() {
               `[AgentDesktop] Updating agent status to "${data.status}"`,
             );
             setAgentStatus(data.status);
+
+            // Persist status to localStorage so softphone can check it
+            try {
+              localStorage.setItem("user.status", data.status);
+            } catch (_) {}
+
+            // CRITICAL: When status changes to "Agent Not Answering", clear active call stores immediately
+            // This ensures the UI is cleared even if WebRTC client hasn't received hangup event yet
+            if (data.status === "Agent Not Answering") {
+              console.log(
+                "[AgentDesktop] Agent Not Answering detected - clearing active call stores",
+              );
+
+              // Clear active call store
+              const activeCallStore = useActiveCallStore.getState();
+              if (activeCallStore.call || activeCallStore.status !== "idle") {
+                console.log(
+                  "[AgentDesktop] Clearing activeCallStore due to Agent Not Answering",
+                );
+                activeCallStore.clearActiveCall();
+              }
+
+              // Clear all calls from calls store that are in ringing state
+              const callsStore = useCallsStore.getState();
+              const allCalls = Object.values(callsStore.calls);
+              allCalls.forEach((call) => {
+                if (
+                  call.status === "ringing" ||
+                  call.status === "alerting" ||
+                  call.status === "trying"
+                ) {
+                  console.log(
+                    `[AgentDesktop] Removing ringing call ${call.callControlId || call.interactionId} from calls store`,
+                  );
+                  callsStore.removeCall(
+                    call.callControlId || call.interactionId,
+                  );
+                }
+              });
+
+              // Clear selected interaction if it's in ringing state
+              setSelectedInteraction((current) => {
+                if (current && current.state === "ringing") {
+                  console.log(
+                    `[AgentDesktop] Clearing selected ringing interaction ${current.id} due to Agent Not Answering`,
+                  );
+                  return null;
+                }
+                return current;
+              });
+
+              // Clear all ringing interactions from dbInteractions state
+              setDbInteractions((current) => {
+                const filtered = current.filter((interaction) => {
+                  if (interaction.state === "ringing") {
+                    console.log(
+                      `[AgentDesktop] Removing ringing interaction ${interaction.id} from dbInteractions due to Agent Not Answering`,
+                    );
+                    return false;
+                  }
+                  return true;
+                });
+                return filtered;
+              });
+
+              // Force immediate refresh of interactions
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("contact-center:refresh-interactions"),
+                );
+              }, 100);
+            }
           }
         } catch (err) {
           console.error(

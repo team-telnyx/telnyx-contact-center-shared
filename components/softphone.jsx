@@ -159,6 +159,21 @@ export function Softphone() {
     }
     if (autoStatusRef.current.forcedBusy) {
       autoStatusRef.current.forcedBusy = false;
+
+      // CRITICAL: Don't auto-revert to "Available" if status is "Agent Not Answering"
+      // Agent must manually change their status after not answering a call
+      let currentStatus = null;
+      try {
+        currentStatus = localStorage.getItem("user.status");
+      } catch (_) {}
+
+      if (currentStatus === "Agent Not Answering") {
+        console.log(
+          "[Softphone] Skipping auto-revert to Available - agent status is 'Agent Not Answering'",
+        );
+        return;
+      }
+
       updateUserStatus("Available");
     }
   }, [activeCall, activeCallsCount]);
