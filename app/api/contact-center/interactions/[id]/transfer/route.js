@@ -18,25 +18,25 @@ export async function POST(request, { params }) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
     const { id } = await params;
     const body = await request.json();
-    const { type, target } = body; // type: 'agent' | 'queue' | 'external', target: username/queueId/number
+    const { type, target, preserveRoutingOptions = false } = body; // type: 'agent' | 'queue' | 'external', target: username/queueId/number
 
     if (!id) {
       return NextResponse.json(
         { ok: false, error: "Interaction ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!type || !target) {
       return NextResponse.json(
         { ok: false, error: "type and target are required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -45,7 +45,7 @@ export async function POST(request, { params }) {
     if (!interaction) {
       return NextResponse.json(
         { ok: false, error: "Interaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -63,18 +63,18 @@ export async function POST(request, { params }) {
     if (interaction.metadata?.original_call_control_id) {
       transferCallControlId = interaction.metadata.original_call_control_id;
       console.log(
-        `[TransferById] ✅ Using original_call_control_id from metadata: ${transferCallControlId} (interaction.call_control_id is WebRTC leg: ${interaction.call_control_id})`
+        `[TransferById] ✅ Using original_call_control_id from metadata: ${transferCallControlId} (interaction.call_control_id is WebRTC leg: ${interaction.call_control_id})`,
       );
     } else if (!isInbound && interaction.metadata?.pstn_call_control_id) {
       // Priority 2: Outbound call - use PSTN leg from metadata
       transferCallControlId = interaction.metadata.pstn_call_control_id;
       console.log(
-        `[TransferById] ✅ Outbound call - Using PSTN leg call_control_id: ${transferCallControlId}`
+        `[TransferById] ✅ Outbound call - Using PSTN leg call_control_id: ${transferCallControlId}`,
       );
     } else {
       // Fallback: Use interaction.call_control_id (should only happen if call wasn't transferred to agent)
       console.warn(
-        `[TransferById] ⚠️ No original_call_control_id in metadata, using interaction.call_control_id: ${transferCallControlId}. This may fail if call was transferred to agent.`
+        `[TransferById] ⚠️ No original_call_control_id in metadata, using interaction.call_control_id: ${transferCallControlId}. This may fail if call was transferred to agent.`,
       );
     }
 
@@ -106,7 +106,7 @@ export async function POST(request, { params }) {
     if (!apiKey) {
       return NextResponse.json(
         { ok: false, error: "TELNYX_API_KEY not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -119,13 +119,13 @@ export async function POST(request, { params }) {
       if (!pool) {
         return NextResponse.json(
           { ok: false, error: "Database not available" },
-          { status: 500 }
+          { status: 500 },
         );
       }
 
       const agentResult = await pool.query(
         "SELECT * FROM users WHERE username = $1 LIMIT 1",
-        [target]
+        [target],
       );
       const targetAgent = agentResult.rows?.[0];
 
@@ -135,7 +135,7 @@ export async function POST(request, { params }) {
             ok: false,
             error: "Target agent not found or has no telephony_user_name",
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -150,37 +150,102 @@ export async function POST(request, { params }) {
         ],
       };
     } else if (type === "queue") {
-      // Transfer to another queue
+      // Transfer to another queue using enqueue command
       const queue = await PgDb.findQueueById(target);
       if (!queue) {
         return NextResponse.json(
           { ok: false, error: "Queue not found" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      // Use bridge with queue parameter
-      const url = buildTelnyxV2Url(
-        `/calls/${encodeURIComponent(transferCallControlId)}/actions/bridge`
+      // If preserveRoutingOptions is enabled, update client_state first
+      if (preserveRoutingOptions) {
+        // Get current interaction's routing options
+        // Check both interaction.priority and routing_metadata.call_priority
+        const routingMetadata = interaction.routing_metadata || {};
+        const currentPriority =
+          interaction.priority || routingMetadata.call_priority || null;
+        const currentRequiredSkills =
+          interaction.required_skills || routingMetadata.required_skills || {};
+
+        // Build client_state with routing options
+        const clientStateObj = {};
+
+        // Add priority if available
+        if (currentPriority && currentPriority >= 1 && currentPriority <= 5) {
+          clientStateObj.call_priority = currentPriority;
+        }
+
+        // Add required_skills if available and not empty
+        if (
+          currentRequiredSkills &&
+          typeof currentRequiredSkills === "object" &&
+          Object.keys(currentRequiredSkills).length > 0
+        ) {
+          clientStateObj.required_skills = currentRequiredSkills;
+        }
+
+        // Only update client_state if we have routing options to preserve
+        if (Object.keys(clientStateObj).length > 0) {
+          // Encode client_state as base64 JSON
+          const clientStateBase64 = Buffer.from(
+            JSON.stringify(clientStateObj),
+          ).toString("base64");
+
+          // Update client_state first
+          const clientStateUrl = buildTelnyxV2Url(
+            `/calls/${encodeURIComponent(transferCallControlId)}/actions/client_state_update`,
+          );
+
+          const clientStateResponse = await fetch(clientStateUrl, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ client_state: clientStateBase64 }),
+          });
+
+          if (!clientStateResponse.ok) {
+            const errorText = await clientStateResponse.text();
+            console.error(
+              "[Transfer] Failed to update client_state:",
+              errorText,
+            );
+            return NextResponse.json(
+              {
+                ok: false,
+                error: `Failed to update client state: ${errorText}`,
+              },
+              { status: clientStateResponse.status },
+            );
+          }
+        }
+      }
+
+      // Use enqueue command to transfer to queue
+      const enqueueUrl = buildTelnyxV2Url(
+        `/calls/${encodeURIComponent(transferCallControlId)}/actions/enqueue`,
       );
-      const bridgeBody = {
-        queue: queue.name,
+      const enqueueBody = {
+        queue_name: queue.name,
       };
 
-      const response = await fetch(url, {
+      const response = await fetch(enqueueUrl, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(bridgeBody),
+        body: JSON.stringify(enqueueBody),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
         return NextResponse.json(
           { ok: false, error: errorText },
-          { status: response.status }
+          { status: response.status },
         );
       }
 
@@ -219,15 +284,19 @@ export async function POST(request, { params }) {
           type: "queue",
           transferredBy: user.username,
           callControlId: transferCallControlId,
-        }
+        },
       );
 
+      // Update interaction - when transferring to queue, the call will be re-enqueued
+      // so we update the queue_id and set state to queued
       await PgDb.updateInteractionById(interaction.id, {
         transferCount: (interaction.transfer_count || 0) + 1,
         transferHistory,
         routingMetadata: updatedRoutingMetadata,
-        state: "transferred",
-        completedAt: new Date().toISOString(),
+        queueId: queue.id,
+        queueName: queue.name,
+        state: "queued", // Call is being re-enqueued in the new queue
+        enqueuedAt: new Date().toISOString(),
       });
 
       // Notify agent to remove interaction from Interactions panel
@@ -253,13 +322,13 @@ export async function POST(request, { params }) {
     } else {
       return NextResponse.json(
         { ok: false, error: "Invalid transfer type" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Execute transfer using Telnyx Call Control API
     const url = buildTelnyxV2Url(
-      `/calls/${encodeURIComponent(transferCallControlId)}/actions/transfer`
+      `/calls/${encodeURIComponent(transferCallControlId)}/actions/transfer`,
     );
 
     const response = await fetch(url, {
@@ -276,7 +345,7 @@ export async function POST(request, { params }) {
       console.error("[Transfer] Telnyx API error:", errorText);
       return NextResponse.json(
         { ok: false, error: errorText },
-        { status: response.status }
+        { status: response.status },
       );
     }
 
@@ -315,7 +384,7 @@ export async function POST(request, { params }) {
         type: type,
         transferredBy: user.username,
         callControlId: transferCallControlId,
-      }
+      },
     );
 
     await PgDb.updateInteractionById(interaction.id, {
@@ -340,7 +409,7 @@ export async function POST(request, { params }) {
     console.error("[TransferById] Error:", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
