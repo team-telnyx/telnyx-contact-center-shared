@@ -250,6 +250,7 @@ export async function POST(request, { params }) {
                           metadata.original_call_control_id,
                         callSessionId: payload.call_session_id,
                         interactionId: originalInteraction.id,
+                        aiCallControlId: metadata.ai_call_control_id || null,
                       }
                     );
                   }
@@ -261,6 +262,7 @@ export async function POST(request, { params }) {
                     originalCallControlId: metadata.original_call_control_id,
                     callSessionId: payload.call_session_id,
                     interactionId: originalInteraction.id,
+                    aiCallControlId: metadata.ai_call_control_id || null,
                   });
 
                   // Broadcast to WebRTC client via SSE
@@ -272,6 +274,7 @@ export async function POST(request, { params }) {
                     originalCallControlId: metadata.original_call_control_id,
                     callSessionId: payload.call_session_id,
                     interactionId: originalInteraction.id,
+                    aiCallControlId: metadata.ai_call_control_id || null,
                     contactCenter: {
                       interactionId: originalInteraction.id,
                       queueName: originalInteraction.queue_name,
@@ -281,6 +284,7 @@ export async function POST(request, { params }) {
                       assignedAt:
                         originalInteraction.assigned_at ||
                         new Date().toISOString(),
+                      aiCallControlId: metadata.ai_call_control_id || null,
                     },
                   });
                 }
