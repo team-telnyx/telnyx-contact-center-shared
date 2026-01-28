@@ -481,6 +481,18 @@ export async function POST(request, { params }) {
                 }
               }
 
+              // Debug: Log client_state from webhook payload
+              if (payload.client_state) {
+                try {
+                  const decoded = JSON.parse(Buffer.from(payload.client_state, "base64").toString());
+                  console.log(`[WebhookRoute] call.enqueued - client_state from payload:`, JSON.stringify(decoded, null, 2));
+                } catch (e) {
+                  console.warn(`[WebhookRoute] call.enqueued - Failed to decode client_state:`, e);
+                }
+              } else {
+                console.warn(`[WebhookRoute] call.enqueued - No client_state in payload`);
+              }
+              
               await handleContactCenterEnqueue({
                 callControlId: payload.call_control_id,
                 callSessionId: payload.call_session_id,
