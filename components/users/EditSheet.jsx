@@ -14,7 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle } from "@tabler/icons-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -116,6 +123,7 @@ export default function EditSheet({
   const [loading, setLoading] = React.useState(false);
   const [availableSkills, setAvailableSkills] = React.useState([]);
   const [userSkills, setUserSkills] = React.useState({}); // { skillId: proficiency (1-5) }
+  const [userSkillsArray, setUserSkillsArray] = React.useState([]); // [{ skillId: string, proficiency: number }] for UI
   const [skillsLoading, setSkillsLoading] = React.useState(false);
   const [availableQueues, setAvailableQueues] = React.useState([]);
   const [userQueueIds, setUserQueueIds] = React.useState([]); // Array of queue IDs
@@ -156,7 +164,15 @@ export default function EditSheet({
           setVoiceNumber(d.voice_number || "");
           // Load user skills - skills is stored as JSONB object { skillId: proficiency }
           const skills = d.skills || {};
-          setUserSkills(typeof skills === 'string' ? JSON.parse(skills) : skills);
+          const skillsObj = typeof skills === 'string' ? JSON.parse(skills) : skills;
+          setUserSkills(skillsObj);
+          // Convert to array format for UI: [{ skillId, proficiency }]
+          setUserSkillsArray(
+            Object.entries(skillsObj).map(([skillId, proficiency]) => ({
+              skillId,
+              proficiency: typeof proficiency === 'number' ? proficiency : parseInt(proficiency, 10) || 1,
+            }))
+          );
           // Load user queue assignments
           if (d.queue_assignments && Array.isArray(d.queue_assignments)) {
             setUserQueueIds(d.queue_assignments.map((qa) => qa.queue_id).filter(Boolean));
@@ -245,6 +261,35 @@ export default function EditSheet({
       return;
     }
 
+    // Validate skills: check for duplicates and empty selections
+    const skillIds = userSkillsArray
+      .map((s) => s.skillId)
+      .filter(Boolean);
+    const duplicateSkillIds = skillIds.filter(
+      (id, index) => skillIds.indexOf(id) !== index
+    );
+    if (duplicateSkillIds.length > 0) {
+      notify({
+        title: "Duplicate skills detected",
+        description: "Each skill can only be assigned once. Please remove duplicates.",
+        variant: "error",
+      });
+      return;
+    }
+
+    // Check for skills with empty skillId but in the array (incomplete selections)
+    const incompleteSkills = userSkillsArray.filter(
+      (s) => !s.skillId || s.skillId.trim() === ""
+    );
+    if (incompleteSkills.length > 0) {
+      notify({
+        title: "Incomplete skill selections",
+        description: "Please select a skill for all entries or remove incomplete ones.",
+        variant: "error",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -258,7 +303,13 @@ export default function EditSheet({
         mobile,
         smsNumber,
         voiceNumber,
-        skills: userSkills, // Send skills object { skillId: proficiency }
+        // Convert array format back to object format { skillId: proficiency }
+        skills: userSkillsArray.reduce((acc, skill) => {
+          if (skill.skillId && skill.proficiency >= 1 && skill.proficiency <= 5) {
+            acc[skill.skillId] = skill.proficiency;
+          }
+          return acc;
+        }, {}),
         queueIds: userQueueIds, // Send array of queue IDs
       };
 
@@ -581,9 +632,32 @@ export default function EditSheet({
 
                   {/* Skills Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Skills & Proficiency
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground">
+                        Skills & Proficiency
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setUserSkillsArray([...userSkillsArray, { skillId: "", proficiency: 1 }]);
+                        }}
+                        disabled={
+                          skillsLoading ||
+                          availableSkills.length === 0 ||
+                          userSkillsArray.length >= availableSkills.length
+                        }
+                        title={
+                          userSkillsArray.length >= availableSkills.length
+                            ? "All available skills have been assigned"
+                            : "Add a skill"
+                        }
+                      >
+                        <IconPlus className="w-4 h-4 mr-1" />
+                        Add Skill
+                      </Button>
+                    </div>
                     {skillsLoading ? (
                       <div className="space-y-2">
                         <Skeleton className="h-9 w-full" />
@@ -595,43 +669,71 @@ export default function EditSheet({
                           <p className="text-sm text-muted-foreground">
                             No skills available. Create skills in the Skills management page.
                           </p>
+                        ) : userSkillsArray.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No skills assigned. Click "Add Skill" to assign skills to this agent.
+                          </p>
                         ) : (
-                          availableSkills.map((skill) => {
-                            const proficiency = userSkills[skill.id] || 0;
+                          userSkillsArray.map((skill, index) => {
                             return (
                               <div
-                                key={skill.id}
-                                className="flex items-center justify-between p-3 border rounded-md"
+                                key={index}
+                                className="flex items-center gap-3 p-3 border rounded-md"
                               >
-                                <div className="flex-1">
-                                  <div className="text-sm font-medium">
-                                    {skill.name}
-                                  </div>
-                                  {skill.description && (
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {skill.description}
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1 ml-4">
+                                <Select
+                                  value={skill.skillId || undefined}
+                                  onValueChange={(value) => {
+                                    // Prevent selecting a skill that's already assigned to another row
+                                    const isDuplicate = userSkillsArray.some(
+                                      (sk, idx) => sk.skillId === value && idx !== index
+                                    );
+                                    if (isDuplicate) {
+                                      notify({
+                                        title: "Skill already assigned",
+                                        description: "This skill is already assigned. Please select a different skill.",
+                                        variant: "error",
+                                      });
+                                      return;
+                                    }
+                                    const updated = [...userSkillsArray];
+                                    updated[index] = { ...updated[index], skillId: value };
+                                    setUserSkillsArray(updated);
+                                  }}
+                                >
+                                  <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder="Select a skill" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availableSkills
+                                      .filter(
+                                        (s) =>
+                                          !skill.skillId ||
+                                          s.id === skill.skillId ||
+                                          !userSkillsArray.some(
+                                            (sk, idx) => sk.skillId === s.id && idx !== index
+                                          )
+                                      )
+                                      .map((skillOption) => (
+                                        <SelectItem key={skillOption.id} value={skillOption.id}>
+                                          {skillOption.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                                <div className="flex items-center gap-1">
                                   {[1, 2, 3, 4, 5].map((level) => (
                                     <button
                                       key={level}
                                       type="button"
                                       onClick={() => {
-                                        const newSkills = { ...userSkills };
-                                        if (proficiency === level) {
-                                          // Clicking the same level removes it
-                                          delete newSkills[skill.id];
-                                        } else {
-                                          newSkills[skill.id] = level;
-                                        }
-                                        setUserSkills(newSkills);
+                                        const updated = [...userSkillsArray];
+                                        updated[index] = { ...updated[index], proficiency: level };
+                                        setUserSkillsArray(updated);
                                       }}
                                       className="focus:outline-none"
                                       title={`Proficiency level ${level}`}
                                     >
-                                      {proficiency >= level ? (
+                                      {(skill.proficiency || 1) >= level ? (
                                         <IconStarFilled
                                           className="size-5 text-yellow-500"
                                         />
@@ -641,6 +743,16 @@ export default function EditSheet({
                                     </button>
                                   ))}
                                 </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setUserSkillsArray(userSkillsArray.filter((_, i) => i !== index));
+                                  }}
+                                >
+                                  <IconTrash className="w-4 h-4" />
+                                </Button>
                               </div>
                             );
                           })

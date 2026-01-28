@@ -20,6 +20,8 @@ import {
   IconList,
   IconEdit,
   IconTrash,
+  IconStar,
+  IconStarFilled,
 } from "@tabler/icons-react";
 import {
   Table,
@@ -95,6 +97,45 @@ export default function AdminQueuesPage() {
   useEffect(() => {
     load();
   }, [query]);
+
+  async function onUpdatePriority(queueId, newPriority) {
+    if (!queueId || newPriority < 1 || newPriority > 5) return;
+    
+    // Optimistically update UI immediately
+    setItems((prevItems) =>
+      prevItems.map((q) =>
+        q.id === queueId ? { ...q, priority: newPriority } : q
+      )
+    );
+    
+    try {
+      const res = await fetch(`/api/admin/queues/${encodeURIComponent(queueId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priority: newPriority }),
+      });
+      
+      if (!res.ok) {
+        // Revert on error
+        const data = await res.json();
+        // Reload to get correct state
+        load();
+        notify({
+          title: "Failed to update priority",
+          description: data?.error || "Unknown error",
+          variant: "error",
+        });
+      }
+    } catch (err) {
+      // Revert on error
+      load();
+      notify({
+        title: "Failed to update priority",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    }
+  }
 
   async function onDelete(id) {
     if (!id) return;
@@ -238,7 +279,27 @@ export default function AdminQueuesPage() {
                             {q.max_size || 0}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
-                            {q.priority || 0}
+                            <div className="flex items-center gap-1">
+                              {[1, 2, 3, 4, 5].map((level) => {
+                                const currentPriority = q.priority && q.priority >= 1 && q.priority <= 5 ? q.priority : 1;
+                                const filled = level <= currentPriority;
+                                return (
+                                  <button
+                                    key={level}
+                                    type="button"
+                                    onClick={() => onUpdatePriority(q.id, level)}
+                                    className="focus:outline-none hover:opacity-80 transition-opacity"
+                                    title={`Set priority to ${level} star${level > 1 ? 's' : ''}`}
+                                  >
+                                    {filled ? (
+                                      <IconStarFilled className="w-4 h-4 text-yellow-400" />
+                                    ) : (
+                                      <IconStar className="w-4 h-4 text-gray-300" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
                             {q.enabled ? "YES" : "NO"}

@@ -51,9 +51,9 @@ function getQueueTypeDisplayName(routingStrategy) {
 }
 
 // Star rating component
-function StarRating({ value, onChange, maxStars = 5 }) {
+function StarRating({ value, onChange, maxStars = 5, disabled = false }) {
   return (
-    <div className="flex gap-1">
+    <div className={`flex gap-1 ${disabled ? "opacity-60 pointer-events-none" : ""}`}>
       {Array.from({ length: maxStars }, (_, i) => {
         const starValue = i + 1;
         const filled = starValue <= value;
@@ -64,6 +64,7 @@ function StarRating({ value, onChange, maxStars = 5 }) {
             onClick={() => onChange(starValue)}
             className="focus:outline-none"
             aria-label={`Set rating to ${starValue} stars`}
+            disabled={disabled}
           >
             {filled ? (
               <IconStarFilled className="w-4 h-4 text-yellow-400" />
@@ -95,17 +96,17 @@ export default function SetQueueOptionsNodeEditor({
     config.queue_name_variable || ""
   );
 
-  // Priority
-  const [priorityUseVariable, setPriorityUseVariable] = useState(
-    config.priority_use_variable !== undefined
-      ? config.priority_use_variable
+  // Call Priority (1-5 stars)
+  const [callPriorityUseVariable, setCallPriorityUseVariable] = useState(
+    config.call_priority_use_variable !== undefined
+      ? config.call_priority_use_variable
       : false
   );
-  const [priority, setPriority] = useState(
-    config.priority !== undefined ? config.priority : 50
+  const [callPriority, setCallPriority] = useState(
+    config.call_priority !== undefined ? config.call_priority : 3
   );
-  const [priorityVariable, setPriorityVariable] = useState(
-    config.priority_variable || ""
+  const [callPriorityVariable, setCallPriorityVariable] = useState(
+    config.call_priority_variable || ""
   );
 
   // Skills
@@ -130,6 +131,14 @@ export default function SetQueueOptionsNodeEditor({
   );
   const [availableSkills, setAvailableSkills] = useState([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
+
+  // Find selected queue to check routing strategy
+  const selectedQueue = useMemo(() => {
+    const queueNameToFind = queueNameUseVariable ? queueNameVariable : queueName;
+    return queues.find((q) => q.name === queueNameToFind);
+  }, [queues, queueName, queueNameVariable, queueNameUseVariable]);
+
+  const queueRoutingStrategy = selectedQueue?.routing_strategy || null;
 
   // Load available skills
   useEffect(() => {
@@ -157,14 +166,33 @@ export default function SetQueueOptionsNodeEditor({
     }
   }, [config.skills]);
 
+  // Reset call priority to 3 when queue changes to FIFO
+  // Clear skills when queue changes to non-Skill-based
+  useEffect(() => {
+    // Only update if queue routing strategy is FIFO and priority is not 3
+    if (queueRoutingStrategy === "FIFO") {
+      if (callPriority !== 3) {
+        setCallPriority(3);
+        setCallPriorityUseVariable(false);
+      }
+      return; // Exit early to avoid multiple updates
+    }
+    // Only clear skills if queue is not Skill-based and skills exist
+    if (queueRoutingStrategy !== "Skill-based" && skills.length > 0) {
+      setSkills([]);
+      setSkillsUseVariable(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueRoutingStrategy]); // Only depend on queueRoutingStrategy to avoid loops
+
   // Track previous values to avoid unnecessary updates
   const prevValuesRef = useRef({
     queueName,
     queueNameVariable,
     queueNameUseVariable,
-    priority,
-    priorityVariable,
-    priorityUseVariable,
+    callPriority,
+    callPriorityVariable,
+    callPriorityUseVariable,
     skills: JSON.stringify(skills),
     skillsVariable,
     skillsUseVariable,
@@ -178,9 +206,9 @@ export default function SetQueueOptionsNodeEditor({
       prev.queueName !== queueName ||
       prev.queueNameVariable !== queueNameVariable ||
       prev.queueNameUseVariable !== queueNameUseVariable ||
-      prev.priority !== priority ||
-      prev.priorityVariable !== priorityVariable ||
-      prev.priorityUseVariable !== priorityUseVariable ||
+      prev.callPriority !== callPriority ||
+      prev.callPriorityVariable !== callPriorityVariable ||
+      prev.callPriorityUseVariable !== callPriorityUseVariable ||
       prev.skills !== skillsStr ||
       prev.skillsVariable !== skillsVariable ||
       prev.skillsUseVariable !== skillsUseVariable;
@@ -193,26 +221,33 @@ export default function SetQueueOptionsNodeEditor({
       queueName,
       queueNameVariable,
       queueNameUseVariable,
-      priority,
-      priorityVariable,
-      priorityUseVariable,
+      callPriority,
+      callPriorityVariable,
+      callPriorityUseVariable,
       skills: skillsStr,
       skillsVariable,
       skillsUseVariable,
     };
 
+    // Build new config, explicitly excluding old priority and skills if queue is not Skill-based
+    const { skills: _, priority: __, ...configWithoutSkillsAndPriority } = config;
     const newConfig = {
-      ...config,
+      ...configWithoutSkillsAndPriority,
       queue_name: queueNameUseVariable ? queueNameVariable : queueName,
       queue_name_use_variable: queueNameUseVariable,
       queue_name_variable: queueNameVariable,
-      priority: priorityUseVariable ? priorityVariable : priority,
-      priority_use_variable: priorityUseVariable,
-      priority_variable: priorityVariable,
-      skills: skillsUseVariable ? undefined : skills,
+      call_priority: callPriorityUseVariable ? callPriorityVariable : callPriority,
+      call_priority_use_variable: callPriorityUseVariable,
+      call_priority_variable: callPriorityVariable,
       skills_use_variable: skillsUseVariable,
       skills_variable: skillsVariable,
     };
+    
+    // Only set skills if queue is Skill-based and has skills
+    if (queueRoutingStrategy === "Skill-based" && !skillsUseVariable && skills.length > 0) {
+      newConfig.skills = skills;
+    }
+    // Note: skills is already excluded from newConfig above if queue is not Skill-based
 
     // Build client_state with queue options
     let clientStateObj = {};
@@ -231,23 +266,39 @@ export default function SetQueueOptionsNodeEditor({
       }
     }
 
+    // Remove old parameters that should not be in client_state
+    delete clientStateObj.priority; // Old parameter, use call_priority instead
+
     // Add queue options to client_state
     if (!queueNameUseVariable && queueName) {
       clientStateObj.queue_name = queueName;
     }
-    if (!priorityUseVariable && priority !== undefined) {
-      clientStateObj.priority = priority;
+    if (!callPriorityUseVariable && callPriority !== undefined && callPriority >= 1 && callPriority <= 5) {
+      clientStateObj.call_priority = callPriority;
     }
-    if (!skillsUseVariable && skills.length > 0) {
-      const requiredSkills = {};
-      skills.forEach((skill) => {
-        if (skill.name && skill.proficiency) {
-          requiredSkills[skill.name] = skill.proficiency;
+    
+    // Only set required_skills if queue routing strategy is Skill-based
+    if (queueRoutingStrategy === "Skill-based") {
+      if (!skillsUseVariable && skills.length > 0) {
+        const requiredSkills = {};
+        skills.forEach((skill) => {
+          if (skill.name && skill.proficiency) {
+            requiredSkills[skill.name] = skill.proficiency;
+          }
+        });
+        if (Object.keys(requiredSkills).length > 0) {
+          clientStateObj.required_skills = requiredSkills;
+        } else {
+          // Remove required_skills if no valid skills
+          delete clientStateObj.required_skills;
         }
-      });
-      if (Object.keys(requiredSkills).length > 0) {
-        clientStateObj.required_skills = requiredSkills;
+      } else {
+        // Remove required_skills if using variable or no skills
+        delete clientStateObj.required_skills;
       }
+    } else {
+      // Remove required_skills for non-Skill-based queues
+      delete clientStateObj.required_skills;
     }
 
     // Encode client_state as base64 JSON
@@ -261,12 +312,13 @@ export default function SetQueueOptionsNodeEditor({
     queueName,
     queueNameVariable,
     queueNameUseVariable,
-    priority,
-    priorityVariable,
-    priorityUseVariable,
+    callPriority,
+    callPriorityVariable,
+    callPriorityUseVariable,
     skills,
     skillsVariable,
     skillsUseVariable,
+    queueRoutingStrategy,
   ]);
 
   // Validation
@@ -281,15 +333,13 @@ export default function SetQueueOptionsNodeEditor({
         errors.push("Queue Name is required");
       }
     }
-    if (priorityUseVariable) {
-      if (!priorityVariable || priorityVariable.trim() === "") {
-        errors.push("Priority variable is required");
-      }
+    if (callPriorityUseVariable) {
+      // Call priority variable is optional - no validation needed
     } else {
-      if (priority === undefined || priority === null || priority === "") {
-        errors.push("Priority is required");
-      } else if (priority < 1 || priority > 100) {
-        errors.push("Priority must be between 1 and 100");
+      if (callPriority !== undefined && callPriority !== null && callPriority !== "") {
+        if (callPriority < 1 || callPriority > 5) {
+          errors.push("Call Priority must be between 1 and 5");
+        }
       }
     }
     if (skillsUseVariable) {
@@ -297,11 +347,25 @@ export default function SetQueueOptionsNodeEditor({
     } else {
       // Skills are optional, but if provided, they must be valid
       if (skills && skills.length > 0) {
-        const invalidSkills = skills.filter(
-          (skill) => !skill.name || !skill.proficiency
+        // Check for duplicate skills FIRST (more specific error)
+        const skillNames = skills
+          .map((s) => s.name)
+          .filter(Boolean);
+        const duplicateNames = skillNames.filter(
+          (name, index) => skillNames.indexOf(name) !== index
         );
-        if (invalidSkills.length > 0) {
-          errors.push("All skills must have a name and proficiency level");
+        if (duplicateNames.length > 0) {
+          errors.push("Skill name cannot be duplicated. Each skill can only be added once.");
+        }
+        
+        // Check for incomplete skills (only if no duplicates found)
+        if (duplicateNames.length === 0) {
+          const invalidSkills = skills.filter(
+            (skill) => !skill.name || !skill.proficiency
+          );
+          if (invalidSkills.length > 0) {
+            errors.push("All skills must have a name and proficiency level");
+          }
         }
       }
     }
@@ -310,9 +374,9 @@ export default function SetQueueOptionsNodeEditor({
     queueName,
     queueNameVariable,
     queueNameUseVariable,
-    priority,
-    priorityVariable,
-    priorityUseVariable,
+    callPriority,
+    callPriorityVariable,
+    callPriorityUseVariable,
     skills,
     skillsVariable,
     skillsUseVariable,
@@ -329,6 +393,10 @@ export default function SetQueueOptionsNodeEditor({
   }, [validationErrors, onValidationChange]);
 
   const handleAddSkill = () => {
+    // Prevent adding more skills than available
+    if (skills.length >= availableSkills.length) {
+      return;
+    }
     setSkills([...skills, { name: "", proficiency: 1 }]);
   };
 
@@ -337,6 +405,16 @@ export default function SetQueueOptionsNodeEditor({
   };
 
   const handleSkillChange = (index, field, value) => {
+    // If changing skill name, check for duplicates BEFORE updating
+    if (field === "name" && value) {
+      const isDuplicate = skills.some(
+        (sk, idx) => sk.name === value && idx !== index
+      );
+      if (isDuplicate) {
+        // Prevent duplicate selection - don't update
+        return;
+      }
+    }
     const updated = [...skills];
     updated[index] = { ...updated[index], [field]: value };
     setSkills(updated);
@@ -406,62 +484,63 @@ export default function SetQueueOptionsNodeEditor({
         </p>
       </div>
 
-      {/* Priority */}
+      {/* Call Priority (1-5 stars) */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <Label htmlFor="priority">
-            Priority <span className="text-red-500 mt-0.5">*</span>
+          <Label htmlFor="call_priority">
+            Call Priority
           </Label>
           <div className="flex items-center gap-2">
-            <Label htmlFor="priority_use_variable" className="text-xs">
+            <Label htmlFor="call_priority_use_variable" className="text-xs">
               Use Variable
             </Label>
             <Switch
-              id="priority_use_variable"
-              checked={priorityUseVariable}
-              onCheckedChange={setPriorityUseVariable}
+              id="call_priority_use_variable"
+              checked={callPriorityUseVariable}
+              onCheckedChange={setCallPriorityUseVariable}
+              disabled={queueRoutingStrategy === "FIFO"}
             />
           </div>
         </div>
-        {priorityUseVariable ? (
+        {callPriorityUseVariable ? (
           <VariableInput
-            value={priorityVariable}
-            onChange={setPriorityVariable}
+            value={callPriorityVariable}
+            onChange={setCallPriorityVariable}
             availableVariables={availableVariables}
-            placeholder="{{priority}}"
+            placeholder="{{call_priority}}"
             className="mt-1 w-full"
+            disabled={queueRoutingStrategy === "FIFO"}
           />
         ) : (
           <div className="flex items-center gap-3 mt-1">
-            <Input
-              id="priority"
-              type="number"
-              min="1"
-              max="100"
-              value={priority}
-              onChange={(e) => {
-                const value = parseInt(e.target.value, 10);
-                if (!isNaN(value) && value >= 1 && value <= 100) {
-                  setPriority(value);
-                } else if (e.target.value === "") {
-                  setPriority("");
-                }
-              }}
-              className="w-24"
+            <StarRating
+              value={callPriority}
+              onChange={setCallPriority}
+              maxStars={5}
+              disabled={queueRoutingStrategy === "FIFO"}
             />
             <span className="text-sm text-muted-foreground">
-              (1 = lowest, 100 = highest)
+              {callPriority === 1 && "Low"}
+              {callPriority === 2 && "Below Normal"}
+              {callPriority === 3 && "Normal"}
+              {callPriority === 4 && "Above Normal"}
+              {callPriority === 5 && "High"}
             </span>
           </div>
         )}
         <p className="text-xs text-muted-foreground mt-1">
-          {priorityUseVariable
-            ? "Enter a variable name (e.g., {{priority}})"
-            : "Set the priority level for this call (1-100)"}
+          {queueRoutingStrategy === "FIFO" ? (
+            "Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy."
+          ) : callPriorityUseVariable ? (
+            "Enter a variable name (e.g., {{call_priority}})"
+          ) : (
+            "Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing."
+          )}
         </p>
       </div>
 
-      {/* Skills */}
+      {/* Skills - Only show for Skill-based queues */}
+      {queueRoutingStrategy === "Skill-based" && (
       <div>
         <div className="flex items-center justify-between mb-2">
           <Label className="text-sm font-semibold">
@@ -477,6 +556,16 @@ export default function SetQueueOptionsNodeEditor({
                 variant="outline"
                 size="sm"
                 onClick={handleAddSkill}
+                disabled={
+                  loadingSkills ||
+                  availableSkills.length === 0 ||
+                  skills.length >= availableSkills.length
+                }
+                title={
+                  skills.length >= availableSkills.length
+                    ? "All available skills have been added"
+                    : "Add a skill"
+                }
               >
                 <IconPlus className="w-4 h-4 mr-1" />
                 Add Skill
@@ -534,14 +623,16 @@ export default function SetQueueOptionsNodeEditor({
                       </SelectItem>
                     ) : availableSkills.length > 0 ? (
                       availableSkills
-                        .filter(
-                          (s) =>
-                            !skill.name ||
-                            s.name === skill.name ||
-                            !skills.some(
-                              (sk, idx) => sk.name === s.name && idx !== index
-                            )
-                        )
+                        .filter((s) => {
+                          // Always show the currently selected skill for this row
+                          if (skill.name && s.name === skill.name) {
+                            return true;
+                          }
+                          // For all other skills, exclude those already selected in other rows
+                          return !skills.some(
+                            (sk, idx) => sk.name === s.name && idx !== index
+                          );
+                        })
                         .map((skillOption) => (
                           <SelectItem
                             key={skillOption.id}
@@ -577,6 +668,7 @@ export default function SetQueueOptionsNodeEditor({
         )}
         </div>
       </div>
+      )}
 
       {/* Validation Errors */}
       {validationErrors.length > 0 && (

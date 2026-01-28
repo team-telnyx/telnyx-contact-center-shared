@@ -173,7 +173,7 @@ export default function EnqueueNodeEditor({
   }, [config.routing_skills, config.client_state]);
 
   const [skills, setSkills] = useState(initialSkills);
-  const [priority, setPriority] = useState(config.routing_priority || 50);
+  const [callPriority, setCallPriority] = useState(config.call_priority || 3); // Call priority 1-5 star scale
   const [availableSkills, setAvailableSkills] = useState([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
 
@@ -183,6 +183,21 @@ export default function EnqueueNodeEditor({
   }, [queues, selectedQueueName]);
 
   const queueType = selectedQueue?.routing_strategy || "FIFO";
+
+  // Reset call priority to 3 when queue changes to FIFO
+  // Clear skills when queue changes to non-Skill-based
+  useEffect(() => {
+    // Only update if queue type is FIFO and priority is not 3
+    if (queueType === "FIFO" && callPriority !== 3) {
+      setCallPriority(3);
+      return; // Exit early to avoid multiple updates
+    }
+    // Only clear skills if queue is not Skill-based and skills exist
+    if (queueType !== "Skill-based" && skills.length > 0) {
+      setSkills([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueType]); // Only depend on queueType to avoid loops
 
   // Load available skills
   useEffect(() => {
@@ -239,7 +254,7 @@ export default function EnqueueNodeEditor({
   const prevValuesRef = useRef({
     selectedQueueName,
     skills: JSON.stringify(skills),
-    priority,
+    callPriority,
     queueType,
     useQueueOptions,
   });
@@ -251,7 +266,7 @@ export default function EnqueueNodeEditor({
     const skillsStr = JSON.stringify(skills);
     const hasChanged =
       prev.selectedQueueName !== selectedQueueName ||
-      prev.priority !== priority ||
+      prev.callPriority !== callPriority ||
       prev.queueType !== queueType ||
       prev.skills !== skillsStr ||
       prev.useQueueOptions !== useQueueOptions;
@@ -264,13 +279,15 @@ export default function EnqueueNodeEditor({
     prevValuesRef.current = {
       selectedQueueName,
       skills: skillsStr,
-      priority,
+      callPriority,
       queueType,
       useQueueOptions,
     };
 
+    // Build new config, explicitly excluding routing_skills if queue is not Skill-based
+    const { routing_skills: _, ...configWithoutRoutingSkills } = config;
     const newConfig = {
-      ...config,
+      ...configWithoutRoutingSkills,
       use_queue_options: useQueueOptions,
     };
 
@@ -278,14 +295,18 @@ export default function EnqueueNodeEditor({
     // They will be read from client_state at execution time
     if (!useQueueOptions) {
       newConfig.queue_name = selectedQueueName;
-      newConfig.routing_skills = skills;
-      newConfig.routing_priority = priority;
+      // Only set routing_skills if queue is Skill-based and has skills
+      if (queueType === "Skill-based" && skills.length > 0) {
+        newConfig.routing_skills = skills;
+      }
+      // Note: routing_skills is already excluded from newConfig above if queue is not Skill-based
+      newConfig.call_priority = callPriority; // Call priority 1-5 stars
     } else {
       // Clear these values when using queue options
       // Set to null explicitly to prevent default value from being applied
       newConfig.queue_name = null;
-      delete newConfig.routing_skills;
-      delete newConfig.routing_priority;
+      // routing_skills already excluded above
+      delete newConfig.call_priority;
     }
 
     // Build client_state by merging routing parameters (only if not using queue options)
@@ -305,7 +326,7 @@ export default function EnqueueNodeEditor({
           } catch {
             // If parsing fails, start fresh but preserve the original as-is
             // This handles cases where client_state might not be JSON
-            if (queueType === "FIFO" || (!skills.length && !priority)) {
+            if (queueType === "FIFO" || !skills.length) {
               newConfig.client_state = config.client_state;
               onChange?.(newConfig);
               return;
@@ -316,12 +337,11 @@ export default function EnqueueNodeEditor({
       }
 
       // Add/update routing parameters based on queue type (merge, don't overwrite)
-      // Clean up routing params that don't apply to current queue type
+      // Clean up old parameters and routing params that don't apply to current queue type
+      delete clientStateObj.priority; // Remove old priority parameter (use call_priority instead)
+      
       if (queueType !== "Skill-based") {
         delete clientStateObj.required_skills;
-      }
-      if (queueType !== "Priority-based") {
-        delete clientStateObj.priority;
       }
 
       // Add routing parameters for current queue type
@@ -345,8 +365,9 @@ export default function EnqueueNodeEditor({
         }
       }
 
-      if (queueType === "Priority-based" && priority) {
-        clientStateObj.priority = priority;
+      // Add call priority (1-5 star scale) - works with all routing types
+      if (callPriority && callPriority >= 1 && callPriority <= 5) {
+        clientStateObj.call_priority = callPriority;
       }
 
       // Encode client_state as base64 JSON (preserve all existing fields)
@@ -364,9 +385,13 @@ export default function EnqueueNodeEditor({
 
     onChange?.(newConfig);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedQueueName, skills, priority, queueType, useQueueOptions]);
+  }, [selectedQueueName, skills, callPriority, queueType, useQueueOptions]);
 
   const handleAddSkill = () => {
+    // Prevent adding more skills than available
+    if (skills.length >= availableSkills.length) {
+      return;
+    }
     setSkills([...skills, { name: "", proficiency: 1 }]);
   };
 
@@ -375,6 +400,16 @@ export default function EnqueueNodeEditor({
   };
 
   const handleSkillChange = (index, field, value) => {
+    // If changing skill name, check for duplicates
+    if (field === "name" && value) {
+      const isDuplicate = skills.some(
+        (sk, idx) => sk.name === value && idx !== index
+      );
+      if (isDuplicate) {
+        // Don't update if it's a duplicate - the filter should prevent this, but add safeguard
+        return;
+      }
+    }
     const updated = [...skills];
     updated[index] = { ...updated[index], [field]: value };
     setSkills(updated);
@@ -449,6 +484,36 @@ export default function EnqueueNodeEditor({
         </p>
       </div>
 
+      {/* Call Priority (1-5 stars) - Available for Skill-based and Priority-based queues */}
+      {!useQueueOptions && (
+        <div className={`space-y-3 p-4 border rounded-lg bg-muted/50 mt-4 ${queueType === "FIFO" ? "opacity-60" : ""}`}>
+          <Label className="text-sm font-semibold">Call Priority</Label>
+          <div className="flex items-center gap-3">
+            <div className={queueType === "FIFO" ? "pointer-events-none" : ""}>
+              <StarRating
+                value={callPriority}
+                onChange={setCallPriority}
+                maxStars={5}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground">
+              {callPriority === 1 && "Low"}
+              {callPriority === 2 && "Below Normal"}
+              {callPriority === 3 && "Normal"}
+              {callPriority === 4 && "Above Normal"}
+              {callPriority === 5 && "High"}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {queueType === "FIFO" ? (
+              "Call priority is set to Normal (3 stars) by default for FIFO queues. Priority-based routing is not used in FIFO strategy."
+            ) : (
+              "Call-level priority (1-5 stars). Higher priority calls are routed first. Works with all routing types including skills-based routing."
+            )}
+          </p>
+        </div>
+      )}
+
       {/* Skills-based Routing Configuration */}
       {queueType === "Skill-based" && (
         <div className="space-y-3 p-4 border rounded-lg bg-muted/50 mt-4">
@@ -459,6 +524,16 @@ export default function EnqueueNodeEditor({
               variant="outline"
               size="sm"
               onClick={handleAddSkill}
+              disabled={
+                loadingSkills ||
+                availableSkills.length === 0 ||
+                skills.length >= availableSkills.length
+              }
+              title={
+                skills.length >= availableSkills.length
+                  ? "All available skills have been added"
+                  : "Add a skill"
+              }
             >
               <IconPlus className="w-4 h-4 mr-1" />
               Add Skill
@@ -492,14 +567,16 @@ export default function EnqueueNodeEditor({
                         </SelectItem>
                       ) : availableSkills.length > 0 ? (
                         availableSkills
-                          .filter(
-                            (s) =>
-                              !skill.name || // Allow if no skill selected yet
-                              s.name === skill.name || // Include currently selected skill
-                              !skills.some(
-                                (sk, idx) => sk.name === s.name && idx !== index
-                              )
-                          )
+                          .filter((s) => {
+                            // Always show the currently selected skill for this row
+                            if (skill.name && s.name === skill.name) {
+                              return true;
+                            }
+                            // For all other skills, exclude those already selected in other rows
+                            return !skills.some(
+                              (sk, idx) => sk.name === s.name && idx !== index
+                            );
+                          })
                           .map((skillOption) => (
                             <SelectItem
                               key={skillOption.id}
@@ -533,38 +610,6 @@ export default function EnqueueNodeEditor({
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Priority-based Routing Configuration */}
-      {queueType === "Priority-based" && (
-        <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
-          <Label htmlFor="routing_priority" className="text-sm font-semibold">
-            Call Priority
-          </Label>
-          <div className="flex items-center gap-3">
-            <Input
-              id="routing_priority"
-              type="number"
-              min="1"
-              max="100"
-              value={priority}
-              onChange={(e) => {
-                const value = parseInt(e.target.value, 10);
-                if (!isNaN(value) && value >= 1 && value <= 100) {
-                  setPriority(value);
-                }
-              }}
-              className="w-24"
-            />
-            <span className="text-sm text-muted-foreground">
-              (1 = lowest, 100 = highest)
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Set the priority level for this call. Higher priority calls will be
-            routed to agents first.
-          </p>
         </div>
       )}
         </>

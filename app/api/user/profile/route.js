@@ -206,9 +206,23 @@ export async function PUT(request) {
 
         if (["Available", "Busy"].includes(update.status)) {
           try {
-            await offerQueuedCallForAgent({ userId: String(userId) });
+            // Add a small delay to ensure state manager is fully updated
+            setTimeout(async () => {
+              try {
+                await offerQueuedCallForAgent({ userId: String(userId) });
+              } catch (offerError) {
+                console.error(
+                  "[Status] Failed to offer queued calls after status update:",
+                  offerError
+                );
+              }
+            }, 100);
           } catch (offerError) {
-            // Failed to offer queued calls after status update
+            // Failed to schedule queued call offering
+            console.error(
+              "[Status] Failed to schedule queued call offering:",
+              offerError
+            );
           }
         }
 

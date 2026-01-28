@@ -31,6 +31,8 @@ import {
   IconFileMusic,
   IconPlayerPlay,
   IconPlayerStop,
+  IconStar,
+  IconStarFilled,
 } from "@tabler/icons-react";
 
 const ROUTING_STRATEGIES = [
@@ -79,6 +81,64 @@ function buildVoiceString(provider, model, voiceName) {
   return voiceName || "";
 }
 
+// Star rating component for call priority (1-5 stars)
+function StarRating({ value, onChange, maxStars = 5 }) {
+  return (
+    <div className="flex gap-1">
+      {Array.from({ length: maxStars }, (_, i) => {
+        const starValue = i + 1;
+        const filled = starValue <= value;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onChange(starValue)}
+            className="focus:outline-none"
+            aria-label={`Set rating to ${starValue} stars`}
+          >
+            {filled ? (
+              <IconStarFilled className="w-5 h-5 text-yellow-400" />
+            ) : (
+              <IconStar className="w-5 h-5 text-gray-300" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Star rating component for queue priority (1-5 stars, minimum 1 star)
+function QueuePriorityStarRating({ value = 1, onChange, maxStars = 5 }) {
+  const currentValue = value && value >= 1 ? value : 1; // Ensure minimum is 1
+  return (
+    <div className="flex gap-1 items-center">
+      {Array.from({ length: maxStars }, (_, i) => {
+        const starValue = i + 1;
+        const filled = starValue <= currentValue;
+        return (
+          <button
+            key={i}
+            type="button"
+            onClick={() => {
+              // Set to clicked star value (minimum is 1, cannot go below)
+              onChange(starValue);
+            }}
+            className="focus:outline-none"
+            aria-label={`Set priority to ${starValue} stars`}
+          >
+            {filled ? (
+              <IconStarFilled className="w-4 h-4 text-yellow-400" />
+            ) : (
+              <IconStar className="w-4 h-4 text-gray-300" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Edit sheet component for Queues
  * @param {object} props
@@ -100,9 +160,10 @@ export default function EditSheet({
   const [maxWaitTimeSecs, setMaxWaitTimeSecs] = React.useState(600);
   const [maxSize, setMaxSize] = React.useState(100);
   const [timeoutSecs, setTimeoutSecs] = React.useState(300);
+  const [agentAnswerTimeoutSecs, setAgentAnswerTimeoutSecs] =
+    React.useState(30);
   const [overflowQueueId, setOverflowQueueId] = React.useState("");
   const [overflowAction, setOverflowAction] = React.useState("transfer");
-  const [priority, setPriority] = React.useState(0);
   const [enabled, setEnabled] = React.useState(true);
   const [active, setActive] = React.useState(true);
   const [skillRequirements, setSkillRequirements] = React.useState({});
@@ -132,12 +193,12 @@ export default function EditSheet({
     console.log(
       "[Queue EditSheet] mediaFiles state changed:",
       mediaFiles.length,
-      "files"
+      "files",
     );
     if (mediaFiles.length > 0) {
       console.log(
         "[Queue EditSheet] Media file names:",
-        mediaFiles.map((f) => f.media_name)
+        mediaFiles.map((f) => f.media_name),
       );
     }
   }, [mediaFiles]);
@@ -153,6 +214,21 @@ export default function EditSheet({
   const [isTestingTts, setIsTestingTts] = React.useState(false);
   const ttsTestAudioRef = React.useRef(null);
 
+  // New routing engine fields
+  const [queuePriority, setQueuePriority] = React.useState(1); // Queue priority 1-5 stars
+  const [defaultCallPriority, setDefaultCallPriority] = React.useState(3);
+  const [skillRelaxationEnabled, setSkillRelaxationEnabled] =
+    React.useState(false);
+  const [skillRelaxationAfterSeconds, setSkillRelaxationAfterSeconds] =
+    React.useState(60);
+  const [skillRelaxationStrategy, setSkillRelaxationStrategy] =
+    React.useState("progressive");
+  const [slaAnswerThresholdSeconds, setSlaAnswerThresholdSeconds] =
+    React.useState(20);
+  const [slaTargetPercentage, setSlaTargetPercentage] = React.useState(80);
+  const [userAssignmentsWithCapacity, setUserAssignmentsWithCapacity] =
+    React.useState({}); // { userId: { priority } }
+
   // Load queue data when queueId changes
   React.useEffect(() => {
     async function loadQueue() {
@@ -166,9 +242,9 @@ export default function EditSheet({
           setMaxWaitTimeSecs(600);
           setMaxSize(100);
           setTimeoutSecs(300);
+          setAgentAnswerTimeoutSecs(30);
           setOverflowQueueId("");
           setOverflowAction("transfer");
-          setPriority(0);
           setEnabled(true);
           setActive(true);
           setSkillRequirements({});
@@ -183,6 +259,14 @@ export default function EditSheet({
           setTtsProvider("AWS");
           setTtsModel("");
           setTtsVoiceName("");
+          setQueuePriority(1);
+          setDefaultCallPriority(3);
+          setSkillRelaxationEnabled(false);
+          setSkillRelaxationAfterSeconds(60);
+          setSkillRelaxationStrategy("progressive");
+          setSlaAnswerThresholdSeconds(20);
+          setSlaTargetPercentage(80);
+          setUserAssignmentsWithCapacity({});
         }
         return;
       }
@@ -193,7 +277,7 @@ export default function EditSheet({
           `/api/admin/queues/${encodeURIComponent(queueId)}`,
           {
             cache: "no-store",
-          }
+          },
         );
         const d = await r.json();
         if (r.ok) {
@@ -204,44 +288,81 @@ export default function EditSheet({
           setMaxWaitTimeSecs(d.max_wait_time_secs || 600);
           setMaxSize(d.max_size || 100);
           setTimeoutSecs(d.timeout_secs || 300);
+          setAgentAnswerTimeoutSecs(d.agent_answer_timeout_secs || 30);
           setOverflowQueueId(d.overflow_queue_id || "");
           setOverflowAction(d.overflow_action || "transfer");
-          setPriority(d.priority || 0);
           setEnabled(d.enabled !== undefined ? d.enabled : true);
           setActive(d.active !== undefined ? Boolean(d.active) : true);
-          setActive(d.active !== undefined ? Boolean(d.active) : true);
+          // Load queue priority (1-5, default 1 if 0 or not set)
+          const loadedPriority =
+            d.priority !== undefined &&
+            d.priority !== null &&
+            d.priority >= 1 &&
+            d.priority <= 5
+              ? d.priority
+              : 1;
+          setQueuePriority(loadedPriority);
           setSkillRequirements(
             typeof d.skill_requirements === "string"
               ? JSON.parse(d.skill_requirements)
-              : d.skill_requirements || {}
+              : d.skill_requirements || {},
           );
           setPriorityRules(
             typeof d.priority_rules === "string"
               ? JSON.parse(d.priority_rules)
-              : d.priority_rules || []
+              : d.priority_rules || [],
           );
-          // Extract user IDs from assignments
+          // Extract user IDs from assignments and store capacity overrides
+          const assignments = (d.userAssignments || []).filter(
+            (ua) => ua.enabled !== false,
+          );
           setAssignedUserIds(
-            (d.userAssignments || [])
-              .filter((ua) => ua.enabled !== false)
-              .map((ua) => ua.user_id)
-              .filter(Boolean)
+            assignments.map((ua) => ua.user_id).filter(Boolean),
           );
+
+          // Store assignment details (priority 1-5, default 1)
+          const assignmentsMap = {};
+          assignments.forEach((ua) => {
+            if (ua.user_id) {
+              const priority =
+                ua.priority !== undefined &&
+                ua.priority !== null &&
+                ua.priority >= 1
+                  ? ua.priority
+                  : 1;
+              assignmentsMap[ua.user_id] = {
+                priority: priority,
+              };
+            }
+          });
+          setUserAssignmentsWithCapacity(assignmentsMap);
+
+          // Load new routing engine fields
+          setDefaultCallPriority(d.default_call_priority || 3);
+          setSkillRelaxationEnabled(d.skill_relaxation_enabled || false);
+          setSkillRelaxationAfterSeconds(
+            d.skill_relaxation_after_seconds || 60,
+          );
+          setSkillRelaxationStrategy(
+            d.skill_relaxation_strategy || "progressive",
+          );
+          setSlaAnswerThresholdSeconds(d.sla_answer_threshold_seconds || 20);
+          setSlaTargetPercentage(d.sla_target_percentage || 80);
           setSelectedWrapupCodes(
             (d.wrapupCodes || [])
               .map((code) => code.wrapup_code_id)
-              .filter(Boolean)
+              .filter(Boolean),
           );
 
           // Load queue audio settings
           setQueueAudioMediaName(d.queue_audio_media_name || "");
           setQueueAudioEnablePosition(d.queue_audio_enable_position || false);
           setQueueAudioPositionInterval(
-            d.queue_audio_position_interval_secs || 60
+            d.queue_audio_position_interval_secs || 60,
           );
           setQueueAudioTtsVoice(d.queue_audio_tts_voice || "AWS.Polly.Joanna");
           setQueueAudioTtsVoiceApiKeyRef(
-            d.queue_audio_tts_voice_api_key_ref || ""
+            d.queue_audio_tts_voice_api_key_ref || "",
           );
 
           // Parse TTS voice string
@@ -287,7 +408,7 @@ export default function EditSheet({
         if (queuesRes.ok) {
           const queuesData = await queuesRes.json();
           setAvailableQueues(
-            (queuesData.rows || []).filter((q) => q.id !== queueId)
+            (queuesData.rows || []).filter((q) => q.id !== queueId),
           );
         }
 
@@ -295,7 +416,7 @@ export default function EditSheet({
           "/api/admin/wrapup-codes?pageSize=1000&active=true",
           {
             cache: "no-store",
-          }
+          },
         );
         if (wrapupRes.ok) {
           const wrapupData = await wrapupRes.json();
@@ -317,7 +438,7 @@ export default function EditSheet({
             "/api/admin/media-library?pageSize=1000",
             {
               cache: "no-store",
-            }
+            },
           );
           if (mediaRes.ok) {
             const mediaData = await mediaRes.json();
@@ -330,19 +451,19 @@ export default function EditSheet({
               })),
             });
             const files = (mediaData.items || []).filter(
-              (file) => file && file.media_name
+              (file) => file && file.media_name,
             );
             console.log(
               "[Queue EditSheet] Setting mediaFiles state with:",
               files.length,
               "files",
-              files.map((f) => f.media_name)
+              files.map((f) => f.media_name),
             );
             if (files.length > 0) {
               setMediaFiles(files);
             } else {
               console.warn(
-                "[Queue EditSheet] No valid media files after filtering"
+                "[Queue EditSheet] No valid media files after filtering",
               );
               setMediaFiles([]);
             }
@@ -351,19 +472,19 @@ export default function EditSheet({
             setTimeout(() => {
               console.log(
                 "[Queue EditSheet] mediaFiles state check (after setState):",
-                files.length
+                files.length,
               );
             }, 100);
             if (mediaData.items && mediaData.items.length === 0) {
               console.warn(
-                "[Queue EditSheet] No media files found. Check if files are uploaded and have audio content type or extension."
+                "[Queue EditSheet] No media files found. Check if files are uploaded and have audio content type or extension.",
               );
             }
           } else {
             const errorData = await mediaRes.json().catch(() => ({}));
             console.error(
               "[Queue EditSheet] Failed to load media files:",
-              errorData.error || mediaRes.statusText
+              errorData.error || mediaRes.statusText,
             );
           }
         } catch (err) {
@@ -462,7 +583,7 @@ export default function EditSheet({
     const allSelected =
       availableWrapupCodes.length > 0 &&
       availableWrapupCodes.every((code) =>
-        selectedWrapupCodes.includes(code.id)
+        selectedWrapupCodes.includes(code.id),
       );
     if (allSelected) {
       // Deselect all
@@ -492,19 +613,32 @@ export default function EditSheet({
         maxWaitTimeSecs: Number(maxWaitTimeSecs),
         maxSize: Number(maxSize),
         timeoutSecs: Number(timeoutSecs),
+        agentAnswerTimeoutSecs: Number(agentAnswerTimeoutSecs),
         overflowQueueId: overflowQueueId || null,
         overflowAction,
-        priority: Number(priority),
         enabled,
         active,
         skillRequirements,
         priorityRules,
         wrapupCodes: selectedWrapupCodes,
-        userAssignments: assignedUserIds.map((userId) => ({
-          userId,
-          priority: 0,
-          enabled: true,
-        })),
+        userAssignments: assignedUserIds.map((userId) => {
+          const priority = userAssignmentsWithCapacity[userId]?.priority;
+          return {
+            userId,
+            priority:
+              priority !== undefined && priority !== null && priority >= 1
+                ? priority
+                : 1,
+            enabled: true,
+          };
+        }),
+        priority: queuePriority, // Queue priority 1-5 stars
+        defaultCallPriority,
+        skillRelaxationEnabled,
+        skillRelaxationAfterSeconds,
+        skillRelaxationStrategy,
+        slaAnswerThresholdSeconds,
+        slaTargetPercentage,
         queueAudioMediaName: queueAudioMediaName || null,
         queueAudioEnablePosition: queueAudioEnablePosition,
         queueAudioPositionIntervalSecs: Number(queueAudioPositionInterval),
@@ -582,6 +716,33 @@ export default function EditSheet({
                 </>
               ) : (
                 <>
+                  {/* Queue Settings */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Queue Settings
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Enabled</Label>
+                        <Switch
+                          checked={enabled}
+                          onCheckedChange={(v) => setEnabled(Boolean(v))}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="active" className="text-sm font-medium">
+                          Active
+                        </Label>
+                        <Switch
+                          checked={active}
+                          onCheckedChange={(v) => setActive(Boolean(v))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
                   {/* Basic Information */}
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -665,6 +826,227 @@ export default function EditSheet({
                           }
                         />
                       </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">
+                          Agent Answer Timeout (secs)
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={agentAnswerTimeoutSecs}
+                          onChange={(e) =>
+                            setAgentAnswerTimeoutSecs(Number(e.target.value))
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Time agent has to answer a call transferred from the
+                          queue. If not answered in time, call will be
+                          re-enqueued and agent status will be set to "Agent Not
+                          Answering".
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Queue Priority Settings */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Queue Priority Settings
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Queue Priority</Label>
+                        <div className="flex items-center gap-3">
+                          <StarRating
+                            value={
+                              queuePriority >= 1 && queuePriority <= 5
+                                ? queuePriority
+                                : 1
+                            }
+                            onChange={setQueuePriority}
+                            maxStars={5}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {queuePriority === 1 && "Low"}
+                            {queuePriority === 2 && "Below Normal"}
+                            {queuePriority === 3 && "Normal"}
+                            {queuePriority === 4 && "Above Normal"}
+                            {queuePriority === 5 && "High"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Queue-level priority for routing (★=Low, ★★★=Normal,
+                          ★★★★★=High). Higher priority queues are routed first.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Call Priority Settings */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Call Priority Settings
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Default Call Priority</Label>
+                        <div className="flex items-center gap-3">
+                          <StarRating
+                            value={defaultCallPriority}
+                            onChange={setDefaultCallPriority}
+                            maxStars={5}
+                          />
+                          <span className="text-sm text-muted-foreground">
+                            {defaultCallPriority === 1 && "Low"}
+                            {defaultCallPriority === 2 && "Below Normal"}
+                            {defaultCallPriority === 3 && "Normal"}
+                            {defaultCallPriority === 4 && "Above Normal"}
+                            {defaultCallPriority === 5 && "High"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Default priority for calls entering this queue (★=Low,
+                          ★★★=Normal, ★★★★★=High)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Skill Relaxation Settings (only for Skill-based routing) */}
+                  {routingStrategy === "Skill-based" && (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                          Skill Relaxation Settings
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <Label className="text-sm font-medium">
+                                Enable Skill Relaxation
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Gradually reduce skill requirements for calls
+                                waiting beyond threshold
+                              </p>
+                            </div>
+                            <Switch
+                              checked={skillRelaxationEnabled}
+                              onCheckedChange={setSkillRelaxationEnabled}
+                            />
+                          </div>
+                          {skillRelaxationEnabled && (
+                            <>
+                              <div className="grid gap-2">
+                                <Label className="text-sm">
+                                  Relaxation After (seconds)
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={skillRelaxationAfterSeconds}
+                                  onChange={(e) =>
+                                    setSkillRelaxationAfterSeconds(
+                                      Number(e.target.value),
+                                    )
+                                  }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Wait time threshold before skill relaxation
+                                  begins
+                                </p>
+                              </div>
+                              <div className="grid gap-2">
+                                <Label className="text-sm">
+                                  Relaxation Strategy
+                                </Label>
+                                <Select
+                                  value={skillRelaxationStrategy}
+                                  onValueChange={setSkillRelaxationStrategy}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="progressive">
+                                      Progressive
+                                    </SelectItem>
+                                    <SelectItem value="fallback">
+                                      Fallback
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                  {skillRelaxationStrategy === "fallback" ? (
+                                    <>
+                                      Fallback: Drop skills above 3 stars to 3
+                                      stars (intermediate level) immediately
+                                      after threshold. Skills at or below 3
+                                      stars remain unchanged.
+                                    </>
+                                  ) : (
+                                    <>
+                                      Progressive: Reduce by 1 star every 30
+                                      seconds (minimum 1 star)
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="border-t" />
+                    </>
+                  )}
+
+                  {/* SLA Settings */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Service Level Agreement (SLA)
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid gap-2">
+                        <Label className="text-sm">
+                          Answer Threshold (seconds)
+                        </Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={slaAnswerThresholdSeconds}
+                          onChange={(e) =>
+                            setSlaAnswerThresholdSeconds(Number(e.target.value))
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Target time to answer calls (e.g., 20 seconds)
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Target Percentage</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={slaTargetPercentage}
+                          onChange={(e) =>
+                            setSlaTargetPercentage(Number(e.target.value))
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Target percentage of calls answered within threshold
+                          (e.g., 80%)
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground italic">
+                        Example: Answer 80% of calls within 20 seconds
+                      </p>
                     </div>
                   </div>
 
@@ -707,41 +1089,6 @@ export default function EditSheet({
 
                   <div className="border-t" />
 
-                  {/* Queue Settings */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                      Queue Settings
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Priority</Label>
-                        <Input
-                          type="number"
-                          value={priority}
-                          onChange={(e) => setPriority(Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Enabled</Label>
-                        <Switch
-                          checked={enabled}
-                          onCheckedChange={(v) => setEnabled(Boolean(v))}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="active" className="text-sm font-medium">
-                          Active
-                        </Label>
-                        <Switch
-                          checked={active}
-                          onCheckedChange={(v) => setActive(Boolean(v))}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t" />
-
                   {/* Wrapup Codes */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -754,7 +1101,7 @@ export default function EditSheet({
                             checked={
                               availableWrapupCodes.length > 0 &&
                               availableWrapupCodes.every((code) =>
-                                selectedWrapupCodes.includes(code.id)
+                                selectedWrapupCodes.includes(code.id),
                               )
                             }
                             onCheckedChange={toggleAllWrapupCodes}
@@ -780,7 +1127,7 @@ export default function EditSheet({
                               >
                                 <Checkbox
                                   checked={selectedWrapupCodes.includes(
-                                    code.id
+                                    code.id,
                                   )}
                                   onCheckedChange={() =>
                                     toggleWrapupCode(code.id)
@@ -877,14 +1224,14 @@ export default function EditSheet({
                                   try {
                                     setIsPlayingMedia(true);
                                     const streamUrl = `/api/admin/media-library/${encodeURIComponent(
-                                      queueAudioMediaName
+                                      queueAudioMediaName,
                                     )}/stream`;
                                     const audio = new Audio(streamUrl);
                                     audio.loop = true;
                                     audio.play().catch((err) => {
                                       console.error(
                                         "Failed to play audio:",
-                                        err
+                                        err,
                                       );
                                       setIsPlayingMedia(false);
                                     });
@@ -1033,7 +1380,7 @@ export default function EditSheet({
                                   const selectedProvider = ttsProviders.find(
                                     (p) =>
                                       p.id === ttsProvider ||
-                                      p.provider === ttsProvider
+                                      p.provider === ttsProvider,
                                   );
                                   const models =
                                     selectedProvider?.models
@@ -1077,7 +1424,7 @@ export default function EditSheet({
                                           </SelectTrigger>
                                           <SelectContent>
                                             {selectedProvider?.models?.some(
-                                              (m) => !m?.id && !m
+                                              (m) => !m?.id && !m,
                                             ) && (
                                               <SelectItem value="__default__">
                                                 Default
@@ -1104,7 +1451,7 @@ export default function EditSheet({
                                   const selectedProvider = ttsProviders.find(
                                     (p) =>
                                       p.id === ttsProvider ||
-                                      p.provider === ttsProvider
+                                      p.provider === ttsProvider,
                                   );
                                   const allVoices = [];
                                   if (selectedProvider?.models) {
@@ -1125,7 +1472,7 @@ export default function EditSheet({
                                           (m) =>
                                             (typeof m === "object"
                                               ? m.id || m.name
-                                              : m) === ttsModel
+                                              : m) === ttsModel,
                                         );
                                       if (
                                         modelObj &&
@@ -1157,7 +1504,7 @@ export default function EditSheet({
                                                   buildVoiceString(
                                                     ttsProvider,
                                                     ttsModel,
-                                                    value
+                                                    value,
                                                   );
                                                 setQueueAudioTtsVoice(voiceStr);
                                               }}
@@ -1195,7 +1542,7 @@ export default function EditSheet({
                                                   // Generate random position between 1 and 20
                                                   const randomPosition =
                                                     Math.floor(
-                                                      Math.random() * 20
+                                                      Math.random() * 20,
                                                     ) + 1;
                                                   const testMessage = `your current position in a queue is ${randomPosition}`;
 
@@ -1222,7 +1569,7 @@ export default function EditSheet({
                                                               queueAudioTtsVoiceApiKeyRef ||
                                                               "",
                                                           }),
-                                                        }
+                                                        },
                                                       );
 
                                                     if (!response.ok) {
@@ -1238,7 +1585,7 @@ export default function EditSheet({
                                                       } else if (
                                                         errorData?.errors &&
                                                         Array.isArray(
-                                                          errorData.errors
+                                                          errorData.errors,
                                                         ) &&
                                                         errorData.errors
                                                           .length > 0
@@ -1251,7 +1598,7 @@ export default function EditSheet({
                                                           errorMessage;
                                                       }
                                                       throw new Error(
-                                                        errorMessage
+                                                        errorMessage,
                                                       );
                                                     }
 
@@ -1259,7 +1606,7 @@ export default function EditSheet({
                                                       await response.blob();
                                                     const audioUrl =
                                                       URL.createObjectURL(
-                                                        audioBlob
+                                                        audioBlob,
                                                       );
                                                     const audioElement =
                                                       new Audio(audioUrl);
@@ -1270,7 +1617,7 @@ export default function EditSheet({
                                                         ttsTestAudioRef.current =
                                                           null;
                                                         URL.revokeObjectURL(
-                                                          audioUrl
+                                                          audioUrl,
                                                         );
                                                       };
 
@@ -1280,7 +1627,7 @@ export default function EditSheet({
                                                         ttsTestAudioRef.current =
                                                           null;
                                                         URL.revokeObjectURL(
-                                                          audioUrl
+                                                          audioUrl,
                                                         );
                                                         notify({
                                                           title: "Error",
@@ -1296,7 +1643,7 @@ export default function EditSheet({
                                                   } catch (error) {
                                                     console.error(
                                                       "Error testing TTS:",
-                                                      error
+                                                      error,
                                                     );
                                                     notify({
                                                       title: "Error",
@@ -1340,7 +1687,7 @@ export default function EditSheet({
                                         const actualValue =
                                           value === "__none__" ? "" : value;
                                         setQueueAudioTtsVoiceApiKeyRef(
-                                          actualValue
+                                          actualValue,
                                         );
                                       }}
                                     >
@@ -1395,46 +1742,114 @@ export default function EditSheet({
                           </p>
                         ) : (
                           <div className="rounded border overflow-hidden">
-                            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
-                              {availableUsers.map((user) => {
-                                const isAssigned = assignedUserIds.includes(
-                                  user.id
-                                );
-                                const userName =
-                                  [user.first_name, user.last_name]
-                                    .filter(Boolean)
-                                    .join(" ") || user.username;
-                                return (
-                                  <label
-                                    key={user.id}
-                                    className="flex items-start gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded-md p-2 -m-2 transition-colors"
-                                  >
-                                    <Checkbox
-                                      checked={isAssigned}
-                                      onCheckedChange={(checked) => {
-                                        if (checked) {
-                                          setAssignedUserIds([
-                                            ...assignedUserIds,
-                                            user.id,
-                                          ]);
-                                        } else {
-                                          setAssignedUserIds(
-                                            assignedUserIds.filter(
-                                              (id) => id !== user.id
-                                            )
-                                          );
-                                        }
-                                      }}
-                                      className="mt-0.5 shrink-0"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium">
-                                        {userName}
+                            <div className="p-3 max-h-[300px] overflow-y-auto">
+                              <div className="grid grid-cols-2 gap-4">
+                                {/* Header row */}
+                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">
+                                  User
+                                </div>
+                                <div className="font-semibold text-sm text-muted-foreground pb-2 border-b">
+                                  Priority
+                                </div>
+
+                                {/* User rows */}
+                                {availableUsers.map((user) => {
+                                  const isAssigned = assignedUserIds.includes(
+                                    user.id,
+                                  );
+                                  const userName =
+                                    [user.first_name, user.last_name]
+                                      .filter(Boolean)
+                                      .join(" ") || user.username;
+                                  const assignment =
+                                    userAssignmentsWithCapacity[user.id] || {};
+                                  const priority =
+                                    assignment.priority !== undefined &&
+                                    assignment.priority !== null &&
+                                    assignment.priority >= 1
+                                      ? assignment.priority
+                                      : 1;
+
+                                  return (
+                                    <React.Fragment key={user.id}>
+                                      {/* User name column */}
+                                      <div className="flex items-center gap-2 py-2">
+                                        <Checkbox
+                                          checked={isAssigned}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              setAssignedUserIds([
+                                                ...assignedUserIds,
+                                                user.id,
+                                              ]);
+                                              // Initialize assignment with defaults (priority 1 = minimum 1 star)
+                                              setUserAssignmentsWithCapacity(
+                                                (prev) => ({
+                                                  ...prev,
+                                                  [user.id]: {
+                                                    priority: 1,
+                                                  },
+                                                }),
+                                              );
+                                            } else {
+                                              setAssignedUserIds(
+                                                assignedUserIds.filter(
+                                                  (id) => id !== user.id,
+                                                ),
+                                              );
+                                              // Remove assignment
+                                              setUserAssignmentsWithCapacity(
+                                                (prev) => {
+                                                  const next = { ...prev };
+                                                  delete next[user.id];
+                                                  return next;
+                                                },
+                                              );
+                                            }
+                                          }}
+                                          className="shrink-0"
+                                        />
+                                        <label
+                                          htmlFor={`user-${user.id}`}
+                                          className="text-sm font-medium cursor-pointer flex-1"
+                                        >
+                                          {userName}
+                                        </label>
                                       </div>
-                                    </div>
-                                  </label>
-                                );
-                              })}
+
+                                      {/* Priority stars column */}
+                                      <div className="flex items-center py-2">
+                                        {isAssigned ? (
+                                          <QueuePriorityStarRating
+                                            value={priority}
+                                            onChange={(newPriority) => {
+                                              setUserAssignmentsWithCapacity(
+                                                (prev) => ({
+                                                  ...prev,
+                                                  [user.id]: {
+                                                    ...prev[user.id],
+                                                    priority: newPriority,
+                                                  },
+                                                }),
+                                              );
+                                            }}
+                                            maxStars={5}
+                                          />
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">
+                                            Not assigned
+                                          </span>
+                                        )}
+                                      </div>
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-3 pt-3 border-t">
+                                Click stars to set agent priority within this
+                                queue (1-5 stars). Higher priority agents are
+                                routed calls first. Minimum is 1 star.
+                              </p>
                             </div>
                           </div>
                         )}

@@ -36,7 +36,7 @@ function CircleButton({ children, onClick, disabled, className, title }) {
         "h-12 w-12 rounded-full flex items-center justify-center text-white",
         "shadow-md active:scale-[0.98] transition-transform",
         disabled && "opacity-50 cursor-not-allowed",
-        className
+        className,
       )}
       onClick={onClick}
       disabled={disabled}
@@ -67,7 +67,7 @@ export function Softphone() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
+    (state) => state.getActiveCalls().length,
   );
 
   // Zustand stores - dial state
@@ -224,9 +224,8 @@ export function Softphone() {
 
         (async () => {
           try {
-            const { getIncomingCallData } = await import(
-              "@/lib/incoming-call-store"
-            );
+            const { getIncomingCallData } =
+              await import("@/lib/incoming-call-store");
             let callData = getIncomingCallData(callControlId);
 
             if (!callData?.interactionId) {
@@ -262,7 +261,7 @@ export function Softphone() {
               ) {
                 lastFetchedInteractionIdRef.current = interactionId;
                 const res = await fetch(
-                  `/api/contact-center/interactions/${interactionId}`
+                  `/api/contact-center/interactions/${interactionId}`,
                 );
                 const data = await res.json();
                 if (data.ok && data.interaction) {
@@ -277,7 +276,7 @@ export function Softphone() {
           } catch (err) {
             console.warn(
               "[Softphone] Error checking incoming call store:",
-              err
+              err,
             );
           }
 
@@ -289,8 +288,8 @@ export function Softphone() {
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                  callControlId
-                )}`
+                  callControlId,
+                )}`,
               );
               const data = await res.json();
               if (data.ok && data.interaction) {
@@ -302,7 +301,7 @@ export function Softphone() {
             } catch (err) {
               console.error(
                 "[Softphone] Failed to fetch interaction by call_control_id:",
-                err
+                err,
               );
               setInteraction(null);
             }
@@ -319,7 +318,7 @@ export function Softphone() {
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
-              `/api/contact-center/interactions/${interactionId}`
+              `/api/contact-center/interactions/${interactionId}`,
             );
             const data = await res.json();
             if (data.ok && data.interaction) {
@@ -410,11 +409,55 @@ export function Softphone() {
           useActiveCallStore.setState(
             { status: "ended" },
             false,
-            "setStatusEnded"
+            "setStatusEnded",
           );
         }
         // Small delay to allow wrapup logic to detect the "ended" status
         await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      // Get callControlId and interactionId for calls store
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
+      const interactionId = storeState?.contactCenter?.interactionId;
+
+      // Dispatch disconnect event IMMEDIATELY with all identifiers
+      // This allows AgentDesktop to remove the interaction from UI instantly
+      if (interactionId || callControlId) {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              callControlId,
+              transcriptions: storeState.transcriptions || [],
+            },
+          }),
+        );
+      }
+
+      // Update and remove call from calls store
+      if (callControlId) {
+        const callsStore = useCallsStore.getState();
+        const callData = callsStore.getCall(callControlId);
+
+        if (callData) {
+          // Update final status and disconnected time
+          callsStore.updateCall(callControlId, {
+            status: "ended",
+            disconnectedTime: Date.now(),
+            isRinging: false,
+          });
+
+          // Remove call from calls store immediately to clear agent desktop
+          callsStore.removeCall(callControlId);
+          // Also remove by interactionId if available
+          if (interactionId) {
+            callsStore.removeCall(interactionId);
+          }
+        }
       }
 
       // Ensure hold/transfer metrics are synced before clearing
@@ -427,6 +470,11 @@ export function Softphone() {
       // Metrics are synced via /api/contact-center/interactions/:id/metrics
 
       clearActiveCall();
+
+      // Also trigger refresh event as backup
+      window.dispatchEvent(
+        new CustomEvent("contact-center:refresh-interactions"),
+      );
     } catch (err) {
       console.error("[Softphone] Error in handleCallEnd:", err);
       clearActiveCall();
@@ -643,13 +691,13 @@ export function Softphone() {
       if (interaction?.id) {
         fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id
+            interaction.id,
           )}/answer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          }
+          },
         ).catch((err) => {
           console.warn("[Softphone] Failed to mark answered:", err);
         });
@@ -684,7 +732,7 @@ export function Softphone() {
       if (originalCallControlId) {
         console.log(
           "[Softphone] Using originalCallControlId from store:",
-          originalCallControlId
+          originalCallControlId,
         );
         try {
           // Hangup the original call leg using Telnyx API
@@ -701,11 +749,11 @@ export function Softphone() {
           if (!response.ok) {
             console.error(
               "[Softphone] Failed to hangup original call leg:",
-              result
+              result,
             );
           } else {
             console.log(
-              "[Softphone] Successfully hung up original call leg via custom header"
+              "[Softphone] Successfully hung up original call leg via custom header",
             );
           }
         } catch (err) {
@@ -719,14 +767,14 @@ export function Softphone() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-            }
+            },
           );
 
           const result = await response.json();
           if (!response.ok) {
             console.error(
               "[Softphone] Failed to hangup original call leg:",
-              result
+              result,
             );
           }
         } catch (err) {
@@ -745,24 +793,44 @@ export function Softphone() {
       // Check if this is a contact center call and trigger wrapup sheet
       const storeState = useActiveCallStore.getState();
       const interactionId = storeState?.contactCenter?.interactionId;
-      if (interactionId) {
-        // Dispatch custom event to trigger wrapup sheet in AgentDesktop
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
+
+      // ALWAYS dispatch disconnect event with both interactionId and callControlId
+      // This ensures AgentDesktop can immediately identify and remove the interaction
+      if (interactionId || callControlId) {
         window.dispatchEvent(
           new CustomEvent("contact-center:call-disconnected", {
             detail: {
               interactionId,
+              callControlId,
               transcriptions: storeState.transcriptions || [],
             },
-          })
+          }),
         );
         console.log(
-          "[Softphone] Dispatched wrapup event for interaction:",
-          interactionId
+          "[Softphone] Dispatched disconnect event for interaction:",
+          interactionId || callControlId,
         );
       }
 
       if (!activeCall) {
         clearActiveCall();
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
         return;
       }
 
@@ -771,6 +839,18 @@ export function Softphone() {
         ["hangup", "ended", "destroy", "idle", "terminated"].includes(status)
       ) {
         clearActiveCall();
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
         return;
       }
 
@@ -781,6 +861,19 @@ export function Softphone() {
           const currentState = useActiveCallStore.getState();
           if (currentState.call) {
             handleCallEnd();
+          } else {
+            // Call already cleared, but ensure it's removed from calls store
+            if (callControlId) {
+              useCallsStore.getState().removeCall(callControlId);
+            }
+            if (interactionId) {
+              useCallsStore.getState().removeCall(interactionId);
+            }
+            setTimeout(() => {
+              window.dispatchEvent(
+                new CustomEvent("contact-center:refresh-interactions"),
+              );
+            }, 100);
           }
         }, 2000);
       } else {
@@ -790,6 +883,25 @@ export function Softphone() {
       console.error("[Softphone] Hangup error:", err);
       try {
         clearActiveCall();
+        const storeState = useActiveCallStore.getState();
+        const callControlId =
+          storeState.callControlId ||
+          storeState.call?.callControlId ||
+          storeState.call?.call_control_id ||
+          storeState.call?.id;
+        const interactionId = storeState?.contactCenter?.interactionId;
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
       } catch (_) {}
     }
   }
@@ -844,7 +956,7 @@ export function Softphone() {
         }
       } catch (_) {}
     },
-    [isCallActive, activeCall]
+    [isCallActive, activeCall],
   );
 
   const keypadDigits = useMemo(
@@ -854,7 +966,7 @@ export function Softphone() {
       ["7", "8", "9"],
       ["*", "0", "#"],
     ],
-    []
+    [],
   );
 
   const refreshDevices = useCallback(async () => {
@@ -877,14 +989,14 @@ export function Softphone() {
     try {
       navigator.mediaDevices?.addEventListener?.(
         "devicechange",
-        onDeviceChange
+        onDeviceChange,
       );
     } catch (_) {}
     return () => {
       try {
         navigator.mediaDevices?.removeEventListener?.(
           "devicechange",
-          onDeviceChange
+          onDeviceChange,
         );
       } catch (_) {}
     };
@@ -918,7 +1030,7 @@ export function Softphone() {
         }
       } catch (_) {}
     },
-    [client]
+    [client],
   );
 
   const applySpeakerSelection = useCallback(async (deviceId) => {
@@ -972,7 +1084,7 @@ export function Softphone() {
                       }}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
-                        selectedMicId === d.deviceId && "bg-zinc-800"
+                        selectedMicId === d.deviceId && "bg-zinc-800",
                       )}
                     >
                       <span className="truncate">
@@ -1009,7 +1121,7 @@ export function Softphone() {
                       }}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
-                        selectedSpeakerId === d.deviceId && "bg-zinc-800"
+                        selectedSpeakerId === d.deviceId && "bg-zinc-800",
                       )}
                     >
                       <span className="truncate">
@@ -1182,7 +1294,7 @@ export function Softphone() {
           <IconChevronDown
             className={clsx(
               "h-3 w-3 transition-transform duration-200",
-              showDtmf && "rotate-180"
+              showDtmf && "rotate-180",
             )}
           />
         </button>
@@ -1203,7 +1315,7 @@ export function Softphone() {
                     "h-10 w-10 rounded-full text-base text-white shadow active:scale-95",
                     isCallActive
                       ? "bg-zinc-800"
-                      : "bg-zinc-800/50 cursor-not-allowed"
+                      : "bg-zinc-800/50 cursor-not-allowed",
                   )}
                 >
                   {digit}

@@ -1339,41 +1339,6 @@ export default function FlowBuilderPage() {
     nodesRef.current = nodes;
   }, [nodes]);
 
-  // Auto-convert {{username}} to actual queue name for enqueue nodes
-  useEffect(() => {
-    if (
-      selectedNode &&
-      selectedNode.data?.nodeType === "enqueue" &&
-      userEmail
-    ) {
-      const config = selectedNode.data?.config || {};
-      const queueName = config.queue_name;
-      const privateQueueName = userEmail.split("@")[0].toUpperCase();
-
-      if (queueName === "{{username}}") {
-        // Auto-convert {{username}} to actual queue name
-        const updatedConfig = {
-          ...config,
-          queue_name: privateQueueName,
-        };
-        setNodeConfig(updatedConfig);
-        // Update the node in the nodes array
-        setNodes((nds) =>
-          nds.map((node) =>
-            node.id === selectedNode.id
-              ? {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    config: updatedConfig,
-                  },
-                }
-              : node
-          )
-        );
-      }
-    }
-  }, [selectedNode, userEmail, setNodes]);
 
   const handleConfigureEdgeVariables = useCallback((edgeId) => {
     console.log("🔍 Configure edge variables called for:", edgeId);
@@ -3673,9 +3638,6 @@ export default function FlowBuilderPage() {
                                       const isQueueNameField =
                                         selectedNodeDef.id === "enqueue" &&
                                         key === "queue_name";
-                                      const privateQueueName = userEmail
-                                        ? userEmail.split("@")[0].toUpperCase()
-                                        : null;
 
                                       // For enqueue queue_name, use fetched queues; otherwise use paramDef options
                                       let processedOptions = [];
@@ -3696,49 +3658,24 @@ export default function FlowBuilderPage() {
                                       }
 
                                       // Get current value
-                                      let currentValue =
+                                      const currentValue =
                                         nodeConfig[key] ||
                                         paramDef.default ||
                                         "";
-
-                                      // For enqueue queue_name, if value is {{username}}, convert to actual queue name
-                                      if (
-                                        isQueueNameField &&
-                                        currentValue === "{{username}}" &&
-                                        privateQueueName
-                                      ) {
-                                        currentValue = privateQueueName;
-                                      }
 
                                       return (
                                         <Select
                                           value={currentValue}
                                           onValueChange={(value) => {
-                                            // For enqueue queue_name, ensure we never store {{username}}
-                                            const finalValue =
-                                              isQueueNameField &&
-                                              value === "{{username}}" &&
-                                              privateQueueName
-                                                ? privateQueueName
-                                                : value;
                                             handleUpdateNodeConfig(
                                               key,
-                                              finalValue
+                                              value
                                             );
                                           }}
                                         >
                                           <SelectTrigger className="mt-1">
                                             <SelectValue>
                                               {(() => {
-                                                if (
-                                                  currentValue ===
-                                                    "{{username}}" &&
-                                                  userEmail
-                                                ) {
-                                                  return userEmail
-                                                    .split("@")[0]
-                                                    .toUpperCase();
-                                                }
                                                 const selectedOption =
                                                   processedOptions.find(
                                                     (opt) =>

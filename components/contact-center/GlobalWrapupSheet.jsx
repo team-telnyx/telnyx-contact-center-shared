@@ -16,13 +16,13 @@ export function GlobalWrapupSheet() {
     useWrapupSheetStore();
   const callStatus = useActiveCallStore((state) => state.status);
   const callInteractionId = useActiveCallStore(
-    (state) => state?.contactCenter?.interactionId || null
+    (state) => state?.contactCenter?.interactionId || null,
   );
   const callTranscriptions = useActiveCallStore(
-    (state) => state?.transcriptions || []
+    (state) => state?.transcriptions || [],
   );
   const disconnectedTime = useActiveCallStore(
-    (state) => state.disconnectedTime
+    (state) => state.disconnectedTime,
   );
   const [interactions, setInteractions] = useState([]);
   const lastWrapupInteractionRef = useRef(null);
@@ -46,7 +46,7 @@ export function GlobalWrapupSheet() {
     const loadInteractions = async () => {
       try {
         const res = await fetch(
-          "/api/contact-center/agent/interactions?limit=50&activeOnly=false"
+          "/api/contact-center/agent/interactions?limit=50&activeOnly=false",
         );
         const data = await res.json();
         if (data.ok && Array.isArray(data.interactions)) {
@@ -66,13 +66,13 @@ export function GlobalWrapupSheet() {
     };
     window.addEventListener(
       "contact-center:refresh-interactions",
-      handleSSEEvent
+      handleSSEEvent,
     );
 
     return () => {
       window.removeEventListener(
         "contact-center:refresh-interactions",
-        handleSSEEvent
+        handleSSEEvent,
       );
     };
   }, []);
@@ -109,6 +109,30 @@ export function GlobalWrapupSheet() {
     // Check if call was answered and not abandoned before opening wrapup sheet
     const checkAndOpenWrapup = async (retryCount = 0) => {
       try {
+        // CRITICAL: Check timeout status FIRST via API before doing anything else
+        // This prevents wrapup sheet from opening even for a moment
+        try {
+          const timeoutCheckRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+            { cache: "no-store" },
+          );
+          if (timeoutCheckRes.ok) {
+            const timeoutData = await timeoutCheckRes.json();
+            if (timeoutData.timeoutReEnqueued === true) {
+              console.log(
+                `[GlobalWrapupSheet] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued`,
+              );
+              return; // Don't open wrapup sheet at all
+            }
+          }
+        } catch (timeoutCheckErr) {
+          // If timeout check fails, continue with normal check
+          console.warn(
+            "[GlobalWrapupSheet] Timeout check failed:",
+            timeoutCheckErr,
+          );
+        }
+
         // Add a small delay on retry to allow database to update
         if (retryCount > 0) {
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -122,8 +146,8 @@ export function GlobalWrapupSheet() {
           try {
             const res = await fetch(
               `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callInteractionId
-              )}`
+                callInteractionId,
+              )}`,
             );
             const data = await res.json();
             if (data.ok && data.interaction) {
@@ -139,8 +163,27 @@ export function GlobalWrapupSheet() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, default to opening wrapup sheet
+        // If still no interaction found after retry, check timeout again before defaulting
         if (!interaction) {
+          try {
+            const timeoutCheckRes = await fetch(
+              `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+              { cache: "no-store" },
+            );
+            if (timeoutCheckRes.ok) {
+              const timeoutData = await timeoutCheckRes.json();
+              if (timeoutData.timeoutReEnqueued === true) {
+                console.log(
+                  `[GlobalWrapupSheet] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (no interaction found)`,
+                );
+                return;
+              }
+            }
+          } catch (timeoutCheckErr) {
+            // Continue if check fails
+          }
+
+          // Default to opening wrapup sheet only if not timeout
           lastWrapupInteractionRef.current = interactionId;
           useWrapupSheetStore
             .getState()
@@ -153,12 +196,23 @@ export function GlobalWrapupSheet() {
         const routingMetadata = metadata.routing_metadata || {};
         const timeline = routingMetadata.timeline || [];
 
+        // Check if this was a timeout re-enqueue scenario
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+
+        // Double-check timeout flag from interaction
+        if (wasTimeoutReEnqueued) {
+          console.log(
+            `[GlobalWrapupSheet] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (from interaction metadata)`,
+          );
+          return;
+        }
+
         // Check if call was answered - look for answered_at or answered event in timeline
         const hasAnsweredEvent = timeline.some(
           (e) =>
             e.type === "answered" ||
             e.type === "connected" ||
-            e.type === "bridged"
+            e.type === "bridged",
         );
         const wasAnswered =
           Boolean(interaction.answered_at) || hasAnsweredEvent;
@@ -167,8 +221,14 @@ export function GlobalWrapupSheet() {
         const isAbandoned = interaction.state === "abandoned";
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Skip wrapup only if abandoned and never answered
-        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+        // Skip wrapup if:
+        // - Timeout re-enqueued (agent didn't answer)
+        // - Abandoned and never answered
+        // - Still queued when ended
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = interactionId;
@@ -178,6 +238,7 @@ export function GlobalWrapupSheet() {
         }
       } catch (err) {
         // Error checking interaction for wrapup
+        console.error("[GlobalWrapupSheet] Error in checkAndOpenWrapup:", err);
       }
     };
 
@@ -197,38 +258,67 @@ export function GlobalWrapupSheet() {
       (interaction) =>
         interaction.state === "completed" &&
         interaction.id !== lastWrapupInteractionRef.current &&
-        !processedCompletedInteractionsRef.current.has(interaction.id)
+        !processedCompletedInteractionsRef.current.has(interaction.id),
     );
 
-    for (const interaction of completedInteractions) {
-      processedCompletedInteractionsRef.current.add(interaction.id);
+    // Process completed interactions asynchronously
+    (async () => {
+      for (const interaction of completedInteractions) {
+        processedCompletedInteractionsRef.current.add(interaction.id);
 
-      const wasAnswered = Boolean(interaction.answered_at);
-      const metadata = interaction.metadata || {};
-      const routingMetadata = metadata.routing_metadata || {};
-      const timeline = routingMetadata.timeline || [];
-      const hasAnsweredEvent = timeline.some(
-        (e) =>
-          e.type === "answered" ||
-          e.type === "connected" ||
-          e.type === "bridged"
-      );
-      const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
+        // CRITICAL: Check timeout status FIRST via API before doing anything else
+        try {
+          const timeoutCheckRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/timeout-check`,
+            { cache: "no-store" },
+          );
+          if (timeoutCheckRes.ok) {
+            const timeoutData = await timeoutCheckRes.json();
+            if (timeoutData.timeoutReEnqueued === true) {
+              console.log(
+                `[GlobalWrapupSheet] Skipping wrapup for interaction ${interaction.id} - timeout re-enqueued (completed interaction)`,
+              );
+              continue; // Skip this interaction, check next one
+            }
+          }
+        } catch (timeoutCheckErr) {
+          // If timeout check fails, continue with normal check
+          console.warn(
+            "[GlobalWrapupSheet] Timeout check failed for completed interaction:",
+            timeoutCheckErr,
+          );
+        }
 
-      const isAbandoned = interaction.state === "abandoned";
-      const wasQueuedWhenEnded = interaction.state === "queued";
+        const wasAnswered = Boolean(interaction.answered_at);
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+        const routingMetadata = metadata.routing_metadata || {};
+        const timeline = routingMetadata.timeline || [];
+        const hasAnsweredEvent = timeline.some(
+          (e) =>
+            e.type === "answered" ||
+            e.type === "connected" ||
+            e.type === "bridged",
+        );
+        const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
 
-      const shouldSkip =
-        wasQueuedWhenEnded || (isAbandoned && !wasActuallyAnswered);
+        const isAbandoned = interaction.state === "abandoned";
+        const wasQueuedWhenEnded = interaction.state === "queued";
 
-      if (!shouldSkip && wasActuallyAnswered) {
-        lastWrapupInteractionRef.current = interaction.id;
-        useWrapupSheetStore
-          .getState()
-          .openWrapup(interaction.id, callTranscriptions || []);
-        break;
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasActuallyAnswered);
+
+        if (!shouldSkip && wasActuallyAnswered) {
+          lastWrapupInteractionRef.current = interaction.id;
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(interaction.id, callTranscriptions || []);
+          break;
+        }
       }
-    }
+    })();
   }, [interactions, callTranscriptions]);
 
   // Listen for manual disconnect events from softphone components
@@ -245,15 +335,46 @@ export function GlobalWrapupSheet() {
         return;
       }
 
+      // CRITICAL: Check timeout status FIRST via API before doing anything else
+      try {
+        const timeoutCheckRes = await fetch(
+          `/api/contact-center/interactions/${encodeURIComponent(eventInteractionId)}/timeout-check`,
+          { cache: "no-store" },
+        );
+        if (timeoutCheckRes.ok) {
+          const timeoutData = await timeoutCheckRes.json();
+          if (timeoutData.timeoutReEnqueued === true) {
+            console.log(
+              `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - timeout re-enqueued (disconnect event)`,
+            );
+            return; // Don't open wrapup sheet at all
+          }
+        }
+      } catch (timeoutCheckErr) {
+        // If timeout check fails, continue with normal check
+        console.warn(
+          "[GlobalWrapupSheet] Timeout check failed in disconnect handler:",
+          timeoutCheckErr,
+        );
+      }
+
       // Find the interaction to check if it was answered
       const interaction = interactions.find((i) => i.id === eventInteractionId);
       if (interaction) {
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
         const wasAnswered = Boolean(interaction.answered_at);
         const isAbandoned = interaction.state === "abandoned";
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Skip wrapup only if abandoned and never answered
-        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+        // Skip wrapup if:
+        // - Timeout re-enqueued (agent didn't answer)
+        // - Abandoned and never answered
+        // - Still queued when ended
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = eventInteractionId;
@@ -262,7 +383,26 @@ export function GlobalWrapupSheet() {
             .openWrapup(eventInteractionId, eventTranscriptions);
         }
       } else {
-        // If interaction not found, assume it was answered and show wrapup
+        // If interaction not found, check timeout again before defaulting
+        try {
+          const timeoutCheckRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(eventInteractionId)}/timeout-check`,
+            { cache: "no-store" },
+          );
+          if (timeoutCheckRes.ok) {
+            const timeoutData = await timeoutCheckRes.json();
+            if (timeoutData.timeoutReEnqueued === true) {
+              console.log(
+                `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - timeout re-enqueued (no interaction found)`,
+              );
+              return;
+            }
+          }
+        } catch (timeoutCheckErr) {
+          // Continue if check fails
+        }
+
+        // Default to opening wrapup sheet only if not timeout
         lastWrapupInteractionRef.current = eventInteractionId;
         useWrapupSheetStore
           .getState()
@@ -272,13 +412,13 @@ export function GlobalWrapupSheet() {
 
     window.addEventListener(
       "contact-center:call-disconnected",
-      handleCallDisconnected
+      handleCallDisconnected,
     );
 
     return () => {
       window.removeEventListener(
         "contact-center:call-disconnected",
-        handleCallDisconnected
+        handleCallDisconnected,
       );
     };
   }, [interactions]);

@@ -28,7 +28,7 @@ export async function GET(request) {
   const page = Math.max(1, Number(searchParams.get("page") || 1));
   const pageSize = Math.min(
     100,
-    Math.max(1, Number(searchParams.get("pageSize") || 20))
+    Math.max(1, Number(searchParams.get("pageSize") || 20)),
   );
   const offset = (page - 1) * pageSize;
 
@@ -41,7 +41,7 @@ export async function GET(request) {
 
   if (q) {
     where.push(
-      `(name ILIKE $${i} OR display_name ILIKE $${i} OR description ILIKE $${i})`
+      `(name ILIKE $${i} OR display_name ILIKE $${i} OR description ILIKE $${i})`,
     );
     vals.push(`%${q}%`);
     i += 1;
@@ -90,6 +90,7 @@ export async function POST(request) {
       maxWaitTimeSecs: body.maxWaitTimeSecs || 600,
       maxSize: body.maxSize || 100,
       timeoutSecs: body.timeoutSecs || 300,
+      agentAnswerTimeoutSecs: body.agentAnswerTimeoutSecs || 30,
       overflowQueueId: body.overflowQueueId || null,
       overflowAction: body.overflowAction || "transfer",
       priority: body.priority || 0,
@@ -113,7 +114,9 @@ export async function POST(request) {
       if (body.queueAudioMediaName !== undefined) {
         updateFields.push(`queue_audio_media_name=$${paramIndex++}`);
         updateValues.push(
-          body.queueAudioMediaName ? String(body.queueAudioMediaName).trim() : null
+          body.queueAudioMediaName
+            ? String(body.queueAudioMediaName).trim()
+            : null,
         );
       }
       if (body.queueAudioEnablePosition !== undefined) {
@@ -121,13 +124,17 @@ export async function POST(request) {
         updateValues.push(Boolean(body.queueAudioEnablePosition));
       }
       if (body.queueAudioPositionIntervalSecs !== undefined) {
-        updateFields.push(`queue_audio_position_interval_secs=$${paramIndex++}`);
+        updateFields.push(
+          `queue_audio_position_interval_secs=$${paramIndex++}`,
+        );
         updateValues.push(Number(body.queueAudioPositionIntervalSecs));
       }
       if (body.queueAudioTtsVoice !== undefined) {
         updateFields.push(`queue_audio_tts_voice=$${paramIndex++}`);
         updateValues.push(
-          body.queueAudioTtsVoice ? String(body.queueAudioTtsVoice).trim() : null
+          body.queueAudioTtsVoice
+            ? String(body.queueAudioTtsVoice).trim()
+            : null,
         );
       }
       if (body.queueAudioTtsVoiceApiKeyRef !== undefined) {
@@ -135,7 +142,7 @@ export async function POST(request) {
         updateValues.push(
           body.queueAudioTtsVoiceApiKeyRef
             ? String(body.queueAudioTtsVoiceApiKeyRef).trim()
-            : null
+            : null,
         );
       }
 
@@ -145,7 +152,64 @@ export async function POST(request) {
         updateValues.push(id);
         await pool.query(
           `UPDATE cc_queues SET ${updateFields.join(", ")} WHERE id=$${paramIndex}`,
-          updateValues
+          updateValues,
+        );
+      }
+    }
+
+    // Update agent answer timeout if provided
+    if (body.agentAnswerTimeoutSecs !== undefined) {
+      await pool.query(
+        `UPDATE cc_queues SET agent_answer_timeout_secs=$1, updated_at=$2 WHERE id=$3`,
+        [Number(body.agentAnswerTimeoutSecs), new Date().toISOString(), id],
+      );
+    }
+
+    // Update new routing engine fields if provided
+    if (
+      body.defaultCallPriority !== undefined ||
+      body.skillRelaxationEnabled !== undefined ||
+      body.skillRelaxationAfterSeconds !== undefined ||
+      body.skillRelaxationStrategy !== undefined ||
+      body.slaAnswerThresholdSeconds !== undefined ||
+      body.slaTargetPercentage !== undefined
+    ) {
+      const updateFields = [];
+      const updateValues = [];
+      let paramIndex = 1;
+
+      if (body.defaultCallPriority !== undefined) {
+        updateFields.push(`default_call_priority=$${paramIndex++}`);
+        updateValues.push(Number(body.defaultCallPriority));
+      }
+      if (body.skillRelaxationEnabled !== undefined) {
+        updateFields.push(`skill_relaxation_enabled=$${paramIndex++}`);
+        updateValues.push(Boolean(body.skillRelaxationEnabled));
+      }
+      if (body.skillRelaxationAfterSeconds !== undefined) {
+        updateFields.push(`skill_relaxation_after_seconds=$${paramIndex++}`);
+        updateValues.push(Number(body.skillRelaxationAfterSeconds));
+      }
+      if (body.skillRelaxationStrategy !== undefined) {
+        updateFields.push(`skill_relaxation_strategy=$${paramIndex++}`);
+        updateValues.push(String(body.skillRelaxationStrategy));
+      }
+      if (body.slaAnswerThresholdSeconds !== undefined) {
+        updateFields.push(`sla_answer_threshold_seconds=$${paramIndex++}`);
+        updateValues.push(Number(body.slaAnswerThresholdSeconds));
+      }
+      if (body.slaTargetPercentage !== undefined) {
+        updateFields.push(`sla_target_percentage=$${paramIndex++}`);
+        updateValues.push(Number(body.slaTargetPercentage));
+      }
+
+      if (updateFields.length > 0) {
+        updateFields.push(`updated_at=$${paramIndex++}`);
+        updateValues.push(new Date().toISOString());
+        updateValues.push(id);
+        await pool.query(
+          `UPDATE cc_queues SET ${updateFields.join(", ")} WHERE id=$${paramIndex}`,
+          updateValues,
         );
       }
     }
@@ -170,7 +234,7 @@ export async function POST(request) {
               assignment.userId,
               assignment.priority || 0,
               assignment.enabled !== undefined ? assignment.enabled : true,
-            ]
+            ],
           );
         }
       }
@@ -185,7 +249,7 @@ export async function POST(request) {
           `INSERT INTO cc_queue_wrapup_codes (id, queue_id, wrapup_code_id, created_at, updated_at)
            VALUES ($1, $2, $3, NOW(), NOW())
            ON CONFLICT (queue_id, wrapup_code_id) DO NOTHING`,
-          [randomUUID(), id, wrapupCodeId]
+          [randomUUID(), id, wrapupCodeId],
         );
       }
     }
@@ -195,7 +259,7 @@ export async function POST(request) {
       const { broadcastToAllAgents } = await import("@/lib/sse");
       const queueRes = await pool.query(
         `SELECT * FROM cc_queues WHERE id = $1`,
-        [id]
+        [id],
       );
       const queue = queueRes.rows?.[0];
       if (queue) {
@@ -211,7 +275,7 @@ export async function POST(request) {
             },
             timestamp: new Date().toISOString(),
           },
-          "queue_changed"
+          "queue_changed",
         );
       }
     } catch (sseError) {

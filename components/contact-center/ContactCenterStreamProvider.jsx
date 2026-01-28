@@ -12,14 +12,14 @@ export function ContactCenterStreamProvider({ children }) {
     const connectContactCenterStream = () => {
       try {
         contactCenterEventSource = new EventSource(
-          "/api/contact-center/agent/stream"
+          "/api/contact-center/agent/stream",
         );
 
         // Listen for connection event to refresh interactions list
         contactCenterEventSource.addEventListener("connected", () => {
           // Refresh interactions list when SSE connects/reconnects to ensure latest state
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions")
+            new CustomEvent("contact-center:refresh-interactions"),
           );
         });
 
@@ -52,7 +52,7 @@ export function ContactCenterStreamProvider({ children }) {
               }
               // Dispatch event to trigger interaction list refresh
               window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions")
+                new CustomEvent("contact-center:refresh-interactions"),
               );
             } else if (data.type === "transcription") {
               const addTranscription =
@@ -103,7 +103,7 @@ export function ContactCenterStreamProvider({ children }) {
               }
               // Dispatch event to trigger interaction list refresh
               window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions")
+                new CustomEvent("contact-center:refresh-interactions"),
               );
             } else if (data.type === "interaction_ended") {
               if (data.callControlId) {
@@ -116,7 +116,7 @@ export function ContactCenterStreamProvider({ children }) {
               }
               // Dispatch event to trigger interaction list refresh
               window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions")
+                new CustomEvent("contact-center:refresh-interactions"),
               );
             }
           } catch (_) {

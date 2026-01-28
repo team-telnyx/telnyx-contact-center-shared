@@ -53,7 +53,7 @@ export default function SoftphoneMini() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
+    (state) => state.getActiveCalls().length,
   );
 
   // Zustand stores - dial state
@@ -175,9 +175,8 @@ export default function SoftphoneMini() {
         // The SSE event should have populated this with the interaction ID
         (async () => {
           try {
-            const { getIncomingCallData } = await import(
-              "@/lib/incoming-call-store"
-            );
+            const { getIncomingCallData } =
+              await import("@/lib/incoming-call-store");
 
             // Try immediate lookup first
             let callData = getIncomingCallData(callControlId);
@@ -224,7 +223,7 @@ export default function SoftphoneMini() {
                 lastFetchedInteractionIdRef.current = interactionId;
 
                 const res = await fetch(
-                  `/api/contact-center/interactions/${interactionId}`
+                  `/api/contact-center/interactions/${interactionId}`,
                 );
                 const data = await res.json();
 
@@ -251,8 +250,8 @@ export default function SoftphoneMini() {
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                  callControlId
-                )}`
+                  callControlId,
+                )}`,
               );
               const data = await res.json();
 
@@ -280,7 +279,7 @@ export default function SoftphoneMini() {
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
-              `/api/contact-center/interactions/${interactionId}`
+              `/api/contact-center/interactions/${interactionId}`,
             );
             const data = await res.json();
 
@@ -357,10 +356,10 @@ export default function SoftphoneMini() {
               callDirection === "outbound"
                 ? false
                 : callDirection === "inbound" || callDirection === "incoming"
-                ? true
-                : activeCall
-                ? false // We have an active call, so this is our outbound call
-                : callState === "new" || callState === "ringing"; // No active call + ringing = incoming
+                  ? true
+                  : activeCall
+                    ? false // We have an active call, so this is our outbound call
+                    : callState === "new" || callState === "ringing"; // No active call + ringing = incoming
 
             // Detect incoming call - can be in "new" or "ringing" state
             // Only show answer UI for truly incoming calls
@@ -372,7 +371,7 @@ export default function SoftphoneMini() {
               // Attach audio when call is active, connected, or answered
               if (
                 ["active", "connected", "answered"].includes(
-                  callState.toLowerCase()
+                  callState.toLowerCase(),
                 )
               ) {
                 attachAudio(call);
@@ -526,7 +525,7 @@ export default function SoftphoneMini() {
                 // Attach audio when call becomes active/connected/answered
                 if (
                   ["active", "connected", "answered"].includes(
-                    callState.toLowerCase()
+                    callState.toLowerCase(),
                   )
                 ) {
                   attachAudio(call);
@@ -730,7 +729,7 @@ export default function SoftphoneMini() {
               // Update duration if call is active
               if (callData.answerTime && !callData.disconnectedTime) {
                 updates.duration = Math.floor(
-                  (Date.now() - callData.answerTime) / 1000
+                  (Date.now() - callData.answerTime) / 1000,
                 );
               }
 
@@ -912,7 +911,7 @@ export default function SoftphoneMini() {
         peer.addEventListener?.("connectionstatechange", checkConnectionState);
         peer.addEventListener?.(
           "iceconnectionstatechange",
-          checkConnectionState
+          checkConnectionState,
         );
       }
 
@@ -937,19 +936,34 @@ export default function SoftphoneMini() {
           useActiveCallStore.setState(
             { status: "ended" },
             false,
-            "setStatusEnded"
+            "setStatusEnded",
           );
         }
         // Small delay to allow wrapup logic to detect the "ended" status
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
 
-      // Get callControlId for calls store
+      // Get callControlId and interactionId for calls store and refresh
       const callControlId =
         storeState.callControlId ||
         storeState.call?.callControlId ||
         storeState.call?.call_control_id ||
         storeState.call?.id;
+      const interactionId = storeState?.contactCenter?.interactionId;
+
+      // Dispatch disconnect event IMMEDIATELY with all identifiers
+      // This allows AgentDesktop to remove the interaction from UI instantly
+      if (interactionId || callControlId) {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              callControlId,
+              transcriptions: storeState.transcriptions || [],
+            },
+          }),
+        );
+      }
 
       // Update calls store before clearing
       if (callControlId) {
@@ -963,6 +977,13 @@ export default function SoftphoneMini() {
             disconnectedTime: Date.now(),
             isRinging: false,
           });
+
+          // Remove call from calls store immediately to clear agent desktop
+          callsStore.removeCall(callControlId);
+          // Also remove by interactionId if available
+          if (interactionId) {
+            callsStore.removeCall(interactionId);
+          }
         }
       }
 
@@ -977,6 +998,11 @@ export default function SoftphoneMini() {
 
       // Clear active call from store
       clearActiveCall();
+
+      // Also trigger refresh event as backup
+      window.dispatchEvent(
+        new CustomEvent("contact-center:refresh-interactions"),
+      );
     } catch (err) {
       // Always clear call even if finalization fails
       clearActiveCall();
@@ -1087,13 +1113,13 @@ export default function SoftphoneMini() {
       if (interaction?.id) {
         fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id
+            interaction.id,
           )}/answer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          }
+          },
         ).catch((err) => {
           // Failed to mark answered
         });
@@ -1153,7 +1179,7 @@ export default function SoftphoneMini() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-            }
+            },
           );
 
           const result = await response.json();
@@ -1178,30 +1204,64 @@ export default function SoftphoneMini() {
     // Check if this is a contact center call and trigger wrapup sheet
     const storeState = useActiveCallStore.getState();
     const interactionId = storeState?.contactCenter?.interactionId;
-    if (interactionId) {
-      // Dispatch custom event to trigger wrapup sheet in AgentDesktop
+    const callControlId =
+      storeState.callControlId ||
+      storeState.call?.callControlId ||
+      storeState.call?.call_control_id ||
+      storeState.call?.id;
+
+    // ALWAYS dispatch disconnect event with both interactionId and callControlId
+    // This ensures AgentDesktop can immediately identify and remove the interaction
+    if (interactionId || callControlId) {
       window.dispatchEvent(
         new CustomEvent("contact-center:call-disconnected", {
           detail: {
             interactionId,
+            callControlId,
             transcriptions: storeState.transcriptions || [],
           },
-        })
+        }),
       );
     }
+
     try {
       if (!activeCall) {
         clearActiveCall();
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
         return;
       }
 
       // Check if call is already ended
-      const storeState = useActiveCallStore.getState();
-      const status = storeState.status;
+      const currentStatus = storeState.status;
       if (
-        ["hangup", "ended", "destroy", "idle", "terminated"].includes(status)
+        ["hangup", "ended", "destroy", "idle", "terminated"].includes(
+          currentStatus,
+        )
       ) {
         clearActiveCall();
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
         return;
       }
 
@@ -1216,6 +1276,19 @@ export default function SoftphoneMini() {
             const currentState = useActiveCallStore.getState();
             if (currentState.call) {
               handleCallEnd();
+            } else {
+              // Call already cleared, but ensure it's removed from calls store
+              if (callControlId) {
+                useCallsStore.getState().removeCall(callControlId);
+              }
+              if (interactionId) {
+                useCallsStore.getState().removeCall(interactionId);
+              }
+              setTimeout(() => {
+                window.dispatchEvent(
+                  new CustomEvent("contact-center:refresh-interactions"),
+                );
+              }, 100);
             }
           }, 2000);
         } else {
@@ -1230,6 +1303,18 @@ export default function SoftphoneMini() {
       // Clear state on any error
       try {
         clearActiveCall();
+        // Remove from calls store and refresh
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }, 100);
       } catch (_) {}
     }
   }

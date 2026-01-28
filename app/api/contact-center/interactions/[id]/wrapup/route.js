@@ -12,7 +12,7 @@ async function getUsernameForUserId(userId) {
   if (!pool) return null;
   const userResult = await pool.query(
     "SELECT username FROM users WHERE id = $1 LIMIT 1",
-    [userId]
+    [userId],
   );
   return userResult.rows?.[0]?.username || null;
 }
@@ -23,7 +23,7 @@ export async function POST(request, { params }) {
     if (!id) {
       return NextResponse.json(
         { ok: false, error: "Interaction ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -31,7 +31,7 @@ export async function POST(request, { params }) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -39,7 +39,7 @@ export async function POST(request, { params }) {
     if (!interaction) {
       return NextResponse.json(
         { ok: false, error: "Interaction not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -51,7 +51,7 @@ export async function POST(request, { params }) {
             ok: false,
             error: "Unauthorized - interaction belongs to different agent",
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
@@ -61,7 +61,7 @@ export async function POST(request, { params }) {
     if (!["start", "end"].includes(action)) {
       return NextResponse.json(
         { ok: false, error: "Invalid wrapup action" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -77,7 +77,7 @@ export async function POST(request, { params }) {
           ? updatedRoutingMetadata.timeline
           : [];
         const disconnectedEvent = timeline.find(
-          (event) => event.type === TimelineEventTypes.DISCONNECTED
+          (event) => event.type === TimelineEventTypes.DISCONNECTED,
         );
         const completedAt =
           interaction.completed_at ||
@@ -88,14 +88,14 @@ export async function POST(request, { params }) {
         if (!completedAt) {
           return NextResponse.json(
             { ok: false, error: "Call not disconnected yet", retry: true },
-            { status: 409 }
+            { status: 409 },
           );
         }
 
         const nowMs = Date.now();
         const completedMs = new Date(completedAt).getTime();
         const startedAt = new Date(
-          Math.max(nowMs, Number.isNaN(completedMs) ? nowMs : completedMs)
+          Math.max(nowMs, Number.isNaN(completedMs) ? nowMs : completedMs),
         ).toISOString();
         metadata.wrapup_started_at = startedAt;
         updatedRoutingMetadata = addTimelineEvent(
@@ -104,7 +104,7 @@ export async function POST(request, { params }) {
           {
             timestamp: startedAt,
             agentUsername: interaction.agent_username || null,
-          }
+          },
         );
         updates.metadata = metadata;
         updates.routingMetadata = updatedRoutingMetadata;
@@ -130,7 +130,7 @@ export async function POST(request, { params }) {
           timestamp: endedAt,
           wrapupDurationSeconds: durationSeconds,
           agentUsername: interaction.agent_username || null,
-        }
+        },
       );
       updates.metadata = metadata;
       updates.routingMetadata = updatedRoutingMetadata;
@@ -142,9 +142,7 @@ export async function POST(request, { params }) {
     console.error("[Wrapup] POST error:", err);
     return NextResponse.json(
       { ok: false, error: "Failed to update wrapup status" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-
-

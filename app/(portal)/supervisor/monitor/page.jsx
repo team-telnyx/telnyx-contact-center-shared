@@ -26,6 +26,9 @@ import {
   IconArrowLeft,
   IconFilter,
   IconEye,
+  IconStar,
+  IconStarFilled,
+  IconArrowDown,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -53,6 +56,81 @@ import {
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
 import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+
+// Component to display skills with relaxation indicator
+function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
+  // Use relaxed skills if available, otherwise use original required skills
+  const skillsToDisplay = relaxedSkills || requiredSkills;
+
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <div className="flex items-center gap-2 cursor-pointer">
+          <Badge variant="outline" className="text-xs">
+            {Object.keys(requiredSkills).length}{" "}
+            {Object.keys(requiredSkills).length === 1 ? "skill" : "skills"}
+          </Badge>
+          <IconInfoCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+          {isRelaxed && (
+            <IconArrowDown className="h-4 w-4 text-red-500" strokeWidth={2.5} />
+          )}
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80">
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold mb-3">
+            {isRelaxed ? "Required Skills (Relaxed)" : "Required Skills"}
+          </h4>
+          {Object.entries(skillsToDisplay).map(([skillName, proficiency]) => {
+            const originalProficiency = requiredSkills[skillName];
+            const isRelaxedSkill =
+              isRelaxed && proficiency < originalProficiency;
+
+            return (
+              <div
+                key={skillName}
+                className="flex items-center justify-between py-1"
+              >
+                <span className="text-sm font-medium">{skillName}</span>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const starValue = i + 1;
+                    const filled = starValue <= proficiency;
+                    return (
+                      <span key={i}>
+                        {filled ? (
+                          <IconStarFilled
+                            className={`w-4 h-4 ${
+                              isRelaxedSkill
+                                ? "text-orange-400"
+                                : "text-yellow-400"
+                            }`}
+                          />
+                        ) : (
+                          <IconStar className="w-4 h-4 text-gray-300" />
+                        )}
+                      </span>
+                    );
+                  })}
+                  {isRelaxedSkill && (
+                    <span className="text-xs text-muted-foreground ml-1">
+                      (was {originalProficiency})
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 export default function MonitorPage() {
   // Helper function to format seconds into hours and minutes
@@ -140,7 +218,7 @@ export default function MonitorPage() {
           // Check for changes and highlight BEFORE updating
           prevAgents.forEach((prevAgent) => {
             const updatedAgent = updateAgents.find(
-              (a) => String(a.userId) === String(prevAgent.userId)
+              (a) => String(a.userId) === String(prevAgent.userId),
             );
             if (updatedAgent) {
               if (prevAgent.activeQueues !== updatedAgent.activeQueues) {
@@ -154,7 +232,7 @@ export default function MonitorPage() {
 
           prevQueues.forEach((prevQueue) => {
             const updatedQueue = updateQueues.find(
-              (q) => String(q.queueId) === String(prevQueue.queueId)
+              (q) => String(q.queueId) === String(prevQueue.queueId),
             );
             if (updatedQueue) {
               if (
@@ -176,34 +254,34 @@ export default function MonitorPage() {
           const currentAgents = currentData.agents?.stats || [];
           const mergedAgents = currentAgents.map((currentAgent) => {
             const updatedAgent = updateAgents.find(
-              (a) => String(a.userId) === String(currentAgent.userId)
+              (a) => String(a.userId) === String(currentAgent.userId),
             );
             return updatedAgent || currentAgent;
           });
 
           // Add any new agents that weren't in the current list
           const currentAgentIds = new Set(
-            currentAgents.map((a) => String(a.userId))
+            currentAgents.map((a) => String(a.userId)),
           );
           const newAgents = updateAgents.filter(
-            (a) => !currentAgentIds.has(String(a.userId))
+            (a) => !currentAgentIds.has(String(a.userId)),
           );
 
           // Merge queues stats - update only changed queues
           const currentQueues = currentData.queues?.stats || [];
           const mergedQueues = currentQueues.map((currentQueue) => {
             const updatedQueue = updateQueues.find(
-              (q) => String(q.queueId) === String(currentQueue.queueId)
+              (q) => String(q.queueId) === String(currentQueue.queueId),
             );
             return updatedQueue || currentQueue;
           });
 
           // Add any new queues that weren't in the current list
           const currentQueueIds = new Set(
-            currentQueues.map((q) => String(q.queueId))
+            currentQueues.map((q) => String(q.queueId)),
           );
           const newQueues = updateQueues.filter(
-            (q) => !currentQueueIds.has(String(q.queueId))
+            (q) => !currentQueueIds.has(String(q.queueId)),
           );
 
           const mergedData = {
@@ -222,10 +300,10 @@ export default function MonitorPage() {
           const selectedQueue = selectedQueueRef.current;
           if (selectedQueue?.id && loadQueueCallsRef.current) {
             const prevQueue = prevQueues.find(
-              (queue) => String(queue.queueId) === String(selectedQueue.id)
+              (queue) => String(queue.queueId) === String(selectedQueue.id),
             );
             const nextQueue = updateQueues.find(
-              (queue) => String(queue.queueId) === String(selectedQueue.id)
+              (queue) => String(queue.queueId) === String(selectedQueue.id),
             );
             const queueChanged =
               prevQueue &&
@@ -275,7 +353,7 @@ export default function MonitorPage() {
           updateAgentQueues(
             update.userId,
             update.queueIds,
-            update.activated === true
+            update.activated === true,
           );
 
           // If the queue dialog is open for this agent, update the local queue list
@@ -287,13 +365,35 @@ export default function MonitorPage() {
               prevQueues.map((queue) =>
                 update.queueIds.includes(queue.id)
                   ? { ...queue, isActivated: update.activated === true }
-                  : queue
-              )
+                  : queue,
+              ),
             );
           }
         }
       } catch (error) {
         console.error("[Monitor] Error handling queue change:", error);
+      }
+    });
+
+    // Listen for interaction updates (e.g., when calls are answered)
+    eventSource.addEventListener("interaction_updated", (event) => {
+      try {
+        const update = JSON.parse(event.data);
+        // If we have a selected queue and the interaction belongs to it, refresh queue calls
+        const selectedQueue = selectedQueueRef.current;
+        if (
+          selectedQueue?.id &&
+          update.queueId &&
+          String(selectedQueue.id) === String(update.queueId) &&
+          loadQueueCallsRef.current
+        ) {
+          // Refresh queue calls to get updated state, answeredAt, etc.
+          setTimeout(() => {
+            loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+          }, 100); // Small delay to ensure DB is updated
+        }
+      } catch (error) {
+        console.error("[Monitor] Error handling interaction update:", error);
       }
     });
 
@@ -322,7 +422,7 @@ export default function MonitorPage() {
       const items = Array.isArray(data.statuses) ? data.statuses : [];
       // Filter to only user-selectable statuses for supervisor status changes
       const userSelectableStatuses = items.filter(
-        (item) => item.user_selectable !== false
+        (item) => item.user_selectable !== false,
       );
       const next = {};
       userSelectableStatuses.forEach((item) => {
@@ -353,7 +453,7 @@ export default function MonitorPage() {
             "Cache-Control": "no-cache, no-store, must-revalidate",
             Pragma: "no-cache",
           },
-        }
+        },
       );
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -432,7 +532,7 @@ export default function MonitorPage() {
             activeQueueIds: activated
               ? [...new Set([...(agent.activeQueueIds || []), ...queueIds])]
               : (agent.activeQueueIds || []).filter(
-                  (id) => !queueIds.includes(id)
+                  (id) => !queueIds.includes(id),
                 ),
           };
         }
@@ -456,7 +556,7 @@ export default function MonitorPage() {
         `/api/contact-center/agent/queues/list?userId=${userId}`,
         {
           cache: "no-store",
-        }
+        },
       );
       if (!res.ok) {
         throw new Error("Failed to load queues");
@@ -488,14 +588,20 @@ export default function MonitorPage() {
       prevCall?.agentUsername !== nextCall?.agentUsername ||
       prevCall?.enqueuedAt !== nextCall?.enqueuedAt ||
       prevCall?.answeredAt !== nextCall?.answeredAt ||
+      prevCall?.completedAt !== nextCall?.completedAt ||
       prevCall?.waitSeconds !== nextCall?.waitSeconds ||
-      prevCall?.talkSeconds !== nextCall?.talkSeconds
+      prevCall?.talkSeconds !== nextCall?.talkSeconds ||
+      prevCall?.isRelaxed !== nextCall?.isRelaxed ||
+      JSON.stringify(prevCall?.relaxedSkills) !==
+        JSON.stringify(nextCall?.relaxedSkills) ||
+      JSON.stringify(prevCall?.requiredSkills) !==
+        JSON.stringify(nextCall?.requiredSkills)
     );
   }
 
   function mergeQueueCalls(prevCalls, nextCalls) {
     const prevMap = new Map(
-      (prevCalls || []).map((call) => [getQueueCallId(call), call])
+      (prevCalls || []).map((call) => [getQueueCallId(call), call]),
     );
     let changed = (prevCalls || []).length !== (nextCalls || []).length;
     const merged = (nextCalls || []).map((call) => {
@@ -548,6 +654,21 @@ export default function MonitorPage() {
   useEffect(() => {
     loadQueueCallsRef.current = loadQueueCalls;
   });
+
+  // Periodically refresh queue calls to update relaxed skills
+  useEffect(() => {
+    if (!selectedQueue?.id) return;
+
+    // Refresh every 5 seconds to update relaxed skills based on wait time
+    // This ensures queued calls show updated relaxed skill requirements
+    const interval = setInterval(() => {
+      if (loadQueueCallsRef.current) {
+        loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+      }
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [selectedQueue?.id]);
 
   async function loadAgentCalls(userId) {
     try {
@@ -606,8 +727,8 @@ export default function MonitorPage() {
         prevQueues.map((queue) =>
           queue.id === queueId
             ? { ...queue, isActivated: !currentlyActivated }
-            : queue
-        )
+            : queue,
+        ),
       );
 
       // Update the agent's queue count in the main list
@@ -678,18 +799,18 @@ export default function MonitorPage() {
 
   // Get unique statuses and queues for filters
   const uniqueStatuses = Array.from(
-    new Set(allAgents.map((agent) => agent.status).filter(Boolean))
+    new Set(allAgents.map((agent) => agent.status).filter(Boolean)),
   ).sort();
 
   const uniqueQueues = Array.from(
     new Set(
-      allAgents.flatMap((agent) => agent.activeQueueIds || []).filter(Boolean)
-    )
+      allAgents.flatMap((agent) => agent.activeQueueIds || []).filter(Boolean),
+    ),
   ).sort();
 
   // Get queue names for display
   const queueNamesMap = new Map(
-    queues.map((q) => [q.queueId, q.queueName || q.queueId])
+    queues.map((q) => [q.queueId, q.queueName || q.queueId]),
   );
 
   // Filter agents based on filters
@@ -757,7 +878,7 @@ export default function MonitorPage() {
     if (selectedQueues.length > 0) {
       const agentQueueIds = agent.activeQueueIds || [];
       const hasMatchingQueue = selectedQueues.some((queueId) =>
-        agentQueueIds.includes(queueId)
+        agentQueueIds.includes(queueId),
       );
       if (!hasMatchingQueue) {
         return false;
@@ -972,6 +1093,8 @@ export default function MonitorPage() {
                         <TableHead>To</TableHead>
                         <TableHead>State</TableHead>
                         <TableHead>Agent</TableHead>
+                        <TableHead>Required Skills</TableHead>
+                        <TableHead>Priority</TableHead>
                         <TableHead>Wait Time</TableHead>
                         <TableHead>Talk Time</TableHead>
                         <TableHead>Waiting Reason</TableHead>
@@ -982,7 +1105,7 @@ export default function MonitorPage() {
                       {queueCalls.length === 0 ? (
                         <TableRow>
                           <TableCell
-                            colSpan={8}
+                            colSpan={10}
                             className="text-center text-muted-foreground py-4"
                           >
                             No calls found for this queue
@@ -991,34 +1114,47 @@ export default function MonitorPage() {
                       ) : (
                         queueCalls.map((call) => {
                           // Calculate real-time wait time
+                          // Wait time stops when call is answered
                           const waitTimeSeconds = call.enqueuedAt
-                            ? Math.max(
-                                0,
-                                Math.floor(
-                                  (currentTime.getTime() -
-                                    new Date(call.enqueuedAt).getTime()) /
-                                    1000
+                            ? call.answeredAt
+                              ? Math.max(
+                                  0,
+                                  Math.floor(
+                                    (new Date(call.answeredAt).getTime() -
+                                      new Date(call.enqueuedAt).getTime()) /
+                                      1000,
+                                  ),
                                 )
-                              )
+                              : Math.max(
+                                  0,
+                                  Math.floor(
+                                    (currentTime.getTime() -
+                                      new Date(call.enqueuedAt).getTime()) /
+                                      1000,
+                                  ),
+                                )
                             : call.waitSeconds || 0;
 
                           // Calculate real-time talk time
+                          // Talk time starts when call is answered and continues until now (or completed)
                           const talkTimeSeconds = call.answeredAt
                             ? Math.max(
                                 0,
                                 Math.floor(
                                   (currentTime.getTime() -
                                     new Date(call.answeredAt).getTime()) /
-                                    1000
-                                )
+                                    1000,
+                                ),
                               )
                             : call.talkSeconds || 0;
 
-                          // Determine state - if answered but state is still ringing, show as connected
+                          // Determine state - if answered but state is still ringing/bridging, show as connected
+                          // Also normalize "answered" state to "connected" for consistency
                           const displayState =
                             call.answeredAt &&
                             (call.state === "ringing" ||
-                              call.state === "bridging")
+                              call.state === "bridging" ||
+                              call.state === "answered")
                               ? "connected"
                               : call.state;
 
@@ -1026,23 +1162,23 @@ export default function MonitorPage() {
                             displayState === "completed"
                               ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                               : displayState === "abandoned"
-                              ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                              : displayState === "answered" ||
-                                displayState === "connected" ||
-                                displayState === "active"
-                              ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                              : displayState === "enqueued" ||
-                                displayState === "queued" ||
-                                displayState === "ringing"
-                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                                : displayState === "answered" ||
+                                    displayState === "connected" ||
+                                    displayState === "active"
+                                  ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                                  : displayState === "enqueued" ||
+                                      displayState === "queued" ||
+                                      displayState === "ringing"
+                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                    : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
                           // Determine waiting reason
                           const getWaitingReason = () => {
                             if (
                               !displayState ||
                               !["queued", "enqueued", "ringing"].includes(
-                                displayState
+                                displayState,
                               )
                             ) {
                               return null;
@@ -1091,6 +1227,46 @@ export default function MonitorPage() {
                                 {call.agentName || call.agentUsername || "—"}
                               </TableCell>
                               <TableCell>
+                                {selectedQueue?.routingStrategy ===
+                                  "Skill-based" &&
+                                call.requiredSkills &&
+                                Object.keys(call.requiredSkills).length > 0 ? (
+                                  <RelaxationIndicator
+                                    requiredSkills={call.requiredSkills}
+                                    relaxedSkills={call.relaxedSkills}
+                                    isRelaxed={call.isRelaxed}
+                                  />
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {call.priority &&
+                                call.priority >= 1 &&
+                                call.priority <= 5 ? (
+                                  <div className="flex items-center gap-1">
+                                    {Array.from({ length: 5 }, (_, i) => {
+                                      const starValue = i + 1;
+                                      const filled = starValue <= call.priority;
+                                      return (
+                                        <span key={i}>
+                                          {filled ? (
+                                            <IconStarFilled className="w-4 h-4 text-yellow-400" />
+                                          ) : (
+                                            <IconStar className="w-4 h-4 text-gray-300" />
+                                          )}
+                                        </span>
+                                      );
+                                    })}
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                      ({call.priority})
+                                    </span>
+                                  </div>
+                                ) : (
+                                  "—"
+                                )}
+                              </TableCell>
+                              <TableCell>
                                 {waitTimeSeconds > 0
                                   ? `${Math.round(waitTimeSeconds)}s`
                                   : "—"}
@@ -1121,18 +1297,18 @@ export default function MonitorPage() {
                                             try {
                                               const res = await fetch(
                                                 `/api/contact-center/queues/${selectedQueue.id}/agents`,
-                                                { cache: "no-store" }
+                                                { cache: "no-store" },
                                               );
                                               if (res.ok) {
                                                 const data = await res.json();
                                                 setAvailableAgentsForSkills(
-                                                  data.agents || []
+                                                  data.agents || [],
                                                 );
                                               }
                                             } catch (error) {
                                               console.error(
                                                 "[Monitor] Error loading agents:",
-                                                error
+                                                error,
                                               );
                                             } finally {
                                               setLoadingAgentsForSkills(false);
@@ -1256,7 +1432,7 @@ export default function MonitorPage() {
                                 callDate === today &&
                                 call.state &&
                                 ["completed", "answered"].includes(
-                                  call.state.toLowerCase()
+                                  call.state.toLowerCase(),
                                 )
                               );
                             }).length;
@@ -1321,11 +1497,11 @@ export default function MonitorPage() {
                                 call.state === "active"
                                   ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                                   : call.state === "ringing" ||
-                                    call.state === "bridging"
-                                  ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                  : call.state === "hold"
-                                  ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                                  : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                      call.state === "bridging"
+                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                    : call.state === "hold"
+                                      ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
                               return (
                                 <TableRow key={call.id}>
@@ -1349,7 +1525,7 @@ export default function MonitorPage() {
                                   <TableCell className="text-xs">
                                     {call.answeredAt
                                       ? new Date(
-                                          call.answeredAt
+                                          call.answeredAt,
                                         ).toLocaleString()
                                       : "—"}
                                   </TableCell>
@@ -1402,14 +1578,14 @@ export default function MonitorPage() {
                                 call.state === "completed"
                                   ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                                   : call.state === "abandoned"
-                                  ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                                  : call.state === "answered" ||
-                                    call.state === "active"
-                                  ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                                  : call.state === "enqueued" ||
-                                    call.state === "ringing"
-                                  ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                  : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                    ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                                    : call.state === "answered" ||
+                                        call.state === "active"
+                                      ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                                      : call.state === "enqueued" ||
+                                          call.state === "ringing"
+                                        ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                        : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
                               return (
                                 <TableRow key={call.id}>
@@ -1433,27 +1609,27 @@ export default function MonitorPage() {
                                   <TableCell className="text-xs">
                                     {call.enqueuedAt
                                       ? new Date(
-                                          call.enqueuedAt
+                                          call.enqueuedAt,
                                         ).toLocaleString()
                                       : "—"}
                                   </TableCell>
                                   <TableCell className="text-xs">
                                     {call.answeredAt
                                       ? new Date(
-                                          call.answeredAt
+                                          call.answeredAt,
                                         ).toLocaleString()
                                       : "—"}
                                   </TableCell>
                                   <TableCell className="text-xs">
                                     {call.completedAt
                                       ? new Date(
-                                          call.completedAt
+                                          call.completedAt,
                                         ).toLocaleString()
                                       : call.abandonedAt
-                                      ? new Date(
-                                          call.abandonedAt
-                                        ).toLocaleString()
-                                      : "—"}
+                                        ? new Date(
+                                            call.abandonedAt,
+                                          ).toLocaleString()
+                                        : "—"}
                                   </TableCell>
                                   <TableCell>
                                     {call.waitSeconds > 0
@@ -1531,10 +1707,10 @@ export default function MonitorPage() {
                             status === "Available"
                               ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                               : status === "Busy"
-                              ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                              : status === "Away"
-                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                                : status === "Away"
+                                  ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                  : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                           const statusStyle = statusInfo.color
                             ? {
                                 color: statusInfo.color,
@@ -1554,7 +1730,9 @@ export default function MonitorPage() {
                                   ]);
                                 } else {
                                   setSelectedStatuses(
-                                    selectedStatuses.filter((s) => s !== status)
+                                    selectedStatuses.filter(
+                                      (s) => s !== status,
+                                    ),
                                   );
                                 }
                               }}
@@ -1626,7 +1804,7 @@ export default function MonitorPage() {
                                   ]);
                                 } else {
                                   setSelectedQueues(
-                                    selectedQueues.filter((q) => q !== queueId)
+                                    selectedQueues.filter((q) => q !== queueId),
                                   );
                                 }
                               }}
@@ -1718,10 +1896,10 @@ export default function MonitorPage() {
                               agent.status === "Available"
                                 ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                                 : agent.status === "Busy"
-                                ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                                : agent.status === "Away"
-                                ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                  ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                                  : agent.status === "Away"
+                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                    : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                             const StatusIcon =
                               STATUS_ICON_MAP[statusInfo.icon] ||
                               STATUS_NAME_ICON_FALLBACK[agent.status] ||
@@ -1776,7 +1954,7 @@ export default function MonitorPage() {
                                 <TableCell
                                   className={
                                     highlightedCells.has(
-                                      `agent-${String(agent.userId)}-queues`
+                                      `agent-${String(agent.userId)}-queues`,
                                     )
                                       ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                       : ""
@@ -1800,7 +1978,7 @@ export default function MonitorPage() {
                                 <TableCell
                                   className={
                                     highlightedCells.has(
-                                      `agent-${String(agent.userId)}-calls`
+                                      `agent-${String(agent.userId)}-calls`,
                                     )
                                       ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                       : ""
@@ -1818,7 +1996,7 @@ export default function MonitorPage() {
                                 <TableCell>
                                   {agent.today?.avgTalkTimeSeconds
                                     ? `${Math.round(
-                                        agent.today.avgTalkTimeSeconds
+                                        agent.today.avgTalkTimeSeconds,
                                       )}s`
                                     : "—"}
                                 </TableCell>
@@ -1873,7 +2051,7 @@ export default function MonitorPage() {
                           <TableCell
                             className={
                               highlightedCells.has(
-                                `queue-${queue.queueId}-waiting`
+                                `queue-${queue.queueId}-waiting`,
                               )
                                 ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                 : ""
@@ -1884,8 +2062,8 @@ export default function MonitorPage() {
                                 queue.realtime?.waitingCalls > 10
                                   ? "destructive"
                                   : queue.realtime?.waitingCalls > 5
-                                  ? "secondary"
-                                  : "outline"
+                                    ? "secondary"
+                                    : "outline"
                               }
                             >
                               {queue.realtime?.waitingCalls || 0}
@@ -1894,7 +2072,7 @@ export default function MonitorPage() {
                           <TableCell
                             className={
                               highlightedCells.has(
-                                `queue-${queue.queueId}-active`
+                                `queue-${queue.queueId}-active`,
                               )
                                 ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
                                 : ""
@@ -1915,7 +2093,7 @@ export default function MonitorPage() {
                           <TableCell>
                             {queue.realtime?.longestWaitSeconds
                               ? `${Math.round(
-                                  queue.realtime.longestWaitSeconds
+                                  queue.realtime.longestWaitSeconds,
                                 )}s`
                               : "—"}
                           </TableCell>
@@ -1931,21 +2109,21 @@ export default function MonitorPage() {
                                   className="bg-green-600"
                                 >
                                   {queue.today?.serviceLevelPercentage.toFixed(
-                                    1
+                                    1,
                                   )}
                                   %
                                 </Badge>
                               ) : queue.today?.serviceLevelPercentage >= 60 ? (
                                 <Badge variant="secondary">
                                   {queue.today?.serviceLevelPercentage.toFixed(
-                                    1
+                                    1,
                                   )}
                                   %
                                 </Badge>
                               ) : (
                                 <Badge variant="destructive">
                                   {queue.today?.serviceLevelPercentage.toFixed(
-                                    1
+                                    1,
                                   )}
                                   %
                                 </Badge>
@@ -2008,10 +2186,10 @@ export default function MonitorPage() {
                     status.name === "Available"
                       ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       : status.name === "Busy"
-                      ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                      : status.name === "Away"
-                      ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                        ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                        : status.name === "Away"
+                          ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                          : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                   const statusStyle = statusInfo.color
                     ? {
                         color: statusInfo.color,
@@ -2194,7 +2372,7 @@ export default function MonitorPage() {
                     </p>
                   ) : (
                     Object.entries(
-                      selectedCallForSkills.requiredSkills || {}
+                      selectedCallForSkills.requiredSkills || {},
                     ).map(([skillName, requiredLevel]) => (
                       <div
                         key={skillName}
@@ -2240,11 +2418,11 @@ export default function MonitorPage() {
                             hasSkill,
                             missing: !hasSkill,
                           };
-                        }
+                        },
                       );
 
                       const missingSkills = skillAnalysis.filter(
-                        (s) => s.missing
+                        (s) => s.missing,
                       );
                       const hasAllSkills = missingSkills.length === 0;
 

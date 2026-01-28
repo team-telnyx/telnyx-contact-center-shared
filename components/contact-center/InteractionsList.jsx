@@ -24,7 +24,7 @@ function formatDuration(seconds) {
   if (hrs > 0) {
     return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
       2,
-      "0"
+      "0",
     )}:${String(secs).padStart(2, "0")}`;
   }
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
@@ -150,7 +150,7 @@ function getWebRTCStatus(interaction, webrtcCallState) {
     // If status indicates call ended, return null so we show database state
     if (
       ["hangup", "ended", "destroy", "idle", "terminated"].includes(
-        webrtcStatus
+        webrtcStatus,
       )
     ) {
       return null;
@@ -266,19 +266,19 @@ function InteractionCard({
     interaction.from_number && interaction.from_number.trim() !== ""
       ? interaction.from_number
       : interaction.fromNumber && interaction.fromNumber.trim() !== ""
-      ? interaction.fromNumber
-      : interaction.from && interaction.from.trim() !== ""
-      ? interaction.from
-      : interaction.caller_number && interaction.caller_number.trim() !== ""
-      ? interaction.caller_number
-      : interaction.callerNumber && interaction.callerNumber.trim() !== ""
-      ? interaction.callerNumber
-      : null;
+        ? interaction.fromNumber
+        : interaction.from && interaction.from.trim() !== ""
+          ? interaction.from
+          : interaction.caller_number && interaction.caller_number.trim() !== ""
+            ? interaction.caller_number
+            : interaction.callerNumber && interaction.callerNumber.trim() !== ""
+              ? interaction.callerNumber
+              : null;
 
   // Fallback: try to extract from routing_metadata timeline if still missing
   if (!callerNumber && interaction.routing_metadata?.timeline) {
     const initiatedEvent = interaction.routing_metadata.timeline.find(
-      (e) => e.type === "initiated" && e.from
+      (e) => e.type === "initiated" && e.from,
     );
     if (initiatedEvent?.from && initiatedEvent.from.trim() !== "") {
       callerNumber = initiatedEvent.from;
@@ -313,8 +313,8 @@ function InteractionCard({
         isSelected
           ? "border-orange-500 shadow-lg ring-1 ring-orange-500/30"
           : isActive
-          ? "border-orange-500/70 hover:border-orange-500 hover:shadow-md"
-          : "border-border hover:border-muted-foreground/50"
+            ? "border-orange-500/70 hover:border-orange-500 hover:shadow-md"
+            : "border-border hover:border-muted-foreground/50",
       )}
     >
       <div className="flex items-start gap-2 mb-2">
@@ -324,8 +324,8 @@ function InteractionCard({
             isActive
               ? "bg-orange-500 text-white"
               : isEnded
-              ? "bg-gray-400 text-gray-600"
-              : "bg-orange-500 text-white"
+                ? "bg-gray-400 text-gray-600"
+                : "bg-orange-500 text-white",
           )}
         >
           <PhoneIncoming className="h-4 w-4" />
@@ -433,12 +433,32 @@ export function InteractionsList({
             </div>
           ) : (
             interactions
-              .filter((interaction) => interaction && interaction.id)
+              .filter((interaction) => {
+                if (!interaction || !interaction.id) return false;
+
+                // Filter out timeout re-enqueued interactions
+                const metadata = interaction.metadata || {};
+                const wasTimeoutReEnqueued =
+                  metadata.timeout_re_enqueued === true;
+
+                // Also filter out interactions that are in "queued" state and have no agent_username
+                // (they were re-enqueued after timeout)
+                const isReEnqueued =
+                  interaction.state === "queued" &&
+                  !interaction.agent_username &&
+                  !interaction.agentUsername;
+
+                if (wasTimeoutReEnqueued || isReEnqueued) {
+                  return false;
+                }
+
+                return true;
+              })
               .map((interaction) => {
                 // Get real-time WebRTC status if available
                 const webrtcState = getWebRTCStatus(
                   interaction,
-                  webrtcCallState
+                  webrtcCallState,
                 );
                 return (
                   <InteractionCard

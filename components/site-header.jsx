@@ -88,11 +88,18 @@ export function SiteHeader() {
         statusEventSource.addEventListener("status_changed", (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log("[SiteHeader] Received status_changed event:", data);
             if (data.status) {
+              console.log(
+                `[SiteHeader] Updating status from "${status}" to "${data.status}"`,
+              );
               setStatus(data.status);
             }
           } catch (err) {
-            // Failed to parse status SSE message
+            console.error(
+              "[SiteHeader] Failed to parse status SSE message:",
+              err,
+            );
           }
         });
 

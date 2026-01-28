@@ -55,10 +55,11 @@ export default function SupervisorCallHistoryDetailPage() {
       try {
         const res = await fetch(
           `/api/contact-center/interactions/${encodeURIComponent(interactionId)}`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Failed to load interaction");
+        if (!res.ok)
+          throw new Error(data?.error || "Failed to load interaction");
         setInteraction(data.interaction || null);
       } catch (err) {
         notify({
@@ -76,7 +77,9 @@ export default function SupervisorCallHistoryDetailPage() {
   const timelineEvents = useMemo(() => {
     if (!interaction?.routing_metadata) return [];
     const timeline = interaction.routing_metadata.timeline || [];
-    return Array.isArray(timeline) ? timeline : [];
+    const events = Array.isArray(timeline) ? timeline : [];
+    // Filter out agent_timeout events - these are internal routing events that shouldn't be displayed
+    return events.filter((event) => event.type !== "agent_timeout");
   }, [interaction]);
 
   const transcriptions =
@@ -91,7 +94,7 @@ export default function SupervisorCallHistoryDetailPage() {
     interaction?.handle_time_seconds ??
     (interaction?.completed_at && startedAt
       ? Math.floor(
-          (new Date(interaction.completed_at) - new Date(startedAt)) / 1000
+          (new Date(interaction.completed_at) - new Date(startedAt)) / 1000,
         )
       : null);
 
@@ -115,8 +118,10 @@ export default function SupervisorCallHistoryDetailPage() {
   const recordingFormat = recordingMetadata?.format || null;
   const recordingChannels = recordingMetadata?.channels || null;
   const transcriptionText = interaction?.metadata?.transcription_text || null;
-  const transcriptionSegments = interaction?.metadata?.transcription_segments || null;
-  const transcriptionSummary = interaction?.metadata?.transcription_summary || null;
+  const transcriptionSegments =
+    interaction?.metadata?.transcription_segments || null;
+  const transcriptionSummary =
+    interaction?.metadata?.transcription_summary || null;
   const aiCallControlId = interaction?.metadata?.ai_call_control_id || null;
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
 
@@ -175,7 +180,9 @@ export default function SupervisorCallHistoryDetailPage() {
                       </code>
                     </div>
                     <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">Agent</span>
+                      <span className="text-sm text-muted-foreground">
+                        Agent
+                      </span>
                       <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
                         {interaction.agent_name ||
                           interaction.agent_username ||
@@ -183,7 +190,9 @@ export default function SupervisorCallHistoryDetailPage() {
                       </code>
                     </div>
                     <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">Queue</span>
+                      <span className="text-sm text-muted-foreground">
+                        Queue
+                      </span>
                       <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
                         {interaction.queue_name || "-"}
                       </code>
@@ -208,7 +217,9 @@ export default function SupervisorCallHistoryDetailPage() {
                       </code>
                     </div>
                     <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">Status</span>
+                      <span className="text-sm text-muted-foreground">
+                        Status
+                      </span>
                       <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all uppercase">
                         {interaction.state || "unknown"}
                       </code>
@@ -257,7 +268,9 @@ export default function SupervisorCallHistoryDetailPage() {
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          <span className="text-xs text-muted-foreground">
+                            -
+                          </span>
                         )}
                       </div>
                     </div>
@@ -314,7 +327,7 @@ export default function SupervisorCallHistoryDetailPage() {
                             onClick={() =>
                               handleCopy(
                                 interaction.call_control_id,
-                                "Call Control ID"
+                                "Call Control ID",
                               )
                             }
                           >
@@ -343,7 +356,7 @@ export default function SupervisorCallHistoryDetailPage() {
                             onClick={() =>
                               handleCopy(
                                 interaction.call_session_id,
-                                "Call Session ID"
+                                "Call Session ID",
                               )
                             }
                           >
@@ -447,7 +460,7 @@ export default function SupervisorCallHistoryDetailPage() {
                               onClick={() =>
                                 handleCopy(
                                   aiCallControlId,
-                                  "AI Call Control ID"
+                                  "AI Call Control ID",
                                 )
                               }
                             >
@@ -480,7 +493,6 @@ export default function SupervisorCallHistoryDetailPage() {
                   </TabsContent>
                 )}
               </Tabs>
-
             </>
           )}
         </CardContent>
@@ -488,4 +500,3 @@ export default function SupervisorCallHistoryDetailPage() {
     </div>
   );
 }
-

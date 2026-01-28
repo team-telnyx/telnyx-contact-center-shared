@@ -44,7 +44,7 @@ export async function GET(request, { params }) {
      JOIN users u ON aqa.user_id = u.id
      WHERE aqa.queue_id = $1
      ORDER BY aqa.priority DESC, u.username ASC`,
-    [id]
+    [id],
   );
 
   const wrapupRes = await pool.query(
@@ -53,7 +53,7 @@ export async function GET(request, { params }) {
      JOIN cc_wrapup_codes w ON qwc.wrapup_code_id = w.id
      WHERE qwc.queue_id = $1
      ORDER BY w.display_order ASC, w.name ASC`,
-    [id]
+    [id],
   );
 
   return NextResponse.json({
@@ -83,36 +83,42 @@ export async function PUT(request, { params }) {
   maybeSet("name", body.name != null ? String(body.name).trim() : undefined);
   maybeSet(
     "display_name",
-    body.displayName != null ? String(body.displayName) : undefined
+    body.displayName != null ? String(body.displayName) : undefined,
   );
   maybeSet(
     "description",
-    body.description != null ? String(body.description) : undefined
+    body.description != null ? String(body.description) : undefined,
   );
   maybeSet(
     "routing_strategy",
-    body.routingStrategy != null ? String(body.routingStrategy) : undefined
+    body.routingStrategy != null ? String(body.routingStrategy) : undefined,
   );
   maybeSet(
     "max_wait_time_secs",
-    body.maxWaitTimeSecs != null ? Number(body.maxWaitTimeSecs) : undefined
+    body.maxWaitTimeSecs != null ? Number(body.maxWaitTimeSecs) : undefined,
   );
   maybeSet("max_size", body.maxSize != null ? Number(body.maxSize) : undefined);
   maybeSet(
     "timeout_secs",
-    body.timeoutSecs != null ? Number(body.timeoutSecs) : undefined
+    body.timeoutSecs != null ? Number(body.timeoutSecs) : undefined,
+  );
+  maybeSet(
+    "agent_answer_timeout_secs",
+    body.agentAnswerTimeoutSecs != null
+      ? Number(body.agentAnswerTimeoutSecs)
+      : undefined,
   );
   maybeSet(
     "overflow_queue_id",
-    body.overflowQueueId != null ? String(body.overflowQueueId) : undefined
+    body.overflowQueueId != null ? String(body.overflowQueueId) : undefined,
   );
   maybeSet(
     "overflow_action",
-    body.overflowAction != null ? String(body.overflowAction) : undefined
+    body.overflowAction != null ? String(body.overflowAction) : undefined,
   );
   maybeSet(
     "priority",
-    body.priority != null ? Number(body.priority) : undefined
+    body.priority != null ? Number(body.priority) : undefined,
   );
   maybeSet("enabled", body.enabled != null ? Boolean(body.enabled) : undefined);
   maybeSet("active", body.active != null ? Boolean(body.active) : undefined);
@@ -122,19 +128,19 @@ export async function PUT(request, { params }) {
       ? body.queueAudioMediaName
         ? String(body.queueAudioMediaName).trim()
         : null
-      : undefined
+      : undefined,
   );
   maybeSet(
     "queue_audio_enable_position",
     body.queueAudioEnablePosition != null
       ? Boolean(body.queueAudioEnablePosition)
-      : undefined
+      : undefined,
   );
   maybeSet(
     "queue_audio_position_interval_secs",
     body.queueAudioPositionIntervalSecs != null
       ? Number(body.queueAudioPositionIntervalSecs)
-      : undefined
+      : undefined,
   );
   maybeSet(
     "queue_audio_tts_voice",
@@ -142,7 +148,7 @@ export async function PUT(request, { params }) {
       ? body.queueAudioTtsVoice
         ? String(body.queueAudioTtsVoice).trim()
         : null
-      : undefined
+      : undefined,
   );
   maybeSet(
     "queue_audio_tts_voice_api_key_ref",
@@ -150,7 +156,7 @@ export async function PUT(request, { params }) {
       ? body.queueAudioTtsVoiceApiKeyRef
         ? String(body.queueAudioTtsVoiceApiKeyRef).trim()
         : null
-      : undefined
+      : undefined,
   );
   if (body.skillRequirements !== undefined) {
     set.skill_requirements = JSON.stringify(body.skillRequirements);
@@ -158,6 +164,44 @@ export async function PUT(request, { params }) {
   if (body.priorityRules !== undefined) {
     set.priority_rules = JSON.stringify(body.priorityRules);
   }
+
+  // New routing engine fields
+  maybeSet(
+    "default_call_priority",
+    body.defaultCallPriority != null
+      ? Number(body.defaultCallPriority)
+      : undefined,
+  );
+  maybeSet(
+    "skill_relaxation_enabled",
+    body.skillRelaxationEnabled != null
+      ? Boolean(body.skillRelaxationEnabled)
+      : undefined,
+  );
+  maybeSet(
+    "skill_relaxation_after_seconds",
+    body.skillRelaxationAfterSeconds != null
+      ? Number(body.skillRelaxationAfterSeconds)
+      : undefined,
+  );
+  maybeSet(
+    "skill_relaxation_strategy",
+    body.skillRelaxationStrategy != null
+      ? String(body.skillRelaxationStrategy)
+      : undefined,
+  );
+  maybeSet(
+    "sla_answer_threshold_seconds",
+    body.slaAnswerThresholdSeconds != null
+      ? Number(body.slaAnswerThresholdSeconds)
+      : undefined,
+  );
+  maybeSet(
+    "sla_target_percentage",
+    body.slaTargetPercentage != null
+      ? Number(body.slaTargetPercentage)
+      : undefined,
+  );
 
   try {
     if (Object.keys(set).length > 0) {
@@ -186,7 +230,7 @@ export async function PUT(request, { params }) {
       // Delete existing assignments
       await pool.query(
         `DELETE FROM cc_queue_user_assignments WHERE queue_id=$1`,
-        [id]
+        [id],
       );
 
       // Insert new assignments
@@ -208,7 +252,7 @@ export async function PUT(request, { params }) {
               assignment.userId,
               assignment.priority || 0,
               assignment.enabled !== undefined ? assignment.enabled : true,
-            ]
+            ],
           );
         }
       }
@@ -219,7 +263,7 @@ export async function PUT(request, { params }) {
           const { broadcastToAllAgents } = await import("@/lib/sse");
           const queueRes = await pool.query(
             `SELECT * FROM cc_queues WHERE id = $1`,
-            [id]
+            [id],
           );
           const queue = queueRes.rows?.[0];
           if (queue) {
@@ -235,13 +279,13 @@ export async function PUT(request, { params }) {
                 },
                 timestamp: new Date().toISOString(),
               },
-              "queue_changed"
+              "queue_changed",
             );
           }
         } catch (sseError) {
           console.error(
             "[Queues] Failed to broadcast queue updated:",
-            sseError
+            sseError,
           );
           // Don't fail the request if SSE fails
         }
@@ -252,7 +296,7 @@ export async function PUT(request, { params }) {
     if (body.wrapupCodes && Array.isArray(body.wrapupCodes)) {
       await pool.query(
         `DELETE FROM cc_queue_wrapup_codes WHERE queue_id = $1`,
-        [id]
+        [id],
       );
 
       const { randomUUID } = await import("crypto");
@@ -262,7 +306,7 @@ export async function PUT(request, { params }) {
           `INSERT INTO cc_queue_wrapup_codes (id, queue_id, wrapup_code_id, created_at, updated_at)
            VALUES ($1, $2, $3, NOW(), NOW())
            ON CONFLICT (queue_id, wrapup_code_id) DO NOTHING`,
-          [randomUUID(), id, wrapupCodeId]
+          [randomUUID(), id, wrapupCodeId],
         );
       }
     }
@@ -287,12 +331,12 @@ export async function DELETE(request, { params }) {
   // Check if queue is used as overflow queue
   const overflowCheck = await pool.query(
     `SELECT COUNT(*) AS c FROM cc_queues WHERE overflow_queue_id = $1`,
-    [id]
+    [id],
   );
   if (Number(overflowCheck.rows?.[0]?.c || 0) > 0) {
     return NextResponse.json(
       { error: "Cannot delete queue that is used as overflow queue" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 

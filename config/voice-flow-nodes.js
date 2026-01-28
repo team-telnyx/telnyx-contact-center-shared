@@ -1027,7 +1027,8 @@ export const VOICE_FLOW_NODES = {
     label: "Set Queue Options",
     icon: "IconSettings",
     color: NODE_COLORS[NODE_CATEGORIES.CALL_CONTROL],
-    description: "Set queue name, priority, and skills in client state",
+    description:
+      "Set queue name, call priority (1-5 stars), and skills in client state. Call priority and skills work together - high-priority skilled calls route first.",
     telnyxAction: "client_state_update",
     telnyxEndpoint: "/v2/calls/:call_control_id/actions/client_state_update",
     inputs: 1,
@@ -1043,19 +1044,22 @@ export const VOICE_FLOW_NODES = {
         required: true,
         description: "The name of the queue (can use {{variable}} notation)",
       },
-      priority: {
+      call_priority: {
         type: "number",
-        label: "Priority",
-        required: true,
+        label: "Call Priority",
+        required: false,
         min: 1,
-        max: 100,
-        description: "Call priority (1-100, can use {{variable}} notation)",
+        max: 5,
+        default: 3,
+        description:
+          "Call priority level (1-5 stars: 1=Low, 3=Normal, 5=High). Higher priority calls are routed first. Display as star rating in UI. Can use {{variable}} notation.",
       },
       skills: {
         type: "array",
         label: "Required Skills",
         required: false,
-        description: "Skills with minimum proficiency levels (optional)",
+        description:
+          "Skills with minimum proficiency levels (1-5 stars). Optional. Can be combined with call priority.",
       },
     },
   },
@@ -1066,7 +1070,8 @@ export const VOICE_FLOW_NODES = {
     label: "Enqueue Call",
     icon: "IconList",
     color: NODE_COLORS[NODE_CATEGORIES.CALL_CONTROL],
-    description: "Put the call in a queue",
+    description:
+      "Put the call in a queue. Supports call priority (1-5 stars) for routing.",
     telnyxAction: "enqueue",
     telnyxEndpoint: "/v2/calls/:call_control_id/actions/enqueue",
     inputs: 1,
@@ -1089,6 +1094,16 @@ export const VOICE_FLOW_NODES = {
         ],
         description:
           "The name of the queue the call should be put in. If a queue with a given name doesn't exist yet it will be created.",
+      },
+      call_priority: {
+        type: "number",
+        label: "Call Priority",
+        required: false,
+        min: 1,
+        max: 5,
+        default: 3,
+        description:
+          "Call priority level (1-5 stars: 1=Low, 3=Normal, 5=High). Higher priority calls are routed first. Defaults to queue's default_call_priority if not specified. Display as star rating in UI. Can use {{variable}} notation.",
       },
       max_wait_time_secs: {
         type: "number",

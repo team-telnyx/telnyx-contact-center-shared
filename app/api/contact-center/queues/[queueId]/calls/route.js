@@ -13,7 +13,7 @@ export async function GET(request, { params }) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -21,7 +21,7 @@ export async function GET(request, { params }) {
     if (!isSupervisorOrAdmin(user)) {
       return NextResponse.json(
         { ok: false, error: "Forbidden" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     if (!queueId) {
       return NextResponse.json(
         { ok: false, error: "Queue ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -37,20 +37,28 @@ export async function GET(request, { params }) {
     if (!pool) {
       return NextResponse.json(
         { ok: false, error: "Server not ready" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    // Get queue info
+    // Get queue info with relaxation settings and routing strategy
     const queueResult = await pool.query(
-      `SELECT id, name, display_name FROM cc_queues WHERE id = $1`,
-      [queueId]
+      `SELECT 
+        id, 
+        name, 
+        display_name,
+        routing_strategy,
+        skill_relaxation_enabled,
+        skill_relaxation_after_seconds,
+        skill_relaxation_strategy
+      FROM cc_queues WHERE id = $1`,
+      [queueId],
     );
 
     if (queueResult.rows.length === 0) {
       return NextResponse.json(
         { ok: false, error: "Queue not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -76,6 +84,7 @@ export async function GET(request, { params }) {
         i.wait_time_seconds,
         i.talk_time_seconds,
         i.required_skills,
+        i.priority,
         i.routing_metadata,
         i.metadata,
         u.first_name,
@@ -88,13 +97,13 @@ export async function GET(request, { params }) {
         AND i.abandoned_at IS NULL
       ORDER BY i.created_at DESC
       LIMIT 1000`,
-      [queueId]
+      [queueId],
     );
 
     // Helper function to safely parse JSONB fields
     const safeParse = (value) => {
       if (!value) return null;
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         try {
           return JSON.parse(value);
         } catch {
@@ -104,13 +113,53 @@ export async function GET(request, { params }) {
       return value;
     };
 
+    // Import relaxation function
+    const { getAdjustedSkillRequirements } =
+      await import("@/lib/contact-center/routing-engine.js");
+
     const calls = callsResult.rows.map((call) => {
       const metadata = safeParse(call.metadata) || {};
       // For supervision, we need the original inbound call's call_control_id
       // If the call was transferred to an agent, use original_call_control_id from metadata
       // Otherwise, use the interaction's call_control_id
-      const originalCallControlId = metadata.original_call_control_id || call.call_control_id;
-      
+      const originalCallControlId =
+        metadata.original_call_control_id || call.call_control_id;
+
+      const requiredSkills = safeParse(call.required_skills);
+
+      // Calculate relaxed skills if relaxation is enabled and call is queued
+      let relaxedSkills = null;
+      let isRelaxed = false;
+      if (
+        requiredSkills &&
+        Object.keys(requiredSkills).length > 0 &&
+        call.enqueued_at &&
+        queue.skill_relaxation_enabled
+      ) {
+        // Calculate wait time: stop at answered_at if call is answered, otherwise use current time
+        const enqueuedAt = new Date(call.enqueued_at).getTime();
+        const endTime = call.answered_at
+          ? new Date(call.answered_at).getTime()
+          : new Date().getTime();
+        const waitTimeSeconds = Math.floor((endTime - enqueuedAt) / 1000);
+
+        relaxedSkills = getAdjustedSkillRequirements(
+          requiredSkills,
+          waitTimeSeconds,
+          {
+            skill_relaxation_enabled: queue.skill_relaxation_enabled,
+            skill_relaxation_after_seconds:
+              queue.skill_relaxation_after_seconds || 60,
+            skill_relaxation_strategy:
+              queue.skill_relaxation_strategy || "progressive",
+          },
+        );
+
+        // Check if relaxation was actually applied (skills changed)
+        isRelaxed =
+          JSON.stringify(requiredSkills) !== JSON.stringify(relaxedSkills);
+      }
+
       return {
         id: call.id,
         callControlId: call.call_control_id,
@@ -133,7 +182,10 @@ export async function GET(request, { params }) {
         updatedAt: call.updated_at,
         waitSeconds: call.wait_time_seconds || 0,
         talkSeconds: call.talk_time_seconds || 0,
-        requiredSkills: safeParse(call.required_skills),
+        requiredSkills: requiredSkills,
+        relaxedSkills: relaxedSkills, // Relaxed skills (null if not relaxed)
+        isRelaxed: isRelaxed, // Whether relaxation was applied
+        priority: call.priority || null, // Call priority (1-5 stars)
         routingMetadata: safeParse(call.routing_metadata),
         metadata: metadata,
       };
@@ -145,6 +197,7 @@ export async function GET(request, { params }) {
         id: queue.id,
         name: queue.name,
         displayName: queue.display_name || queue.name,
+        routingStrategy: queue.routing_strategy || "FIFO",
       },
       calls,
     });
@@ -152,7 +205,7 @@ export async function GET(request, { params }) {
     console.error("[QueueCalls] Error fetching queue calls:", error);
     return NextResponse.json(
       { ok: false, error: "Failed to fetch queue calls" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

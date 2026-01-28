@@ -13,6 +13,7 @@ export function AgentDesktop() {
   const [interactions, setInteractions] = useState([]);
   const [dbInteractions, setDbInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
+  const [agentStatus, setAgentStatus] = useState(null); // Track agent's current status
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
@@ -24,13 +25,13 @@ export function AgentDesktop() {
   // Use selectors to ensure re-renders when these specific values change
   const callStatus = useActiveCallStore((state) => state.status);
   const callInteractionId = useActiveCallStore(
-    (state) => state?.contactCenter?.interactionId || null
+    (state) => state?.contactCenter?.interactionId || null,
   );
   const callTranscriptions = useActiveCallStore(
-    (state) => state?.transcriptions || []
+    (state) => state?.transcriptions || [],
   );
   const disconnectedTime = useActiveCallStore(
-    (state) => state.disconnectedTime
+    (state) => state.disconnectedTime,
   );
 
   // Get calls from calls store - subscribe to changes
@@ -50,12 +51,12 @@ export function AgentDesktop() {
         call.status !== "idle" &&
         call.status !== "terminated" &&
         !call.disconnectedTime &&
-        (call.interactionId || call.originalCallControlId || call.queueName)
+        (call.interactionId || call.originalCallControlId || call.queueName),
     );
   }, [calls]);
 
   const buildInteractionsWithStore = useCallback(
-    (dbInteractions = []) => {
+    (dbInteractions = [], currentAgentStatus = null) => {
       const storeCallMap = new Map();
       activeCalls.forEach((call) => {
         if (call.interactionId) {
@@ -75,7 +76,31 @@ export function AgentDesktop() {
         }
       });
 
-      const enhancedInteractions = dbInteractions.map((interaction) => {
+      // Filter out timeout re-enqueued interactions from database interactions
+      const filteredDbInteractions = dbInteractions.filter((interaction) => {
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+        const isReEnqueued =
+          interaction.state === "queued" &&
+          !interaction.agent_username &&
+          !interaction.agentUsername;
+
+        // CRITICAL: If agent status is "Agent Not Answering", filter out any ringing interactions
+        // This handles the case where the database hasn't updated yet but the agent status has changed
+        if (
+          currentAgentStatus === "Agent Not Answering" &&
+          interaction.state === "ringing"
+        ) {
+          console.log(
+            `[AgentDesktop] Filtering out ringing interaction ${interaction.id} in buildInteractionsWithStore - agent status is "Agent Not Answering"`,
+          );
+          return false;
+        }
+
+        return !wasTimeoutReEnqueued && !isReEnqueued;
+      });
+
+      const enhancedInteractions = filteredDbInteractions.map((interaction) => {
         const metadata = interaction.metadata || {};
         const storeCall =
           storeCallMap.get(interaction.id) ||
@@ -114,8 +139,8 @@ export function AgentDesktop() {
               (storeCall.callerNumber && storeCall.callerNumber.trim() !== "")
                 ? storeCall.callerNumber
                 : storeCall.fromNumber && storeCall.fromNumber.trim() !== ""
-                ? storeCall.fromNumber
-                : null,
+                  ? storeCall.fromNumber
+                  : null,
             queue_name: storeCall.queueName || interaction.queue_name,
             state: storeCall.status || interaction.state,
           };
@@ -136,7 +161,7 @@ export function AgentDesktop() {
           matchKeys.delete(null);
           matchKeys.delete("");
 
-          return !dbInteractions.some((interaction) => {
+          return !filteredDbInteractions.some((interaction) => {
             const metadata = interaction.metadata || {};
             const interactionKeys = new Set([
               interaction.id,
@@ -182,7 +207,7 @@ export function AgentDesktop() {
         return true;
       });
     },
-    [activeCalls]
+    [activeCalls],
   );
 
   // Initialize calls store on mount (ensures it's visible in dev tools)
@@ -193,19 +218,59 @@ export function AgentDesktop() {
 
   const applyInteractions = useCallback(
     (mergedInteractions) => {
-      setInteractions(mergedInteractions);
+      // Filter out timeout re-enqueued interactions - these should not be shown to the agent
+      const filteredInteractions = mergedInteractions.filter((interaction) => {
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+
+        // Also filter out interactions that are in "queued" state and have no agent_username
+        // (they were re-enqueued after timeout)
+        const isReEnqueued =
+          interaction.state === "queued" &&
+          !interaction.agent_username &&
+          !interaction.agentUsername;
+
+        if (wasTimeoutReEnqueued || isReEnqueued) {
+          console.log(
+            `[AgentDesktop] Filtering out timeout re-enqueued interaction ${interaction.id}`,
+          );
+          return false;
+        }
+
+        return true;
+      });
+
+      setInteractions(filteredInteractions);
 
       // Auto-select first active if none selected
       setSelectedInteraction((current) => {
         if (!current) {
-          return mergedInteractions.length > 0 ? mergedInteractions[0] : null;
+          return filteredInteractions.length > 0
+            ? filteredInteractions[0]
+            : null;
         }
         // Update selected interaction if it exists in the new list
+        // Also deselect if current interaction was timeout re-enqueued
         if (current) {
-          const updated = mergedInteractions.find(
+          const currentMetadata = current.metadata || {};
+          const wasCurrentTimeoutReEnqueued =
+            currentMetadata.timeout_re_enqueued === true;
+          const isCurrentReEnqueued =
+            current.state === "queued" &&
+            !current.agent_username &&
+            !current.agentUsername;
+
+          if (wasCurrentTimeoutReEnqueued || isCurrentReEnqueued) {
+            // Deselect if current interaction was timeout re-enqueued
+            return filteredInteractions.length > 0
+              ? filteredInteractions[0]
+              : null;
+          }
+
+          const updated = filteredInteractions.find(
             (i) =>
               i.id === current.id ||
-              i.call_control_id === current.call_control_id
+              i.call_control_id === current.call_control_id,
           );
           if (updated) {
             return updated;
@@ -231,8 +296,8 @@ export function AgentDesktop() {
 
             fetch(
               `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callControlId
-              )}`
+                callControlId,
+              )}`,
             )
               .then((res) => res.json())
               .then((data) => {
@@ -254,7 +319,7 @@ export function AgentDesktop() {
         return null;
       });
     },
-    [setInteractions, setSelectedInteraction]
+    [setInteractions, setSelectedInteraction],
   );
 
   // Load interactions from database on mount and via SSE-triggered refreshes
@@ -263,14 +328,39 @@ export function AgentDesktop() {
     const loadInteractions = async () => {
       try {
         const res = await fetch(
-          "/api/contact-center/agent/interactions?limit=50&activeOnly=true"
+          "/api/contact-center/agent/interactions?limit=50&activeOnly=true",
+          { cache: "no-store" },
         );
         const data = await res.json();
         if (data.ok && Array.isArray(data.interactions)) {
-          setDbInteractions(data.interactions);
+          // Filter out timeout re-enqueued interactions on the client side as well
+          const filtered = data.interactions.filter((interaction) => {
+            const metadata = interaction.metadata || {};
+            const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+            const isReEnqueued =
+              interaction.state === "queued" &&
+              !interaction.agent_username &&
+              !interaction.agentUsername;
+
+            // CRITICAL: If agent status is "Agent Not Answering", filter out any ringing interactions
+            // This handles the case where the database hasn't updated yet but the agent status has changed
+            if (
+              agentStatus === "Agent Not Answering" &&
+              interaction.state === "ringing"
+            ) {
+              console.log(
+                `[AgentDesktop] Filtering out ringing interaction ${interaction.id} - agent status is "Agent Not Answering"`,
+              );
+              return false;
+            }
+
+            return !wasTimeoutReEnqueued && !isReEnqueued;
+          });
+          setDbInteractions(filtered);
         }
       } catch (err) {
         // Failed to load interactions
+        console.error("[AgentDesktop] Failed to load interactions:", err);
       }
     };
 
@@ -285,37 +375,145 @@ export function AgentDesktop() {
     // Listen for custom events from ContactCenterStreamProvider
     window.addEventListener(
       "contact-center:refresh-interactions",
-      handleSSEEvent
+      handleSSEEvent,
+    );
+
+    // Also listen for call disconnect events to IMMEDIATELY remove the interaction
+    const handleCallDisconnected = (event) => {
+      const { interactionId, callControlId } = event.detail || {};
+
+      // IMMEDIATELY remove the interaction from local state
+      // This ensures the UI clears instantly, even before database refresh
+      if (interactionId || callControlId) {
+        setDbInteractions((current) => {
+          const filtered = current.filter((interaction) => {
+            const matchesId = interaction.id === interactionId;
+            const matchesCallControlId =
+              interaction.call_control_id === callControlId;
+            if (matchesId || matchesCallControlId) {
+              console.log(
+                `[AgentDesktop] Immediately removing disconnected interaction: ${interactionId || callControlId}`,
+              );
+              return false;
+            }
+            return true;
+          });
+          return filtered;
+        });
+
+        // Also remove from calls store immediately
+        if (callControlId) {
+          useCallsStore.getState().removeCall(callControlId);
+        }
+        if (interactionId) {
+          useCallsStore.getState().removeCall(interactionId);
+        }
+
+        // Clear selected interaction if it's the one that disconnected
+        setSelectedInteraction((current) => {
+          if (
+            current &&
+            (current.id === interactionId ||
+              current.call_control_id === callControlId)
+          ) {
+            return null;
+          }
+          return current;
+        });
+      }
+
+      // Then refresh from database after a short delay to ensure consistency
+      setTimeout(() => {
+        loadInteractions();
+      }, 300);
+    };
+
+    window.addEventListener(
+      "contact-center:call-disconnected",
+      handleCallDisconnected,
     );
 
     return () => {
       window.removeEventListener(
         "contact-center:refresh-interactions",
-        handleSSEEvent
+        handleSSEEvent,
+      );
+      window.removeEventListener(
+        "contact-center:call-disconnected",
+        handleCallDisconnected,
       );
     };
   }, []);
 
   // Rebuild interactions from store updates without polling
   useEffect(() => {
-    const mergedInteractions = buildInteractionsWithStore(dbInteractions);
+    const mergedInteractions = buildInteractionsWithStore(
+      dbInteractions,
+      agentStatus,
+    );
     applyInteractions(mergedInteractions);
-  }, [applyInteractions, buildInteractionsWithStore, dbInteractions]);
+  }, [
+    applyInteractions,
+    buildInteractionsWithStore,
+    dbInteractions,
+    agentStatus,
+  ]);
 
-  // Load current username
+  // Load current username and agent status
   useEffect(() => {
-    const loadUsername = async () => {
+    const loadUserInfo = async () => {
       try {
         const res = await fetch("/api/auth/me");
         const data = await res.json();
         if (data.isAuth && data.user?.email) {
           setCurrentUsername(data.user.email);
         }
+        // Get agent status from user profile API
+        try {
+          const profileRes = await fetch("/api/user/profile");
+          const profileData = await profileRes.json();
+          if (profileData.ok && profileData.data?.status) {
+            setAgentStatus(profileData.data.status);
+          }
+        } catch (profileErr) {
+          // Failed to load status from profile
+        }
       } catch (err) {
         // Silently handle errors
       }
     };
-    loadUsername();
+    loadUserInfo();
+
+    // Listen for status changes via SSE (same endpoint as site-header uses)
+    let statusEventSource = null;
+    try {
+      statusEventSource = new EventSource("/api/user/status-stream");
+      statusEventSource.addEventListener("status_changed", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("[AgentDesktop] Received status_changed event:", data);
+          if (data.status) {
+            console.log(
+              `[AgentDesktop] Updating agent status to "${data.status}"`,
+            );
+            setAgentStatus(data.status);
+          }
+        } catch (err) {
+          console.error(
+            "[AgentDesktop] Failed to parse status SSE message:",
+            err,
+          );
+        }
+      });
+    } catch (err) {
+      console.error("[AgentDesktop] Failed to set up status SSE:", err);
+    }
+
+    return () => {
+      if (statusEventSource) {
+        statusEventSource.close();
+      }
+    };
   }, []);
 
   // Auto-refresh selected interaction if from_number is missing
@@ -340,8 +538,8 @@ export function AgentDesktop() {
 
       fetch(
         `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-          callControlId
-        )}`
+          callControlId,
+        )}`,
       )
         .then((res) => res.json())
         .then((data) => {
@@ -370,7 +568,7 @@ export function AgentDesktop() {
     const stillExists = interactions.some(
       (interaction) =>
         interaction.id === selectedInteraction.id ||
-        interaction.call_control_id === selectedInteraction.call_control_id
+        interaction.call_control_id === selectedInteraction.call_control_id,
     );
     if (!stillExists) {
       setSelectedInteraction(null);
@@ -404,6 +602,14 @@ export function AgentDesktop() {
     lastStatusRef.current = callStatus;
     if (wasDisconnected) {
       lastDisconnectedTimeRef.current = disconnectedTime;
+
+      // When call disconnects, refresh interactions list to remove it
+      // This ensures timeout re-enqueued calls are immediately removed
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:refresh-interactions"),
+        );
+      }, 300);
     }
 
     // Trigger wrapup check if call ended, cleared, or disconnected
@@ -423,6 +629,27 @@ export function AgentDesktop() {
     // Check if call was answered and not abandoned before opening wrapup sheet
     const checkAndOpenWrapup = async (retryCount = 0) => {
       try {
+        // CRITICAL: Check timeout status FIRST via API before doing anything else
+        // This prevents wrapup sheet from opening even for a moment
+        try {
+          const timeoutCheckRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+            { cache: "no-store" },
+          );
+          if (timeoutCheckRes.ok) {
+            const timeoutData = await timeoutCheckRes.json();
+            if (timeoutData.timeoutReEnqueued === true) {
+              console.log(
+                `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued`,
+              );
+              return; // Don't open wrapup sheet at all
+            }
+          }
+        } catch (timeoutCheckErr) {
+          // If timeout check fails, continue with normal check
+          console.warn("[AgentDesktop] Timeout check failed:", timeoutCheckErr);
+        }
+
         // Add a small delay on retry to allow database to update
         if (retryCount > 0) {
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -436,8 +663,8 @@ export function AgentDesktop() {
           try {
             const res = await fetch(
               `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                callInteractionId
-              )}`
+                callInteractionId,
+              )}`,
             );
             const data = await res.json();
             if (data.ok && data.interaction) {
@@ -453,9 +680,27 @@ export function AgentDesktop() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, default to opening wrapup sheet
-        // (call was active and ended, so assume it was answered unless we have evidence otherwise)
+        // If still no interaction found after retry, check timeout again before defaulting
         if (!interaction) {
+          try {
+            const timeoutCheckRes = await fetch(
+              `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+              { cache: "no-store" },
+            );
+            if (timeoutCheckRes.ok) {
+              const timeoutData = await timeoutCheckRes.json();
+              if (timeoutData.timeoutReEnqueued === true) {
+                console.log(
+                  `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (no interaction found)`,
+                );
+                return;
+              }
+            }
+          } catch (timeoutCheckErr) {
+            // Continue if check fails
+          }
+
+          // Default to opening wrapup sheet only if not timeout
           lastWrapupInteractionRef.current = interactionId;
           // Use global wrapup sheet store
           import("@/lib/stores/wrapup-sheet-store").then((module) => {
@@ -468,15 +713,24 @@ export function AgentDesktop() {
 
         // Check metadata for hangup cause and timeline events
         const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
         const routingMetadata = metadata.routing_metadata || {};
         const timeline = routingMetadata.timeline || [];
+
+        // Double-check timeout flag from interaction
+        if (wasTimeoutReEnqueued) {
+          console.log(
+            `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (from interaction metadata)`,
+          );
+          return;
+        }
 
         // Check if call was answered - look for answered_at or answered event in timeline
         const hasAnsweredEvent = timeline.some(
           (e) =>
             e.type === "answered" ||
             e.type === "connected" ||
-            e.type === "bridged"
+            e.type === "bridged",
         );
         const wasAnswered =
           Boolean(interaction.answered_at) || hasAnsweredEvent;
@@ -484,7 +738,7 @@ export function AgentDesktop() {
         // Check if call was abandoned or rejected
         const isAbandoned = interaction.state === "abandoned";
         const disconnectedEvent = timeline.find(
-          (e) => e.type === "disconnected"
+          (e) => e.type === "disconnected",
         );
         const hangupCause =
           disconnectedEvent?.hangupCause || metadata.hangup_cause;
@@ -497,15 +751,19 @@ export function AgentDesktop() {
         // Check if call was in "queued" state when it ended (abandoned before answer)
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Always open wrapup sheet for disconnected calls (including agent disconnects)
-        // Skip wrapup ONLY if:
-        // 1. Call was still in queued state when it ended (abandoned before answer), OR
-        // 2. Call was explicitly marked as abandoned AND was never answered
+        // Skip wrapup if:
+        // 1. Timeout re-enqueued (agent didn't answer - status already set to "Agent Not Answering")
+        // 2. Call was still in queued state when it ended (abandoned before answer), OR
+        // 3. Call was explicitly marked as abandoned AND was never answered
         // This ensures agent disconnects (which are answered calls) always show wrapup
+        // but timeout scenarios don't show wrapup (status is already "Agent Not Answering")
         //
         // Note: If call was answered (has answered_at or answered event), always show wrapup
         // even if state is "abandoned" (might be a timing issue or incorrect state update)
-        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
           // Open wrapup sheet - call was connected and ended (including agent disconnects)
@@ -519,6 +777,7 @@ export function AgentDesktop() {
         }
       } catch (err) {
         // Error checking interaction for wrapup
+        console.error("[AgentDesktop] Error in checkAndOpenWrapup:", err);
       }
     };
 
@@ -536,44 +795,76 @@ export function AgentDesktop() {
       (interaction) =>
         interaction.state === "completed" &&
         interaction.id !== lastWrapupInteractionRef.current &&
-        !processedCompletedInteractionsRef.current.has(interaction.id)
+        !processedCompletedInteractionsRef.current.has(interaction.id),
     );
 
-    for (const interaction of completedInteractions) {
-      // Mark as processed immediately to avoid duplicate processing
-      processedCompletedInteractionsRef.current.add(interaction.id);
+    // Process completed interactions asynchronously
+    (async () => {
+      for (const interaction of completedInteractions) {
+        // Mark as processed immediately to avoid duplicate processing
+        processedCompletedInteractionsRef.current.add(interaction.id);
 
-      // Check if this interaction was answered
-      const wasAnswered = Boolean(interaction.answered_at);
-      const metadata = interaction.metadata || {};
-      const routingMetadata = metadata.routing_metadata || {};
-      const timeline = routingMetadata.timeline || [];
-      const hasAnsweredEvent = timeline.some(
-        (e) =>
-          e.type === "answered" ||
-          e.type === "connected" ||
-          e.type === "bridged"
-      );
-      const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
+        // CRITICAL: Check timeout status FIRST via API before doing anything else
+        try {
+          const timeoutCheckRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/timeout-check`,
+            { cache: "no-store" },
+          );
+          if (timeoutCheckRes.ok) {
+            const timeoutData = await timeoutCheckRes.json();
+            if (timeoutData.timeoutReEnqueued === true) {
+              console.log(
+                `[AgentDesktop] Skipping wrapup for interaction ${interaction.id} - timeout re-enqueued (completed interaction)`,
+              );
+              continue; // Skip this interaction, check next one
+            }
+          }
+        } catch (timeoutCheckErr) {
+          // If timeout check fails, continue with normal check
+          console.warn(
+            "[AgentDesktop] Timeout check failed for completed interaction:",
+            timeoutCheckErr,
+          );
+        }
 
-      const isAbandoned = interaction.state === "abandoned";
-      const wasQueuedWhenEnded = interaction.state === "queued";
+        // Check if this interaction was answered
+        const wasAnswered = Boolean(interaction.answered_at);
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+        const routingMetadata = metadata.routing_metadata || {};
+        const timeline = routingMetadata.timeline || [];
+        const hasAnsweredEvent = timeline.some(
+          (e) =>
+            e.type === "answered" ||
+            e.type === "connected" ||
+            e.type === "bridged",
+        );
+        const wasActuallyAnswered = wasAnswered || hasAnsweredEvent;
 
-      // Skip if abandoned and never answered
-      const shouldSkip =
-        wasQueuedWhenEnded || (isAbandoned && !wasActuallyAnswered);
+        const isAbandoned = interaction.state === "abandoned";
+        const wasQueuedWhenEnded = interaction.state === "queued";
 
-      if (!shouldSkip && wasActuallyAnswered) {
-        lastWrapupInteractionRef.current = interaction.id;
-        // Use global wrapup sheet store
-        import("@/lib/stores/wrapup-sheet-store").then((module) => {
-          module.default
-            .getState()
-            .openWrapup(interaction.id, lastTranscriptionsRef.current || []);
-        });
-        break; // Only open for the first completed interaction
+        // Skip wrapup if:
+        // - Timeout re-enqueued (agent didn't answer - status already set to "Agent Not Answering")
+        // - Abandoned and never answered
+        // - Still queued when ended
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasActuallyAnswered);
+
+        if (!shouldSkip && wasActuallyAnswered) {
+          lastWrapupInteractionRef.current = interaction.id;
+          // Use global wrapup sheet store
+          import("@/lib/stores/wrapup-sheet-store").then((module) => {
+            module.default
+              .getState()
+              .openWrapup(interaction.id, lastTranscriptionsRef.current || []);
+          });
+          break; // Only open for the first completed interaction
+        }
       }
-    }
+    })();
   }, [interactions]);
 
   // Listen for manual disconnect events and open global wrapup sheet
@@ -590,28 +881,36 @@ export function AgentDesktop() {
       // Find the interaction to check if it was answered
       const interaction = interactions.find((i) => i.id === interactionId);
       if (interaction) {
+        const metadata = interaction.metadata || {};
+        const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
         const wasAnswered = Boolean(interaction.answered_at);
         const isAbandoned = interaction.state === "abandoned";
         const wasQueuedWhenEnded = interaction.state === "queued";
 
-        // Skip wrapup only if abandoned and never answered
-        const shouldSkip = wasQueuedWhenEnded || (isAbandoned && !wasAnswered);
+        // Skip wrapup if:
+        // - Timeout re-enqueued (agent didn't answer)
+        // - Abandoned and never answered
+        // - Still queued when ended
+        const shouldSkip =
+          wasTimeoutReEnqueued ||
+          wasQueuedWhenEnded ||
+          (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = interactionId;
           // Use global wrapup sheet store
-          const { openWrapup } = await import(
-            "@/lib/stores/wrapup-sheet-store"
-          );
-          openWrapup(interactionId, transcriptions || []);
+          const { default: useWrapupSheetStore } =
+            await import("@/lib/stores/wrapup-sheet-store");
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(interactionId, transcriptions || []);
         }
       } else {
         // If interaction not found, assume it was answered and show wrapup
         lastWrapupInteractionRef.current = interactionId;
         // Use global wrapup sheet store
-        const { default: useWrapupSheetStore } = await import(
-          "@/lib/stores/wrapup-sheet-store"
-        );
+        const { default: useWrapupSheetStore } =
+          await import("@/lib/stores/wrapup-sheet-store");
         useWrapupSheetStore
           .getState()
           .openWrapup(interactionId, transcriptions || []);
@@ -620,13 +919,13 @@ export function AgentDesktop() {
 
     window.addEventListener(
       "contact-center:call-disconnected",
-      handleCallDisconnected
+      handleCallDisconnected,
     );
 
     return () => {
       window.removeEventListener(
         "contact-center:call-disconnected",
-        handleCallDisconnected
+        handleCallDisconnected,
       );
     };
   }, [interactions]);
