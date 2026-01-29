@@ -122,14 +122,14 @@ export default function SupervisorScheduledEventsPage() {
         filteredItems = filteredItems.filter((item) =>
           (item.telnyx_agent_target || "")
             .toLowerCase()
-            .includes(filters.fromNumber.toLowerCase())
+            .includes(filters.fromNumber.toLowerCase()),
         );
       }
       if (filters.toNumber) {
         filteredItems = filteredItems.filter((item) =>
           (item.telnyx_end_user_target || "")
             .toLowerCase()
-            .includes(filters.toNumber.toLowerCase())
+            .includes(filters.toNumber.toLowerCase()),
         );
       }
 
@@ -173,11 +173,11 @@ export default function SupervisorScheduledEventsPage() {
               (hasVoiceConfig && hasTelephonyEnabled) ||
               (hasMessagingConfig && hasMessagingEnabled)
             );
-          }
+          },
         );
 
         console.log(
-          `[Scheduled Events] Filtered ${assistantsWithPhoneCapability.length} assistants with phone capability from ${allAssistants.length} total`
+          `[Scheduled Events] Filtered ${assistantsWithPhoneCapability.length} assistants with phone capability from ${allAssistants.length} total`,
         );
 
         setAssistants(assistantsWithPhoneCapability);
@@ -210,11 +210,11 @@ export default function SupervisorScheduledEventsPage() {
     try {
       const r = await fetch(
         `/api/admin/scheduled-events/${encodeURIComponent(
-          eventId
+          eventId,
         )}?assistantId=${encodeURIComponent(assistantId)}`,
         {
           method: "DELETE",
-        }
+        },
       );
       if (r.ok) {
         toast.success("Event deleted successfully");
@@ -329,9 +329,9 @@ export default function SupervisorScheduledEventsPage() {
 
   async function handleOpenConversation(conversationId) {
     if (!conversationId) return;
-    
+
     setSelectedConversationId(conversationId);
-    
+
     // Create a mock interaction object with the conversation_id
     // The AiConversationSheet will use this to load the conversation
     const mockInteraction = {
@@ -341,7 +341,7 @@ export default function SupervisorScheduledEventsPage() {
       },
       conversation_id: conversationId,
     };
-    
+
     setConversationInteraction(mockInteraction);
     setShowConversationSheet(true);
   }
@@ -520,9 +520,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
           </div>
 
           {/* Filters */}
-          <div className="flex items-end gap-2 mb-4">
-            <div>
-              <Label className="text-xs mb-1">Channel</Label>
+          <div className="flex items-end gap-4 mb-4">
+            <div className="w-[160px]">
+              <Label className="text-xs mb-1 block">Channel</Label>
               {mounted ? (
                 <Combobox
                   value={filters.channel}
@@ -536,13 +536,14 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                   ]}
                   placeholder="All Channels"
                   searchable={true}
+                  triggerClassName="w-full"
                 />
               ) : (
                 <div className="h-9 w-[160px] border rounded-md bg-muted animate-pulse" />
               )}
             </div>
-            <div>
-              <Label className="text-xs mb-1 w-[160px]">Assistant</Label>
+            <div className="w-[160px]">
+              <Label className="text-xs mb-1 block">Assistant</Label>
               {mounted ? (
                 <Combobox
                   value={filters.assistantId}
@@ -558,6 +559,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                   ]}
                   placeholder="Select Assistant"
                   searchable={true}
+                  triggerClassName="w-full"
                 />
               ) : (
                 <div className="h-9 w-[160px] border rounded-md bg-muted animate-pulse" />
@@ -618,8 +620,12 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                     </TableHead>
                     <TableHead className="px-[10px] w-[130px]">From</TableHead>
                     <TableHead className="px-[10px] w-[130px]">To</TableHead>
-                    <TableHead className="px-[10px] w-[100px]">Status</TableHead>
-                    <TableHead className="px-[10px] w-[100px]">Duration</TableHead>
+                    <TableHead className="px-[10px] w-[100px]">
+                      Status
+                    </TableHead>
+                    <TableHead className="px-[10px] w-[100px]">
+                      Duration
+                    </TableHead>
                     <TableHead className="px-[10px] w-[80px] text-right">
                       Actions
                     </TableHead>
@@ -638,13 +644,13 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                             <Badge
                               className={
                                 channelBadgeColor(
-                                  event.telnyx_conversation_channel
+                                  event.telnyx_conversation_channel,
                                 ) + " justify-center"
                               }
                               variant="outline"
                             >
                               {formatChannelName(
-                                event.telnyx_conversation_channel
+                                event.telnyx_conversation_channel,
                               )}
                             </Badge>
                           </TableCell>
@@ -665,8 +671,11 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                             )}
                           </TableCell>
                           <TableCell className="px-[10px] text-xs whitespace-nowrap">
-                            {event.call_duration !== null && event.call_duration !== undefined ? (
-                              <span className="font-mono">{formatCallDuration(event.call_duration)}</span>
+                            {event.call_duration !== null &&
+                            event.call_duration !== undefined ? (
+                              <span className="font-mono">
+                                {formatCallDuration(event.call_duration)}
+                              </span>
                             ) : (
                               "—"
                             )}
@@ -677,7 +686,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleOpenConversation(event.conversation_id)
+                                    handleOpenConversation(
+                                      event.conversation_id,
+                                    )
                                   }
                                   className="inline-flex items-center text-blue-500 hover:text-blue-600"
                                   title="View conversation history"
@@ -848,20 +859,20 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
                 sms_chat (required)
               </li>
               <li>
-                <strong>telnyx_end_user_target</strong>: Phone number to call
-                or text (required)
+                <strong>telnyx_end_user_target</strong>: Phone number to call or
+                text (required)
               </li>
               <li>
                 <strong>telnyx_agent_target</strong>: Phone number to call or
                 text from (required)
               </li>
               <li>
-                <strong>scheduled_at_fixed_datetime</strong>: ISO 8601
-                datetime (required)
+                <strong>scheduled_at_fixed_datetime</strong>: ISO 8601 datetime
+                (required)
               </li>
               <li>
-                <strong>text</strong>: SMS text (optional, required for
-                sms_chat channel)
+                <strong>text</strong>: SMS text (optional, required for sms_chat
+                channel)
               </li>
             </ul>
           </DialogHeader>
@@ -985,4 +996,3 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
     </div>
   );
 }
-

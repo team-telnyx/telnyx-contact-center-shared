@@ -1036,7 +1036,7 @@ export default function MonitorPage() {
   });
 
   return (
-    <div className="px-4 lg:px-4 py-0 pb-2 space-y-6">
+    <div className="px-4 lg:px-4 py-4 pb-2 space-y-6">
       {/* Connection Status */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1101,13 +1101,13 @@ export default function MonitorPage() {
       {/* Overall Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <Card className="border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
             <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
               Total Calls Today
             </CardTitle>
-            <IconPhone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <IconPhone className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
           </CardHeader>
-          <CardContent className="pt-0 px-4 pb-3">
+          <CardContent className="pt-2 px-4 pb-4">
             <div className="text-4xl font-bold text-blue-900 dark:text-blue-100">
               {overall.calls?.total || 0}
             </div>
@@ -1119,13 +1119,13 @@ export default function MonitorPage() {
         </Card>
 
         <Card className="border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
             <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
               Active Agents
             </CardTitle>
-            <IconUsers className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <IconUsers className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
           </CardHeader>
-          <CardContent className="pt-0 px-4 pb-3">
+          <CardContent className="pt-2 px-4 pb-4">
             <div className="text-4xl font-bold text-green-900 dark:text-green-100">
               {overall.agents?.totalActive || 0}
             </div>
@@ -1137,13 +1137,13 @@ export default function MonitorPage() {
         </Card>
 
         <Card className="border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
             <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
               Active Calls
             </CardTitle>
-            <IconActivity className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <IconActivity className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
           </CardHeader>
-          <CardContent className="pt-0 px-4 pb-3">
+          <CardContent className="pt-2 px-4 pb-4">
             <div className="text-4xl font-bold text-purple-900 dark:text-purple-100">
               {overall.calls?.active || 0}
             </div>
@@ -1154,13 +1154,13 @@ export default function MonitorPage() {
         </Card>
 
         <Card className="border-l-4 border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
             <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
               Avg Wait Time
             </CardTitle>
-            <IconClock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <IconClock className="h-4 w-4 text-orange-600 dark:text-orange-400 shrink-0" />
           </CardHeader>
-          <CardContent className="pt-0 px-4 pb-3">
+          <CardContent className="pt-2 px-4 pb-4">
             <div className="text-4xl font-bold text-orange-900 dark:text-orange-100">
               {Math.round(overall.calls?.avgWaitTimeSeconds || 0)}s
             </div>

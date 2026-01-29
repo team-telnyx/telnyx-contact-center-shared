@@ -37,7 +37,7 @@ export function AgentAssist({ interactionId, interaction }) {
   // Read transcriptions directly from active-call-store (same as demo portal)
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
   const originalCallControlId = useActiveCallStore(
-    (state) => state.originalCallControlId
+    (state) => state.originalCallControlId,
   );
 
   // Debug: Log interaction data to help troubleshoot from_number issue
@@ -54,7 +54,7 @@ export function AgentAssist({ interactionId, interaction }) {
   useEffect(() => {
     if (scrollRef.current) {
       const viewport = scrollRef.current.querySelector(
-        "[data-radix-scroll-area-viewport]"
+        "[data-radix-scroll-area-viewport]",
       );
       if (viewport) {
         viewport.scrollTop = viewport.scrollHeight;
@@ -77,7 +77,7 @@ export function AgentAssist({ interactionId, interaction }) {
     try {
       const url = new URL(
         "/api/contact-center/kb-articles/search",
-        window.location.origin
+        window.location.origin,
       );
       url.searchParams.set("q", intent);
       url.searchParams.set("pageSize", "5");
@@ -94,7 +94,7 @@ export function AgentAssist({ interactionId, interaction }) {
         console.error(
           "KB articles search failed:",
           response.status,
-          await response.text()
+          await response.text(),
         );
         setKbArticles([]);
       }
@@ -303,12 +303,12 @@ export function AgentAssist({ interactionId, interaction }) {
   };
 
   return (
-    <div className="flex flex-col h-full gap-3 px-4 overflow-hidden pb-4">
+    <div className="flex flex-col h-full gap-3 px-4 overflow-hidden pb-4 pt-4">
       {/* Top Stats Cards */}
       <div className="grid grid-cols-3 gap-3 flex-shrink-0">
         {/* Intent Card */}
         <Card className="border-2 border-border bg-card">
-          <CardContent className="pl-5">
+          <CardContent className="pl-5 pt-4 pb-4">
             <h3 className="text-lg font-semibold mb-2">Detected Intent</h3>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2.5 rounded-lg bg-purple-500/10">
@@ -349,7 +349,7 @@ export function AgentAssist({ interactionId, interaction }) {
 
         {/* Current Sentiment Card */}
         <Card className="border-2 border-border bg-card">
-          <CardContent className="pl-5">
+          <CardContent className="pl-5 pt-4 pb-4">
             <h3 className="text-lg font-semibold mb-2">Current Sentiment</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-blue-500/10">
@@ -363,7 +363,7 @@ export function AgentAssist({ interactionId, interaction }) {
                 </div>
                 <Badge
                   className={`text-white hover:opacity-90 text-xs px-2 py-0.5 mt-1 ${getSentimentBadgeColorSolid(
-                    aggregateStats.currentSentiment
+                    aggregateStats.currentSentiment,
                   )}`}
                 >
                   {aggregateStats.currentSentiment}
@@ -375,7 +375,7 @@ export function AgentAssist({ interactionId, interaction }) {
 
         {/* Average Sentiment Card */}
         <Card className="border-2 border-border bg-card">
-          <CardContent className="pl-5">
+          <CardContent className="pl-5 pt-4 pb-4">
             <h3 className="text-lg font-semibold mb-2">Average Sentiment</h3>
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-lg bg-green-500/10">
@@ -389,7 +389,7 @@ export function AgentAssist({ interactionId, interaction }) {
                 </div>
                 <Badge
                   className={`text-white hover:opacity-90 text-xs px-2 py-0.5 mt-1 ${getSentimentBadgeColorSolid(
-                    aggregateStats.averageSentiment
+                    aggregateStats.averageSentiment,
                   )}`}
                 >
                   {aggregateStats.averageSentiment}
@@ -405,7 +405,7 @@ export function AgentAssist({ interactionId, interaction }) {
         {/* Column 1: Transcription Chat View */}
         <Card className="col-span-1 flex flex-col border-2 border-border bg-card overflow-hidden">
           <CardContent className="p-0 flex flex-col h-full overflow-hidden">
-            <div className="px-4 pb-6 border-b border-border flex-shrink-0">
+            <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <MessageSquare className="h-5 w-5 text-green-500" />
                 Live Transcription
@@ -441,7 +441,7 @@ export function AgentAssist({ interactionId, interaction }) {
         {/* Column 2: KB Articles List */}
         <Card className="col-span-1 flex flex-col border-2 border-border bg-card overflow-hidden h-full">
           <CardContent className="p-0 flex flex-col h-full overflow-hidden">
-            <div className="px-4 pb-6 border-b border-border flex-shrink-0">
+            <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                   <BookOpen className="h-5 w-5 text-amber-500" />
@@ -531,7 +531,7 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
             <Badge
               variant="outline"
               className={`text-xs ${getSentimentBadgeColor(
-                transcription.sentiment
+                transcription.sentiment,
               )}`}
             >
               {getSentimentIcon(transcription.sentiment)}
@@ -601,7 +601,7 @@ function KbArticleCard({ article, isSelected, onSelect }) {
       }`}
       onClick={onSelect}
     >
-      <CardContent className="px-4 py-0">
+      <CardContent className="px-4 py-3">
         <div className="space-y-1.5">
           {article.category && (
             <Badge
@@ -734,22 +734,22 @@ function ArticleViewer({
   const displayContent = useLLM
     ? llmResponse || ""
     : article
-    ? article.content || "No content available"
-    : "Select an article to view content";
+      ? article.content || "No content available"
+      : "Select an article to view content";
   const isContentLoading = useLLM && isGenerating;
 
   return (
     <>
       {/* Fixed Header */}
-      <div className="px-4 pb-6 border-b border-border flex-shrink-0">
+      <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-500" />
             {useLLM && llmResponse
               ? "AI Generated Response"
               : article
-              ? "Article Content"
-              : "Content"}
+                ? "Article Content"
+                : "Content"}
           </h3>
           <div className="flex items-center gap-2">
             <Switch
@@ -910,7 +910,7 @@ function ArticleViewer({
         </div>
       </ScrollArea>
 
-      <div className="px-4 pt-4 border-t bg-muted/10 flex-shrink-0">
+      <div className="px-4 pt-4 pb-4 border-t bg-muted/10 flex-shrink-0">
         <div className="grid grid-cols-2 gap-2">
           <Button
             className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white border-0 rounded-lg"
@@ -923,7 +923,12 @@ function ArticleViewer({
                 onSendSMS();
               }
             }}
-            disabled={!callerNumber || callerNumber.trim() === ""}
+            disabled={
+              !callerNumber ||
+              callerNumber.trim() === "" ||
+              (!useLLM && !article) ||
+              (useLLM && !llmResponse)
+            }
           >
             <Send className="h-6 w-6 mr-2" />
             Send SMS

@@ -414,7 +414,7 @@ export function InteractionsList({
 }) {
   return (
     <div className="flex flex-col h-full">
-      <div className="px-4 py-3 bg-muted/50 border-b -mt-6 rounded-t-xl">
+      <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-md bg-primary/10">
             <IconPhone className="h-4 w-4 text-primary" />

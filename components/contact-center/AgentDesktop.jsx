@@ -1021,7 +1021,7 @@ export function AgentDesktop() {
 
         {/* Right Panel - Interaction Details */}
         <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <div className="px-4 py-3 bg-muted/50 border-b -mt-6 rounded-t-xl">
+          <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 rounded-md bg-primary/10">
