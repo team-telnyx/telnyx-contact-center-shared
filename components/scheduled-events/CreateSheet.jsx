@@ -43,7 +43,7 @@ export default function CreateSheet({
 }) {
   const { user } = useAuth();
   const [assistantId, setAssistantId] = React.useState(
-    preselectedAssistantId || ""
+    preselectedAssistantId || "",
   );
   const [channel, setChannel] = React.useState("phone_call");
   const [fromNumber, setFromNumber] = React.useState("");
@@ -67,7 +67,7 @@ export default function CreateSheet({
       try {
         const res = await fetch(
           `/api/ai/assistants/${encodeURIComponent(assistantId)}/phone-numbers`,
-          { cache: "no-store" }
+          { cache: "no-store" },
         );
         const data = await res.json();
         if (res.ok && data.ok) {
@@ -80,10 +80,10 @@ export default function CreateSheet({
           // Auto-select user's voice number if it's in the list, otherwise select first
           if (numbers.length > 0) {
             const userNumber = numbers.find(
-              (n) => n.phone_number === user?.voiceNumber
+              (n) => n.phone_number === user?.voiceNumber,
             );
             setFromNumber(
-              userNumber?.phone_number || numbers[0].phone_number || ""
+              userNumber?.phone_number || numbers[0].phone_number || "",
             );
           } else {
             setFromNumber("");
@@ -243,8 +243,8 @@ export default function CreateSheet({
                           loadingNumbers
                             ? "Loading numbers..."
                             : phoneNumbers.length === 0
-                            ? "No numbers available"
-                            : "Select a number"
+                              ? "No numbers available"
+                              : "Select a number"
                         }
                       />
                     </SelectTrigger>

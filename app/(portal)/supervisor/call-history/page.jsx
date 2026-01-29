@@ -52,7 +52,7 @@ function formatDuration(seconds) {
   const secs = total % 60;
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(
     2,
-    "0"
+    "0",
   )}:${String(secs).padStart(2, "0")}`;
 }
 
@@ -97,19 +97,25 @@ export default function SupervisorCallHistoryPage() {
     const toIso = toIsoDateTime(filters.to);
     if (fromIso) sp.set("from", fromIso);
     if (toIso) sp.set("to", toIso);
-    if (filters.queue && filters.queue !== "all") sp.set("queue", filters.queue);
-    if (filters.agent && filters.agent !== "all") sp.set("agent", filters.agent);
+    if (filters.queue && filters.queue !== "all")
+      sp.set("queue", filters.queue);
+    if (filters.agent && filters.agent !== "all")
+      sp.set("agent", filters.agent);
     return sp.toString();
   }, [page, pageSize, filters]);
 
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/contact-center/interactions/history?${query}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/contact-center/interactions/history?${query}`,
+        {
+          cache: "no-store",
+        },
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed to load call history");
+      if (!res.ok)
+        throw new Error(data?.error || "Failed to load call history");
       setItems(data.rows || []);
       setTotal(Number(data.count || 0));
       if (data.filters) {
@@ -151,7 +157,7 @@ export default function SupervisorCallHistoryPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-end gap-4">
-            <div className="grid gap-3 md:grid-cols-2 w-full md:w-auto md:max-w-[360px]">
+            <div className="flex flex-wrap items-end gap-4 w-full md:w-auto">
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
                   From
@@ -163,7 +169,7 @@ export default function SupervisorCallHistoryPage() {
                     setPage(1);
                     setFilters((prev) => ({ ...prev, from: e.target.value }));
                   }}
-                  className="w-full md:w-[170px]"
+                  className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
                 />
               </div>
               <div>
@@ -177,7 +183,7 @@ export default function SupervisorCallHistoryPage() {
                     setPage(1);
                     setFilters((prev) => ({ ...prev, to: e.target.value }));
                   }}
-                  className="w-full md:w-[170px]"
+                  className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
                 />
               </div>
             </div>
@@ -283,15 +289,15 @@ export default function SupervisorCallHistoryPage() {
                         ? Math.floor(
                             (new Date(item.completed_at) -
                               new Date(startedAt)) /
-                              1000
+                              1000,
                           )
                         : null);
-                  const hasRecording = Boolean(
-                    item.recording_url ||
+                    const hasRecording = Boolean(
+                      item.recording_url ||
                       item.metadata?.recording?.recording_url ||
-                      item.metadata?.recording?.recording_urls?.mp3
-                  );
-                  return (
+                      item.metadata?.recording?.recording_urls?.mp3,
+                    );
+                    return (
                       <TableRow key={item.id}>
                         <TableCell>
                           {item.direction === "inbound" ? (
@@ -312,34 +318,34 @@ export default function SupervisorCallHistoryPage() {
                         </TableCell>
                         <TableCell>{formatDateTime(startedAt)}</TableCell>
                         <TableCell>{formatDuration(durationSeconds)}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={`uppercase bg-transparent ${
-                            String(item.state || "")
-                              .toLowerCase()
-                              .includes("complete")
-                              ? "border-green-500 text-green-500"
-                              : String(item.state || "")
-                                  .toLowerCase()
-                                  .includes("abandon")
-                              ? "border-red-500 text-red-500"
-                              : String(item.state || "")
-                                  .toLowerCase()
-                                  .includes("fail")
-                              ? "border-red-500 text-red-500"
-                              : String(item.state || "")
-                                  .toLowerCase()
-                                  .includes("hangup")
-                              ? "border-red-500 text-red-500"
-                              : "border-blue-500 text-blue-500"
-                          }`}
-                        >
-                          {item.state || "unknown"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {hasRecording ? (
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={`uppercase bg-transparent ${
+                              String(item.state || "")
+                                .toLowerCase()
+                                .includes("complete")
+                                ? "border-green-500 text-green-500"
+                                : String(item.state || "")
+                                      .toLowerCase()
+                                      .includes("abandon")
+                                  ? "border-red-500 text-red-500"
+                                  : String(item.state || "")
+                                        .toLowerCase()
+                                        .includes("fail")
+                                    ? "border-red-500 text-red-500"
+                                    : String(item.state || "")
+                                          .toLowerCase()
+                                          .includes("hangup")
+                                      ? "border-red-500 text-red-500"
+                                      : "border-blue-500 text-blue-500"
+                            }`}
+                          >
+                            {item.state || "unknown"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {hasRecording ? (
                             <Badge className="bg-green-500/10 text-green-500 border border-green-500/40">
                               Available
                             </Badge>
@@ -359,7 +365,9 @@ export default function SupervisorCallHistoryPage() {
                               <IconInfoCircle className="h-4 w-4" />
                             </Button>
                             <Button size="icon" variant="ghost" asChild>
-                              <Link href={`/supervisor/call-history/${item.id}`}>
+                              <Link
+                                href={`/supervisor/call-history/${item.id}`}
+                              >
                                 <IconExternalLink className="h-4 w-4" />
                               </Link>
                             </Button>
@@ -448,4 +456,3 @@ export default function SupervisorCallHistoryPage() {
     </div>
   );
 }
-

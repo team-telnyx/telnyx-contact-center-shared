@@ -1119,7 +1119,7 @@ export const VOICE_FLOW_NODES = {
         default: 100,
         placeholder: "200",
         description:
-          "The maximum number of calls allowed in the queue at a given time. Can't be modified for an existing queue.",
+          "The maximum number of calls allowed in the queue at a given time. Note: This parameter is not sent to Telnyx API as max_size cannot be modified for existing queues. Kept in config for backward compatibility only.",
       },
       keep_after_hangup: {
         type: "boolean",

@@ -194,6 +194,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@date-fns/tz@npm:^1.4.1":
+  version: 1.4.1
+  resolution: "@date-fns/tz@npm:1.4.1"
+  checksum: 10c0/9033fdc4682fe3d4d147625ce04fa88a8792653594e2de8d5a438c8f3bfc0990ee28fe773f91cac6810b06d818b5b281ae0608752ba8337257d0279ded3f019a
+  languageName: node
+  linkType: hard
+
 "@emnapi/core@npm:^1.4.3, @emnapi/core@npm:^1.7.1":
   version: 1.7.1
   resolution: "@emnapi/core@npm:1.7.1"
@@ -3691,6 +3698,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"date-fns-jalali@npm:^4.1.0-0":
+  version: 4.1.0-0
+  resolution: "date-fns-jalali@npm:4.1.0-0"
+  checksum: 10c0/f9ad98d9f7e8e5abe0d070dc806b0c8baded2b1208626c42e92cbd2605b5171f5714d6b79b20cc2666267d821699244c9d0b5e93274106cf57d6232da77596ed
+  languageName: node
+  linkType: hard
+
 "date-fns@npm:^4.1.0":
   version: 4.1.0
   resolution: "date-fns@npm:4.1.0"
@@ -6935,6 +6949,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-day-picker@npm:^9.13.0":
+  version: 9.13.0
+  resolution: "react-day-picker@npm:9.13.0"
+  dependencies:
+    "@date-fns/tz": "npm:^1.4.1"
+    date-fns: "npm:^4.1.0"
+    date-fns-jalali: "npm:^4.1.0-0"
+  peerDependencies:
+    react: ">=16.8.0"
+  checksum: 10c0/e176309a24697f6552c80c7fde257f3dc06506a4e5ec22b11b55bf136bd452ab98d2ca9c2a17632092d67d23d08b3b35daf77d99e95a937ad290d3322abc745c
+  languageName: node
+  linkType: hard
+
 "react-dom@npm:19.2.3":
   version: 19.2.3
   resolution: "react-dom@npm:19.2.3"
@@ -7907,6 +7934,7 @@ __metadata:
     next-themes: "npm:^0.4.6"
     pg: "npm:^8.16.3"
     react: "npm:19.2.3"
+    react-day-picker: "npm:^9.13.0"
     react-dom: "npm:19.2.3"
     react-easy-crop: "npm:^5.5.6"
     react-markdown: "npm:^10.1.0"
