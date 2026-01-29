@@ -111,6 +111,7 @@ import {
   IconPlus,
   IconVariable,
   IconApi,
+  IconDatabase,
   IconGitBranch,
   IconGitFork,
   IconCircuitGround,
@@ -149,6 +150,7 @@ import SetVariableNodeEditor, {
 } from "@/components/voice-flow/SetVariableNodeEditor";
 import LogicGateNodeEditor from "@/components/voice-flow/LogicGateNodeEditor";
 import HttpRequestNodeEditor from "@/components/voice-flow/HttpRequestNodeEditor";
+import DataActionsNodeEditor from "@/components/voice-flow/DataActionsNodeEditor";
 import ReferNodeEditor from "@/components/voice-flow/ReferNodeEditor";
 import DialNodeEditor from "@/components/voice-flow/DialNodeEditor";
 import BridgeNodeEditor from "@/components/voice-flow/BridgeNodeEditor";
@@ -270,6 +272,9 @@ const getNodeExecutionIcon = (nodeType) => {
   if (type === "http_request_action") {
     return <IconApi className="size-4 text-indigo-500" />;
   }
+  if (type === "data_action") {
+    return <IconDatabase className="size-4 text-teal-500" />;
+  }
   if (type === "condition") {
     return <IconGitBranch className="size-4 text-yellow-500" />;
   }
@@ -316,7 +321,7 @@ function WebhookToolHeader({ eventType, direction, timestamp, className }) {
     <CollapsibleTrigger
       className={cn(
         "flex w-full flex-col items-start p-3 hover:bg-muted/50 transition-colors",
-        className
+        className,
       )}
     >
       <div className="flex items-center justify-between w-full gap-4">
@@ -383,7 +388,7 @@ function NodeExecutionToolHeader({
     <CollapsibleTrigger
       className={cn(
         "flex w-full flex-col items-start p-3 hover:bg-muted/50 transition-colors",
-        className
+        className,
       )}
     >
       <div className="flex items-center justify-between w-full gap-4">
@@ -508,14 +513,14 @@ function renderNodeExecutionDetails(nodeType, details, success) {
                   details.response.status < 300
                     ? "bg-green-50 text-green-700 border-green-200"
                     : details.response.status >= 300 &&
-                      details.response.status < 400
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : details.response.status >= 400 &&
-                      details.response.status < 500
-                    ? "bg-red-50 text-red-700 border-red-200"
-                    : details.response.status >= 500
-                    ? "bg-orange-50 text-orange-700 border-orange-200"
-                    : "bg-gray-50 text-gray-700 border-gray-200"
+                        details.response.status < 400
+                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                      : details.response.status >= 400 &&
+                          details.response.status < 500
+                        ? "bg-red-50 text-red-700 border-red-200"
+                        : details.response.status >= 500
+                          ? "bg-orange-50 text-orange-700 border-orange-200"
+                          : "bg-gray-50 text-gray-700 border-gray-200"
                 }`}
               >
                 {details.response.status} {details.response.status_text}
@@ -749,8 +754,8 @@ function CustomNode({ data, selected }) {
             isActive
               ? "border-[#00C081] shadow-[0_0_15px_rgba(0,192,129,0.5)]"
               : selected
-              ? "border-primary"
-              : "border-border"
+                ? "border-primary"
+                : "border-border"
           }`}
           style={{
             minWidth: "280px",
@@ -1059,7 +1064,7 @@ function VariableCard({
     return checkDuplicateVariableName(
       editingName,
       { nodes, edges, globalVariables },
-      { type: "global", oldName: varName }
+      { type: "global", oldName: varName },
     );
   }, [editingName, nodes, edges, globalVariables, varName]);
 
@@ -1071,7 +1076,7 @@ function VariableCard({
       const check = checkDuplicateVariableName(
         newVarName,
         { nodes, edges, globalVariables },
-        { type: "global", oldName: varName }
+        { type: "global", oldName: varName },
       );
 
       if (check.isDuplicate) {
@@ -1220,7 +1225,7 @@ export default function FlowBuilderPage() {
             : ["agent"];
 
         const hasAdminAccess = userRoles.some(
-          (role) => role === "admin" || role === "owner"
+          (role) => role === "admin" || role === "owner",
         );
 
         if (!hasAdminAccess) {
@@ -1272,10 +1277,10 @@ export default function FlowBuilderPage() {
   const currentCallControlId = useFlowCurrentCallControlId(flowId);
   const setFlowEvents = useCallFlowMonitorStore((state) => state.setFlowEvents);
   const setCurrentCallControlId = useCallFlowMonitorStore(
-    (state) => state.setCurrentCallControlId
+    (state) => state.setCurrentCallControlId,
   );
   const clearFlowEvents = useCallFlowMonitorStore(
-    (state) => state.clearFlowEvents
+    (state) => state.clearFlowEvents,
   );
   const [aiAssistants, setAiAssistants] = useState([]);
   const [assistantSearchQuery, setAssistantSearchQuery] = useState("");
@@ -1321,7 +1326,7 @@ export default function FlowBuilderPage() {
     (edgeId) => {
       setEdges((eds) => eds.filter((e) => e.id !== edgeId));
     },
-    [setEdges]
+    [setEdges],
   );
 
   // Refs to store latest edges and nodes for callbacks
@@ -1339,7 +1344,6 @@ export default function FlowBuilderPage() {
     nodesRef.current = nodes;
   }, [nodes]);
 
-
   const handleConfigureEdgeVariables = useCallback((edgeId) => {
     console.log("🔍 Configure edge variables called for:", edgeId);
 
@@ -1350,7 +1354,7 @@ export default function FlowBuilderPage() {
     console.log("🔍 Ref has", currentEdges.length, "edges");
     console.log(
       "🔍 Available edges:",
-      currentEdges.map((e) => e.id)
+      currentEdges.map((e) => e.id),
     );
 
     const edge = currentEdges.find((e) => e.id === edgeId);
@@ -1367,7 +1371,7 @@ export default function FlowBuilderPage() {
       console.error("❌ Edge not found:", edgeId);
       console.error(
         "❌ Available edge IDs:",
-        currentEdges.map((e) => e.id)
+        currentEdges.map((e) => e.id),
       );
     }
   }, []);
@@ -1384,7 +1388,7 @@ export default function FlowBuilderPage() {
       };
       setEdges((eds) => addEdge(newEdge, eds));
     },
-    [setEdges, handleDeleteEdge, handleConfigureEdgeVariables]
+    [setEdges, handleDeleteEdge, handleConfigureEdgeVariables],
   );
 
   // Load flow data
@@ -1443,7 +1447,7 @@ export default function FlowBuilderPage() {
             const cases = configWithDefaults.cases || [];
             const defaultLabel = configWithDefaults.defaultLabel || "Default";
             dynamicOutputLabels = cases.map(
-              (c) => c.label || `Case ${c.value}`
+              (c) => c.label || `Case ${c.value}`,
             );
             dynamicOutputLabels.push(defaultLabel);
             dynamicOutputs = dynamicOutputLabels.length;
@@ -1480,19 +1484,19 @@ export default function FlowBuilderPage() {
                 "AMD Detection Ended",
                 "AMD Premium Detection Ended",
                 "AMD Greeting Ended",
-                "AMD Premium Greeting Ended"
+                "AMD Premium Greeting Ended",
               );
               amdEvents.push(
                 "call.machine.detection.ended",
                 "call.machine.premium.detection.ended",
                 "call.machine.greeting.ended",
-                "call.machine.premium.greeting.ended"
+                "call.machine.premium.greeting.ended",
               );
               amdDescriptions.push(
                 "Triggered when standard AMD detection ends (call.machine.detection.ended event)",
                 "Triggered when premium AMD detection ends (call.machine.premium.detection.ended event)",
                 "Triggered when machine greeting ends (call.machine.greeting.ended event)",
-                "Triggered when premium machine greeting ends (call.machine.premium.greeting.ended event)"
+                "Triggered when premium machine greeting ends (call.machine.premium.greeting.ended event)",
               );
             }
 
@@ -1505,17 +1509,17 @@ export default function FlowBuilderPage() {
               streamingOutputs.push(
                 "Streaming Started",
                 "Streaming Stopped",
-                "Streaming Failed"
+                "Streaming Failed",
               );
               streamingEvents.push(
                 "streaming.started",
                 "streaming.stopped",
-                "streaming.failed"
+                "streaming.failed",
               );
               streamingDescriptions.push(
                 "Triggered when streaming starts (streaming.started event)",
                 "Triggered when streaming stops (streaming.stopped event)",
-                "Triggered when streaming fails (streaming.failed event)"
+                "Triggered when streaming fails (streaming.failed event)",
               );
             }
 
@@ -1641,7 +1645,7 @@ export default function FlowBuilderPage() {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request"
+        node.data?.nodeType === "http_request",
     );
   }, [nodes]);
 
@@ -1660,7 +1664,7 @@ export default function FlowBuilderPage() {
     }
 
     const eventSource = new EventSource(
-      `/api/voice/flows/${flowId}/monitor-stream`
+      `/api/voice/flows/${flowId}/monitor-stream`,
     );
     eventSourceRef.current = eventSource;
 
@@ -1714,7 +1718,7 @@ export default function FlowBuilderPage() {
     eventSource.onerror = (error) => {
       console.warn(
         "[Monitor] SSE connection lost (this may be normal during network issues):",
-        error
+        error,
       );
       eventSource.close();
       eventSourceRef.current = null;
@@ -1737,7 +1741,7 @@ export default function FlowBuilderPage() {
           ...node.data,
           isActive: activeNodes.has(node.id),
         },
-      }))
+      })),
     );
   }, [activeNodes, setNodes]);
 
@@ -1753,7 +1757,7 @@ export default function FlowBuilderPage() {
             isActive: activeEdges.has(edgeKey),
           },
         };
-      })
+      }),
     );
   }, [activeEdges, setEdges]);
 
@@ -1840,7 +1844,7 @@ export default function FlowBuilderPage() {
           console.warn(
             "Monitor API returned non-OK status:",
             res.status,
-            res.statusText
+            res.statusText,
           );
           return;
         }
@@ -1869,12 +1873,12 @@ export default function FlowBuilderPage() {
           ) {
             // New call detected - filter to only include events from the new call
             console.log(
-              "[Monitor] New call detected, clearing previous events"
+              "[Monitor] New call detected, clearing previous events",
             );
             clearFlowEvents(flowId);
             // Filter webhooks to only include events from the new call
             webhooksToStore = webhooks.filter(
-              (w) => w.call_control_id === newCallControlId
+              (w) => w.call_control_id === newCallControlId,
             );
             // Also clear server-side data for the previous call
             await fetch(`/api/voice/flows/${flowId}/monitor/clear`, {
@@ -1884,7 +1888,7 @@ export default function FlowBuilderPage() {
                 callControlId: lastCallControlIdRef.current,
               }),
             }).catch((err) =>
-              console.error("Error clearing previous call data:", err)
+              console.error("Error clearing previous call data:", err),
             );
           }
 
@@ -1900,7 +1904,7 @@ export default function FlowBuilderPage() {
         // Only log as warning to avoid console spam during network issues
         console.warn(
           "Monitor data fetch failed (this may be normal during network issues):",
-          error.message
+          error.message,
         );
       }
     };
@@ -1951,7 +1955,7 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request"
+        node.data?.nodeType === "http_request",
     );
 
     if (!hasInitiator) {
@@ -1966,7 +1970,7 @@ export default function FlowBuilderPage() {
 
     // Check for enqueue nodes with skill-based queues that have no skills
     const enqueueNodes = nodes.filter(
-      (node) => node.data?.nodeType === "enqueue"
+      (node) => node.data?.nodeType === "enqueue",
     );
     for (const node of enqueueNodes) {
       const config = node.data?.config || {};
@@ -2119,7 +2123,7 @@ export default function FlowBuilderPage() {
           body: JSON.stringify({
             webhook_url: webhookUpdateInfo.newUrl,
           }),
-        }
+        },
       );
 
       const data = await res.json();
@@ -2203,7 +2207,7 @@ export default function FlowBuilderPage() {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request"
+        node.data?.nodeType === "http_request",
     );
   }, [nodes]);
 
@@ -2215,7 +2219,7 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request"
+        node.data?.nodeType === "http_request",
     );
 
     // Check if trying to add an initiator node when one already exists
@@ -2337,7 +2341,7 @@ export default function FlowBuilderPage() {
 
       handleAddNode(nodeType, position);
     },
-    [reactFlowInstance, nodes]
+    [reactFlowInstance, nodes],
   );
 
   function handleUpdateNodeConfig(key, value) {
@@ -2359,8 +2363,8 @@ export default function FlowBuilderPage() {
                   config: updatedConfig,
                 },
               }
-            : node
-        )
+            : node,
+        ),
       );
     }
   }
@@ -2375,7 +2379,7 @@ export default function FlowBuilderPage() {
       }));
     });
     setEdges((eds) =>
-      eds.filter((e) => e.source !== nodeId && e.target !== nodeId)
+      eds.filter((e) => e.source !== nodeId && e.target !== nodeId),
     );
     if (selectedNode?.id === nodeId) {
       setSelectedNode(null);
@@ -2406,7 +2410,7 @@ export default function FlowBuilderPage() {
         flowPosition: position,
       });
     },
-    [reactFlowInstance]
+    [reactFlowInstance],
   );
 
   // Close context menu on scroll or click outside
@@ -2628,7 +2632,7 @@ export default function FlowBuilderPage() {
                     const hasInitiator = nodes.some(
                       (node) =>
                         node.data?.nodeType === "incoming_call" ||
-                        node.data?.nodeType === "http_request"
+                        node.data?.nodeType === "http_request",
                     );
 
                     if (!hasInitiator) {
@@ -2739,7 +2743,7 @@ export default function FlowBuilderPage() {
                             ].filter((node) =>
                               node.label
                                 .toLowerCase()
-                                .includes(contextMenuSearchQuery.toLowerCase())
+                                .includes(contextMenuSearchQuery.toLowerCase()),
                             );
 
                             if (filteredNodes.length === 0) return null;
@@ -2763,7 +2767,7 @@ export default function FlowBuilderPage() {
                                       onClick={() => {
                                         handleAddNode(
                                           node.id,
-                                          contextMenuPosition.flowPosition
+                                          contextMenuPosition.flowPosition,
                                         );
                                         closeContextMenu();
                                       }}
@@ -2852,8 +2856,8 @@ export default function FlowBuilderPage() {
                                           label: newLabel,
                                         },
                                       }
-                                    : node
-                                )
+                                    : node,
+                                ),
                               );
                               // Also update selectedNode so the input reflects the change
                               setSelectedNode((prev) =>
@@ -2865,7 +2869,7 @@ export default function FlowBuilderPage() {
                                         label: newLabel,
                                       },
                                     }
-                                  : prev
+                                  : prev,
                               );
                             }}
                             className="mt-1"
@@ -2903,8 +2907,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -2931,8 +2935,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -2959,8 +2963,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -2982,8 +2986,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3005,8 +3009,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3028,8 +3032,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3056,8 +3060,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3075,8 +3079,8 @@ export default function FlowBuilderPage() {
                                               dynamicOutputLabels: outputLabels,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3105,7 +3109,7 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
+                                        : node,
                                     );
                                     return updatedNodes;
                                   });
@@ -3145,8 +3149,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3173,8 +3177,40 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
+                                  );
+                                }
+                              }}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                              nodes={nodes}
+                              edges={edges}
+                              globalVariables={globalVariables}
+                              selectedNodeId={selectedNode?.id}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "DataActionsNodeEditor" ? (
+                            <DataActionsNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3205,8 +3241,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3228,15 +3264,15 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
                               onOutputsChange={(
                                 outputLabels,
                                 outputEvents,
-                                outputDescriptions
+                                outputDescriptions,
                               ) => {
                                 if (selectedNode) {
                                   setNodes((nds) =>
@@ -3254,8 +3290,8 @@ export default function FlowBuilderPage() {
                                                 outputDescriptions,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3282,8 +3318,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3305,15 +3341,15 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
                               onOutputsChange={(
                                 outputLabels,
                                 outputEvents,
-                                outputDescriptions
+                                outputDescriptions,
                               ) => {
                                 if (selectedNode) {
                                   setNodes((nds) =>
@@ -3331,8 +3367,8 @@ export default function FlowBuilderPage() {
                                                 outputDescriptions,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3359,8 +3395,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3386,8 +3422,8 @@ export default function FlowBuilderPage() {
                                               config: newConfig,
                                             },
                                           }
-                                        : node
-                                    )
+                                        : node,
+                                    ),
                                   );
                                 }
                               }}
@@ -3432,7 +3468,7 @@ export default function FlowBuilderPage() {
                                               nodeConfig[key] ||
                                                 paramDef.placeholder ||
                                                 "",
-                                              key
+                                              key,
                                             )
                                           }
                                         >
@@ -3450,7 +3486,7 @@ export default function FlowBuilderPage() {
                                       onChange={(e) =>
                                         handleUpdateNodeConfig(
                                           key,
-                                          e.target.value
+                                          e.target.value,
                                         )
                                       }
                                       placeholder={paramDef.placeholder}
@@ -3481,7 +3517,7 @@ export default function FlowBuilderPage() {
                                             value === "variable";
                                           handleUpdateNodeConfig(
                                             `${key}_use_variable`,
-                                            isVariable
+                                            isVariable,
                                           );
                                           // Clear value when switching modes
                                           if (isVariable) {
@@ -3547,7 +3583,7 @@ export default function FlowBuilderPage() {
                                                 value={assistantSearchQuery}
                                                 onChange={(e) =>
                                                   setAssistantSearchQuery(
-                                                    e.target.value
+                                                    e.target.value,
                                                   )
                                                 }
                                                 className="h-8 border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
@@ -3568,7 +3604,7 @@ export default function FlowBuilderPage() {
                                                   return name
                                                     .toLowerCase()
                                                     .includes(
-                                                      assistantSearchQuery.toLowerCase()
+                                                      assistantSearchQuery.toLowerCase(),
                                                     );
                                                 })
                                                 .map((assistant) => (
@@ -3591,9 +3627,9 @@ export default function FlowBuilderPage() {
                                                   return name
                                                     .toLowerCase()
                                                     .includes(
-                                                      assistantSearchQuery.toLowerCase()
+                                                      assistantSearchQuery.toLowerCase(),
                                                     );
-                                                }
+                                                },
                                               ).length === 0 && (
                                                 <div className="px-2 py-6 text-center text-sm text-muted-foreground">
                                                   {assistantSearchQuery
@@ -3618,7 +3654,7 @@ export default function FlowBuilderPage() {
                                               nodes,
                                               edges,
                                               globalVariables,
-                                            }
+                                            },
                                           )}
                                           placeholder="{{assistant_id}}"
                                           className="mt-1"
@@ -3649,7 +3685,7 @@ export default function FlowBuilderPage() {
                                             value: queue.name,
                                             label:
                                               queue.display_name || queue.name,
-                                          })
+                                          }),
                                         );
                                       } else {
                                         // For other select fields, use paramDef options
@@ -3667,10 +3703,7 @@ export default function FlowBuilderPage() {
                                         <Select
                                           value={currentValue}
                                           onValueChange={(value) => {
-                                            handleUpdateNodeConfig(
-                                              key,
-                                              value
-                                            );
+                                            handleUpdateNodeConfig(key, value);
                                           }}
                                         >
                                           <SelectTrigger className="mt-1">
@@ -3679,7 +3712,8 @@ export default function FlowBuilderPage() {
                                                 const selectedOption =
                                                   processedOptions.find(
                                                     (opt) =>
-                                                      opt.value === currentValue
+                                                      opt.value ===
+                                                      currentValue,
                                                   );
                                                 return (
                                                   selectedOption?.label ||
@@ -3720,7 +3754,7 @@ export default function FlowBuilderPage() {
                                       onChange={(e) =>
                                         handleUpdateNodeConfig(
                                           key,
-                                          parseInt(e.target.value, 10) || 0
+                                          parseInt(e.target.value, 10) || 0,
                                         )
                                       }
                                       placeholder={paramDef.placeholder}
@@ -3734,7 +3768,7 @@ export default function FlowBuilderPage() {
                                       onValueChange={(value) =>
                                         handleUpdateNodeConfig(
                                           key,
-                                          value === "true"
+                                          value === "true",
                                         )
                                       }
                                     >
@@ -3756,7 +3790,7 @@ export default function FlowBuilderPage() {
                                       onChange={(e) =>
                                         handleUpdateNodeConfig(
                                           key,
-                                          e.target.value
+                                          e.target.value,
                                         )
                                       }
                                       placeholder={paramDef.placeholder}
@@ -3769,7 +3803,7 @@ export default function FlowBuilderPage() {
                                     </p>
                                   )}
                                 </div>
-                              )
+                              ),
                             )
                           )}
                         </div>
@@ -3869,7 +3903,7 @@ export default function FlowBuilderPage() {
                                 className="p-2 border rounded text-xs font-mono bg-background hover:bg-muted cursor-pointer"
                                 onClick={() => {
                                   navigator.clipboard.writeText(
-                                    `{{global.${varName}}}`
+                                    `{{global.${varName}}}`,
                                   );
                                   notify({
                                     title: "Success",
@@ -3885,7 +3919,7 @@ export default function FlowBuilderPage() {
                                   {varDef.value || "(empty)"}
                                 </div>
                               </div>
-                            )
+                            ),
                           )}
                         </div>
                       )}
@@ -3924,7 +3958,7 @@ export default function FlowBuilderPage() {
                                 className="p-2 border rounded text-xs font-mono bg-background hover:bg-muted cursor-pointer"
                                 onClick={() => {
                                   navigator.clipboard.writeText(
-                                    `{{${edgeVar.name}}}`
+                                    `{{${edgeVar.name}}}`,
                                   );
                                   notify({
                                     title: "Success",
@@ -4155,7 +4189,7 @@ export default function FlowBuilderPage() {
                           {renderNodeExecutionDetails(
                             nodeType,
                             details,
-                            success
+                            success,
                           )}
                         </ToolContent>
                       </Tool>
@@ -4211,8 +4245,8 @@ export default function FlowBuilderPage() {
                         ...(edgeData || {}),
                       },
                     }
-                  : e
-              )
+                  : e,
+              ),
             );
             setShowEdgeVariableMapper(false);
             setSelectedEdge(null);
@@ -4400,7 +4434,7 @@ export default function FlowBuilderPage() {
                           {renderNodeExecutionDetails(
                             nodeType,
                             details,
-                            success
+                            success,
                           )}
                         </ToolContent>
                       </Tool>

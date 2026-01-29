@@ -17,6 +17,7 @@ import {
   IconAward,
   IconBook,
   IconCalendar,
+  IconDatabase,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -71,15 +72,9 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
-          title: "Contacts",
-          url: "/admin/contacts",
-          icon: IconAddressBook,
-          role_access: ["admin", "owner"],
-        },
-        {
-          title: "KB Articles",
-          url: "/admin/kb-articles",
-          icon: IconBook,
+          title: "Data Sources",
+          url: "/admin/data-sources",
+          icon: IconDatabase,
           role_access: ["admin", "owner"],
         },
         {

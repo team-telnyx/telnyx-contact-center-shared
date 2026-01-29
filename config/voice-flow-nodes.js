@@ -2218,6 +2218,73 @@ export const VOICE_FLOW_NODES = {
       },
     },
   },
+
+  data_action: {
+    id: "data_action",
+    category: NODE_CATEGORIES.INTEGRATION,
+    label: "Data Action",
+    icon: "IconDatabase",
+    color: NODE_COLORS[NODE_CATEGORIES.INTEGRATION],
+    description: "Perform CRUD operations on Contacts, KB Articles, or Tasks",
+    telnyxAction: null,
+    telnyxEndpoint: null,
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["Success", "Error"],
+    outputEvents: ["data.success", "data.error"],
+    customEditor: "DataActionsNodeEditor",
+    config: {
+      dataSource: {
+        type: "select",
+        label: "Data Source",
+        required: true,
+        options: [
+          { value: "contacts", label: "Contacts" },
+          { value: "kb_articles", label: "KB Articles" },
+          { value: "tasks", label: "Tasks" },
+        ],
+        description: "Select the data source to operate on",
+      },
+      action: {
+        type: "select",
+        label: "Action",
+        required: true,
+        options: [
+          { value: "create", label: "Create" },
+          { value: "read", label: "Read (Get Single)" },
+          { value: "update", label: "Update" },
+          { value: "delete", label: "Delete" },
+          { value: "list", label: "List/Search" },
+        ],
+        description: "Select the operation to perform",
+      },
+      fields: {
+        type: "object",
+        label: "Fields",
+        required: false,
+        description: "Field values (dynamically generated)",
+      },
+      recordId: {
+        type: "string",
+        label: "Record ID",
+        required: false,
+        description: "ID of the record (supports {{variable}})",
+      },
+      queryParams: {
+        type: "object",
+        label: "Query Parameters",
+        required: false,
+        description: "Search/filter parameters",
+      },
+      responseVariable: {
+        type: "string",
+        label: "Response Variable Name",
+        required: false,
+        default: "data_response",
+        description: "Variable name to store the API response",
+      },
+    },
+  },
 };
 
 /**
