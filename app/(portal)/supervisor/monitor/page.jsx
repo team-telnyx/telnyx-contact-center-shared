@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,6 +30,7 @@ import {
   IconStarFilled,
   IconArrowDown,
 } from "@tabler/icons-react";
+import { ChevronDownIcon } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 import {
   Dialog,
@@ -154,11 +155,10 @@ export default function MonitorPage() {
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [queueCalls, setQueueCalls] = useState([]);
   const [loadingQueueCalls, setLoadingQueueCalls] = useState(false);
-  const [selectedAgentDetail, setSelectedAgentDetail] = useState(null);
-  const [agentCalls, setAgentCalls] = useState([]);
-  const [agentActiveCalls, setAgentActiveCalls] = useState([]);
-  const [loadingAgentCalls, setLoadingAgentCalls] = useState(false);
-  const [agentTimeTracking, setAgentTimeTracking] = useState(null);
+  const [expandedAgentId, setExpandedAgentId] = useState(null);
+  const [agentCallsMap, setAgentCallsMap] = useState({});
+  const [agentActiveCallsMap, setAgentActiveCallsMap] = useState({});
+  const [loadingAgentCalls, setLoadingAgentCalls] = useState(new Set());
   const [statusMeta, setStatusMeta] = useState({});
   const [currentTime, setCurrentTime] = useState(new Date());
   const [skillMatchDialogOpen, setSkillMatchDialogOpen] = useState(false);
@@ -671,8 +671,13 @@ export default function MonitorPage() {
   }, [selectedQueue?.id]);
 
   async function loadAgentCalls(userId) {
+    // Don't reload if already loaded
+    if (agentCallsMap[userId]) {
+      return;
+    }
+
     try {
-      setLoadingAgentCalls(true);
+      setLoadingAgentCalls((prev) => new Set(prev).add(userId));
       const res = await fetch(`/api/contact-center/agents/${userId}/calls`, {
         cache: "no-store",
       });
@@ -681,10 +686,14 @@ export default function MonitorPage() {
       }
       const data = await res.json();
       if (data.ok) {
-        setAgentCalls(data.calls || []);
-        setAgentActiveCalls(data.activeCalls || []);
-        setSelectedAgentDetail(data.agent);
-        setAgentTimeTracking(data.timeTracking || null);
+        setAgentCallsMap((prev) => ({
+          ...prev,
+          [userId]: data.calls || [],
+        }));
+        setAgentActiveCallsMap((prev) => ({
+          ...prev,
+          [userId]: data.activeCalls || [],
+        }));
       } else {
         throw new Error(data.error || "Failed to load agent calls");
       }
@@ -696,7 +705,11 @@ export default function MonitorPage() {
         variant: "error",
       });
     } finally {
-      setLoadingAgentCalls(false);
+      setLoadingAgentCalls((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   }
 
@@ -1017,7 +1030,7 @@ export default function MonitorPage() {
 
       {/* Statistics Section */}
       <Card className="mb-0 flex flex-col h-[calc(100vh-360px)] min-h-[100px]">
-        <CardHeader className="flex-shrink-0">
+        <CardHeader className="shrink-0">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               {selectedQueue ? (
@@ -1036,25 +1049,6 @@ export default function MonitorPage() {
                   </Button>
                   <IconTrendingUp className="size-5" />
                   {selectedQueue.displayName || selectedQueue.name} - Calls
-                </>
-              ) : selectedAgentDetail ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedAgentDetail(null);
-                      setAgentCalls([]);
-                      setAgentActiveCalls([]);
-                      setAgentTimeTracking(null);
-                    }}
-                    className="mr-2 -ml-2"
-                  >
-                    <IconArrowLeft className="h-4 w-4 mr-1" />
-                    Back
-                  </Button>
-                  <IconUsers className="size-5" />
-                  {selectedAgentDetail.name} - Calls
                 </>
               ) : activeTab === "agents" ? (
                 <>
@@ -1347,311 +1341,6 @@ export default function MonitorPage() {
                 </div>
               )}
             </>
-          ) : selectedAgentDetail ? (
-            <>
-              {loadingAgentCalls ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Agent Stats Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
-                        <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                          Time on Calls
-                        </CardTitle>
-                        <IconPhone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      </CardHeader>
-                      <CardContent className="pt-0 px-4 pb-3">
-                        <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                          {agentTimeTracking
-                            ? formatTime(agentTimeTracking.callSeconds)
-                            : "0h 0m"}
-                        </div>
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                          Today
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-l-4 border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/20">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
-                        <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                          Time on Break
-                        </CardTitle>
-                        <IconClock className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                      </CardHeader>
-                      <CardContent className="pt-0 px-4 pb-3">
-                        <div className="text-2xl font-bold text-orange-900 dark:text-orange-100">
-                          {agentTimeTracking
-                            ? formatTime(agentTimeTracking.breakSeconds)
-                            : "0h 0m"}
-                        </div>
-                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-                          Today
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
-                        <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                          Total Work Time
-                        </CardTitle>
-                        <IconActivity className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      </CardHeader>
-                      <CardContent className="pt-0 px-4 pb-3">
-                        <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                          {agentTimeTracking
-                            ? formatTime(agentTimeTracking.workSeconds)
-                            : "0h 0m"}
-                        </div>
-                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-                          Today
-                        </p>
-                      </CardContent>
-                    </Card>
-                    <Card className="border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-0 px-4">
-                        <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
-                          Calls Handled
-                        </CardTitle>
-                        <IconPhone className="h-4 w-4 text-green-600 dark:text-green-400" />
-                      </CardHeader>
-                      <CardContent className="pt-0 px-4 pb-3">
-                        <div className="text-2xl font-bold text-green-900 dark:text-green-100">
-                          {(() => {
-                            const today = new Date().toDateString();
-                            return agentCalls.filter((call) => {
-                              const callDate = call.createdAt
-                                ? new Date(call.createdAt).toDateString()
-                                : null;
-                              return (
-                                callDate === today &&
-                                call.state &&
-                                ["completed", "answered"].includes(
-                                  call.state.toLowerCase(),
-                                )
-                              );
-                            }).length;
-                          })()}
-                        </div>
-                        <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-                          Today
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Active Calls Section */}
-                  {agentActiveCalls.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold">Active Calls</h3>
-                        <div className="flex gap-2">
-                          {agentActiveCalls.map((call) => (
-                            <Button
-                              key={call.id}
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                // TODO: Implement monitor live call functionality
-                                notify({
-                                  title: "Monitor Call",
-                                  description: `Monitoring call ${
-                                    call.callControlId?.slice(0, 8) ||
-                                    call.id?.slice(0, 8)
-                                  } - Feature coming soon`,
-                                  variant: "info",
-                                });
-                              }}
-                              className="flex items-center gap-2"
-                            >
-                              <IconPhone className="h-4 w-4" />
-                              Monitor{" "}
-                              {call.callControlId?.slice(0, 8) ||
-                                call.id?.slice(0, 8)}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Call ID</TableHead>
-                              <TableHead>From</TableHead>
-                              <TableHead>To</TableHead>
-                              <TableHead>Queue</TableHead>
-                              <TableHead>State</TableHead>
-                              <TableHead>Answered</TableHead>
-                              <TableHead>Talk Time</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {agentActiveCalls.map((call) => {
-                              const stateColor =
-                                call.state === "answered" ||
-                                call.state === "active"
-                                  ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-                                  : call.state === "ringing" ||
-                                      call.state === "bridging"
-                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                    : call.state === "hold"
-                                      ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
-
-                              return (
-                                <TableRow key={call.id}>
-                                  <TableCell className="font-mono text-xs">
-                                    {call.callControlId?.slice(0, 8) ||
-                                      call.id?.slice(0, 8) ||
-                                      "—"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {call.fromNumber || "—"}
-                                  </TableCell>
-                                  <TableCell>{call.toNumber || "—"}</TableCell>
-                                  <TableCell>{call.queueName || "—"}</TableCell>
-                                  <TableCell>
-                                    <span
-                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
-                                    >
-                                      {call.state || "unknown"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {call.answeredAt
-                                      ? new Date(
-                                          call.answeredAt,
-                                        ).toLocaleString()
-                                      : "—"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {call.talkSeconds > 0
-                                      ? `${Math.round(call.talkSeconds)}s`
-                                      : "—"}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* All Calls Table */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">All Calls</h3>
-                    <div className="overflow-x-auto h-full -mx-6 px-6">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Call ID</TableHead>
-                            <TableHead>From</TableHead>
-                            <TableHead>To</TableHead>
-                            <TableHead>Queue</TableHead>
-                            <TableHead>State</TableHead>
-                            <TableHead>Enqueued</TableHead>
-                            <TableHead>Answered</TableHead>
-                            <TableHead>Completed</TableHead>
-                            <TableHead>Wait Time</TableHead>
-                            <TableHead>Talk Time</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {agentCalls.length === 0 ? (
-                            <TableRow>
-                              <TableCell
-                                colSpan={10}
-                                className="text-center text-muted-foreground py-4"
-                              >
-                                No calls found
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            agentCalls.map((call) => {
-                              const stateColor =
-                                call.state === "completed"
-                                  ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-                                  : call.state === "abandoned"
-                                    ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                                    : call.state === "answered" ||
-                                        call.state === "active"
-                                      ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                                      : call.state === "enqueued" ||
-                                          call.state === "ringing"
-                                        ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                        : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
-
-                              return (
-                                <TableRow key={call.id}>
-                                  <TableCell className="font-mono text-xs">
-                                    {call.callControlId?.slice(0, 8) ||
-                                      call.id?.slice(0, 8) ||
-                                      "—"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {call.fromNumber || "—"}
-                                  </TableCell>
-                                  <TableCell>{call.toNumber || "—"}</TableCell>
-                                  <TableCell>{call.queueName || "—"}</TableCell>
-                                  <TableCell>
-                                    <span
-                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
-                                    >
-                                      {call.state || "unknown"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {call.enqueuedAt
-                                      ? new Date(
-                                          call.enqueuedAt,
-                                        ).toLocaleString()
-                                      : "—"}
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {call.answeredAt
-                                      ? new Date(
-                                          call.answeredAt,
-                                        ).toLocaleString()
-                                      : "—"}
-                                  </TableCell>
-                                  <TableCell className="text-xs">
-                                    {call.completedAt
-                                      ? new Date(
-                                          call.completedAt,
-                                        ).toLocaleString()
-                                      : call.abandonedAt
-                                        ? new Date(
-                                            call.abandonedAt,
-                                          ).toLocaleString()
-                                        : "—"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {call.waitSeconds > 0
-                                      ? `${Math.round(call.waitSeconds)}s`
-                                      : "—"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {call.talkSeconds > 0
-                                      ? `${Math.round(call.talkSeconds)}s`
-                                      : "—"}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
           ) : activeTab === "agents" ? (
             <>
               {loading ? (
@@ -1910,97 +1599,256 @@ export default function MonitorPage() {
                                   borderColor: statusInfo.color,
                                 }
                               : undefined;
+                            const agentId = String(agent.userId);
+                            const isExpanded = expandedAgentId === agentId;
+                            const activeCalls =
+                              agentActiveCallsMap[agentId] || [];
+                            const isLoading = loadingAgentCalls.has(agentId);
 
                             return (
-                              <TableRow key={agent.userId}>
-                                <TableCell className="font-medium">
-                                  <button
-                                    onClick={() => loadAgentCalls(agent.userId)}
-                                    className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                                  >
-                                    {displayName}
-                                  </button>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <span
-                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
-                                        statusInfo.color ? "" : statusColor
-                                      } bg-transparent`}
-                                      style={statusStyle}
-                                    >
-                                      <StatusIcon
-                                        className="h-3.5 w-3.5"
-                                        style={
-                                          statusInfo.color
-                                            ? { color: statusInfo.color }
-                                            : undefined
-                                        }
-                                      />
-                                      {agent.status}
-                                    </span>
+                              <React.Fragment key={agent.userId}>
+                                <TableRow className="hover:bg-muted/50">
+                                  <TableCell className="font-medium">
                                     <button
                                       onClick={() => {
-                                        setSelectedAgent(agent);
-                                        setStatusDialogOpen(true);
+                                        const newValue =
+                                          expandedAgentId === agentId
+                                            ? null
+                                            : agentId;
+                                        setExpandedAgentId(newValue);
+                                        if (
+                                          newValue &&
+                                          !agentCallsMap[agentId]
+                                        ) {
+                                          loadAgentCalls(agent.userId);
+                                        }
                                       }}
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
-                                      title="Change status"
+                                      className="flex items-center gap-2 text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                                     >
-                                      <IconInfoCircle className="h-4 w-4" />
+                                      <span>{displayName}</span>
+                                      <ChevronDownIcon
+                                        className={`text-muted-foreground size-4 shrink-0 transition-transform duration-200 ${
+                                          isExpanded ? "rotate-180" : ""
+                                        }`}
+                                      />
                                     </button>
-                                  </div>
-                                </TableCell>
-                                <TableCell
-                                  className={
-                                    highlightedCells.has(
-                                      `agent-${String(agent.userId)}-queues`,
-                                    )
-                                      ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                      : ""
-                                  }
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span>{agent.activeQueues || 0}</span>
-                                    <button
-                                      onClick={async () => {
-                                        setSelectedAgent(agent);
-                                        setQueueDialogOpen(true);
-                                        await loadAgentQueues(agent.userId);
-                                      }}
-                                      className="text-muted-foreground hover:text-foreground transition-colors"
-                                      title="View queue assignments"
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium border min-w-[96px] justify-center ${
+                                          statusInfo.color ? "" : statusColor
+                                        } bg-transparent`}
+                                        style={statusStyle}
+                                      >
+                                        <StatusIcon
+                                          className="h-3.5 w-3.5"
+                                          style={
+                                            statusInfo.color
+                                              ? { color: statusInfo.color }
+                                              : undefined
+                                          }
+                                        />
+                                        {agent.status}
+                                      </span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAgent(agent);
+                                          setStatusDialogOpen(true);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                        title="Change status"
+                                      >
+                                        <IconInfoCircle className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
+                                        `agent-${agentId}-queues`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span>{agent.activeQueues || 0}</span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAgent(agent);
+                                          setQueueDialogOpen(true);
+                                          loadAgentQueues(agent.userId);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                        title="View queue assignments"
+                                      >
+                                        <IconInfoCircle className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
+                                        `agent-${agentId}-calls`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    {agent.currentCalls} /{" "}
+                                    {agent.maxConcurrentCalls}
+                                  </TableCell>
+                                  <TableCell>
+                                    {agent.today?.totalCalls || 0}
+                                  </TableCell>
+                                  <TableCell>
+                                    {agent.today?.completedCalls || 0}
+                                  </TableCell>
+                                  <TableCell>
+                                    {agent.today?.avgTalkTimeSeconds
+                                      ? `${Math.round(
+                                          agent.today.avgTalkTimeSeconds,
+                                        )}s`
+                                      : "—"}
+                                  </TableCell>
+                                </TableRow>
+                                {isExpanded && (
+                                  <TableRow>
+                                    <TableCell
+                                      colSpan={7}
+                                      className="p-0 border-t bg-muted/30"
                                     >
-                                      <IconInfoCircle className="h-4 w-4" />
-                                    </button>
-                                  </div>
-                                </TableCell>
-                                <TableCell
-                                  className={
-                                    highlightedCells.has(
-                                      `agent-${String(agent.userId)}-calls`,
-                                    )
-                                      ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                      : ""
-                                  }
-                                >
-                                  {agent.currentCalls} /{" "}
-                                  {agent.maxConcurrentCalls}
-                                </TableCell>
-                                <TableCell>
-                                  {agent.today?.totalCalls || 0}
-                                </TableCell>
-                                <TableCell>
-                                  {agent.today?.completedCalls || 0}
-                                </TableCell>
-                                <TableCell>
-                                  {agent.today?.avgTalkTimeSeconds
-                                    ? `${Math.round(
-                                        agent.today.avgTalkTimeSeconds,
-                                      )}s`
-                                    : "—"}
-                                </TableCell>
-                              </TableRow>
+                                      <div className="px-4 py-2">
+                                        {isLoading ? (
+                                          <div className="space-y-2 py-4">
+                                            <Skeleton className="h-10 w-full" />
+                                            <Skeleton className="h-10 w-full" />
+                                          </div>
+                                        ) : activeCalls.length === 0 ? (
+                                          <p className="text-sm text-muted-foreground text-center py-4">
+                                            No active calls
+                                          </p>
+                                        ) : (
+                                          <div className="overflow-x-auto">
+                                            <Table>
+                                              <TableHeader>
+                                                <TableRow>
+                                                  <TableHead>From</TableHead>
+                                                  <TableHead>To</TableHead>
+                                                  <TableHead>State</TableHead>
+                                                  <TableHead>Queue</TableHead>
+                                                  <TableHead>
+                                                    Talk Time
+                                                  </TableHead>
+                                                  <TableHead>Actions</TableHead>
+                                                </TableRow>
+                                              </TableHeader>
+                                              <TableBody>
+                                                {activeCalls.map((call) => {
+                                                  // Calculate real-time talk time
+                                                  const talkTimeSeconds =
+                                                    call.answeredAt
+                                                      ? Math.max(
+                                                          0,
+                                                          Math.floor(
+                                                            (currentTime.getTime() -
+                                                              new Date(
+                                                                call.answeredAt,
+                                                              ).getTime()) /
+                                                              1000,
+                                                          ),
+                                                        )
+                                                      : call.talkSeconds || 0;
+
+                                                  // Determine state
+                                                  const displayState =
+                                                    call.answeredAt &&
+                                                    (call.state === "ringing" ||
+                                                      call.state ===
+                                                        "bridging" ||
+                                                      call.state === "answered")
+                                                      ? "connected"
+                                                      : call.state;
+
+                                                  const stateColor =
+                                                    displayState === "completed"
+                                                      ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
+                                                      : displayState ===
+                                                          "abandoned"
+                                                        ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                                                        : displayState ===
+                                                              "answered" ||
+                                                            displayState ===
+                                                              "connected" ||
+                                                            displayState ===
+                                                              "active"
+                                                          ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                                                          : displayState ===
+                                                                "enqueued" ||
+                                                              displayState ===
+                                                                "queued" ||
+                                                              displayState ===
+                                                                "ringing"
+                                                            ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                                            : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+
+                                                  return (
+                                                    <TableRow key={call.id}>
+                                                      <TableCell>
+                                                        {call.fromNumber || "—"}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        {call.toNumber || "—"}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <span
+                                                          className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
+                                                        >
+                                                          {displayState ||
+                                                            "unknown"}
+                                                        </span>
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        {call.queueName || "—"}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        {talkTimeSeconds > 0
+                                                          ? `${Math.round(
+                                                              talkTimeSeconds,
+                                                            )}s`
+                                                          : "—"}
+                                                      </TableCell>
+                                                      <TableCell>
+                                                        <button
+                                                          onClick={() => {
+                                                            setSelectedCallForSupervision(
+                                                              call,
+                                                            );
+                                                            setSupervisionModalOpen(
+                                                              true,
+                                                            );
+                                                          }}
+                                                          className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                                                          title="Supervise this call"
+                                                        >
+                                                          <IconEye className="h-4 w-4" />
+                                                        </button>
+                                                      </TableCell>
+                                                    </TableRow>
+                                                  );
+                                                })}
+                                              </TableBody>
+                                            </Table>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </React.Fragment>
                             );
                           })}
                         </TableBody>

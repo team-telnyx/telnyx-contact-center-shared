@@ -77,7 +77,6 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const [agents, setAgents] = useState([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentStats, setAgentStats] = useState(null);
-  const [agentFilter, setAgentFilter] = useState("all"); // "all", "available", "busy", "offline"
   const [selectedAgentNumber, setSelectedAgentNumber] = useState("");
   const [agentFullProfiles, setAgentFullProfiles] = useState(new Map()); // Map of userId -> full profile
 
@@ -119,7 +118,6 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setSelectionType("queues");
       setQueueStats(null);
       setAgentStats(null);
-      setAgentFilter("all");
       setPreserveRoutingOptions(true);
 
       // Load source queue info if interaction exists
@@ -335,15 +333,6 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         return routingStrategy || "FIFO";
     }
   };
-
-  // Filter agents based on filter dropdown
-  const filteredAgents = agents.filter((agent) => {
-    if (agentFilter === "all") return true;
-    if (agentFilter === "available") return agent.status === "Available";
-    if (agentFilter === "busy") return agent.status === "Busy";
-    if (agentFilter === "offline") return agent.status === "Offline";
-    return true;
-  });
 
   // Get agent numbers (Softphone first, then mobile, then voice)
   const getAgentNumbers = (agentStats, fullUserProfile) => {
@@ -798,7 +787,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
               )}
             >
               <Bot className="h-5 w-5" />
-              <div className="font-semibold text-xs">AI Assistants</div>
+              <div className="font-semibold text-xs">AI Agents</div>
               {selectionType === "assistants" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -996,32 +985,16 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           {selectionType === "agents" && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-purple-600" />
-                    Select User
-                  </Label>
-                  <ClientOnlySelect
-                    value={agentFilter}
-                    onValueChange={setAgentFilter}
-                  >
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="available">Available</SelectItem>
-                      <SelectItem value="busy">Busy</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                    </SelectContent>
-                  </ClientOnlySelect>
-                </div>
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-purple-600" />
+                  Select User
+                </Label>
                 {loadingData ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading users...
                   </div>
-                ) : filteredAgents.length === 0 ? (
+                ) : agents.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
                     No users found
                   </div>
@@ -1037,7 +1010,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                       <SelectValue placeholder="Choose a user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {filteredAgents.map((agent) => {
+                      {agents.map((agent) => {
                         const displayName =
                           `${agent.firstName || ""} ${agent.lastName || ""}`.trim() ||
                           agent.username ||
@@ -1274,21 +1247,21 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* AI Assistants Selection */}
+          {/* AI Agents Selection */}
           {selectionType === "assistants" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <Bot className="h-4 w-4 text-indigo-600" />
-                  Select AI Assistant
+                  Select AI Agent
                 </Label>
                 {loadingData ? (
                   <div className="text-sm text-muted-foreground">
-                    Loading assistants...
+                    Loading AI agents...
                   </div>
                 ) : assistants.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
-                    No AI assistants found
+                    No AI agents found
                   </div>
                 ) : (
                   <ClientOnlySelect
@@ -1296,7 +1269,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                     onValueChange={setSelectedAssistantId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose an AI assistant" />
+                      <SelectValue placeholder="Choose an AI agent" />
                     </SelectTrigger>
                     <SelectContent>
                       {assistants.map((assistant) => (

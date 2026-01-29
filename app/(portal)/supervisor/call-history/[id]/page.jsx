@@ -17,9 +17,11 @@ import {
   IconUsers,
   IconTimeline,
   IconRobot,
+  IconHistory,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import InteractionTimeline from "@/components/contact-center/InteractionTimeline";
+import RoutingMetadataTimeline from "@/components/contact-center/RoutingMetadataTimeline";
 import RecordingPlayer from "@/components/contact-center/RecordingPlayer";
 import TranscriptionHistory from "@/components/contact-center/TranscriptionHistory";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
@@ -399,6 +401,24 @@ export default function SupervisorCallHistoryDetailPage() {
                       <InteractionTimeline events={timelineEvents} />
                     </CardContent>
                   </Card>
+
+                  {interaction?.routing_metadata?.timeline &&
+                    Array.isArray(interaction.routing_metadata.timeline) &&
+                    interaction.routing_metadata.timeline.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <IconHistory className="h-5 w-5 text-purple-500" />
+                            Detailed Event Timeline
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <RoutingMetadataTimeline
+                            events={interaction.routing_metadata.timeline}
+                          />
+                        </CardContent>
+                      </Card>
+                    )}
                 </TabsContent>
 
                 <TabsContent value="recording" className="mt-4 space-y-4">

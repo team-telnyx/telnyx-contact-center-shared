@@ -44,7 +44,14 @@ function formatTime(seconds) {
   return `${secs}s`;
 }
 
-function MetricCard({ title, value, description, icon: Icon, trend, className }) {
+function MetricCard({
+  title,
+  value,
+  description,
+  icon: Icon,
+  trend,
+  className,
+}) {
   return (
     <Card className={cn("relative overflow-hidden", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -158,7 +165,7 @@ export default function HomePage() {
   const performanceData = charts.performanceDistribution || [];
   const totalPerformance = performanceData.reduce(
     (sum, item) => sum + item.value,
-    0
+    0,
   );
 
   // Prepare hourly activity data
@@ -166,13 +173,15 @@ export default function HomePage() {
   // Fill in missing hours with 0
   const fullHourlyData = Array.from({ length: 24 }, (_, i) => {
     const existing = hourlyData.find((d) => d.hour === i);
-    return existing || {
-      hour: i,
-      hourLabel: `${String(i).padStart(2, "0")}:00`,
-      total: 0,
-      completed: 0,
-      abandoned: 0,
-    };
+    return (
+      existing || {
+        hour: i,
+        hourLabel: `${String(i).padStart(2, "0")}:00`,
+        total: 0,
+        completed: 0,
+        abandoned: 0,
+      }
+    );
   });
 
   // Prepare queue distribution data
@@ -198,7 +207,7 @@ export default function HomePage() {
                 "px-4 py-2 rounded-md text-sm font-medium transition-all",
                 period === "today"
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background",
               )}
             >
               Today
@@ -210,7 +219,7 @@ export default function HomePage() {
                 "px-4 py-2 rounded-md text-sm font-medium transition-all",
                 period === "7days"
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background",
               )}
             >
               7 Days
@@ -222,7 +231,7 @@ export default function HomePage() {
                 "px-4 py-2 rounded-md text-sm font-medium transition-all",
                 period === "30days"
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background"
+                  : "text-muted-foreground hover:text-foreground hover:bg-background",
               )}
             >
               30 Days
@@ -238,7 +247,7 @@ export default function HomePage() {
             <IconRefresh
               className={cn(
                 "h-4 w-4 mr-2",
-                (refreshing || loading) && "animate-spin"
+                (refreshing || loading) && "animate-spin",
               )}
             />
             Refresh
@@ -267,7 +276,7 @@ export default function HomePage() {
           value={
             metrics.totalCalls > 0
               ? `${Math.round(
-                  (metrics.completedCalls / metrics.totalCalls) * 100
+                  (metrics.completedCalls / metrics.totalCalls) * 100,
                 )}%`
               : "0%"
           }
@@ -332,21 +341,35 @@ export default function HomePage() {
           className="col-span-1"
         >
           {queueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={queueData}>
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart
+                data={queueData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="queueName"
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
+                  angle={0}
+                  textAnchor="middle"
                   tick={{ fontSize: 12 }}
+                  interval={0}
+                  height={60}
                 />
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="completed" stackId="a" fill="#10b981" name="Completed" />
-                <Bar dataKey="abandoned" stackId="a" fill="#ef4444" name="Abandoned" />
+                <Bar
+                  dataKey="completed"
+                  stackId="a"
+                  fill="#10b981"
+                  name="Completed"
+                />
+                <Bar
+                  dataKey="abandoned"
+                  stackId="a"
+                  fill="#ef4444"
+                  name="Abandoned"
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -370,11 +393,7 @@ export default function HomePage() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={fullHourlyData}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="hourLabel"
-                tick={{ fontSize: 11 }}
-                interval={2}
-              />
+              <XAxis dataKey="hourLabel" tick={{ fontSize: 11 }} interval={2} />
               <YAxis />
               <Tooltip />
               <Legend />

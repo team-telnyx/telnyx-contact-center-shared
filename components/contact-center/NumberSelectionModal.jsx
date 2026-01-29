@@ -128,18 +128,14 @@ export function NumberSelectionModal({
   description,
 }) {
   const [mounted, setMounted] = useState(false);
-  const [selectionType, setSelectionType] = useState("queues"); // "queues", "users", "contact", "assistants", or "manual"
-  const [selectedQueueId, setSelectedQueueId] = useState("");
+  const [selectionType, setSelectionType] = useState("users"); // "users", "contact", "assistants", or "manual"
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedAssistantId, setSelectedAssistantId] = useState("");
   const [selectedNumber, setSelectedNumber] = useState("");
   const [manualNumber, setManualNumber] = useState("");
-  const [queues, setQueues] = useState([]);
-  const [queueStats, setQueueStats] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentStats, setAgentStats] = useState(null);
-  const [agentFilter, setAgentFilter] = useState("all");
   const [selectedAgentNumber, setSelectedAgentNumber] = useState("");
   const [agentFullProfiles, setAgentFullProfiles] = useState(new Map());
   const [customers, setCustomers] = useState([]);
@@ -150,7 +146,6 @@ export function NumberSelectionModal({
   const [user, setUser] = useState(null);
 
   // Refs for polling intervals
-  const queueStatsIntervalRef = useRef(null);
   const agentStatsIntervalRef = useRef(null);
 
   // Ensure component is mounted before rendering to prevent hydration mismatch
@@ -164,7 +159,7 @@ export function NumberSelectionModal({
   const defaultDescription =
     mode === "transfer"
       ? "Choose where to transfer this call"
-      : "Choose a number from contacts, users, AI assistants, or enter manually";
+      : "Choose a number from contacts, users, AI agents, or enter manually";
 
   const modalTitle = title || defaultTitle;
   const modalDescription = description || defaultDescription;
@@ -174,54 +169,22 @@ export function NumberSelectionModal({
     if (open) {
       loadUserAndRecords();
       // Reset selections when modal opens
-      setSelectedQueueId("");
       setSelectedRecordId("");
       setSelectedUserId("");
       setSelectedAssistantId("");
       setSelectedNumber("");
       setSelectedAgentNumber("");
       setManualNumber("");
-      setSelectionType("queues");
-      setQueueStats(null);
+      setSelectionType("users");
       setAgentStats(null);
-      setAgentFilter("all");
     } else {
       // Clear intervals when modal closes
-      if (queueStatsIntervalRef.current) {
-        clearInterval(queueStatsIntervalRef.current);
-        queueStatsIntervalRef.current = null;
-      }
       if (agentStatsIntervalRef.current) {
         clearInterval(agentStatsIntervalRef.current);
         agentStatsIntervalRef.current = null;
       }
     }
   }, [open]);
-
-  // Load queue stats when queue is selected
-  useEffect(() => {
-    if (open && selectedQueueId) {
-      loadQueueStats(selectedQueueId);
-      // Set up polling for queue stats
-      if (queueStatsIntervalRef.current) {
-        clearInterval(queueStatsIntervalRef.current);
-      }
-      queueStatsIntervalRef.current = setInterval(() => {
-        loadQueueStats(selectedQueueId);
-      }, 2000);
-    } else {
-      if (queueStatsIntervalRef.current) {
-        clearInterval(queueStatsIntervalRef.current);
-        queueStatsIntervalRef.current = null;
-      }
-    }
-
-    return () => {
-      if (queueStatsIntervalRef.current) {
-        clearInterval(queueStatsIntervalRef.current);
-      }
-    };
-  }, [open, selectedQueueId]);
 
   // Load agent stats when agent is selected
   useEffect(() => {
@@ -277,15 +240,6 @@ export function NumberSelectionModal({
           setAgentFullProfiles(profileMap);
         }
 
-        // Load queues
-        const queuesRes = await fetch("/api/contact-center/queues/list", {
-          cache: "no-store",
-        });
-        const queuesData = await queuesRes.json();
-        if (queuesData.queues) {
-          setQueues(queuesData.queues);
-        }
-
         // Load agents stats
         const agentsRes = await fetch("/api/contact-center/stats/agents", {
           cache: "no-store",
@@ -299,21 +253,6 @@ export function NumberSelectionModal({
       console.error("Failed to load records:", err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadQueueStats = async (queueId) => {
-    try {
-      const res = await fetch(
-        `/api/contact-center/stats/queues?queueId=${encodeURIComponent(queueId)}`,
-        { cache: "no-store" },
-      );
-      const data = await res.json();
-      if (data.stats) {
-        setQueueStats(data.stats);
-      }
-    } catch (err) {
-      console.error("[NumberSelectionModal] Failed to load queue stats:", err);
     }
   };
 
@@ -331,42 +270,6 @@ export function NumberSelectionModal({
       console.error("[NumberSelectionModal] Failed to load agent stats:", err);
     }
   };
-
-  // Helper functions for queue type badge (from EnqueueNodeEditor)
-  const getQueueTypeBadgeColor = (routingStrategy) => {
-    switch (routingStrategy) {
-      case "FIFO":
-        return "bg-blue-500";
-      case "Skill-based":
-        return "bg-purple-500";
-      case "Priority-based":
-        return "bg-orange-500";
-      default:
-        return "bg-gray-500";
-    }
-  };
-
-  const getQueueTypeDisplayName = (routingStrategy) => {
-    switch (routingStrategy) {
-      case "FIFO":
-        return "FIFO";
-      case "Skill-based":
-        return "SKILLS";
-      case "Priority-based":
-        return "PRIORITY";
-      default:
-        return routingStrategy || "FIFO";
-    }
-  };
-
-  // Filter agents based on filter dropdown
-  const filteredAgents = agents.filter((agent) => {
-    if (agentFilter === "all") return true;
-    if (agentFilter === "available") return agent.status === "Available";
-    if (agentFilter === "busy") return agent.status === "Busy";
-    if (agentFilter === "offline") return agent.status === "Offline";
-    return true;
-  });
 
   // Get agent numbers (Softphone first, then mobile, then voice)
   const getAgentNumbers = (agentStats, fullUserProfile) => {
@@ -484,17 +387,7 @@ export function NumberSelectionModal({
   const handleConfirm = () => {
     let numberToSelect = "";
 
-    if (selectionType === "queues" && selectedQueueId) {
-      // For dial mode, select the queue name
-      const queue = queues.find((q) => q.id === selectedQueueId);
-      if (queue) {
-        numberToSelect = queue.name;
-      }
-    } else if (
-      selectionType === "users" &&
-      selectedUserId &&
-      selectedAgentNumber
-    ) {
+    if (selectionType === "users" && selectedUserId && selectedAgentNumber) {
       numberToSelect = selectedAgentNumber;
     } else if (
       selectionType === "contact" &&
@@ -517,9 +410,7 @@ export function NumberSelectionModal({
   };
 
   const isValid = () => {
-    if (selectionType === "queues") {
-      return !!selectedQueueId;
-    } else if (selectionType === "users") {
+    if (selectionType === "users") {
       return selectedUserId && selectedAgentNumber;
     } else if (selectionType === "contact") {
       return selectedRecordId && selectedNumber;
@@ -547,24 +438,7 @@ export function NumberSelectionModal({
 
         <div className="space-y-6 py-4">
           {/* Selection Type */}
-          <div className="grid grid-cols-5 gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectionType("queues")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
-                selectionType === "queues"
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : "bg-blue-500/10 text-blue-600 border-blue-500/20 hover:bg-blue-500/20",
-              )}
-            >
-              <UsersRound className="h-5 w-5" />
-              <div className="font-semibold text-xs">Queues</div>
-              {selectionType === "queues" && (
-                <CheckCircle2 className="h-3 w-3" />
-              )}
-            </button>
-
+          <div className="grid grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => setSelectionType("users")}
@@ -610,7 +484,7 @@ export function NumberSelectionModal({
               )}
             >
               <Bot className="h-5 w-5" />
-              <div className="font-semibold text-xs">AI Assistants</div>
+              <div className="font-semibold text-xs">AI Agents</div>
               {selectionType === "assistants" && (
                 <CheckCircle2 className="h-3 w-3" />
               )}
@@ -634,138 +508,20 @@ export function NumberSelectionModal({
             </button>
           </div>
 
-          {/* Queues Selection */}
-          {selectionType === "queues" && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-2">
-                  <UsersRound className="h-4 w-4 text-blue-600" />
-                  Select Queue
-                </Label>
-                {loading ? (
-                  <div className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading queues...
-                  </div>
-                ) : queues.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No queues available
-                  </div>
-                ) : (
-                  <ClientOnlySelect
-                    value={selectedQueueId}
-                    onValueChange={setSelectedQueueId}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a queue" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {queues.map((queue) => (
-                        <SelectItem key={queue.id} value={queue.id}>
-                          <div className="flex items-center gap-2">
-                            <UsersRound className="h-4 w-4 text-blue-500" />
-                            <span className="font-medium">
-                              {queue.display_name || queue.name}
-                            </span>
-                            <Badge
-                              className={cn(
-                                "text-xs",
-                                getQueueTypeBadgeColor(queue.routing_strategy),
-                              )}
-                            >
-                              {getQueueTypeDisplayName(queue.routing_strategy)}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </ClientOnlySelect>
-                )}
-              </div>
-
-              {selectedQueueId && (
-                <div className="space-y-3 p-4 bg-muted rounded-lg">
-                  {queueStats ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Available Agents
-                          </Label>
-                          <div className="text-sm font-medium text-green-600">
-                            {queueStats.agents?.available || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Busy Agents
-                          </Label>
-                          <div className="text-sm font-medium text-orange-600">
-                            {queueStats.agents?.busy || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Calls Awaiting
-                          </Label>
-                          <div className="text-sm font-medium text-yellow-600">
-                            {queueStats.realtime?.waitingCalls || 0}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            Expected Wait Time
-                          </Label>
-                          <div className="text-sm font-medium">
-                            {queueStats.realtime?.longestWaitSeconds
-                              ? `${Math.round(queueStats.realtime.longestWaitSeconds)}s`
-                              : "—"}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading queue statistics...
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Users Selection */}
           {selectionType === "users" && (
             <div className="space-y-4">
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-purple-600" />
-                    Select User
-                  </Label>
-                  <ClientOnlySelect
-                    value={agentFilter}
-                    onValueChange={setAgentFilter}
-                  >
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="available">Available</SelectItem>
-                      <SelectItem value="busy">Busy</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                    </SelectContent>
-                  </ClientOnlySelect>
-                </div>
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-purple-600" />
+                  Select User
+                </Label>
                 {loading ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading users...
                   </div>
-                ) : filteredAgents.length === 0 ? (
+                ) : agents.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
                     No users found
                   </div>
@@ -781,7 +537,7 @@ export function NumberSelectionModal({
                       <SelectValue placeholder="Choose a user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {filteredAgents.map((agent) => {
+                      {agents.map((agent) => {
                         const displayName =
                           `${agent.firstName || ""} ${agent.lastName || ""}`.trim() ||
                           agent.username ||
@@ -1029,21 +785,21 @@ export function NumberSelectionModal({
             </div>
           )}
 
-          {/* AI Assistants Selection */}
+          {/* AI Agents Selection */}
           {selectionType === "assistants" && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <Bot className="h-4 w-4 text-indigo-600" />
-                  Select AI Assistant
+                  Select AI Agent
                 </Label>
                 {loading ? (
                   <div className="text-sm text-muted-foreground">
-                    Loading assistants...
+                    Loading AI agents...
                   </div>
                 ) : assistants.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
-                    No AI assistants found
+                    No AI agents found
                   </div>
                 ) : (
                   <ClientOnlySelect
@@ -1051,7 +807,7 @@ export function NumberSelectionModal({
                     onValueChange={setSelectedAssistantId}
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose an AI assistant" />
+                      <SelectValue placeholder="Choose an AI agent" />
                     </SelectTrigger>
                     <SelectContent>
                       {assistants.map((assistant) => (
