@@ -15,7 +15,7 @@ export async function PUT(request) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -25,7 +25,7 @@ export async function PUT(request) {
     if (!status || typeof status !== "string") {
       return NextResponse.json(
         { ok: false, error: "Status is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -40,7 +40,7 @@ export async function PUT(request) {
             ok: false,
             error: "Only supervisors and admins can manage other users' status",
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
       targetUserIdFinal = targetUserId;
@@ -50,26 +50,28 @@ export async function PUT(request) {
     if (!pool) {
       return NextResponse.json(
         { ok: false, error: "Server not ready" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     // Validate status against database
     // If supervisor is changing another agent's status, only allow user-selectable statuses
-    // Otherwise (self-update), allow all active statuses
+    // Otherwise (self-update), allow all active statuses (but Offline is not user-selectable)
     const isSupervisorChangingOtherUser = targetUserIdFinal !== user.id;
-    let validStatuses = ["Available", "Busy", "Away", "Offline"];
+    let validStatuses = isSupervisorChangingOtherUser
+      ? ["Available", "Busy", "Away"] // User-selectable only (Offline is not user-selectable)
+      : ["Available", "Busy", "Away"]; // For self-update, still exclude Offline (system-only)
     try {
       const query = isSupervisorChangingOtherUser
         ? `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
-        : `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`;
+        : `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`;
       const statusResult = await pool.query(query);
       if (statusResult.rows.length > 0) {
         validStatuses = statusResult.rows.map((row) => row.name);
       }
     } catch (error) {
       console.error("[AgentStatus] Error fetching statuses:", error);
-      // Use fallback statuses
+      // Use fallback statuses (Offline is not user-selectable)
     }
 
     if (!validStatuses.includes(status)) {
@@ -78,25 +80,26 @@ export async function PUT(request) {
           ok: false,
           error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Get target user info
     const targetUserRes = await pool.query(
       `SELECT id, username, status, agent_status FROM users WHERE id = $1`,
-      [targetUserIdFinal]
+      [targetUserIdFinal],
     );
 
     if (!targetUserRes.rows || targetUserRes.rows.length === 0) {
       return NextResponse.json(
         { ok: false, error: "User not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     const targetUser = targetUserRes.rows[0];
-    const previousStatus = targetUser.status || targetUser.agent_status || "Unknown";
+    const previousStatus =
+      targetUser.status || targetUser.agent_status || "Unknown";
 
     // Update status using the setUserStatus function which handles all the necessary updates
     await setUserStatus({
@@ -126,7 +129,7 @@ export async function PUT(request) {
       } catch (activityError) {
         console.error(
           "[AgentStatus] Failed to log supervisor activity:",
-          activityError
+          activityError,
         );
         // Don't fail the request if activity logging fails
       }
@@ -141,8 +144,7 @@ export async function PUT(request) {
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err.message || "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-

@@ -33,7 +33,7 @@ function findCustomHeader(headers, name) {
   if (!Array.isArray(headers)) return null;
   return headers.find(
     (header) =>
-      String(header?.name || "").toLowerCase() === String(name).toLowerCase()
+      String(header?.name || "").toLowerCase() === String(name).toLowerCase(),
   );
 }
 
@@ -41,7 +41,7 @@ async function updateConversationMetadata(conversationId, metadata) {
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey || !conversationId) return null;
   const baseUrl = buildTelnyxV2Url(
-    `/ai/conversations/${encodeURIComponent(conversationId)}`
+    `/ai/conversations/${encodeURIComponent(conversationId)}`,
   );
   try {
     const currentRes = await fetch(baseUrl, {
@@ -109,7 +109,7 @@ export async function POST(request, { params }) {
     if (!flowId) {
       return NextResponse.json(
         { ok: false, error: "Flow ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -123,7 +123,7 @@ export async function POST(request, { params }) {
       // Uncomment to enforce signature validation:
       return NextResponse.json(
         { ok: false, error: "Invalid signature" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -169,22 +169,22 @@ export async function POST(request, { params }) {
           // Try to find by custom headers first (from transfer)
           const customHeaders = payload.custom_headers || [];
           const originalCallControlIdHeader = customHeaders.find(
-            (h) => h.name === "X-Original-Call-Control-Id"
+            (h) => h.name === "X-Original-Call-Control-Id",
           );
           const originalCallSessionIdHeader = customHeaders.find(
-            (h) => h.name === "X-Original-Call-Session-Id"
+            (h) => h.name === "X-Original-Call-Session-Id",
           );
 
           if (originalCallControlIdHeader?.value) {
             originalInteraction = await PgDb.findInteractionByCallControlId(
-              originalCallControlIdHeader.value
+              originalCallControlIdHeader.value,
             );
           }
 
           // Fallback: try by call_session_id (both legs share the same session)
           if (!originalInteraction && payload.call_session_id) {
             originalInteraction = await PgDb.findInteractionByCallSessionId(
-              payload.call_session_id
+              payload.call_session_id,
             );
           }
 
@@ -192,7 +192,7 @@ export async function POST(request, { params }) {
             // Extract AI call ID from custom headers if present
             const aiCallHeader = findCustomHeader(
               customHeaders,
-              AI_CALL_ID_HEADER
+              AI_CALL_ID_HEADER,
             );
             const aiCallControlId = aiCallHeader?.value || null;
 
@@ -223,14 +223,13 @@ export async function POST(request, { params }) {
             if (originalInteraction.agent_username) {
               try {
                 const { broadcastToKey } = await import("@/lib/sse");
-                const { storeIncomingCallData } = await import(
-                  "@/lib/incoming-call-store"
-                );
+                const { storeIncomingCallData } =
+                  await import("@/lib/incoming-call-store");
                 const { PgDb: PgDbForUser } = await import("@/lib/pgdb.js");
 
                 // Get agent user ID for SSE broadcast
                 const agent = await PgDbForUser.findUserByUsername(
-                  originalInteraction.agent_username
+                  originalInteraction.agent_username,
                 );
 
                 if (agent?.id) {
@@ -251,7 +250,7 @@ export async function POST(request, { params }) {
                         callSessionId: payload.call_session_id,
                         interactionId: originalInteraction.id,
                         aiCallControlId: metadata.ai_call_control_id || null,
-                      }
+                      },
                     );
                   }
 
@@ -310,13 +309,13 @@ export async function POST(request, { params }) {
           const { PgDb } = await import("@/lib/pgdb.js");
           const aiCallHeader = findCustomHeader(
             payload.custom_headers || [],
-            AI_CALL_ID_HEADER
+            AI_CALL_ID_HEADER,
           );
           const aiCallControlId = aiCallHeader?.value || null;
 
           // Check if interaction already exists for this call_control_id
           const existingInteraction = await PgDb.findInteractionByCallControlId(
-            payload.call_control_id
+            payload.call_control_id,
           );
 
           if (!existingInteraction) {
@@ -329,7 +328,7 @@ export async function POST(request, { params }) {
                 to: payload.to,
                 direction: payload.direction,
                 flowId: flowId,
-              }
+              },
             );
 
             // Create interaction record for incoming call
@@ -389,17 +388,17 @@ export async function POST(request, { params }) {
           let interaction = null;
           if (payload.call_control_id) {
             interaction = await PgDb.findInteractionByCallControlId(
-              payload.call_control_id
+              payload.call_control_id,
             );
           }
           if (!interaction && payload.call_session_id) {
             interaction = await PgDb.findInteractionByCallSessionId(
-              payload.call_session_id
+              payload.call_session_id,
             );
           }
           if (!interaction && payload.call_leg_id) {
             interaction = await PgDb.findInteractionByCallLegId(
-              payload.call_leg_id
+              payload.call_leg_id,
             );
           }
           const aiCallControlId =
@@ -437,12 +436,10 @@ export async function POST(request, { params }) {
         const queueName = payload.queue;
         if (queueName) {
           try {
-            const { handleContactCenterEnqueue } = await import(
-              "@/lib/contact-center/webhook-handler.js"
-            );
-            const { isContactCenterQueue } = await import(
-              "@/lib/contact-center/queue-utils.js"
-            );
+            const { handleContactCenterEnqueue } =
+              await import("@/lib/contact-center/webhook-handler.js");
+            const { isContactCenterQueue } =
+              await import("@/lib/contact-center/queue-utils.js");
 
             if (isContactCenterQueue(queueName)) {
               // Get flow owner username
@@ -465,13 +462,13 @@ export async function POST(request, { params }) {
                 try {
                   const existingInteraction =
                     await PgDb.findInteractionByCallControlId(
-                      payload.call_control_id
+                      payload.call_control_id,
                     );
 
                   if (existingInteraction?.routing_metadata?.timeline) {
                     const initiatedEvent =
                       existingInteraction.routing_metadata.timeline.find(
-                        (e) => e.type === "initiated" && e.from
+                        (e) => e.type === "initiated" && e.from,
                       );
                     if (
                       initiatedEvent?.from &&
@@ -485,18 +482,6 @@ export async function POST(request, { params }) {
                 }
               }
 
-              // Debug: Log client_state from webhook payload
-              if (payload.client_state) {
-                try {
-                  const decoded = JSON.parse(Buffer.from(payload.client_state, "base64").toString());
-                  console.log(`[WebhookRoute] call.enqueued - client_state from payload:`, JSON.stringify(decoded, null, 2));
-                } catch (e) {
-                  console.warn(`[WebhookRoute] call.enqueued - Failed to decode client_state:`, e);
-                }
-              } else {
-                console.warn(`[WebhookRoute] call.enqueued - No client_state in payload`);
-              }
-              
               await handleContactCenterEnqueue({
                 callControlId: payload.call_control_id,
                 callSessionId: payload.call_session_id,
@@ -533,9 +518,8 @@ export async function POST(request, { params }) {
       event === "call.recording.transcription.saved"
     ) {
       try {
-        const { handleContactCenterEvent } = await import(
-          "@/lib/contact-center/webhook-handler.js"
-        );
+        const { handleContactCenterEvent } =
+          await import("@/lib/contact-center/webhook-handler.js");
         await handleContactCenterEvent(event, payload);
       } catch (err) {
         // Don't fail the webhook, just log the error
@@ -545,9 +529,8 @@ export async function POST(request, { params }) {
     // Handle call.transcription for Agent Assist
     if (event === "call.transcription") {
       try {
-        const { handleTranscriptionEvent } = await import(
-          "@/lib/contact-center/webhook-handler.js"
-        );
+        const { handleTranscriptionEvent } =
+          await import("@/lib/contact-center/webhook-handler.js");
         await handleTranscriptionEvent(payload);
       } catch (err) {
         // Don't fail the webhook, just log the error
@@ -556,13 +539,13 @@ export async function POST(request, { params }) {
     if (!flow) {
       return NextResponse.json(
         { ok: false, error: "Flow not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Find the incoming call initiator node
     const incomingCallNode = flow.nodes?.find(
-      (node) => node.data?.nodeType === "incoming_call"
+      (node) => node.data?.nodeType === "incoming_call",
     );
 
     if (!incomingCallNode) {
@@ -571,7 +554,7 @@ export async function POST(request, { params }) {
           ok: false,
           error: "Flow does not have an incoming call trigger",
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -581,7 +564,7 @@ export async function POST(request, { params }) {
 
     if (configuredAppId && receivedAppId && configuredAppId !== receivedAppId) {
       console.warn(
-        `Voice application mismatch: expected ${configuredAppId}, received ${receivedAppId}`
+        `Voice application mismatch: expected ${configuredAppId}, received ${receivedAppId}`,
       );
       // We'll still process it, but log the warning
     }
@@ -633,7 +616,7 @@ export async function POST(request, { params }) {
       // Process edge variable mappings for edges from incoming_call node
       const edges = flow.edges || [];
       const matchingEdges = edges.filter(
-        (e) => e.source === incomingCallNode.id
+        (e) => e.source === incomingCallNode.id,
       );
 
       // Process edge variable mappings
@@ -675,7 +658,7 @@ export async function POST(request, { params }) {
                       JSON.stringify({
                         flowId,
                         currentNodeId: node.id,
-                      })
+                      }),
                     ).toString("base64"),
                   },
                 },
@@ -692,11 +675,11 @@ export async function POST(request, { params }) {
                 configuredNode,
                 payload.call_control_id,
                 body,
-                executionState
+                executionState,
               );
 
               return { node, result };
-            })
+            }),
           );
 
           // Check if any of the executed nodes was record_start with output 0
@@ -708,7 +691,7 @@ export async function POST(request, { params }) {
               payload.call_control_id,
               body,
               variables,
-              flowId
+              flowId,
             );
           }
 
@@ -750,7 +733,7 @@ export async function POST(request, { params }) {
                 payload.call_control_id,
                 body,
                 variables,
-                flowId
+                flowId,
               );
             } else {
               // Telephony node - execution sent command, now STOP and WAIT for webhook
@@ -762,7 +745,7 @@ export async function POST(request, { params }) {
             // Create execution record if it doesn't exist
             await VoiceFlowDb.createFlowExecution(
               flowId,
-              payload.call_control_id
+              payload.call_control_id,
             );
             await VoiceFlowDb.updateFlowExecution(payload.call_control_id, {
               variables,
@@ -771,7 +754,7 @@ export async function POST(request, { params }) {
           } catch (error) {
             console.error(
               `[IncomingWebhook] Failed to store variables in database:`,
-              error
+              error,
             );
           }
 
@@ -789,7 +772,7 @@ export async function POST(request, { params }) {
               error: "Failed to execute flow node",
               details: error.message,
             },
-            { status: 500 }
+            { status: 500 },
           );
         }
       } else {
@@ -800,7 +783,7 @@ export async function POST(request, { params }) {
           // Create execution record if it doesn't exist
           await VoiceFlowDb.createFlowExecution(
             flowId,
-            payload.call_control_id
+            payload.call_control_id,
           );
           await VoiceFlowDb.updateFlowExecution(payload.call_control_id, {
             variables,
@@ -809,7 +792,7 @@ export async function POST(request, { params }) {
         } catch (error) {
           console.error(
             `[IncomingWebhook] Failed to store variables in database:`,
-            error
+            error,
           );
         }
 
@@ -856,13 +839,13 @@ export async function POST(request, { params }) {
               // Find all call legs in this session from cc_interactions table
               const calls = await pool.query(
                 "SELECT call_control_id, direction, state FROM cc_interactions WHERE call_session_id = $1 ORDER BY created_at ASC",
-                [callSessionId]
+                [callSessionId],
               );
 
               // Find the other call leg (the one that's not the current WebRTC leg that hung up)
               // This works for both incoming and outgoing calls transferred to agents
               const originalCall = calls.rows?.find(
-                (call) => call.call_control_id !== callControlId
+                (call) => call.call_control_id !== callControlId,
               );
 
               if (originalCall) {
@@ -871,7 +854,7 @@ export async function POST(request, { params }) {
                   flowId,
                   "hangup",
                   originalCall.call_control_id,
-                  {}
+                  {},
                 );
 
                 // Hangup result handled
@@ -880,9 +863,8 @@ export async function POST(request, { params }) {
               // Update the interaction state instead of calls table
               try {
                 const { PgDb } = await import("@/lib/pgdb.js");
-                const interaction = await PgDb.findInteractionByCallControlId(
-                  callControlId
-                );
+                const interaction =
+                  await PgDb.findInteractionByCallControlId(callControlId);
                 if (interaction) {
                   await PgDb.updateInteractionById(interaction.id, {
                     state: "completed",
@@ -913,9 +895,8 @@ export async function POST(request, { params }) {
     // Handle call.recording.saved - store recording payload in metadata
     if (event === "call.recording.saved") {
       try {
-        const { handleContactCenterEvent } = await import(
-          "@/lib/contact-center/webhook-handler.js"
-        );
+        const { handleContactCenterEvent } =
+          await import("@/lib/contact-center/webhook-handler.js");
         await handleContactCenterEvent(event, payload);
       } catch (err) {
         // Error handling call.recording.saved
@@ -928,7 +909,7 @@ export async function POST(request, { params }) {
       const clientState = payload.client_state;
       if (clientState) {
         const decoded = JSON.parse(
-          Buffer.from(clientState, "base64").toString("utf-8")
+          Buffer.from(clientState, "base64").toString("utf-8"),
         );
         currentNodeId = decoded.currentNodeId;
       }
@@ -942,7 +923,7 @@ export async function POST(request, { params }) {
       if (currentNode) {
         // Retrieve latest variables from database to ensure we have the most up-to-date values
         const execution = await VoiceFlowDb.getFlowExecution(
-          payload.call_control_id
+          payload.call_control_id,
         );
         if (execution && execution.variables) {
           Object.assign(variables, execution.variables);
@@ -961,7 +942,7 @@ export async function POST(request, { params }) {
             const outputEvents = nodeDef?.outputEvents || [];
             const outputIndex = parseInt(
               e.sourceHandle.replace("output-", ""),
-              10
+              10,
             );
             if (!isNaN(outputIndex) && outputEvents[outputIndex] === event) {
               return true;
@@ -1036,7 +1017,7 @@ export async function POST(request, { params }) {
                   try {
                     const decoded = Buffer.from(
                       payload.client_state,
-                      "base64"
+                      "base64",
                     ).toString();
                     const payloadClientState = JSON.parse(decoded);
                     // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
@@ -1044,7 +1025,7 @@ export async function POST(request, { params }) {
                   } catch (err) {
                     console.warn(
                       "[FlowWebhook] Failed to decode payload client_state:",
-                      err
+                      err,
                     );
                   }
                 }
@@ -1054,7 +1035,7 @@ export async function POST(request, { params }) {
                   try {
                     const decoded = Buffer.from(
                       existingConfig.client_state,
-                      "base64"
+                      "base64",
                     ).toString();
                     const configClientState = JSON.parse(decoded);
                     // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
@@ -1065,7 +1046,7 @@ export async function POST(request, { params }) {
                   } catch (err) {
                     console.warn(
                       "[FlowWebhook] Failed to decode config client_state:",
-                      err
+                      err,
                     );
                   }
                 }
@@ -1081,7 +1062,7 @@ export async function POST(request, { params }) {
                       ...existingConfig,
                       // Merge client_state: preserve routing params, add flow tracking
                       client_state: Buffer.from(
-                        JSON.stringify(mergedClientState)
+                        JSON.stringify(mergedClientState),
                       ).toString("base64"),
                     },
                   },
@@ -1097,11 +1078,11 @@ export async function POST(request, { params }) {
                   configuredNextNode,
                   payload.call_control_id,
                   body,
-                  executionState
+                  executionState,
                 );
 
                 return { node: nextNode, result };
-              })
+              }),
             );
 
             // Check if any of the executed nodes was record_start with output 0
@@ -1113,7 +1094,7 @@ export async function POST(request, { params }) {
                 payload.call_control_id,
                 body,
                 variables,
-                flowId
+                flowId,
               );
             }
 
@@ -1160,7 +1141,7 @@ export async function POST(request, { params }) {
                   payload.call_control_id,
                   body,
                   variables,
-                  flowId
+                  flowId,
                 );
               }
             }
@@ -1170,7 +1151,7 @@ export async function POST(request, { params }) {
               // Create execution record if it doesn't exist
               await VoiceFlowDb.createFlowExecution(
                 flowId,
-                payload.call_control_id
+                payload.call_control_id,
               );
               await VoiceFlowDb.updateFlowExecution(payload.call_control_id, {
                 variables,
@@ -1179,7 +1160,7 @@ export async function POST(request, { params }) {
             } catch (error) {
               console.error(
                 `[IncomingWebhook] Failed to store variables in database:`,
-                error
+                error,
               );
             }
 
@@ -1197,12 +1178,12 @@ export async function POST(request, { params }) {
                 error: "Failed to execute flow nodes",
                 details: error.message,
               },
-              { status: 500 }
+              { status: 500 },
             );
           }
         } else {
           const hasAnyEdges = flow.edges?.some(
-            (e) => e.source === currentNode.id
+            (e) => e.source === currentNode.id,
           );
 
           if (!hasAnyEdges) {
@@ -1240,7 +1221,7 @@ export async function POST(request, { params }) {
     console.error("Incoming call webhook error:", error);
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -1256,7 +1237,7 @@ async function executeNodeChain(
   callControlId,
   body,
   variables,
-  flowId
+  flowId,
 ) {
   // Retrieve latest variables from database to ensure we have the most up-to-date values
   const execution = await VoiceFlowDb.getFlowExecution(callControlId);
@@ -1306,7 +1287,7 @@ async function executeNodeChain(
       try {
         const decoded = Buffer.from(
           body.data.payload.client_state,
-          "base64"
+          "base64",
         ).toString();
         const payloadClientState = JSON.parse(decoded);
         // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
@@ -1314,7 +1295,7 @@ async function executeNodeChain(
       } catch (err) {
         console.warn(
           "[FlowWebhook] Failed to decode payload client_state:",
-          err
+          err,
         );
       }
     }
@@ -1324,7 +1305,7 @@ async function executeNodeChain(
       try {
         const decoded = Buffer.from(
           existingConfig.client_state,
-          "base64"
+          "base64",
         ).toString();
         const configClientState = JSON.parse(decoded);
         // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
@@ -1332,7 +1313,7 @@ async function executeNodeChain(
       } catch (err) {
         console.warn(
           "[FlowWebhook] Failed to decode config client_state:",
-          err
+          err,
         );
       }
     }
@@ -1348,7 +1329,7 @@ async function executeNodeChain(
           ...existingConfig,
           // Merge client_state: preserve routing params, add flow tracking
           client_state: Buffer.from(JSON.stringify(mergedClientState)).toString(
-            "base64"
+            "base64",
           ),
         },
       },
@@ -1365,7 +1346,7 @@ async function executeNodeChain(
       configuredNode,
       callControlId,
       body,
-      nodeExecutionState
+      nodeExecutionState,
     );
 
     // Merge variables
@@ -1412,7 +1393,7 @@ async function executeNodeChain(
         callControlId,
         body,
         variables,
-        flowId
+        flowId,
       );
     } else if (result.success && !isLogicalNode) {
       // Telephony node - command sent, STOP and wait for webhook
@@ -1438,7 +1419,7 @@ async function handleRecordStartNode(
   callControlId,
   body,
   variables,
-  flowId
+  flowId,
 ) {
   const nodeType = recordStartNode.data?.nodeType;
 
@@ -1460,7 +1441,7 @@ async function handleRecordStartNode(
     flow,
     recordStartNode,
     body,
-    executionState
+    executionState,
   );
 
   if (output0Nodes.length > 0) {
@@ -1478,7 +1459,7 @@ async function handleRecordStartNode(
                   JSON.stringify({
                     flowId,
                     currentNodeId: node.id,
-                  })
+                  }),
                 ).toString("base64"),
               },
             },
@@ -1495,11 +1476,11 @@ async function handleRecordStartNode(
             configuredNode,
             callControlId,
             body,
-            nodeExecutionState
+            nodeExecutionState,
           );
 
           return { node, result };
-        })
+        }),
       );
 
       return true; // Handled

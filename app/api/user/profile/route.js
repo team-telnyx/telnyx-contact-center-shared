@@ -12,16 +12,16 @@ async function getAllowedStatuses() {
   try {
     const pool = getPostgresPool();
     if (!pool) {
-      // Fallback to default statuses if DB not available
-      return ["Available", "Busy", "Away", "Offline"];
+      // Fallback to default statuses if DB not available (Offline is not user-selectable)
+      return ["Available", "Busy", "Away"];
     }
     const result = await pool.query(
-      `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
+      `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`,
     );
     return result.rows.map((row) => row.name);
   } catch (error) {
-    // Fallback to default statuses
-    return ["Available", "Busy", "Away", "Offline"];
+    // Fallback to default statuses (Offline is not user-selectable)
+    return ["Available", "Busy", "Away"];
   }
 }
 
@@ -31,7 +31,7 @@ async function getStatusMetaByName(statusName) {
     if (!pool) return null;
     const result = await pool.query(
       `SELECT name, user_selectable FROM cc_user_statuses WHERE is_active = true AND name = $1 LIMIT 1`,
-      [statusName]
+      [statusName],
     );
     return result.rows?.[0] || null;
   } catch (error) {
@@ -49,13 +49,13 @@ export async function GET(request) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "User not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -84,7 +84,7 @@ export async function GET(request) {
     console.error("[USER] Profile GET error", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -95,7 +95,7 @@ export async function PUT(request) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -166,7 +166,7 @@ export async function PUT(request) {
     if (Object.keys(update).length === 0) {
       return NextResponse.json(
         { ok: false, error: "No valid fields to update" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -184,7 +184,7 @@ export async function PUT(request) {
         if (pool) {
           await pool.query(
             `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
-            [update.status, userId]
+            [update.status, userId],
           );
           // Also update cc_agent_state table
           await pool.query(
@@ -194,15 +194,14 @@ export async function PUT(request) {
                agent_status = EXCLUDED.agent_status,
                last_status_change = NOW(),
                last_activity = NOW()`,
-            [userId, user.username, update.status]
+            [userId, user.username, update.status],
           );
         }
 
         // Update state manager
-        const { updateAgentStatus } = await import(
-          "@/lib/contact-center/state-manager"
-        );
-        updateAgentStatus(userId, update.status, user.username);
+        const { updateAgentStatus } =
+          await import("@/lib/contact-center/state-manager");
+        await updateAgentStatus(userId, update.status, user.username);
 
         if (["Available", "Busy"].includes(update.status)) {
           try {
@@ -213,7 +212,7 @@ export async function PUT(request) {
               } catch (offerError) {
                 console.error(
                   "[Status] Failed to offer queued calls after status update:",
-                  offerError
+                  offerError,
                 );
               }
             }, 100);
@@ -221,7 +220,7 @@ export async function PUT(request) {
             // Failed to schedule queued call offering
             console.error(
               "[Status] Failed to schedule queued call offering:",
-              offerError
+              offerError,
             );
           }
         }
@@ -230,13 +229,12 @@ export async function PUT(request) {
         try {
           const { broadcastToKey } = await import("@/lib/sse");
           // Broadcast to all monitor streams
-          const { getPostgresPool: getPool } = await import(
-            "@/lib/postgres.mjs"
-          );
+          const { getPostgresPool: getPool } =
+            await import("@/lib/postgres.mjs");
           const monitorPool = getPool();
           if (monitorPool) {
             const supervisors = await monitorPool.query(
-              `SELECT id FROM users WHERE 'supervisor' = ANY(roles) OR 'admin' = ANY(roles) OR 'owner' = ANY(roles)`
+              `SELECT id FROM users WHERE 'supervisor' = ANY(roles) OR 'admin' = ANY(roles) OR 'owner' = ANY(roles)`,
             );
             for (const supervisor of supervisors.rows || []) {
               await broadcastToKey(
@@ -248,14 +246,14 @@ export async function PUT(request) {
                   username: user.username,
                   timestamp: new Date().toISOString(),
                 },
-                "status_changed"
+                "status_changed",
               );
             }
           }
         } catch (monitorError) {
           console.error(
             "[Status] Failed to broadcast to monitors:",
-            monitorError
+            monitorError,
           );
         }
       } catch (stateError) {
@@ -270,7 +268,7 @@ export async function PUT(request) {
           {
             activityType: "status_change",
             pageSize: 1,
-          }
+          },
         );
 
         let previousActivityStartedAt = null;
@@ -309,10 +307,10 @@ export async function PUT(request) {
             username: user.username,
             timestamp: new Date().toISOString(),
           },
-          "status_changed" // Event type for SSE
+          "status_changed", // Event type for SSE
         );
         console.log(
-          `[Status] SSE broadcast sent to ${user.username} for status: ${update.status}`
+          `[Status] SSE broadcast sent to ${user.username} for status: ${update.status}`,
         );
       } catch (sseError) {
         console.error("[Status] Failed to broadcast via SSE:", sseError);
@@ -329,7 +327,7 @@ export async function PUT(request) {
       } catch (ccError) {
         console.error(
           "[Status] Failed to broadcast to contact center stream:",
-          ccError
+          ccError,
         );
         // Don't fail the request if this fails
       }
@@ -345,7 +343,7 @@ export async function PUT(request) {
     console.error("[USER] Profile PUT error", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -361,7 +359,7 @@ export async function POST(request) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -415,7 +413,7 @@ export async function POST(request) {
     if (update.status) {
       const previousStatus = user.status || user.agent_status || "Unknown";
       const sseKey = `user:status:${userId}`;
-      
+
       // Update agent_status to match status for contact center
       try {
         const { getPostgresPool } = await import("@/lib/postgres.mjs");
@@ -423,7 +421,7 @@ export async function POST(request) {
         if (pool) {
           await pool.query(
             `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
-            [update.status, userId]
+            [update.status, userId],
           );
           await pool.query(
             `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity)
@@ -432,14 +430,13 @@ export async function POST(request) {
                agent_status = EXCLUDED.agent_status,
                last_status_change = NOW(),
                last_activity = NOW()`,
-            [userId, user.username, update.status]
+            [userId, user.username, update.status],
           );
         }
 
-        const { updateAgentStatus } = await import(
-          "@/lib/contact-center/state-manager"
-        );
-        updateAgentStatus(userId, update.status, user.username);
+        const { updateAgentStatus } =
+          await import("@/lib/contact-center/state-manager");
+        await updateAgentStatus(userId, update.status, user.username);
 
         // Broadcast to web clients via SSE
         try {
@@ -452,7 +449,7 @@ export async function POST(request) {
               username: user.username,
               timestamp: new Date().toISOString(),
             },
-            "status_changed"
+            "status_changed",
           );
         } catch (sseError) {
           console.error("[Status] Failed to broadcast via SSE:", sseError);
@@ -467,7 +464,7 @@ export async function POST(request) {
     console.error("[USER] Profile POST error", err);
     return NextResponse.json(
       { ok: false, error: "Server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

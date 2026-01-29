@@ -13,7 +13,7 @@ export async function GET(request, { params }) {
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -21,7 +21,7 @@ export async function GET(request, { params }) {
     if (!isSupervisorOrAdmin(user)) {
       return NextResponse.json(
         { ok: false, error: "Forbidden" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     if (!userId) {
       return NextResponse.json(
         { ok: false, error: "User ID is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -37,7 +37,7 @@ export async function GET(request, { params }) {
     if (!pool) {
       return NextResponse.json(
         { ok: false, error: "Server not ready" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -45,13 +45,13 @@ export async function GET(request, { params }) {
     const agentResult = await pool.query(
       `SELECT id, username, first_name, last_name, agent_status, max_concurrent_calls 
        FROM users WHERE id = $1`,
-      [userId]
+      [userId],
     );
 
     if (agentResult.rows.length === 0) {
       return NextResponse.json(
         { ok: false, error: "Agent not found" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -62,6 +62,8 @@ export async function GET(request, { params }) {
         : agent.username;
 
     // Get all active/interactions for this agent
+    // Exclude completed, abandoned, and re-enqueued calls to avoid showing ghost calls
+    // Also exclude calls that are in "queued" state (they've been re-enqueued and are no longer assigned)
     const callsResult = await pool.query(
       `SELECT 
         i.id,
@@ -90,9 +92,14 @@ export async function GET(request, { params }) {
       FROM cc_interactions i
       LEFT JOIN cc_queues q ON i.queue_id = q.id
       WHERE i.agent_username = $1
+        AND i.completed_at IS NULL
+        AND i.abandoned_at IS NULL
+        AND i.state != 'queued'
+        AND COALESCE(i.metadata->>'timeout_re_enqueued', '') != 'true'
+        AND i.assigned_at IS NOT NULL
       ORDER BY i.created_at DESC
       LIMIT 1000`,
-      [agent.username]
+      [agent.username],
     );
 
     const calls = callsResult.rows.map((call) => ({
@@ -123,7 +130,9 @@ export async function GET(request, { params }) {
     const activeCalls = calls.filter(
       (call) =>
         call.state &&
-        !["completed", "abandoned", "failed"].includes(call.state.toLowerCase())
+        !["completed", "abandoned", "failed"].includes(
+          call.state.toLowerCase(),
+        ),
     );
 
     // Get time tracking data for today
@@ -136,7 +145,7 @@ export async function GET(request, { params }) {
         COALESCE(SUM(logged_in_seconds), 0) as total_logged_in_seconds
       FROM cc_user_time_tracking
       WHERE user_id = $1 AND tracking_date = $2`,
-      [userId, today]
+      [userId, today],
     );
 
     const timeTracking = timeTrackingResult.rows[0] || {
@@ -175,7 +184,7 @@ export async function GET(request, { params }) {
     console.error("[AgentCalls] Error fetching agent calls:", error);
     return NextResponse.json(
       { ok: false, error: "Failed to fetch agent calls" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

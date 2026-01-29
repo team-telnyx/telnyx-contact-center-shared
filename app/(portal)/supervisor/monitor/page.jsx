@@ -133,7 +133,107 @@ function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
   );
 }
 
+// Component to display agent skills on hover
+function AgentSkillsIndicator({ agentUserId }) {
+  const [agentSkills, setAgentSkills] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const loadAgentSkills = async () => {
+    if (hasLoaded || loading || !agentUserId) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/contact-center/agents/${agentUserId}/skills`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ok && data.agent) {
+          setAgentSkills(data.agent.skills || {});
+          setHasLoaded(true);
+        }
+      }
+    } catch (error) {
+      console.error("[Monitor] Error loading agent skills:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!agentUserId) return null;
+
+  return (
+    <HoverCard
+      onOpenChange={(open) => {
+        if (open && !hasLoaded) {
+          loadAgentSkills();
+        }
+      }}
+    >
+      <HoverCardTrigger asChild>
+        <div className="inline-flex items-center cursor-pointer">
+          <IconInfoCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80">
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold mb-3">Agent Skills</h4>
+          {loading ? (
+            <div className="space-y-2 py-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+            </div>
+          ) : agentSkills && Object.keys(agentSkills).length > 0 ? (
+            Object.entries(agentSkills).map(([skillName, proficiency]) => (
+              <div
+                key={skillName}
+                className="flex items-center justify-between py-1"
+              >
+                <span className="text-sm font-medium">{skillName}</span>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const starValue = i + 1;
+                    const filled = starValue <= proficiency;
+                    return (
+                      <span key={i}>
+                        {filled ? (
+                          <IconStarFilled className="w-4 h-4 text-yellow-400" />
+                        ) : (
+                          <IconStar className="w-4 h-4 text-gray-300" />
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No skills assigned</p>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
 export default function MonitorPage() {
+  // Helper function to format idle time in seconds to human-readable format
+  const formatIdleTime = (seconds) => {
+    if (!seconds || seconds <= 0) return "—";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
+  };
+
   // Helper function to format seconds into hours and minutes
   const formatTime = (seconds) => {
     if (!seconds || seconds === 0) return "0h 0m";
@@ -251,12 +351,46 @@ export default function MonitorPage() {
           });
 
           // Merge agents stats - update only changed agents
+          // Always use availableSince from server (database) as single source of truth
+          // Client-side calculation will use this timestamp for real-time updates
           const currentAgents = currentData.agents?.stats || [];
           const mergedAgents = currentAgents.map((currentAgent) => {
             const updatedAgent = updateAgents.find(
               (a) => String(a.userId) === String(currentAgent.userId),
             );
-            return updatedAgent || currentAgent;
+            if (updatedAgent) {
+              // Smart merge for availableSince:
+              // 1. If server provides availableSince, use it (it's the source of truth)
+              // 2. If server sends null but agent is still Available, preserve existing availableSince
+              //    (prevents flickering when server temporarily doesn't have the value due to race conditions)
+              // 3. If status changed or calls changed, always use server's value
+              const statusChanged = updatedAgent.status !== currentAgent.status;
+              const callsChanged =
+                updatedAgent.currentCalls !== currentAgent.currentCalls;
+              const isStillAvailable =
+                updatedAgent.status === "Available" &&
+                updatedAgent.currentCalls === 0 &&
+                currentAgent.status === "Available" &&
+                currentAgent.currentCalls === 0;
+
+              if (
+                !statusChanged &&
+                !callsChanged &&
+                isStillAvailable &&
+                !updatedAgent.availableSince &&
+                currentAgent.availableSince
+              ) {
+                // Agent is still Available with no changes, but server sent null availableSince
+                // Preserve existing to prevent flickering (server might have race condition)
+                return {
+                  ...updatedAgent,
+                  availableSince: currentAgent.availableSince,
+                };
+              }
+              // Use server's value in all other cases (status/calls changed, or server provided value)
+              return updatedAgent;
+            }
+            return currentAgent;
           });
 
           // Add any new agents that weren't in the current list
@@ -910,7 +1044,17 @@ export default function MonitorPage() {
           Supervisory Console
         </h1>
         <div className="flex items-center gap-3">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              setActiveTab(value);
+              // Clear selected queue when switching tabs to ensure proper view rendering
+              if (selectedQueue) {
+                setSelectedQueue(null);
+                setQueueCalls([]);
+              }
+            }}
+          >
             <TabsList>
               <TabsTrigger value="agents" className="flex items-center gap-2">
                 <IconUsers className="h-4 w-4" />
@@ -1144,13 +1288,19 @@ export default function MonitorPage() {
 
                           // Determine state - if answered but state is still ringing/bridging, show as connected
                           // Also normalize "answered" state to "connected" for consistency
+                          // But don't override terminal states (completed, abandoned, failed)
                           const displayState =
-                            call.answeredAt &&
-                            (call.state === "ringing" ||
-                              call.state === "bridging" ||
-                              call.state === "answered")
-                              ? "connected"
-                              : call.state;
+                            call.state &&
+                            ["completed", "abandoned", "failed"].includes(
+                              call.state.toLowerCase(),
+                            )
+                              ? call.state
+                              : call.answeredAt &&
+                                  (call.state === "ringing" ||
+                                    call.state === "bridging" ||
+                                    call.state === "answered")
+                                ? "connected"
+                                : call.state;
 
                           const stateColor =
                             displayState === "completed"
@@ -1218,7 +1368,18 @@ export default function MonitorPage() {
                                 </span>
                               </TableCell>
                               <TableCell>
-                                {call.agentName || call.agentUsername || "—"}
+                                <div className="flex items-center gap-2">
+                                  <span>
+                                    {call.agentName ||
+                                      call.agentUsername ||
+                                      "—"}
+                                  </span>
+                                  {call.agentUserId && (
+                                    <AgentSkillsIndicator
+                                      agentUserId={call.agentUserId}
+                                    />
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 {selectedQueue?.routingStrategy ===
@@ -1549,6 +1710,7 @@ export default function MonitorPage() {
                           <TableRow>
                             <TableHead>Agent</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead>Idle Time</TableHead>
                             <TableHead>Active Queues</TableHead>
                             <TableHead>Current Calls</TableHead>
                             <TableHead>Today: Total</TableHead>
@@ -1664,6 +1826,33 @@ export default function MonitorPage() {
                                       </button>
                                     </div>
                                   </TableCell>
+                                  <TableCell>
+                                    {(() => {
+                                      // Database (availableSince) is the single source of truth
+                                      // Calculate idle time client-side from availableSince timestamp for real-time updates
+                                      if (
+                                        agent.status === "Available" &&
+                                        agent.currentCalls === 0 &&
+                                        agent.availableSince
+                                      ) {
+                                        const availableSinceTime = new Date(
+                                          agent.availableSince,
+                                        ).getTime();
+                                        const nowTime = currentTime.getTime();
+                                        const idleSeconds = Math.max(
+                                          0,
+                                          Math.floor(
+                                            (nowTime - availableSinceTime) /
+                                              1000,
+                                          ),
+                                        );
+                                        return formatIdleTime(idleSeconds);
+                                      }
+                                      // If availableSince is missing but agent is Available, show dash
+                                      // This should be rare and indicates available_since needs initialization
+                                      return "—";
+                                    })()}
+                                  </TableCell>
                                   <TableCell
                                     className={
                                       highlightedCells.has(
@@ -1718,7 +1907,7 @@ export default function MonitorPage() {
                                 {isExpanded && (
                                   <TableRow>
                                     <TableCell
-                                      colSpan={7}
+                                      colSpan={8}
                                       className="p-0 border-t bg-muted/30"
                                     >
                                       <div className="px-4 py-2">
@@ -1764,14 +1953,26 @@ export default function MonitorPage() {
                                                       : call.talkSeconds || 0;
 
                                                   // Determine state
+                                                  // Don't override terminal states (completed, abandoned, failed)
                                                   const displayState =
-                                                    call.answeredAt &&
-                                                    (call.state === "ringing" ||
-                                                      call.state ===
-                                                        "bridging" ||
-                                                      call.state === "answered")
-                                                      ? "connected"
-                                                      : call.state;
+                                                    call.state &&
+                                                    [
+                                                      "completed",
+                                                      "abandoned",
+                                                      "failed",
+                                                    ].includes(
+                                                      call.state.toLowerCase(),
+                                                    )
+                                                      ? call.state
+                                                      : call.answeredAt &&
+                                                          (call.state ===
+                                                            "ringing" ||
+                                                            call.state ===
+                                                              "bridging" ||
+                                                            call.state ===
+                                                              "answered")
+                                                        ? "connected"
+                                                        : call.state;
 
                                                   const stateColor =
                                                     displayState === "completed"

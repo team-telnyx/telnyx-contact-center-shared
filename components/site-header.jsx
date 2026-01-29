@@ -125,36 +125,7 @@ export function SiteHeader() {
                 loadQueuesRef.current();
               }
             } else if (data.type === "queue_activation_changed") {
-              // Notify about activation change (only if it's not the current user)
-              try {
-                const currentUserRes = await fetch("/api/auth/me");
-                const currentUserData = await currentUserRes.json();
-                if (
-                  currentUserData?.isAuth &&
-                  currentUserData?.user?.id !== data.userId
-                ) {
-                  const queueNames = data.queues
-                    .map((q) => q.displayName || q.name)
-                    .join(", ");
-                  // Use first + last name if available, fallback to username
-                  const userName =
-                    data.firstName || data.lastName
-                      ? `${data.firstName || ""} ${data.lastName || ""}`.trim()
-                      : data.username;
-                  notify({
-                    title: data.activated
-                      ? "User activated in queues"
-                      : "User deactivated from queues",
-                    description: `${userName} ${
-                      data.activated ? "activated" : "deactivated"
-                    } in ${queueNames}.`,
-                    variant: "info",
-                  });
-                }
-              } catch (fetchErr) {
-                // Failed to fetch current user
-              }
-              // Reload queues to update activation status
+              // Reload queues to update activation status (no toast notification)
               if (loadQueuesRef.current) {
                 loadQueuesRef.current();
               }

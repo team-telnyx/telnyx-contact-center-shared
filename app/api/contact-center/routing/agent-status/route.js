@@ -28,14 +28,14 @@ export async function POST(request) {
     if (!pool) {
       return NextResponse.json(
         { error: "Database not available" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     // Get user info
     const userResult = await pool.query(
       `SELECT username, agent_status FROM users WHERE id = $1`,
-      [userId]
+      [userId],
     );
 
     if (!userResult.rows || userResult.rows.length === 0) {
@@ -50,13 +50,16 @@ export async function POST(request) {
     if (status) {
       // Validate status
       // Get valid statuses from database
-      let validStatuses = ["Available", "Busy", "Away", "Offline"]; // Fallback
+      // Offline is system-only and not user-selectable
+      let validStatuses = system
+        ? ["Available", "Busy", "Away", "Offline"] // System can set any status including Offline
+        : ["Available", "Busy", "Away"]; // Users can only select user-selectable statuses (Offline excluded)
       if (pool) {
         try {
           const statusResult = await pool.query(
             system
               ? `SELECT name FROM cc_user_statuses WHERE is_active = true ORDER BY display_order ASC, name ASC`
-              : `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`
+              : `SELECT name FROM cc_user_statuses WHERE is_active = true AND user_selectable = true ORDER BY display_order ASC, name ASC`,
           );
           if (statusResult.rows.length > 0) {
             validStatuses = statusResult.rows.map((row) => row.name);
@@ -70,21 +73,21 @@ export async function POST(request) {
         return NextResponse.json(
           {
             error: `Invalid status. Must be one of: ${validStatuses.join(
-              ", "
+              ", ",
             )}`,
           },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       // Update in database
       await pool.query(
         `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
-        [status, userId]
+        [status, userId],
       );
 
       // Update in state manager
-      updateAgentStatus(userId, status, username);
+      await updateAgentStatus(userId, status, username);
 
       // Update agent state table
       await pool.query(
@@ -94,7 +97,7 @@ export async function POST(request) {
            agent_status = EXCLUDED.agent_status,
            last_status_change = NOW(),
            last_activity = NOW()`,
-        [userId, username, status]
+        [userId, username, status],
       );
     }
 
@@ -107,7 +110,7 @@ export async function POST(request) {
         `UPDATE cc_agent_state 
          SET active_queue_ids = $1, last_activity = NOW()
          WHERE user_id = $2`,
-        [queueIds, userId]
+        [queueIds, userId],
       );
     }
 
@@ -124,7 +127,7 @@ export async function POST(request) {
       } catch (error) {
         console.error(
           "[AgentStatus] Failed to offer queued calls after status change:",
-          error
+          error,
         );
       }
     }
@@ -142,7 +145,7 @@ export async function POST(request) {
         error: "Internal server error",
         message: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

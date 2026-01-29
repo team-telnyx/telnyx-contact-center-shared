@@ -157,7 +157,7 @@ export async function POST(request) {
             targetUser.agent_status &&
             targetUser.agent_status !== "Offline"
           ) {
-            updateAgentStatus(
+            await updateAgentStatus(
               targetUserIdFinal,
               targetUser.agent_status,
               targetUser.username,
