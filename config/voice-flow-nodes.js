@@ -1085,9 +1085,8 @@ export const VOICE_FLOW_NODES = {
         type: "select",
         label: "Queue Name",
         required: true,
-        default: "{{username}}",
+        default: "",
         options: [
-          { value: "{{username}}", label: "{{username}}" },
           { value: "SALES", label: "SALES" },
           { value: "SUPPORT", label: "SUPPORT" },
           { value: "MARKETING", label: "MARKETING" },

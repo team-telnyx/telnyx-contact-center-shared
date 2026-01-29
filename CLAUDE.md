@@ -35,6 +35,7 @@ The core of the system is a visual flow designer that executes Telnyx Voice API 
 - **Node Editors**: `components/voice-flow/` - custom React components for configuring each node type
 
 Key concepts:
+
 - Flows transition between nodes based on webhook events (e.g., `call.answered`, `call.hangup`)
 - Variables can be substituted in node configs using `{{variable}}` notation
 - Client state is used to maintain context across webhook calls
@@ -51,6 +52,7 @@ Skills-based routing system with real-time state management:
 - **User Status** (`lib/contact-center/user-status.js`): Manages agent availability states
 
 The routing flow:
+
 1. Calls are enqueued via the `enqueue` voice flow node
 2. Queue options (name, priority, required skills) can be set via `set_queue_options` node
 3. Routing engine finds best agent match based on skills, availability, and call priority
@@ -101,6 +103,7 @@ Next.js App Router with route handlers in `app/api/`:
 ### Variable Substitution
 
 Voice flow configs support variable interpolation:
+
 - Format: `{{variable_name}}` or `{{path.to.nested.value}}`
 - Engine: `lib/expression-engine.js` for expression evaluation
 - Utils: `lib/variable-utils.js` for get/set operations on nested paths
@@ -122,13 +125,14 @@ import { notify } from "@/components/ToastNotify";
 notify({
   title: "Success",
   description: "Operation completed",
-  variant: "success"
+  variant: "success",
 });
 ```
 
 ### Integration with Telnyx API
 
 When creating Telnyx API integrations:
+
 1. Check `openapi/telnyx.json` for API specifications (if present)
 2. Use `lib/telnyx.js` utilities for building URLs
 3. Store credentials via `lib/telnyx-credentials.js`
@@ -152,6 +156,7 @@ When creating Telnyx API integrations:
 ### Skills-Based Routing
 
 Skills format in user profiles and queue requirements:
+
 ```json
 {
   "skill_uuid": proficiency_level,
@@ -166,8 +171,9 @@ The routing engine converts UUIDs to skill names for matching and caches skill m
 ### Queue Configuration
 
 Queues can be created dynamically via the `enqueue` flow node or pre-configured in the database:
-- Queue name can use variable substitution: `{{username}}`
-- Priority determines routing order (1-100)
+
+- Queue name can use variable substitution: `{{variable}}`
+- Priority determines routing order (1-5 stars)
 - Required skills filter available agents
 - Max wait time and max size configurable
 
