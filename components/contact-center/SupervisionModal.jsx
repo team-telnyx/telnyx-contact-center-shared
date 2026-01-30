@@ -544,11 +544,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   };
 
   const handleStartSupervision = async (role) => {
-    // Get the original call control ID for supervision
-    // For calls transferred to agents, use originalCallControlId from metadata
-    // Otherwise, use the call's callControlId
+    // Get the call control ID for supervision
+    // Prefer agent's call leg ID when call is answered (for whispering/monitoring agent leg)
+    // Fallback to original call leg ID for queued calls
+    // Use supervisionCallControlId if provided (already computed by API with correct preference)
     const callControlId =
-      call?.originalCallControlId || // Original inbound call (preferred for supervision)
+      call?.supervisionCallControlId || // Pre-computed by API (prefers agent leg when available)
+      call?.agentCallControlId || // Agent's call leg (WebRTC leg) - preferred when call is answered
+      call?.originalCallControlId || // Original inbound call leg - fallback for queued calls
       call?.callControlId ||
       call?.id ||
       call?.call_control_id;
@@ -565,9 +568,12 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     console.log("[SupervisionModal] Starting supervision with:", {
       role,
       callControlId,
+      supervisionCallControlId: call?.supervisionCallControlId,
+      agentCallControlId: call?.agentCallControlId,
       originalCallControlId: call?.originalCallControlId,
       interactionCallControlId: call?.callControlId,
       callId: call?.id,
+      isCallAnswered: isCallAnswered,
     });
 
     // Note: telephony_user_name validation is handled by the backend
@@ -635,7 +641,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         // Then update state (async, triggers re-render)
         setActiveRole(role);
         setSupervisorCallControlId(data.supervisorCallControlId);
-        // Store the supervised call control ID (the original call being supervised)
+        // Store the supervised call control ID (the call leg being supervised - agent leg when available)
         // This is what we'll use for switch_supervisor_role
         setSupervisedCallControlId(callControlId);
 
@@ -706,12 +712,14 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       return;
     }
 
-    // Use the supervised call control ID (the original call being supervised)
+    // Use the supervised call control ID (the call leg being supervised)
     // This is the same ID we used when starting supervision (supervise_call_control_id)
-    // NOT the supervisor call's ID - that's what we were doing wrong!
+    // Prefer agent's call leg when available, otherwise use original leg
     const callControlIdToUse =
-      supervisedCallControlId ||
-      call?.originalCallControlId ||
+      supervisedCallControlId || // Stored from when supervision started
+      call?.supervisionCallControlId || // Pre-computed by API (prefers agent leg when available)
+      call?.agentCallControlId || // Agent's call leg (WebRTC leg) - preferred when call is answered
+      call?.originalCallControlId || // Original inbound call leg - fallback for queued calls
       call?.callControlId ||
       call?.id ||
       call?.call_control_id;
@@ -726,10 +734,12 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     }
 
     console.log("[SupervisionModal] Switching supervisor role:", {
-      supervisedCallControlId: callControlIdToUse, // The original call being supervised (correct)
+      supervisedCallControlId: callControlIdToUse, // The call leg being supervised (agent leg when available)
       supervisorCallControlId: currentSupervisorCallControlId, // The supervisor call (for reference only)
       currentRole: activeRole,
       newRole,
+      agentCallControlId: call?.agentCallControlId,
+      originalCallControlId: call?.originalCallControlId,
     });
 
     setLoading(true);

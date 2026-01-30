@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Info, PhoneCall } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useCallsStore from "@/lib/stores/calls-store";
+import { AgentDataSources } from "./AgentDataSources";
 
 export function AgentDesktop() {
   const [selectedInteraction, setSelectedInteraction] = useState(null);
@@ -139,8 +140,8 @@ export function AgentDesktop() {
               (storeCall.callerNumber && storeCall.callerNumber.trim() !== "")
                 ? storeCall.callerNumber
                 : storeCall.fromNumber && storeCall.fromNumber.trim() !== ""
-                  ? storeCall.fromNumber
-                  : null,
+                ? storeCall.fromNumber
+                : null,
             queue_name: storeCall.queueName || interaction.queue_name,
             state: storeCall.status || interaction.state,
           };
@@ -392,7 +393,9 @@ export function AgentDesktop() {
               interaction.call_control_id === callControlId;
             if (matchesId || matchesCallControlId) {
               console.log(
-                `[AgentDesktop] Immediately removing disconnected interaction: ${interactionId || callControlId}`,
+                `[AgentDesktop] Immediately removing disconnected interaction: ${
+                  interactionId || callControlId
+                }`,
               );
               return false;
             }
@@ -529,7 +532,9 @@ export function AgentDesktop() {
                   call.status === "trying"
                 ) {
                   console.log(
-                    `[AgentDesktop] Removing ringing call ${call.callControlId || call.interactionId} from calls store`,
+                    `[AgentDesktop] Removing ringing call ${
+                      call.callControlId || call.interactionId
+                    } from calls store`,
                   );
                   callsStore.removeCall(
                     call.callControlId || call.interactionId,
@@ -705,7 +710,9 @@ export function AgentDesktop() {
         // This prevents wrapup sheet from opening even for a moment
         try {
           const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+            `/api/contact-center/interactions/${encodeURIComponent(
+              interactionId,
+            )}/timeout-check`,
             { cache: "no-store" },
           );
           if (timeoutCheckRes.ok) {
@@ -756,7 +763,9 @@ export function AgentDesktop() {
         if (!interaction) {
           try {
             const timeoutCheckRes = await fetch(
-              `/api/contact-center/interactions/${encodeURIComponent(interactionId)}/timeout-check`,
+              `/api/contact-center/interactions/${encodeURIComponent(
+                interactionId,
+              )}/timeout-check`,
               { cache: "no-store" },
             );
             if (timeoutCheckRes.ok) {
@@ -879,7 +888,9 @@ export function AgentDesktop() {
         // CRITICAL: Check timeout status FIRST via API before doing anything else
         try {
           const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(interaction.id)}/timeout-check`,
+            `/api/contact-center/interactions/${encodeURIComponent(
+              interaction.id,
+            )}/timeout-check`,
             { cache: "no-store" },
           );
           if (timeoutCheckRes.ok) {
@@ -955,6 +966,7 @@ export function AgentDesktop() {
       if (interaction) {
         const metadata = interaction.metadata || {};
         const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+        const isConsultCall = metadata.is_consult_call === true;
         const wasAnswered = Boolean(interaction.answered_at);
         const isAbandoned = interaction.state === "abandoned";
         const wasQueuedWhenEnded = interaction.state === "queued";
@@ -963,16 +975,19 @@ export function AgentDesktop() {
         // - Timeout re-enqueued (agent didn't answer)
         // - Abandoned and never answered
         // - Still queued when ended
+        // - Consult call (consultant call leg, not the parked call)
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
+          isConsultCall ||
           (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {
           lastWrapupInteractionRef.current = interactionId;
           // Use global wrapup sheet store
-          const { default: useWrapupSheetStore } =
-            await import("@/lib/stores/wrapup-sheet-store");
+          const { default: useWrapupSheetStore } = await import(
+            "@/lib/stores/wrapup-sheet-store"
+          );
           useWrapupSheetStore
             .getState()
             .openWrapup(interactionId, transcriptions || []);
@@ -981,8 +996,9 @@ export function AgentDesktop() {
         // If interaction not found, assume it was answered and show wrapup
         lastWrapupInteractionRef.current = interactionId;
         // Use global wrapup sheet store
-        const { default: useWrapupSheetStore } =
-          await import("@/lib/stores/wrapup-sheet-store");
+        const { default: useWrapupSheetStore } = await import(
+          "@/lib/stores/wrapup-sheet-store"
+        );
         useWrapupSheetStore
           .getState()
           .openWrapup(interactionId, transcriptions || []);
@@ -1002,47 +1018,245 @@ export function AgentDesktop() {
     };
   }, [interactions]);
 
+  const [activeView, setActiveView] = useState("interaction-details");
+  const [isHydrated, setIsHydrated] = useState(false);
+  const previousInteractionsRef = useRef([]);
+  const hasRestoredStateRef = useRef(false);
+  const savedSelectedInteractionIdRef = useRef(null);
+
+  // Restore activeView from localStorage after hydration
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("agent-desktop.activeView");
+        if (saved && ["interaction-details", "contacts", "tasks", "kb-articles", "web-pages"].includes(saved)) {
+          setActiveView(saved);
+        }
+      } catch (_) {}
+      setIsHydrated(true);
+    }
+  }, []);
+
+  // Save state to localStorage when activeView changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("agent-desktop.activeView", activeView);
+      } catch (_) {}
+    }
+  }, [activeView]);
+
+  // Save selected interaction ID to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== "undefined" && selectedInteraction?.id) {
+      try {
+        localStorage.setItem("agent-desktop.selectedInteractionId", selectedInteraction.id);
+        savedSelectedInteractionIdRef.current = selectedInteraction.id;
+      } catch (_) {}
+    } else if (!selectedInteraction && typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("agent-desktop.selectedInteractionId");
+        savedSelectedInteractionIdRef.current = null;
+      } catch (_) {}
+    }
+  }, [selectedInteraction?.id]);
+
+  // Restore selected interaction on mount if it still exists
+  useEffect(() => {
+    if (hasRestoredStateRef.current || interactions.length === 0) return;
+    
+    try {
+      const savedInteractionId = localStorage.getItem("agent-desktop.selectedInteractionId");
+      if (savedInteractionId) {
+        const savedInteraction = interactions.find(
+          (i) => i.id === savedInteractionId || i.call_control_id === savedInteractionId
+        );
+        if (savedInteraction) {
+          // Set the ref FIRST before setting state, so the effect knows it's a restore
+          savedSelectedInteractionIdRef.current = savedInteractionId;
+          setSelectedInteraction(savedInteraction);
+        } else {
+          // Interaction no longer exists, clear saved state
+          localStorage.removeItem("agent-desktop.selectedInteractionId");
+          savedSelectedInteractionIdRef.current = null;
+        }
+      }
+    } catch (_) {}
+    
+    hasRestoredStateRef.current = true;
+  }, [interactions]);
+
+  // Reset to interaction details when a call is selected, but only if it's a new incoming call
+  // Don't override restored state for existing calls
+  useEffect(() => {
+    if (!selectedInteraction) return;
+    
+    // Only reset to interaction details if:
+    // 1. This is a new incoming call (ringing, new, alerting, trying)
+    // 2. OR the user manually selected a different interaction (not restored)
+    const isNewIncomingCall =
+      selectedInteraction.state === "ringing" ||
+      selectedInteraction.state === "new" ||
+      selectedInteraction.state === "alerting" ||
+      selectedInteraction.state === "trying";
+    
+    const isRestoredSelection = 
+      savedSelectedInteractionIdRef.current === selectedInteraction.id ||
+      savedSelectedInteractionIdRef.current === selectedInteraction.call_control_id;
+    
+    // Only switch to interaction details if it's a new incoming call
+    // OR if the user manually selected a different interaction (not the restored one)
+    if (isNewIncomingCall || !isRestoredSelection) {
+      setActiveView("interaction-details");
+    }
+  }, [selectedInteraction?.id, selectedInteraction?.state]);
+
+  // Detect new incoming calls and switch to interaction details view
+  useEffect(() => {
+    if (interactions.length === 0) {
+      previousInteractionsRef.current = [];
+      return;
+    }
+
+    // Find new incoming calls (ringing, new, alerting, trying states)
+    const newIncomingCalls = interactions.filter((interaction) => {
+      const isIncomingState =
+        interaction.state === "ringing" ||
+        interaction.state === "new" ||
+        interaction.state === "alerting" ||
+        interaction.state === "trying";
+      
+      // Check if this interaction is new (not in previous list)
+      const wasInPreviousList = previousInteractionsRef.current.some(
+        (prev) =>
+          prev.id === interaction.id ||
+          prev.call_control_id === interaction.call_control_id,
+      );
+
+      return isIncomingState && !wasInPreviousList;
+    });
+
+    // If there's a new incoming call, switch to interaction details view
+    if (newIncomingCalls.length > 0) {
+      // Find the most recent incoming call (first in list is usually most recent)
+      const newCall = newIncomingCalls[0];
+      
+      // Switch to interaction details view
+      setActiveView("interaction-details");
+      
+      // Also auto-select the new call if no call is currently selected
+      // or if the currently selected call is not an incoming call
+      setSelectedInteraction((current) => {
+        if (!current) {
+          return newCall;
+        }
+        // If current selection is not an incoming call, switch to the new one
+        const currentIsIncoming =
+          current.state === "ringing" ||
+          current.state === "new" ||
+          current.state === "alerting" ||
+          current.state === "trying";
+        if (!currentIsIncoming) {
+          return newCall;
+        }
+        return current;
+      });
+    }
+
+    // Update previous interactions reference
+    previousInteractionsRef.current = interactions;
+  }, [interactions]);
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Main Content */}
-      <div className="flex gap-4 flex-1 min-h-0 overflow-hidden">
-        {/* Left Panel - Interactions List */}
-        <Card className="w-80 shrink-0 flex flex-col overflow-hidden">
+    <div className="flex gap-4 h-full w-full overflow-hidden max-w-full">
+      {/* Left Panel - Two stacked cards */}
+      <div className="w-80 shrink-0 flex flex-col gap-4 h-full min-h-0">
+        {/* Interactions Card */}
+        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <InteractionsList
             interactions={
               Array.isArray(interactions) ? interactions.filter(Boolean) : []
             }
             selectedId={selectedInteraction?.id}
-            onSelect={setSelectedInteraction}
+            onSelect={(interaction) => {
+              setSelectedInteraction(interaction);
+              // When user manually selects an interaction, switch to details view
+              // This overrides any restored state
+              setActiveView("interaction-details");
+              // Clear saved state since user made a manual selection
+              savedSelectedInteractionIdRef.current = null;
+            }}
             webrtcCallState={useActiveCallStore()}
             currentUsername={currentUsername}
           />
         </Card>
 
-        {/* Right Panel - Interaction Details */}
-        <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
-          <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-md bg-primary/10">
-                  <Info className="h-4 w-4 text-primary" />
-                </div>
-                <h2 className="text-base font-semibold text-foreground">
-                  Interaction Details
-                </h2>
-              </div>
-            </div>
-          </div>
-          {selectedInteraction ? (
-            <InteractionDetail interaction={selectedInteraction} />
-          ) : (
-            <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-2">
-              <PhoneCall className="h-10 w-10 text-green-500 animate-pulse" />
-              <p>Waiting for a call...</p>
-            </div>
-          )}
+        {/* Data Sources Card */}
+        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <AgentDataSources
+            view={null}
+            selectedInteraction={selectedInteraction}
+            activeView={activeView}
+            onTileClick={setActiveView}
+          />
         </Card>
       </div>
+
+      {/* Right Panel - Interaction Details or Data Source View */}
+      <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {activeView === "web-pages" ? (
+          <AgentDataSources
+            view={activeView}
+            selectedInteraction={selectedInteraction}
+            onBackToInteraction={() => {
+              setActiveView("interaction-details");
+              // Clear saved selection ref since user manually navigated back
+              savedSelectedInteractionIdRef.current = null;
+            }}
+          />
+        ) : (
+          <>
+            <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-md bg-primary/10">
+                    <Info className="h-4 w-4 text-primary" />
+                  </div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    {activeView === "interaction-details"
+                      ? "Interaction Details"
+                      : activeView === "contacts"
+                      ? "Contacts"
+                      : activeView === "tasks"
+                      ? "Tasks"
+                      : "KB Articles"}
+                  </h2>
+                </div>
+              </div>
+            </div>
+            {activeView === "interaction-details" ? (
+              selectedInteraction ? (
+                <InteractionDetail interaction={selectedInteraction} />
+              ) : (
+                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-2">
+                  <PhoneCall className="h-10 w-10 text-green-500 animate-pulse" />
+                  <p>Waiting for a call...</p>
+                </div>
+              )
+            ) : (
+              <AgentDataSources
+                view={activeView}
+                selectedInteraction={selectedInteraction}
+                onBackToInteraction={() => {
+                  setActiveView("interaction-details");
+                  // Clear saved selection ref since user manually navigated back
+                  savedSelectedInteractionIdRef.current = null;
+                }}
+              />
+            )}
+          </>
+        )}
+      </Card>
     </div>
   );
 }

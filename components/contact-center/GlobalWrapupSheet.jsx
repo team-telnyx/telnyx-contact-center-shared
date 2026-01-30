@@ -352,6 +352,26 @@ export function GlobalWrapupSheet() {
         }
       } catch (timeoutCheckErr) {
         // If timeout check fails, continue with normal check
+      }
+
+      // Check if this is a consult call - don't show wrapup for consultant call leg
+      try {
+        const interactionRes = await fetch(
+          `/api/contact-center/interactions/${encodeURIComponent(eventInteractionId)}`,
+          { cache: "no-store" },
+        );
+        if (interactionRes.ok) {
+          const interactionData = await interactionRes.json();
+          const interaction = interactionData.interaction;
+          if (interaction?.metadata?.is_consult_call) {
+            console.log(
+              `[GlobalWrapupSheet] Skipping wrapup for consult call interaction ${eventInteractionId}`,
+            );
+            return; // Don't open wrapup sheet for consult calls
+          }
+        }
+      } catch (consultCheckErr) {
+        // If consult check fails, continue with normal check
         console.warn(
           "[GlobalWrapupSheet] Timeout check failed in disconnect handler:",
           timeoutCheckErr,
@@ -363,6 +383,7 @@ export function GlobalWrapupSheet() {
       if (interaction) {
         const metadata = interaction.metadata || {};
         const wasTimeoutReEnqueued = metadata.timeout_re_enqueued === true;
+        const isConsultCall = metadata.is_consult_call === true;
         const wasAnswered = Boolean(interaction.answered_at);
         const isAbandoned = interaction.state === "abandoned";
         const wasQueuedWhenEnded = interaction.state === "queued";
@@ -371,9 +392,11 @@ export function GlobalWrapupSheet() {
         // - Timeout re-enqueued (agent didn't answer)
         // - Abandoned and never answered
         // - Still queued when ended
+        // - Consult call (consultant call leg, not the parked call)
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
+          isConsultCall ||
           (isAbandoned && !wasAnswered);
 
         if (!shouldSkip) {

@@ -94,6 +94,14 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const [user, setUser] = useState(null);
   const [loadingData, setLoadingData] = useState(false);
 
+  // Consult state
+  const [consultState, setConsultState] = useState({
+    isActive: false,
+    parkedCall: null, // { callControlId, fromNumber, fromName, interactionId }
+    consultantCall: null, // { callControlId, toNumber, toName }
+    agentCallControlId: null, // Agent's WebRTC call control ID
+  });
+
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
   const agentStatsIntervalRef = useRef(null);
@@ -119,6 +127,13 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setQueueStats(null);
       setAgentStats(null);
       setPreserveRoutingOptions(true);
+      // Reset consult state when modal closes
+      setConsultState({
+        isActive: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
 
       // Load source queue info if interaction exists
       if (interaction?.queue_id) {
@@ -572,6 +587,203 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
     if (target) {
       handleTransfer(target, transferType);
+    }
+  };
+
+  const handleConsult = async () => {
+    let target = "";
+    let transferType = "external";
+
+    if (selectionType === "queues" && selectedQueueId) {
+      alert("Consult is only available for external transfers");
+      return;
+    } else if (
+      selectionType === "agents" &&
+      selectedAgentId &&
+      selectedAgentNumber
+    ) {
+      target = selectedAgentNumber;
+      transferType = "external";
+    } else if (
+      selectionType === "contacts" &&
+      selectedRecordId &&
+      selectedNumber
+    ) {
+      target = selectedNumber;
+      transferType = "external";
+    } else if (selectionType === "assistants" && selectedAssistantId) {
+      target = `sip:user@${selectedAssistantId}.sip.telnyx.com`;
+      transferType = "external";
+    } else if (selectionType === "manual" && manualNumber.trim()) {
+      target = manualNumber.trim();
+      transferType = "external";
+    }
+
+    if (!target) {
+      alert("Please select a consult destination");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get active call from store
+      let storeState;
+      let callsStoreState;
+
+      try {
+        const { default: useActiveCallStore } =
+          await import("@/lib/stores/active-call-store");
+        const { default: useCallsStore } =
+          await import("@/lib/stores/calls-store");
+        storeState = useActiveCallStore.getState();
+        callsStoreState = useCallsStore.getState();
+      } catch (importErr) {
+        console.error("[TransferModal] Error importing stores:", importErr);
+        alert("Failed to access call state. Please try again.");
+        setLoading(false);
+        return;
+      }
+
+      if (!storeState.call) {
+        alert("No active call to consult");
+        setLoading(false);
+        return;
+      }
+
+      const activeCall = storeState.call;
+      const agentCallControlId =
+        storeState.callControlId ||
+        activeCall.callControlId ||
+        activeCall.call_control_id ||
+        activeCall.id;
+
+      let interactionId = interaction?.id;
+      let parkedCallControlId =
+        interaction?.metadata?.original_call_control_id ||
+        interaction?.call_control_id ||
+        storeState.originalCallControlId;
+
+      // If no interaction, try to get from call data
+      if (!parkedCallControlId && agentCallControlId) {
+        const callData = callsStoreState.getCall(agentCallControlId);
+        if (callData?.originalCallControlId) {
+          parkedCallControlId = callData.originalCallControlId;
+        }
+      }
+
+      if (!parkedCallControlId) {
+        // Try to lookup
+        try {
+          const lookupId = storeState.rtcCallId || agentCallControlId;
+          const res = await fetch(
+            `/api/voice/call-leg/${encodeURIComponent(lookupId)}`,
+          );
+          const data = await res.json();
+          if (data.ok && data.call_control_id) {
+            parkedCallControlId = data.call_control_id;
+          }
+        } catch (err) {
+          // Silently handle error
+        }
+      }
+
+      // Step 1: Disconnect agent's WebRTC call (this will park the caller due to park_after_unbridge)
+      if (typeof activeCall.hangup === "function") {
+        activeCall.hangup();
+        // Wait a bit for the disconnect to complete
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // Step 2: Call API to initiate consultant call and update metadata
+      // Use interaction ID if available, otherwise use agent's call control ID (not parked call control ID)
+      let endpoint;
+      if (interactionId) {
+        endpoint = `/api/contact-center/interactions/${interactionId}/consult`;
+      } else if (agentCallControlId) {
+        // Use agent's call control ID to find the interaction
+        endpoint = `/api/contact-center/interactions/by-call-control-id/consult?callControlId=${encodeURIComponent(
+          agentCallControlId,
+        )}`;
+      } else {
+        alert("Cannot determine interaction or call control ID for consult");
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: transferType,
+          target: target.trim(),
+          agentCallControlId: agentCallControlId,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok) {
+        // Step 3: Initiate consultant call from WebRTC client
+        // The consultant call will be received by the WebRTC client
+        // For now, we'll track the consultant call control ID from the API response
+        // The actual WebRTC call will be established when the consultant answers
+
+        // Update consult state
+        setConsultState({
+          isActive: true,
+          parkedCall: {
+            callControlId: data.parkedCall?.callControlId || parkedCallControlId,
+            fromNumber:
+              interaction?.from_number || data.parkedCall?.fromNumber,
+            fromName: interaction?.from_name || data.parkedCall?.fromName,
+            interactionId: interactionId,
+          },
+          consultantCall: {
+            callControlId: data.consultantCall?.callControlId,
+            toNumber: target.trim(),
+            toName: data.consultantCall?.toName || null,
+          },
+          agentCallControlId: data.consultantCall?.callControlId, // This will be the new consultant call
+        });
+      } else {
+        alert(data.error || "Consult failed");
+      }
+    } catch (err) {
+      console.error("[TransferModal] Consult error:", err);
+      alert("Consult failed: " + (err.message || "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSwitchCallLeg = async (targetCallControlId) => {
+    if (!consultState.agentCallControlId || !targetCallControlId) {
+      alert("Cannot switch call leg. Missing call information.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/voice/call-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "bridge",
+          callControlId: consultState.agentCallControlId,
+          params: {
+            call_control_id: targetCallControlId,
+          },
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.ok) {
+        alert(data.error || "Failed to switch call leg");
+      }
+    } catch (err) {
+      console.error("[TransferModal] Switch call leg error:", err);
+      alert("Failed to switch call leg: " + (err.message || "Unknown error"));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1312,6 +1524,83 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
+          {/* Consult Call Tiles */}
+          {consultState.isActive && (
+            <div className="space-y-3 pt-4 border-t">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <PhoneCall className="h-4 w-4 text-blue-600" />
+                Call Legs
+              </Label>
+              <div className="grid grid-cols-1 gap-3">
+                {/* Parked Call Tile */}
+                {consultState.parkedCall && (
+                  <div
+                    onClick={() =>
+                      handleSwitchCallLeg(consultState.parkedCall.callControlId)
+                    }
+                    className={cn(
+                      "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                      "bg-muted/50 border-gray-400/50 opacity-60 hover:opacity-80",
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-600">
+                            {consultState.parkedCall.fromName ||
+                              consultState.parkedCall.fromNumber ||
+                              "Parked Call"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {consultState.parkedCall.fromNumber}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge className="bg-gray-500 text-white text-xs">
+                        Parked
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Consultant Call Tile */}
+                {consultState.consultantCall && (
+                  <div
+                    onClick={() =>
+                      handleSwitchCallLeg(
+                        consultState.consultantCall.callControlId,
+                      )
+                    }
+                    className={cn(
+                      "p-3 rounded-lg border-2 cursor-pointer transition-all",
+                      "bg-blue-500/10 border-blue-500 hover:bg-blue-500/20",
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-blue-500" />
+                        <div>
+                          <div className="text-sm font-medium text-blue-600">
+                            {consultState.consultantCall.toName ||
+                              consultState.consultantCall.toNumber ||
+                              "Consultant"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {consultState.consultantCall.toNumber}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge className="bg-blue-500 text-white text-xs">
+                        Active
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
@@ -1321,6 +1610,28 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             >
               Cancel
             </Button>
+            {!consultState.isActive && (
+              <Button
+                onClick={handleConsult}
+                disabled={
+                  !isValid() ||
+                  loading ||
+                  loadingData ||
+                  selectionType === "queues"
+                }
+                variant="secondary"
+                className="min-w-[120px]"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Consulting...
+                  </>
+                ) : (
+                  "Consult"
+                )}
+              </Button>
+            )}
             <Button
               onClick={handleConfirm}
               disabled={!isValid() || loading || loadingData}

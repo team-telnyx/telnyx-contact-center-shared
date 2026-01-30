@@ -206,6 +206,18 @@ export default function TasksView() {
     return name || user.username || "—";
   }
 
+  function formatStatus(status) {
+    if (!status) return "OPEN";
+    return String(status)
+      .replace(/_/g, " ")
+      .toUpperCase();
+  }
+
+  function formatPriority(priority) {
+    if (!priority) return "MEDIUM";
+    return String(priority).toUpperCase();
+  }
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Get unique task types from items
@@ -418,7 +430,7 @@ export default function TasksView() {
                               }
                               variant="outline"
                             >
-                              {task.status || "open"}
+                              {formatStatus(task.status)}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">
@@ -429,7 +441,7 @@ export default function TasksView() {
                               }
                               variant="outline"
                             >
-                              {task.priority || "medium"}
+                              {formatPriority(task.priority)}
                             </Badge>
                           </TableCell>
                           <TableCell className="px-[10px] text-xs">

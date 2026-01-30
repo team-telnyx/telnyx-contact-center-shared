@@ -95,6 +95,7 @@ export async function GET(request, { params }) {
       WHERE i.queue_id = $1
         AND i.completed_at IS NULL
         AND i.abandoned_at IS NULL
+        AND COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'
       ORDER BY i.created_at DESC
       LIMIT 1000`,
       [queueId],
@@ -119,11 +120,14 @@ export async function GET(request, { params }) {
 
     const calls = callsResult.rows.map((call) => {
       const metadata = safeParse(call.metadata) || {};
-      // For supervision, we need the original inbound call's call_control_id
-      // If the call was transferred to an agent, use original_call_control_id from metadata
-      // Otherwise, use the interaction's call_control_id
+      // For supervision, use agent's call leg ID when call is answered (agent leg exists)
+      // Otherwise, use original call leg ID for queued calls
+      const agentCallControlId = metadata.agent_call_control_id || null;
       const originalCallControlId =
         metadata.original_call_control_id || call.call_control_id;
+      // Prefer agent call leg for supervision when call is answered, otherwise use original leg
+      const supervisionCallControlId =
+        agentCallControlId || originalCallControlId;
 
       const requiredSkills = safeParse(call.required_skills);
 
@@ -163,7 +167,9 @@ export async function GET(request, { params }) {
       return {
         id: call.id,
         callControlId: call.call_control_id,
-        originalCallControlId: originalCallControlId, // Use this for supervision
+        originalCallControlId: originalCallControlId,
+        agentCallControlId: agentCallControlId, // Agent's call leg (WebRTC leg)
+        supervisionCallControlId: supervisionCallControlId, // Use this for supervision (prefers agent leg when available)
         callSessionId: call.call_session_id,
         fromNumber: call.from_number,
         toNumber: call.to_number,

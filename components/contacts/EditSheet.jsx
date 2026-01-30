@@ -24,12 +24,14 @@ import { Card, CardContent } from "@/components/ui/card";
  * @param {function} props.onOpenChange - Callback when sheet open state changes
  * @param {string} props.contactId - Contact ID to edit (null for new contact)
  * @param {function} props.onSaveComplete - Callback when save is complete
+ * @param {string} props.prefillPhone - Phone number to prefill when creating new contact
  */
 export default function ContactEditSheet({
   open,
   onOpenChange,
   contactId,
   onSaveComplete,
+  prefillPhone,
 }) {
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
@@ -66,7 +68,7 @@ export default function ContactEditSheet({
           setCompanyName("");
           setJobTitle("");
           setDepartment("");
-          setPhone("");
+          setPhone(prefillPhone || "");
           setMobile("");
           setBusinessPhone1("");
           setBusinessPhone2("");
@@ -135,7 +137,7 @@ export default function ContactEditSheet({
     if (open) {
       loadContact();
     }
-  }, [contactId, open]);
+  }, [contactId, open, prefillPhone]);
 
   async function onSave() {
     // Validate required fields

@@ -273,16 +273,47 @@ export default function MonitorPage() {
     useState(null);
   const selectedQueueRef = useRef(null);
   const loadQueueCallsRef = useRef(null);
+  const isLoadingDashboardRef = useRef(false);
+  const isPageVisibleRef = useRef(true);
+  const pollIntervalRef = useRef(null);
 
   useEffect(() => {
     selectedQueueRef.current = selectedQueue;
   }, [selectedQueue]);
 
-  // Update current time every second for real-time calculations
+  // Handle page visibility to prevent excessive requests when page wakes up
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const handleVisibilityChange = () => {
+      const isVisible = !document.hidden;
+      isPageVisibleRef.current = isVisible;
+
+      if (isVisible) {
+        // Page became visible - reload dashboard once after a short delay
+        // This prevents rapid-fire requests when waking up
+        setTimeout(() => {
+          if (isPageVisibleRef.current && !isLoadingDashboardRef.current) {
+            loadDashboard();
+          }
+        }, 500);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Update current time every second for real-time calculations
+  // Pause when page is hidden to prevent unnecessary updates
+  useEffect(() => {
+    const updateTime = () => {
+      if (isPageVisibleRef.current) {
+        setCurrentTime(new Date());
+      }
+    };
+
+    const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -300,6 +331,11 @@ export default function MonitorPage() {
     };
 
     eventSource.addEventListener("monitor_update", (event) => {
+      // Skip updates when page is hidden to prevent queued requests
+      if (!isPageVisibleRef.current) {
+        return;
+      }
+
       try {
         const update = JSON.parse(event.data);
 
@@ -431,8 +467,13 @@ export default function MonitorPage() {
           };
 
           // Check if selected queue needs to be refreshed
+          // Only refresh if page is visible to prevent queued requests
           const selectedQueue = selectedQueueRef.current;
-          if (selectedQueue?.id && loadQueueCallsRef.current) {
+          if (
+            selectedQueue?.id &&
+            loadQueueCallsRef.current &&
+            isPageVisibleRef.current
+          ) {
             const prevQueue = prevQueues.find(
               (queue) => String(queue.queueId) === String(selectedQueue.id),
             );
@@ -450,7 +491,10 @@ export default function MonitorPage() {
                   nextQueue.realtime?.longestWaitSeconds);
             if (queueChanged) {
               setTimeout(() => {
-                loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+                // Double-check visibility before executing
+                if (isPageVisibleRef.current && loadQueueCallsRef.current) {
+                  loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+                }
               }, 0);
             }
           }
@@ -511,6 +555,11 @@ export default function MonitorPage() {
 
     // Listen for interaction updates (e.g., when calls are answered)
     eventSource.addEventListener("interaction_updated", (event) => {
+      // Skip updates when page is hidden to prevent queued requests
+      if (!isPageVisibleRef.current) {
+        return;
+      }
+
       try {
         const update = JSON.parse(event.data);
         // If we have a selected queue and the interaction belongs to it, refresh queue calls
@@ -523,7 +572,10 @@ export default function MonitorPage() {
         ) {
           // Refresh queue calls to get updated state, answeredAt, etc.
           setTimeout(() => {
-            loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+            // Double-check visibility before executing
+            if (isPageVisibleRef.current && loadQueueCallsRef.current) {
+              loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+            }
           }, 100); // Small delay to ensure DB is updated
         }
       } catch (error) {
@@ -535,16 +587,23 @@ export default function MonitorPage() {
       console.error("[Monitor] SSE error:", error);
       setConnected(false);
       // Fallback to polling if SSE fails
-      if (!data) {
-        const pollInterval = setInterval(() => {
-          loadDashboard();
+      if (!data && !pollIntervalRef.current) {
+        pollIntervalRef.current = setInterval(() => {
+          // Only poll when page is visible
+          if (isPageVisibleRef.current && !isLoadingDashboardRef.current) {
+            loadDashboard();
+          }
         }, 5000);
-        return () => clearInterval(pollInterval);
       }
     };
 
     return () => {
       eventSource.close();
+      // Clean up polling interval if it exists
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     };
   }, []);
 
@@ -575,7 +634,18 @@ export default function MonitorPage() {
   }
 
   async function loadDashboard() {
+    // Prevent multiple simultaneous loads
+    if (isLoadingDashboardRef.current) {
+      return;
+    }
+
+    // Don't load if page is hidden
+    if (!isPageVisibleRef.current) {
+      return;
+    }
+
     try {
+      isLoadingDashboardRef.current = true;
       setLoading(true);
       // Add timestamp to prevent caching
       const timestamp = new Date().getTime();
@@ -604,6 +674,8 @@ export default function MonitorPage() {
         description: error.message,
         variant: "error",
       });
+    } finally {
+      isLoadingDashboardRef.current = false;
     }
   }
 
@@ -790,13 +862,15 @@ export default function MonitorPage() {
   });
 
   // Periodically refresh queue calls to update relaxed skills
+  // Pause when page is hidden to prevent queued requests
   useEffect(() => {
     if (!selectedQueue?.id) return;
 
     // Refresh every 5 seconds to update relaxed skills based on wait time
     // This ensures queued calls show updated relaxed skill requirements
     const interval = setInterval(() => {
-      if (loadQueueCallsRef.current) {
+      // Only refresh when page is visible
+      if (isPageVisibleRef.current && loadQueueCallsRef.current) {
         loadQueueCallsRef.current(selectedQueue.id, { silent: true });
       }
     }, 5000); // Refresh every 5 seconds
@@ -1296,26 +1370,26 @@ export default function MonitorPage() {
                             )
                               ? call.state
                               : call.answeredAt &&
-                                  (call.state === "ringing" ||
-                                    call.state === "bridging" ||
-                                    call.state === "answered")
-                                ? "connected"
-                                : call.state;
+                                (call.state === "ringing" ||
+                                  call.state === "bridging" ||
+                                  call.state === "answered")
+                              ? "connected"
+                              : call.state;
 
                           const stateColor =
                             displayState === "completed"
                               ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                               : displayState === "abandoned"
-                                ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                                : displayState === "answered" ||
-                                    displayState === "connected" ||
-                                    displayState === "active"
-                                  ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                                  : displayState === "enqueued" ||
-                                      displayState === "queued" ||
-                                      displayState === "ringing"
-                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                    : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                              ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                              : displayState === "answered" ||
+                                displayState === "connected" ||
+                                displayState === "active"
+                              ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                              : displayState === "enqueued" ||
+                                displayState === "queued" ||
+                                displayState === "ringing"
+                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
                           // Determine waiting reason
                           const getWaitingReason = () => {
@@ -1482,16 +1556,23 @@ export default function MonitorPage() {
                                 )}
                               </TableCell>
                               <TableCell>
-                                <button
-                                  onClick={() => {
-                                    setSelectedCallForSupervision(call);
-                                    setSupervisionModalOpen(true);
-                                  }}
-                                  className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
-                                  title="Supervise this call"
-                                >
-                                  <IconEye className="h-4 w-4" />
-                                </button>
+                                {/* Only show supervision button for answered calls (not queued) */}
+                                {call.answeredAt ||
+                                call.agentUsername ||
+                                call.agentName ? (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedCallForSupervision(call);
+                                      setSupervisionModalOpen(true);
+                                    }}
+                                    className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                                    title="Supervise this call"
+                                  >
+                                    <IconEye className="h-4 w-4" />
+                                  </button>
+                                ) : (
+                                  "—"
+                                )}
                               </TableCell>
                             </TableRow>
                           );
@@ -1557,10 +1638,10 @@ export default function MonitorPage() {
                             status === "Available"
                               ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                               : status === "Busy"
-                                ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                                : status === "Away"
-                                  ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                  : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                              ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                              : status === "Away"
+                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                           const statusStyle = statusInfo.color
                             ? {
                                 color: statusInfo.color,
@@ -1747,10 +1828,10 @@ export default function MonitorPage() {
                               agent.status === "Available"
                                 ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                                 : agent.status === "Busy"
-                                  ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                                  : agent.status === "Away"
-                                    ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                    : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                                : agent.status === "Away"
+                                ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                             const StatusIcon =
                               STATUS_ICON_MAP[statusInfo.icon] ||
                               STATUS_NAME_ICON_FALLBACK[agent.status] ||
@@ -1965,36 +2046,36 @@ export default function MonitorPage() {
                                                     )
                                                       ? call.state
                                                       : call.answeredAt &&
-                                                          (call.state ===
-                                                            "ringing" ||
-                                                            call.state ===
-                                                              "bridging" ||
-                                                            call.state ===
-                                                              "answered")
-                                                        ? "connected"
-                                                        : call.state;
+                                                        (call.state ===
+                                                          "ringing" ||
+                                                          call.state ===
+                                                            "bridging" ||
+                                                          call.state ===
+                                                            "answered")
+                                                      ? "connected"
+                                                      : call.state;
 
                                                   const stateColor =
                                                     displayState === "completed"
                                                       ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                                                       : displayState ===
-                                                          "abandoned"
-                                                        ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                                                        : displayState ===
-                                                              "answered" ||
-                                                            displayState ===
-                                                              "connected" ||
-                                                            displayState ===
-                                                              "active"
-                                                          ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                                                          : displayState ===
-                                                                "enqueued" ||
-                                                              displayState ===
-                                                                "queued" ||
-                                                              displayState ===
-                                                                "ringing"
-                                                            ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                                                            : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                                                        "abandoned"
+                                                      ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                                                      : displayState ===
+                                                          "answered" ||
+                                                        displayState ===
+                                                          "connected" ||
+                                                        displayState ===
+                                                          "active"
+                                                      ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                                                      : displayState ===
+                                                          "enqueued" ||
+                                                        displayState ===
+                                                          "queued" ||
+                                                        displayState ===
+                                                          "ringing"
+                                                      ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                                                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
 
                                                   return (
                                                     <TableRow key={call.id}>
@@ -2023,20 +2104,25 @@ export default function MonitorPage() {
                                                           : "—"}
                                                       </TableCell>
                                                       <TableCell>
-                                                        <button
-                                                          onClick={() => {
-                                                            setSelectedCallForSupervision(
-                                                              call,
-                                                            );
-                                                            setSupervisionModalOpen(
-                                                              true,
-                                                            );
-                                                          }}
-                                                          className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
-                                                          title="Supervise this call"
-                                                        >
-                                                          <IconEye className="h-4 w-4" />
-                                                        </button>
+                                                        {/* Only show supervision button for answered calls (not queued/ringing) */}
+                                                        {call.answeredAt ? (
+                                                          <button
+                                                            onClick={() => {
+                                                              setSelectedCallForSupervision(
+                                                                call,
+                                                              );
+                                                              setSupervisionModalOpen(
+                                                                true,
+                                                              );
+                                                            }}
+                                                            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+                                                            title="Supervise this call"
+                                                          >
+                                                            <IconEye className="h-4 w-4" />
+                                                          </button>
+                                                        ) : (
+                                                          "—"
+                                                        )}
                                                       </TableCell>
                                                     </TableRow>
                                                   );
@@ -2111,8 +2197,8 @@ export default function MonitorPage() {
                                 queue.realtime?.waitingCalls > 10
                                   ? "destructive"
                                   : queue.realtime?.waitingCalls > 5
-                                    ? "secondary"
-                                    : "outline"
+                                  ? "secondary"
+                                  : "outline"
                               }
                             >
                               {queue.realtime?.waitingCalls || 0}
@@ -2235,10 +2321,10 @@ export default function MonitorPage() {
                     status.name === "Available"
                       ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
                       : status.name === "Busy"
-                        ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
-                        : status.name === "Away"
-                          ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                          : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                      ? "text-orange-600 border-orange-600 dark:text-orange-400 dark:border-orange-400"
+                      : status.name === "Away"
+                      ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
                   const statusStyle = statusInfo.color
                     ? {
                         color: statusInfo.color,

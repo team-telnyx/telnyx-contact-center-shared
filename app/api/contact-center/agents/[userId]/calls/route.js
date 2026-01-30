@@ -87,6 +87,7 @@ export async function GET(request, { params }) {
         i.hold_count,
         i.hold_duration_seconds,
         i.transfer_count,
+        i.metadata,
         q.name as queue_display_name,
         q.display_name as queue_name
       FROM cc_interactions i
@@ -96,35 +97,65 @@ export async function GET(request, { params }) {
         AND i.abandoned_at IS NULL
         AND i.state != 'queued'
         AND COALESCE(i.metadata->>'timeout_re_enqueued', '') != 'true'
+        AND COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'
         AND i.assigned_at IS NOT NULL
       ORDER BY i.created_at DESC
       LIMIT 1000`,
       [agent.username],
     );
 
-    const calls = callsResult.rows.map((call) => ({
-      id: call.id,
-      callControlId: call.call_control_id,
-      callSessionId: call.call_session_id,
-      fromNumber: call.from_number,
-      toNumber: call.to_number,
-      state: call.state,
-      queueId: call.queue_id,
-      queueName: call.queue_name || call.queue_display_name || call.queue_name,
-      enqueuedAt: call.enqueued_at,
-      assignedAt: call.assigned_at,
-      answeredAt: call.answered_at,
-      completedAt: call.completed_at,
-      abandonedAt: call.abandoned_at,
-      createdAt: call.created_at,
-      updatedAt: call.updated_at,
-      waitSeconds: call.wait_time_seconds || 0,
-      talkSeconds: call.talk_time_seconds || 0,
-      handleSeconds: call.handle_time_seconds || 0,
-      holdCount: call.hold_count || 0,
-      holdDurationSeconds: call.hold_duration_seconds || 0,
-      transferCount: call.transfer_count || 0,
-    }));
+    // Helper function to safely parse JSONB fields
+    const safeParse = (value) => {
+      if (!value) return null;
+      if (typeof value === "string") {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      }
+      return value;
+    };
+
+    const calls = callsResult.rows.map((call) => {
+      const metadata = safeParse(call.metadata) || {};
+      // For supervision, use agent's call leg ID when call is answered (agent leg exists)
+      // Otherwise, use original call leg ID for queued calls
+      const agentCallControlId = metadata.agent_call_control_id || null;
+      const originalCallControlId =
+        metadata.original_call_control_id || call.call_control_id;
+      // Prefer agent call leg for supervision when call is answered, otherwise use original leg
+      const supervisionCallControlId =
+        agentCallControlId || originalCallControlId;
+
+      return {
+        id: call.id,
+        callControlId: call.call_control_id,
+        originalCallControlId: originalCallControlId,
+        agentCallControlId: agentCallControlId, // Agent's call leg (WebRTC leg)
+        supervisionCallControlId: supervisionCallControlId, // Use this for supervision (prefers agent leg when available)
+        callSessionId: call.call_session_id,
+        fromNumber: call.from_number,
+        toNumber: call.to_number,
+        state: call.state,
+        queueId: call.queue_id,
+        queueName:
+          call.queue_name || call.queue_display_name || call.queue_name,
+        enqueuedAt: call.enqueued_at,
+        assignedAt: call.assigned_at,
+        answeredAt: call.answered_at,
+        completedAt: call.completed_at,
+        abandonedAt: call.abandoned_at,
+        createdAt: call.created_at,
+        updatedAt: call.updated_at,
+        waitSeconds: call.wait_time_seconds || 0,
+        talkSeconds: call.talk_time_seconds || 0,
+        handleSeconds: call.handle_time_seconds || 0,
+        holdCount: call.hold_count || 0,
+        holdDurationSeconds: call.hold_duration_seconds || 0,
+        transferCount: call.transfer_count || 0,
+      };
+    });
 
     // Filter active calls (not completed or abandoned)
     const activeCalls = calls.filter(

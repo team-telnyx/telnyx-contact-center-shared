@@ -140,9 +140,7 @@ export async function PATCH(request, { params }) {
       const existingStatus = existingRes.rows[0].status;
       if (existingStatus !== "resolved" && existingStatus !== "closed") {
         if (body.status === "resolved") {
-          updates.push(`resolved_at=$${i}`);
-          vals.push(new Date().toISOString());
-          i += 1;
+          updates.push(`resolved_at=NOW()`);
           // Set resolved_by if user is authenticated
           if (auth.type === "session" && auth.user) {
             updates.push(`resolved_by=$${i}`);
@@ -151,9 +149,7 @@ export async function PATCH(request, { params }) {
           }
         }
         if (body.status === "closed") {
-          updates.push(`closed_at=$${i}`);
-          vals.push(new Date().toISOString());
-          i += 1;
+          updates.push(`closed_at=NOW()`);
         }
       }
     }
@@ -193,8 +189,7 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error }, { status: 400 });
   }
 
-  updates.push(`updated_at=$${i}`);
-  vals.push(new Date().toISOString());
+  updates.push(`updated_at=NOW()`);
   vals.push(id);
 
   try {

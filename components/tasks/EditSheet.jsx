@@ -56,12 +56,16 @@ const PRIORITY_OPTIONS = [
  * @param {function} props.onOpenChange - Callback when sheet open state changes
  * @param {string} props.taskId - Task ID to edit (null for new task)
  * @param {function} props.onSaveComplete - Callback when save is complete
+ * @param {string} props.prefillContactId - Contact ID to prefill
+ * @param {object} props.prefillCallerData - Caller data to prefill {callerName, callerPhone, callerEmail}
  */
 export default function TaskEditSheet({
   open,
   onOpenChange,
   taskId,
   onSaveComplete,
+  prefillContactId,
+  prefillCallerData,
 }) {
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -137,10 +141,10 @@ export default function TaskEditSheet({
           setCustomTaskType("");
           setStatus("open");
           setPriority("medium");
-          setContactId("");
-          setCallerName("");
-          setCallerPhone("");
-          setCallerEmail("");
+          setContactId(prefillContactId || "");
+          setCallerName(prefillCallerData?.callerName || "");
+          setCallerPhone(prefillCallerData?.callerPhone || "");
+          setCallerEmail(prefillCallerData?.callerEmail || "");
           setAssignedTo("");
           setDueDate("");
           setTags("");
@@ -193,7 +197,7 @@ export default function TaskEditSheet({
     }
 
     loadTask();
-  }, [taskId, open]);
+  }, [taskId, open, prefillContactId, prefillCallerData]);
 
   async function onSave() {
     // Validate required fields

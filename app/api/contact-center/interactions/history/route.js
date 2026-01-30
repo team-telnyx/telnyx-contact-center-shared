@@ -79,6 +79,7 @@ export async function GET(request) {
     const where = [
       "i.is_contact_center = true",
       "COALESCE(i.metadata->>'is_transfer_leg', 'false') <> 'true'",
+      "COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'",
       `(
         i.completed_at IS NOT NULL
         OR i.abandoned_at IS NOT NULL
