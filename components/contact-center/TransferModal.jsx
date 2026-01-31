@@ -163,6 +163,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const [consultState, setConsultState] = useState({
     isActive: false,
     initiating: false, // Flag to indicate consult is being set up (prevents premature state reset)
+    activatedAt: null, // Timestamp when isActive became true - used to prevent immediate reset
     parkedCall: null, // { callControlId, fromNumber, fromName, interactionId }
     consultantCall: null, // { callControlId, toNumber, toName }
     agentCallControlId: null, // Agent's WebRTC call control ID
@@ -190,6 +191,20 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     // Skip if consult is not active or is being initiated
     if (!consultState.isActive || consultState.initiating) {
       return;
+    }
+
+    // CRITICAL: Don't reset within 2 seconds of activation
+    // This prevents resetting due to stale "ended" status from the old call
+    const activatedAt = consultState.activatedAt;
+    if (activatedAt) {
+      const timeSinceActivation = Date.now() - activatedAt;
+      if (timeSinceActivation < 2000) {
+        console.log("[TransferModal] Skipping reset - too soon after activation", {
+          timeSinceActivation,
+          activatedAt,
+        });
+        return;
+      }
     }
 
     // CRITICAL: Get callControlId from store to verify this is actually the consult call ending
@@ -223,12 +238,13 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
       });
     }
-  }, [activeCall, callStatus, consultState.isActive, consultState.initiating, consultState.consultantCall?.callControlId]);
+  }, [activeCall, callStatus, consultState.isActive, consultState.initiating, consultState.activatedAt, consultState.consultantCall?.callControlId]);
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
@@ -259,6 +275,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -930,7 +947,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         setConsultState({
           isActive: false,
           initiating: false,
-          parkedCall: null,
+          activatedAt: null,
+        parkedCall: null,
           consultantCall: null,
           agentCallControlId: null,
         });
@@ -1062,6 +1080,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           ...prev,
           isActive: true, // NOW activate - call is established
           initiating: false, // No longer initiating
+          activatedAt: Date.now(), // Track when activated to prevent immediate reset
           agentCallControlId: newAgentCallControlId,
           consultantCall: {
             ...prev.consultantCall,
@@ -1089,7 +1108,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         setConsultState({
           isActive: false,
           initiating: false,
-          parkedCall: null,
+          activatedAt: null,
+        parkedCall: null,
           consultantCall: null,
           agentCallControlId: null,
         });
@@ -1108,6 +1128,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1233,6 +1254,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1250,6 +1272,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1264,6 +1287,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false,
         initiating: false,
+        activatedAt: null,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
