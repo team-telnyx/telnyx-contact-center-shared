@@ -1308,27 +1308,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   // Prevent modal from closing when consult call is active or being initiated
   const handleModalOpenChange = (newOpen) => {
     if (!newOpen) {
-      // Check consultState (isActive or initiating) and activeCall to prevent closing during consult
-      const hasActiveConsultCall = 
-        consultState.isActive || 
-        consultState.initiating || 
-        (activeCall && isCallActive());
-      
-      if (hasActiveConsultCall) {
-        // Prevent closing if consult call is active or being initiated
-        console.log(
-          "[TransferModal] Cannot close modal while consult call is in progress",
-          { 
-            consultStateIsActive: consultState.isActive, 
-            consultStateInitiating: consultState.initiating,
-            hasActiveCall: !!activeCall, 
-            isCallActive: isCallActive() 
-          },
-        );
+      // Prevent closing if there's an active call
+      if (isCallActive()) {
+        console.log("[TransferModal] Cannot close modal while call is in progress");
         return;
       }
     }
-    console.log("[TransferModal] Modal close allowed", { newOpen, consultStateIsActive: consultState.isActive, consultStateInitiating: consultState.initiating });
     onOpenChange(newOpen);
   };
 
@@ -2079,19 +2064,19 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* Consult Call Tiles - Horizontal colored rectangles */}
-          {/* Show when: isActive, initiating, OR when we have parkedCall data and an active call */}
-          {(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
+          {/* Active Call UI - Show when there's an active call (based on activeCallStore, not consultState) */}
+          {/* This ensures UI shows even if consultState timing is off */}
+          {isCallActive() && (
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <PhoneCall className="h-4 w-4 text-blue-600" />
-                  Call Legs
+                  Active Call
                 </Label>
                 {/* Call Status Badge */}
                 <Badge
                   className={cn(
-                    "text-xs",
+                    "text-base font-semibold uppercase tracking-wide px-3 py-1",
                     isCallConnected()
                       ? "bg-green-500 text-white"
                       : callStatus === "ringing" || callStatus === "early"
@@ -2102,77 +2087,29 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   {callStatus || activeCall?.state || "initiating"}
                 </Badge>
               </div>
-              <div className="flex gap-3">
-                {/* Parked Call Tile - Dimmed (not active) */}
-                {consultState.parkedCall && (
-                  <div
-                    onClick={() => handleSwitchCallLeg('parked')}
-                    className={cn(
-                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
-                      "bg-amber-500/20 border-2 border-amber-500/40",
-                      "opacity-50 hover:opacity-75",
-                    )}
-                    title="Click to switch to parked caller"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-amber-700 dark:text-amber-400 truncate">
-                          {consultState.parkedCall.fromName || "Customer"}
-                        </div>
-                        <div className="text-xs text-amber-600/70 dark:text-amber-500/70 truncate">
-                          {formatPhoneDisplay(consultState.parkedCall.fromNumber)}
-                        </div>
-                      </div>
-                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                        PARKED
-                      </span>
+              
+              {/* Current Call Info */}
+              <div className="p-3 rounded-lg bg-green-500/20 border-2 border-green-500">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-green-700 dark:text-green-400">
+                      Consult Call
+                    </div>
+                    <div className="text-xs text-green-600/70 dark:text-green-500/70">
+                      {formatPhoneDisplay(useActiveCallStore.getState().toNumber || "Unknown")}
                     </div>
                   </div>
-                )}
-
-                {/* Consultant Call Tile - Active */}
-                {consultState.consultantCall && (
-                  <div
-                    onClick={() => handleSwitchCallLeg('consultant')}
-                    className={cn(
-                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
-                      "bg-green-500/20 border-2 border-green-500",
-                      "hover:bg-green-500/30",
-                    )}
-                    title="Currently connected to consultant"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-green-700 dark:text-green-400 truncate">
-                          {consultState.consultantCall.toName || "Consultant"}
-                        </div>
-                        <div className="text-xs text-green-600/70 dark:text-green-500/70 truncate flex items-center gap-1">
-                          {formatPhoneDisplay(consultState.consultantCall.toNumber)}
-                          {isVoipNumber(consultState.consultantCall.toNumber) && (
-                            <span 
-                              className="inline-flex items-center cursor-help" 
-                              title={consultState.consultantCall.toNumber}
-                            >
-                              <Network className="h-3 w-3" />
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                        ACTIVE
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                    {isCallConnected() ? "CONNECTED" : "CONNECTING"}
+                  </span>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Call Control Buttons - Minimal height, just buttons */}
-          {/* Show when: isActive, initiating, OR when we have parkedCall data and an active call */}
-          {(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
+          {/* Call Control Buttons - Show when there's an active call */}
+          {isCallActive() && (
             <div className="flex items-center justify-center gap-3 pt-3">
               {!isCallConnected() ? (
                 <>
@@ -2236,18 +2173,18 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             <Button
               variant="outline"
               onClick={() => handleModalOpenChange(false)}
-              disabled={loading || consultState.isActive || consultState.initiating}
+              disabled={loading || isCallActive()}
               title={
-                consultState.isActive || consultState.initiating
-                  ? "Cannot close while consult call is in progress"
+                isCallActive()
+                  ? "Cannot close while call is in progress"
                   : "Cancel"
               }
             >
               Cancel
             </Button>
-            {/* Show Consult/Transfer buttons when NOT in active consult session */}
-            {/* Hide when: isActive OR initiating OR (parkedCall exists AND call is active) */}
-            {!(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
+            {/* Show Consult/Transfer buttons when there's NO active call */}
+            {/* Hide when there's an active call in the store */}
+            {!isCallActive() && (
               <>
                 <Button
                   onClick={handleConsult}
