@@ -6,7 +6,7 @@ import {
   getWebrtcCallLegMappingBySessionId,
 } from "@/lib/mobile-call-leg-store";
 
-async function dialAndBridge({ to, from, linkTo, connectionId }) {
+async function dialAndBridge({ to, from, linkTo, connectionId, isConsultCall = false }) {
   const url = buildTelnyxV2Url("/calls");
   const body = {
     to,
@@ -16,6 +16,14 @@ async function dialAndBridge({ to, from, linkTo, connectionId }) {
     bridge_intent: true,
     bridge_on_answer: true,
   };
+  
+  // For consult calls, add park_after_unbridge so switching between call legs
+  // doesn't disconnect the consultant - they stay parked instead
+  if (isConsultCall) {
+    body.park_after_unbridge = "always";
+    console.log("[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=always");
+  }
+  
   const resp = await fetch(url, {
     method: "POST",
     headers: {
@@ -363,14 +371,17 @@ export async function POST(request) {
         }
 
         // Initiate dialAndBridge to create second leg
+        // For consult calls, pass isConsultCall=true to enable park_after_unbridge
         console.log(
-          "[voice-webhook] 📞 Calling dialAndBridge to create second leg..."
+          "[voice-webhook] 📞 Calling dialAndBridge to create second leg...",
+          consultInteraction ? "(consult call)" : "(regular outbound)"
         );
         const pstnCallControlId = await dialAndBridge({
           to,
           from,
           linkTo: callControlId,
           connectionId,
+          isConsultCall: !!consultInteraction,
         });
 
         console.log("[voice-webhook] 📞 dialAndBridge response:", {
