@@ -8438,10 +8438,10 @@
             "$ref": "#/components/responses/AuditLogListResponse"
           },
           "401": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/AuditLogsGenericErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/AuditLogsGenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9071,7 +9071,7 @@
             "$ref": "#/components/responses/ServiceUnavailableErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9140,7 +9140,7 @@
             "$ref": "#/components/responses/BadRequestErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9190,7 +9190,7 @@
             "$ref": "#/components/responses/UnprocessableEntityErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9248,7 +9248,7 @@
             "$ref": "#/components/responses/UnprocessableEntityErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9298,7 +9298,7 @@
             "$ref": "#/components/responses/NotFoundErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -9364,7 +9364,7 @@
             "$ref": "#/components/responses/UnprocessableEntityErrorResponse"
           },
           "default": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -10063,6 +10063,44 @@
           },
           "default": {
             "$ref": "#/components/responses/call-control_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/calls/{call_control_id}/actions/ai_assistant_add_messages": {
+      "post": {
+        "summary": "Add messages to AI Assistant",
+        "description": "Add messages to the conversation started by an AI assistant on the call.",
+        "operationId": "CallAddMessagesToAIAssistant",
+        "tags": [
+          "Call Commands"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallControlId"
+          }
+        ],
+        "requestBody": {
+          "description": "AI Assistant add messages request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIAssistantAddMessagesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CallControlCommandResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/call-control_GenericErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityResponse"
           }
         },
         "x-latency-category": "interactive"
@@ -13064,7 +13102,7 @@
             "description": "The credentials configuration for connection_id was deleted successfully."
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -13092,7 +13130,7 @@
             "$ref": "#/components/responses/CredentialsResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -13123,7 +13161,7 @@
             "$ref": "#/components/responses/CredentialsResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -13154,7 +13192,7 @@
             "$ref": "#/components/responses/CredentialsResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -17538,7 +17576,7 @@
             "$ref": "#/components/responses/InvoiceDetailResponse"
           },
           "400": {
-            "$ref": "#/components/responses/invoice_BadRequestErrorResponse"
+            "$ref": "#/components/responses/BadRequestErrorResponse"
           },
           "403": {
             "$ref": "#/components/responses/invoice_ForbiddenErrorResponse"
@@ -17988,14 +18026,14 @@
             "headers": {}
           },
           "401": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           },
           "500": {
             "description": "Unexpected error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/billing-group_Errors"
+                  "$ref": "#/components/schemas/Errors"
                 }
               }
             },
@@ -18045,14 +18083,14 @@
             "headers": {}
           },
           "401": {
-            "$ref": "#/components/responses/billing-group_GenericErrorResponse"
+            "$ref": "#/components/responses/GenericErrorResponse"
           },
           "500": {
             "description": "Unexpected error",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/billing-group_Errors"
+                  "$ref": "#/components/schemas/Errors"
                 }
               }
             },
@@ -20175,6 +20213,7 @@
     },
     "/messages/whatsapp": {
       "post": {
+        "x-hidden": true,
         "tags": [
           "Whatsapp messaging"
         ],
@@ -31548,7 +31587,7 @@
             "$ref": "#/components/responses/ListRecordingTranscriptionsResponse"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31578,7 +31617,7 @@
             "$ref": "#/components/responses/RecordingTranscriptionResponse"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31606,7 +31645,7 @@
             "$ref": "#/components/responses/RecordingTranscriptionResponse"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31701,7 +31740,7 @@
             "$ref": "#/components/responses/RecordingsResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31735,7 +31774,7 @@
             "description": "The recordings have been successfully deleted."
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31765,7 +31804,7 @@
             "$ref": "#/components/responses/RecordingResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -31793,7 +31832,7 @@
             "$ref": "#/components/responses/RecordingResponseBody"
           },
           "default": {
-            "$ref": "#/components/responses/GenericErrorResponse"
+            "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
           },
           "401": {
             "$ref": "#/components/responses/call-recordings_UnauthorizedResponse"
@@ -35188,9 +35227,8 @@
             "name": "filter[name]",
             "description": "A valid SIM card group name.",
             "schema": {
-              "format": "uuid",
               "type": "string",
-              "example": "1119e3cb-f39d-4254-ad38-9080d5fe90a9"
+              "example": "My Test Group"
             },
             "in": "query"
           },
@@ -38774,81 +38812,6 @@
           },
           "404": {
             "$ref": "#/components/responses/call-scripting_NotFoundResponse"
-          }
-        }
-      }
-    },
-    "/texml/calls/{application_id}": {
-      "post": {
-        "summary": "(Deprecated) Initiate an outbound call",
-        "description": "Initiate an outbound TeXML call. Telnyx will request TeXML from the XML Request URL configured for the connection in the Mission Control Portal.",
-        "x-latency-category": "responsive",
-        "x-group-parameters": "true",
-        "operationId": "DeprecatedInitiateTexmlCall",
-        "tags": [
-          "TeXML REST Commands"
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ApplicationId"
-          }
-        ],
-        "requestBody": {
-          "description": "Iniatiate Call request object",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeprecatedInitiateCallRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/DeprecatedInitiateCallResponse"
-          },
-          "422": {
-            "$ref": "#/components/responses/call-scripting_UnprocessableEntityResponse"
-          }
-        }
-      }
-    },
-    "/texml/calls/{call_sid}/update": {
-      "post": {
-        "summary": "(Deprecated) Update call",
-        "description": "Update TeXML call. Please note that the keys present in the payload MUST BE formatted in CamelCase as specified in the example.",
-        "x-latency-category": "responsive",
-        "x-group-parameters": "true",
-        "operationId": "DeprecatedUpdateTexmlCall",
-        "tags": [
-          "TeXML REST Commands"
-        ],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/CallSid"
-          }
-        ],
-        "requestBody": {
-          "description": "Update Call request object",
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateCallRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/UpdateTeXMLCallResponse"
-          },
-          "404": {
-            "$ref": "#/components/responses/call-scripting_NotFoundResponse"
-          },
-          "422": {
-            "$ref": "#/components/responses/call-scripting_UnprocessableEntityResponse"
           }
         }
       }
@@ -42519,15 +42482,6 @@
           "type": "string"
         }
       },
-      "ApplicationId": {
-        "name": "application_id",
-        "in": "path",
-        "required": true,
-        "description": "The ID of the TeXML application used for the call.",
-        "schema": {
-          "type": "string"
-        }
-      },
       "AuthorizationBearer": {
         "name": "authorization_bearer",
         "in": "header",
@@ -42989,7 +42943,6 @@
       "FilterMobileNetworkOperatorsConsolidated": {
         "name": "filter",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
         "description": "Consolidated filter parameter for mobile network operators (deepObject style). Originally: filter[name][starts_with], filter[name][contains], filter[name][ends_with], filter[country_code], filter[mcc], filter[mnc], filter[tadig], filter[network_preferences_enabled]",
         "schema": {
@@ -43047,7 +43000,6 @@
       "FilterOTAUpdatesConsolidated": {
         "name": "filter",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
         "description": "Consolidated filter parameter for OTA updates (deepObject style). Originally: filter[status], filter[sim_card_id], filter[type]",
         "schema": {
@@ -43288,7 +43240,6 @@
       "FilterSIMCardActionsConsolidated": {
         "name": "filter",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
         "description": "Consolidated filter parameter for SIM card actions (deepObject style). Originally: filter[sim_card_id], filter[status], filter[bulk_sim_card_action_id], filter[action_type]",
         "schema": {
@@ -43335,28 +43286,20 @@
       "FilterSIMCardConsolidated": {
         "name": "filter",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
-        "description": "Consolidated filter parameter for SIM cards (deepObject style). Originally: filter[tags], filter[iccid], filter[status]",
+        "description": "Consolidated filter parameter for SIM cards (deepObject style). Originally: filter[iccid], filter[msisdn], filter[status], filter[tags]",
         "schema": {
           "type": "object",
           "properties": {
-            "tags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "example": [
-                "personal",
-                "customers",
-                "active-customers"
-              ],
-              "description": "A list of SIM card tags to filter on.<br/><br/>\n If the SIM card contains <b><i>all</i></b> of the given <code>tags</code> they will be found.<br/><br/>\nFor example, if the SIM cards have the following tags: <ul>\n  <li><code>['customers', 'staff', 'test']</code>\n  <li><code>['test']</code></li>\n  <li><code>['customers']</code></li>\n</ul>\nSearching for <code>['customers', 'test']</code> returns only the first because it's the only one with both tags.<br/> Searching for <code>test</code> returns the first two SIMs, because both of them have such tag.<br/> Searching for <code>customers</code> returns the first and last SIMs.<br/>\n"
-            },
             "iccid": {
               "type": "string",
               "example": "89310410106543789301",
               "description": "A search string to partially match for the SIM card's ICCID."
+            },
+            "msisdn": {
+              "type": "string",
+              "example": "+13109976224",
+              "description": "A search string to match for the SIM card's MSISDN."
             },
             "status": {
               "type": "array",
@@ -43371,6 +43314,18 @@
                 ]
               },
               "description": "Filter by a SIM card's status."
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "example": [
+                "personal",
+                "customers",
+                "active-customers"
+              ],
+              "description": "A list of SIM card tags to filter on.<br/><br/>\n If the SIM card contains <b><i>all</i></b> of the given <code>tags</code> they will be found.<br/><br/>\nFor example, if the SIM cards have the following tags: <ul>\n  <li><code>['customers', 'staff', 'test']</code>\n  <li><code>['test']</code></li>\n  <li><code>['customers']</code></li>\n</ul>\nSearching for <code>['customers', 'test']</code> returns only the first because it's the only one with both tags.<br/> Searching for <code>test</code> returns the first two SIMs, because both of them have such tag.<br/> Searching for <code>customers</code> returns the first and last SIMs.<br/>\n"
             }
           }
         }
@@ -43398,7 +43353,6 @@
       "FilterSIMCardOrdersConsolidated": {
         "name": "filter",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
         "description": "Consolidated filter parameter for SIM card orders (deepObject style). Originally: filter[created_at], filter[updated_at], filter[quantity], filter[cost.amount], filter[cost.currency], filter[address.id], filter[address.street_address], filter[address.extended_address], filter[address.locality], filter[address.administrative_area], filter[address.country_code], filter[address.postal_code]",
         "schema": {
@@ -45634,7 +45588,6 @@
       "wireless_PageConsolidated": {
         "name": "page",
         "in": "query",
-        "style": "deepObject",
         "explode": true,
         "description": "Consolidated pagination parameter (deepObject style). Originally: page[number], page[size]",
         "schema": {
@@ -46521,6 +46474,16 @@
           }
         }
       },
+      "AuditLogsGenericErrorResponse": {
+        "description": "Unexpected error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AuditLogsErrors"
+            }
+          }
+        }
+      },
       "AutoRechargePrefResponse": {
         "description": "Successful response",
         "content": {
@@ -46541,7 +46504,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
+              "$ref": "#/components/schemas/invoice_Errors"
             }
           }
         }
@@ -46794,9 +46757,14 @@
                 }
               },
               "properties": {
-                "result": {
-                  "type": "string",
-                  "example": "ok"
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
                 }
               }
             }
@@ -47060,7 +47028,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
+              "$ref": "#/components/schemas/Errors"
             }
           }
         }
@@ -47726,22 +47694,6 @@
           }
         }
       },
-      "DeprecatedInitiateCallResponse": {
-        "description": "Successful response upon initiating a TeXML call.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "title": "Initiate TeXML Call Response",
-              "properties": {
-                "data": {
-                  "$ref": "#/components/schemas/InitiateCallResult"
-                }
-              }
-            }
-          }
-        }
-      },
       "DialParticipantResponse": {
         "description": "New participant resource.",
         "content": {
@@ -47925,7 +47877,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
+              "$ref": "#/components/schemas/Errors"
             }
           }
         }
@@ -47982,11 +47934,11 @@
         }
       },
       "GenericErrorResponse": {
-        "description": "Unexpected error.",
+        "description": "Unexpected error",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/call-recordings_Errors"
+              "$ref": "#/components/schemas/billing_Errors"
             }
           }
         }
@@ -49520,13 +49472,7 @@
                   }
                 },
                 "meta": {
-                  "type": "object",
-                  "example": {
-                    "page_number": 2,
-                    "page_size": 1,
-                    "total_pages": 3,
-                    "total_results": 3
-                  }
+                  "$ref": "#/components/schemas/PaginationMeta"
                 }
               }
             }
@@ -51098,7 +51044,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
+              "$ref": "#/components/schemas/Errors"
             }
           }
         }
@@ -51610,9 +51556,14 @@
                 }
               },
               "properties": {
-                "result": {
-                  "type": "string",
-                  "example": "ok"
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
                 }
               }
             }
@@ -51754,17 +51705,14 @@
                     }
                   },
                   "example": {
-                    "data": {
-                      "record_type": "registration_status",
-                      "status": "Expired",
-                      "sip_username": "rogerp",
-                      "ip_address": "190.106.106.121",
-                      "transport": "UDP",
-                      "port": 37223,
-                      "user_agent": "Z 5.4.12 v2.10.13.2-mod",
-                      "last_registration": "2021-09-28T15:11:02",
-                      "id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
-                    }
+                    "record_type": "registration_status",
+                    "status": "Expired",
+                    "sip_username": "rogerp",
+                    "ip_address": "190.106.106.121",
+                    "transport": "UDP",
+                    "port": 37223,
+                    "user_agent": "Z 5.4.12 v2.10.13.2-mod",
+                    "last_registration": "2021-09-28T15:11:02"
                   }
                 }
               }
@@ -52736,7 +52684,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
+              "$ref": "#/components/schemas/Errors"
             }
           }
         }
@@ -53197,22 +53145,6 @@
           }
         }
       },
-      "UpdateTeXMLCallResponse": {
-        "description": "Successful response upon updating a TeXML call.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "title": "TeXML REST Command Response",
-              "properties": {
-                "data": {
-                  "$ref": "#/components/schemas/UpdateCommandResult"
-                }
-              }
-            }
-          }
-        }
-      },
       "UpdateWirelessBlocklistResponse": {
         "description": "Successful response",
         "content": {
@@ -53552,28 +53484,8 @@
         },
         "description": "Successful Response"
       },
-      "billing-group_GenericErrorResponse": {
-        "description": "Unexpected error",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/billing-group_Errors"
-            }
-          }
-        }
-      },
       "billing_ForbiddenErrorResponse": {
         "description": "Insufficient permissions to access balance information",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/billing_Errors"
-            }
-          }
-        }
-      },
-      "billing_GenericErrorResponse": {
-        "description": "Unexpected error",
         "content": {
           "application/json": {
             "schema": {
@@ -53714,6 +53626,16 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/call-control_Errors"
+            }
+          }
+        }
+      },
+      "call-recordings_GenericErrorResponse": {
+        "description": "Unexpected error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/call-recordings_Errors"
             }
           }
         }
@@ -54195,16 +54117,6 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/emergency_Errors"
-            }
-          }
-        }
-      },
-      "invoice_BadRequestErrorResponse": {
-        "description": "Invalid request parameters",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/invoice_Errors"
             }
           }
         }
@@ -55028,6 +54940,65 @@
         ],
         "type": "string",
         "description": "An enumeration."
+      },
+      "AIAssistantAddMessagesRequest": {
+        "type": "object",
+        "title": "AI Assistant Add Messages Request",
+        "properties": {
+          "client_state": {
+            "description": "Use this field to add state to every subsequent webhook. It must be a valid Base-64 encoded string.",
+            "type": "string",
+            "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+          },
+          "command_id": {
+            "description": "Use this field to avoid duplicate commands. Telnyx will ignore any command with the same `command_id` for the same `call_control_id`.",
+            "type": "string",
+            "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
+          },
+          "messages": {
+            "description": "The messages to add to the conversation.",
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/UserMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/AssistantMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/SystemMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/DeveloperMessage"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "role",
+                "mapping": {
+                  "user": "#/components/schemas/UserMessage",
+                  "assistant": "#/components/schemas/AssistantMessage",
+                  "tool": "#/components/schemas/ToolMessage",
+                  "system": "#/components/schemas/SystemMessage",
+                  "developer": "#/components/schemas/DeveloperMessage"
+                }
+              }
+            }
+          }
+        },
+        "example": {
+          "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
+          "command_id": "891510ac-f3e4-11e8-af5b-de00688a4901",
+          "messages": [
+            {
+              "role": "system",
+              "content": "Get the user's favorite color"
+            }
+          ]
+        }
       },
       "AIAssistantStartRequest": {
         "type": "object",
@@ -56223,7 +56194,7 @@
                   "$ref": "#/components/schemas/TransferTool"
                 },
                 {
-                  "$ref": "#/components/schemas/RetrievalTool"
+                  "$ref": "#/components/schemas/CallControlRetrievalTool"
                 }
               ],
               "discriminator": {
@@ -56234,7 +56205,7 @@
                   "webhook": "#/components/schemas/WebhookTool",
                   "hangup": "#/components/schemas/HangupTool",
                   "transfer": "#/components/schemas/TransferTool",
-                  "retrieval": "#/components/schemas/RetrievalTool"
+                  "retrieval": "#/components/schemas/CallControlRetrievalTool"
                 }
               }
             }
@@ -56307,6 +56278,41 @@
         ],
         "title": "AssistantDeletedResponse",
         "description": "Aligns with the OpenAI API:\nhttps://platform.openai.com/docs/api-reference/assistants/deleteAssistant"
+      },
+      "AssistantMessage": {
+        "type": "object",
+        "title": "Assistant Message",
+        "description": "Messages sent by the model in response to user messages.",
+        "properties": {
+          "role": {
+            "description": "The role of the messages author, in this case `assistant`.",
+            "type": "string",
+            "enum": [
+              "assistant"
+            ]
+          },
+          "content": {
+            "description": "The contents of the assistant message. Required unless `tool_calls`",
+            "type": "string"
+          },
+          "tool_calls": {
+            "type": "array",
+            "description": "The tool calls generated by the model, such as function calls.",
+            "items": {
+              "$ref": "#/components/schemas/ToolCall"
+            }
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "example": {
+          "role": "assistant",
+          "content": "Hello, I'm John."
+        }
       },
       "AssistantSmsChatReq": {
         "properties": {
@@ -56464,7 +56470,7 @@
         "items": {
           "oneOf": [
             {
-              "$ref": "#/components/schemas/WebhookTool"
+              "$ref": "#/components/schemas/inference-embedding_WebhookTool"
             },
             {
               "$ref": "#/components/schemas/RetrievalTool"
@@ -56476,7 +56482,7 @@
               "$ref": "#/components/schemas/HangupTool"
             },
             {
-              "$ref": "#/components/schemas/TransferTool"
+              "$ref": "#/components/schemas/inference-embedding_TransferTool"
             },
             {
               "$ref": "#/components/schemas/SIPReferTool"
@@ -56510,23 +56516,24 @@
         "type": "object",
         "properties": {
           "file": {
-            "description": "The audio file object to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm. File uploads are limited to 100 MB. Cannot be used together with `file_url`",
+            "description": "The audio file object to transcribe, in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm. File uploads are limited to 100 MB. Cannot be used together with `file_url`. Note: `deepgram/nova-3` only supports mp3 and wav formats.",
             "type": "string",
             "format": "binary"
           },
           "file_url": {
-            "description": "Link to audio file in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm. Support for hosted files is limited to 100MB. Cannot be used together with `file`",
+            "description": "Link to audio file in one of these formats: flac, mp3, mp4, mpeg, mpga, m4a, ogg, wav, or webm. Support for hosted files is limited to 100MB. Cannot be used together with `file`. Note: `deepgram/nova-3` only supports mp3 and wav formats.",
             "type": "string",
             "example": "https://example.com/file.mp3"
           },
           "model": {
-            "description": "ID of the model to use. `distil-whisper/distil-large-v2` is lower latency but English-only. `openai/whisper-large-v3-turbo` is multi-lingual but slightly higher latency.",
+            "description": "ID of the model to use. `distil-whisper/distil-large-v2` is lower latency but English-only. `openai/whisper-large-v3-turbo` is multi-lingual but slightly higher latency. `deepgram/nova-3` supports English variants (en, en-US, en-GB, en-AU, en-NZ, en-IN) and only accepts mp3/wav files.",
             "example": "distil-whisper/distil-large-v2",
             "default": "distil-whisper/distil-large-v2",
             "type": "string",
             "enum": [
               "distil-whisper/distil-large-v2",
-              "openai/whisper-large-v3-turbo"
+              "openai/whisper-large-v3-turbo",
+              "deepgram/nova-3"
             ]
           },
           "response_format": {
@@ -56546,6 +56553,20 @@
             "enum": [
               "segment"
             ]
+          },
+          "language": {
+            "type": "string",
+            "description": "The language of the audio to be transcribed. For `deepgram/nova-3`, only English variants are supported: `en`, `en-US`, `en-GB`, `en-AU`, `en-NZ`, `en-IN`. For `openai/whisper-large-v3-turbo`, supports multiple languages. `distil-whisper/distil-large-v2` does not support language parameter.",
+            "example": "en-US"
+          },
+          "model_config": {
+            "type": "object",
+            "description": "Additional model-specific configuration parameters. Only allowed with `deepgram/nova-3` model. Can include Deepgram-specific options such as `smart_format`, `punctuate`, `diarize`, `utterance`, `numerals`, and `language`. If `language` is provided both as a top-level parameter and in `model_config`, the top-level parameter takes precedence.",
+            "additionalProperties": true,
+            "example": {
+              "smart_format": true,
+              "punctuate": true
+            }
           }
         },
         "required": [
@@ -56781,6 +56802,17 @@
           },
           "meta": {
             "$ref": "#/components/schemas/audit-logs_PaginationMeta"
+          }
+        }
+      },
+      "AuditLogsErrors": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/audit-logs_Error"
+            }
           }
         }
       },
@@ -58383,7 +58415,7 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Bucket Ids"
+            "description": "List of [embedded storage buckets](https://developers.telnyx.com/api-reference/embeddings/embed-documents) to use for retrieval-augmented generation."
           },
           "max_num_results": {
             "description": "The maximum number of results to retrieve as context for the language model.",
@@ -59495,8 +59527,7 @@
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "from": "+35319605860",
-            "to": "+35319605860",
-            "state": "bridged"
+            "to": "+35319605860"
           }
         }
       },
@@ -59727,6 +59758,26 @@
           }
         }
       },
+      "CallControlBucketIds": {
+        "properties": {
+          "bucket_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bucket Ids"
+          },
+          "max_num_results": {
+            "description": "The maximum number of results to retrieve as context for the language model.",
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bucket_ids"
+        ],
+        "title": "BucketIds"
+      },
       "CallControlCommandResult": {
         "type": "object",
         "title": "Call Control Command Result",
@@ -59783,6 +59834,221 @@
       "CallControlId": {
         "type": "string",
         "example": "v3:KBnLO0ZK3DhKM5s7bE9VluaSmKsOchKht_fUYvxcp8ysbmzCCtpkmA"
+      },
+      "CallControlRetrievalTool": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "retrieval"
+            ]
+          },
+          "retrieval": {
+            "$ref": "#/components/schemas/CallControlBucketIds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "retrieval"
+        ],
+        "title": "RetrievalTool"
+      },
+      "CallControlTransferToolParams": {
+        "properties": {
+          "targets": {
+            "type": "array",
+            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The name of the target.",
+                  "example": "Support"
+                },
+                "to": {
+                  "type": "string",
+                  "description": "The destination number or SIP URI of the call.",
+                  "example": "+13129457420"
+                }
+              }
+            }
+          },
+          "from": {
+            "type": "string",
+            "example": "+35319605860",
+            "description": "Number or SIP URI placing the call."
+          }
+        },
+        "type": "object",
+        "required": [
+          "targets",
+          "from"
+        ],
+        "title": "TransferToolParams"
+      },
+      "CallControlWebhookToolParams": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the tool."
+          },
+          "description": {
+            "type": "string",
+            "description": "The description of the tool."
+          },
+          "url": {
+            "description": "The URL of the external tool to be called. This URL is going to be used by the assistant. The URL can be templated like: `https://example.com/api/v1/{id}`, where `{id}` is a placeholder for a value that will be provided by the assistant if `path_parameters` are provided with the `id` attribute.",
+            "type": "string",
+            "example": "https://example.com/api/v1/function"
+          },
+          "method": {
+            "description": "The HTTP method to be used when calling the external tool.",
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST",
+              "PUT",
+              "DELETE",
+              "PATCH"
+            ],
+            "default": "POST"
+          },
+          "headers": {
+            "description": "The headers to be sent to the external tool.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `Bearer {{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret as the bearer token.",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "body_parameters": {
+            "description": "The body parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the body of the request. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
+            "type": "object",
+            "properties": {
+              "properties": {
+                "description": "The properties of the body parameters.",
+                "type": "object"
+              },
+              "required": {
+                "description": "The required properties of the body parameters.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "object"
+                ]
+              }
+            },
+            "example": {
+              "properties": {
+                "age": {
+                  "description": "The age of the customer.",
+                  "type": "integer"
+                },
+                "location": {
+                  "description": "The location of the customer.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "age",
+                "location"
+              ],
+              "type": "object"
+            }
+          },
+          "path_parameters": {
+            "description": "The path parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the path of the request if the URL contains a placeholder for a value. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
+            "type": "object",
+            "properties": {
+              "properties": {
+                "description": "The properties of the path parameters.",
+                "type": "object"
+              },
+              "required": {
+                "description": "The required properties of the path parameters.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "object"
+                ]
+              }
+            },
+            "example": {
+              "properties": {
+                "id": {
+                  "description": "The id of the customer.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "type": "object"
+            }
+          },
+          "query_parameters": {
+            "description": "The query parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the query of the request. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
+            "type": "object",
+            "properties": {
+              "properties": {
+                "description": "The properties of the query parameters.",
+                "type": "object"
+              },
+              "required": {
+                "description": "The required properties of the query parameters.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "object"
+                ]
+              }
+            },
+            "example": {
+              "properties": {
+                "page": {
+                  "description": "The page number.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "name",
+          "description"
+        ],
+        "title": "WebhookToolParams"
       },
       "CallDtmfReceived": {
         "type": "object",
@@ -61806,7 +62072,6 @@
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
           "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
-            "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
             "call_leg_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
@@ -62163,7 +62428,7 @@
           },
           "audio_url": "http://www.example.com/sounds/greeting.wav",
           "timeout_secs": 60,
-          "timeout_limit_secs": 60,
+          "time_limit_secs": 60,
           "webhook_url": "https://www.example.com/server-b/",
           "webhook_url_method": "POST",
           "answering_machine_detection": "detect",
@@ -63498,7 +63763,7 @@
             "stream_id": "1edb94f9-7ef0-4150-b502-e0ebadfd9491",
             "stream_params": {
               "stream_url": "wss://www.example.com/websocket",
-              "stream_track": "inbound_track"
+              "track": "inbound_track"
             },
             "stream_type": "websocket"
           }
@@ -64825,7 +65090,7 @@
           },
           "api_key_ref": {
             "type": "string",
-            "description": "If you are using an external inference provider like xAI or OpenAI, this field allows you to pass along a reference to your API key. After creating an [integration secret](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for you API key, pass the secret's `identifier` in this field."
+            "description": "If you are using an external inference provider like xAI or OpenAI, this field allows you to pass along a reference to your API key. After creating an [integration secret](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) for you API key, pass the secret's `identifier` in this field."
           },
           "stream": {
             "type": "boolean",
@@ -65633,7 +65898,6 @@
           "record_type": "event",
           "event_type": "conference.created",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -65641,7 +65905,7 @@
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -65886,7 +66150,6 @@
           "record_type": "event",
           "event_type": "conference.ended",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -65894,7 +66157,7 @@
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z",
+            "occurred_at": "2018-02-02T22:25:27.521Z",
             "reason": "host_left"
           }
         }
@@ -65915,7 +66178,6 @@
           "record_type": "event",
           "event_type": "conference.floor.changed",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -65923,7 +66185,7 @@
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66331,7 +66593,6 @@
           "record_type": "event",
           "event_type": "conference.participant.playback.ended",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -66341,7 +66602,7 @@
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
             "media_url": "https://www.example.com/audio.mp3",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66441,7 +66702,6 @@
           "record_type": "event",
           "event_type": "conference.participant.playback.started",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -66451,7 +66711,7 @@
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
             "media_url": "https://www.example.com/audio.mp3",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66551,7 +66811,6 @@
           "record_type": "event",
           "event_type": "conference.participant.speak.ended",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -66560,7 +66819,7 @@
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66650,7 +66909,6 @@
           "record_type": "event",
           "event_type": "conference.participant.speak.started",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "connection_id": "7267xxxxxxxxxxxxxx",
@@ -66659,7 +66917,7 @@
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66784,13 +67042,12 @@
           "record_type": "event",
           "event_type": "conference.playback.ended",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "connection_id": "7267xxxxxxxxxxxxxx",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
             "media_url": "https://www.example.com/audio.mp3",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -66870,13 +67127,12 @@
           "record_type": "event",
           "event_type": "conference.playback.started",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "connection_id": "7267xxxxxxxxxxxxxx",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
             "media_url": "https://www.example.com/audio.mp3",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -67118,6 +67374,14 @@
             "type": "string",
             "description": "The URI of the current page.",
             "example": "/v2/texml/Accounts/61bf923e-5e4d-4595-a110-56190ea18a1b/Conferences/6dc6cc1a-1ba1-4351-86b8-4c22c95cd98f/Recordings.json?Page=0&PageSize=1"
+          },
+          "participants": {
+            "type": "array",
+            "description": "List of participant resources.",
+            "items": {
+              "type": "object"
+            },
+            "example": []
           }
         }
       },
@@ -67128,7 +67392,6 @@
           "record_type": "event",
           "event_type": "conference.recording.saved",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
@@ -67474,12 +67737,11 @@
           "record_type": "event",
           "event_type": "conference.speak.ended",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "connection_id": "7267xxxxxxxxxxxxxx",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -67662,12 +67924,11 @@
           "record_type": "event",
           "event_type": "conference.speak.started",
           "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
-          "occurred_at": "2018-02-02T22:25:27.521992Z",
           "payload": {
             "connection_id": "7267xxxxxxxxxxxxxx",
             "creator_call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "conference_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
-            "occured_at": "2018-02-02T22:25:27.521Z"
+            "occurred_at": "2018-02-02T22:25:27.521Z"
           }
         },
         "properties": {
@@ -67924,6 +68185,34 @@
         "example": "ec0c8e5d-439e-4620-a0c1-9d9c8d02a836",
         "default": null
       },
+      "ConnectionJitterBuffer": {
+        "type": "object",
+        "description": "Configuration options for Jitter Buffer. Enables Jitter Buffer for RTP streams of SIP Trunking calls. The feature is off unless enabled. You may define min and max values in msec for customized buffering behaviors. Larger values add latency but tolerate more jitter, while smaller values reduce latency but are more sensitive to jitter and reordering.",
+        "properties": {
+          "enable_jitter_buffer": {
+            "type": "boolean",
+            "description": "Enables Jitter Buffer for RTP streams of SIP Trunking calls. The feature is off unless enabled.",
+            "default": false,
+            "example": true
+          },
+          "jitterbuffer_msec_min": {
+            "type": "integer",
+            "description": "The minimum jitter buffer size in milliseconds. Must be between 40 and 400. Has no effect if enable_jitter_buffer is not true.",
+            "minimum": 40,
+            "maximum": 400,
+            "default": 60,
+            "example": 60
+          },
+          "jitterbuffer_msec_max": {
+            "type": "integer",
+            "description": "The maximum jitter buffer size in milliseconds. Must be between 40 and 400. Has no effect if enable_jitter_buffer is not true.",
+            "minimum": 40,
+            "maximum": 400,
+            "default": 200,
+            "example": 200
+          }
+        }
+      },
       "ConnectionName": {
         "title": "Connection Name",
         "type": "string",
@@ -68037,21 +68326,27 @@
                 }
               },
               "logo_uri": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "uri",
-                "nullable": true,
                 "description": "URL of the client logo"
               },
               "tos_uri": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "uri",
-                "nullable": true,
                 "description": "URL of the client's terms of service"
               },
               "policy_uri": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "uri",
-                "nullable": true,
                 "description": "URL of the client's privacy policy"
               },
               "redirect_uri": {
@@ -69305,6 +69600,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -69329,7 +69627,7 @@
           "rtcp_settings": {
             "port": "rtcp-mux",
             "capture_enabled": true,
-            "report_frequency_seconds": 10
+            "report_frequency_secs": 10
           },
           "inbound": {
             "ani_number_format": "+E.164",
@@ -69337,7 +69635,6 @@
             "codecs": [
               "G722"
             ],
-            "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
             "isup_headers_enabled": true,
@@ -69362,6 +69659,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         }
       },
@@ -69772,6 +70074,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -69806,7 +70111,6 @@
             "codecs": [
               "G722"
             ],
-            "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
             "isup_headers_enabled": true,
@@ -69840,6 +70144,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         },
         "type": "object"
@@ -70293,6 +70602,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -70321,13 +70633,12 @@
             "capture_enabled": true,
             "report_frequency_secs": 10
           },
-          "inbound:": {
+          "inbound": {
             "ani_number_format": "+E.164",
-            "dns_number_format": "+e164",
-            "codecs": "G722",
-            "default_primary_ip_id": "192.168.0.0",
-            "default_tertiary_ip_id": "192.168.0.0",
-            "default_secondary_ip_id": "192.168.0.0",
+            "dnis_number_format": "+e164",
+            "codecs": [
+              "G722"
+            ],
             "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
@@ -70359,6 +70670,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         },
         "type": "object"
@@ -72442,6 +72758,12 @@
             "default": false,
             "description": "Enable on-net T38 if you prefer the sender and receiver negotiating T38 directly if both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call depending on each leg's settings."
           },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
           "webhook_event_url": {
             "type": "string",
             "format": "uri",
@@ -72509,6 +72831,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -72541,7 +72866,7 @@
           "rtcp_settings": {
             "port": "rtp+1",
             "capture_enabled": true,
-            "report_frequency_seconds": 10
+            "report_frequency_secs": 10
           },
           "inbound": {
             "ani_number_format": "+E.164",
@@ -72574,6 +72899,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         }
       },
@@ -72633,6 +72963,14 @@
               "OPUS",
               "H.264"
             ]
+          },
+          "default_routing_method": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "round-robin"
+            ],
+            "description": "Default routing method to be used when a number is associated with the connection. Must be one of the routing method types or left blank, other values are not allowed."
           },
           "channel_limit": {
             "type": "integer",
@@ -73323,237 +73661,6 @@
           }
         ]
       },
-      "DeprecatedInitiateCallRequest": {
-        "type": "object",
-        "title": "Initiate Call Request",
-        "required": [
-          "To",
-          "From"
-        ],
-        "properties": {
-          "To": {
-            "description": "The phone number of the called party. Phone numbers are formatted with a `+` and country code.",
-            "example": "+16175551212",
-            "type": "string"
-          },
-          "From": {
-            "description": "The phone number of the party that initiated the call. Phone numbers are formatted with a `+` and country code.",
-            "example": "+16175551212",
-            "type": "string"
-          },
-          "CallerId": {
-            "description": "To be used as the caller id name (SIP From Display Name) presented to the destination (`To` number). The string should have a maximum of 128 characters, containing only letters, numbers, spaces, and `-_~!.+` special characters. If ommited, the display name will be the same as the number in the `From` field.",
-            "example": "Info",
-            "type": "string"
-          },
-          "Url": {
-            "description": "The URL from which Telnyx will retrieve the TeXML call instructions.",
-            "example": "https://www.example.com/instructions.xml",
-            "type": "string"
-          },
-          "UrlMethod": {
-            "description": "HTTP request type used for `Url`. The default value is inherited from TeXML Application setting.",
-            "example": "GET",
-            "default": "POST",
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST"
-            ]
-          },
-          "FallbackUrl": {
-            "description": "A failover URL for which Telnyx will retrieve the TeXML call instructions if the `Url` is not responding.",
-            "example": "https://www.example.com/instructions-fallback.xml",
-            "type": "string"
-          },
-          "StatusCallback": {
-            "description": "URL destination for Telnyx to send status callback events to for the call.",
-            "example": "https://www.example.com/callback",
-            "type": "string"
-          },
-          "StatusCallbackMethod": {
-            "description": "HTTP request type used for `StatusCallback`.",
-            "example": "GET",
-            "default": "POST",
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST"
-            ]
-          },
-          "StatusCallbackEvent": {
-            "description": "The call events for which Telnyx should send a webhook. Multiple events can be defined when separated by a space.",
-            "example": "initiated",
-            "default": "completed",
-            "type": "string",
-            "enum": [
-              "initiated",
-              "ringing",
-              "answered",
-              "completed"
-            ]
-          },
-          "MachineDetection": {
-            "description": "Enables Answering Machine Detection.",
-            "example": "Enable",
-            "default": "Disable",
-            "type": "string",
-            "enum": [
-              "Enable",
-              "Disable",
-              "DetectMessageEnd"
-            ]
-          },
-          "DetectionMode": {
-            "description": "Allows you to chose between Premium and Standard detections.",
-            "example": "Premium",
-            "default": "Regular",
-            "type": "string",
-            "enum": [
-              "Premium",
-              "Regular"
-            ]
-          },
-          "AsyncAmd": {
-            "description": "Select whether to perform answering machine detection in the background. By default execution is blocked until Answering Machine Detection is completed.",
-            "example": true,
-            "default": false,
-            "type": "boolean"
-          },
-          "AsyncAmdStatusCallback": {
-            "description": "URL destination for Telnyx to send AMD callback events to for the call.",
-            "example": "https://www.example.com/callback",
-            "type": "string"
-          },
-          "AsyncAmdStatusCallbackMethod": {
-            "description": "HTTP request type used for `AsyncAmdStatusCallback`. The default value is inherited from TeXML Application setting.",
-            "example": "GET",
-            "default": "POST",
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST"
-            ]
-          },
-          "MachineDetectionTimeout": {
-            "description": "Maximum timeout threshold in milliseconds for overall detection.",
-            "example": 5000,
-            "default": 30000,
-            "maximum": 60000,
-            "minimum": 500,
-            "type": "integer"
-          },
-          "MachineDetectionSpeechThreshold": {
-            "description": "Maximum threshold of a human greeting. If greeting longer than this value, considered machine. Ignored when `premium` detection is used.",
-            "example": 2000,
-            "default": 3500,
-            "type": "integer"
-          },
-          "MachineDetectionSpeechEndThreshold": {
-            "description": "Silence duration threshold after a greeting message or voice for it be considered human. Ignored when `premium` detection is used.",
-            "example": 2000,
-            "default": 800,
-            "type": "integer"
-          },
-          "MachineDetectionSilenceTimeout": {
-            "description": "If initial silence duration is greater than this value, consider it a machine. Ignored when `premium` detection is used.",
-            "example": 2000,
-            "default": 3500,
-            "type": "integer"
-          },
-          "CancelPlaybackOnMachineDetection": {
-            "description": "Whether to cancel ongoing playback on `machine` detection. Defaults to `true`.",
-            "default": true,
-            "example": false,
-            "type": "boolean"
-          },
-          "CancelPlaybackOnDetectMessageEnd": {
-            "description": "Whether to cancel ongoing playback on `greeting ended` detection. Defaults to `true`.",
-            "default": true,
-            "example": false,
-            "type": "boolean"
-          },
-          "PreferredCodecs": {
-            "description": "The list of comma-separated codecs to be offered on a call.",
-            "example": "PCMA,PCMU",
-            "type": "string"
-          },
-          "Record": {
-            "description": "Whether to record the entire participant's call leg. Defaults to `false`.",
-            "example": false,
-            "type": "boolean"
-          },
-          "RecordingChannels": {
-            "description": "The number of channels in the final recording. Defaults to `mono`.",
-            "example": "dual",
-            "type": "string",
-            "enum": [
-              "mono",
-              "dual"
-            ]
-          },
-          "RecordingStatusCallback": {
-            "description": "The URL the recording callbacks will be sent to.",
-            "example": "https://example.com/recording_status_callback",
-            "type": "string"
-          },
-          "RecordingStatusCallbackMethod": {
-            "description": "HTTP request type used for `RecordingStatusCallback`. Defaults to `POST`.",
-            "example": "GET",
-            "type": "string",
-            "enum": [
-              "GET",
-              "POST"
-            ]
-          },
-          "RecordingStatusCallbackEvent": {
-            "description": "The changes to the recording's state that should generate a call to `RecoridngStatusCallback`. Can be: `in-progress`, `completed` and `absent`. Separate multiple values with a space. Defaults to `completed`.",
-            "example": "in-progress completed absent",
-            "type": "string"
-          },
-          "RecordingTimeout": {
-            "description": "The number of seconds that Telnyx will wait for the recording to be stopped if silence is detected. The timer only starts when the speech is detected. Please note that the transcription is used to detect silence and the related charge will be applied. The minimum value is 0. The default value is 0 (infinite)",
-            "example": 5,
-            "type": "integer",
-            "default": 0
-          },
-          "RecordingTrack": {
-            "description": "The audio track to record for the call. The default is `both`.",
-            "example": "inbound",
-            "type": "string",
-            "enum": [
-              "inbound",
-              "outbound",
-              "both"
-            ]
-          },
-          "SipAuthPassword": {
-            "description": "The password to use for SIP authentication.",
-            "example": "1234",
-            "type": "string"
-          },
-          "SipAuthUsername": {
-            "description": "The username to use for SIP authentication.",
-            "example": "user",
-            "type": "string"
-          },
-          "Trim": {
-            "description": "Whether to trim any leading and trailing silence from the recording. Defaults to `trim-silence`.",
-            "example": "trim-silence",
-            "type": "string",
-            "enum": [
-              "trim-silence",
-              "do-not-trim"
-            ]
-          }
-        },
-        "example": {
-          "To": "+13121230000",
-          "From": "+13120001234",
-          "Url": "https://www.example.com/texml.xml",
-          "StatusCallback": "https://www.example.com/statuscallback-listener"
-        }
-      },
       "DetailRecord": {
         "type": "object",
         "description": "An object following one of the schemas published in https://developers.telnyx.com/docs/api/v2/detail-records",
@@ -73606,6 +73713,35 @@
           "meta": {
             "$ref": "#/components/schemas/detail-records_PaginationMeta"
           }
+        }
+      },
+      "DeveloperMessage": {
+        "type": "object",
+        "title": "Developer Message",
+        "description": "Developer-provided instructions that the model should follow, regardless of messages sent by the user.",
+        "properties": {
+          "role": {
+            "description": "The role of the messages author, in this case developer.",
+            "type": "string",
+            "enum": [
+              "developer"
+            ]
+          },
+          "content": {
+            "description": "The contents of the developer message.",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "example": {
+          "role": "developer",
+          "content": "Get the user's favorite color"
         }
       },
       "DialConferenceParticipantRequest": {
@@ -75307,7 +75443,7 @@
           "errors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/audit-logs_Error"
+              "$ref": "#/components/schemas/billing-group_Error"
             }
           }
         }
@@ -76002,72 +76138,104 @@
               "user_id": "19a75cea-02c6-4b9a-84fa-c9bc8341feb8"
             },
             "record_type": "event"
+          },
+          "meta": {
+            "attempt": 1,
+            "delivered_to": "https://www.example.com/webhooks"
           }
         },
         "properties": {
-          "record_type": {
-            "$ref": "#/components/schemas/programmable-fax_RecordType"
-          },
-          "id": {
-            "$ref": "#/components/schemas/Id"
-          },
-          "event_type": {
-            "type": "string",
-            "example": "fax.delivered",
-            "enum": [
-              "fax.delivered"
-            ],
-            "description": "The type of event being delivered."
-          },
-          "payload": {
+          "data": {
             "type": "object",
             "properties": {
-              "call_duration_secs": {
-                "description": "The duration of the call in seconds.",
-                "type": "integer",
-                "example": 25
+              "record_type": {
+                "$ref": "#/components/schemas/programmable-fax_RecordType"
               },
-              "connection_id": {
-                "$ref": "#/components/schemas/ConnectionId"
+              "id": {
+                "$ref": "#/components/schemas/Id"
               },
-              "direction": {
-                "$ref": "#/components/schemas/Direction"
-              },
-              "fax_id": {
-                "$ref": "#/components/schemas/FaxId"
-              },
-              "original_media_url": {
-                "$ref": "#/components/schemas/OriginalMediaUrl"
-              },
-              "media_name": {
-                "$ref": "#/components/schemas/MediaName"
-              },
-              "to": {
-                "$ref": "#/components/schemas/To"
-              },
-              "from": {
-                "$ref": "#/components/schemas/From"
-              },
-              "user_id": {
-                "$ref": "#/components/schemas/UserId"
-              },
-              "page_count": {
-                "description": "Number of transferred pages",
-                "type": "integer",
-                "example": 2
-              },
-              "status": {
+              "occurred_at": {
                 "type": "string",
-                "example": "delivered",
+                "format": "date-time",
+                "description": "ISO 8601 datetime of when the event occurred.",
+                "example": "2020-05-05T13:08:22.039204Z"
+              },
+              "event_type": {
+                "type": "string",
+                "example": "fax.delivered",
                 "enum": [
-                  "delivered"
+                  "fax.delivered"
                 ],
-                "description": "The status of the fax."
+                "description": "The type of event being delivered."
               },
-              "client_state": {
-                "description": "State received from a command.",
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "call_duration_secs": {
+                    "description": "The duration of the call in seconds.",
+                    "type": "integer",
+                    "example": 25
+                  },
+                  "connection_id": {
+                    "$ref": "#/components/schemas/ConnectionId"
+                  },
+                  "direction": {
+                    "$ref": "#/components/schemas/Direction"
+                  },
+                  "fax_id": {
+                    "$ref": "#/components/schemas/FaxId"
+                  },
+                  "original_media_url": {
+                    "$ref": "#/components/schemas/OriginalMediaUrl"
+                  },
+                  "media_name": {
+                    "$ref": "#/components/schemas/MediaName"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/To"
+                  },
+                  "from": {
+                    "$ref": "#/components/schemas/From"
+                  },
+                  "user_id": {
+                    "$ref": "#/components/schemas/UserId"
+                  },
+                  "page_count": {
+                    "description": "Number of transferred pages",
+                    "type": "integer",
+                    "example": 2
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "delivered",
+                    "enum": [
+                      "delivered"
+                    ],
+                    "description": "The status of the fax."
+                  },
+                  "client_state": {
+                    "description": "State received from a command.",
+                    "type": "string",
+                    "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Metadata about the webhook delivery.",
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "description": "The delivery attempt number.",
+                "example": 1
+              },
+              "delivered_to": {
                 "type": "string",
-                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                "format": "uri",
+                "description": "The URL the webhook was delivered to.",
+                "example": "https://www.example.com/webhooks"
               }
             }
           }
@@ -76103,69 +76271,101 @@
               "user_id": "19a75cea-02c6-4b9a-84fa-c9bc8341feb8"
             },
             "record_type": "event"
+          },
+          "meta": {
+            "attempt": 1,
+            "delivered_to": "https://www.example.com/webhooks"
           }
         },
         "properties": {
-          "record_type": {
-            "$ref": "#/components/schemas/programmable-fax_RecordType"
-          },
-          "id": {
-            "$ref": "#/components/schemas/Id"
-          },
-          "event_type": {
-            "type": "string",
-            "example": "fax.failed",
-            "enum": [
-              "fax.failed"
-            ],
-            "description": "The type of event being delivered."
-          },
-          "payload": {
+          "data": {
             "type": "object",
             "properties": {
-              "connection_id": {
-                "$ref": "#/components/schemas/ConnectionId"
+              "record_type": {
+                "$ref": "#/components/schemas/programmable-fax_RecordType"
               },
-              "direction": {
-                "$ref": "#/components/schemas/Direction"
+              "id": {
+                "$ref": "#/components/schemas/Id"
               },
-              "fax_id": {
-                "$ref": "#/components/schemas/FaxId"
-              },
-              "original_media_url": {
-                "$ref": "#/components/schemas/OriginalMediaUrl"
-              },
-              "media_name": {
-                "$ref": "#/components/schemas/MediaName"
-              },
-              "to": {
-                "$ref": "#/components/schemas/To"
-              },
-              "from": {
-                "$ref": "#/components/schemas/From"
-              },
-              "user_id": {
-                "$ref": "#/components/schemas/UserId"
-              },
-              "failure_reason": {
+              "occurred_at": {
                 "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 datetime of when the event occurred.",
+                "example": "2020-05-05T13:08:22.039204Z"
+              },
+              "event_type": {
+                "type": "string",
+                "example": "fax.failed",
                 "enum": [
-                  "rejected"
+                  "fax.failed"
                 ],
-                "description": "Cause of the sending failure"
+                "description": "The type of event being delivered."
               },
-              "status": {
-                "type": "string",
-                "example": "failed",
-                "enum": [
-                  "failed"
-                ],
-                "description": "The status of the fax."
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "connection_id": {
+                    "$ref": "#/components/schemas/ConnectionId"
+                  },
+                  "direction": {
+                    "$ref": "#/components/schemas/Direction"
+                  },
+                  "fax_id": {
+                    "$ref": "#/components/schemas/FaxId"
+                  },
+                  "original_media_url": {
+                    "$ref": "#/components/schemas/OriginalMediaUrl"
+                  },
+                  "media_name": {
+                    "$ref": "#/components/schemas/MediaName"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/To"
+                  },
+                  "from": {
+                    "$ref": "#/components/schemas/From"
+                  },
+                  "user_id": {
+                    "$ref": "#/components/schemas/UserId"
+                  },
+                  "failure_reason": {
+                    "type": "string",
+                    "enum": [
+                      "rejected"
+                    ],
+                    "description": "Cause of the sending failure"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "failed",
+                    "enum": [
+                      "failed"
+                    ],
+                    "description": "The status of the fax."
+                  },
+                  "client_state": {
+                    "description": "State received from a command.",
+                    "type": "string",
+                    "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Metadata about the webhook delivery.",
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "description": "The delivery attempt number.",
+                "example": 1
               },
-              "client_state": {
-                "description": "State received from a command.",
+              "delivered_to": {
                 "type": "string",
-                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                "format": "uri",
+                "description": "The URL the webhook was delivered to.",
+                "example": "https://www.example.com/webhooks"
               }
             }
           }
@@ -76196,62 +76396,94 @@
               "user_id": "19a75cea-02c6-4b9a-84fa-c9bc8341feb8"
             },
             "record_type": "event"
+          },
+          "meta": {
+            "attempt": 1,
+            "delivered_to": "https://www.example.com/webhooks"
           }
         },
         "properties": {
-          "record_type": {
-            "$ref": "#/components/schemas/programmable-fax_RecordType"
-          },
-          "id": {
-            "$ref": "#/components/schemas/Id"
-          },
-          "event_type": {
-            "type": "string",
-            "example": "fax.media.processed",
-            "enum": [
-              "fax.media.processed"
-            ],
-            "description": "The type of event being delivered."
-          },
-          "payload": {
+          "data": {
             "type": "object",
             "properties": {
-              "connection_id": {
-                "$ref": "#/components/schemas/ConnectionId"
+              "record_type": {
+                "$ref": "#/components/schemas/programmable-fax_RecordType"
               },
-              "direction": {
-                "$ref": "#/components/schemas/Direction"
+              "id": {
+                "$ref": "#/components/schemas/Id"
               },
-              "fax_id": {
-                "$ref": "#/components/schemas/FaxId"
-              },
-              "original_media_url": {
-                "$ref": "#/components/schemas/OriginalMediaUrl"
-              },
-              "media_name": {
-                "$ref": "#/components/schemas/MediaName"
-              },
-              "to": {
-                "$ref": "#/components/schemas/To"
-              },
-              "from": {
-                "$ref": "#/components/schemas/From"
-              },
-              "user_id": {
-                "$ref": "#/components/schemas/UserId"
-              },
-              "status": {
+              "occurred_at": {
                 "type": "string",
-                "example": "media.processed",
+                "format": "date-time",
+                "description": "ISO 8601 datetime of when the event occurred.",
+                "example": "2020-05-05T13:08:22.039204Z"
+              },
+              "event_type": {
+                "type": "string",
+                "example": "fax.media.processed",
                 "enum": [
-                  "media.processed"
+                  "fax.media.processed"
                 ],
-                "description": "The status of the fax."
+                "description": "The type of event being delivered."
               },
-              "client_state": {
-                "description": "State received from a command.",
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "connection_id": {
+                    "$ref": "#/components/schemas/ConnectionId"
+                  },
+                  "direction": {
+                    "$ref": "#/components/schemas/Direction"
+                  },
+                  "fax_id": {
+                    "$ref": "#/components/schemas/FaxId"
+                  },
+                  "original_media_url": {
+                    "$ref": "#/components/schemas/OriginalMediaUrl"
+                  },
+                  "media_name": {
+                    "$ref": "#/components/schemas/MediaName"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/To"
+                  },
+                  "from": {
+                    "$ref": "#/components/schemas/From"
+                  },
+                  "user_id": {
+                    "$ref": "#/components/schemas/UserId"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "media.processed",
+                    "enum": [
+                      "media.processed"
+                    ],
+                    "description": "The status of the fax."
+                  },
+                  "client_state": {
+                    "description": "State received from a command.",
+                    "type": "string",
+                    "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Metadata about the webhook delivery.",
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "description": "The delivery attempt number.",
+                "example": 1
+              },
+              "delivered_to": {
                 "type": "string",
-                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                "format": "uri",
+                "description": "The URL the webhook was delivered to.",
+                "example": "https://www.example.com/webhooks"
               }
             }
           }
@@ -76276,62 +76508,94 @@
               "user_id": "19a75cea-02c6-4b9a-84fa-c9bc8341feb8"
             },
             "record_type": "event"
+          },
+          "meta": {
+            "attempt": 1,
+            "delivered_to": "https://www.example.com/webhooks"
           }
         },
         "properties": {
-          "record_type": {
-            "$ref": "#/components/schemas/programmable-fax_RecordType"
-          },
-          "id": {
-            "$ref": "#/components/schemas/Id"
-          },
-          "event_type": {
-            "type": "string",
-            "example": "fax.queued",
-            "enum": [
-              "fax.queued"
-            ],
-            "description": "The type of event being delivered."
-          },
-          "payload": {
+          "data": {
             "type": "object",
             "properties": {
-              "connection_id": {
-                "$ref": "#/components/schemas/ConnectionId"
+              "record_type": {
+                "$ref": "#/components/schemas/programmable-fax_RecordType"
               },
-              "direction": {
-                "$ref": "#/components/schemas/Direction"
+              "id": {
+                "$ref": "#/components/schemas/Id"
               },
-              "fax_id": {
-                "$ref": "#/components/schemas/FaxId"
-              },
-              "original_media_url": {
-                "$ref": "#/components/schemas/OriginalMediaUrl"
-              },
-              "media_name": {
-                "$ref": "#/components/schemas/MediaName"
-              },
-              "to": {
-                "$ref": "#/components/schemas/To"
-              },
-              "from": {
-                "$ref": "#/components/schemas/From"
-              },
-              "user_id": {
-                "$ref": "#/components/schemas/UserId"
-              },
-              "status": {
+              "occurred_at": {
                 "type": "string",
-                "example": "queued",
+                "format": "date-time",
+                "description": "ISO 8601 datetime of when the event occurred.",
+                "example": "2020-05-05T13:08:22.039204Z"
+              },
+              "event_type": {
+                "type": "string",
+                "example": "fax.queued",
                 "enum": [
-                  "queued"
+                  "fax.queued"
                 ],
-                "description": "The status of the fax."
+                "description": "The type of event being delivered."
               },
-              "client_state": {
-                "description": "State received from a command.",
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "connection_id": {
+                    "$ref": "#/components/schemas/ConnectionId"
+                  },
+                  "direction": {
+                    "$ref": "#/components/schemas/Direction"
+                  },
+                  "fax_id": {
+                    "$ref": "#/components/schemas/FaxId"
+                  },
+                  "original_media_url": {
+                    "$ref": "#/components/schemas/OriginalMediaUrl"
+                  },
+                  "media_name": {
+                    "$ref": "#/components/schemas/MediaName"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/To"
+                  },
+                  "from": {
+                    "$ref": "#/components/schemas/From"
+                  },
+                  "user_id": {
+                    "$ref": "#/components/schemas/UserId"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "queued",
+                    "enum": [
+                      "queued"
+                    ],
+                    "description": "The status of the fax."
+                  },
+                  "client_state": {
+                    "description": "State received from a command.",
+                    "type": "string",
+                    "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Metadata about the webhook delivery.",
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "description": "The delivery attempt number.",
+                "example": 1
+              },
+              "delivered_to": {
                 "type": "string",
-                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                "format": "uri",
+                "description": "The URL the webhook was delivered to.",
+                "example": "https://www.example.com/webhooks"
               }
             }
           }
@@ -76356,62 +76620,94 @@
               "user_id": "19a75cea-02c6-4b9a-84fa-c9bc8341feb8"
             },
             "record_type": "event"
+          },
+          "meta": {
+            "attempt": 1,
+            "delivered_to": "https://www.example.com/webhooks"
           }
         },
         "properties": {
-          "record_type": {
-            "$ref": "#/components/schemas/programmable-fax_RecordType"
-          },
-          "id": {
-            "$ref": "#/components/schemas/Id"
-          },
-          "event_type": {
-            "type": "string",
-            "example": "fax.sending.started",
-            "enum": [
-              "fax.sending.started"
-            ],
-            "description": "The type of event being delivered."
-          },
-          "payload": {
+          "data": {
             "type": "object",
             "properties": {
-              "connection_id": {
-                "$ref": "#/components/schemas/ConnectionId"
+              "record_type": {
+                "$ref": "#/components/schemas/programmable-fax_RecordType"
               },
-              "direction": {
-                "$ref": "#/components/schemas/Direction"
+              "id": {
+                "$ref": "#/components/schemas/Id"
               },
-              "fax_id": {
-                "$ref": "#/components/schemas/FaxId"
-              },
-              "original_media_url": {
-                "$ref": "#/components/schemas/OriginalMediaUrl"
-              },
-              "media_name": {
-                "$ref": "#/components/schemas/MediaName"
-              },
-              "to": {
-                "$ref": "#/components/schemas/To"
-              },
-              "from": {
-                "$ref": "#/components/schemas/From"
-              },
-              "user_id": {
-                "$ref": "#/components/schemas/UserId"
-              },
-              "status": {
+              "occurred_at": {
                 "type": "string",
-                "example": "sending",
+                "format": "date-time",
+                "description": "ISO 8601 datetime of when the event occurred.",
+                "example": "2020-05-05T13:08:22.039204Z"
+              },
+              "event_type": {
+                "type": "string",
+                "example": "fax.sending.started",
                 "enum": [
-                  "sending"
+                  "fax.sending.started"
                 ],
-                "description": "The status of the fax."
+                "description": "The type of event being delivered."
               },
-              "client_state": {
-                "description": "State received from a command.",
+              "payload": {
+                "type": "object",
+                "properties": {
+                  "connection_id": {
+                    "$ref": "#/components/schemas/ConnectionId"
+                  },
+                  "direction": {
+                    "$ref": "#/components/schemas/Direction"
+                  },
+                  "fax_id": {
+                    "$ref": "#/components/schemas/FaxId"
+                  },
+                  "original_media_url": {
+                    "$ref": "#/components/schemas/OriginalMediaUrl"
+                  },
+                  "media_name": {
+                    "$ref": "#/components/schemas/MediaName"
+                  },
+                  "to": {
+                    "$ref": "#/components/schemas/To"
+                  },
+                  "from": {
+                    "$ref": "#/components/schemas/From"
+                  },
+                  "user_id": {
+                    "$ref": "#/components/schemas/UserId"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "sending",
+                    "enum": [
+                      "sending"
+                    ],
+                    "description": "The status of the fax."
+                  },
+                  "client_state": {
+                    "description": "State received from a command.",
+                    "type": "string",
+                    "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                  }
+                }
+              }
+            }
+          },
+          "meta": {
+            "type": "object",
+            "description": "Metadata about the webhook delivery.",
+            "properties": {
+              "attempt": {
+                "type": "integer",
+                "description": "The delivery attempt number.",
+                "example": 1
+              },
+              "delivered_to": {
                 "type": "string",
-                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+                "format": "uri",
+                "description": "The URL the webhook was delivered to.",
+                "example": "https://www.example.com/webhooks"
               }
             }
           }
@@ -76736,6 +77032,12 @@
             "default": false,
             "description": "Enable on-net T38 if you prefer that the sender and receiver negotiate T38 directly when both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call according to each leg's settings."
           },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
           "user_name": {
             "type": "string",
             "description": "The username for the FQDN connection."
@@ -76832,6 +77134,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -76870,7 +77175,6 @@
             "codecs": [
               "G722"
             ],
-            "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
             "isup_headers_enabled": true,
@@ -76901,6 +77205,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         }
       },
@@ -78967,7 +79276,7 @@
         "title": "Inbound Ip",
         "example": {
           "ani_number_format": "+E.164",
-          "dns_number_format": "+e164",
+          "dnis_number_format": "+e164",
           "codecs": [
             "G722"
           ],
@@ -79865,6 +80174,61 @@
             "description": "ISO 8601 formatted date indicating when the resource was updated"
           }
         }
+      },
+      "InferenceEmbeddingTransferToolParams": {
+        "properties": {
+          "targets": {
+            "type": "array",
+            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The name of the target.",
+                  "example": "Support"
+                },
+                "to": {
+                  "type": "string",
+                  "description": "The destination number or SIP URI of the call.",
+                  "example": "+13129457420"
+                }
+              }
+            }
+          },
+          "from": {
+            "type": "string",
+            "example": "+35319605860",
+            "description": "Number or SIP URI placing the call."
+          },
+          "warm_transfer_instructions": {
+            "type": "string",
+            "example": "Briefly greet the transfer recipient and provide any relevant information from the call. Let them know you will bridge the call right after.",
+            "description": "Natural language instructions for your agent for how to provide context for the transfer recipient."
+          },
+          "custom_headers": {
+            "description": "Custom headers to be added to the SIP INVITE for the transfer command.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `{{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret.",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "targets",
+          "from"
+        ],
+        "title": "TransferToolParams"
       },
       "InitiateCallRequest": {
         "type": "object",
@@ -80973,6 +81337,12 @@
             "description": "Enable on-net T38 if you prefer the sender and receiver negotiating T38 directly if both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call depending on each leg's settings.",
             "example": false
           },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
           "webhook_event_url": {
             "type": "string",
             "format": "uri",
@@ -81050,6 +81420,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -81122,6 +81495,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         }
       },
@@ -82970,6 +83348,10 @@
           "record_type"
         ]
       },
+      "MessageMetadata": {
+        "description": "Metadata to add to the message",
+        "type": "object"
+      },
       "MessageTemplateResponseDataWrapper": {
         "title": "MessageTemplateResponseDataWrapper",
         "type": "object",
@@ -84603,6 +84985,12 @@
             "type": "string",
             "description": "The relative URI for this participant.",
             "example": "/v2/texml/Accounts/4e71926f-8f13-450e-b91c-23c2ef786aa6/Conferences/cd5a70f4-759b-4d5e-9c06-88c00f16f3c1/Participants/v3:9X2vxPDFY2RHSJ1EdMS0RHRksMTg7ldNxdjWbVr9zBjbGjGsSe-aiQ.json"
+          },
+          "conference_sid": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The unique identifier for the conference.",
+            "example": "cd5a70f4-759b-4d5e-9c06-88c00f16f3c1"
           }
         }
       },
@@ -85834,26 +86222,34 @@
             "description": "List of allowed redirect URIs"
           },
           "logo_uri": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uri",
-            "nullable": true,
             "description": "URL of the client logo"
           },
           "tos_uri": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uri",
-            "nullable": true,
             "description": "URL of the client's terms of service"
           },
           "policy_uri": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "uri",
-            "nullable": true,
             "description": "URL of the client's privacy policy"
           },
           "client_secret": {
-            "type": "string",
-            "nullable": true,
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "Client secret (only included when available, for confidential clients)"
           },
           "created_at": {
@@ -86189,9 +86585,11 @@
             "description": "List of granted OAuth scopes"
           },
           "last_used_at": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time",
-            "nullable": true,
             "description": "Timestamp when the grant was last used"
           },
           "created_at": {
@@ -88305,6 +88703,12 @@
             "type": "string",
             "description": "The relative URI for this participant.",
             "example": "/v2/texml/Accounts/4e71926f-8f13-450e-b91c-23c2ef786aa6/Conferences/cd5a70f4-759b-4d5e-9c06-88c00f16f3c1/Participants/v3:9X2vxPDFY2RHSJ1EdMS0RHRksMTg7ldNxdjWbVr9zBjbGjGsSe-aiQ.json"
+          },
+          "conference_sid": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The unique identifier for the conference.",
+            "example": "cd5a70f4-759b-4d5e-9c06-88c00f16f3c1"
           }
         }
       },
@@ -92991,7 +93395,7 @@
               "string",
               "null"
             ],
-            "description": "This attribute is an [error code](https://developers.telnyx.com/api/errors) related to the failure reason.",
+            "description": "This attribute is an [error code](https://developers.telnyx.com/development/api-fundamentals/api-errors) related to the failure reason.",
             "readOnly": true,
             "default": null,
             "example": null
@@ -93082,7 +93486,7 @@
         "properties": {
           "bucket": {
             "type": "string",
-            "description": "The embedded storage bucket to compute the clusters from. The bucket must already be [embedded](https://developers.telnyx.com/api/inference/inference-embedding/post-embedding)."
+            "description": "The embedded storage bucket to compute the clusters from. The bucket must already be [embedded](https://developers.telnyx.com/api-reference/embeddings/embed-documents)."
           },
           "prefix": {
             "type": "string",
@@ -95214,7 +95618,7 @@
             ]
           },
           "retrieval": {
-            "$ref": "#/components/schemas/inference-embedding_BucketIds"
+            "$ref": "#/components/schemas/BucketIds"
           }
         },
         "type": "object",
@@ -95233,7 +95637,7 @@
             ]
           },
           "retrieval": {
-            "$ref": "#/components/schemas/inference-embedding_BucketIds"
+            "$ref": "#/components/schemas/BucketIds"
           }
         },
         "type": "object",
@@ -98726,13 +99130,36 @@
             "example": true
           },
           "transcription_engine": {
-            "description": "Engine to use for speech recognition. `A` - `Google`",
+            "description": "Engine to use for speech recognition. `A` - `Google`, `B` - `Telnyx`, `deepgram/nova-3` - `Deepgram Nova-3`. Note: `deepgram/nova-3` supports only `en` and `en-{Region}` languages.",
             "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "deepgram/nova-3"
+            ],
             "default": "A",
             "example": "A"
           },
           "transcription_language": {
-            "$ref": "#/components/schemas/GoogleTranscriptionLanguageLong"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GoogleTranscriptionLanguageLong"
+              },
+              {
+                "$ref": "#/components/schemas/TelnyxTranscriptionLanguage"
+              },
+              {
+                "$ref": "#/components/schemas/DeepgramNova3TranscriptionLanguage"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "transcription_engine",
+              "mapping": {
+                "A": "#/components/schemas/GoogleTranscriptionLanguageLong",
+                "B": "#/components/schemas/TelnyxTranscriptionLanguage",
+                "deepgram/nova-3": "#/components/schemas/DeepgramNova3TranscriptionLanguage"
+              }
+            }
           },
           "transcription_profanity_filter": {
             "description": "Enables profanity_filter. Applies to `google` engine only.",
@@ -98838,8 +99265,7 @@
         "example": {
           "connector_name": "my-siprec-connector",
           "siprec_track": "both_tracks",
-          "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
-          "command_id": "891510ac-f3e4-11e8-af5b-de00688a4901"
+          "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d"
         }
       },
       "StartStreamingRequest": {
@@ -99930,6 +100356,35 @@
           "role": "barge"
         }
       },
+      "SystemMessage": {
+        "type": "object",
+        "title": "System Message",
+        "description": "Developer-provided instructions that the model should follow, regardless of messages sent by the user.",
+        "properties": {
+          "role": {
+            "description": "The role of the messages author, in this case `system`.",
+            "type": "string",
+            "enum": [
+              "system"
+            ]
+          },
+          "content": {
+            "description": "The contents of the system message.",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "example": {
+          "role": "system",
+          "content": "Get the user's favorite color"
+        }
+      },
       "T38Enabled": {
         "description": "The flag to disable the T.38 protocol.",
         "type": "boolean",
@@ -100687,7 +101142,7 @@
           },
           "voicemail_detection": {
             "type": "object",
-            "description": "Configuration for voicemail detection (AMD - Answering Machine Detection) on outgoing calls.",
+            "description": "Configuration for voicemail detection (AMD - Answering Machine Detection) on outgoing calls. These settings only apply if AMD is enabled on the Dial command. See [TeXML Dial documentation](https://developers.telnyx.com/api-reference/texml-rest-commands/initiate-an-outbound-call) for enabling AMD. Recommended settings: MachineDetection=Enable, AsyncAmd=true, DetectionMode=Premium.",
             "properties": {
               "on_voicemail_detected": {
                 "type": "object",
@@ -103233,6 +103688,83 @@
           "expires_in"
         ]
       },
+      "ToolCall": {
+        "title": "Tool Call",
+        "type": "object",
+        "description": "A call to a function tool created by the model.",
+        "properties": {
+          "id": {
+            "description": "The ID of the tool call.",
+            "type": "string"
+          },
+          "type": {
+            "description": "The type of the tool. Currently, only `function` is supported.",
+            "type": "string",
+            "enum": [
+              "function"
+            ]
+          },
+          "function": {
+            "description": "The function that the model called.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the function to call."
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "function"
+        ],
+        "example": {
+          "id": "call_123",
+          "type": "function",
+          "function": {
+            "name": "get_weather"
+          }
+        }
+      },
+      "ToolMessage": {
+        "type": "object",
+        "title": "Tool Message",
+        "properties": {
+          "role": {
+            "description": "The role of the messages author, in this case `tool`.",
+            "type": "string",
+            "enum": [
+              "tool"
+            ]
+          },
+          "content": {
+            "description": "The contents of the tool message.",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "description": "Tool call that this message is responding to.",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          }
+        },
+        "required": [
+          "role",
+          "content",
+          "tool_call_id"
+        ],
+        "example": {
+          "role": "tool",
+          "content": "Hello, I'm John.",
+          "tool_call_id": "call_123"
+        }
+      },
       "TotalSummary": {
         "type": "object",
         "properties": {
@@ -103940,7 +104472,11 @@
           }
         },
         "example": {
-          "language": "en",
+          "transcription_engine": "Google",
+          "transcription_engine_config": {
+            "transcription_engine": "Google",
+            "language": "en"
+          },
           "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
           "command_id": "891510ac-f3e4-11e8-af5b-de00688a4901"
         }
@@ -103977,7 +104513,7 @@
           "from_display_name": "Company Name",
           "audio_url": "http://www.example.com/sounds/greeting.wav",
           "timeout_secs": 60,
-          "timeout_limit_secs": 60,
+          "time_limit_secs": 60,
           "webhook_url": "https://www.example.com/server-b/",
           "webhook_url_method": "POST",
           "answering_machine_detection": "detect",
@@ -104015,9 +104551,7 @@
               "value": "value"
             }
           ],
-          "sip_transport_protocol": "TLS",
-          "stream_url": "wss://www.example.com/websocket",
-          "stream_track": "both_tracks"
+          "sip_transport_protocol": "TLS"
         },
         "properties": {
           "to": {
@@ -104358,7 +104892,7 @@
             ]
           },
           "transfer": {
-            "$ref": "#/components/schemas/inference-embedding_TransferToolParams"
+            "$ref": "#/components/schemas/CallControlTransferToolParams"
           }
         },
         "type": "object",
@@ -104367,40 +104901,6 @@
           "transfer"
         ],
         "title": "TransferTool"
-      },
-      "TransferToolParams": {
-        "properties": {
-          "targets": {
-            "type": "array",
-            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "The name of the target.",
-                  "example": "Support"
-                },
-                "to": {
-                  "type": "string",
-                  "description": "The destination number or SIP URI of the call.",
-                  "example": "+13129457420"
-                }
-              }
-            }
-          },
-          "from": {
-            "type": "string",
-            "example": "+35319605860",
-            "description": "Number or SIP URI placing the call."
-          }
-        },
-        "type": "object",
-        "required": [
-          "targets",
-          "from"
-        ],
-        "title": "TransferToolParams"
       },
       "TriggerBrandSmsOtpRequest": {
         "title": "TriggerBrandSmsOtpRequest",
@@ -105293,24 +105793,6 @@
           }
         }
       },
-      "UpdateCommandResult": {
-        "type": "object",
-        "title": "TeXml REST Update Command Result",
-        "example": {
-          "sid": "c46e06d7-b78f-4b13-96b6-c576af9640ff",
-          "status": "accepted"
-        },
-        "properties": {
-          "sid": {
-            "type": "string",
-            "example": "c46e06d7-b78f-4b13-96b6-c576af9640ff"
-          },
-          "status": {
-            "type": "string",
-            "example": "accepted"
-          }
-        }
-      },
       "UpdateConferenceParticipantRequest": {
         "type": "object",
         "title": "Update Conference Participant Request",
@@ -105577,6 +106059,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -105605,7 +106090,7 @@
           "rtcp_settings": {
             "port": "rtcp-mux",
             "capture_enabled": true,
-            "report_frequency_seconds": 10
+            "report_frequency_secs": 10
           },
           "inbound": {
             "ani_number_format": "+E.164",
@@ -105613,7 +106098,6 @@
             "codecs": [
               "G722"
             ],
-            "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
             "isup_headers_enabled": true,
@@ -105638,6 +106122,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         }
       },
@@ -105925,6 +106414,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -105959,7 +106451,6 @@
             "codecs": [
               "G722"
             ],
-            "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
             "isup_headers_enabled": true,
@@ -105976,6 +106467,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         },
         "type": "object"
@@ -106132,6 +106628,9 @@
           },
           "noise_suppression_details": {
             "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
           }
         },
         "example": {
@@ -106160,13 +106659,12 @@
             "capture_enabled": true,
             "report_frequency_secs": 10
           },
-          "inbound:": {
+          "inbound": {
             "ani_number_format": "+E.164",
-            "dns_number_format": "+e164",
-            "codecs": "G722",
-            "default_primary_ip_id": "192.168.0.0",
-            "default_tertiary_ip_id": "192.168.0.0",
-            "default_secondary_ip_id": "192.168.0.0",
+            "dnis_number_format": "+e164",
+            "codecs": [
+              "G722"
+            ],
             "default_routing_method": "sequential",
             "channel_limit": 10,
             "generate_ringback_tone": true,
@@ -106198,6 +106696,11 @@
           "noise_suppression_details": {
             "engine": "deep_filter_net",
             "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
           }
         },
         "type": "object"
@@ -108128,6 +108631,35 @@
         "format": "uuid",
         "example": "a7f7c54a-4df3-4bca-a65a-3da1ecc777f0"
       },
+      "UserMessage": {
+        "type": "object",
+        "title": "User message.",
+        "description": "Messages sent by an end user",
+        "properties": {
+          "role": {
+            "description": "The role of the messages author, in this case `user`.",
+            "type": "string",
+            "enum": [
+              "user"
+            ]
+          },
+          "content": {
+            "description": "The contents of the user message.",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/MessageMetadata"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "example": {
+          "role": "user",
+          "content": "Hello, I would like some help."
+        }
+      },
       "UserRequirement": {
         "type": "object",
         "properties": {
@@ -109727,7 +110259,7 @@
           },
           "api_key_ref": {
             "type": "string",
-            "description": "The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) that refers to your ElevenLabs API key. Warning: Free plans are unlikely to work with this integration."
+            "description": "The `identifier` for an integration secret [/v2/integration_secrets](https://developers.telnyx.com/api-reference/integration-secrets/create-a-secret) that refers to your ElevenLabs API key. Warning: Free plans are unlikely to work with this integration."
           },
           "temperature": {
             "type": "number",
@@ -110324,7 +110856,7 @@
             ]
           },
           "webhook": {
-            "$ref": "#/components/schemas/inference-embedding_WebhookToolParams"
+            "$ref": "#/components/schemas/CallControlWebhookToolParams"
           }
         },
         "type": "object",
@@ -110371,7 +110903,7 @@
                   "type": "string"
                 },
                 "value": {
-                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `Bearer {{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret as the bearer token.",
+                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `Bearer {{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret as the bearer token. [Telnyx signature headers](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks) will be automatically added to the request.",
                   "type": "string"
                 }
               }
@@ -110383,7 +110915,8 @@
             "properties": {
               "properties": {
                 "description": "The properties of the body parameters.",
-                "type": "object"
+                "type": "object",
+                "additionalProperties": true
               },
               "required": {
                 "description": "The required properties of the body parameters.",
@@ -110423,7 +110956,8 @@
             "properties": {
               "properties": {
                 "description": "The properties of the path parameters.",
-                "type": "object"
+                "type": "object",
+                "additionalProperties": true
               },
               "required": {
                 "description": "The required properties of the path parameters.",
@@ -110458,7 +110992,8 @@
             "properties": {
               "properties": {
                 "description": "The properties of the query parameters.",
-                "type": "object"
+                "type": "object",
+                "additionalProperties": true
               },
               "required": {
                 "description": "The required properties of the query parameters.",
@@ -110486,6 +111021,17 @@
               ],
               "type": "object"
             }
+          },
+          "async": {
+            "type": "boolean",
+            "default": false,
+            "description": "If async, the assistant will move forward without waiting for your server to respond."
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "minimum": 500,
+            "maximum": 10000,
+            "description": "The maximum number of milliseconds to wait for the webhook to respond. Only applicable when async is false."
           }
         },
         "type": "object",
@@ -111712,17 +112258,6 @@
           }
         }
       },
-      "billing-group_Errors": {
-        "type": "object",
-        "properties": {
-          "errors": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/billing-group_Error"
-            }
-          }
-        }
-      },
       "billing_Error": {
         "required": [
           "code",
@@ -112345,7 +112880,7 @@
             "call_leg_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "call_session_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
             "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
-            "result": "Internal server error"
+            "reason": "Internal server error"
           }
         }
       },
@@ -113056,256 +113591,43 @@
           "instructions"
         ]
       },
-      "inference-embedding_BucketIds": {
+      "inference-embedding_TransferTool": {
         "properties": {
-          "bucket_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "description": "List of [embedded storage buckets](https://developers.telnyx.com/api-reference/embeddings/embed-documents) to use for retrieval-augmented generation."
-          },
-          "max_num_results": {
-            "description": "The maximum number of results to retrieve as context for the language model.",
-            "type": "integer"
-          }
-        },
-        "type": "object",
-        "required": [
-          "bucket_ids"
-        ],
-        "title": "BucketIds"
-      },
-      "inference-embedding_TransferToolParams": {
-        "properties": {
-          "targets": {
-            "type": "array",
-            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "The name of the target.",
-                  "example": "Support"
-                },
-                "to": {
-                  "type": "string",
-                  "description": "The destination number or SIP URI of the call.",
-                  "example": "+13129457420"
-                }
-              }
-            }
-          },
-          "from": {
-            "type": "string",
-            "example": "+35319605860",
-            "description": "Number or SIP URI placing the call."
-          },
-          "warm_transfer_instructions": {
-            "type": "string",
-            "example": "Briefly greet the transfer recipient and provide any relevant information from the call. Let them know you will bridge the call right after.",
-            "description": "Natural language instructions for your agent for how to provide context for the transfer recipient."
-          },
-          "custom_headers": {
-            "description": "Custom headers to be added to the SIP INVITE for the transfer command.",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "value": {
-                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `{{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret.",
-                  "type": "string"
-                }
-              }
-            }
-          }
-        },
-        "type": "object",
-        "required": [
-          "targets",
-          "from"
-        ],
-        "title": "TransferToolParams"
-      },
-      "inference-embedding_WebhookToolParams": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name of the tool."
-          },
-          "description": {
-            "type": "string",
-            "description": "The description of the tool."
-          },
-          "url": {
-            "description": "The URL of the external tool to be called. This URL is going to be used by the assistant. The URL can be templated like: `https://example.com/api/v1/{id}`, where `{id}` is a placeholder for a value that will be provided by the assistant if `path_parameters` are provided with the `id` attribute.",
-            "type": "string",
-            "example": "https://example.com/api/v1/function"
-          },
-          "method": {
-            "description": "The HTTP method to be used when calling the external tool.",
+          "type": {
             "type": "string",
             "enum": [
-              "GET",
-              "POST",
-              "PUT",
-              "DELETE",
-              "PATCH"
-            ],
-            "default": "POST"
+              "transfer"
+            ]
           },
-          "headers": {
-            "description": "The headers to be sent to the external tool.",
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "value": {
-                  "description": "The value of the header. Note that we support mustache templating for the value. For example you can use `Bearer {{#integration_secret}}test-secret{{/integration_secret}}` to pass the value of the integration secret as the bearer token. [Telnyx signature headers](https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-webhooks) will be automatically added to the request.",
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "body_parameters": {
-            "description": "The body parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the body of the request. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
-            "type": "object",
-            "properties": {
-              "properties": {
-                "description": "The properties of the body parameters.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "required": {
-                "description": "The required properties of the body parameters.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "object"
-                ]
-              }
-            },
-            "example": {
-              "properties": {
-                "age": {
-                  "description": "The age of the customer.",
-                  "type": "integer"
-                },
-                "location": {
-                  "description": "The location of the customer.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "age",
-                "location"
-              ],
-              "type": "object"
-            }
-          },
-          "path_parameters": {
-            "description": "The path parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the path of the request if the URL contains a placeholder for a value. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
-            "type": "object",
-            "properties": {
-              "properties": {
-                "description": "The properties of the path parameters.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "required": {
-                "description": "The required properties of the path parameters.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "object"
-                ]
-              }
-            },
-            "example": {
-              "properties": {
-                "id": {
-                  "description": "The id of the customer.",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id"
-              ],
-              "type": "object"
-            }
-          },
-          "query_parameters": {
-            "description": "The query parameters the webhook tool accepts, described as a JSON Schema object. These parameters will be passed to the webhook as the query of the request. See the [JSON Schema reference](https://json-schema.org/understanding-json-schema) for documentation about the format",
-            "type": "object",
-            "properties": {
-              "properties": {
-                "description": "The properties of the query parameters.",
-                "type": "object",
-                "additionalProperties": true
-              },
-              "required": {
-                "description": "The required properties of the query parameters.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "object"
-                ]
-              }
-            },
-            "example": {
-              "properties": {
-                "page": {
-                  "description": "The page number.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "page"
-              ],
-              "type": "object"
-            }
-          },
-          "async": {
-            "type": "boolean",
-            "default": false,
-            "description": "If async, the assistant will move forward without waiting for your server to respond."
-          },
-          "timeout_ms": {
-            "type": "integer",
-            "minimum": 500,
-            "maximum": 10000,
-            "description": "The maximum number of milliseconds to wait for the webhook to respond. Only applicable when async is false."
+          "transfer": {
+            "$ref": "#/components/schemas/InferenceEmbeddingTransferToolParams"
           }
         },
         "type": "object",
         "required": [
-          "url",
-          "name",
-          "description"
+          "type",
+          "transfer"
         ],
-        "title": "WebhookToolParams"
+        "title": "TransferTool"
+      },
+      "inference-embedding_WebhookTool": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "webhook"
+            ]
+          },
+          "webhook": {
+            "$ref": "#/components/schemas/WebhookToolParams"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "webhook"
+        ],
+        "title": "WebhookTool"
       },
       "integration-secrets_Error": {
         "properties": {

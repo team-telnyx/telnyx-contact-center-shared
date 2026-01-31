@@ -19,9 +19,10 @@ async function dialAndBridge({ to, from, linkTo, connectionId, isConsultCall = f
   
   // For consult calls, add park_after_unbridge so switching between call legs
   // doesn't disconnect the consultant - they stay parked instead
+  // Valid value per Telnyx OpenAPI spec: "self" (parks current leg after unbridge)
   if (isConsultCall) {
-    body.park_after_unbridge = "always";
-    console.log("[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=always");
+    body.park_after_unbridge = "self";
+    console.log("[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=self");
   }
   
   const resp = await fetch(url, {
