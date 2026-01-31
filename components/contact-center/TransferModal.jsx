@@ -918,6 +918,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setConsultState({
         isActive: false, // Not active yet - still setting up
         initiating: true, // Flag to show loading state on buttons
+        activatedAt: null, // Will be set when isActive becomes true
         parkedCall: {
           callControlId: data.parkedCallControlId || parkedCallControlId,
           fromNumber: currentInteraction?.from_number || null,
@@ -2118,38 +2119,72 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-2">
                   <PhoneCall className="h-4 w-4 text-blue-600" />
-                  Active Call
+                  Call Legs
                 </Label>
-                {/* Call Status Badge */}
+                {/* Call Status Badge - smaller, border/text only */}
                 <Badge
+                  variant="outline"
                   className={cn(
-                    "text-base font-semibold uppercase tracking-wide px-3 py-1",
+                    "text-xs font-medium uppercase",
                     isCallConnected()
-                      ? "bg-green-500 text-white"
+                      ? "border-green-500 text-green-500"
                       : callStatus === "ringing" || callStatus === "early"
-                        ? "bg-yellow-500 text-white"
-                        : "bg-blue-500 text-white",
+                        ? "border-yellow-500 text-yellow-500"
+                        : "border-blue-500 text-blue-500",
                   )}
                 >
                   {callStatus || activeCall?.state || "initiating"}
                 </Badge>
               </div>
               
-              {/* Current Call Info */}
-              <div className="p-3 rounded-lg bg-green-500/20 border-2 border-green-500">
-                <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-green-700 dark:text-green-400">
-                      Consult Call
-                    </div>
-                    <div className="text-xs text-green-600/70 dark:text-green-500/70">
-                      {formatPhoneDisplay(useActiveCallStore.getState().toNumber || "Unknown")}
+              {/* Call Legs Tiles */}
+              <div className="flex gap-3">
+                {/* Parked Call Tile - Customer on hold */}
+                {consultState.parkedCall && (
+                  <div
+                    className={cn(
+                      "flex-1 p-3 rounded-lg",
+                      "bg-amber-500/20 border-2 border-amber-500/40",
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-amber-700 dark:text-amber-400 truncate">
+                          {consultState.parkedCall.fromName || "Customer"}
+                        </div>
+                        <div className="text-xs text-amber-600/70 dark:text-amber-500/70 truncate">
+                          {formatPhoneDisplay(consultState.parkedCall.fromNumber)}
+                        </div>
+                      </div>
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                        ON HOLD
+                      </span>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                    {isCallConnected() ? "CONNECTED" : "CONNECTING"}
-                  </span>
+                )}
+
+                {/* Consultant Call Tile - Active call */}
+                <div
+                  className={cn(
+                    "flex-1 p-3 rounded-lg",
+                    "bg-green-500/20 border-2 border-green-500",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                        {consultState.consultantCall?.toName || "Consultant"}
+                      </div>
+                      <div className="text-xs text-green-600/70 dark:text-green-500/70 truncate">
+                        {formatPhoneDisplay(consultState.consultantCall?.toNumber || useActiveCallStore.getState().toNumber || "Unknown")}
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                      {isCallConnected() ? "ACTIVE" : "CONNECTING"}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
