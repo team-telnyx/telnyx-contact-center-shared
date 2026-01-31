@@ -116,30 +116,40 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   // Consult state
   const [consultState, setConsultState] = useState({
     isActive: false,
+    initiating: false, // Flag to indicate consult is being set up (prevents premature state reset)
     parkedCall: null, // { callControlId, fromNumber, fromName, interactionId }
     consultantCall: null, // { callControlId, toNumber, toName }
     agentCallControlId: null, // Agent's WebRTC call control ID
   });
 
-  // Reset consult state when call ends
+  // Reset consult state when CONSULT call ends (not the original call)
+  // We need to be careful here - when we start consult, the original call hangs up first
+  // We should only reset when the CONSULT call ends, not the original
   useEffect(() => {
+    // Skip if consult is not active or is being initiated
+    if (!consultState.isActive || consultState.initiating) {
+      return;
+    }
+
     const callStatus = callUI.status || activeCall?.state || "";
     const lowerStatus = callStatus.toLowerCase();
     const isCallEnded = ["hangup", "ended", "destroy", "purge", "idle", "terminated"].includes(
       lowerStatus,
     );
 
-    if (isCallEnded && consultState.isActive) {
-      // Call ended, reset consult state
-      console.log("[TransferModal] Call ended, resetting consult state");
+    // Only reset if the consult call itself ended (not the original call being parked)
+    // Check that we actually have an active consult call that's ending
+    if (isCallEnded && consultState.consultantCall?.callControlId) {
+      console.log("[TransferModal] Consult call ended, resetting consult state");
       setConsultState({
         isActive: false,
+        initiating: false,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
       });
     }
-  }, [activeCall, callUI.status]);
+  }, [activeCall, callUI.status, consultState.isActive, consultState.initiating, consultState.consultantCall?.callControlId]);
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
@@ -166,9 +176,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       setQueueStats(null);
       setAgentStats(null);
       setPreserveRoutingOptions(true);
-      // Reset consult state when modal closes
+      // Reset consult state when modal opens (fresh start)
       setConsultState({
         isActive: false,
+        initiating: false,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -827,14 +838,6 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         `[TransferModal] Consult API succeeded: ${JSON.stringify(data)}. Server hung up agent's call leg. Initiating WebRTC call to consultant.`,
       );
 
-      // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
-      // This will trigger call.initiated webhook which will use dialAndBridge
-      if (!client) {
-        alert("WebRTC client not available. Please ensure you're connected.");
-        setLoading(false);
-        return;
-      }
-
       // Get consultant target from response or use the one from form
       const consultantTarget = data.consultantTarget || target.trim();
       const fromNumber =
@@ -842,6 +845,45 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         currentInteraction?.to_number ||
         storeState.call?.fromNumber ||
         null;
+
+      // IMPORTANT: Set consultState BEFORE initiating WebRTC call
+      // This prevents the modal from closing and the reset useEffect from triggering
+      setConsultState({
+        isActive: true,
+        initiating: true, // Flag to indicate we're still setting up the call
+        parkedCall: {
+          callControlId: data.parkedCallControlId || parkedCallControlId,
+          fromNumber: currentInteraction?.from_number || null,
+          fromName: currentInteraction?.from_name || null,
+          interactionId: interactionId,
+        },
+        consultantCall: {
+          callControlId: null, // Will be set when WebRTC call is established
+          toNumber: consultantTarget,
+          toName: null,
+        },
+        agentCallControlId: null, // Will be set when WebRTC call is established
+      });
+
+      console.log(
+        `[TransferModal] Set consultState.isActive=true BEFORE WebRTC call to prevent modal close`,
+      );
+
+      // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
+      // This will trigger call.initiated webhook which will use dialAndBridge
+      if (!client) {
+        alert("WebRTC client not available. Please ensure you're connected.");
+        setLoading(false);
+        // Reset consult state on error
+        setConsultState({
+          isActive: false,
+          initiating: false,
+          parkedCall: null,
+          consultantCall: null,
+          agentCallControlId: null,
+        });
+        return;
+      }
 
       console.log(
         `[TransferModal] Initiating WebRTC call to consultant: destinationNumber=${consultantTarget}, callerNumber=${fromNumber}`,
@@ -918,25 +960,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           `[TransferModal] WebRTC call initiated. Waiting for call.initiated webhook to trigger dialAndBridge.`,
         );
 
-        // Step 3: Update local consult state for UI
-        // The consultant call will be received by the WebRTC client
-        setConsultState({
-          isActive: true,
-          parkedCall: {
-            callControlId: data.parkedCall?.callControlId || parkedCallControlId,
-            fromNumber:
-              currentInteraction?.from_number || data.parkedCall?.fromNumber,
-            fromName:
-              currentInteraction?.from_name || data.parkedCall?.fromName,
-            interactionId: interactionId,
-          },
-          consultantCall: {
-            callControlId: null, // Will be set when webhook receives call.initiated
-            toNumber: consultantTarget,
-            toName: null,
-          },
-          agentCallControlId: null, // Will be set when webhook receives call.initiated
-        });
+        // Step 3: Update consult state - mark initiating as false now that call is started
+        // Keep isActive=true to prevent modal from closing
+        setConsultState((prev) => ({
+          ...prev,
+          initiating: false, // Call has been initiated
+        }));
 
         // Keep modal open and stop loading - consult call is being initiated
         setLoading(false);
@@ -948,6 +977,14 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         console.error("[TransferModal] Failed to initiate WebRTC call:", callErr);
         alert("Failed to initiate consult call: " + (callErr.message || "Unknown error"));
         setLoading(false);
+        // Reset consult state on error
+        setConsultState({
+          isActive: false,
+          initiating: false,
+          parkedCall: null,
+          consultantCall: null,
+          agentCallControlId: null,
+        });
         return;
       }
     } catch (err) {
@@ -997,6 +1034,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state when call ends
       setConsultState({
         isActive: false,
+        initiating: false,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1009,6 +1047,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state when call ends
       setConsultState({
         isActive: false,
+        initiating: false,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1018,6 +1057,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       clearActiveCall();
       setConsultState({
         isActive: false,
+        initiating: false,
         parkedCall: null,
         consultantCall: null,
         agentCallControlId: null,
@@ -1073,22 +1113,30 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     return ["active", "connected", "answered", "held"].includes(lowerStatus);
   };
 
-  // Prevent modal from closing when consult call is active
+  // Prevent modal from closing when consult call is active or being initiated
   const handleModalOpenChange = (newOpen) => {
     if (!newOpen) {
-      // Check both consultState and activeCall to prevent closing during consult
-      const hasActiveConsultCall = consultState.isActive || (activeCall && isCallActive());
+      // Check consultState (isActive or initiating) and activeCall to prevent closing during consult
+      const hasActiveConsultCall = 
+        consultState.isActive || 
+        consultState.initiating || 
+        (activeCall && isCallActive());
       
       if (hasActiveConsultCall) {
-        // Prevent closing if consult call is active
+        // Prevent closing if consult call is active or being initiated
         console.log(
           "[TransferModal] Cannot close modal while consult call is in progress",
-          { consultStateIsActive: consultState.isActive, hasActiveCall: !!activeCall, isCallActive: isCallActive() },
+          { 
+            consultStateIsActive: consultState.isActive, 
+            consultStateInitiating: consultState.initiating,
+            hasActiveCall: !!activeCall, 
+            isCallActive: isCallActive() 
+          },
         );
         return;
       }
     }
-    console.log("[TransferModal] Modal close allowed", { newOpen, consultStateIsActive: consultState.isActive });
+    console.log("[TransferModal] Modal close allowed", { newOpen, consultStateIsActive: consultState.isActive, consultStateInitiating: consultState.initiating });
     onOpenChange(newOpen);
   };
 
