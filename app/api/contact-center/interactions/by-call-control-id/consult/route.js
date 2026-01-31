@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import {
-  addTimelineEvent,
-  TimelineEventTypes,
-} from "@/lib/contact-center/call-timeline-tracker.js";
 
 /**
  * POST /api/contact-center/interactions/by-call-control-id/consult
@@ -26,7 +23,7 @@ export async function POST(request) {
     const callControlId = searchParams.get("callControlId");
 
     const body = await request.json();
-    const { type, target } = body; // type: 'external', target: phone number or SIP URI
+    const { type, target, agentCallControlId: bodyAgentCallControlId } = body; // type: 'external', target: phone number or SIP URI
 
     if (!callControlId) {
       return NextResponse.json(
@@ -42,19 +39,74 @@ export async function POST(request) {
       );
     }
 
-    // Find interaction by call control ID
-    const interaction = await PgDb.findInteractionByCallControlId(callControlId);
+    // Find interaction ONLY by agent_call_control_id in metadata
+    // This is the agent's WebRTC call control ID, not the rtcCallId or original caller's ID
+    const pool = getPostgresPool();
+    let interaction = null;
+    
+    if (pool) {
+      const r = await pool.query(
+        `SELECT * FROM cc_interactions 
+         WHERE metadata->>'agent_call_control_id' = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [callControlId],
+      );
+      if (r.rows?.[0]) {
+        const row = r.rows[0];
+        // Helper to safely parse JSON
+        const safeParse = (value) => {
+          if (!value) return null;
+          if (typeof value === "object") return value;
+          if (typeof value === "string") {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return value;
+            }
+          }
+          return value;
+        };
+        interaction = {
+          ...row,
+          required_skills: safeParse(row.required_skills),
+          routing_metadata: safeParse(row.routing_metadata),
+          transfer_history: safeParse(row.transfer_history),
+          tags: safeParse(row.tags),
+          wrapup_codes: safeParse(row.wrapup_codes),
+          metadata: safeParse(row.metadata),
+        };
+      }
+    }
+    
     if (!interaction) {
+      console.error(
+        `[Consult] Interaction not found for agent_call_control_id: ${callControlId}. Searched ONLY in metadata->>'agent_call_control_id'`,
+      );
       return NextResponse.json(
-        { ok: false, error: "Interaction not found" },
+        {
+          ok: false,
+          error: `Interaction not found for agent call control ID: ${callControlId}`,
+        },
         { status: 404 },
       );
     }
 
     // Get agent's WebRTC call control ID (the agent's leg)
+    // Since we searched by agent_call_control_id, callControlId IS the agent's call control ID
+    // Prefer the one from body if provided and matches, otherwise use from metadata or query param
     const agentCallControlId =
+      bodyAgentCallControlId ||
       interaction.metadata?.agent_call_control_id ||
+      callControlId; // callControlId is the agent_call_control_id we searched for
+
+    // Get the original caller's call control ID (parked leg)
+    const parkedCallControlId =
+      interaction.metadata?.original_call_control_id ||
       interaction.call_control_id;
+
+    console.log(
+      `[Consult] Found interaction ${interaction.id} by agent_call_control_id=${callControlId}. Agent call control ID: ${agentCallControlId} (from body: ${bodyAgentCallControlId}, from metadata: ${interaction.metadata?.agent_call_control_id}, from query: ${callControlId}), Parked: ${parkedCallControlId}`,
+    );
 
     if (!agentCallControlId) {
       return NextResponse.json(
@@ -62,11 +114,6 @@ export async function POST(request) {
         { status: 400 },
       );
     }
-
-    // Get the original caller's call control ID (parked leg)
-    const parkedCallControlId =
-      interaction.metadata?.original_call_control_id ||
-      interaction.call_control_id;
 
     if (!parkedCallControlId) {
       return NextResponse.json(
@@ -90,7 +137,13 @@ export async function POST(request) {
     // Step 1: Initiate new call to consultant and bridge to agent's WebRTC connection
     // Get agent's WebRTC connection ID
     const agent = await PgDb.findUserByUsername(user.username);
+    console.log(
+      `[Consult] Agent lookup for ${user.username}: found=${!!agent}, telephony_credentials_id=${agent?.telephony_credentials_id}, telephony_user_name=${agent?.telephony_user_name || agent?.telephonyUserName}`,
+    );
     if (!agent || !agent.telephony_credentials_id) {
+      console.error(
+        `[Consult] Agent ${user.username} does not have WebRTC connection configured. telephony_credentials_id: ${agent?.telephony_credentials_id}, agent object keys: ${agent ? Object.keys(agent).join(", ") : "null"}`,
+      );
       return NextResponse.json(
         { ok: false, error: "Agent does not have WebRTC connection configured" },
         { status: 400 },
@@ -103,126 +156,96 @@ export async function POST(request) {
       agent.telephonyUserName ||
       user.username.split("@")[0];
 
-    // Determine from number (use agent's number or interaction's from_number)
-    const fromNumber =
-      agent.voice_number ||
-      interaction.from_number ||
-      interaction.to_number;
+    console.log(
+      `[Consult] Agent ${user.username}: connection_id=${connectionId}, telephony_user_name=${telephonyUserName}, agent_call_control_id=${agentCallControlId}`,
+    );
 
-    // Create new call to consultant using dial API
-    // This will create a call that goes to the agent's WebRTC connection
-    const dialUrl = buildTelnyxV2Url("/calls");
-    const dialBody = {
-      to: target.trim(), // Consultant's number
-      from: fromNumber,
-      connection_id: connectionId, // Agent's WebRTC connection
+    // Step 1: Set consult_state FIRST (before hangup) to prevent webhook handler from hanging up original leg
+    // This tells the webhook handler that we're in a consult process
+    const metadata = interaction.metadata || {};
+    metadata.consult_state = {
+      isActive: false, // Will be set to true when consult call is initiated
+      pendingConsult: true, // Indicates we're waiting for hangup to complete
+      parkedCallControlId: parkedCallControlId,
+      agentCallControlId: agentCallControlId,
+      consultantTarget: target.trim(),
+      connectionId: connectionId,
+      telephonyUserName: telephonyUserName,
+      startedAt: new Date().toISOString(),
     };
 
-    const dialResponse = await fetch(dialUrl, {
+    await PgDb.updateInteractionById(interaction.id, {
+      metadata,
+    });
+
+    console.log(
+      `[Consult] Set consult_state in metadata BEFORE hangup to prevent original leg disconnect.`,
+    );
+
+    // Step 2: Hangup the agent's call leg
+    // This will park the caller due to park_after_unbridge setting
+    const hangupUrl = buildTelnyxV2Url(
+      `/calls/${encodeURIComponent(agentCallControlId)}/actions/hangup`,
+    );
+    const hangupBody = {};
+
+    console.log(
+      `[Consult] Step 2: Hanging up agent's call leg: ${JSON.stringify({
+        url: hangupUrl,
+        method: "POST",
+        callControlId: agentCallControlId,
+        body: hangupBody,
+      })}`,
+    );
+
+    const hangupResponse = await fetch(hangupUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(dialBody),
+      body: JSON.stringify(hangupBody),
     });
 
-    if (!dialResponse.ok) {
-      const errorText = await dialResponse.text();
-      console.error("[Consult] Failed to dial consultant:", errorText);
-      return NextResponse.json(
-        { ok: false, error: `Failed to call consultant: ${errorText}` },
-        { status: dialResponse.status },
+    if (!hangupResponse.ok) {
+      const errorText = await hangupResponse.text();
+      console.error(
+        `[Consult] Failed to hangup agent's call leg: ${errorText}`,
       );
-    }
-
-    const dialData = await dialResponse.json();
-    // The dial returns the call control ID for the consultant call
-    // This call will be received by the agent's WebRTC client
-    const consultantCallControlId =
-      dialData?.data?.call_control_id || null;
-
-    if (!consultantCallControlId) {
-      return NextResponse.json(
-        { ok: false, error: "Failed to get consultant call control ID" },
-        { status: 500 },
-      );
-    }
-
-    // Step 2: Update interaction metadata with consult information
-    const metadata = interaction.metadata || {};
-    metadata.consult_state = {
-      isActive: true,
-      parkedCallControlId: parkedCallControlId,
-      consultantCallControlId: consultantCallControlId,
-      agentCallControlId: agentCallControlId,
-      consultantTarget: target.trim(),
-      startedAt: new Date().toISOString(),
-    };
-
-    // Mark consultant call interaction as internal (not shown in supervisor monitoring)
-    // Create a separate interaction record for the consultant call that's marked as internal
-    try {
-      await PgDb.createInteraction({
-        call_control_id: consultantCallControlId,
-        call_session_id: dialData?.data?.call_session_id || null,
-        direction: "outbound",
-        from_number: fromNumber,
-        to_number: target.trim(),
-        agent_username: user.username,
-        state: "initiated",
-        is_contact_center: false, // Not a contact center call
-        metadata: {
-          is_consult_call: true, // Mark as consult call
-          consult_interaction_id: interaction.id, // Link to original interaction
-          original_interaction_id: interaction.id,
-        },
+      // Rollback consult_state on error
+      delete metadata.consult_state;
+      await PgDb.updateInteractionById(interaction.id, {
+        metadata,
       });
-    } catch (consultInteractionErr) {
-      // Don't fail if consultant interaction creation fails
-      console.error("[Consult] Failed to create consultant interaction:", consultInteractionErr);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Failed to hangup agent's call leg: ${errorText}`,
+        },
+        { status: hangupResponse.status },
+      );
     }
 
-    // Add timeline events
-    const updatedRoutingMetadata = addTimelineEvent(
-      interaction.routing_metadata || {},
-      TimelineEventTypes.CALL_PARKED,
-      {
-        reason: "consult",
-        parkedCallControlId: parkedCallControlId,
-        agentCallControlId: agentCallControlId,
-      },
-    );
-
-    const finalRoutingMetadata = addTimelineEvent(
-      updatedRoutingMetadata,
-      TimelineEventTypes.CONSULT_INITIATED,
-      {
-        consultantCallControlId: consultantCallControlId,
-        consultantTarget: target.trim(),
-        agentCallControlId: consultantCallControlId, // New agent call leg
-      },
+    const hangupData = await hangupResponse.json();
+    console.log(
+      `[Consult] Hangup response: ${JSON.stringify(hangupData)}`,
     );
 
     await PgDb.updateInteractionById(interaction.id, {
       metadata,
-      routingMetadata: finalRoutingMetadata,
     });
 
-    // Return consult state information
+    console.log(
+      `[Consult] Set consult_state in metadata. Waiting for hangup webhook to initiate consult call.`,
+    );
+
+    // Return success - the frontend will initiate the WebRTC call
     return NextResponse.json({
       ok: true,
-      parkedCall: {
-        callControlId: parkedCallControlId,
-        fromNumber: interaction.from_number,
-        fromName: interaction.from_name,
-      },
-      consultantCall: {
-        callControlId: consultantCallControlId,
-        toNumber: target.trim(),
-        toName: null, // Could be enhanced to lookup contact name
-      },
-      agentCallControlId: consultantCallControlId, // Agent's new call leg (consultant)
+      message: "Agent call leg hangup initiated. Please initiate WebRTC call to consultant.",
+      agentCallControlId: agentCallControlId,
+      parkedCallControlId: parkedCallControlId,
+      consultantTarget: target.trim(), // Return target for frontend to use
     });
   } catch (err) {
     console.error("[Consult] Error:", err);

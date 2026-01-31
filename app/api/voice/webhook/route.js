@@ -46,6 +46,7 @@ async function createOutboundInteraction({
   webrtcCallControlId,
   pstnCallControlId,
   connectionId,
+  metadata: additionalMetadata = {},
 }) {
   try {
     const { PgDb } = await import("@/lib/pgdb.js");
@@ -98,6 +99,7 @@ async function createOutboundInteraction({
           webrtc_call_control_id: webrtcCallControlId || null,
           pstn_call_control_id: pstnCallControlId || null,
           is_outbound_call: true,
+          ...additionalMetadata,
         },
       });
 
@@ -224,7 +226,66 @@ export async function POST(request) {
           }
         );
 
+        // Check if this is a consult call by looking for pending consult for this agent
+        let consultInteraction = null;
+        if (username) {
+          try {
+            const { PgDb } = await import("@/lib/pgdb.js");
+            // Find interaction with pending consult for this agent
+            const { getPostgresPool } = await import("@/lib/postgres.mjs");
+            const pool = getPostgresPool();
+            if (pool) {
+              const result = await pool.query(
+                `SELECT * FROM cc_interactions 
+                 WHERE agent_username = $1 
+                   AND metadata->>'consult_state' IS NOT NULL
+                   AND (metadata->'consult_state'->>'pendingConsult')::boolean = true
+                 ORDER BY created_at DESC LIMIT 1`,
+                [username],
+              );
+              if (result.rows?.[0]) {
+                const row = result.rows[0];
+                const safeParse = (value) => {
+                  if (!value) return null;
+                  if (typeof value === "object") return value;
+                  if (typeof value === "string") {
+                    try {
+                      return JSON.parse(value);
+                    } catch {
+                      return value;
+                    }
+                  }
+                  return value;
+                };
+                consultInteraction = {
+                  ...row,
+                  metadata: safeParse(row.metadata),
+                };
+                const consultantTarget =
+                  consultInteraction.metadata?.consult_state?.consultantTarget;
+                console.log(
+                  `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${to?.phone_number || to})`,
+                );
+              }
+            }
+          } catch (consultCheckErr) {
+            console.error(
+              "[voice-webhook] Error checking for consult call:",
+              consultCheckErr,
+            );
+          }
+        }
+
         // Create outbound interaction for WebRTC leg
+        // If this is a consult call, mark it accordingly
+        const interactionMetadata = consultInteraction
+          ? {
+              is_consult_call: true,
+              consult_interaction_id: consultInteraction.id,
+              original_interaction_id: consultInteraction.id,
+            }
+          : {};
+
         await createOutboundInteraction({
           callControlId,
           callSessionId,
@@ -234,6 +295,7 @@ export async function POST(request) {
           webrtcCallControlId: callControlId,
           pstnCallControlId: null,
           connectionId,
+          metadata: interactionMetadata,
         });
 
         // Store initial mapping with X-RTC-CALLID
@@ -265,6 +327,48 @@ export async function POST(request) {
           pstnCallControlId,
           webrtcCallControlId: callControlId,
         });
+
+        // If this is a consult call, update the original interaction's consult_state
+        if (consultInteraction && pstnCallControlId) {
+          try {
+            const { PgDb } = await import("@/lib/pgdb.js");
+            const { addTimelineEvent, TimelineEventTypes } = await import(
+              "@/lib/contact-center/call-timeline-tracker.js"
+            );
+            const consultState = consultInteraction.metadata?.consult_state || {};
+            const updatedMetadata = {
+              ...consultInteraction.metadata,
+              consult_state: {
+                ...consultState,
+                isActive: true,
+                pendingConsult: false,
+                consultantCallControlId: callControlId, // WebRTC leg is the consultant call
+                consultantCallInitiatedAt: new Date().toISOString(),
+              },
+            };
+            const updatedRoutingMetadata = addTimelineEvent(
+              consultInteraction.routing_metadata || {},
+              TimelineEventTypes.CONSULT_INITIATED,
+              {
+                consultantCallControlId: callControlId,
+                consultantTarget: consultState.consultantTarget,
+                agentCallControlId: callControlId,
+              },
+            );
+            await PgDb.updateInteractionById(consultInteraction.id, {
+              metadata: updatedMetadata,
+              routingMetadata: updatedRoutingMetadata,
+            });
+            console.log(
+              `[voice-webhook] ✅ Updated consult interaction ${consultInteraction.id} with active consult state`,
+            );
+          } catch (consultUpdateErr) {
+            console.error(
+              "[voice-webhook] Error updating consult interaction:",
+              consultUpdateErr,
+            );
+          }
+        }
 
         // Update mapping if we got PSTN leg call_control_id from dial response
         if (pstnCallControlId && callSessionId) {

@@ -85,7 +85,13 @@ export async function POST(request, { params }) {
           disconnectedEvent?.timestamp ||
           null;
 
-        if (!completedAt) {
+        // Check if call is in a terminal state (completed/abandoned) even if timestamp isn't set yet
+        const isTerminalState =
+          interaction.state === "completed" ||
+          interaction.state === "abandoned" ||
+          interaction.state === "failed";
+
+        if (!completedAt && !isTerminalState) {
           return NextResponse.json(
             { ok: false, error: "Call not disconnected yet", retry: true },
             { status: 409 },
@@ -93,7 +99,10 @@ export async function POST(request, { params }) {
         }
 
         const nowMs = Date.now();
-        const completedMs = new Date(completedAt).getTime();
+        // If we have a completedAt timestamp, use it; otherwise use current time for terminal states
+        const completedMs = completedAt
+          ? new Date(completedAt).getTime()
+          : nowMs;
         const startedAt = new Date(
           Math.max(nowMs, Number.isNaN(completedMs) ? nowMs : completedMs),
         ).toISOString();

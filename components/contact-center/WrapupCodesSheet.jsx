@@ -330,11 +330,17 @@ export default function WrapupCodesSheet({
       if (action === "start" && !res.ok) {
         const data = await res.json().catch(() => ({}));
         if (res.status === 409 && data?.retry) {
-          if (wrapupStartRetryRef.current < 10) {
+          if (wrapupStartRetryRef.current < 15) {
             wrapupStartRetryRef.current += 1;
+            // Exponential backoff: 500ms, 1000ms, 2000ms, etc., max 5000ms
+            const delay = Math.min(500 * Math.pow(2, wrapupStartRetryRef.current - 1), 5000);
             setTimeout(() => {
               sendWrapupEvent("start");
-            }, 500);
+            }, delay);
+          } else {
+            console.warn(
+              `[WrapupCodesSheet] Max retries reached for wrapup start on interaction ${interactionId}`,
+            );
           }
           return;
         }

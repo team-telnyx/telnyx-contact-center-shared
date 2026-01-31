@@ -34,6 +34,11 @@ import {
   PhoneCall,
   UsersRound,
   Loader2,
+  PhoneOff,
+  Mic,
+  MicOff,
+  Pause,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -41,6 +46,12 @@ import {
   STATUS_NAME_ICON_FALLBACK,
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
+import { useTelnyx } from "@/components/telephony-provider";
+import useActiveCallStore, {
+  useActiveCall,
+  useCallUI,
+  useIsRinging,
+} from "@/lib/stores/active-call-store";
 
 // Prevent hydration mismatch by only rendering Select components after mount
 function ClientOnlySelect({ children, ...props }) {
@@ -62,9 +73,16 @@ function ClientOnlySelect({ children, ...props }) {
 }
 
 export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
+  const { client } = useTelnyx();
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [selectionType, setSelectionType] = useState("queues"); // "queues", "agents", "contacts", "assistants", or "manual"
+
+  // Call control hooks
+  const activeCall = useActiveCall();
+  const callUI = useCallUI();
+  const isRinging = useIsRinging();
+  const { clearActiveCall, setMuted } = useActiveCallStore();
 
   // Queue state
   const [queues, setQueues] = useState([]);
@@ -93,6 +111,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   const [user, setUser] = useState(null);
   const [loadingData, setLoadingData] = useState(false);
+  const [statuses, setStatuses] = useState([]); // Statuses from database
 
   // Consult state
   const [consultState, setConsultState] = useState({
@@ -101,6 +120,26 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     consultantCall: null, // { callControlId, toNumber, toName }
     agentCallControlId: null, // Agent's WebRTC call control ID
   });
+
+  // Reset consult state when call ends
+  useEffect(() => {
+    const callStatus = callUI.status || activeCall?.state || "";
+    const lowerStatus = callStatus.toLowerCase();
+    const isCallEnded = ["hangup", "ended", "destroy", "purge", "idle", "terminated"].includes(
+      lowerStatus,
+    );
+
+    if (isCallEnded && consultState.isActive) {
+      // Call ended, reset consult state
+      console.log("[TransferModal] Call ended, resetting consult state");
+      setConsultState({
+        isActive: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
+    }
+  }, [activeCall, callUI.status]);
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
@@ -260,6 +299,15 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         });
         setAgentFullProfiles(profileMap);
       }
+
+      // Load statuses for status colors
+      const statusesRes = await fetch("/api/user/statuses", {
+        cache: "no-store",
+      });
+      const statusesData = await statusesRes.json();
+      if (statusesData.ok && statusesData.statuses) {
+        setStatuses(statusesData.statuses);
+      }
     } catch (err) {
       console.error("[TransferModal] Failed to load data:", err);
     } finally {
@@ -347,6 +395,17 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       default:
         return routingStrategy || "FIFO";
     }
+  };
+
+  // Helper function to get status color from statuses table
+  const getStatusColor = (statusName) => {
+    if (!statusName || !statuses.length) {
+      return null; // Return null to use fallback colors
+    }
+    const status = statuses.find(
+      (s) => s.name === statusName || s.id === statusName.toLowerCase(),
+    );
+    return status?.color || null;
   };
 
   // Get agent numbers (Softphone first, then mobile, then voice)
@@ -651,41 +710,78 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       }
 
       const activeCall = storeState.call;
-      const agentCallControlId =
-        storeState.callControlId ||
-        activeCall.callControlId ||
-        activeCall.call_control_id ||
-        activeCall.id;
-
+      
       let interactionId = interaction?.id;
-      let parkedCallControlId =
-        interaction?.metadata?.original_call_control_id ||
-        interaction?.call_control_id ||
-        storeState.originalCallControlId;
+      let currentInteraction = interaction;
+      
+      // Get call_session_id from store - this is the most reliable way to find the interaction
+      const callSessionId =
+        storeState.originalCallSessionId ||
+        storeState.call?.callSessionId ||
+        storeState.call?.call_session_id ||
+        activeCall?.callSessionId ||
+        activeCall?.call_session_id;
 
-      // If no interaction, try to get from call data
-      if (!parkedCallControlId && agentCallControlId) {
-        const callData = callsStoreState.getCall(agentCallControlId);
-        if (callData?.originalCallControlId) {
-          parkedCallControlId = callData.originalCallControlId;
-        }
-      }
-
-      if (!parkedCallControlId) {
-        // Try to lookup
+      // If we don't have agent_call_control_id in metadata, fetch interaction by call_session_id
+      if (!currentInteraction?.metadata?.agent_call_control_id && callSessionId) {
         try {
-          const lookupId = storeState.rtcCallId || agentCallControlId;
-          const res = await fetch(
-            `/api/voice/call-leg/${encodeURIComponent(lookupId)}`,
+          const interactionRes = await fetch(
+            `/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(callSessionId)}`,
+            { cache: "no-store" },
           );
-          const data = await res.json();
-          if (data.ok && data.call_control_id) {
-            parkedCallControlId = data.call_control_id;
+          if (interactionRes.ok) {
+            const interactionData = await interactionRes.json();
+            if (interactionData.interaction) {
+              currentInteraction = interactionData.interaction;
+              interactionId = currentInteraction.id;
+            }
           }
         } catch (err) {
-          // Silently handle error
+          console.error(
+            "[TransferModal] Failed to fetch interaction by call_session_id:",
+            err,
+          );
         }
       }
+
+      // If still no agent_call_control_id, try fetching by interactionId
+      if (!currentInteraction?.metadata?.agent_call_control_id && interactionId) {
+        try {
+          const interactionRes = await fetch(
+            `/api/contact-center/interactions/${encodeURIComponent(interactionId)}`,
+            { cache: "no-store" },
+          );
+          if (interactionRes.ok) {
+            const interactionData = await interactionRes.json();
+            if (interactionData.interaction) {
+              currentInteraction = interactionData.interaction;
+            }
+          }
+        } catch (err) {
+          console.error(
+            "[TransferModal] Failed to fetch interaction by ID:",
+            err,
+          );
+        }
+      }
+
+      // Get agent_call_control_id from interaction metadata - this is the ONLY correct ID to use
+      // NOT the rtcCallId from WebRTC store!
+      const agentCallControlId =
+        currentInteraction?.metadata?.agent_call_control_id;
+
+      if (!agentCallControlId) {
+        alert(
+          "Cannot find agent call control ID in interaction metadata. Please ensure the call is properly connected.",
+        );
+        setLoading(false);
+        return;
+      }
+
+      let parkedCallControlId =
+        currentInteraction?.metadata?.original_call_control_id ||
+        currentInteraction?.call_control_id ||
+        storeState.originalCallControlId;
 
       // Step 1: Call API to set consult state BEFORE disconnecting WebRTC
       // This is critical - the webhook handler checks consult_state.isActive to know
@@ -693,61 +789,167 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       let endpoint;
       if (interactionId) {
         endpoint = `/api/contact-center/interactions/${interactionId}/consult`;
-      } else if (agentCallControlId) {
-        // Use agent's call control ID to find the interaction
+      } else {
+        // Use agent_call_control_id from metadata to find the interaction
         endpoint = `/api/contact-center/interactions/by-call-control-id/consult?callControlId=${encodeURIComponent(
           agentCallControlId,
         )}`;
-      } else {
-        alert("Cannot determine interaction or call control ID for consult");
-        setLoading(false);
-        return;
       }
+
+      const requestBody = {
+        type: transferType,
+        target: target.trim(),
+        agentCallControlId: agentCallControlId, // Use the correct ID from metadata
+      };
+
+      console.log(
+        `[TransferModal] Consult request: endpoint=${endpoint}, body=${JSON.stringify(requestBody)}, interactionId=${interactionId}, agentCallControlId=${agentCallControlId}, parkedCallControlId=${parkedCallControlId}`,
+      );
 
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: transferType,
-          target: target.trim(),
-          agentCallControlId: agentCallControlId,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       // Check if API call succeeded before disconnecting WebRTC
       const data = await res.json();
       if (!data.ok) {
+        console.error(
+          `[TransferModal] Consult API failed: ${JSON.stringify(data)}`,
+        );
         alert(data.error || "Consult failed");
         setLoading(false);
         return;
       }
 
-      // Step 2: NOW disconnect agent's WebRTC call (this will park the caller due to park_after_unbridge)
-      // The consult_state is already set, so webhook handler won't terminate the parked call
-      if (typeof activeCall.hangup === "function") {
-        activeCall.hangup();
-        // Wait a bit for the disconnect to complete
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(
+        `[TransferModal] Consult API succeeded: ${JSON.stringify(data)}. Server hung up agent's call leg. Initiating WebRTC call to consultant.`,
+      );
+
+      // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
+      // This will trigger call.initiated webhook which will use dialAndBridge
+      if (!client) {
+        alert("WebRTC client not available. Please ensure you're connected.");
+        setLoading(false);
+        return;
       }
 
-      // Step 3: Update local consult state for UI
-      // The consultant call will be received by the WebRTC client
-      setConsultState({
-        isActive: true,
-        parkedCall: {
-          callControlId: data.parkedCall?.callControlId || parkedCallControlId,
-          fromNumber:
-            interaction?.from_number || data.parkedCall?.fromNumber,
-          fromName: interaction?.from_name || data.parkedCall?.fromName,
-          interactionId: interactionId,
-        },
-        consultantCall: {
-          callControlId: data.consultantCall?.callControlId,
-          toNumber: target.trim(),
-          toName: data.consultantCall?.toName || null,
-        },
-        agentCallControlId: data.consultantCall?.callControlId, // This will be the new consultant call
-      });
+      // Get consultant target from response or use the one from form
+      const consultantTarget = data.consultantTarget || target.trim();
+      const fromNumber =
+        currentInteraction?.from_number ||
+        currentInteraction?.to_number ||
+        storeState.call?.fromNumber ||
+        null;
+
+      console.log(
+        `[TransferModal] Initiating WebRTC call to consultant: destinationNumber=${consultantTarget}, callerNumber=${fromNumber}`,
+      );
+
+      try {
+        // Enable microphone
+        try {
+          client.enableMicrophone?.();
+        } catch (_) {}
+
+        // Create new WebRTC call (same as softphone outbound call)
+        const call = client.newCall({
+          destinationNumber: consultantTarget,
+          callerNumber: fromNumber || undefined,
+          audio: true,
+          video: false,
+        });
+
+        // Set active call in store (consult call)
+        const { default: useActiveCallStore } =
+          await import("@/lib/stores/active-call-store");
+        const activeCallStore = useActiveCallStore.getState();
+        activeCallStore.setActiveCall(call, {
+          direction: "outbound",
+          fromNumber: fromNumber,
+          toNumber: consultantTarget,
+        });
+
+        // Update status immediately
+        const initialState = call.state || "trying";
+        if (initialState) {
+          activeCallStore.updateStatus(initialState);
+        }
+
+        // Wire call events (comprehensive - same as softphone)
+        if (typeof call.on === "function") {
+          call.on("ringing", () => {
+            activeCallStore.updateStatus("ringing");
+          });
+          call.on("active", () => {
+            activeCallStore.updateStatus("active");
+          });
+          call.on("connected", () => {
+            activeCallStore.updateStatus("connected");
+          });
+          call.on("answered", () => {
+            activeCallStore.updateStatus("answered");
+          });
+          call.on("held", () => {
+            activeCallStore.setHeld(true);
+          });
+          call.on("hangup", () => {
+            activeCallStore.updateStatus("ended");
+          });
+          call.on("destroy", () => {
+            activeCallStore.updateStatus("ended");
+          });
+          call.on("ended", () => {
+            activeCallStore.updateStatus("ended");
+          });
+          call.on("stateChanged", (newState) => {
+            if (newState) {
+              const lowerState = String(newState).toLowerCase();
+              activeCallStore.updateStatus(lowerState);
+            }
+          });
+        }
+
+        // Send invite to initiate the call
+        call.invite?.();
+
+        console.log(
+          `[TransferModal] WebRTC call initiated. Waiting for call.initiated webhook to trigger dialAndBridge.`,
+        );
+
+        // Step 3: Update local consult state for UI
+        // The consultant call will be received by the WebRTC client
+        setConsultState({
+          isActive: true,
+          parkedCall: {
+            callControlId: data.parkedCall?.callControlId || parkedCallControlId,
+            fromNumber:
+              currentInteraction?.from_number || data.parkedCall?.fromNumber,
+            fromName:
+              currentInteraction?.from_name || data.parkedCall?.fromName,
+            interactionId: interactionId,
+          },
+          consultantCall: {
+            callControlId: null, // Will be set when webhook receives call.initiated
+            toNumber: consultantTarget,
+            toName: null,
+          },
+          agentCallControlId: null, // Will be set when webhook receives call.initiated
+        });
+
+        // Keep modal open and stop loading - consult call is being initiated
+        setLoading(false);
+        // Don't close the modal - user needs to see consult call legs and can switch between them
+        console.log(
+          `[TransferModal] Consult call initiated. Modal will stay open for call leg management.`,
+        );
+      } catch (callErr) {
+        console.error("[TransferModal] Failed to initiate WebRTC call:", callErr);
+        alert("Failed to initiate consult call: " + (callErr.message || "Unknown error"));
+        setLoading(false);
+        return;
+      }
     } catch (err) {
       console.error("[TransferModal] Consult error:", err);
       alert("Consult failed: " + (err.message || "Unknown error"));
@@ -786,6 +988,108 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Call control handlers (similar to SupervisionModal)
+  const handleDisconnectCall = () => {
+    if (!activeCall) {
+      clearActiveCall();
+      // Reset consult state when call ends
+      setConsultState({
+        isActive: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
+      return;
+    }
+    try {
+      activeCall.hangup?.();
+      clearActiveCall();
+      // Reset consult state when call ends
+      setConsultState({
+        isActive: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
+    } catch (err) {
+      console.error("[TransferModal] Error disconnecting call:", err);
+      clearActiveCall();
+      setConsultState({
+        isActive: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
+    }
+  };
+
+  const handleToggleMute = () => {
+    if (!activeCall) return;
+    try {
+      if (callUI.isMuted) {
+        activeCall.unmuteAudio?.() || activeCall.unmute?.();
+        setMuted(false);
+      } else {
+        activeCall.muteAudio?.() || activeCall.mute?.();
+        setMuted(true);
+      }
+    } catch (err) {
+      console.error("[TransferModal] Toggle mute error:", err);
+    }
+  };
+
+  const handleToggleHold = () => {
+    if (!activeCall) return;
+    try {
+      const { setHeld, updateStatus } = useActiveCallStore.getState();
+      if (callUI.isHeld) {
+        activeCall.unhold?.() || activeCall.resume?.();
+        updateStatus("active");
+      } else {
+        activeCall.hold?.() || activeCall.pause?.();
+        updateStatus("held");
+      }
+    } catch (err) {
+      console.error("[TransferModal] Toggle hold error:", err);
+    }
+  };
+
+  // Check if call is active (not ended/hungup)
+  const isCallActive = () => {
+    if (!activeCall) return false;
+    const callStatus = callUI.status || activeCall.state || "";
+    const lowerStatus = callStatus.toLowerCase();
+    return !["hangup", "ended", "destroy", "purge", "idle", "terminated"].includes(
+      lowerStatus,
+    );
+  };
+
+  const isCallConnected = () => {
+    if (!activeCall) return false;
+    const callStatus = callUI.status || activeCall.state || "";
+    const lowerStatus = callStatus.toLowerCase();
+    return ["active", "connected", "answered", "held"].includes(lowerStatus);
+  };
+
+  // Prevent modal from closing when consult call is active
+  const handleModalOpenChange = (newOpen) => {
+    if (!newOpen) {
+      // Check both consultState and activeCall to prevent closing during consult
+      const hasActiveConsultCall = consultState.isActive || (activeCall && isCallActive());
+      
+      if (hasActiveConsultCall) {
+        // Prevent closing if consult call is active
+        console.log(
+          "[TransferModal] Cannot close modal while consult call is in progress",
+          { consultStateIsActive: consultState.isActive, hasActiveCall: !!activeCall, isCallActive: isCallActive() },
+        );
+        return;
+      }
+    }
+    console.log("[TransferModal] Modal close allowed", { newOpen, consultStateIsActive: consultState.isActive });
+    onOpenChange(newOpen);
   };
 
   const isValid = () => {
@@ -926,7 +1230,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleModalOpenChange}>
       <DialogContent className="sm:max-w-[700px] dark:bg-zinc-900 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Transfer Call</DialogTitle>
@@ -1232,22 +1536,38 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                         const StatusIcon =
                           STATUS_NAME_ICON_FALLBACK[agent.status] ||
                           STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                        const statusColor =
-                          agent.status === "Available"
-                            ? "text-green-600"
-                            : agent.status === "Busy"
-                              ? "text-orange-600"
-                              : agent.status === "Away"
-                                ? "text-yellow-600"
-                                : "text-gray-600";
+                        // Get status color from database, fallback to hardcoded colors
+                        const statusColorHex = getStatusColor(agent.status);
+                        const statusColorClass =
+                          !statusColorHex
+                            ? agent.status === "Available"
+                              ? "text-green-600"
+                              : agent.status === "Busy"
+                                ? "text-orange-600"
+                                : agent.status === "Away"
+                                  ? "text-yellow-600"
+                                  : "text-gray-600"
+                            : null;
                         return (
                           <SelectItem key={agent.userId} value={agent.userId}>
                             <div className="flex items-center gap-2">
                               <StatusIcon
-                                className={cn("h-4 w-4", statusColor)}
+                                className={cn("h-4 w-4", statusColorClass)}
+                                style={
+                                  statusColorHex
+                                    ? { color: statusColorHex }
+                                    : undefined
+                                }
                               />
                               <span className="font-medium">{displayName}</span>
-                              <span className={cn("text-xs", statusColor)}>
+                              <span
+                                className={cn("text-xs", statusColorClass)}
+                                style={
+                                  statusColorHex
+                                    ? { color: statusColorHex }
+                                    : undefined
+                                }
+                              >
                                 ({agent.status})
                               </span>
                             </div>
@@ -1273,24 +1593,40 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                               const StatusIcon =
                                 STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
                                 STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                              const statusColor =
-                                agentStats.status === "Available"
-                                  ? "text-green-600"
-                                  : agentStats.status === "Busy"
-                                    ? "text-orange-600"
-                                    : agentStats.status === "Away"
-                                      ? "text-yellow-600"
-                                      : "text-gray-600";
+                              // Get status color from database, fallback to hardcoded colors
+                              const statusColorHex = getStatusColor(
+                                agentStats.status,
+                              );
+                              const statusColorClass =
+                                !statusColorHex
+                                  ? agentStats.status === "Available"
+                                    ? "text-green-600"
+                                    : agentStats.status === "Busy"
+                                      ? "text-orange-600"
+                                      : agentStats.status === "Away"
+                                        ? "text-yellow-600"
+                                        : "text-gray-600"
+                                  : null;
                               return (
                                 <>
                                   <StatusIcon
-                                    className={cn("h-4 w-4", statusColor)}
+                                    className={cn("h-4 w-4", statusColorClass)}
+                                    style={
+                                      statusColorHex
+                                        ? { color: statusColorHex }
+                                        : undefined
+                                    }
                                   />
                                   <span
                                     className={cn(
                                       "text-sm font-medium",
-                                      statusColor,
+                                      statusColorClass,
                                     )}
+                                    style={
+                                      statusColorHex
+                                        ? { color: statusColorHex }
+                                        : undefined
+                                    }
                                   >
                                     {agentStats.status || "Unknown"}
                                   </span>
@@ -1602,12 +1938,83 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
+          {/* Call Control Buttons - Show when consult call is active */}
+          {consultState.isActive && (
+            <div className="pt-4 border-t">
+              <div className="flex items-center justify-center gap-3 p-4 bg-muted/30 rounded-lg">
+                {isRinging ||
+                (activeCall &&
+                  (activeCall.state === "ringing" ||
+                    activeCall.state === "early" ||
+                    activeCall.state === "new")) ? (
+                  <>
+                    {/* Show only disconnect button for outbound calls in progress (dialing/ringing) */}
+                    <button
+                      onClick={handleDisconnectCall}
+                      disabled={loading}
+                      className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Disconnect"
+                    >
+                      <PhoneOff className="h-5 w-5" />
+                    </button>
+                  </>
+                ) : isCallConnected() ? (
+                  <>
+                    {/* Mute, Disconnect, and Hold buttons when answered */}
+                    <button
+                      onClick={handleToggleMute}
+                      disabled={loading}
+                      className={cn(
+                        "h-12 w-12 rounded-full grid place-items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                        callUI.isMuted
+                          ? "bg-zinc-700 hover:bg-zinc-800 text-white"
+                          : "bg-zinc-600 hover:bg-zinc-700 text-white",
+                      )}
+                      title={callUI.isMuted ? "Unmute" : "Mute"}
+                    >
+                      {callUI.isMuted ? (
+                        <MicOff className="h-5 w-5" />
+                      ) : (
+                        <Mic className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={handleDisconnectCall}
+                      disabled={loading}
+                      className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Disconnect"
+                    >
+                      <PhoneOff className="h-5 w-5" />
+                    </button>
+                    <button
+                      onClick={handleToggleHold}
+                      disabled={loading}
+                      className="h-12 w-12 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={callUI.isHeld ? "Unhold" : "Hold"}
+                    >
+                      {callUI.isHeld ? (
+                        <Play className="h-5 w-5" />
+                      ) : (
+                        <Pause className="h-5 w-5" />
+                      )}
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
+              onClick={() => handleModalOpenChange(false)}
+              disabled={loading || consultState.isActive}
+              title={
+                consultState.isActive
+                  ? "Cannot close while consult call is in progress"
+                  : "Cancel"
+              }
             >
               Cancel
             </Button>
@@ -1620,8 +2027,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   loadingData ||
                   selectionType === "queues"
                 }
-                variant="secondary"
-                className="min-w-[120px]"
+                className="min-w-[120px] bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               >
                 {loading ? (
                   <>
@@ -1635,8 +2041,15 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             )}
             <Button
               onClick={handleConfirm}
-              disabled={!isValid() || loading || loadingData}
+              disabled={
+                !isValid() || loading || loadingData || consultState.isActive
+              }
               className="min-w-[120px]"
+              title={
+                consultState.isActive
+                  ? "Cannot transfer while consult call is in progress"
+                  : undefined
+              }
             >
               {loading ? (
                 <>

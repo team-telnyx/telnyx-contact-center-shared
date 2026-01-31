@@ -225,6 +225,28 @@ export function Softphone() {
     }
   }, [activeCall, hydrateRemoteAudio]);
 
+  // Wire call events when activeCall changes (e.g., when set from TransferModal)
+  // This ensures that calls set in the store from other components (like TransferModal) are properly wired
+  const lastWiredCallRef = useRef(null);
+  useEffect(() => {
+    if (activeCall && typeof activeCall.on === "function") {
+      // Only wire if this is a different call object (by reference)
+      if (lastWiredCallRef.current !== activeCall) {
+        // Wire the call to ensure all event handlers are set up
+        // This is safe to call multiple times - duplicate listeners won't cause issues
+        console.log("[Softphone] Wiring call events for activeCall from store:", {
+          callId: activeCall.id,
+          state: activeCall.state,
+          callControlId: activeCall.callControlId,
+        });
+        wireCall(activeCall);
+        lastWiredCallRef.current = activeCall;
+      }
+    } else if (!activeCall) {
+      lastWiredCallRef.current = null;
+    }
+  }, [activeCall]); // Wire when activeCall changes
+
   // Fetch interaction when call is active (same as mini phone)
   useEffect(() => {
     if (activeCall) {
