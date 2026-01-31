@@ -1274,6 +1274,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       
       console.log(`[TransferModal] Bridging currentAgentCallControlId=${currentAgentCallControlId} to targetCallControlId=${targetCallControlId}`);
 
+      // Use bridge with park_after_unbridge="self" so the call leg we're leaving
+      // stays parked instead of being disconnected (per Telnyx OpenAPI spec)
       const res = await fetch("/api/voice/call-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1282,6 +1284,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           callControlId: currentAgentCallControlId,
           params: {
             call_control_id: targetCallControlId,
+            park_after_unbridge: "self",
           },
         }),
       });
