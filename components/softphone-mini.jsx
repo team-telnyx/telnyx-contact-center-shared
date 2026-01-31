@@ -689,6 +689,26 @@ export default function SoftphoneMini() {
     }
   }, [activeCall]);
 
+  // Wire call events when activeCall changes (e.g., when set from TransferModal)
+  // This ensures that calls set in the store from other components (like TransferModal) are properly wired
+  const lastWiredCallRef = useRef(null);
+  useEffect(() => {
+    if (activeCall && typeof activeCall.on === "function") {
+      // Only wire if this is a different call object (by reference)
+      if (lastWiredCallRef.current !== activeCall) {
+        console.log("[SoftphoneMini] Wiring call events for activeCall from store:", {
+          callId: activeCall.id,
+          state: activeCall.state,
+          callControlId: activeCall.callControlId,
+        });
+        wireCall(activeCall);
+        lastWiredCallRef.current = activeCall;
+      }
+    } else if (!activeCall) {
+      lastWiredCallRef.current = null;
+    }
+  }, [activeCall]);
+
   function wireCall(call) {
     try {
       attachAudio(call);

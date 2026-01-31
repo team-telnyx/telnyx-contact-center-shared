@@ -72,6 +72,49 @@ function ClientOnlySelect({ children, ...props }) {
   return <Select {...props}>{children}</Select>;
 }
 
+// Helper to detect VoIP/SIP numbers (long generated telephony account names)
+function isVoipNumber(number) {
+  if (!number) return false;
+  const str = String(number).trim();
+  // Detect SIP URIs or long alphanumeric strings (generated telephony usernames)
+  return (
+    str.startsWith("sip:") ||
+    str.includes("@sip.") ||
+    str.includes("@") ||
+    (str.length > 20 && /^[a-zA-Z0-9_-]+$/.test(str))
+  );
+}
+
+// Helper to format phone display - show "VoIP Call" for generated telephony names
+function formatPhoneDisplay(number) {
+  if (!number) return "Unknown";
+  const str = String(number).trim();
+  
+  // If it's a SIP URI with a long generated name, show "VoIP Call"
+  if (str.startsWith("sip:") || str.includes("@sip.") || str.includes("@")) {
+    // Extract username from SIP URI
+    const match = str.match(/^(?:sip:)?([^@]+)@/);
+    if (match && match[1]) {
+      const username = match[1];
+      // If username is long and looks generated (alphanumeric), show VoIP Call
+      if (username.length > 15 && /^[a-zA-Z0-9_-]+$/.test(username)) {
+        return "VoIP Call";
+      }
+      // Otherwise show the username
+      return username;
+    }
+    return "VoIP Call";
+  }
+  
+  // If it's a long alphanumeric string (generated telephony username)
+  if (str.length > 20 && /^[a-zA-Z0-9_-]+$/.test(str)) {
+    return "VoIP Call";
+  }
+  
+  // Regular phone number - return as is
+  return str;
+}
+
 export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   const { client } = useTelnyx();
   const [loading, setLoading] = useState(false);
@@ -971,15 +1014,23 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         // Send invite to initiate the call
         call.invite?.();
 
+        // Get the WebRTC call control ID from the call object
+        const newAgentCallControlId = call.callControlId || call.call_control_id || call.id || null;
+
         console.log(
-          `[TransferModal] WebRTC call initiated. Waiting for call.initiated webhook to trigger dialAndBridge.`,
+          `[TransferModal] WebRTC call initiated. callControlId=${newAgentCallControlId}. Waiting for call.initiated webhook to trigger dialAndBridge.`,
         );
 
-        // Step 3: Update consult state - mark initiating as false now that call is started
+        // Step 3: Update consult state with the new call's control ID
         // Keep isActive=true to prevent modal from closing
         setConsultState((prev) => ({
           ...prev,
           initiating: false, // Call has been initiated
+          agentCallControlId: newAgentCallControlId,
+          consultantCall: {
+            ...prev.consultantCall,
+            callControlId: newAgentCallControlId,
+          },
         }));
 
         // Keep modal open and stop loading - consult call is being initiated
@@ -1022,20 +1073,68 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     }
   };
 
-  const handleSwitchCallLeg = async (targetCallControlId) => {
-    if (!consultState.agentCallControlId || !targetCallControlId) {
-      alert("Cannot switch call leg. Missing call information.");
+  const handleSwitchCallLeg = async (targetLegType) => {
+    // targetLegType: 'parked' or 'consultant'
+    // We need to use the correct call control IDs from the interaction metadata
+    // The parked call uses original_call_control_id
+    // The consultant call uses the current WebRTC call's ID
+    
+    const interactionId = consultState.parkedCall?.interactionId || interaction?.id;
+    
+    if (!interactionId) {
+      alert("Cannot switch call leg. Missing interaction information.");
       return;
     }
 
     setLoading(true);
     try {
+      // Fetch the latest interaction to get correct call control IDs
+      const interactionRes = await fetch(
+        `/api/contact-center/interactions/${interactionId}`,
+        { cache: "no-store" },
+      );
+      const interactionData = await interactionRes.json();
+      
+      if (!interactionData.ok || !interactionData.interaction) {
+        alert("Failed to fetch interaction data");
+        setLoading(false);
+        return;
+      }
+      
+      const currentInteraction = interactionData.interaction;
+      const parkedCallControlId = currentInteraction.metadata?.original_call_control_id;
+      const agentCallControlId = currentInteraction.metadata?.agent_call_control_id;
+      
+      console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, agentCallControlId=${agentCallControlId}`);
+      
+      // For switching, we need to bridge the current WebRTC connection to the target leg
+      // Get the current active WebRTC call control ID
+      const { default: useActiveCallStore } = await import("@/lib/stores/active-call-store");
+      const storeState = useActiveCallStore.getState();
+      const currentWebRtcCallControlId = storeState.callControlId || storeState.call?.callControlId || storeState.call?.call_control_id || storeState.call?.id;
+      
+      if (!currentWebRtcCallControlId) {
+        alert("Cannot switch call leg. No active WebRTC call.");
+        setLoading(false);
+        return;
+      }
+      
+      const targetCallControlId = targetLegType === 'parked' ? parkedCallControlId : agentCallControlId;
+      
+      if (!targetCallControlId) {
+        alert(`Cannot switch to ${targetLegType} call. Missing call control ID.`);
+        setLoading(false);
+        return;
+      }
+      
+      console.log(`[TransferModal] Bridging currentWebRtcCallControlId=${currentWebRtcCallControlId} to targetCallControlId=${targetCallControlId}`);
+
       const res = await fetch("/api/voice/call-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "bridge",
-          callControlId: consultState.agentCallControlId,
+          callControlId: currentWebRtcCallControlId,
           params: {
             call_control_id: targetCallControlId,
           },
@@ -1045,6 +1144,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       const data = await res.json();
       if (!data.ok) {
         alert(data.error || "Failed to switch call leg");
+      } else {
+        console.log(`[TransferModal] Successfully switched to ${targetLegType} call leg`);
       }
     } catch (err) {
       console.error("[TransferModal] Switch call leg error:", err);
@@ -1952,76 +2053,74 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* Consult Call Tiles */}
+          {/* Consult Call Tiles - Horizontal colored rectangles */}
           {consultState.isActive && (
             <div className="space-y-3 pt-4 border-t">
               <Label className="text-sm font-semibold flex items-center gap-2">
                 <PhoneCall className="h-4 w-4 text-blue-600" />
                 Call Legs
               </Label>
-              <div className="grid grid-cols-1 gap-3">
-                {/* Parked Call Tile */}
+              <div className="flex gap-3">
+                {/* Parked Call Tile - Dimmed (not active) */}
                 {consultState.parkedCall && (
                   <div
-                    onClick={() =>
-                      handleSwitchCallLeg(consultState.parkedCall.callControlId)
-                    }
+                    onClick={() => handleSwitchCallLeg('parked')}
                     className={cn(
-                      "p-3 rounded-lg border-2 cursor-pointer transition-all",
-                      "bg-muted/50 border-gray-400/50 opacity-60 hover:opacity-80",
+                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
+                      "bg-amber-500/20 border-2 border-amber-500/40",
+                      "opacity-50 hover:opacity-75",
                     )}
+                    title="Click to switch to parked caller"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-gray-500" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-600">
-                            {consultState.parkedCall.fromName ||
-                              consultState.parkedCall.fromNumber ||
-                              "Parked Call"}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {consultState.parkedCall.fromNumber}
-                          </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-amber-700 dark:text-amber-400 truncate">
+                          {consultState.parkedCall.fromName || "Customer"}
+                        </div>
+                        <div className="text-xs text-amber-600/70 dark:text-amber-500/70 truncate">
+                          {formatPhoneDisplay(consultState.parkedCall.fromNumber)}
                         </div>
                       </div>
-                      <Badge className="bg-gray-500 text-white text-xs">
-                        Parked
-                      </Badge>
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                        PARKED
+                      </span>
                     </div>
                   </div>
                 )}
 
-                {/* Consultant Call Tile */}
+                {/* Consultant Call Tile - Active */}
                 {consultState.consultantCall && (
                   <div
-                    onClick={() =>
-                      handleSwitchCallLeg(
-                        consultState.consultantCall.callControlId,
-                      )
-                    }
+                    onClick={() => handleSwitchCallLeg('consultant')}
                     className={cn(
-                      "p-3 rounded-lg border-2 cursor-pointer transition-all",
-                      "bg-blue-500/10 border-blue-500 hover:bg-blue-500/20",
+                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
+                      "bg-green-500/20 border-2 border-green-500",
+                      "hover:bg-green-500/30",
                     )}
+                    title="Currently connected to consultant"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-blue-500" />
-                        <div>
-                          <div className="text-sm font-medium text-blue-600">
-                            {consultState.consultantCall.toName ||
-                              consultState.consultantCall.toNumber ||
-                              "Consultant"}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {consultState.consultantCall.toNumber}
-                          </div>
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-green-700 dark:text-green-400 truncate">
+                          {consultState.consultantCall.toName || "Consultant"}
+                        </div>
+                        <div className="text-xs text-green-600/70 dark:text-green-500/70 truncate flex items-center gap-1">
+                          {formatPhoneDisplay(consultState.consultantCall.toNumber)}
+                          {isVoipNumber(consultState.consultantCall.toNumber) && (
+                            <span 
+                              className="inline-flex items-center cursor-help" 
+                              title={consultState.consultantCall.toNumber}
+                            >
+                              <Network className="h-3 w-3" />
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <Badge className="bg-blue-500 text-white text-xs">
-                        Active
-                      </Badge>
+                      <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                        ACTIVE
+                      </span>
                     </div>
                   </div>
                 )}
@@ -2032,14 +2131,15 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           {/* Call Control Buttons - Show when consult call is active */}
           {consultState.isActive && (
             <div className="pt-4 border-t">
+              {/* Show current call status */}
+              <div className="text-center text-xs text-muted-foreground mb-2">
+                Call Status: {callUI.status || activeCall?.state || "initiating"}
+              </div>
               <div className="flex items-center justify-center gap-3 p-4 bg-muted/30 rounded-lg">
-                {isRinging ||
-                (activeCall &&
-                  (activeCall.state === "ringing" ||
-                    activeCall.state === "early" ||
-                    activeCall.state === "new")) ? (
+                {/* Always show disconnect button during consult */}
+                {!isCallConnected() ? (
                   <>
-                    {/* Show only disconnect button for outbound calls in progress (dialing/ringing) */}
+                    {/* Show only disconnect button when call is not yet connected (dialing/ringing) */}
                     <button
                       onClick={handleDisconnectCall}
                       disabled={loading}
@@ -2048,8 +2148,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                     >
                       <PhoneOff className="h-5 w-5" />
                     </button>
+                    <span className="text-sm text-muted-foreground">
+                      {activeCall ? "Calling..." : "Initializing..."}
+                    </span>
                   </>
-                ) : isCallConnected() ? (
+                ) : (
                   <>
                     {/* Mute, Disconnect, and Hold buttons when answered */}
                     <button
@@ -2090,7 +2193,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                       )}
                     </button>
                   </>
-                ) : null}
+                )}
               </div>
             </div>
           )}
