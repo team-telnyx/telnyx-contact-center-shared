@@ -164,6 +164,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     isActive: false,
     initiating: false, // Flag to indicate consult is being set up (prevents premature state reset)
     activatedAt: null, // Timestamp when isActive became true - used to prevent immediate reset
+    activeLeg: 'consultant', // Which leg is currently active: 'parked' or 'consultant'
     parkedCall: null, // { callControlId, fromNumber, fromName, interactionId }
     consultantCall: null, // { callControlId, toNumber, toName }
     agentCallControlId: null, // Agent's WebRTC call control ID
@@ -237,6 +238,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       console.log("[TransferModal] Consult call ended, resetting consult state. status=", effectiveStatus);
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -245,6 +247,54 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       });
     }
   }, [activeCall, callStatus, consultState.isActive, consultState.initiating, consultState.activatedAt, consultState.consultantCall?.callControlId]);
+
+  // Listen for parked call hangup events
+  useEffect(() => {
+    if (!consultState.isActive || !consultState.parkedCall?.callControlId) {
+      return;
+    }
+
+    const parkedCallControlId = consultState.parkedCall.callControlId;
+
+    // Handler for interaction ended events
+    const handleInteractionEvent = async () => {
+      // Check if parked call is still active by fetching interaction
+      if (!consultState.parkedCall?.interactionId) return;
+      
+      try {
+        const res = await fetch(
+          `/api/contact-center/interactions/${consultState.parkedCall.interactionId}`,
+          { cache: "no-store" }
+        );
+        const data = await res.json();
+        
+        if (data.ok && data.interaction) {
+          const state = data.interaction.state?.toLowerCase();
+          if (["completed", "abandoned", "ended"].includes(state)) {
+            console.log("[TransferModal] Parked call has ended, removing tile");
+            setConsultState((prev) => ({
+              ...prev,
+              parkedCall: null, // Remove parked call tile
+              activeLeg: 'consultant', // Switch to consultant
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("[TransferModal] Error checking parked call status:", err);
+      }
+    };
+
+    // Listen for refresh events
+    window.addEventListener("contact-center:refresh-interactions", handleInteractionEvent);
+
+    // Also poll periodically while consult is active
+    const pollInterval = setInterval(handleInteractionEvent, 5000);
+
+    return () => {
+      window.removeEventListener("contact-center:refresh-interactions", handleInteractionEvent);
+      clearInterval(pollInterval);
+    };
+  }, [consultState.isActive, consultState.parkedCall?.callControlId, consultState.parkedCall?.interactionId]);
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
@@ -274,6 +324,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state when modal opens (fresh start)
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -947,6 +998,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         // Reset consult state on error
         setConsultState({
           isActive: false,
+        activeLeg: 'consultant',
           initiating: false,
           activatedAt: null,
         parkedCall: null,
@@ -1108,6 +1160,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         // Reset consult state on error and cleanup in database
         setConsultState({
           isActive: false,
+        activeLeg: 'consultant',
           initiating: false,
           activatedAt: null,
         parkedCall: null,
@@ -1128,6 +1181,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state on outer error
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -1211,6 +1265,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         alert(data.error || "Failed to switch call leg");
       } else {
         console.log(`[TransferModal] Successfully switched to ${targetLegType} call leg`);
+        // Update active leg in state
+        setConsultState((prev) => ({
+          ...prev,
+          activeLeg: targetLegType,
+        }));
       }
     } catch (err) {
       console.error("[TransferModal] Switch call leg error:", err);
@@ -1254,6 +1313,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state when call ends
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -1272,6 +1332,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Reset consult state when call ends
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -1287,6 +1348,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       clearActiveCall();
       setConsultState({
         isActive: false,
+        activeLeg: 'consultant',
         initiating: false,
         activatedAt: null,
         parkedCall: null,
@@ -2137,18 +2199,25 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                 </Badge>
               </div>
               
-              {/* Call Legs Tiles */}
+              {/* Call Legs Tiles - Clickable to switch between legs */}
               <div className="flex gap-3">
                 {/* Parked Call Tile - Customer on hold */}
                 {consultState.parkedCall && (
                   <div
+                    onClick={() => handleSwitchCallLeg('parked')}
                     className={cn(
-                      "flex-1 p-3 rounded-lg",
-                      "bg-amber-500/20 border-2 border-amber-500/40",
+                      "flex-1 p-3 rounded-lg cursor-pointer transition-all",
+                      consultState.activeLeg === 'parked'
+                        ? "bg-amber-500/30 border-2 border-amber-500"
+                        : "bg-amber-500/10 border-2 border-amber-500/40 hover:bg-amber-500/20",
                     )}
+                    title="Click to switch to customer"
                   >
                     <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
+                      <div className={cn(
+                        "h-3 w-3 rounded-full",
+                        consultState.activeLeg === 'parked' ? "bg-amber-500 animate-pulse" : "bg-amber-500/50"
+                      )} />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-amber-700 dark:text-amber-400 truncate">
                           {consultState.parkedCall.fromName || "Customer"}
@@ -2158,21 +2227,28 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                         </div>
                       </div>
                       <span className="text-xs font-medium text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                        ON HOLD
+                        {consultState.activeLeg === 'parked' ? "ACTIVE" : "ON HOLD"}
                       </span>
                     </div>
                   </div>
                 )}
 
-                {/* Consultant Call Tile - Active call */}
+                {/* Consultant Call Tile - Click to switch */}
                 <div
+                  onClick={() => handleSwitchCallLeg('consultant')}
                   className={cn(
-                    "flex-1 p-3 rounded-lg",
-                    "bg-green-500/20 border-2 border-green-500",
+                    "flex-1 p-3 rounded-lg cursor-pointer transition-all",
+                    consultState.activeLeg !== 'parked'
+                      ? "bg-green-500/30 border-2 border-green-500"
+                      : "bg-green-500/10 border-2 border-green-500/40 hover:bg-green-500/20",
                   )}
+                  title="Click to switch to consultant"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse" />
+                    <div className={cn(
+                      "h-3 w-3 rounded-full",
+                      consultState.activeLeg !== 'parked' ? "bg-green-500 animate-pulse" : "bg-green-500/50"
+                    )} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-green-700 dark:text-green-400 truncate">
                         {consultState.consultantCall?.toName || "Consultant"}
@@ -2182,7 +2258,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                       </div>
                     </div>
                     <span className="text-xs font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
-                      {isCallConnected() ? "ACTIVE" : "CONNECTING"}
+                      {consultState.activeLeg !== 'parked' 
+                        ? (isCallConnected() ? "ACTIVE" : "CONNECTING")
+                        : "ON HOLD"}
                     </span>
                   </div>
                 </div>
