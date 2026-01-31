@@ -687,15 +687,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         }
       }
 
-      // Step 1: Disconnect agent's WebRTC call (this will park the caller due to park_after_unbridge)
-      if (typeof activeCall.hangup === "function") {
-        activeCall.hangup();
-        // Wait a bit for the disconnect to complete
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-
-      // Step 2: Call API to initiate consultant call and update metadata
-      // Use interaction ID if available, otherwise use agent's call control ID (not parked call control ID)
+      // Step 1: Call API to set consult state BEFORE disconnecting WebRTC
+      // This is critical - the webhook handler checks consult_state.isActive to know
+      // whether to hang up the original call leg or keep it parked
       let endpoint;
       if (interactionId) {
         endpoint = `/api/contact-center/interactions/${interactionId}/consult`;
@@ -720,33 +714,40 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         }),
       });
 
+      // Check if API call succeeded before disconnecting WebRTC
       const data = await res.json();
-      if (data.ok) {
-        // Step 3: Initiate consultant call from WebRTC client
-        // The consultant call will be received by the WebRTC client
-        // For now, we'll track the consultant call control ID from the API response
-        // The actual WebRTC call will be established when the consultant answers
-
-        // Update consult state
-        setConsultState({
-          isActive: true,
-          parkedCall: {
-            callControlId: data.parkedCall?.callControlId || parkedCallControlId,
-            fromNumber:
-              interaction?.from_number || data.parkedCall?.fromNumber,
-            fromName: interaction?.from_name || data.parkedCall?.fromName,
-            interactionId: interactionId,
-          },
-          consultantCall: {
-            callControlId: data.consultantCall?.callControlId,
-            toNumber: target.trim(),
-            toName: data.consultantCall?.toName || null,
-          },
-          agentCallControlId: data.consultantCall?.callControlId, // This will be the new consultant call
-        });
-      } else {
+      if (!data.ok) {
         alert(data.error || "Consult failed");
+        setLoading(false);
+        return;
       }
+
+      // Step 2: NOW disconnect agent's WebRTC call (this will park the caller due to park_after_unbridge)
+      // The consult_state is already set, so webhook handler won't terminate the parked call
+      if (typeof activeCall.hangup === "function") {
+        activeCall.hangup();
+        // Wait a bit for the disconnect to complete
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      // Step 3: Update local consult state for UI
+      // The consultant call will be received by the WebRTC client
+      setConsultState({
+        isActive: true,
+        parkedCall: {
+          callControlId: data.parkedCall?.callControlId || parkedCallControlId,
+          fromNumber:
+            interaction?.from_number || data.parkedCall?.fromNumber,
+          fromName: interaction?.from_name || data.parkedCall?.fromName,
+          interactionId: interactionId,
+        },
+        consultantCall: {
+          callControlId: data.consultantCall?.callControlId,
+          toNumber: target.trim(),
+          toName: data.consultantCall?.toName || null,
+        },
+        agentCallControlId: data.consultantCall?.callControlId, // This will be the new consultant call
+      });
     } catch (err) {
       console.error("[TransferModal] Consult error:", err);
       alert("Consult failed: " + (err.message || "Unknown error"));
