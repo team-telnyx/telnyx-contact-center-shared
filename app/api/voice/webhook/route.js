@@ -235,6 +235,7 @@ export async function POST(request) {
             const { getPostgresPool } = await import("@/lib/postgres.mjs");
             const pool = getPostgresPool();
             if (pool) {
+              console.log(`[voice-webhook] 🔍 Looking for pending consult for agent: ${username}`);
               const result = await pool.query(
                 `SELECT * FROM cc_interactions 
                  WHERE agent_username = $1 
@@ -243,6 +244,7 @@ export async function POST(request) {
                  ORDER BY created_at DESC LIMIT 1`,
                 [username],
               );
+              console.log(`[voice-webhook] 🔍 Found ${result.rows?.length || 0} interactions with pending consult`);
               if (result.rows?.[0]) {
                 const row = result.rows[0];
                 const safeParse = (value) => {
@@ -329,7 +331,9 @@ export async function POST(request) {
         });
 
         // If this is a consult call, update the original interaction's consult_state
-        if (consultInteraction && pstnCallControlId) {
+        // Update even if pstnCallControlId is null - we still need to save agentCallControlId
+        if (consultInteraction) {
+          console.log(`[voice-webhook] 🔵 Updating consult_state for interaction ${consultInteraction.id} with agentCallControlId=${callControlId}, pstnCallControlId=${pstnCallControlId}`);
           try {
             const { PgDb } = await import("@/lib/pgdb.js");
             const { addTimelineEvent, TimelineEventTypes } = await import(
