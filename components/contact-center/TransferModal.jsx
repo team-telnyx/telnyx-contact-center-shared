@@ -880,11 +880,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         storeState.call?.fromNumber ||
         null;
 
-      // IMPORTANT: Set consultState BEFORE initiating WebRTC call
-      // This prevents the modal from closing and the reset useEffect from triggering
+      // Set consultState.initiating=true BEFORE WebRTC call to show loading state
+      // Keep isActive=false so buttons remain visible (but disabled with loading spinner)
+      // isActive will be set to true AFTER WebRTC call is established
       setConsultState({
-        isActive: true,
-        initiating: true, // Flag to indicate we're still setting up the call
+        isActive: false, // Not active yet - still setting up
+        initiating: true, // Flag to show loading state on buttons
         parkedCall: {
           callControlId: data.parkedCallControlId || parkedCallControlId,
           fromNumber: currentInteraction?.from_number || null,
@@ -900,7 +901,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       });
 
       console.log(
-        `[TransferModal] Set consultState.isActive=true BEFORE WebRTC call to prevent modal close`,
+        `[TransferModal] Set consultState.initiating=true, keeping buttons visible with loading`,
       );
 
       // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
@@ -908,6 +909,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       if (!client) {
         alert("WebRTC client not available. Please ensure you're connected.");
         setLoading(false);
+        // Clear consultInProgress flag on error
+        useActiveCallStore.getState().setConsultInProgress(false);
         // Reset consult state on error
         setConsultState({
           isActive: false,
@@ -916,6 +919,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           consultantCall: null,
           agentCallControlId: null,
         });
+        // Clean up consult state in database since we can't proceed
+        if (interactionId) {
+          cleanupConsultStateInDb(interactionId, true);
+        }
         return;
       }
 
@@ -1012,10 +1019,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         );
 
         // Step 3: Update consult state with the new call's control ID
-        // Keep isActive=true to prevent modal from closing
+        // NOW set isActive=true since call is established - this hides the Consult/Transfer buttons
+        // and shows the call legs UI
         setConsultState((prev) => ({
           ...prev,
-          initiating: false, // Call has been initiated
+          isActive: true, // NOW activate - call is established
+          initiating: false, // No longer initiating
           agentCallControlId: newAgentCallControlId,
           consultantCall: {
             ...prev.consultantCall,
@@ -2188,15 +2197,16 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             <Button
               variant="outline"
               onClick={() => handleModalOpenChange(false)}
-              disabled={loading || consultState.isActive}
+              disabled={loading || consultState.isActive || consultState.initiating}
               title={
-                consultState.isActive
+                consultState.isActive || consultState.initiating
                   ? "Cannot close while consult call is in progress"
                   : "Cancel"
               }
             >
               Cancel
             </Button>
+            {/* Show Consult button when not in active consult (but can be initiating - shows loading) */}
             {!consultState.isActive && (
               <Button
                 onClick={handleConsult}
@@ -2204,14 +2214,15 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                   !isValid() ||
                   loading ||
                   loadingData ||
-                  selectionType === "queues"
+                  selectionType === "queues" ||
+                  consultState.initiating
                 }
                 className="min-w-[120px] bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               >
-                {loading ? (
+                {loading || consultState.initiating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Consulting...
+                    {consultState.initiating ? "Connecting..." : "Consulting..."}
                   </>
                 ) : (
                   "Consult"
@@ -2221,11 +2232,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             <Button
               onClick={handleConfirm}
               disabled={
-                !isValid() || loading || loadingData || consultState.isActive
+                !isValid() || loading || loadingData || consultState.isActive || consultState.initiating
               }
               className="min-w-[120px]"
               title={
-                consultState.isActive
+                consultState.isActive || consultState.initiating
                   ? "Cannot transfer while consult call is in progress"
                   : undefined
               }
