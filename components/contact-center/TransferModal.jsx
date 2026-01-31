@@ -818,6 +818,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         currentInteraction?.call_control_id ||
         storeState.originalCallControlId;
 
+      // CRITICAL: Set consultInProgress flag BEFORE API call to prevent clearActiveCall
+      // from being called when the original call hangs up (race condition protection)
+      useActiveCallStore.getState().setConsultInProgress(true);
+      console.log("[TransferModal] Set consultInProgress=true to protect against clearActiveCall");
+
       // Step 1: Call API to set consult state BEFORE disconnecting WebRTC
       // This is critical - the webhook handler checks consult_state.isActive to know
       // whether to hang up the original call leg or keep it parked
@@ -853,6 +858,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         console.error(
           `[TransferModal] Consult API failed: ${JSON.stringify(data)}`,
         );
+        // Clear consultInProgress flag on API error
+        useActiveCallStore.getState().setConsultInProgress(false);
         alert(data.error || "Consult failed");
         setLoading(false);
         return;
@@ -1008,6 +1015,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           },
         }));
 
+        // Clear consultInProgress flag - new call is now set in the store
+        useActiveCallStore.getState().setConsultInProgress(false);
+        console.log("[TransferModal] Cleared consultInProgress flag - new consult call is established");
+
         // Keep modal open and stop loading - consult call is being initiated
         setLoading(false);
         // Don't close the modal - user needs to see consult call legs and can switch between them
@@ -1018,6 +1029,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         console.error("[TransferModal] Failed to initiate WebRTC call:", callErr);
         alert("Failed to initiate consult call: " + (callErr.message || "Unknown error"));
         setLoading(false);
+        // Clear consultInProgress flag on error
+        useActiveCallStore.getState().setConsultInProgress(false);
         // Reset consult state on error and cleanup in database
         setConsultState({
           isActive: false,
@@ -1035,6 +1048,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     } catch (err) {
       console.error("[TransferModal] Consult error:", err);
       alert("Consult failed: " + (err.message || "Unknown error"));
+      // Clear consultInProgress flag on error
+      useActiveCallStore.getState().setConsultInProgress(false);
       // Reset consult state on outer error
       setConsultState({
         isActive: false,
@@ -1750,99 +1765,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                 )}
               </div>
 
-              {selectedAgent && (
-                <div className="space-y-3 p-4 bg-muted rounded-lg">
-                  {agentStats ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Status
-                          </Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            {(() => {
-                              const StatusIcon =
-                                STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
-                                STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                              // Get status color from database, fallback to hardcoded colors
-                              const statusColorHex = getStatusColor(
-                                agentStats.status,
-                              );
-                              const statusColorClass =
-                                !statusColorHex
-                                  ? agentStats.status === "Available"
-                                    ? "text-green-600"
-                                    : agentStats.status === "Busy"
-                                      ? "text-orange-600"
-                                      : agentStats.status === "Away"
-                                        ? "text-yellow-600"
-                                        : "text-gray-600"
-                                  : null;
-                              return (
-                                <>
-                                  <StatusIcon
-                                    className={cn("h-4 w-4", statusColorClass)}
-                                    style={
-                                      statusColorHex
-                                        ? { color: statusColorHex }
-                                        : undefined
-                                    }
-                                  />
-                                  <span
-                                    className={cn(
-                                      "text-sm font-medium",
-                                      statusColorClass,
-                                    )}
-                                    style={
-                                      statusColorHex
-                                        ? { color: statusColorHex }
-                                        : undefined
-                                    }
-                                  >
-                                    {agentStats.status || "Unknown"}
-                                  </span>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            On Call
-                          </Label>
-                          <div className="mt-1">
-                            {(() => {
-                              const currentCallsCount =
-                                typeof agentStats.currentCalls === "number"
-                                  ? agentStats.currentCalls
-                                  : agentStats.currentCalls?.length || 0;
-                              const isOnCall = currentCallsCount > 0;
-                              return (
-                                <Badge
-                                  className={cn(
-                                    "text-xs",
-                                    isOnCall
-                                      ? "bg-green-500 text-white"
-                                      : "bg-gray-500 text-white",
-                                  )}
-                                >
-                                  {isOnCall ? "Yes" : "No"}
-                                </Badge>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading agent statistics...
-                    </div>
-                  )}
-                </div>
-              )}
-
+              {/* Select Number - moved ABOVE agent stats */}
               {selectedAgent && agentNumbers.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold flex items-center gap-2">
@@ -1882,6 +1805,84 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                       })}
                     </SelectContent>
                   </ClientOnlySelect>
+                </div>
+              )}
+
+              {/* Agent stats - moved BELOW Select Number */}
+              {selectedAgent && (
+                <div className="space-y-3 p-4 bg-muted rounded-lg">
+                  {agentStats ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            Status
+                          </Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            {(() => {
+                              const StatusIcon =
+                                STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
+                                STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                              const statusColorHex = getStatusColor(agentStats.status);
+                              const statusColorClass =
+                                !statusColorHex
+                                  ? agentStats.status === "Available"
+                                    ? "text-green-600"
+                                    : agentStats.status === "Busy"
+                                      ? "text-orange-600"
+                                      : agentStats.status === "Away"
+                                        ? "text-yellow-600"
+                                        : "text-gray-600"
+                                  : null;
+                              return (
+                                <>
+                                  <StatusIcon
+                                    className={cn("h-4 w-4", statusColorClass)}
+                                    style={statusColorHex ? { color: statusColorHex } : undefined}
+                                  />
+                                  <span
+                                    className={cn("text-sm font-medium", statusColorClass)}
+                                    style={statusColorHex ? { color: statusColorHex } : undefined}
+                                  >
+                                    {agentStats.status || "Unknown"}
+                                  </span>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">
+                            On Call
+                          </Label>
+                          <div className="mt-1">
+                            {(() => {
+                              const currentCallsCount =
+                                typeof agentStats.currentCalls === "number"
+                                  ? agentStats.currentCalls
+                                  : agentStats.currentCalls?.length || 0;
+                              const isOnCall = currentCallsCount > 0;
+                              return (
+                                <Badge
+                                  className={cn(
+                                    "text-xs",
+                                    isOnCall ? "bg-green-500 text-white" : "bg-gray-500 text-white",
+                                  )}
+                                >
+                                  {isOnCall ? "Yes" : "No"}
+                                </Badge>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading agent statistics...
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2035,10 +2036,25 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           {/* Consult Call Tiles - Horizontal colored rectangles */}
           {consultState.isActive && (
             <div className="space-y-3 pt-4 border-t">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                <PhoneCall className="h-4 w-4 text-blue-600" />
-                Call Legs
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <PhoneCall className="h-4 w-4 text-blue-600" />
+                  Call Legs
+                </Label>
+                {/* Call Status Badge */}
+                <Badge
+                  className={cn(
+                    "text-xs",
+                    isCallConnected()
+                      ? "bg-green-500 text-white"
+                      : callStatus === "ringing" || callStatus === "early"
+                        ? "bg-yellow-500 text-white"
+                        : "bg-blue-500 text-white",
+                  )}
+                >
+                  {callStatus || activeCall?.state || "initiating"}
+                </Badge>
+              </div>
               <div className="flex gap-3">
                 {/* Parked Call Tile - Dimmed (not active) */}
                 {consultState.parkedCall && (
@@ -2107,73 +2123,63 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* Call Control Buttons - Show when consult call is active */}
+          {/* Call Control Buttons - Minimal height, just buttons */}
           {consultState.isActive && (
-            <div className="pt-4 border-t">
-              {/* Show current call status */}
-              <div className="text-center text-xs text-muted-foreground mb-2">
-                Call Status: {callStatus || activeCall?.state || "initiating"}
-              </div>
-              <div className="flex items-center justify-center gap-3 p-4 bg-muted/30 rounded-lg">
-                {/* Always show disconnect button during consult */}
-                {!isCallConnected() ? (
-                  <>
-                    {/* Show only disconnect button when call is not yet connected (dialing/ringing) */}
-                    <button
-                      onClick={handleDisconnectCall}
-                      disabled={loading}
-                      className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Disconnect"
-                    >
-                      <PhoneOff className="h-5 w-5" />
-                    </button>
-                    <span className="text-sm text-muted-foreground">
-                      {activeCall ? "Calling..." : "Initializing..."}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {/* Mute, Disconnect, and Hold buttons when answered */}
-                    <button
-                      onClick={handleToggleMute}
-                      disabled={loading}
-                      className={cn(
-                        "h-12 w-12 rounded-full grid place-items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
-                        callUI.isMuted
-                          ? "bg-zinc-700 hover:bg-zinc-800 text-white"
-                          : "bg-zinc-600 hover:bg-zinc-700 text-white",
-                      )}
-                      title={callUI.isMuted ? "Unmute" : "Mute"}
-                    >
-                      {callUI.isMuted ? (
-                        <MicOff className="h-5 w-5" />
-                      ) : (
-                        <Mic className="h-5 w-5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={handleDisconnectCall}
-                      disabled={loading}
-                      className="h-12 w-12 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Disconnect"
-                    >
-                      <PhoneOff className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={handleToggleHold}
-                      disabled={loading}
-                      className="h-12 w-12 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={callUI.isHeld ? "Unhold" : "Hold"}
-                    >
-                      {callUI.isHeld ? (
-                        <Play className="h-5 w-5" />
-                      ) : (
-                        <Pause className="h-5 w-5" />
-                      )}
-                    </button>
-                  </>
-                )}
-              </div>
+            <div className="flex items-center justify-center gap-3 pt-3">
+              {!isCallConnected() ? (
+                <>
+                  {/* Disconnect button when call not yet connected */}
+                  <button
+                    onClick={handleDisconnectCall}
+                    disabled={loading}
+                    className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Disconnect"
+                  >
+                    <PhoneOff className="h-4 w-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Mute, Disconnect, and Hold buttons when answered */}
+                  <button
+                    onClick={handleToggleMute}
+                    disabled={loading}
+                    className={cn(
+                      "h-10 w-10 rounded-full grid place-items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                      callUI.isMuted
+                        ? "bg-zinc-700 hover:bg-zinc-800 text-white"
+                        : "bg-zinc-600 hover:bg-zinc-700 text-white",
+                    )}
+                    title={callUI.isMuted ? "Unmute" : "Mute"}
+                  >
+                    {callUI.isMuted ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={handleDisconnectCall}
+                    disabled={loading}
+                    className="h-10 w-10 rounded-full grid place-items-center bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Disconnect"
+                  >
+                    <PhoneOff className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={handleToggleHold}
+                    disabled={loading}
+                    className="h-10 w-10 rounded-full grid place-items-center bg-zinc-600 hover:bg-zinc-700 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={callUI.isHeld ? "Unhold" : "Hold"}
+                  >
+                    {callUI.isHeld ? (
+                      <Play className="h-4 w-4" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
