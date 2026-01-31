@@ -2080,7 +2080,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           )}
 
           {/* Consult Call Tiles - Horizontal colored rectangles */}
-          {consultState.isActive && (
+          {/* Show when: isActive, initiating, OR when we have parkedCall data and an active call */}
+          {(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-2">
@@ -2170,7 +2171,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           )}
 
           {/* Call Control Buttons - Minimal height, just buttons */}
-          {consultState.isActive && (
+          {/* Show when: isActive, initiating, OR when we have parkedCall data and an active call */}
+          {(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
             <div className="flex items-center justify-center gap-3 pt-3">
               {!isCallConnected() ? (
                 <>
@@ -2243,50 +2245,45 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             >
               Cancel
             </Button>
-            {/* Show Consult button when not in active consult (but can be initiating - shows loading) */}
-            {!consultState.isActive && (
-              <Button
-                onClick={handleConsult}
-                disabled={
-                  !isValid() ||
-                  loading ||
-                  loadingData ||
-                  selectionType === "queues" ||
-                  consultState.initiating
-                }
-                className="min-w-[120px] bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-              >
-                {loading || consultState.initiating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    {consultState.initiating ? "Connecting..." : "Consulting..."}
-                  </>
-                ) : (
-                  "Consult"
-                )}
-              </Button>
+            {/* Show Consult/Transfer buttons when NOT in active consult session */}
+            {/* Hide when: isActive OR initiating OR (parkedCall exists AND call is active) */}
+            {!(consultState.isActive || consultState.initiating || (consultState.parkedCall && isCallActive())) && (
+              <>
+                <Button
+                  onClick={handleConsult}
+                  disabled={
+                    !isValid() ||
+                    loading ||
+                    loadingData ||
+                    selectionType === "queues"
+                  }
+                  className="min-w-[120px] bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Consulting...
+                    </>
+                  ) : (
+                    "Consult"
+                  )}
+                </Button>
+                <Button
+                  onClick={handleConfirm}
+                  disabled={!isValid() || loading || loadingData}
+                  className="min-w-[120px]"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Transferring...
+                    </>
+                  ) : (
+                    "Transfer"
+                  )}
+                </Button>
+              </>
             )}
-            <Button
-              onClick={handleConfirm}
-              disabled={
-                !isValid() || loading || loadingData || consultState.isActive || consultState.initiating
-              }
-              className="min-w-[120px]"
-              title={
-                consultState.isActive || consultState.initiating
-                  ? "Cannot transfer while consult call is in progress"
-                  : undefined
-              }
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Transferring...
-                </>
-              ) : (
-                "Transfer"
-              )}
-            </Button>
           </div>
         </div>
       </DialogContent>
