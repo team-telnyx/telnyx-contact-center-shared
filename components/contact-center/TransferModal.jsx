@@ -192,6 +192,21 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       return;
     }
 
+    // CRITICAL: Get callControlId from store to verify this is actually the consult call ending
+    // not stale status from the old call
+    const storeCallControlId = useActiveCallStore.getState().callControlId;
+    const consultCallControlId = consultState.consultantCall?.callControlId;
+    
+    // If store's callControlId doesn't match our consult call, skip
+    // This prevents resetting state when stale "ended" status from old call triggers this effect
+    if (consultCallControlId && storeCallControlId && storeCallControlId !== consultCallControlId) {
+      console.log("[TransferModal] Skipping reset - callControlId mismatch", {
+        storeCallControlId,
+        consultCallControlId,
+      });
+      return;
+    }
+
     // Use callStatus from hook (not callUI.status which is undefined)
     const effectiveStatus = callStatus || activeCall?.state || "";
     const lowerStatus = String(effectiveStatus).toLowerCase();
@@ -203,7 +218,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
     // Only reset if the consult call itself ended (not the original call being parked)
     // Check that we actually have an active consult call that's ending
-    if (isCallEnded && consultState.consultantCall?.callControlId) {
+    if (isCallEnded && consultCallControlId) {
       console.log("[TransferModal] Consult call ended, resetting consult state. status=", effectiveStatus);
       setConsultState({
         isActive: false,
@@ -1018,7 +1033,29 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           `[TransferModal] WebRTC call initiated. callControlId=${newAgentCallControlId}. Waiting for call.initiated webhook to trigger dialAndBridge.`,
         );
 
-        // Step 3: Update consult state with the new call's control ID
+        // Step 3: Wait a moment for store to stabilize before setting isActive
+        // This prevents race condition where useEffect sees stale "ended" status
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Verify store has the new call before activating consult UI
+        const verifyStore = useActiveCallStore.getState();
+        console.log(`[TransferModal] Verify store before isActive: call=${!!verifyStore.call}, status=${verifyStore.status}, callControlId=${verifyStore.callControlId}`);
+
+        // CRITICAL: Only activate if store shows a valid call state (not ended/idle)
+        const storeStatus = String(verifyStore.status || "").toLowerCase();
+        const isStoreCallValid = verifyStore.call && 
+          !["ended", "hangup", "destroy", "idle", "terminated", "purge"].includes(storeStatus);
+
+        if (!isStoreCallValid) {
+          console.warn(`[TransferModal] Store call not valid, status=${storeStatus}. Waiting for valid state...`);
+          // Wait a bit more and check again
+          await new Promise(resolve => setTimeout(resolve, 300));
+          const retryStore = useActiveCallStore.getState();
+          const retryStatus = String(retryStore.status || "").toLowerCase();
+          console.log(`[TransferModal] Retry verify: call=${!!retryStore.call}, status=${retryStatus}`);
+        }
+
+        // Step 4: Update consult state with the new call's control ID
         // NOW set isActive=true since call is established - this hides the Consult/Transfer buttons
         // and shows the call legs UI
         setConsultState((prev) => ({
