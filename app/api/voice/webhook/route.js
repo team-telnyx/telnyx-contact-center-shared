@@ -226,16 +226,22 @@ export async function POST(request) {
           }
         );
 
-        // Check if this is a consult call by looking for pending consult for this agent
+        // Check if this is a consult call by looking for pending consult
+        // Try multiple lookup methods: username, consultantTarget (SIP URI), or telephonyUserName
         let consultInteraction = null;
-        if (username) {
-          try {
-            const { PgDb } = await import("@/lib/pgdb.js");
-            // Find interaction with pending consult for this agent
-            const { getPostgresPool } = await import("@/lib/postgres.mjs");
-            const pool = getPostgresPool();
-            if (pool) {
-              console.log(`[voice-webhook] 🔍 Looking for pending consult for agent: ${username}`);
+        try {
+          const { PgDb } = await import("@/lib/pgdb.js");
+          const { getPostgresPool } = await import("@/lib/postgres.mjs");
+          const pool = getPostgresPool();
+          if (pool) {
+            // Extract the destination for matching
+            const toValue = to?.phone_number || to || "";
+            const toSipUser = toValue.includes("@") ? toValue.split("@")[0] : toValue;
+            
+            console.log(`[voice-webhook] 🔍 Looking for pending consult. username=${username}, to=${toValue}, toSipUser=${toSipUser}`);
+            
+            // Try lookup by username first (if available)
+            if (username) {
               const result = await pool.query(
                 `SELECT * FROM cc_interactions 
                  WHERE agent_username = $1 
@@ -244,38 +250,80 @@ export async function POST(request) {
                  ORDER BY created_at DESC LIMIT 1`,
                 [username],
               );
-              console.log(`[voice-webhook] 🔍 Found ${result.rows?.length || 0} interactions with pending consult`);
               if (result.rows?.[0]) {
-                const row = result.rows[0];
-                const safeParse = (value) => {
-                  if (!value) return null;
-                  if (typeof value === "object") return value;
-                  if (typeof value === "string") {
-                    try {
-                      return JSON.parse(value);
-                    } catch {
-                      return value;
-                    }
-                  }
-                  return value;
-                };
-                consultInteraction = {
-                  ...row,
-                  metadata: safeParse(row.metadata),
-                };
-                const consultantTarget =
-                  consultInteraction.metadata?.consult_state?.consultantTarget;
-                console.log(
-                  `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${to?.phone_number || to})`,
-                );
+                consultInteraction = result.rows[0];
+                console.log(`[voice-webhook] 🔍 Found pending consult by username: ${username}`);
               }
             }
-          } catch (consultCheckErr) {
-            console.error(
-              "[voice-webhook] Error checking for consult call:",
-              consultCheckErr,
-            );
+            
+            // If not found by username, try by consultantTarget matching the 'to' field
+            if (!consultInteraction && toValue) {
+              // Match by full SIP URI or just the SIP username part
+              const result = await pool.query(
+                `SELECT * FROM cc_interactions 
+                 WHERE metadata->>'consult_state' IS NOT NULL
+                   AND (metadata->'consult_state'->>'pendingConsult')::boolean = true
+                   AND (
+                     metadata->'consult_state'->>'consultantTarget' = $1
+                     OR metadata->'consult_state'->>'consultantTarget' LIKE $2
+                   )
+                 ORDER BY created_at DESC LIMIT 1`,
+                [toValue, `%${toSipUser}@%`],
+              );
+              if (result.rows?.[0]) {
+                consultInteraction = result.rows[0];
+                console.log(`[voice-webhook] 🔍 Found pending consult by consultantTarget: ${toValue}`);
+              }
+            }
+            
+            // If not found, try by telephonyUserName (agent's WebRTC connection)
+            if (!consultInteraction && payloadConnectionId) {
+              const result = await pool.query(
+                `SELECT * FROM cc_interactions 
+                 WHERE metadata->>'consult_state' IS NOT NULL
+                   AND (metadata->'consult_state'->>'pendingConsult')::boolean = true
+                   AND metadata->'consult_state'->>'connectionId' = $1
+                 ORDER BY created_at DESC LIMIT 1`,
+                [payloadConnectionId],
+              );
+              if (result.rows?.[0]) {
+                consultInteraction = result.rows[0];
+                console.log(`[voice-webhook] 🔍 Found pending consult by connectionId: ${payloadConnectionId}`);
+              }
+            }
+            
+            // Parse the interaction if found
+            if (consultInteraction) {
+              const safeParse = (value) => {
+                if (!value) return null;
+                if (typeof value === "object") return value;
+                if (typeof value === "string") {
+                  try {
+                    return JSON.parse(value);
+                  } catch {
+                    return value;
+                  }
+                }
+                return value;
+              };
+              consultInteraction = {
+                ...consultInteraction,
+                metadata: safeParse(consultInteraction.metadata),
+              };
+              const consultantTarget =
+                consultInteraction.metadata?.consult_state?.consultantTarget;
+              console.log(
+                `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${toValue})`,
+              );
+            } else {
+              console.log(`[voice-webhook] 🔍 No pending consult found for this call`);
+            }
           }
+        } catch (consultCheckErr) {
+          console.error(
+            "[voice-webhook] Error checking for consult call:",
+            consultCheckErr,
+          );
         }
 
         // Create outbound interaction for WebRTC leg
