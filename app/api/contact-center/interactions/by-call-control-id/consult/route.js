@@ -5,6 +5,144 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 /**
+ * DELETE /api/contact-center/interactions/by-call-control-id/consult
+ * Cancel/cleanup consult state and optionally hangup parked call
+ * Used when consult fails or is cancelled
+ */
+export async function DELETE(request) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const callControlId = searchParams.get("callControlId");
+    const hangupParked = searchParams.get("hangupParked") === "true";
+
+    if (!callControlId) {
+      return NextResponse.json(
+        { ok: false, error: "callControlId is required" },
+        { status: 400 },
+      );
+    }
+
+    // Find interaction by agent_call_control_id in metadata
+    const pool = getPostgresPool();
+    let interaction = null;
+    
+    if (pool) {
+      const r = await pool.query(
+        `SELECT * FROM cc_interactions 
+         WHERE metadata->>'agent_call_control_id' = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [callControlId],
+      );
+      if (r.rows?.[0]) {
+        const row = r.rows[0];
+        const safeParse = (value) => {
+          if (!value) return null;
+          if (typeof value === "object") return value;
+          if (typeof value === "string") {
+            try {
+              return JSON.parse(value);
+            } catch {
+              return value;
+            }
+          }
+          return value;
+        };
+        interaction = {
+          ...row,
+          metadata: safeParse(row.metadata),
+        };
+      }
+    }
+
+    if (!interaction) {
+      return NextResponse.json(
+        { ok: false, error: "Interaction not found" },
+        { status: 404 },
+      );
+    }
+
+    const metadata = interaction.metadata || {};
+    const consultState = metadata.consult_state;
+
+    console.log(
+      `[Consult] DELETE - Cleaning up consult state for interaction ${interaction.id}, hangupParked=${hangupParked}, consultState=${JSON.stringify(consultState)}`,
+    );
+
+    // Clear consult_state from metadata
+    delete metadata.consult_state;
+    
+    await PgDb.updateInteractionById(interaction.id, {
+      metadata,
+    });
+
+    console.log(
+      `[Consult] Cleared consult_state from interaction ${interaction.id} metadata`,
+    );
+
+    // Optionally hangup the parked call (customer leg)
+    if (hangupParked && consultState?.parkedCallControlId) {
+      const apiKey = process.env.TELNYX_API_KEY;
+      if (apiKey) {
+        try {
+          const hangupUrl = buildTelnyxV2Url(
+            `/calls/${encodeURIComponent(consultState.parkedCallControlId)}/actions/hangup`,
+          );
+          
+          console.log(
+            `[Consult] Hanging up parked call ${consultState.parkedCallControlId}`,
+          );
+          
+          const hangupResponse = await fetch(hangupUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({}),
+          });
+
+          if (!hangupResponse.ok) {
+            const errorText = await hangupResponse.text();
+            console.error(
+              `[Consult] Failed to hangup parked call: ${errorText}`,
+            );
+          } else {
+            console.log(
+              `[Consult] Successfully hung up parked call ${consultState.parkedCallControlId}`,
+            );
+          }
+        } catch (hangupError) {
+          console.error(
+            `[Consult] Error hanging up parked call:`,
+            hangupError,
+          );
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Consult state cleared",
+      clearedState: consultState || null,
+    });
+  } catch (err) {
+    console.error("[Consult] DELETE Error:", err);
+    return NextResponse.json(
+      { ok: false, error: err?.message || "Server error" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
  * POST /api/contact-center/interactions/by-call-control-id/consult
  * Create a consult call by parking the current call and initiating a new call
  * (for calls without interaction ID)

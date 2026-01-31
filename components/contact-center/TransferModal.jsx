@@ -122,6 +122,21 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     agentCallControlId: null, // Agent's WebRTC call control ID
   });
 
+  // Helper to clean up consult state in database (for error recovery)
+  const cleanupConsultStateInDb = async (interactionId, hangupParked = false) => {
+    if (!interactionId) return;
+    try {
+      const url = hangupParked
+        ? `/api/contact-center/interactions/${interactionId}/consult?hangupParked=true`
+        : `/api/contact-center/interactions/${interactionId}/consult`;
+      const res = await fetch(url, { method: "DELETE" });
+      const data = await res.json();
+      console.log(`[TransferModal] Cleaned up consult state in DB:`, data);
+    } catch (err) {
+      console.error(`[TransferModal] Failed to cleanup consult state in DB:`, err);
+    }
+  };
+
   // Reset consult state when CONSULT call ends (not the original call)
   // We need to be careful here - when we start consult, the original call hangs up first
   // We should only reset when the CONSULT call ends, not the original
@@ -977,7 +992,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         console.error("[TransferModal] Failed to initiate WebRTC call:", callErr);
         alert("Failed to initiate consult call: " + (callErr.message || "Unknown error"));
         setLoading(false);
-        // Reset consult state on error
+        // Reset consult state on error and cleanup in database
         setConsultState({
           isActive: false,
           initiating: false,
@@ -985,11 +1000,23 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           consultantCall: null,
           agentCallControlId: null,
         });
+        // Clean up consult state in database and hangup parked call since consult failed
+        if (interactionId) {
+          cleanupConsultStateInDb(interactionId, true);
+        }
         return;
       }
     } catch (err) {
       console.error("[TransferModal] Consult error:", err);
       alert("Consult failed: " + (err.message || "Unknown error"));
+      // Reset consult state on outer error
+      setConsultState({
+        isActive: false,
+        initiating: false,
+        parkedCall: null,
+        consultantCall: null,
+        agentCallControlId: null,
+      });
     } finally {
       setLoading(false);
     }
@@ -1029,6 +1056,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
   // Call control handlers (similar to SupervisionModal)
   const handleDisconnectCall = () => {
+    // Get interactionId before resetting state
+    const interactionId = consultState.parkedCall?.interactionId || interaction?.id;
+    const wasConsultActive = consultState.isActive || consultState.initiating;
+    
     if (!activeCall) {
       clearActiveCall();
       // Reset consult state when call ends
@@ -1039,6 +1070,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         consultantCall: null,
         agentCallControlId: null,
       });
+      // Clean up consult state in database if we were in a consult process
+      if (wasConsultActive && interactionId) {
+        cleanupConsultStateInDb(interactionId, true);
+      }
       return;
     }
     try {
@@ -1052,6 +1087,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         consultantCall: null,
         agentCallControlId: null,
       });
+      // Clean up consult state in database if we were in a consult process
+      if (wasConsultActive && interactionId) {
+        cleanupConsultStateInDb(interactionId, true);
+      }
     } catch (err) {
       console.error("[TransferModal] Error disconnecting call:", err);
       clearActiveCall();
@@ -1062,6 +1101,10 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         consultantCall: null,
         agentCallControlId: null,
       });
+      // Clean up consult state in database on error
+      if (wasConsultActive && interactionId) {
+        cleanupConsultStateInDb(interactionId, true);
+      }
     }
   };
 

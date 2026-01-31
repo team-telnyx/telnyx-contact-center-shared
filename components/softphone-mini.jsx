@@ -1451,17 +1451,17 @@ export default function SoftphoneMini() {
       >
         <IconChevronDown className="h-4 w-4" />
       </button>
-      {activeCall && (
-        <TransferModal
-          open={showTransfer}
-          onOpenChange={setShowTransfer}
-          interaction={interaction}
-          onTransfer={() => {
-            setShowTransfer(false);
-            console.log("[SoftphoneMini] Transfer successful");
-          }}
-        />
-      )}
+      {/* TransferModal must stay mounted during consult process even when activeCall is null
+          (because consult hangs up original call before initiating new WebRTC call) */}
+      <TransferModal
+        open={showTransfer}
+        onOpenChange={setShowTransfer}
+        interaction={interaction}
+        onTransfer={() => {
+          setShowTransfer(false);
+          console.log("[SoftphoneMini] Transfer successful");
+        }}
+      />
       <NumberSelectionModal
         open={showNumberModal}
         onOpenChange={setShowNumberModal}

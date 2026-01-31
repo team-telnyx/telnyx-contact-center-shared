@@ -4,6 +4,114 @@ import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 /**
+ * DELETE /api/contact-center/interactions/[id]/consult
+ * Cancel/cleanup consult state and optionally hangup parked call
+ * Used when consult fails or is cancelled
+ */
+export async function DELETE(request, { params }) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const { id } = await params;
+    const url = new URL(request.url);
+    const hangupParked = url.searchParams.get("hangupParked") === "true";
+
+    if (!id) {
+      return NextResponse.json(
+        { ok: false, error: "Interaction ID is required" },
+        { status: 400 },
+      );
+    }
+
+    // Find interaction by ID
+    const interaction = await PgDb.findInteractionById(id);
+    if (!interaction) {
+      return NextResponse.json(
+        { ok: false, error: "Interaction not found" },
+        { status: 404 },
+      );
+    }
+
+    const metadata = interaction.metadata || {};
+    const consultState = metadata.consult_state;
+
+    console.log(
+      `[Consult] DELETE - Cleaning up consult state for interaction ${id}, hangupParked=${hangupParked}, consultState=${JSON.stringify(consultState)}`,
+    );
+
+    // Clear consult_state from metadata
+    delete metadata.consult_state;
+    
+    await PgDb.updateInteractionById(interaction.id, {
+      metadata,
+    });
+
+    console.log(
+      `[Consult] Cleared consult_state from interaction ${id} metadata`,
+    );
+
+    // Optionally hangup the parked call (customer leg)
+    if (hangupParked && consultState?.parkedCallControlId) {
+      const apiKey = process.env.TELNYX_API_KEY;
+      if (apiKey) {
+        try {
+          const hangupUrl = buildTelnyxV2Url(
+            `/calls/${encodeURIComponent(consultState.parkedCallControlId)}/actions/hangup`,
+          );
+          
+          console.log(
+            `[Consult] Hanging up parked call ${consultState.parkedCallControlId}`,
+          );
+          
+          const hangupResponse = await fetch(hangupUrl, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({}),
+          });
+
+          if (!hangupResponse.ok) {
+            const errorText = await hangupResponse.text();
+            console.error(
+              `[Consult] Failed to hangup parked call: ${errorText}`,
+            );
+          } else {
+            console.log(
+              `[Consult] Successfully hung up parked call ${consultState.parkedCallControlId}`,
+            );
+          }
+        } catch (hangupError) {
+          console.error(
+            `[Consult] Error hanging up parked call:`,
+            hangupError,
+          );
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: "Consult state cleared",
+      clearedState: consultState || null,
+    });
+  } catch (err) {
+    console.error("[Consult] DELETE Error:", err);
+    return NextResponse.json(
+      { ok: false, error: err?.message || "Server error" },
+      { status: 500 },
+    );
+  }
+}
+
+/**
  * POST /api/contact-center/interactions/[id]/consult
  * Create a consult call by parking the current call and initiating a new call
  */
