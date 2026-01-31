@@ -165,3 +165,53 @@
   }
 }
 
+/* Recharts tooltip and bar hover styles for dark mode */
+.dark .recharts-tooltip-wrapper {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-tooltip-label {
+  color: var(--card-foreground) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-tooltip-item {
+  color: var(--card-foreground) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-tooltip-item-name {
+  color: var(--card-foreground) !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-tooltip-item-value {
+  color: var(--card-foreground) !important;
+}
+
+/* Bar hover states - prevent light background on hover */
+.dark .recharts-bar-rectangle:hover {
+  opacity: 0.8 !important;
+}
+
+.dark .recharts-active-bar {
+  opacity: 0.8 !important;
+}
+
+.dark .recharts-bar-rectangle {
+  transition: opacity 0.2s ease;
+}
+
+/* Chart axes and legend text colors for dark mode */
+.dark .recharts-cartesian-axis-tick-value,
+.dark .recharts-legend-item-text {
+  fill: var(--muted-foreground) !important;
+}
+
+.dark .recharts-cartesian-grid line {
+  stroke: var(--border) !important;
+  opacity: 0.3;
+}
+
+.dark .recharts-legend-wrapper {
+  color: var(--muted-foreground) !important;
+}

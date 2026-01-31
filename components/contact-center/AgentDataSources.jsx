@@ -8,6 +8,7 @@ import {
   IconBook,
   IconChecklist,
   IconWorld,
+  IconDatabase,
 } from "@tabler/icons-react";
 import { AgentContactsView } from "./AgentContactsView";
 import { AgentTasksView } from "./AgentTasksView";
@@ -58,6 +59,7 @@ export function AgentDataSources({
       <div className="flex flex-col h-full overflow-hidden">
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
           <div className="flex items-center gap-2">
+            <IconDatabase className="h-4 w-4 text-muted-foreground" />
             <h3 className="text-sm font-semibold text-foreground">
               Data Sources
             </h3>

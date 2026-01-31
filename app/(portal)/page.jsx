@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import {
   Card,
   CardContent,
@@ -18,7 +19,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
 } from "recharts";
@@ -33,6 +34,63 @@ import {
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+
+// Custom Tooltip component for Recharts that respects dark/light theme
+function CustomTooltip({ active, payload, label }) {
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Check initial theme
+    const checkDark = () => {
+      if (theme === "dark") {
+        setIsDark(true);
+      } else if (theme === "system") {
+        setIsDark(document.documentElement.classList.contains("dark"));
+      } else {
+        setIsDark(false);
+      }
+    };
+    checkDark();
+
+    // Listen for theme changes
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, [theme]);
+
+  if (!active || !payload || !payload.length) {
+    return null;
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-3 shadow-md",
+        isDark
+          ? "bg-card border-border text-card-foreground"
+          : "bg-popover border-border text-popover-foreground",
+      )}
+    >
+      <p className="font-medium mb-2">{label}</p>
+      {payload.map((entry, index) => (
+        <p key={index} className="text-sm">
+          <span
+            className="inline-block w-3 h-3 rounded-sm mr-2"
+            style={{ backgroundColor: entry.color }}
+          />
+          {entry.name}: {entry.value}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 function formatTime(seconds) {
   if (!seconds || seconds === 0) return "0s";
@@ -260,7 +318,9 @@ export default function HomePage() {
         <MetricCard
           title={period === "today" ? "Today's Calls" : "Total Calls"}
           value={metrics.totalCalls || 0}
-          description={`${metrics.completedCalls || 0} completed, ${metrics.abandonedCalls || 0} abandoned`}
+          description={`${metrics.completedCalls || 0} completed, ${
+            metrics.abandonedCalls || 0
+          } abandoned`}
           icon={IconPhone}
           className="border-l-4 border-l-blue-500"
         />
@@ -280,14 +340,20 @@ export default function HomePage() {
                 )}%`
               : "0%"
           }
-          description={`${metrics.completedCalls || 0} of ${metrics.totalCalls || 0} calls completed`}
+          description={`${metrics.completedCalls || 0} of ${
+            metrics.totalCalls || 0
+          } calls completed`}
           icon={IconCheck}
           className="border-l-4 border-l-emerald-500"
         />
         <MetricCard
           title="Total Talk Time"
           value={formatTime(metrics.totalTalkTime)}
-          description={`Total time spent on calls ${period === "today" ? "today" : `in ${period === "7days" ? "7 days" : "30 days"}`}`}
+          description={`Total time spent on calls ${
+            period === "today"
+              ? "today"
+              : `in ${period === "7days" ? "7 days" : "30 days"}`
+          }`}
           icon={IconPhone}
           className="border-l-4 border-l-orange-500"
         />
@@ -320,7 +386,7 @@ export default function HomePage() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <RechartsTooltip content={<CustomTooltip />} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -356,7 +422,7 @@ export default function HomePage() {
                   height={60}
                 />
                 <YAxis />
-                <Tooltip />
+                <RechartsTooltip content={<CustomTooltip />} />
                 <Legend />
                 <Bar
                   dataKey="completed"
@@ -395,7 +461,7 @@ export default function HomePage() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="hourLabel" tick={{ fontSize: 11 }} interval={2} />
               <YAxis />
-              <Tooltip />
+              <RechartsTooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="completed" fill="#10b981" name="Completed" />
               <Bar dataKey="abandoned" fill="#ef4444" name="Abandoned" />

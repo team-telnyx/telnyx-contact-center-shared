@@ -426,52 +426,58 @@ export function InteractionsList({
       </div>
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-3">
-          {interactions.length === 0 ? (
-            <div className="text-center text-muted-foreground py-12 text-sm">
-              <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No interactions</p>
-            </div>
-          ) : (
-            interactions
-              .filter((interaction) => {
-                if (!interaction || !interaction.id) return false;
+          {(() => {
+            const filteredInteractions = interactions.filter((interaction) => {
+              if (!interaction || !interaction.id) return false;
 
-                // Filter out timeout re-enqueued interactions
-                const metadata = interaction.metadata || {};
-                const wasTimeoutReEnqueued =
-                  metadata.timeout_re_enqueued === true;
+              // Filter out timeout re-enqueued interactions
+              const metadata = interaction.metadata || {};
+              const wasTimeoutReEnqueued =
+                metadata.timeout_re_enqueued === true;
 
-                // Also filter out interactions that are in "queued" state and have no agent_username
-                // (they were re-enqueued after timeout)
-                const isReEnqueued =
-                  interaction.state === "queued" &&
-                  !interaction.agent_username &&
-                  !interaction.agentUsername;
+              // Also filter out interactions that are in "queued" state and have no agent_username
+              // (they were re-enqueued after timeout)
+              const isReEnqueued =
+                interaction.state === "queued" &&
+                !interaction.agent_username &&
+                !interaction.agentUsername;
 
-                if (wasTimeoutReEnqueued || isReEnqueued) {
-                  return false;
-                }
+              if (wasTimeoutReEnqueued || isReEnqueued) {
+                return false;
+              }
 
-                return true;
-              })
-              .map((interaction) => {
-                // Get real-time WebRTC status if available
-                const webrtcState = getWebRTCStatus(
-                  interaction,
-                  webrtcCallState,
-                );
-                return (
-                  <InteractionCard
-                    key={interaction.id}
-                    interaction={interaction}
-                    isSelected={selectedId === interaction.id}
-                    onSelect={onSelect}
-                    webrtcState={webrtcState}
-                    currentUsername={currentUsername}
-                  />
-                );
-              })
-          )}
+              return true;
+            });
+
+            if (filteredInteractions.length === 0) {
+              return (
+                <div className="flex items-center justify-center w-full -mx-3 min-h-[200px]">
+                  <div className="text-center text-muted-foreground text-sm">
+                    <Phone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>No interactions</p>
+                  </div>
+                </div>
+              );
+            }
+
+            return filteredInteractions.map((interaction) => {
+              // Get real-time WebRTC status if available
+              const webrtcState = getWebRTCStatus(
+                interaction,
+                webrtcCallState,
+              );
+              return (
+                <InteractionCard
+                  key={interaction.id}
+                  interaction={interaction}
+                  isSelected={selectedId === interaction.id}
+                  onSelect={onSelect}
+                  webrtcState={webrtcState}
+                  currentUsername={currentUsername}
+                />
+              );
+            });
+          })()}
         </div>
       </ScrollArea>
     </div>

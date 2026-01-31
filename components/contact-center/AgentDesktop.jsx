@@ -1239,7 +1239,7 @@ export function AgentDesktop() {
                 <InteractionDetail interaction={selectedInteraction} />
               ) : (
                 <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-2">
-                  <PhoneCall className="h-10 w-10 text-green-500 animate-pulse" />
+                  <PhoneCall className="h-10 w-10 text-gray-500" />
                   <p>Waiting for a call...</p>
                 </div>
               )
