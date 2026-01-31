@@ -1199,10 +1199,33 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   };
 
   // Call control handlers (similar to SupervisionModal)
-  const handleDisconnectCall = () => {
-    // Get interactionId before resetting state
-    const interactionId = consultState.parkedCall?.interactionId || interaction?.id;
-    const wasConsultActive = consultState.isActive || consultState.initiating;
+  const handleDisconnectCall = async () => {
+    // Get interactionId from multiple sources - store, consultState, or props
+    const storeState = useActiveCallStore.getState();
+    let interactionId = 
+      storeState.contactCenter?.interactionId ||
+      consultState.parkedCall?.interactionId || 
+      interaction?.id;
+    
+    // If no interactionId, try to look it up by callSessionId
+    if (!interactionId && storeState.originalCallSessionId) {
+      try {
+        const res = await fetch(
+          `/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(storeState.originalCallSessionId)}`,
+          { cache: "no-store" }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.interaction?.id) {
+            interactionId = data.interaction.id;
+          }
+        }
+      } catch (err) {
+        console.error("[TransferModal] Failed to look up interaction by callSessionId:", err);
+      }
+    }
+    
+    const wasConsultActive = consultState.isActive || consultState.initiating || isCallActive();
     
     if (!activeCall) {
       clearActiveCall();
