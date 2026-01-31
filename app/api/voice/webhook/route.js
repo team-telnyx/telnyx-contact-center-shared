@@ -342,7 +342,11 @@ export async function POST(request) {
                 ...consultState,
                 isActive: true,
                 pendingConsult: false,
-                consultantCallControlId: callControlId, // WebRTC leg is the consultant call
+                // Store the new agent call control ID for the consult call
+                // This is the WebRTC leg that connects agent to consultant
+                agentCallControlId: callControlId,
+                consultantCallControlId: callControlId, // Same as agentCallControlId for WebRTC leg
+                pstnCallControlId: pstnCallControlId, // PSTN leg to consultant
                 consultantCallInitiatedAt: new Date().toISOString(),
               },
             };
