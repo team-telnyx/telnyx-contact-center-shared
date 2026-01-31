@@ -50,8 +50,10 @@ import { useTelnyx } from "@/components/telephony-provider";
 import useActiveCallStore, {
   useActiveCall,
   useCallUI,
+  useCallStatus,
   useIsRinging,
 } from "@/lib/stores/active-call-store";
+import useCallsStore from "@/lib/stores/calls-store";
 
 // Prevent hydration mismatch by only rendering Select components after mount
 function ClientOnlySelect({ children, ...props }) {
@@ -124,6 +126,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   // Call control hooks
   const activeCall = useActiveCall();
   const callUI = useCallUI();
+  const callStatus = useCallStatus(); // Get call status from store root (not ui)
   const isRinging = useIsRinging();
   const { clearActiveCall, setMuted } = useActiveCallStore();
 
@@ -540,22 +543,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       interaction?.call_control_id;
 
     if (!interactionId && !callControlId) {
-      // Get call control ID from stores
-      let storeState;
-      let callsStoreState;
-
-      try {
-        const { default: useActiveCallStore } =
-          await import("@/lib/stores/active-call-store");
-        const { default: useCallsStore } =
-          await import("@/lib/stores/calls-store");
-        storeState = useActiveCallStore.getState();
-        callsStoreState = useCallsStore.getState();
-      } catch (importErr) {
-        console.error("[TransferModal] Error importing stores:", importErr);
-        alert("Failed to access call state. Please try again.");
-        return;
-      }
+      // Get call control ID from stores (use statically imported stores)
+      const storeState = useActiveCallStore.getState();
+      const callsStoreState = useCallsStore.getState();
 
       if (!storeState.call) {
         alert("No active call to transfer");
@@ -646,22 +636,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
       const data = await res.json();
       if (data.ok) {
-        // Record transfer in active call store
-        try {
-          const { default: useActiveCallStore } =
-            await import("@/lib/stores/active-call-store");
-          const store = useActiveCallStore.getState();
-          store.recordTransfer({
-            to: targetValue,
-            type: transferType,
-            callControlId: callControlId,
-          });
-        } catch (storeErr) {
-          console.error(
-            "[TransferModal] Error recording transfer in store:",
-            storeErr,
-          );
-        }
+        // Record transfer in active call store (use statically imported store)
+        useActiveCallStore.getState().recordTransfer({
+          to: targetValue,
+          type: transferType,
+          callControlId: callControlId,
+        });
 
         onOpenChange(false);
         try {
@@ -754,23 +734,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
     setLoading(true);
     try {
-      // Get active call from store
-      let storeState;
-      let callsStoreState;
-
-      try {
-        const { default: useActiveCallStore } =
-          await import("@/lib/stores/active-call-store");
-        const { default: useCallsStore } =
-          await import("@/lib/stores/calls-store");
-        storeState = useActiveCallStore.getState();
-        callsStoreState = useCallsStore.getState();
-      } catch (importErr) {
-        console.error("[TransferModal] Error importing stores:", importErr);
-        alert("Failed to access call state. Please try again.");
-        setLoading(false);
-        return;
-      }
+      // Get active call from store (use statically imported stores)
+      const storeState = useActiveCallStore.getState();
+      const callsStoreState = useCallsStore.getState();
 
       if (!storeState.call) {
         alert("No active call to consult");
@@ -778,7 +744,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         return;
       }
 
-      const activeCall = storeState.call;
+      const activeCallFromStore = storeState.call;
       
       let interactionId = interaction?.id;
       let currentInteraction = interaction;
@@ -961,9 +927,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           video: false,
         });
 
-        // Set active call in store (consult call)
-        const { default: useActiveCallStore } =
-          await import("@/lib/stores/active-call-store");
+        // Set active call in store (consult call) - use statically imported store
         const activeCallStore = useActiveCallStore.getState();
         activeCallStore.setActiveCall(call, {
           direction: "outbound",
@@ -977,36 +941,47 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           activeCallStore.updateStatus(initialState);
         }
 
+        console.log(`[TransferModal] Set activeCall in store. initialState=${initialState}, call.state=${call.state}`);
+
         // Wire call events (comprehensive - same as softphone)
         if (typeof call.on === "function") {
           call.on("ringing", () => {
-            activeCallStore.updateStatus("ringing");
+            console.log("[TransferModal] Call event: ringing");
+            useActiveCallStore.getState().updateStatus("ringing");
           });
           call.on("active", () => {
-            activeCallStore.updateStatus("active");
+            console.log("[TransferModal] Call event: active");
+            useActiveCallStore.getState().updateStatus("active");
           });
           call.on("connected", () => {
-            activeCallStore.updateStatus("connected");
+            console.log("[TransferModal] Call event: connected");
+            useActiveCallStore.getState().updateStatus("connected");
           });
           call.on("answered", () => {
-            activeCallStore.updateStatus("answered");
+            console.log("[TransferModal] Call event: answered");
+            useActiveCallStore.getState().updateStatus("answered");
           });
           call.on("held", () => {
-            activeCallStore.setHeld(true);
+            console.log("[TransferModal] Call event: held");
+            useActiveCallStore.getState().setHeld(true);
           });
           call.on("hangup", () => {
-            activeCallStore.updateStatus("ended");
+            console.log("[TransferModal] Call event: hangup");
+            useActiveCallStore.getState().updateStatus("ended");
           });
           call.on("destroy", () => {
-            activeCallStore.updateStatus("ended");
+            console.log("[TransferModal] Call event: destroy");
+            useActiveCallStore.getState().updateStatus("ended");
           });
           call.on("ended", () => {
-            activeCallStore.updateStatus("ended");
+            console.log("[TransferModal] Call event: ended");
+            useActiveCallStore.getState().updateStatus("ended");
           });
           call.on("stateChanged", (newState) => {
+            console.log(`[TransferModal] Call event: stateChanged to ${newState}`);
             if (newState) {
               const lowerState = String(newState).toLowerCase();
-              activeCallStore.updateStatus(lowerState);
+              useActiveCallStore.getState().updateStatus(lowerState);
             }
           });
         }
@@ -1108,10 +1083,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, agentCallControlId=${agentCallControlId}`);
       
       // For switching, we need to bridge the current WebRTC connection to the target leg
-      // Get the current active WebRTC call control ID
-      const { default: useActiveCallStore } = await import("@/lib/stores/active-call-store");
-      const storeState = useActiveCallStore.getState();
-      const currentWebRtcCallControlId = storeState.callControlId || storeState.call?.callControlId || storeState.call?.call_control_id || storeState.call?.id;
+      // Get the current active WebRTC call control ID (use statically imported store)
+      const switchStoreState = useActiveCallStore.getState();
+      const currentWebRtcCallControlId = switchStoreState.callControlId || switchStoreState.call?.callControlId || switchStoreState.call?.call_control_id || switchStoreState.call?.id;
       
       if (!currentWebRtcCallControlId) {
         alert("Cannot switch call leg. No active WebRTC call.");
@@ -1241,19 +1215,24 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   };
 
   // Check if call is active (not ended/hungup)
+  // Get effective call status - prefer store status, fallback to call object state
+  const getEffectiveCallStatus = () => {
+    return callStatus || activeCall?.state || "";
+  };
+
   const isCallActive = () => {
     if (!activeCall) return false;
-    const callStatus = callUI.status || activeCall.state || "";
-    const lowerStatus = callStatus.toLowerCase();
-    return !["hangup", "ended", "destroy", "purge", "idle", "terminated"].includes(
+    const status = getEffectiveCallStatus();
+    const lowerStatus = String(status).toLowerCase();
+    return !["hangup", "ended", "destroy", "purge", "idle", "terminated", ""].includes(
       lowerStatus,
     );
   };
 
   const isCallConnected = () => {
     if (!activeCall) return false;
-    const callStatus = callUI.status || activeCall.state || "";
-    const lowerStatus = callStatus.toLowerCase();
+    const status = getEffectiveCallStatus();
+    const lowerStatus = String(status).toLowerCase();
     return ["active", "connected", "answered", "held"].includes(lowerStatus);
   };
 
@@ -2133,7 +2112,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             <div className="pt-4 border-t">
               {/* Show current call status */}
               <div className="text-center text-xs text-muted-foreground mb-2">
-                Call Status: {callUI.status || activeCall?.state || "initiating"}
+                Call Status: {callStatus || activeCall?.state || "initiating"}
               </div>
               <div className="flex items-center justify-center gap-3 p-4 bg-muted/30 rounded-lg">
                 {/* Always show disconnect button during consult */}
