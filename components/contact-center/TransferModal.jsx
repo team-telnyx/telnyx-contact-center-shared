@@ -1223,22 +1223,48 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       
       const currentInteraction = interactionData.interaction;
       const parkedCallControlId = currentInteraction.metadata?.original_call_control_id;
-      const agentCallControlId = currentInteraction.metadata?.agent_call_control_id;
       
-      console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, agentCallControlId=${agentCallControlId}`);
+      // For consult calls, the agent's current call control ID is stored in consult_state
+      // This is the Telnyx call_control_id for the consult call (not the original agent leg)
+      // Also check consultantCallControlId which may be used instead
+      const consultAgentCallControlId = 
+        currentInteraction.metadata?.consult_state?.agentCallControlId ||
+        currentInteraction.metadata?.consult_state?.consultantCallControlId;
       
-      // For switching, we need to bridge the current WebRTC connection to the target leg
-      // Get the current active WebRTC call control ID (use statically imported store)
-      const switchStoreState = useActiveCallStore.getState();
-      const currentWebRtcCallControlId = switchStoreState.callControlId || switchStoreState.call?.callControlId || switchStoreState.call?.call_control_id || switchStoreState.call?.id;
+      console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, consultAgentCallControlId=${consultAgentCallControlId}, consult_state=${JSON.stringify(currentInteraction.metadata?.consult_state)}`);
       
-      if (!currentWebRtcCallControlId) {
-        alert("Cannot switch call leg. No active WebRTC call.");
+      // Get current agent's Telnyx call_control_id
+      // During consult, this should be the consult call's call_control_id
+      let currentAgentCallControlId = consultAgentCallControlId;
+      
+      // If no consult agent call control ID, wait a moment and try again
+      // The webhook may not have processed yet
+      if (!currentAgentCallControlId) {
+        console.log("[TransferModal] No consultAgentCallControlId found, waiting for webhook...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Fetch interaction again
+        const retryRes = await fetch(
+          `/api/contact-center/interactions/${interactionId}`,
+          { cache: "no-store" },
+        );
+        const retryData = await retryRes.json();
+        if (retryData.ok && retryData.interaction) {
+          currentAgentCallControlId = 
+            retryData.interaction.metadata?.consult_state?.agentCallControlId ||
+            retryData.interaction.metadata?.consult_state?.consultantCallControlId;
+          console.log(`[TransferModal] Retry found consultAgentCallControlId: ${currentAgentCallControlId}`);
+        }
+      }
+      
+      if (!currentAgentCallControlId) {
+        alert("Cannot switch call leg. Consult call control ID not found. Please wait a moment and try again.");
         setLoading(false);
         return;
       }
       
-      const targetCallControlId = targetLegType === 'parked' ? parkedCallControlId : agentCallControlId;
+      // Determine target call control ID based on which leg we want to switch to
+      const targetCallControlId = targetLegType === 'parked' ? parkedCallControlId : consultAgentCallControlId;
       
       if (!targetCallControlId) {
         alert(`Cannot switch to ${targetLegType} call. Missing call control ID.`);
@@ -1246,14 +1272,14 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         return;
       }
       
-      console.log(`[TransferModal] Bridging currentWebRtcCallControlId=${currentWebRtcCallControlId} to targetCallControlId=${targetCallControlId}`);
+      console.log(`[TransferModal] Bridging currentAgentCallControlId=${currentAgentCallControlId} to targetCallControlId=${targetCallControlId}`);
 
       const res = await fetch("/api/voice/call-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "bridge",
-          callControlId: currentWebRtcCallControlId,
+          callControlId: currentAgentCallControlId,
           params: {
             call_control_id: targetCallControlId,
           },
