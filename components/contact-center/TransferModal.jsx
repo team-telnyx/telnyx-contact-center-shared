@@ -192,16 +192,19 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       return;
     }
 
-    const callStatus = callUI.status || activeCall?.state || "";
-    const lowerStatus = callStatus.toLowerCase();
-    const isCallEnded = ["hangup", "ended", "destroy", "purge", "idle", "terminated"].includes(
+    // Use callStatus from hook (not callUI.status which is undefined)
+    const effectiveStatus = callStatus || activeCall?.state || "";
+    const lowerStatus = String(effectiveStatus).toLowerCase();
+    
+    // Only check for actual end states, NOT "idle" (which could be initial state)
+    const isCallEnded = ["hangup", "ended", "destroy", "purge", "terminated"].includes(
       lowerStatus,
     );
 
     // Only reset if the consult call itself ended (not the original call being parked)
     // Check that we actually have an active consult call that's ending
     if (isCallEnded && consultState.consultantCall?.callControlId) {
-      console.log("[TransferModal] Consult call ended, resetting consult state");
+      console.log("[TransferModal] Consult call ended, resetting consult state. status=", effectiveStatus);
       setConsultState({
         isActive: false,
         initiating: false,
@@ -210,7 +213,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         agentCallControlId: null,
       });
     }
-  }, [activeCall, callUI.status, consultState.isActive, consultState.initiating, consultState.consultantCall?.callControlId]);
+  }, [activeCall, callStatus, consultState.isActive, consultState.initiating, consultState.consultantCall?.callControlId]);
 
   // Refs for polling intervals
   const queueStatsIntervalRef = useRef(null);
@@ -935,7 +938,12 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         });
 
         // Set active call in store (consult call) - use statically imported store
+        // Small delay to ensure any pending clearActiveCall calls have been blocked
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         const activeCallStore = useActiveCallStore.getState();
+        console.log(`[TransferModal] Before setActiveCall: consultInProgress=${activeCallStore.consultInProgress}, currentCall=${!!activeCallStore.call}, currentStatus=${activeCallStore.status}`);
+        
         activeCallStore.setActiveCall(call, {
           direction: "outbound",
           fromNumber: fromNumber,
@@ -948,7 +956,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           activeCallStore.updateStatus(initialState);
         }
 
-        console.log(`[TransferModal] Set activeCall in store. initialState=${initialState}, call.state=${call.state}`);
+        console.log(`[TransferModal] After setActiveCall: call=${!!useActiveCallStore.getState().call}, status=${useActiveCallStore.getState().status}, initialState=${initialState}`);
 
         // Wire call events (comprehensive - same as softphone)
         if (typeof call.on === "function") {
@@ -1808,79 +1816,71 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
                 </div>
               )}
 
-              {/* Agent stats - moved BELOW Select Number */}
+              {/* Agent stats - single line layout */}
               {selectedAgent && (
-                <div className="space-y-3 p-4 bg-muted rounded-lg">
+                <div className="p-3 bg-muted rounded-lg">
                   {agentStats ? (
-                    <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            Status
-                          </Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            {(() => {
-                              const StatusIcon =
-                                STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
-                                STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
-                              const statusColorHex = getStatusColor(agentStats.status);
-                              const statusColorClass =
-                                !statusColorHex
-                                  ? agentStats.status === "Available"
-                                    ? "text-green-600"
-                                    : agentStats.status === "Busy"
-                                      ? "text-orange-600"
-                                      : agentStats.status === "Away"
-                                        ? "text-yellow-600"
-                                        : "text-gray-600"
-                                  : null;
-                              return (
-                                <>
-                                  <StatusIcon
-                                    className={cn("h-4 w-4", statusColorClass)}
-                                    style={statusColorHex ? { color: statusColorHex } : undefined}
-                                  />
-                                  <span
-                                    className={cn("text-sm font-medium", statusColorClass)}
-                                    style={statusColorHex ? { color: statusColorHex } : undefined}
-                                  >
-                                    {agentStats.status || "Unknown"}
-                                  </span>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">
-                            On Call
-                          </Label>
-                          <div className="mt-1">
-                            {(() => {
-                              const currentCallsCount =
-                                typeof agentStats.currentCalls === "number"
-                                  ? agentStats.currentCalls
-                                  : agentStats.currentCalls?.length || 0;
-                              const isOnCall = currentCallsCount > 0;
-                              return (
-                                <Badge
-                                  className={cn(
-                                    "text-xs",
-                                    isOnCall ? "bg-green-500 text-white" : "bg-gray-500 text-white",
-                                  )}
-                                >
-                                  {isOnCall ? "Yes" : "No"}
-                                </Badge>
-                              );
-                            })()}
-                          </div>
-                        </div>
+                    <div className="flex items-center justify-between gap-4">
+                      {/* Status - label and value in one line */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Status:</span>
+                        {(() => {
+                          const StatusIcon =
+                            STATUS_NAME_ICON_FALLBACK[agentStats.status] ||
+                            STATUS_ICON_MAP[DEFAULT_STATUS_ICON];
+                          const statusColorHex = getStatusColor(agentStats.status);
+                          const statusColorClass =
+                            !statusColorHex
+                              ? agentStats.status === "Available"
+                                ? "text-green-600"
+                                : agentStats.status === "Busy"
+                                  ? "text-orange-600"
+                                  : agentStats.status === "Away"
+                                    ? "text-yellow-600"
+                                    : "text-gray-600"
+                              : null;
+                          return (
+                            <>
+                              <StatusIcon
+                                className={cn("h-4 w-4", statusColorClass)}
+                                style={statusColorHex ? { color: statusColorHex } : undefined}
+                              />
+                              <span
+                                className={cn("text-sm font-medium", statusColorClass)}
+                                style={statusColorHex ? { color: statusColorHex } : undefined}
+                              >
+                                {agentStats.status || "Unknown"}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
-                    </>
+                      {/* On Call - label and value in one line */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">On Call:</span>
+                        {(() => {
+                          const currentCallsCount =
+                            typeof agentStats.currentCalls === "number"
+                              ? agentStats.currentCalls
+                              : agentStats.currentCalls?.length || 0;
+                          const isOnCall = currentCallsCount > 0;
+                          return (
+                            <Badge
+                              className={cn(
+                                "text-xs",
+                                isOnCall ? "bg-green-500 text-white" : "bg-gray-500 text-white",
+                              )}
+                            >
+                              {isOnCall ? "Yes" : "No"}
+                            </Badge>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   ) : (
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading agent statistics...
+                      Loading...
                     </div>
                   )}
                 </div>
