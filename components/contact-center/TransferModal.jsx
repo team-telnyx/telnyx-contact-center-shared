@@ -1331,9 +1331,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
   // Prevent modal from closing when consult call is active or being initiated
   const handleModalOpenChange = (newOpen) => {
     if (!newOpen) {
-      // Prevent closing if there's an active call
-      if (isCallActive()) {
-        console.log("[TransferModal] Cannot close modal while call is in progress");
+      // Prevent closing if consult is active or being initiated
+      if (consultState.isActive || consultState.initiating) {
+        console.log("[TransferModal] Cannot close modal while consult call is in progress");
         return;
       }
     }
@@ -2087,9 +2087,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* Active Call UI - Show when there's an active call (based on activeCallStore, not consultState) */}
-          {/* This ensures UI shows even if consultState timing is off */}
-          {isCallActive() && (
+          {/* Active Call UI - Show when consult is active or being initiated */}
+          {/* Only show when agent has started a consult call, not for regular CC calls */}
+          {(consultState.isActive || consultState.initiating) && (
             <div className="space-y-3 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold flex items-center gap-2">
@@ -2131,8 +2131,8 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             </div>
           )}
 
-          {/* Call Control Buttons - Show when there's an active call */}
-          {isCallActive() && (
+          {/* Call Control Buttons - Show when consult is active or being initiated */}
+          {(consultState.isActive || consultState.initiating) && (
             <div className="flex items-center justify-center gap-3 pt-3">
               {!isCallConnected() ? (
                 <>
@@ -2196,18 +2196,18 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
             <Button
               variant="outline"
               onClick={() => handleModalOpenChange(false)}
-              disabled={loading || isCallActive()}
+              disabled={loading || consultState.isActive || consultState.initiating}
               title={
-                isCallActive()
-                  ? "Cannot close while call is in progress"
+                (consultState.isActive || consultState.initiating)
+                  ? "Cannot close while consult call is in progress"
                   : "Cancel"
               }
             >
               Cancel
             </Button>
-            {/* Show Consult/Transfer buttons when there's NO active call */}
-            {/* Hide when there's an active call in the store */}
-            {!isCallActive() && (
+            {/* Show Consult/Transfer buttons when NOT in consult mode */}
+            {/* Hide when consult is active or being initiated */}
+            {!(consultState.isActive || consultState.initiating) && (
               <>
                 <Button
                   onClick={handleConsult}
