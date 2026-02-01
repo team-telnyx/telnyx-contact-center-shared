@@ -21,8 +21,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SheetFooter } from "@/components/ui/sheet";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 
 /**
  * Format timestamp in seconds to MM:SS format
@@ -143,12 +141,10 @@ export default function TranscriptionSheet({
                   Call Summary
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="text-xs text-muted-foreground prose prose-xs dark:prose-invert max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_strong]:text-foreground">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {transcriptionSummary}
-                  </ReactMarkdown>
-                </div>
+              <CardContent>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {transcriptionSummary}
+                </p>
               </CardContent>
             </Card>
           )}
