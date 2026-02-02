@@ -1,31 +1,26 @@
-"use client";
-
 import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import DataSourcesTiles from "@/components/data-sources/DataSourcesTiles";
-import ContactsView from "@/components/data-sources/ContactsView";
-import KbArticlesView from "@/components/data-sources/KbArticlesView";
-import TasksView from "@/components/data-sources/TasksView";
+import DataSourcesPageClient from "./page-client";
 
-function DataSourcesContent() {
-  const searchParams = useSearchParams();
-  const view = searchParams.get("view") || "contacts";
-
-  return (
-    <>
-      <DataSourcesTiles />
-      {view === "contacts" && <ContactsView />}
-      {view === "kb-articles" && <KbArticlesView />}
-      {view === "tasks" && <TasksView />}
-    </>
-  );
-}
+export const dynamic = "force-dynamic";
 
 export default function DataSourcesPage() {
   return (
     <div className="px-4 lg:px-6">
-      <Suspense fallback={null}>
-        <DataSourcesContent />
+      <Suspense
+        fallback={
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-20 bg-muted animate-pulse rounded-lg"
+                />
+              ))}
+            </div>
+          </div>
+        }
+      >
+        <DataSourcesPageClient />
       </Suspense>
     </div>
   );
