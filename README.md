@@ -148,6 +148,10 @@ ALLOWED_ORIGINS=https://your-domain.com
 # Authentication
 NEXTAUTH_SECRET=your_secret_here_min_32_chars
 
+# Allowed email domains for user registration (comma-separated)
+# Domains will be automatically seeded to the database on startup
+ALLOWED_EMAIL_DOMAINS=yourdomain.com,subdomain.yourdomain.com
+
 # Telnyx Configuration
 TELNYX_API_KEY=your_telnyx_api_key
 TELNYX_WEBHOOK_SECRET=your_webhook_secret
@@ -458,7 +462,7 @@ The application uses PostgreSQL with a comprehensive schema including:
 ### Core Tables
 
 - **users**: User accounts with contact center configuration
-- **domains**: Allowed email domains for registration
+- **domains**: Allowed email domains for registration (automatically seeded from `ALLOWED_EMAIL_DOMAINS` env var)
 - **app_settings**: Application-wide settings and configuration
 - **skills**: Available skills for skills-based routing
 
