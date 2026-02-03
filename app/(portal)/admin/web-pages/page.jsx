@@ -5,12 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  IconWorld,
-  IconEdit,
-  IconTrash,
-  IconPlus,
-} from "@tabler/icons-react";
+import { IconWorld, IconEdit, IconTrash, IconPlus } from "@tabler/icons-react";
 import {
   Table,
   TableBody,
@@ -86,7 +81,7 @@ export default function AdminWebPagesPage() {
   }
 
   return (
-    <>
+    <div className="px-4 lg:px-6">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -125,7 +120,9 @@ export default function AdminWebPagesPage() {
                     <TableHead className="px-[10px]">Description</TableHead>
                     <TableHead className="px-[10px]">Status</TableHead>
                     <TableHead className="px-[10px]">Order</TableHead>
-                    <TableHead className="px-[10px] text-right">Actions</TableHead>
+                    <TableHead className="px-[10px] text-right">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -187,7 +184,8 @@ export default function AdminWebPagesPage() {
                                     <DialogTitle>Delete web page?</DialogTitle>
                                     <DialogDescription>
                                       This action cannot be undone. This will
-                                      permanently delete the web page "{page.name}".
+                                      permanently delete the web page "
+                                      {page.name}".
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="flex justify-end gap-2 pt-2">
@@ -235,6 +233,6 @@ export default function AdminWebPagesPage() {
         pageId={editPageId}
         onSaveComplete={load}
       />
-    </>
+    </div>
   );
 }
