@@ -152,6 +152,14 @@ NEXTAUTH_SECRET=your_secret_here_min_32_chars
 # Domains will be automatically seeded to the database on startup
 ALLOWED_EMAIL_DOMAINS=yourdomain.com,subdomain.yourdomain.com
 
+# Default owner user account (created automatically on first deployment)
+# Email address for the default owner account (must match an allowed domain)
+DEFAULT_OWNER_EMAIL=owner@yourdomain.com
+
+# Password for the default owner account (minimum 8 characters)
+# IMPORTANT: Change this password after first login!
+DEFAULT_OWNER_PASSWORD=your_secure_password_here
+
 # Telnyx Configuration
 TELNYX_API_KEY=your_telnyx_api_key
 TELNYX_WEBHOOK_SECRET=your_webhook_secret
@@ -465,6 +473,17 @@ The application uses PostgreSQL with a comprehensive schema including:
 - **domains**: Allowed email domains for registration (automatically seeded from `ALLOWED_EMAIL_DOMAINS` env var)
 - **app_settings**: Application-wide settings and configuration
 - **skills**: Available skills for skills-based routing
+
+### Automatic Database Seeding
+
+On first deployment or when running `yarn ensure:pg`, the following are automatically seeded:
+
+- **Allowed Email Domains**: From `ALLOWED_EMAIL_DOMAINS` environment variable
+- **Default Owner User**: From `DEFAULT_OWNER_EMAIL` and `DEFAULT_OWNER_PASSWORD` environment variables
+  - Created with "owner" role and verified status (can log in immediately)
+  - Password must be at least 8 characters
+  - Email domain must be in the allowed domains list (or will show a warning)
+  - **Important**: Change the default password after first login!
 
 ### Contact Center Tables
 
