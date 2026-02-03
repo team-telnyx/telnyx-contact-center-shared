@@ -109,6 +109,12 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
+          title: "Domains",
+          url: "/admin/domains",
+          icon: IconWorld,
+          role_access: ["admin", "owner"],
+        },
+        {
           title: "Skills",
           url: "/admin/skills",
           icon: IconAward,
