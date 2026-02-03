@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import { completeCall, updateAgentStatus } from "@/lib/contact-center/state-manager";
 
 /**
  * DELETE /api/contact-center/interactions/[id]/consult
@@ -48,66 +47,14 @@ export async function DELETE(request, { params }) {
 
     // Clear consult_state from metadata
     delete metadata.consult_state;
-    
-    // If hangupParked is true, we're ending the entire interaction
-    // Update state to completed and clear agent's call count
-    if (hangupParked) {
-      const completedAt = new Date().toISOString();
-      
-      // Update interaction in database
-      await PgDb.updateInteractionById(interaction.id, {
-        metadata,
-        state: "completed",
-        completedAt: completedAt,
-      });
 
-      // Update state manager to clear agent's call count
-      completeCall(interaction.id, completedAt, false);
+    await PgDb.updateInteractionById(interaction.id, {
+      metadata,
+    });
 
-      // Also update agent status in database to Available if they have no other active calls
-      // Get agent ID from interaction
-      const agentUserId = interaction.agent_user_id;
-      if (agentUserId) {
-        // Update agent status to Available in both state manager and database
-        await updateAgentStatus(agentUserId, "Available", interaction.agent_username);
-        
-        // Also update in database directly to ensure persistence
-        try {
-          const pool = (await import("@/lib/pgdb")).getPostgresPool();
-          if (pool) {
-            await pool.query(
-              `UPDATE users SET agent_status = 'Available', updated_at = NOW() WHERE id = $1`,
-              [agentUserId]
-            );
-            // Also update cc_agent_state if exists
-            await pool.query(
-              `UPDATE cc_agent_state 
-               SET agent_status = 'Available', last_status_change = NOW(), last_call_ended_at = NOW() 
-               WHERE user_id = $1`,
-              [agentUserId]
-            );
-            console.log(
-              `[Consult] Updated agent ${agentUserId} status to Available in database`,
-            );
-          }
-        } catch (dbError) {
-          console.error(`[Consult] Failed to update agent status in database:`, dbError);
-        }
-      }
-
-      console.log(
-        `[Consult] Marked interaction ${id} as completed and cleared agent call count`,
-      );
-    } else {
-      // Just clear consult_state
-      await PgDb.updateInteractionById(interaction.id, {
-        metadata,
-      });
-
-      console.log(
-        `[Consult] Cleared consult_state from interaction ${id} metadata`,
-      );
-    }
+    console.log(
+      `[Consult] Cleared consult_state from interaction ${id} metadata`,
+    );
 
     // Optionally hangup the parked call (customer leg)
     if (hangupParked && consultState?.parkedCallControlId) {

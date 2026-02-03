@@ -203,7 +203,7 @@ export async function PUT(request) {
           await import("@/lib/contact-center/state-manager");
         await updateAgentStatus(userId, update.status, user.username);
 
-        if (["Available", "Busy"].includes(update.status)) {
+        if (update.status === "Available") {
           try {
             // Add a small delay to ensure state manager is fully updated
             setTimeout(async () => {

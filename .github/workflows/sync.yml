@@ -1,0 +1,32 @@
+name: Sync to child repos
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mother repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Push to telnyx-contact-center-gmr
+        continue-on-error: true
+        run: |
+          git remote add gmr https://x-access-token:${{ secrets.REPO_TOKEN }}@github.com/team-telnyx/telnyx-contact-center-gmr.git || true
+          git push gmr HEAD:main --force || git push gmr HEAD:master --force || echo "Warning: Failed to push to telnyx-contact-center-gmr (repo may not exist yet)"
+
+      - name: Push to telnyx-contact-center-ttec
+        continue-on-error: true
+        run: |
+          git remote add ttec https://x-access-token:${{ secrets.REPO_TOKEN }}@github.com/team-telnyx/telnyx-contact-center-ttec.git || true
+          git push ttec HEAD:main --force || git push ttec HEAD:master --force || echo "Warning: Failed to push to telnyx-contact-center-ttec (repo may not exist yet)"

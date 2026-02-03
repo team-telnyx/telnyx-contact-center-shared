@@ -248,7 +248,7 @@ function PhoneStatus() {
   return (
     <div
       className={clsx(
-        "flex items-center gap-1.5 border px-3 py-1 rounded-md text-base font-semibold uppercase tracking-wide",
+        "flex items-center gap-1.5 border px-2 py-0.5 rounded-md text-xsi font-semibold uppercase tracking-wide",
         displayValue.color
       )}
     >

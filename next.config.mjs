@@ -20,6 +20,8 @@ const nextConfig = {
   serverExternalPackages: ["pg", "pgpass", "pg-connection-string"],
   // Turbopack configuration to prevent unnecessary file watching
   turbopack: {
+    // Ensure Turbopack resolves from this repo root
+    root: process.cwd(),
     // Ignore files and directories that shouldn't trigger reloads
     resolveAlias: {},
     // Configure file watching to exclude unnecessary directories

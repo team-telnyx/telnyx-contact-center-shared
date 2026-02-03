@@ -129,9 +129,9 @@ export async function GET(request, { params }) {
       };
     });
 
-    // Filter to available agents (Available or Busy status, available for routing, under capacity)
+    // Filter to available agents (Available status, available for routing, under capacity)
     const availableAgents = agentsWithCounts.filter((agent) => {
-      if (!["Available", "Busy"].includes(agent.agentStatus)) return false;
+      if (agent.agentStatus !== "Available") return false;
       if (!agent.availableForRouting) return false;
       if (agent.isAvailableForRouting === false) return false;
       return agent.currentCallsCount < agent.maxConcurrentCalls;

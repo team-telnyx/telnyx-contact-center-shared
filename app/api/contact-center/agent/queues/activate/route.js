@@ -164,7 +164,7 @@ export async function POST(request) {
             );
           }
 
-          if (["Available", "Busy"].includes(targetUser.agent_status)) {
+          if (targetUser.agent_status === "Available") {
             try {
               await offerQueuedCallForAgent({
                 userId: targetUserIdFinal,

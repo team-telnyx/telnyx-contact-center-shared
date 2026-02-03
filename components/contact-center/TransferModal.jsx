@@ -236,15 +236,65 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     // Check that we actually have an active consult call that's ending
     if (isCallEnded && consultCallControlId) {
       console.log("[TransferModal] Consult call ended, resetting consult state. status=", effectiveStatus);
-      setConsultState({
-        isActive: false,
-        activeLeg: 'consultant',
-        initiating: false,
-        activatedAt: null,
-        parkedCall: null,
-        consultantCall: null,
-        agentCallControlId: null,
-      });
+
+      const parkedCallControlId = consultState.parkedCall?.callControlId;
+      const currentAgentCallControlId =
+        consultState.agentCallControlId ||
+        consultCallControlId ||
+        storeCallControlId;
+
+      const resetConsultState = () => {
+        setConsultState({
+          isActive: false,
+          activeLeg: 'consultant',
+          initiating: false,
+          activatedAt: null,
+          parkedCall: null,
+          consultantCall: null,
+          agentCallControlId: null,
+        });
+      };
+
+      if (parkedCallControlId && currentAgentCallControlId) {
+        (async () => {
+          try {
+            console.log("[TransferModal] Bridging back to parked call after consult ended", {
+              currentAgentCallControlId,
+              parkedCallControlId,
+            });
+            const res = await fetch("/api/voice/call-action", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "bridge",
+                callControlId: currentAgentCallControlId,
+                params: {
+                  call_control_id: parkedCallControlId,
+                  park_after_unbridge: "self",
+                },
+              }),
+            });
+
+            const data = await res.json();
+            if (!data.ok) {
+              console.error(
+                "[TransferModal] Failed to bridge back to parked call after consult ended:",
+                data.error || data,
+              );
+            } else {
+              console.log("[TransferModal] Bridged back to parked call after consult ended");
+            }
+          } catch (err) {
+            console.error(
+              "[TransferModal] Error bridging back to parked call after consult ended:",
+              err,
+            );
+          }
+        })().finally(resetConsultState);
+        return;
+      }
+
+      resetConsultState();
     }
   }, [activeCall, callStatus, consultState.isActive, consultState.initiating, consultState.activatedAt, consultState.consultantCall?.callControlId]);
 
@@ -1197,7 +1247,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     // targetLegType: 'parked' or 'consultant'
     // We need to use the correct call control IDs from the interaction metadata
     // The parked call uses original_call_control_id
-    // The consultant call uses the current WebRTC call's ID
+    // The consultant call uses the PSTN leg from consult_state.pstnCallControlId
     
     const interactionId = consultState.parkedCall?.interactionId || interaction?.id;
     
@@ -1227,22 +1277,24 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // For consult calls, the agent's current call control ID is stored in consult_state
       // This is the Telnyx call_control_id for the consult call (not the original agent leg)
       // Also check consultantCallControlId which may be used instead
-      const consultAgentCallControlId = 
+      let consultAgentCallControlId =
         currentInteraction.metadata?.consult_state?.agentCallControlId ||
         currentInteraction.metadata?.consult_state?.consultantCallControlId;
-      
-      console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, consultAgentCallControlId=${consultAgentCallControlId}, consult_state=${JSON.stringify(currentInteraction.metadata?.consult_state)}`);
-      
+      let consultPstnCallControlId =
+        currentInteraction.metadata?.consult_state?.pstnCallControlId;
+
+      console.log(`[TransferModal] Switch call leg: targetLegType=${targetLegType}, parkedCallControlId=${parkedCallControlId}, consultAgentCallControlId=${consultAgentCallControlId}, consultPstnCallControlId=${consultPstnCallControlId}, consult_state=${JSON.stringify(currentInteraction.metadata?.consult_state)}`);
+
       // Get current agent's Telnyx call_control_id
       // During consult, this should be the consult call's call_control_id
       let currentAgentCallControlId = consultAgentCallControlId;
-      
+
       // If no consult agent call control ID, wait a moment and try again
       // The webhook may not have processed yet
-      if (!currentAgentCallControlId) {
-        console.log("[TransferModal] No consultAgentCallControlId found, waiting for webhook...");
+      if (!currentAgentCallControlId || (targetLegType === "consultant" && !consultPstnCallControlId)) {
+        console.log("[TransferModal] Missing consult call control IDs, waiting for webhook...");
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // Fetch interaction again
         const retryRes = await fetch(
           `/api/contact-center/interactions/${interactionId}`,
@@ -1250,26 +1302,40 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         );
         const retryData = await retryRes.json();
         if (retryData.ok && retryData.interaction) {
-          currentAgentCallControlId = 
+          consultAgentCallControlId =
             retryData.interaction.metadata?.consult_state?.agentCallControlId ||
             retryData.interaction.metadata?.consult_state?.consultantCallControlId;
-          console.log(`[TransferModal] Retry found consultAgentCallControlId: ${currentAgentCallControlId}`);
+          consultPstnCallControlId =
+            retryData.interaction.metadata?.consult_state?.pstnCallControlId;
+          currentAgentCallControlId = consultAgentCallControlId;
+          console.log(`[TransferModal] Retry found consultAgentCallControlId=${consultAgentCallControlId}, consultPstnCallControlId=${consultPstnCallControlId}`);
         }
       }
-      
+
       if (!currentAgentCallControlId) {
-        alert("Cannot switch call leg. Consult call control ID not found. Please wait a moment and try again.");
+        alert("Cannot switch call leg. Agent consult call control ID not found. Please wait a moment and try again.");
         setLoading(false);
         return;
       }
-      
+
       // Determine target call control ID based on which leg we want to switch to
-      const targetCallControlId = targetLegType === 'parked' ? parkedCallControlId : consultAgentCallControlId;
-      
+      const targetCallControlId =
+        targetLegType === 'parked'
+          ? parkedCallControlId
+          : (consultPstnCallControlId || consultAgentCallControlId);
+
       if (!targetCallControlId) {
-        alert(`Cannot switch to ${targetLegType} call. Missing call control ID.`);
+        if (targetLegType === "consultant") {
+          alert("Cannot switch to consult call. Consult PSTN call control ID not found. Please wait a moment and try again.");
+        } else {
+          alert(`Cannot switch to ${targetLegType} call. Missing call control ID.`);
+        }
         setLoading(false);
         return;
+      }
+
+      if (targetLegType === "consultant" && !consultPstnCallControlId && consultAgentCallControlId) {
+        console.warn("[TransferModal] Consult PSTN call control ID missing, falling back to consult agent call control ID");
       }
       
       console.log(`[TransferModal] Bridging currentAgentCallControlId=${currentAgentCallControlId} to targetCallControlId=${targetCallControlId}`);
@@ -1336,7 +1402,152 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     }
     
     const wasConsultActive = consultState.isActive || consultState.initiating || isCallActive();
-    
+
+    if (consultState.isActive || consultState.initiating || consultState.parkedCall?.callControlId) {
+      setLoading(true);
+      try {
+        let currentInteraction = interaction || null;
+
+        if (!currentInteraction && interactionId) {
+          try {
+            const interactionRes = await fetch(
+              `/api/contact-center/interactions/${interactionId}`,
+              { cache: "no-store" },
+            );
+            const interactionData = await interactionRes.json();
+            if (interactionData.ok && interactionData.interaction) {
+              currentInteraction = interactionData.interaction;
+            }
+          } catch (err) {
+            console.error("[TransferModal] Failed to fetch interaction by ID:", err);
+          }
+        }
+
+        if (!currentInteraction) {
+          const lookupCallControlId =
+            storeState.callControlId ||
+            consultState.agentCallControlId ||
+            consultState.consultantCall?.callControlId;
+          if (lookupCallControlId) {
+            try {
+              const lookupRes = await fetch(
+                `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
+                  lookupCallControlId,
+                )}`,
+                { cache: "no-store" },
+              );
+              const lookupData = await lookupRes.json();
+              if (lookupData.ok && lookupData.interaction) {
+                currentInteraction = lookupData.interaction;
+              }
+            } catch (err) {
+              console.error(
+                "[TransferModal] Failed to fetch interaction by call control ID:",
+                err,
+              );
+            }
+          }
+        }
+
+        const consultMetadata = currentInteraction?.metadata?.consult_state || {};
+        const consultPstnCallControlId = consultMetadata.pstnCallControlId;
+        const parkedCallControlId =
+          consultMetadata.parkedCallControlId ||
+          currentInteraction?.metadata?.original_call_control_id ||
+          consultState.parkedCall?.callControlId;
+        const currentAgentCallControlId =
+          consultMetadata.agentCallControlId ||
+          consultMetadata.consultantCallControlId ||
+          consultState.agentCallControlId ||
+          storeState.callControlId ||
+          useActiveCallStore.getState().callControlId;
+
+        if (!consultPstnCallControlId) {
+          alert(
+            "Cannot disconnect consult call. Consult PSTN call control ID not found. Please wait a moment and try again.",
+          );
+          return;
+        }
+
+        console.log("[TransferModal] Disconnecting consult call leg", {
+          consultPstnCallControlId,
+          parkedCallControlId,
+          currentAgentCallControlId,
+        });
+
+        try {
+          const hangupRes = await fetch("/api/voice/call-action", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "hangup",
+              callControlId: consultPstnCallControlId,
+              params: {},
+            }),
+          });
+          const hangupData = await hangupRes.json();
+          if (!hangupData.ok) {
+            console.error(
+              "[TransferModal] Failed to hangup consult PSTN leg:",
+              hangupData.error || hangupData,
+            );
+          }
+        } catch (err) {
+          console.error("[TransferModal] Error hanging up consult PSTN leg:", err);
+        }
+
+        if (parkedCallControlId && currentAgentCallControlId) {
+          try {
+            const bridgeRes = await fetch("/api/voice/call-action", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "bridge",
+                callControlId: currentAgentCallControlId,
+                params: {
+                  call_control_id: parkedCallControlId,
+                  park_after_unbridge: "self",
+                },
+              }),
+            });
+            const bridgeData = await bridgeRes.json();
+            if (!bridgeData.ok) {
+              console.error(
+                "[TransferModal] Failed to bridge back to parked call:",
+                bridgeData.error || bridgeData,
+              );
+            }
+          } catch (err) {
+            console.error("[TransferModal] Error bridging back to parked call:", err);
+          }
+        } else {
+          console.warn(
+            "[TransferModal] Missing call control IDs to bridge back to parked call",
+            {
+              parkedCallControlId,
+              currentAgentCallControlId,
+            },
+          );
+        }
+
+        setConsultState({
+          isActive: false,
+          activeLeg: 'consultant',
+          initiating: false,
+          activatedAt: null,
+          parkedCall: null,
+          consultantCall: null,
+          agentCallControlId: null,
+        });
+        return;
+      } catch (err) {
+        console.error("[TransferModal] Error disconnecting consult call:", err);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
     if (!activeCall) {
       clearActiveCall();
       // Reset consult state when call ends

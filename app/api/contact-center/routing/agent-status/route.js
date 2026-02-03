@@ -115,7 +115,7 @@ export async function POST(request) {
     }
 
     const shouldOfferQueuedCalls =
-      ["Available", "Busy"].includes(effectiveStatus) &&
+      effectiveStatus === "Available" &&
       (Boolean(status) || (Array.isArray(queueIds) && isActive !== false));
 
     if (shouldOfferQueuedCalls) {
