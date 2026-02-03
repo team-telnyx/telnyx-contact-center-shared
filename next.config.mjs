@@ -6,7 +6,12 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  allowedDevOrigins: ["tunnel.demotelnyx.com", "api.tokaj.synology.me"],
+  // Allowed dev origins from environment variable (comma-separated)
+  // Falls back to empty array if not set
+  allowedDevOrigins: (process.env.ALLOWED_DEV_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
   // Configure static file serving for media files
   async rewrites() {
     return [

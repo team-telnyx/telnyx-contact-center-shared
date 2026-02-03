@@ -44,8 +44,8 @@ export async function proxy(request) {
     const defaultAllowed = [
       "http://localhost:3000",
       "http://127.0.0.1:3000",
-      "https://cc.demotelnyx.com",
-      "https://tunnel.demotelnyx.com",
+      "https://cc.domain.com",
+      "https://app.domain.com",
     ];
     const allowedOrigins = new Set([...defaultAllowed, ...envAllowed]);
 
