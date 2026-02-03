@@ -280,9 +280,12 @@ export function AgentAssist({ interactionId, interaction }) {
       const data = await response.json();
 
       if (response.ok && data.ok) {
+        const isChunked = data.chunked;
         notify({
           title: "Article is being played",
-          description: "Reading article content to caller",
+          description: isChunked
+            ? `Reading content in ${data.totalChunks} parts for faster playback`
+            : "Reading article content to caller",
           variant: "success",
         });
       } else {

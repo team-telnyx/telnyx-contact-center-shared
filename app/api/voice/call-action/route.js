@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import {
+  startChunkedSpeak,
+  shouldChunk,
+  cancelQueue,
+} from "@/lib/contact-center/speak-queue";
 
 /**
  * POST /api/voice/call-action
@@ -32,6 +37,35 @@ export async function POST(request) {
         { ok: false, error: "Server not configured" },
         { status: 500 }
       );
+    }
+
+    // For speak actions with long text, use chunked speak queue
+    if (action === "speak" && params.payload && shouldChunk(params.payload)) {
+      const result = await startChunkedSpeak(
+        callControlId,
+        params.payload,
+        params.voice || "female",
+        params.language
+      );
+
+      if (!result.ok) {
+        return NextResponse.json(
+          { ok: false, error: result.error || "Failed to start chunked speak" },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        chunked: true,
+        totalChunks: result.totalChunks,
+        data: {},
+      });
+    }
+
+    // For stop_speak actions, also cancel any active speak queue
+    if (action === "stop_speak" || (action === "speak" && params.stop === "all")) {
+      cancelQueue(callControlId);
     }
 
     // Build the Telnyx API URL for the call control action
