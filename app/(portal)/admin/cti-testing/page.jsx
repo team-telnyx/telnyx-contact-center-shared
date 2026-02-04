@@ -16,7 +16,7 @@ import {
   IconPlayerPlay,
   IconMicrophone,
   IconMicrophoneOff,
-  IconPhoneForwarded,
+  IconPhoneCall as IconPhoneForwarded, // Use IconPhoneCall as fallback for IconPhoneForwarded
   IconVolumeOff,
   IconVolume,
   IconSettings,
