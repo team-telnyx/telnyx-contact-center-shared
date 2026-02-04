@@ -19,6 +19,7 @@ import {
   IconCalendar,
   IconDatabase,
   IconWorld,
+  IconPhoneCall,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -130,6 +131,12 @@ export const menuConfig = {
           title: "Call Flows",
           url: "/admin/call-flows",
           icon: IconGitBranch,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "CTI Testing",
+          url: "/admin/cti-testing",
+          icon: IconPhoneCall,
           role_access: ["admin", "owner"],
         },
         {
