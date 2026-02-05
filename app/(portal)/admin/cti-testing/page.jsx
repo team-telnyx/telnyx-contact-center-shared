@@ -573,7 +573,7 @@ export default function CTITestingPage() {
                           </span>
                         </div>
                         {event.data && (
-                          <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto">
+                          <pre className="text-xs bg-slate-900 text-slate-50 p-2 rounded overflow-auto border border-slate-700">
                             {JSON.stringify(event.data, null, 2)}
                           </pre>
                         )}
