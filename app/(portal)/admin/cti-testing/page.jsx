@@ -16,23 +16,23 @@ import {
   IconPlayerPlay,
   IconMicrophone,
   IconMicrophoneOff,
-  IconPhoneCall as IconPhoneForwarded, // Use IconPhoneCall as fallback for IconPhoneForwarded
+  IconPhoneCall as IconPhoneForwarded,
   IconVolumeOff,
   IconVolume,
   IconSettings,
   IconActivity,
+  IconFileText,
+  IconRefresh
 } from "@tabler/icons-react";
 
 export default function CTITestingPage() {
   // Phone configuration state
   const [phoneConfig, setPhoneConfig] = useState({
     ip: "",
-    port: "5060",
-    username: "",
+    port: "80", // Default to HTTP for REST
+    username: "Polycom", // Default for REST API
     password: "",
-    macAddress: "",
-    model: "Polycom VVX300",
-    sipDomain: "",
+    model: "Polycom VVX300"
   });
 
   // Phone status state
@@ -40,7 +40,12 @@ export default function CTITestingPage() {
     connected: false,
     state: "idle", // idle, dialing, ringing, connected, hold
     currentCall: null,
+    details: null
   });
+
+  // Logs state
+  const [phoneLogs, setPhoneLogs] = useState("");
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
   // Call controls state
   const [dialNumber, setDialNumber] = useState("");
@@ -230,7 +235,7 @@ export default function CTITestingPage() {
   };
 
   const testConnection = async () => {
-    addEvent("info", "Testing phone connection", phoneConfig);
+    addEvent("info", "Testing phone connection (REST API)", phoneConfig);
     
     try {
       const response = await fetch("/api/voice/cti/test", {
@@ -242,15 +247,45 @@ export default function CTITestingPage() {
       const result = await response.json();
       
       if (result.ok) {
-        addEvent("success", "Phone connection test successful", result.data);
-        setPhoneStatus(prev => ({ ...prev, connected: true }));
+        addEvent("success", "Phone connection successful", result.data);
+        setPhoneStatus(prev => ({ 
+          ...prev, 
+          connected: true,
+          details: result.data
+        }));
       } else {
-        addEvent("error", `Connection test failed: ${result.error}`);
+        addEvent("error", `Connection test failed: ${result.error}`, result);
         setPhoneStatus(prev => ({ ...prev, connected: false }));
       }
     } catch (error) {
       addEvent("error", `Network error: ${error.message}`);
       setPhoneStatus(prev => ({ ...prev, connected: false }));
+    }
+  };
+
+  const fetchLogs = async () => {
+    setIsLoadingLogs(true);
+    addEvent("info", "Fetching phone logs...");
+    
+    try {
+      const response = await fetch("/api/voice/cti/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneConfig }),
+      });
+
+      const result = await response.json();
+      
+      if (result.ok) {
+        addEvent("success", "Logs fetched successfully");
+        setPhoneLogs(JSON.stringify(result.data, null, 2));
+      } else {
+        addEvent("error", `Failed to fetch logs: ${result.error}`);
+      }
+    } catch (error) {
+      addEvent("error", `Network error: ${error.message}`);
+    } finally {
+      setIsLoadingLogs(false);
     }
   };
 
@@ -296,8 +331,9 @@ export default function CTITestingPage() {
       </div>
 
       <Tabs defaultValue="controls" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="controls">Call Controls</TabsTrigger>
+          <TabsTrigger value="logs">Phone Logs</TabsTrigger>
           <TabsTrigger value="config">Phone Configuration</TabsTrigger>
           <TabsTrigger value="events">Event Log</TabsTrigger>
         </TabsList>
@@ -310,7 +346,7 @@ export default function CTITestingPage() {
                 Phone Configuration
               </CardTitle>
               <CardDescription>
-                Configure connection parameters for your SIP phone
+                Configure connection parameters for your SIP phone (REST API)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -325,48 +361,30 @@ export default function CTITestingPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="port">SIP Port</Label>
+                  <Label htmlFor="port">Port (80/443)</Label>
                   <Input
                     id="port"
-                    placeholder="5060"
+                    placeholder="80"
                     value={phoneConfig.port}
                     onChange={(e) => setPhoneConfig(prev => ({ ...prev, port: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="username">SIP Username</Label>
+                  <Label htmlFor="username">Username (usually Polycom)</Label>
                   <Input
                     id="username"
-                    placeholder="Extension number"
+                    placeholder="Polycom"
                     value={phoneConfig.username}
                     onChange={(e) => setPhoneConfig(prev => ({ ...prev, username: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">SIP Password</Label>
+                  <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
                     value={phoneConfig.password}
                     onChange={(e) => setPhoneConfig(prev => ({ ...prev, password: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mac">MAC Address</Label>
-                  <Input
-                    id="mac"
-                    placeholder="00:04:f2:ab:cd:ef"
-                    value={phoneConfig.macAddress}
-                    onChange={(e) => setPhoneConfig(prev => ({ ...prev, macAddress: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="domain">SIP Domain</Label>
-                  <Input
-                    id="domain"
-                    placeholder="sip.telnyx.com"
-                    value={phoneConfig.sipDomain}
-                    onChange={(e) => setPhoneConfig(prev => ({ ...prev, sipDomain: e.target.value }))}
                   />
                 </div>
               </div>
@@ -386,7 +404,7 @@ export default function CTITestingPage() {
               <CardHeader>
                 <CardTitle>Call Controls</CardTitle>
                 <CardDescription>
-                  Basic call operations via SIP NOTIFY
+                  Basic call operations via REST API
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -416,7 +434,7 @@ export default function CTITestingPage() {
                   <Button 
                     onClick={handleAnswer} 
                     variant="outline"
-                    disabled={!phoneConfig.ip || phoneStatus.state !== "ringing"}
+                    disabled={!phoneConfig.ip}
                   >
                     <IconPlayerPlay className="w-4 h-4 mr-2" />
                     Answer
@@ -424,7 +442,7 @@ export default function CTITestingPage() {
                   <Button 
                     onClick={handleHangup} 
                     variant="destructive"
-                    disabled={!phoneConfig.ip || phoneStatus.state === "idle"}
+                    disabled={!phoneConfig.ip}
                   >
                     <IconPhoneOff className="w-4 h-4 mr-2" />
                     Hangup
@@ -432,15 +450,15 @@ export default function CTITestingPage() {
                   <Button 
                     onClick={handleHold}
                     variant="outline"
-                    disabled={!phoneConfig.ip || !["connected", "hold"].includes(phoneStatus.state)}
+                    disabled={!phoneConfig.ip}
                   >
                     <IconPlayerPause className="w-4 h-4 mr-2" />
-                    {phoneStatus.state === "hold" ? "Resume" : "Hold"}
+                    Hold/Resume
                   </Button>
                   <Button 
                     onClick={handleMute}
                     variant="outline"
-                    disabled={!phoneConfig.ip || phoneStatus.state === "idle"}
+                    disabled={!phoneConfig.ip}
                   >
                     <IconMicrophoneOff className="w-4 h-4 mr-2" />
                     Mute
@@ -448,7 +466,7 @@ export default function CTITestingPage() {
                   <Button 
                     onClick={handleTransfer}
                     variant="outline"
-                    disabled={!phoneConfig.ip || !["connected", "hold"].includes(phoneStatus.state)}
+                    disabled={!phoneConfig.ip}
                     className="col-span-2"
                   >
                     <IconPhoneForwarded className="w-4 h-4 mr-2" />
@@ -461,45 +479,63 @@ export default function CTITestingPage() {
             {/* Phone Status */}
             <Card>
               <CardHeader>
-                <CardTitle>Phone Status</CardTitle>
+                <CardTitle>Phone Info</CardTitle>
                 <CardDescription>
-                  Current state and call information
+                  Details from Device Info API
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Connection:</span>
-                    <Badge variant="outline" className={phoneStatus.connected ? "border-green-500 text-green-700" : "border-red-500 text-red-700"}>
-                      {phoneStatus.connected ? "Connected" : "Disconnected"}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">State:</span>
-                    <Badge className={getStateColor(phoneStatus.state)}>
-                      {phoneStatus.state.toUpperCase()}
-                    </Badge>
-                  </div>
-                  {phoneStatus.currentCall && (
-                    <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Current Call:</span>
-                        <span className="text-sm">{phoneStatus.currentCall.number}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium">Duration:</span>
-                        <span className="text-sm">
-                          {phoneStatus.currentCall.startTime && 
-                            Math.floor((Date.now() - new Date(phoneStatus.currentCall.startTime)) / 1000)
-                          }s
-                        </span>
-                      </div>
+                {phoneStatus.details ? (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Model:</span>
+                      <span>{phoneStatus.details.ModelNumber}</span>
                     </div>
-                  )}
-                </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">Firmware:</span>
+                      <span>{phoneStatus.details.Firmware?.Application}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">MAC:</span>
+                      <span>{phoneStatus.details.MACAddress}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">IP:</span>
+                      <span>{phoneStatus.details.IPAddress}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">State:</span>
+                      <Badge variant="outline">{phoneStatus.details.AppState}</Badge>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">Connect to phone to see details.</p>
+                )}
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="logs" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                Device Logs
+                <Button variant="outline" size="sm" onClick={fetchLogs} disabled={isLoadingLogs}>
+                  <IconRefresh className={`w-4 h-4 mr-2 ${isLoadingLogs ? 'animate-spin' : ''}`} />
+                  Refresh Logs
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Fetch internal logs from the device
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[500px] w-full border rounded-lg p-4 bg-black text-white font-mono text-xs">
+                {phoneLogs || "No logs fetched yet."}
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="events" className="space-y-6">

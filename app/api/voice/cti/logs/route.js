@@ -14,13 +14,13 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: "IP required" }, { status: 400 });
     }
 
-    const result = await PolycomAPI.mute(phoneConfig);
+    const result = await PolycomAPI.getLogs(phoneConfig);
 
     if (!result.success) {
       return NextResponse.json({ ok: false, error: result.error, details: result }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, data: result });
+    return NextResponse.json({ ok: true, data: result.data });
   } catch (err) {
     return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
   }
