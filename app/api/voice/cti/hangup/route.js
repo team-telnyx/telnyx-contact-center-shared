@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { sendPolycomNotify } from "@/lib/cti/polycom-sip-notify";
 
 /**
  * POST /api/voice/cti/hangup
- * End call via SIP NOTIFY to IP phone
+ * End current call via SIP NOTIFY
  */
 export async function POST(request) {
   try {
@@ -25,45 +26,20 @@ export async function POST(request) {
       );
     }
 
-    const { ip, port = "5060", model = "Polycom VVX300" } = phoneConfig;
+    console.log(`[CTI Hangup] Sending hangup command to ${phoneConfig.ip}:${phoneConfig.port || 5060}`);
 
-    // TODO: Implement actual SIP NOTIFY for Polycom VVX300 hangup command
-    // For Polycom phones, the SIP NOTIFY would look like:
-    // NOTIFY sip:user@phone.ip SIP/2.0
-    // Event: polycom-call
-    // Content-Type: application/polycom-call+xml
-    // 
-    // <PolycomIPPhone>
-    //   <Call>
-    //     <Action>hangup</Action>
-    //   </Call>
-    // </PolycomIPPhone>
+    const result = await sendPolycomNotify(phoneConfig, 'hangup');
 
-    console.log(`[CTI Hangup] Sending hangup command to ${ip}:${port}`);
-
-    // Simulate SIP NOTIFY send
-    await new Promise(resolve => setTimeout(resolve, 200)); // Simulate network delay
-
-    // Mock response - in real implementation, this would be the SIP NOTIFY response
-    const hangupResponse = {
-      sipNotifyResult: {
-        status: "200 OK",
-        method: "NOTIFY",
-        event: "polycom-call",
-        target: `sip:${phoneConfig.username}@${ip}:${port}`,
-        contentType: "application/polycom-call+xml"
-      },
-      callInfo: {
-        action: "hangup",
-        state: "idle",
-        endTime: new Date().toISOString()
-      }
-    };
+    if (!result.success) {
+      return NextResponse.json(
+        { ok: false, error: result.error || "Phone rejected command", details: result },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: `Hangup command sent to ${model} at ${ip}`,
-      data: hangupResponse
+      data: result
     });
 
   } catch (err) {

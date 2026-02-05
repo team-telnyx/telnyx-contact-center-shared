@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { sendPolycomNotify } from "@/lib/cti/polycom-sip-notify";
 
 /**
  * POST /api/voice/cti/dial
@@ -32,57 +33,35 @@ export async function POST(request) {
       );
     }
 
-    // Validate and normalize phone number
-    const cleanNumber = number.replace(/\D/g, ''); // Remove non-digits
-    if (cleanNumber.length < 7) {
+    // Validate number (basic check)
+    if (number.length < 3) {
       return NextResponse.json(
         { ok: false, error: "Invalid phone number" },
         { status: 400 }
       );
     }
 
-    const { ip, port = "5060", model = "Polycom VVX300" } = phoneConfig;
+    console.log(`[CTI Dial] Sending dial command to ${phoneConfig.ip}:${phoneConfig.port || 5060} for number ${number}`);
 
-    // TODO: Implement actual SIP NOTIFY for Polycom VVX300
-    // For Polycom phones, we would send something like:
-    // NOTIFY sip:user@phone.ip SIP/2.0
-    // Event: polycom-call
-    // Content-Type: application/polycom-call+xml
-    // 
-    // <PolycomIPPhone>
-    //   <Call>
-    //     <Number>+1234567890</Number>
-    //     <Action>dial</Action>
-    //   </Call>
-    // </PolycomIPPhone>
+    // Send actual SIP NOTIFY
+    const result = await sendPolycomNotify(phoneConfig, 'dial', { number });
 
-    console.log(`[CTI Dial] Sending dial command to ${ip}:${port} for number ${number}`);
-
-    // Simulate SIP NOTIFY send
-    await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-
-    // Mock response - in real implementation, this would be the SIP NOTIFY response
-    const dialResponse = {
-      sipNotifyResult: {
-        status: "200 OK",
-        method: "NOTIFY",
-        event: "polycom-call",
-        target: `sip:${phoneConfig.username}@${ip}:${port}`,
-        contentType: "application/polycom-call+xml"
-      },
-      callInfo: {
-        callId: `call-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        number: number,
-        direction: "outbound",
-        state: "dialing",
-        startTime: new Date().toISOString()
-      }
-    };
+    if (!result.success) {
+      console.warn(`[CTI Dial] Failed: ${result.error || 'Unknown error'}`, result);
+      return NextResponse.json(
+        { 
+          ok: false, 
+          error: result.error || "Phone rejected command",
+          details: result 
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: `Dial command sent to ${model} at ${ip} for number ${number}`,
-      data: dialResponse
+      message: `Dial command accepted by phone`,
+      data: result
     });
 
   } catch (err) {

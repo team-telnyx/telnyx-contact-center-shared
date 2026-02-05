@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { testPolycomConnection } from "@/lib/cti/polycom-sip-notify";
 
 /**
  * POST /api/voice/cti/test
- * Test connection to SIP phone via SIP NOTIFY
+ * Test SIP connection to IP phone (OPTIONS)
  */
 export async function POST(request) {
   try {
@@ -25,48 +26,21 @@ export async function POST(request) {
       );
     }
 
-    // Validate phone config
-    const { ip, port = "5060", username, macAddress, model = "Polycom VVX300" } = phoneConfig;
+    console.log(`[CTI Test] Testing connection to ${phoneConfig.ip}:${phoneConfig.port || 5060}`);
 
-    // For now, simulate a connection test
-    // TODO: Implement actual SIP NOTIFY ping/status check
-    const isValidIP = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip);
-    
-    if (!isValidIP) {
+    const result = await testPolycomConnection(phoneConfig);
+
+    if (!result.success) {
       return NextResponse.json(
-        { ok: false, error: "Invalid IP address format" },
-        { status: 400 }
+        { ok: false, error: "Connection test failed", details: result },
+        { status: 500 }
       );
     }
 
-    // Simulate connection test (replace with actual SIP NOTIFY)
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-
-    // Mock phone response - in real implementation, this would be SIP NOTIFY response
-    const phoneStatus = {
-      ip,
-      port,
-      model,
-      status: "online",
-      sipState: "registered",
-      capabilities: ["dial", "answer", "hangup", "hold", "mute", "transfer"],
-      lastSeen: new Date().toISOString(),
-      macAddress: macAddress || "unknown",
-      firmware: "5.9.7.3480" // Mock firmware version
-    };
-
     return NextResponse.json({
       ok: true,
-      message: `Successfully connected to ${model} at ${ip}:${port}`,
-      data: {
-        phoneStatus,
-        connection: {
-          method: "SIP_NOTIFY",
-          transport: "UDP",
-          timeout: 5000,
-          testType: "ping"
-        }
-      }
+      message: "Phone is reachable via SIP",
+      data: result
     });
 
   } catch (err) {

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { sendPolycomNotify } from "@/lib/cti/polycom-sip-notify";
 
 /**
  * POST /api/voice/cti/unhold
- * Resume call from hold via SIP NOTIFY to IP phone
+ * Resume call via SIP NOTIFY
  */
 export async function POST(request) {
   try {
@@ -25,45 +26,20 @@ export async function POST(request) {
       );
     }
 
-    const { ip, port = "5060", model = "Polycom VVX300" } = phoneConfig;
+    console.log(`[CTI Unhold] Sending unhold command to ${phoneConfig.ip}:${phoneConfig.port || 5060}`);
 
-    // TODO: Implement actual SIP NOTIFY for Polycom VVX300 unhold command
-    // For Polycom phones, the SIP NOTIFY would look like:
-    // NOTIFY sip:user@phone.ip SIP/2.0
-    // Event: polycom-call
-    // Content-Type: application/polycom-call+xml
-    // 
-    // <PolycomIPPhone>
-    //   <Call>
-    //     <Action>unhold</Action>
-    //   </Call>
-    // </PolycomIPPhone>
+    const result = await sendPolycomNotify(phoneConfig, 'unhold');
 
-    console.log(`[CTI Unhold] Sending unhold command to ${ip}:${port}`);
-
-    // Simulate SIP NOTIFY send
-    await new Promise(resolve => setTimeout(resolve, 200)); // Simulate network delay
-
-    // Mock response - in real implementation, this would be the SIP NOTIFY response
-    const unholdResponse = {
-      sipNotifyResult: {
-        status: "200 OK",
-        method: "NOTIFY",
-        event: "polycom-call",
-        target: `sip:${phoneConfig.username}@${ip}:${port}`,
-        contentType: "application/polycom-call+xml"
-      },
-      callInfo: {
-        action: "unhold",
-        state: "connected",
-        timestamp: new Date().toISOString()
-      }
-    };
+    if (!result.success) {
+      return NextResponse.json(
+        { ok: false, error: result.error || "Phone rejected command", details: result },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: `Unhold command sent to ${model} at ${ip}`,
-      data: unholdResponse
+      data: result
     });
 
   } catch (err) {
