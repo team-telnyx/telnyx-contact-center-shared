@@ -31,11 +31,7 @@ import {
   IconTrendingUp,
   IconTrendingDown,
   IconRefresh,
-  IconSend,
-  IconHistory,
-  IconSearch,
 } from "@tabler/icons-react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -361,58 +357,6 @@ export default function HomePage() {
           icon={IconPhone}
           className="border-l-4 border-l-orange-500"
         />
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link href="/messaging/send-sms">
-            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                  <IconSend className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Send SMS</CardTitle>
-                  <CardDescription className="text-sm">
-                    Send text messages via Telnyx
-                  </CardDescription>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/messaging/sms-history">
-            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-12 w-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <IconHistory className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">SMS History</CardTitle>
-                  <CardDescription className="text-sm">
-                    View sent and received messages
-                  </CardDescription>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
-          <Link href="/number-lookup">
-            <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                <div className="h-12 w-12 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <IconSearch className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Number Lookup</CardTitle>
-                  <CardDescription className="text-sm">
-                    Look up carrier and caller info
-                  </CardDescription>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
       </div>
 
       {/* Charts Section */}
