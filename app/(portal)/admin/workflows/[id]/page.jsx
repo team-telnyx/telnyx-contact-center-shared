@@ -561,7 +561,7 @@ export default function WorkflowEditorPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6 h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+    <div className="px-4 lg:px-6 h-[calc(100vh-120px)] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -602,7 +602,7 @@ export default function WorkflowEditorPage() {
       {/* Main Content - 3 Column Layout (equal widths) */}
       <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
         {/* Left Panel: Stages */}
-        <div>
+        <div className="min-h-0 h-full">
           <Card className="h-full flex flex-col overflow-hidden">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <div className="flex items-center justify-between">
@@ -672,7 +672,7 @@ export default function WorkflowEditorPage() {
         </div>
 
         {/* Center Panel: Items */}
-        <div>
+        <div className="min-h-0 h-full">
           <Card className="h-full flex flex-col overflow-hidden">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <div className="flex items-center justify-between">
@@ -736,7 +736,7 @@ export default function WorkflowEditorPage() {
         </div>
 
         {/* Right Panel: Item Editor */}
-        <div>
+        <div className="min-h-0 h-full">
           <Card className="h-full flex flex-col overflow-hidden">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
