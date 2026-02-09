@@ -551,16 +551,10 @@ export default function WorkflowEditorPage() {
     return (
       <div className="px-4 lg:px-6 space-y-4">
         <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-3">
-            <Skeleton className="h-[600px]" />
-          </div>
-          <div className="col-span-5">
-            <Skeleton className="h-[600px]" />
-          </div>
-          <div className="col-span-4">
-            <Skeleton className="h-[600px]" />
-          </div>
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton className="h-[600px]" />
+          <Skeleton className="h-[600px]" />
+          <Skeleton className="h-[600px]" />
         </div>
       </div>
     );
@@ -605,10 +599,10 @@ export default function WorkflowEditorPage() {
         </div>
       </div>
 
-      {/* Main Content - 3 Column Layout */}
-      <div className="grid grid-cols-12 gap-4 h-[calc(100vh-180px)]">
+      {/* Main Content - 3 Column Layout (equal widths) */}
+      <div className="grid grid-cols-3 gap-4 h-[calc(100vh-180px)]">
         {/* Left Panel: Stages */}
-        <div className="col-span-3">
+        <div>
           <Card className="h-full flex flex-col">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -675,7 +669,7 @@ export default function WorkflowEditorPage() {
         </div>
 
         {/* Center Panel: Items */}
-        <div className="col-span-5">
+        <div>
           <Card className="h-full flex flex-col">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0">
               <div className="flex items-center justify-between">
@@ -738,7 +732,7 @@ export default function WorkflowEditorPage() {
         </div>
 
         {/* Right Panel: Item Editor */}
-        <div className="col-span-4">
+        <div>
           <Card className="h-full flex flex-col">
             <CardHeader className="py-3 px-4 border-b flex-shrink-0">
               <CardTitle className="text-sm font-medium">
@@ -961,31 +955,93 @@ export default function WorkflowEditorPage() {
   );
 }
 
-// Item Editor Component
+const SLOT_TYPES = [
+  { value: "text", label: "Text" },
+  { value: "number", label: "Number" },
+  { value: "date", label: "Date" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "select", label: "Select (options)" },
+  { value: "boolean", label: "Yes/No" },
+];
+
+const ITEM_TYPES = [
+  { value: "action", label: "Action", description: "Agent must perform this action" },
+  { value: "question", label: "Question", description: "Agent must ask this question" },
+  { value: "topic", label: "Topic", description: "Topic to cover in conversation" },
+  { value: "slot", label: "Data Slot", description: "Data to collect from customer" },
+];
+
+// Item Editor Component with all slot fields
 function ItemEditor({ item, onSave }) {
   const [form, setForm] = useState({
     label: item.label || "",
     description: item.description || "",
+    type: item.type || "action",
+    is_required: item.is_required !== false,
+    slot_name: item.slot_name || "",
+    slot_type: item.slot_type || "text",
+    slot_options: item.slot_options || [],
+    slot_validation: item.slot_validation || "",
   });
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [newOption, setNewOption] = useState("");
 
   // Reset form when item changes
   useEffect(() => {
     setForm({
       label: item.label || "",
       description: item.description || "",
+      type: item.type || "action",
+      is_required: item.is_required !== false,
+      slot_name: item.slot_name || "",
+      slot_type: item.slot_type || "text",
+      slot_options: Array.isArray(item.slot_options) ? item.slot_options : [],
+      slot_validation: item.slot_validation || "",
     });
     setHasChanges(false);
-  }, [item.id, item.label, item.description]);
+    setNewOption("");
+  }, [item.id]);
 
   // Check for changes
   useEffect(() => {
+    const originalOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
     const changed =
       form.label !== (item.label || "") ||
-      form.description !== (item.description || "");
+      form.description !== (item.description || "") ||
+      form.type !== (item.type || "action") ||
+      form.is_required !== (item.is_required !== false) ||
+      form.slot_name !== (item.slot_name || "") ||
+      form.slot_type !== (item.slot_type || "text") ||
+      JSON.stringify(form.slot_options) !== JSON.stringify(originalOptions) ||
+      form.slot_validation !== (item.slot_validation || "");
     setHasChanges(changed);
   }, [form, item]);
+
+  function addOption() {
+    if (!newOption.trim()) return;
+    if (form.slot_options.includes(newOption.trim())) {
+      notify({
+        title: "Duplicate option",
+        description: "This option already exists",
+        variant: "error",
+      });
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      slot_options: [...f.slot_options, newOption.trim()],
+    }));
+    setNewOption("");
+  }
+
+  function removeOption(optionToRemove) {
+    setForm((f) => ({
+      ...f,
+      slot_options: f.slot_options.filter((opt) => opt !== optionToRemove),
+    }));
+  }
 
   async function handleSave() {
     if (!form.label.trim()) {
@@ -997,11 +1053,27 @@ function ItemEditor({ item, onSave }) {
       return;
     }
 
+    // Validate slot fields for slot type
+    if (form.type === "slot" && !form.slot_name.trim()) {
+      notify({
+        title: "Validation Error",
+        description: "Slot name is required for data slot items",
+        variant: "error",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       await onSave({
         label: form.label.trim(),
         description: form.description.trim(),
+        type: form.type,
+        is_required: form.is_required,
+        slot_name: form.type === "slot" ? form.slot_name.trim() : null,
+        slot_type: form.type === "slot" ? form.slot_type : null,
+        slot_options: form.type === "slot" && form.slot_type === "select" ? form.slot_options : null,
+        slot_validation: form.type === "slot" ? form.slot_validation.trim() : null,
       });
       setHasChanges(false);
     } finally {
@@ -1009,28 +1081,210 @@ function ItemEditor({ item, onSave }) {
     }
   }
 
+  const isSlotType = form.type === "slot";
+  const showOptions = isSlotType && form.slot_type === "select";
+
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="item-label">Label</Label>
-        <Input
-          id="item-label"
-          value={form.label}
-          onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-        />
+    <div className="space-y-6">
+      {/* Basic Info Section */}
+      <div className="space-y-4">
+        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Basic Info
+        </h4>
+        
+        <div className="space-y-2">
+          <Label htmlFor="item-type">Type</Label>
+          <Select
+            value={form.type}
+            onValueChange={(value) => setForm((f) => ({ ...f, type: value }))}
+          >
+            <SelectTrigger id="item-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEM_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  <div className="flex flex-col">
+                    <span>{t.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {ITEM_TYPES.find((t) => t.value === form.type)?.description}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="item-label">Label</Label>
+          <Input
+            id="item-label"
+            value={form.label}
+            onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+            placeholder="e.g., Verify customer identity"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="item-description">Description</Label>
+          <Textarea
+            id="item-description"
+            value={form.description}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, description: e.target.value }))
+            }
+            placeholder="Additional context for the agent..."
+            rows={2}
+          />
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div className="space-y-0.5">
+            <Label htmlFor="item-required">Required</Label>
+            <p className="text-xs text-muted-foreground">
+              Agent must complete this item
+            </p>
+          </div>
+          <Switch
+            id="item-required"
+            checked={form.is_required}
+            onCheckedChange={(checked) =>
+              setForm((f) => ({ ...f, is_required: checked }))
+            }
+          />
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="item-description">Description</Label>
-        <Textarea
-          id="item-description"
-          value={form.description}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, description: e.target.value }))
-          }
-          rows={4}
-        />
-      </div>
-      <div className="flex justify-end">
+
+      {/* Slot Configuration Section - Only visible when type is "slot" */}
+      {isSlotType && (
+        <div className="space-y-4 border-t pt-4">
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Slot Configuration
+          </h4>
+
+          <div className="space-y-2">
+            <Label htmlFor="slot-name">Slot Name</Label>
+            <Input
+              id="slot-name"
+              value={form.slot_name}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, slot_name: e.target.value }))
+              }
+              placeholder="e.g., customer_name, account_number"
+            />
+            <p className="text-xs text-muted-foreground">
+              Identifier used to store the collected value (use snake_case)
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="slot-type">Data Type</Label>
+            <Select
+              value={form.slot_type}
+              onValueChange={(value) =>
+                setForm((f) => ({ ...f, slot_type: value }))
+              }
+            >
+              <SelectTrigger id="slot-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SLOT_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
+      {/* Options Section - Only visible when slot_type is "select" */}
+      {showOptions && (
+        <div className="space-y-4 border-t pt-4">
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Options
+          </h4>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Customer must choose one of these options
+          </p>
+
+          {/* Current options as badges */}
+          {form.slot_options.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {form.slot_options.map((opt) => (
+                <Badge
+                  key={opt}
+                  variant="secondary"
+                  className="flex items-center gap-1 pr-1"
+                >
+                  {opt}
+                  <button
+                    type="button"
+                    onClick={() => removeOption(opt)}
+                    className="ml-1 rounded-full hover:bg-destructive hover:text-destructive-foreground p-0.5 transition-colors"
+                  >
+                    <IconX className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Add new option */}
+          <div className="flex items-center gap-2">
+            <Input
+              value={newOption}
+              onChange={(e) => setNewOption(e.target.value)}
+              placeholder="Add an option..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addOption();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addOption}
+              disabled={!newOption.trim()}
+            >
+              <IconPlus className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Section - Only visible when type is "slot" */}
+      {isSlotType && (
+        <div className="space-y-4 border-t pt-4">
+          <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Validation Instructions
+          </h4>
+
+          <div className="space-y-2">
+            <Textarea
+              id="slot-validation"
+              value={form.slot_validation}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, slot_validation: e.target.value }))
+              }
+              placeholder="Instructions for the AI on how to validate/format this data.&#10;&#10;Examples:&#10;- Format as DD/MM/YYYY&#10;- Must be a valid Polish phone number (+48...)&#10;- Accept full name with at least first and last name"
+              rows={4}
+            />
+            <p className="text-xs text-muted-foreground">
+              LLM instructions for validating and formatting the captured value
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-2 border-t">
         <Button onClick={handleSave} disabled={saving || !hasChanges}>
           {saving ? (
             <>

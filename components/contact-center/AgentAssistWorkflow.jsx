@@ -606,135 +606,243 @@ function TranscriptionBubble({ transcription }) {
 }
 
 /**
- * Suggested Response Card - Single suggestion for current slot
+ * Generate a suggestion based on the item
+ */
+function generateSuggestion(stage, item) {
+  // Generate contextual question based on item type and label
+  const questionTemplates = {
+    slot: {
+      name: "Could you please tell me your full name?",
+      "customer name": "Could you please tell me your full name?",
+      email: "What email address should I use for your account?",
+      phone: "What's the best phone number to reach you?",
+      address: "Could you provide your current address?",
+      account: "Could you please provide your account number?",
+      "account number": "Could you please provide your account number?",
+      order: "What is your order number?",
+      "order number": "What is your order number?",
+      product: "Which product are you inquiring about?",
+      issue: "Could you describe the issue you're experiencing?",
+      default: `Could you please provide your ${item.label.toLowerCase()}?`,
+    },
+    question: {
+      default: `${item.label}`,
+    },
+    action: {
+      default: `I'll now ${item.label.toLowerCase()}.`,
+    },
+    topic: {
+      default: `Let me help you with ${item.label.toLowerCase()}.`,
+    },
+  };
+
+  const templates = questionTemplates[item.type] || questionTemplates.slot;
+  const labelLower = item.label.toLowerCase();
+  
+  // Find matching template or use default
+  let text = templates.default;
+  for (const [key, value] of Object.entries(templates)) {
+    if (key !== "default" && labelLower.includes(key)) {
+      text = value;
+      break;
+    }
+  }
+
+  // For select type slots, add options to the suggestion
+  const slotOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
+  if (item.type === "slot" && item.slot_type === "select" && slotOptions.length > 0) {
+    text = `${text}\n\nPlease select: ${slotOptions.join(", ")}`;
+  }
+
+  return {
+    id: `${item.id}-${Date.now()}`,
+    text,
+    stageName: stage.name,
+    itemId: item.id,
+    itemLabel: item.label,
+    itemType: item.type,
+    slotOptions: slotOptions.length > 0 ? slotOptions : null,
+    timestamp: new Date(),
+  };
+}
+
+/**
+ * Suggested Response Card - Accumulating list of suggestions
  */
 function SuggestedResponseCard({ currentSlot }) {
-  const [copied, setCopied] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [copiedId, setCopiedId] = useState(null);
+  const scrollRef = useRef(null);
+  const endRef = useRef(null);
+  const lastItemIdRef = useRef(null);
 
-  // Generate a suggested question based on the current item needing fill
-  const suggestion = useMemo(() => {
-    if (!currentSlot) return null;
+  // Add new suggestion when currentSlot changes to a new item
+  useEffect(() => {
+    if (!currentSlot) return;
     
     const { stage, item } = currentSlot;
     
-    // Generate contextual question based on item type and label
-    const questionTemplates = {
-      slot: {
-        name: "Could you please tell me your full name?",
-        "customer name": "Could you please tell me your full name?",
-        email: "What email address should I use for your account?",
-        phone: "What's the best phone number to reach you?",
-        address: "Could you provide your current address?",
-        account: "Could you please provide your account number?",
-        "account number": "Could you please provide your account number?",
-        order: "What is your order number?",
-        "order number": "What is your order number?",
-        product: "Which product are you inquiring about?",
-        issue: "Could you describe the issue you're experiencing?",
-        default: `Could you please provide your ${item.label.toLowerCase()}?`,
-      },
-      question: {
-        default: `${item.label}`,
-      },
-      action: {
-        default: `I'll now ${item.label.toLowerCase()}.`,
-      },
-      topic: {
-        default: `Let me help you with ${item.label.toLowerCase()}.`,
-      },
-    };
-
-    const templates = questionTemplates[item.type] || questionTemplates.slot;
-    const labelLower = item.label.toLowerCase();
-    
-    // Find matching template or use default
-    let text = templates.default;
-    for (const [key, value] of Object.entries(templates)) {
-      if (key !== "default" && labelLower.includes(key)) {
-        text = value;
-        break;
-      }
+    // Only add suggestion if this is a new item
+    if (lastItemIdRef.current !== item.id) {
+      lastItemIdRef.current = item.id;
+      const newSuggestion = generateSuggestion(stage, item);
+      setSuggestions((prev) => [...prev, newSuggestion]);
     }
-
-    return {
-      text,
-      stageName: stage.name,
-      itemLabel: item.label,
-      itemType: item.type,
-    };
   }, [currentSlot]);
 
-  const handleCopy = () => {
-    if (!suggestion) return;
+  // Auto-scroll to bottom when new suggestions added
+  useEffect(() => {
+    if (suggestions.length > 0) {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [suggestions.length]);
+
+  const handleCopy = (suggestion) => {
     navigator.clipboard.writeText(suggestion.text);
-    setCopied(true);
+    setCopiedId(suggestion.id);
     notify({
       title: "Copied to clipboard",
       description: "Paste in your response",
       variant: "success",
     });
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopiedId(null), 2000);
   };
+
+  const isComplete = !currentSlot && suggestions.length > 0;
 
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
-          Suggested Response
+          Suggested Responses
+          {suggestions.length > 0 && (
+            <Badge variant="outline" className="ml-auto text-xs">
+              {suggestions.length} suggestions
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div className="px-4 pb-4">
-            {!suggestion ? (
+        <ScrollArea className="h-full" ref={scrollRef}>
+          <div className="px-4 pb-4 space-y-3">
+            {suggestions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
-                <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500 opacity-50" />
-                <p className="text-sm">All items completed!</p>
-                <p className="text-xs mt-1">Great job finishing the workflow</p>
+                <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Waiting for workflow...</p>
+                <p className="text-xs mt-1">Suggestions will appear here</p>
               </div>
             ) : (
-              <div
-                className="group p-4 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60 hover:bg-amber-500/10 transition-all cursor-pointer"
-                onClick={handleCopy}
-              >
-                {/* Current context badge */}
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-500 border-purple-500/50">
-                    {suggestion.stageName}
-                  </Badge>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/50">
-                    {suggestion.itemLabel}
-                  </Badge>
-                </div>
-
-                {/* Suggestion text */}
-                <div className="flex items-start gap-3">
-                  <Bot className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-base leading-relaxed font-medium">
-                      "{suggestion.text}"
-                    </p>
-                    
-                    <div className="flex items-center gap-2 mt-3">
-                      <span className="text-xs text-muted-foreground group-hover:text-amber-500 flex items-center gap-1">
-                        {copied ? (
-                          <>
-                            <CheckCheck className="h-3.5 w-3.5" />
-                            Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Click to copy
-                          </>
+              <>
+                {suggestions.map((suggestion, index) => {
+                  const isCopied = copiedId === suggestion.id;
+                  const isLatest = index === suggestions.length - 1;
+                  
+                  return (
+                    <div
+                      key={suggestion.id}
+                      className={`group p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                        isLatest
+                          ? "border-amber-500/50 bg-amber-500/5 hover:border-amber-500/80 hover:bg-amber-500/10"
+                          : "border-border/50 bg-muted/30 hover:border-border hover:bg-muted/50"
+                      }`}
+                      onClick={() => handleCopy(suggestion)}
+                    >
+                      {/* Context badge */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[10px] ${
+                            isLatest 
+                              ? "bg-purple-500/10 text-purple-500 border-purple-500/50"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {suggestion.stageName}
+                        </Badge>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                        <Badge 
+                          variant="outline" 
+                          className={`text-[10px] ${
+                            isLatest
+                              ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {suggestion.itemLabel}
+                        </Badge>
+                        {isLatest && (
+                          <Badge className="text-[10px] bg-amber-500 text-white ml-auto">
+                            Current
+                          </Badge>
                         )}
-                      </span>
+                      </div>
+
+                      {/* Suggestion text */}
+                      <div className="flex items-start gap-2">
+                        <Bot className={`h-4 w-4 mt-0.5 shrink-0 ${
+                          isLatest ? "text-amber-500" : "text-muted-foreground"
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                            isLatest ? "font-medium" : "text-muted-foreground"
+                          }`}>
+                            "{suggestion.text}"
+                          </p>
+                          
+                          {/* Slot options badges */}
+                          {suggestion.slotOptions && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {suggestion.slotOptions.map((opt) => (
+                                <Badge 
+                                  key={opt} 
+                                  variant="outline" 
+                                  className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50"
+                                >
+                                  {opt}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`text-xs flex items-center gap-1 ${
+                              isCopied 
+                                ? "text-green-500" 
+                                : isLatest 
+                                  ? "text-muted-foreground group-hover:text-amber-500"
+                                  : "text-muted-foreground"
+                            }`}>
+                              {isCopied ? (
+                                <>
+                                  <CheckCheck className="h-3 w-3" />
+                                  Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3" />
+                                  Click to copy
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                  );
+                })}
+
+                {/* Completion message */}
+                {isComplete && (
+                  <div className="text-center text-muted-foreground py-4 border-t">
+                    <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                    <p className="text-sm font-medium text-green-600">All items completed!</p>
+                    <p className="text-xs mt-1">Great job finishing the workflow</p>
                   </div>
-                </div>
-              </div>
+                )}
+
+                <div ref={endRef} />
+              </>
             )}
           </div>
         </ScrollArea>
