@@ -157,6 +157,7 @@ import BridgeNodeEditor from "@/components/voice-flow/BridgeNodeEditor";
 import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
+import AgentAssistNodeEditor from "@/components/voice-flow/AgentAssistNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
@@ -3433,6 +3434,23 @@ export default function FlowBuilderPage() {
                                 edges,
                                 globalVariables,
                               })}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "AgentAssistNodeEditor" ? (
+                            <AgentAssistNodeEditor
+                              node={selectedNode}
+                              updateNodeData={(nodeId, newData) => {
+                                setNodes((nds) =>
+                                  nds.map((node) =>
+                                    node.id === nodeId
+                                      ? { ...node, data: newData }
+                                      : node,
+                                  ),
+                                );
+                                setNodeConfig(newData.config || {});
+                              }}
+                              nodes={nodes}
+                              edges={edges}
                             />
                           ) : (
                             Object.entries(selectedNodeDef.config || {}).map(

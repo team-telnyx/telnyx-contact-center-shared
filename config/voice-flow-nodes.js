@@ -2105,6 +2105,61 @@ export const VOICE_FLOW_NODES = {
     },
   },
 
+  // AGENT ASSIST - Configure AI agent assistance for calls
+  agent_assist: {
+    id: "agent_assist",
+    category: NODE_CATEGORIES.AI_INTEGRATION,
+    label: "Agent Assist",
+    icon: "IconRobot",
+    color: NODE_COLORS[NODE_CATEGORIES.AI_INTEGRATION],
+    description: "Configure Agent Assist workflow and settings for the call",
+    telnyxAction: "agent_assist_config",
+    telnyxEndpoint: null, // Internal configuration, not a Telnyx API call
+    inputs: 1,
+    outputs: 1,
+    outputLabels: ["Configured"],
+    outputEvents: ["agent_assist.configured"],
+    outputDescriptions: ["Agent Assist has been configured for this call"],
+    customEditor: "AgentAssistNodeEditor",
+    config: {
+      enabled: {
+        type: "boolean",
+        label: "Enable Agent Assist",
+        required: false,
+        default: true,
+        description: "Enable or disable Agent Assist for this call",
+      },
+      workflow_id: {
+        type: "workflow_select",
+        label: "Workflow",
+        required: false,
+        default: "",
+        description: "Select the workflow to guide agents through this call",
+      },
+      auto_start: {
+        type: "boolean",
+        label: "Auto-start on Answer",
+        required: false,
+        default: true,
+        description: "Automatically start workflow tracking when call is answered",
+      },
+      show_suggestions: {
+        type: "boolean",
+        label: "Show AI Suggestions",
+        required: false,
+        default: true,
+        description: "Show AI-powered suggestions to agents during the call",
+      },
+      auto_detect_completion: {
+        type: "boolean",
+        label: "Auto-detect Item Completion",
+        required: false,
+        default: true,
+        description: "Automatically detect when workflow items are completed based on conversation",
+      },
+    },
+  },
+
   flow_end: {
     id: "flow_end",
     category: NODE_CATEGORIES.LOGICAL,
