@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,9 +44,9 @@ import {
   DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
-import WorkflowEditorSheet from "@/components/contact-center/WorkflowEditorSheet";
 
 export default function AdminWorkflowsPage() {
+  const router = useRouter();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -56,11 +57,6 @@ export default function AdminWorkflowsPage() {
     q: "",
   });
   const [loading, setLoading] = useState(false);
-
-  // Sheet state
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState(null);
-  const [isNewWorkflow, setIsNewWorkflow] = useState(false);
 
   const query = useMemo(() => {
     const sp = new URLSearchParams();
@@ -151,28 +147,6 @@ export default function AdminWorkflowsPage() {
     }
   }
 
-  function handleEditWorkflow(workflow) {
-    setSelectedWorkflowId(workflow.id);
-    setIsNewWorkflow(false);
-    setEditorOpen(true);
-  }
-
-  function handleNewWorkflow() {
-    setSelectedWorkflowId(null);
-    setIsNewWorkflow(true);
-    setEditorOpen(true);
-  }
-
-  function handleEditorClose(open) {
-    if (!open) {
-      setEditorOpen(false);
-      setSelectedWorkflowId(null);
-      setIsNewWorkflow(false);
-      // Reload list to reflect any changes
-      load();
-    }
-  }
-
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Extract unique categories from current items
@@ -220,7 +194,7 @@ export default function AdminWorkflowsPage() {
                 {loading ? "Loading…" : "Refresh"}
               </Button>
               <Button
-                onClick={handleNewWorkflow}
+                onClick={() => router.push("/admin/workflows/new")}
                 variant="default"
               >
                 <IconPlus className="size-4 mr-1" />
@@ -345,7 +319,9 @@ export default function AdminWorkflowsPage() {
                             <div className="inline-flex items-center gap-2 justify-end">
                               <button
                                 type="button"
-                                onClick={() => handleEditWorkflow(workflow)}
+                                onClick={() =>
+                                  router.push(`/admin/workflows/${workflow.id}`)
+                                }
                                 className="inline-flex items-center text-telnyx-green"
                                 title="Edit workflow"
                               >
@@ -481,15 +457,6 @@ export default function AdminWorkflowsPage() {
           </div>
         </div>
       </Card>
-
-      {/* Workflow Editor Sheet */}
-      <WorkflowEditorSheet
-        open={editorOpen}
-        onOpenChange={handleEditorClose}
-        workflowId={selectedWorkflowId}
-        onBack={() => handleEditorClose(false)}
-        isNew={isNewWorkflow}
-      />
     </div>
   );
 }
