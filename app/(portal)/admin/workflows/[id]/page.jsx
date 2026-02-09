@@ -561,9 +561,9 @@ export default function WorkflowEditorPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6">
+    <div className="px-4 lg:px-6 h-[calc(100vh-120px)] overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -600,7 +600,7 @@ export default function WorkflowEditorPage() {
       </div>
 
       {/* Main Content - 3 Column Layout (equal widths) */}
-      <div className="grid grid-cols-3 gap-4 h-[calc(100vh-180px)]">
+      <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
         {/* Left Panel: Stages */}
         <div>
           <Card className="h-full flex flex-col overflow-hidden">
@@ -977,16 +977,16 @@ const ITEM_TYPES = [
   { value: "slot", label: "Data Slot", description: "Data to collect from customer" },
 ];
 
-// Predefined hint colors for variety
+// Predefined hint colors for variety (border + text only, no background)
 const HINT_COLORS = [
-  { border: "border-blue-500", text: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950" },
-  { border: "border-green-500", text: "text-green-600", bg: "bg-green-50 dark:bg-green-950" },
-  { border: "border-purple-500", text: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950" },
-  { border: "border-orange-500", text: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950" },
-  { border: "border-pink-500", text: "text-pink-600", bg: "bg-pink-50 dark:bg-pink-950" },
-  { border: "border-cyan-500", text: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950" },
-  { border: "border-amber-500", text: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950" },
-  { border: "border-indigo-500", text: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
+  { border: "border-blue-500", text: "text-blue-500" },
+  { border: "border-green-500", text: "text-green-500" },
+  { border: "border-purple-500", text: "text-purple-500" },
+  { border: "border-orange-500", text: "text-orange-500" },
+  { border: "border-pink-500", text: "text-pink-500" },
+  { border: "border-cyan-500", text: "text-cyan-500" },
+  { border: "border-amber-500", text: "text-amber-500" },
+  { border: "border-indigo-500", text: "text-indigo-500" },
 ];
 
 function getHintColor(index) {
@@ -1231,8 +1231,7 @@ function ItemEditor({ item, onSave }) {
                   className={cn(
                     "flex items-center gap-1 pr-1 border-2",
                     color.border,
-                    color.text,
-                    color.bg
+                    color.text
                   )}
                 >
                   {hint}
@@ -1344,8 +1343,7 @@ function ItemEditor({ item, onSave }) {
                     className={cn(
                       "flex items-center gap-1 pr-1 border-2",
                       color.border,
-                      color.text,
-                      color.bg
+                      color.text
                     )}
                   >
                     {opt}
