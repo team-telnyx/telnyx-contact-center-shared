@@ -1403,7 +1403,7 @@ function ItemEditor({ item, onSave }) {
               onChange={(e) =>
                 setForm((f) => ({ ...f, slot_validation: e.target.value }))
               }
-              placeholder="Instructions for the AI on how to validate/format this data.&#10;&#10;Examples:&#10;- Format as DD/MM/YYYY&#10;- Must be a valid Polish phone number (+48...)&#10;- Accept full name with at least first and last name"
+              placeholder="Instructions for the AI on how to validate/format this data.&#10;&#10;Examples:&#10;- Format as MM/DD/YYYY&#10;- Must be a valid US phone number (+1...)&#10;- Accept full name with at least first and last name"
               rows={4}
             />
             <p className="text-xs text-muted-foreground">
