@@ -2112,7 +2112,7 @@ export const VOICE_FLOW_NODES = {
     label: "Agent Assist",
     icon: "IconRobot",
     color: NODE_COLORS[NODE_CATEGORIES.AI_INTEGRATION],
-    description: "Configure Agent Assist workflow and settings for the call",
+    description: "Configure Agent Assist settings - KB Articles or Workflows",
     telnyxAction: "agent_assist_config",
     telnyxEndpoint: null, // Internal configuration, not a Telnyx API call
     inputs: 1,
@@ -2129,12 +2129,52 @@ export const VOICE_FLOW_NODES = {
         default: true,
         description: "Enable or disable Agent Assist for this call",
       },
+      assist_type: {
+        type: "select",
+        label: "Assist Type",
+        required: true,
+        default: "kb_articles",
+        options: [
+          { value: "kb_articles", label: "KB Articles" },
+          { value: "workflows", label: "Workflows" },
+        ],
+        description: "Choose between Knowledge Base articles or guided Workflows",
+      },
+      // KB Articles options
+      kb_category: {
+        type: "kb_category_select",
+        label: "KB Category",
+        required: false,
+        default: "",
+        description: "Filter suggestions to specific KB category (optional)",
+        showWhen: { assist_type: "kb_articles" },
+      },
+      kb_auto_suggest: {
+        type: "boolean",
+        label: "Auto-suggest Articles",
+        required: false,
+        default: true,
+        description: "Automatically suggest relevant KB articles based on conversation",
+        showWhen: { assist_type: "kb_articles" },
+      },
+      kb_max_suggestions: {
+        type: "number",
+        label: "Max Suggestions",
+        required: false,
+        default: 3,
+        min: 1,
+        max: 10,
+        description: "Maximum number of KB articles to suggest at once",
+        showWhen: { assist_type: "kb_articles" },
+      },
+      // Workflow options
       workflow_id: {
         type: "workflow_select",
         label: "Workflow",
         required: false,
         default: "",
         description: "Select the workflow to guide agents through this call",
+        showWhen: { assist_type: "workflows" },
       },
       auto_start: {
         type: "boolean",
@@ -2142,6 +2182,7 @@ export const VOICE_FLOW_NODES = {
         required: false,
         default: true,
         description: "Automatically start workflow tracking when call is answered",
+        showWhen: { assist_type: "workflows" },
       },
       show_suggestions: {
         type: "boolean",
@@ -2149,6 +2190,7 @@ export const VOICE_FLOW_NODES = {
         required: false,
         default: true,
         description: "Show AI-powered suggestions to agents during the call",
+        showWhen: { assist_type: "workflows" },
       },
       auto_detect_completion: {
         type: "boolean",
@@ -2156,6 +2198,7 @@ export const VOICE_FLOW_NODES = {
         required: false,
         default: true,
         description: "Automatically detect when workflow items are completed based on conversation",
+        showWhen: { assist_type: "workflows" },
       },
     },
   },
