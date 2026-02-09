@@ -28,6 +28,15 @@ export async function GET(request) {
       limit,
     });
 
+    // DEBUG: Log metadata for each interaction
+    interactions.forEach((interaction, idx) => {
+      console.log(`[API agent/interactions] interaction[${idx}].id:`, interaction.id);
+      console.log(`[API agent/interactions] interaction[${idx}].metadata:`, JSON.stringify(interaction.metadata));
+      if (interaction.metadata?.agent_assist_config) {
+        console.log(`[API agent/interactions] interaction[${idx}].agent_assist_config:`, JSON.stringify(interaction.metadata.agent_assist_config));
+      }
+    });
+
     // Only return interactions from cc_interactions table
     return NextResponse.json({ ok: true, interactions });
   } catch (err) {
