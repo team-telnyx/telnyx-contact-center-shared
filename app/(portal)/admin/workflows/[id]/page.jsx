@@ -603,10 +603,13 @@ export default function WorkflowEditorPage() {
       <div className="grid grid-cols-3 gap-4 h-[calc(100vh-180px)]">
         {/* Left Panel: Stages */}
         <div>
-          <Card className="h-full flex flex-col">
-            <CardHeader className="py-3 px-4 border-b flex-shrink-0">
+          <Card className="h-full flex flex-col overflow-hidden">
+            <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Stages</CardTitle>
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <IconGitBranch className="size-4" />
+                  Stages
+                </CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -670,10 +673,11 @@ export default function WorkflowEditorPage() {
 
         {/* Center Panel: Items */}
         <div>
-          <Card className="h-full flex flex-col">
-            <CardHeader className="py-3 px-4 border-b flex-shrink-0">
+          <Card className="h-full flex flex-col overflow-hidden">
+            <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <IconCheck className="size-4" />
                   {selectedStage ? `Items in "${selectedStage.name}"` : "Items"}
                 </CardTitle>
                 {selectedStageId && (
@@ -733,24 +737,23 @@ export default function WorkflowEditorPage() {
 
         {/* Right Panel: Item Editor */}
         <div>
-          <Card className="h-full flex flex-col">
-            <CardHeader className="py-3 px-4 border-b flex-shrink-0">
-              <CardTitle className="text-sm font-medium">
+          <Card className="h-full flex flex-col overflow-hidden">
+            <CardHeader className="py-3 px-4 border-b flex-shrink-0 h-14">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <IconEdit className="size-4" />
                 {selectedItem ? "Edit Item" : "Item Details"}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 flex-1 overflow-auto">
-              {!selectedItem ? (
-                <div className="flex items-center justify-center h-full text-center text-muted-foreground">
-                  <p className="text-sm">Select an item to edit</p>
-                </div>
-              ) : (
-                <ItemEditor
-                  item={selectedItem}
-                  onSave={(updates) => updateItem(selectedItem.id, updates)}
-                />
-              )}
-            </CardContent>
+            {!selectedItem ? (
+              <CardContent className="flex-1 flex items-center justify-center text-center text-muted-foreground">
+                <p className="text-sm">Select an item to edit</p>
+              </CardContent>
+            ) : (
+              <ItemEditor
+                item={selectedItem}
+                onSave={(updates) => updateItem(selectedItem.id, updates)}
+              />
+            )}
           </Card>
         </div>
       </div>
@@ -1085,7 +1088,9 @@ function ItemEditor({ item, onSave }) {
   const showOptions = isSlotType && form.slot_type === "select";
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
+      {/* Scrollable form content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
       {/* Basic Info Section */}
       <div className="space-y-4">
         <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
@@ -1283,17 +1288,19 @@ function ItemEditor({ item, onSave }) {
         </div>
       )}
 
-      {/* Save Button */}
-      <div className="flex justify-end pt-2 border-t">
-        <Button onClick={handleSave} disabled={saving || !hasChanges}>
+      </div>
+
+      {/* Save Button - Fixed at bottom */}
+      <div className="flex-shrink-0 p-4 border-t bg-background">
+        <Button onClick={handleSave} disabled={saving || !hasChanges} className="w-full">
           {saving ? (
             <>
-              <IconLoader2 className="size-4 mr-1 animate-spin" />
+              <IconLoader2 className="size-4 mr-2 animate-spin" />
               Saving...
             </>
           ) : (
             <>
-              <IconDeviceFloppy className="size-4 mr-1" />
+              <IconDeviceFloppy className="size-4 mr-2" />
               Save Changes
             </>
           )}
