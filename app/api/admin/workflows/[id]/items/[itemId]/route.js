@@ -48,6 +48,7 @@ export async function PUT(request, { params }) {
       label,
       description,
       prompt_hint,
+      hints,
       order_index,
       is_required,
       slot_name,
@@ -82,6 +83,10 @@ export async function PUT(request, { params }) {
     if (prompt_hint !== undefined) {
       updates.push(`prompt_hint = $${paramIndex++}`);
       values.push(prompt_hint);
+    }
+    if (hints !== undefined) {
+      updates.push(`hints = $${paramIndex++}`);
+      values.push(hints ? JSON.stringify(hints) : null);
     }
     if (order_index !== undefined) {
       updates.push(`order_index = $${paramIndex++}`);
