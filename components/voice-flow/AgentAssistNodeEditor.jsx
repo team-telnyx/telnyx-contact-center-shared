@@ -18,22 +18,19 @@ import {
   IconRobot,
   IconGitBranch,
   IconBook,
-  IconBulb,
 } from "@tabler/icons-react";
 
 export default function AgentAssistNodeEditor({
-  node,
-  updateNodeData,
-  nodes,
-  edges,
+  config = {},
+  onChange,
 }) {
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const config = node.data?.config || {};
 
   const assistType = config.assist_type || "kb_articles";
+  const enabled = config.enabled !== false;
 
   // Load workflows on mount
   useEffect(() => {
@@ -76,12 +73,9 @@ export default function AgentAssistNodeEditor({
   }, []);
 
   function handleChange(key, value) {
-    updateNodeData(node.id, {
-      ...node.data,
-      config: {
-        ...config,
-        [key]: value,
-      },
+    onChange({
+      ...config,
+      [key]: value,
     });
   }
 
@@ -104,7 +98,7 @@ export default function AgentAssistNodeEditor({
           </p>
         </div>
         <Switch
-          checked={config.enabled !== false}
+          checked={enabled}
           onCheckedChange={(checked) => handleChange("enabled", checked)}
         />
       </div>
@@ -175,7 +169,7 @@ export default function AgentAssistNodeEditor({
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select
-                value={config.kb_category || ""}
+                value={config.kb_category || "all"}
                 onValueChange={(value) => handleChange("kb_category", value === "all" ? "" : value)}
               >
                 <SelectTrigger>
@@ -184,7 +178,7 @@ export default function AgentAssistNodeEditor({
                 <SelectContent>
                   <SelectItem value="all">All categories</SelectItem>
                   {kbCategories.map((cat) => (
-                    <SelectItem key={cat.id || cat.name} value={cat.id || cat.name}>
+                    <SelectItem key={cat.id || cat.name || cat} value={cat.id || cat.name || cat}>
                       {cat.name || cat}
                     </SelectItem>
                   ))}
@@ -243,7 +237,7 @@ export default function AgentAssistNodeEditor({
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select
-                value={config.workflow_id || ""}
+                value={config.workflow_id || "none"}
                 onValueChange={(value) => handleChange("workflow_id", value === "none" ? "" : value)}
               >
                 <SelectTrigger>

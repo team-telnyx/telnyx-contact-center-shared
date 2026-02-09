@@ -3438,19 +3438,25 @@ export default function FlowBuilderPage() {
                           ) : selectedNodeDef.customEditor ===
                             "AgentAssistNodeEditor" ? (
                             <AgentAssistNodeEditor
-                              node={selectedNode}
-                              updateNodeData={(nodeId, newData) => {
-                                setNodes((nds) =>
-                                  nds.map((node) =>
-                                    node.id === nodeId
-                                      ? { ...node, data: newData }
-                                      : node,
-                                  ),
-                                );
-                                setNodeConfig(newData.config || {});
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
+                                  );
+                                }
                               }}
-                              nodes={nodes}
-                              edges={edges}
                             />
                           ) : (
                             Object.entries(selectedNodeDef.config || {}).map(
