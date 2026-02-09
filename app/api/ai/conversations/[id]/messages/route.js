@@ -4,7 +4,7 @@ import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request, context) {
+export async function GET(request, context) {
   try {
     const user = await getAuthenticatedUser();
     if (!user) {
@@ -14,13 +14,21 @@ export async function GET(_request, context) {
       );
     }
 
-    const apiKey = process.env.TELNYX_API_KEY;
+    const { searchParams } = new URL(request.url);
+    const useDemoApiKey = searchParams.get("useDemoApiKey") === "true";
+    
+    // Use demo API key if requested, otherwise use regular API key
+    const apiKey = useDemoApiKey
+      ? process.env.TELNYX_DEMO_PORTAL_API_KEY
+      : process.env.TELNYX_API_KEY;
+    
     if (!apiKey) {
       return NextResponse.json(
-        { ok: false, error: "Missing TELNYX_API_KEY" },
+        { ok: false, error: useDemoApiKey ? "Missing TELNYX_DEMO_PORTAL_API_KEY" : "Missing TELNYX_API_KEY" },
         { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }
+    
     const { params } = await context;
     const { id } = await params;
     if (!id) {

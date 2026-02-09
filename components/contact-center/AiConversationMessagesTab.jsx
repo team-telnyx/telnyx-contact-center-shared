@@ -56,6 +56,8 @@ export default function AiConversationMessagesTab({
   recording,
   currentTime,
   isPlaying,
+  useDemoApiKey = false,
+  hasAiCallControlId = false,
   onMessagesLoaded,
   onSeek,
 }) {
@@ -158,18 +160,44 @@ export default function AiConversationMessagesTab({
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/ai/conversations/${encodeURIComponent(
-            conversation.id
-          )}/messages`,
-          { cache: "no-store" }
-        );
+        const url = `/api/ai/conversations/${encodeURIComponent(
+          conversation.id
+        )}/messages${useDemoApiKey ? "?useDemoApiKey=true" : ""}`;
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
         if (!cancelled && res.ok && data?.ok) {
           const msgs = Array.isArray(data.messages) ? data.messages : [];
           setMessages(msgs);
           if (onMessagesLoaded) {
             onMessagesLoaded(msgs);
+          }
+        } else if (!cancelled && hasAiCallControlId && !useDemoApiKey) {
+          // Check if we should retry with demo API key
+          // Retry if: 502 (gateway error), 403, 404, or error message indicates "not found"
+          const shouldRetry = !res.ok || 
+            res.status === 403 || 
+            res.status === 404 || 
+            res.status === 502 ||
+            (data?.error && (
+              data.error.includes("404") || 
+              data.error.includes("not found") || 
+              data.error.includes("Resource not found")
+            ));
+          
+          if (shouldRetry) {
+            // Fallback: try with demo API key if regular fetch failed
+            const demoUrl = `/api/ai/conversations/${encodeURIComponent(
+              conversation.id
+            )}/messages?useDemoApiKey=true`;
+            const demoRes = await fetch(demoUrl, { cache: "no-store" });
+            const demoData = await demoRes.json();
+            if (!cancelled && demoRes.ok && demoData?.ok) {
+              const msgs = Array.isArray(demoData.messages) ? demoData.messages : [];
+              setMessages(msgs);
+              if (onMessagesLoaded) {
+                onMessagesLoaded(msgs);
+              }
+            }
           }
         }
       } catch (_) {}
@@ -179,7 +207,7 @@ export default function AiConversationMessagesTab({
     return () => {
       cancelled = true;
     };
-  }, [conversation?.id, enabled]);
+  }, [conversation?.id, enabled, useDemoApiKey, hasAiCallControlId]);
 
   useEffect(() => {
     if (currentMessageIndex === -1 || !isPlaying) return;

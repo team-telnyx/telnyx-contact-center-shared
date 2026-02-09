@@ -53,7 +53,7 @@ export default function SoftphoneMini() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length,
+    (state) => state.getActiveCalls().length
   );
 
   // Zustand stores - dial state
@@ -144,7 +144,7 @@ export default function SoftphoneMini() {
 
       if (currentStatus === "Agent Not Answering") {
         console.log(
-          "[SoftphoneMini] Skipping auto-revert to Available - agent status is 'Agent Not Answering'",
+          "[SoftphoneMini] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
         );
         return;
       }
@@ -190,8 +190,9 @@ export default function SoftphoneMini() {
         // The SSE event should have populated this with the interaction ID
         (async () => {
           try {
-            const { getIncomingCallData } =
-              await import("@/lib/incoming-call-store");
+            const { getIncomingCallData } = await import(
+              "@/lib/incoming-call-store"
+            );
 
             // Try immediate lookup first
             let callData = getIncomingCallData(callControlId);
@@ -238,7 +239,7 @@ export default function SoftphoneMini() {
                 lastFetchedInteractionIdRef.current = interactionId;
 
                 const res = await fetch(
-                  `/api/contact-center/interactions/${interactionId}`,
+                  `/api/contact-center/interactions/${interactionId}`
                 );
                 const data = await res.json();
 
@@ -265,8 +266,8 @@ export default function SoftphoneMini() {
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                  callControlId,
-                )}`,
+                  callControlId
+                )}`
               );
               const data = await res.json();
 
@@ -294,7 +295,7 @@ export default function SoftphoneMini() {
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
-              `/api/contact-center/interactions/${interactionId}`,
+              `/api/contact-center/interactions/${interactionId}`
             );
             const data = await res.json();
 
@@ -371,10 +372,10 @@ export default function SoftphoneMini() {
               callDirection === "outbound"
                 ? false
                 : callDirection === "inbound" || callDirection === "incoming"
-                  ? true
-                  : activeCall
-                    ? false // We have an active call, so this is our outbound call
-                    : callState === "new" || callState === "ringing"; // No active call + ringing = incoming
+                ? true
+                : activeCall
+                ? false // We have an active call, so this is our outbound call
+                : callState === "new" || callState === "ringing"; // No active call + ringing = incoming
 
             // Detect incoming call - can be in "new" or "ringing" state
             // Only show answer UI for truly incoming calls
@@ -386,7 +387,7 @@ export default function SoftphoneMini() {
               // Attach audio when call is active, connected, or answered
               if (
                 ["active", "connected", "answered"].includes(
-                  callState.toLowerCase(),
+                  callState.toLowerCase()
                 )
               ) {
                 attachAudio(call);
@@ -540,7 +541,7 @@ export default function SoftphoneMini() {
                 // Attach audio when call becomes active/connected/answered
                 if (
                   ["active", "connected", "answered"].includes(
-                    callState.toLowerCase(),
+                    callState.toLowerCase()
                   )
                 ) {
                   attachAudio(call);
@@ -622,6 +623,7 @@ export default function SoftphoneMini() {
         const data = await res.json();
         const mobile = data?.user?.mobile || "";
         const voice = data?.user?.voiceNumber || "";
+        const mainFromNumber = data?.user?.mainFromNumber || "";
 
         // Only set mobile as toNumber if there's no existing toNumber in the store
         if (!toNumber && mobile) {
@@ -629,7 +631,14 @@ export default function SoftphoneMini() {
           setToInput(mobile);
         }
 
-        fromRef.current = voice || "";
+        // Use user's voice number, or fallback to main from number if not set
+        // Always set mainFromNumber if voice is not available
+        const fromNumber = voice || mainFromNumber;
+        if (fromNumber && fromNumber.trim() !== "") {
+          fromRef.current = fromNumber;
+        } else {
+          fromRef.current = "";
+        }
       } catch (_) {}
     })();
   }, []);
@@ -696,11 +705,14 @@ export default function SoftphoneMini() {
     if (activeCall && typeof activeCall.on === "function") {
       // Only wire if this is a different call object (by reference)
       if (lastWiredCallRef.current !== activeCall) {
-        console.log("[SoftphoneMini] Wiring call events for activeCall from store:", {
-          callId: activeCall.id,
-          state: activeCall.state,
-          callControlId: activeCall.callControlId,
-        });
+        console.log(
+          "[SoftphoneMini] Wiring call events for activeCall from store:",
+          {
+            callId: activeCall.id,
+            state: activeCall.state,
+            callControlId: activeCall.callControlId,
+          }
+        );
         wireCall(activeCall);
         lastWiredCallRef.current = activeCall;
       }
@@ -764,7 +776,7 @@ export default function SoftphoneMini() {
               // Update duration if call is active
               if (callData.answerTime && !callData.disconnectedTime) {
                 updates.duration = Math.floor(
-                  (Date.now() - callData.answerTime) / 1000,
+                  (Date.now() - callData.answerTime) / 1000
                 );
               }
 
@@ -946,7 +958,7 @@ export default function SoftphoneMini() {
         peer.addEventListener?.("connectionstatechange", checkConnectionState);
         peer.addEventListener?.(
           "iceconnectionstatechange",
-          checkConnectionState,
+          checkConnectionState
         );
       }
 
@@ -971,7 +983,7 @@ export default function SoftphoneMini() {
           useActiveCallStore.setState(
             { status: "ended" },
             false,
-            "setStatusEnded",
+            "setStatusEnded"
           );
         }
         // Small delay to allow wrapup logic to detect the "ended" status
@@ -996,7 +1008,7 @@ export default function SoftphoneMini() {
               callControlId,
               transcriptions: storeState.transcriptions || [],
             },
-          }),
+          })
         );
       }
 
@@ -1036,7 +1048,7 @@ export default function SoftphoneMini() {
 
       // Also trigger refresh event as backup
       window.dispatchEvent(
-        new CustomEvent("contact-center:refresh-interactions"),
+        new CustomEvent("contact-center:refresh-interactions")
       );
     } catch (err) {
       // Always clear call even if finalization fails
@@ -1044,10 +1056,26 @@ export default function SoftphoneMini() {
     }
   }
 
-  function startCall() {
+  async function startCall() {
     const to = (toNumber || "").trim();
-    const from = fromRef.current || "";
+    let from = fromRef.current || "";
     if (!client || !to || activeCall) return;
+
+    // If fromNumber is empty, try to get mainFromNumber as fallback
+    if (!from) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        const mainFromNumber = data?.user?.mainFromNumber || "";
+        if (mainFromNumber) {
+          from = mainFromNumber.trim();
+          // Update the ref with the fallback number
+          fromRef.current = mainFromNumber;
+        }
+      } catch (_) {
+        // If fetch fails, continue with empty from
+      }
+    }
 
     try {
       // Ensure mic is available
@@ -1148,13 +1176,13 @@ export default function SoftphoneMini() {
       if (interaction?.id) {
         fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id,
+            interaction.id
           )}/answer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          },
+          }
         ).catch((err) => {
           // Failed to mark answered
         });
@@ -1214,7 +1242,7 @@ export default function SoftphoneMini() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-            },
+            }
           );
 
           const result = await response.json();
@@ -1255,7 +1283,7 @@ export default function SoftphoneMini() {
             callControlId,
             transcriptions: storeState.transcriptions || [],
           },
-        }),
+        })
       );
     }
 
@@ -1271,7 +1299,7 @@ export default function SoftphoneMini() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
         return;
@@ -1281,7 +1309,7 @@ export default function SoftphoneMini() {
       const currentStatus = storeState.status;
       if (
         ["hangup", "ended", "destroy", "idle", "terminated"].includes(
-          currentStatus,
+          currentStatus
         )
       ) {
         clearActiveCall();
@@ -1294,7 +1322,7 @@ export default function SoftphoneMini() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
         return;
@@ -1321,7 +1349,7 @@ export default function SoftphoneMini() {
               }
               setTimeout(() => {
                 window.dispatchEvent(
-                  new CustomEvent("contact-center:refresh-interactions"),
+                  new CustomEvent("contact-center:refresh-interactions")
                 );
               }, 100);
             }
@@ -1347,7 +1375,7 @@ export default function SoftphoneMini() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
       } catch (_) {}

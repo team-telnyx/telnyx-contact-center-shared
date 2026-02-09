@@ -6,7 +6,14 @@ import {
   getWebrtcCallLegMappingBySessionId,
 } from "@/lib/mobile-call-leg-store";
 
-async function dialAndBridge({ to, from, linkTo, connectionId, isConsultCall = false }) {
+async function dialAndBridge({
+  to,
+  from,
+  linkTo,
+  connectionId,
+  isConsultCall = false,
+  fromDisplayName = null,
+}) {
   const url = buildTelnyxV2Url("/calls");
   const body = {
     to,
@@ -16,15 +23,22 @@ async function dialAndBridge({ to, from, linkTo, connectionId, isConsultCall = f
     bridge_intent: true,
     bridge_on_answer: true,
   };
-  
+
+  // Add caller ID display name if provided
+  if (fromDisplayName) {
+    body.from_display_name = fromDisplayName;
+  }
+
   // For consult calls, add park_after_unbridge so switching between call legs
   // doesn't disconnect the consultant - they stay parked instead
   // Valid value per Telnyx OpenAPI spec: "self" (parks current leg after unbridge)
   if (isConsultCall) {
     body.park_after_unbridge = "self";
-    console.log("[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=self");
+    console.log(
+      "[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=self"
+    );
   }
-  
+
   const resp = await fetch(url, {
     method: "POST",
     headers: {
@@ -245,10 +259,14 @@ export async function POST(request) {
           if (pool) {
             // Extract the destination for matching
             const toValue = to?.phone_number || to || "";
-            const toSipUser = toValue.includes("@") ? toValue.split("@")[0] : toValue;
-            
-            console.log(`[voice-webhook] 🔍 Looking for pending consult. username=${username}, to=${toValue}, toSipUser=${toSipUser}`);
-            
+            const toSipUser = toValue.includes("@")
+              ? toValue.split("@")[0]
+              : toValue;
+
+            console.log(
+              `[voice-webhook] 🔍 Looking for pending consult. username=${username}, to=${toValue}, toSipUser=${toSipUser}`
+            );
+
             // Try lookup by username first (if available)
             if (username) {
               const result = await pool.query(
@@ -257,14 +275,16 @@ export async function POST(request) {
                    AND metadata->>'consult_state' IS NOT NULL
                    AND (metadata->'consult_state'->>'pendingConsult')::boolean = true
                  ORDER BY created_at DESC LIMIT 1`,
-                [username],
+                [username]
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(`[voice-webhook] 🔍 Found pending consult by username: ${username}`);
+                console.log(
+                  `[voice-webhook] 🔍 Found pending consult by username: ${username}`
+                );
               }
             }
-            
+
             // If not found by username, try by consultantTarget matching the 'to' field
             if (!consultInteraction && toValue) {
               // Match by full SIP URI or just the SIP username part
@@ -277,14 +297,16 @@ export async function POST(request) {
                      OR metadata->'consult_state'->>'consultantTarget' LIKE $2
                    )
                  ORDER BY created_at DESC LIMIT 1`,
-                [toValue, `%${toSipUser}@%`],
+                [toValue, `%${toSipUser}@%`]
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(`[voice-webhook] 🔍 Found pending consult by consultantTarget: ${toValue}`);
+                console.log(
+                  `[voice-webhook] 🔍 Found pending consult by consultantTarget: ${toValue}`
+                );
               }
             }
-            
+
             // If not found, try by telephonyUserName (agent's WebRTC connection)
             if (!consultInteraction && payloadConnectionId) {
               const result = await pool.query(
@@ -293,14 +315,16 @@ export async function POST(request) {
                    AND (metadata->'consult_state'->>'pendingConsult')::boolean = true
                    AND metadata->'consult_state'->>'connectionId' = $1
                  ORDER BY created_at DESC LIMIT 1`,
-                [payloadConnectionId],
+                [payloadConnectionId]
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(`[voice-webhook] 🔍 Found pending consult by connectionId: ${payloadConnectionId}`);
+                console.log(
+                  `[voice-webhook] 🔍 Found pending consult by connectionId: ${payloadConnectionId}`
+                );
               }
             }
-            
+
             // Parse the interaction if found
             if (consultInteraction) {
               const safeParse = (value) => {
@@ -322,17 +346,132 @@ export async function POST(request) {
               const consultantTarget =
                 consultInteraction.metadata?.consult_state?.consultantTarget;
               console.log(
-                `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${toValue})`,
+                `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${toValue})`
               );
             } else {
-              console.log(`[voice-webhook] 🔍 No pending consult found for this call`);
+              console.log(
+                `[voice-webhook] 🔍 No pending consult found for this call`
+              );
             }
           }
         } catch (consultCheckErr) {
           console.error(
             "[voice-webhook] Error checking for consult call:",
-            consultCheckErr,
+            consultCheckErr
           );
+        }
+
+        // Get user's phone number and display name for the PSTN leg
+        // Use voice_number from profile, or fallback to TELNYX_MAIN_FROM_NUMBER
+        let effectiveFromNumber = from;
+        let fromDisplayName = null;
+
+        console.log("[voice-webhook] 🔍 Looking up user for from number:", {
+          username,
+          payloadConnectionId,
+          originalFrom: from,
+          isSipUri: from?.includes("@sip.") || false,
+        });
+
+        if (username || payloadConnectionId) {
+          try {
+            const { getPostgresPool } = await import("@/lib/postgres.mjs");
+            const pool = getPostgresPool();
+            if (pool) {
+              let userQuery;
+              let userParams;
+
+              if (username) {
+                userQuery =
+                  "SELECT voice_number, first_name, last_name FROM users WHERE username = $1 LIMIT 1";
+                userParams = [username];
+                console.log(
+                  "[voice-webhook] 🔍 Looking up user by username:",
+                  username
+                );
+              } else {
+                userQuery =
+                  "SELECT voice_number, first_name, last_name FROM users WHERE telephony_credentials_id = $1 LIMIT 1";
+                userParams = [payloadConnectionId];
+                console.log(
+                  "[voice-webhook] 🔍 Looking up user by telephony_credentials_id:",
+                  payloadConnectionId
+                );
+              }
+
+              const userResult = await pool.query(userQuery, userParams);
+              console.log("[voice-webhook] 🔍 User lookup result:", {
+                found: !!userResult.rows?.[0],
+                rowCount: userResult.rows?.length || 0,
+              });
+
+              if (userResult.rows?.[0]) {
+                const user = userResult.rows[0];
+                // Use voice_number or fallback to TELNYX_MAIN_FROM_NUMBER
+                effectiveFromNumber =
+                  user.voice_number ||
+                  process.env.TELNYX_MAIN_FROM_NUMBER ||
+                  from;
+
+                // Build display name from first_name and last_name
+                const nameParts = [user.first_name, user.last_name].filter(
+                  Boolean
+                );
+                if (nameParts.length > 0) {
+                  fromDisplayName = nameParts.join(" ");
+                }
+
+                console.log(
+                  "[voice-webhook] 📞 Using user profile for PSTN leg:",
+                  {
+                    username,
+                    userVoiceNumber: user.voice_number,
+                    mainFromNumber: process.env.TELNYX_MAIN_FROM_NUMBER,
+                    effectiveFromNumber,
+                    fromDisplayName,
+                    originalFrom: from,
+                  }
+                );
+              } else {
+                console.log(
+                  "[voice-webhook] ⚠️ User not found in database, will use fallback"
+                );
+              }
+            }
+          } catch (userLookupErr) {
+            console.error(
+              "[voice-webhook] ❌ Error looking up user:",
+              userLookupErr
+            );
+          }
+        }
+
+        // Always check if we need to use TELNYX_MAIN_FROM_NUMBER as fallback
+        // This handles cases where:
+        // 1. User lookup failed
+        // 2. User has no voice_number
+        // 3. From is a SIP URI (WebRTC username)
+        if (
+          !effectiveFromNumber ||
+          effectiveFromNumber.includes("@sip.") ||
+          effectiveFromNumber.startsWith("sip:")
+        ) {
+          const mainFromNumber = process.env.TELNYX_MAIN_FROM_NUMBER;
+          if (mainFromNumber) {
+            console.log(
+              "[voice-webhook] 🔄 Using TELNYX_MAIN_FROM_NUMBER as fallback:",
+              {
+                previousFrom: effectiveFromNumber,
+                newFrom: mainFromNumber,
+              }
+            );
+            effectiveFromNumber = mainFromNumber;
+          } else {
+            console.warn(
+              "[voice-webhook] ⚠️ TELNYX_MAIN_FROM_NUMBER not set, keeping original from:",
+              effectiveFromNumber
+            );
+          }
         }
 
         // Create outbound interaction for WebRTC leg
@@ -348,7 +487,7 @@ export async function POST(request) {
         await createOutboundInteraction({
           callControlId,
           callSessionId,
-          fromNumber: from,
+          fromNumber: effectiveFromNumber, // Use effective from number
           toNumber: to,
           username,
           webrtcCallControlId: callControlId,
@@ -364,7 +503,7 @@ export async function POST(request) {
             callSessionId,
             webrtcCallControlId: callControlId,
             pstnCallControlId: null, // Will be updated when second leg arrives
-            fromNumber: from,
+            fromNumber: effectiveFromNumber, // Use effective from number
             toNumber: to,
             username,
             connectionId: payloadConnectionId,
@@ -375,14 +514,20 @@ export async function POST(request) {
         // For consult calls, pass isConsultCall=true to enable park_after_unbridge
         console.log(
           "[voice-webhook] 📞 Calling dialAndBridge to create second leg...",
-          consultInteraction ? "(consult call)" : "(regular outbound)"
+          consultInteraction ? "(consult call)" : "(regular outbound)",
+          {
+            to,
+            from: effectiveFromNumber,
+            fromDisplayName,
+          }
         );
         const pstnCallControlId = await dialAndBridge({
           to,
-          from,
+          from: effectiveFromNumber,
           linkTo: callControlId,
           connectionId,
           isConsultCall: !!consultInteraction,
+          fromDisplayName,
         });
 
         console.log("[voice-webhook] 📞 dialAndBridge response:", {
@@ -393,13 +538,16 @@ export async function POST(request) {
         // If this is a consult call, update the original interaction's consult_state
         // Update even if pstnCallControlId is null - we still need to save agentCallControlId
         if (consultInteraction) {
-          console.log(`[voice-webhook] 🔵 Updating consult_state for interaction ${consultInteraction.id} with agentCallControlId=${callControlId}, pstnCallControlId=${pstnCallControlId}`);
+          console.log(
+            `[voice-webhook] 🔵 Updating consult_state for interaction ${consultInteraction.id} with agentCallControlId=${callControlId}, pstnCallControlId=${pstnCallControlId}`
+          );
           try {
             const { PgDb } = await import("@/lib/pgdb.js");
             const { addTimelineEvent, TimelineEventTypes } = await import(
               "@/lib/contact-center/call-timeline-tracker.js"
             );
-            const consultState = consultInteraction.metadata?.consult_state || {};
+            const consultState =
+              consultInteraction.metadata?.consult_state || {};
             const updatedMetadata = {
               ...consultInteraction.metadata,
               consult_state: {
@@ -421,19 +569,19 @@ export async function POST(request) {
                 consultantCallControlId: callControlId,
                 consultantTarget: consultState.consultantTarget,
                 agentCallControlId: callControlId,
-              },
+              }
             );
             await PgDb.updateInteractionById(consultInteraction.id, {
               metadata: updatedMetadata,
               routingMetadata: updatedRoutingMetadata,
             });
             console.log(
-              `[voice-webhook] ✅ Updated consult interaction ${consultInteraction.id} with active consult state`,
+              `[voice-webhook] ✅ Updated consult interaction ${consultInteraction.id} with active consult state`
             );
           } catch (consultUpdateErr) {
             console.error(
               "[voice-webhook] Error updating consult interaction:",
-              consultUpdateErr,
+              consultUpdateErr
             );
           }
         }

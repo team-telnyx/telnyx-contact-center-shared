@@ -36,7 +36,7 @@ function CircleButton({ children, onClick, disabled, className, title }) {
         "h-12 w-12 rounded-full flex items-center justify-center text-white",
         "shadow-md active:scale-[0.98] transition-transform",
         disabled && "opacity-50 cursor-not-allowed",
-        className,
+        className
       )}
       onClick={onClick}
       disabled={disabled}
@@ -67,7 +67,7 @@ export function Softphone() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length,
+    (state) => state.getActiveCalls().length
   );
 
   // Zustand stores - dial state
@@ -169,7 +169,7 @@ export function Softphone() {
 
       if (currentStatus === "Agent Not Answering") {
         console.log(
-          "[Softphone] Skipping auto-revert to Available - agent status is 'Agent Not Answering'",
+          "[Softphone] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
         );
         return;
       }
@@ -234,11 +234,14 @@ export function Softphone() {
       if (lastWiredCallRef.current !== activeCall) {
         // Wire the call to ensure all event handlers are set up
         // This is safe to call multiple times - duplicate listeners won't cause issues
-        console.log("[Softphone] Wiring call events for activeCall from store:", {
-          callId: activeCall.id,
-          state: activeCall.state,
-          callControlId: activeCall.callControlId,
-        });
+        console.log(
+          "[Softphone] Wiring call events for activeCall from store:",
+          {
+            callId: activeCall.id,
+            state: activeCall.state,
+            callControlId: activeCall.callControlId,
+          }
+        );
         wireCall(activeCall);
         lastWiredCallRef.current = activeCall;
       }
@@ -261,8 +264,9 @@ export function Softphone() {
 
         (async () => {
           try {
-            const { getIncomingCallData } =
-              await import("@/lib/incoming-call-store");
+            const { getIncomingCallData } = await import(
+              "@/lib/incoming-call-store"
+            );
             let callData = getIncomingCallData(callControlId);
 
             if (!callData?.interactionId) {
@@ -298,7 +302,7 @@ export function Softphone() {
               ) {
                 lastFetchedInteractionIdRef.current = interactionId;
                 const res = await fetch(
-                  `/api/contact-center/interactions/${interactionId}`,
+                  `/api/contact-center/interactions/${interactionId}`
                 );
                 const data = await res.json();
                 if (data.ok && data.interaction) {
@@ -313,7 +317,7 @@ export function Softphone() {
           } catch (err) {
             console.warn(
               "[Softphone] Error checking incoming call store:",
-              err,
+              err
             );
           }
 
@@ -325,8 +329,8 @@ export function Softphone() {
             try {
               const res = await fetch(
                 `/api/contact-center/interactions/by-call-control-id?callControlId=${encodeURIComponent(
-                  callControlId,
-                )}`,
+                  callControlId
+                )}`
               );
               const data = await res.json();
               if (data.ok && data.interaction) {
@@ -338,7 +342,7 @@ export function Softphone() {
             } catch (err) {
               console.error(
                 "[Softphone] Failed to fetch interaction by call_control_id:",
-                err,
+                err
               );
               setInteraction(null);
             }
@@ -355,7 +359,7 @@ export function Softphone() {
         const fetchInteraction = async () => {
           try {
             const res = await fetch(
-              `/api/contact-center/interactions/${interactionId}`,
+              `/api/contact-center/interactions/${interactionId}`
             );
             const data = await res.json();
             if (data.ok && data.interaction) {
@@ -446,7 +450,7 @@ export function Softphone() {
           useActiveCallStore.setState(
             { status: "ended" },
             false,
-            "setStatusEnded",
+            "setStatusEnded"
           );
         }
         // Small delay to allow wrapup logic to detect the "ended" status
@@ -471,7 +475,7 @@ export function Softphone() {
               callControlId,
               transcriptions: storeState.transcriptions || [],
             },
-          }),
+          })
         );
       }
 
@@ -510,7 +514,7 @@ export function Softphone() {
 
       // Also trigger refresh event as backup
       window.dispatchEvent(
-        new CustomEvent("contact-center:refresh-interactions"),
+        new CustomEvent("contact-center:refresh-interactions")
       );
     } catch (err) {
       console.error("[Softphone] Error in handleCallEnd:", err);
@@ -518,10 +522,26 @@ export function Softphone() {
     }
   }
 
-  function startCall() {
+  async function startCall() {
     const to = (toNumber || "").trim();
-    const from = (fromNumber || "").trim();
+    let from = (fromNumber || "").trim();
     if (!client || !to || activeCall) return;
+
+    // If fromNumber is empty, try to get mainFromNumber as fallback
+    if (!from) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        const mainFromNumber = data?.user?.mainFromNumber || "";
+        if (mainFromNumber) {
+          from = mainFromNumber.trim();
+          // Update the dial store with the fallback number
+          setDialFromNumber(mainFromNumber);
+        }
+      } catch (_) {
+        // If fetch fails, continue with empty from
+      }
+    }
 
     try {
       try {
@@ -728,13 +748,13 @@ export function Softphone() {
       if (interaction?.id) {
         fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
-            interaction.id,
+            interaction.id
           )}/answer`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ answeredAt: new Date().toISOString() }),
-          },
+          }
         ).catch((err) => {
           console.warn("[Softphone] Failed to mark answered:", err);
         });
@@ -769,7 +789,7 @@ export function Softphone() {
       if (originalCallControlId) {
         console.log(
           "[Softphone] Using originalCallControlId from store:",
-          originalCallControlId,
+          originalCallControlId
         );
         try {
           // Hangup the original call leg using Telnyx API
@@ -786,11 +806,11 @@ export function Softphone() {
           if (!response.ok) {
             console.error(
               "[Softphone] Failed to hangup original call leg:",
-              result,
+              result
             );
           } else {
             console.log(
-              "[Softphone] Successfully hung up original call leg via custom header",
+              "[Softphone] Successfully hung up original call leg via custom header"
             );
           }
         } catch (err) {
@@ -804,14 +824,14 @@ export function Softphone() {
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-            },
+            }
           );
 
           const result = await response.json();
           if (!response.ok) {
             console.error(
               "[Softphone] Failed to hangup original call leg:",
-              result,
+              result
             );
           }
         } catch (err) {
@@ -846,11 +866,11 @@ export function Softphone() {
               callControlId,
               transcriptions: storeState.transcriptions || [],
             },
-          }),
+          })
         );
         console.log(
           "[Softphone] Dispatched disconnect event for interaction:",
-          interactionId || callControlId,
+          interactionId || callControlId
         );
       }
 
@@ -865,7 +885,7 @@ export function Softphone() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
         return;
@@ -885,7 +905,7 @@ export function Softphone() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
         return;
@@ -908,7 +928,7 @@ export function Softphone() {
             }
             setTimeout(() => {
               window.dispatchEvent(
-                new CustomEvent("contact-center:refresh-interactions"),
+                new CustomEvent("contact-center:refresh-interactions")
               );
             }, 100);
           }
@@ -936,7 +956,7 @@ export function Softphone() {
         }
         setTimeout(() => {
           window.dispatchEvent(
-            new CustomEvent("contact-center:refresh-interactions"),
+            new CustomEvent("contact-center:refresh-interactions")
           );
         }, 100);
       } catch (_) {}
@@ -951,12 +971,18 @@ export function Softphone() {
         const data = await res.json();
         const mobile = data?.user?.mobile || "";
         const voice = data?.user?.voiceNumber || "";
+        const mainFromNumber = data?.user?.mainFromNumber || "";
 
         if (!toNumber && mobile) {
           setDialToNumber(mobile);
         }
 
-        if (voice) setDialFromNumber(voice);
+        // Use user's voice number, or fallback to main from number if not set
+        // Always set mainFromNumber if voice is not available
+        const fromNumber = voice || mainFromNumber;
+        if (fromNumber && fromNumber.trim() !== "") {
+          setDialFromNumber(fromNumber);
+        }
       } catch (_) {}
     })();
   }, []);
@@ -993,7 +1019,7 @@ export function Softphone() {
         }
       } catch (_) {}
     },
-    [isCallActive, activeCall],
+    [isCallActive, activeCall]
   );
 
   const keypadDigits = useMemo(
@@ -1003,7 +1029,7 @@ export function Softphone() {
       ["7", "8", "9"],
       ["*", "0", "#"],
     ],
-    [],
+    []
   );
 
   const refreshDevices = useCallback(async () => {
@@ -1026,14 +1052,14 @@ export function Softphone() {
     try {
       navigator.mediaDevices?.addEventListener?.(
         "devicechange",
-        onDeviceChange,
+        onDeviceChange
       );
     } catch (_) {}
     return () => {
       try {
         navigator.mediaDevices?.removeEventListener?.(
           "devicechange",
-          onDeviceChange,
+          onDeviceChange
         );
       } catch (_) {}
     };
@@ -1067,7 +1093,7 @@ export function Softphone() {
         }
       } catch (_) {}
     },
-    [client],
+    [client]
   );
 
   const applySpeakerSelection = useCallback(async (deviceId) => {
@@ -1121,7 +1147,7 @@ export function Softphone() {
                       }}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
-                        selectedMicId === d.deviceId && "bg-zinc-800",
+                        selectedMicId === d.deviceId && "bg-zinc-800"
                       )}
                     >
                       <span className="truncate">
@@ -1158,7 +1184,7 @@ export function Softphone() {
                       }}
                       className={clsx(
                         "flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
-                        selectedSpeakerId === d.deviceId && "bg-zinc-800",
+                        selectedSpeakerId === d.deviceId && "bg-zinc-800"
                       )}
                     >
                       <span className="truncate">
@@ -1331,7 +1357,7 @@ export function Softphone() {
           <IconChevronDown
             className={clsx(
               "h-3 w-3 transition-transform duration-200",
-              showDtmf && "rotate-180",
+              showDtmf && "rotate-180"
             )}
           />
         </button>
@@ -1352,7 +1378,7 @@ export function Softphone() {
                     "h-10 w-10 rounded-full text-base text-white shadow active:scale-95",
                     isCallActive
                       ? "bg-zinc-800"
-                      : "bg-zinc-800/50 cursor-not-allowed",
+                      : "bg-zinc-800/50 cursor-not-allowed"
                   )}
                 >
                   {digit}

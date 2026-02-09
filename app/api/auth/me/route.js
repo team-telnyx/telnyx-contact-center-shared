@@ -50,6 +50,7 @@ export async function GET(request) {
         smsNumber: user.sms_number || user.smsNumber || "Telnyx",
         mobile: user.mobile || "",
         voiceNumber: user.voice_number || user.voiceNumber || "",
+        mainFromNumber: process.env.TELNYX_MAIN_FROM_NUMBER || "",
         firstName: user.first_name || user.firstName || "",
         lastName: user.last_name || user.lastName || "",
       },

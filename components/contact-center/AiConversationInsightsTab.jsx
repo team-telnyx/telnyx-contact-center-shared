@@ -30,7 +30,12 @@ function formatTimestamp(value) {
   }
 }
 
-export default function AiConversationInsightsTab({ conversation, enabled }) {
+export default function AiConversationInsightsTab({ 
+  conversation, 
+  enabled,
+  useDemoApiKey = false,
+  hasAiCallControlId = false,
+}) {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState([]);
   const [insightNames, setInsightNames] = useState({});
@@ -42,19 +47,46 @@ export default function AiConversationInsightsTab({ conversation, enabled }) {
     async function loadInsights() {
       setInsightsLoading(true);
       try {
-        const res = await fetch(
-          `/api/ai/conversations/${encodeURIComponent(
-            conversation.id
-          )}/conversations-insights`,
-          { cache: "no-store" }
-        );
+        const url = `/api/ai/conversations/${encodeURIComponent(
+          conversation.id
+        )}/conversations-insights${useDemoApiKey ? "?useDemoApiKey=true" : ""}`;
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
         if (!cancelled && res.ok && data?.ok) {
           const next = Array.isArray(data?.insights)
             ? data.insights
             : data?.data || [];
           setInsights(next);
+        } else if (!cancelled && hasAiCallControlId && !useDemoApiKey) {
+          // Check if we should retry with demo API key
+          // Retry if: 502 (gateway error), 403, 404, or error message indicates "not found"
+          const shouldRetry = !res.ok || 
+            res.status === 403 || 
+            res.status === 404 || 
+            res.status === 502 ||
+            (data?.error && (
+              data.error.includes("404") || 
+              data.error.includes("not found") || 
+              data.error.includes("Resource not found")
+            ));
+          
+          if (shouldRetry) {
+            // Fallback: try with demo API key if regular fetch failed
+            const demoUrl = `/api/ai/conversations/${encodeURIComponent(
+              conversation.id
+            )}/conversations-insights?useDemoApiKey=true`;
+            const demoRes = await fetch(demoUrl, { cache: "no-store" });
+            const demoData = await demoRes.json();
+            if (!cancelled && demoRes.ok && demoData?.ok) {
+              const next = Array.isArray(demoData?.insights)
+                ? demoData.insights
+                : demoData?.data || [];
+              setInsights(next);
+            }
+          }
         }
+        
+        // Load insight groups (this doesn't need demo API key as it's a general endpoint)
         const groupsRes = await fetch(`/api/ai/conversations/insight-groups`, {
           cache: "no-store",
         });
@@ -74,7 +106,7 @@ export default function AiConversationInsightsTab({ conversation, enabled }) {
     return () => {
       cancelled = true;
     };
-  }, [conversation?.id, enabled]);
+  }, [conversation?.id, enabled, useDemoApiKey, hasAiCallControlId]);
 
   return (
     <div className="flex-1 min-h-0 overflow-auto py-2 space-y-2">

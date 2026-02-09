@@ -14,10 +14,17 @@ export async function GET(request, context) {
       );
     }
 
-    const apiKey = process.env.TELNYX_API_KEY;
+    const { searchParams } = new URL(request.url);
+    const useDemoApiKey = searchParams.get("useDemoApiKey") === "true";
+    
+    // Use demo API key if requested, otherwise use regular API key
+    const apiKey = useDemoApiKey
+      ? process.env.TELNYX_DEMO_PORTAL_API_KEY
+      : process.env.TELNYX_API_KEY;
+    
     if (!apiKey) {
       return NextResponse.json(
-        { ok: false, error: "Missing TELNYX_API_KEY" },
+        { ok: false, error: useDemoApiKey ? "Missing TELNYX_DEMO_PORTAL_API_KEY" : "Missing TELNYX_API_KEY" },
         { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -31,14 +38,16 @@ export async function GET(request, context) {
       );
     }
 
-    const { searchParams } = new URL(request.url);
     const upstream = new URL(
       buildTelnyxV2Url(
         `/ai/conversations/${encodeURIComponent(id)}/conversations-insights`
       )
     );
+    // Don't forward the useDemoApiKey parameter to Telnyx API
     searchParams.forEach((value, key) => {
-      upstream.searchParams.set(key, value);
+      if (key !== "useDemoApiKey") {
+        upstream.searchParams.set(key, value);
+      }
     });
 
     const res = await fetch(upstream.toString(), {

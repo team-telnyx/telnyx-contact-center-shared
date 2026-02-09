@@ -79,6 +79,40 @@ function CopyInline({ value }) {
   );
 }
 
+/**
+ * Helper function to fetch AI conversation by call_control_id with fallback to demo API key
+ * @param {string} callControlId - The call_control_id to search for
+ * @param {boolean} useDemoApiKey - Whether to use demo API key
+ * @returns {Promise<{ok: boolean, conversation: any|null, status: number}>}
+ */
+async function fetchConversationByCallControlId(callControlId, useDemoApiKey = false) {
+  const params = new URLSearchParams();
+  params.set("metadata->call_control_id", `eq.${callControlId}`);
+  params.set("limit", "1");
+  params.set("order", "created_at.desc");
+  if (useDemoApiKey) {
+    params.set("useDemoApiKey", "true");
+  }
+  
+  try {
+    const res = await fetch(`/api/ai/conversations?${params.toString()}`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    
+    if (res.ok && data?.ok) {
+      const items = Array.isArray(data?.items) ? data.items : [];
+      if (items.length > 0) {
+        return { ok: true, conversation: items[0], status: res.status };
+      }
+    }
+    
+    return { ok: false, conversation: null, status: res.status };
+  } catch (err) {
+    return { ok: false, conversation: null, status: 0 };
+  }
+}
+
 export default function AiConversationSheet({
   interaction,
   triggerClassName,
@@ -130,6 +164,7 @@ export default function AiConversationSheet({
   );
   const [conversation, setConversation] = useState(null);
   const [loadingConversation, setLoadingConversation] = useState(false);
+  const [usedDemoApiKey, setUsedDemoApiKey] = useState(false);
   const [messages, setMessages] = useState([]);
   const [recording, setRecording] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -142,6 +177,19 @@ export default function AiConversationSheet({
     const direction = String(interaction?.direction || "").toLowerCase();
     return direction === "incoming" || direction === "inbound";
   }, [interaction?.direction]);
+
+  // Check if this call came from X-AI-Call-ID header (has ai_call_control_id)
+  const hasAiCallControlId = useMemo(() => {
+    return !!(
+      interaction?.metadata?.ai_call_control_id ||
+      interaction?.ai_call_control_id ||
+      aiCallControlId
+    );
+  }, [
+    interaction?.metadata?.ai_call_control_id,
+    interaction?.ai_call_control_id,
+    aiCallControlId,
+  ]);
 
   // Update aiCallControlId when interaction changes
   useEffect(() => {
@@ -199,11 +247,15 @@ export default function AiConversationSheet({
 
     if (!agentCallControlId && !conversationId) return;
 
+    // Reset demo API key flag when starting a new fetch
+    setUsedDemoApiKey(false);
+
     let cancelled = false;
     async function loadConversation() {
       setLoadingConversation(true);
       try {
         let res;
+        let conversationFound = false;
 
         // If we have conversation_id, load directly by ID
         if (conversationId) {
@@ -217,58 +269,78 @@ export default function AiConversationSheet({
             const data = await res.json();
             // Handle API response format: { ok: true, data: {...} }
             const conversation = data?.data || data;
-            setConversation(conversation || null);
-          } else if (!cancelled) {
+            if (conversation) {
+              setConversation(conversation);
+              conversationFound = true;
+            }
+          }
+          
+          // If not found and this is an AI call, try with demo API key
+          if (!conversationFound && hasAiCallControlId && (!res.ok || res.status === 403 || res.status === 404)) {
+            const demoRes = await fetch(
+              `/api/ai/conversations/${encodeURIComponent(conversationId)}?useDemoApiKey=true`,
+              {
+                cache: "no-store",
+              },
+            );
+            if (!cancelled && demoRes.ok) {
+              const demoData = await demoRes.json();
+              const demoConversation = demoData?.data || demoData;
+              if (demoConversation) {
+                setConversation(demoConversation);
+                setUsedDemoApiKey(true);
+                conversationFound = true;
+              }
+            }
+          }
+          
+          if (!cancelled && !conversationFound) {
             setConversation(null);
           }
         } else if (agentCallControlId) {
           // Load by filtering with call_control_id from metadata
           // Try agent_call_control_id first (matches the recording lookup)
-          const params = new URLSearchParams();
-          params.set("metadata->call_control_id", `eq.${agentCallControlId}`);
-          params.set("limit", "1");
-          params.set("order", "created_at.desc");
-          res = await fetch(`/api/ai/conversations?${params.toString()}`, {
-            cache: "no-store",
-          });
-          const data = await res.json();
-          if (!cancelled && res.ok && data?.ok) {
-            const items = Array.isArray(data?.items) ? data.items : [];
-            if (items.length > 0) {
-              setConversation(items[0]);
-            } else {
-              // Fallback: try with ai_call_control_id if different from agent_call_control_id
-              const aiCallId = interaction?.metadata?.ai_call_control_id;
-              if (aiCallId && aiCallId !== agentCallControlId) {
-                const fallbackParams = new URLSearchParams();
-                fallbackParams.set(
-                  "metadata->call_control_id",
-                  `eq.${aiCallId}`,
-                );
-                fallbackParams.set("limit", "1");
-                fallbackParams.set("order", "created_at.desc");
-                const fallbackRes = await fetch(
-                  `/api/ai/conversations?${fallbackParams.toString()}`,
-                  { cache: "no-store" },
-                );
-                const fallbackData = await fallbackRes.json();
-                if (
-                  !cancelled &&
-                  fallbackRes.ok &&
-                  fallbackData?.ok &&
-                  Array.isArray(fallbackData?.items) &&
-                  fallbackData.items.length > 0
-                ) {
-                  setConversation(fallbackData.items[0]);
-                } else if (!cancelled) {
-                  setConversation(null);
-                }
-              } else if (!cancelled) {
-                setConversation(null);
+          let result = await fetchConversationByCallControlId(agentCallControlId, false);
+          let shouldTryDemo = !result.ok || result.status === 403 || result.status === 404;
+          
+          if (!cancelled && result.ok && result.conversation) {
+            setConversation(result.conversation);
+            conversationFound = true;
+          } else {
+            // Fallback: try with ai_call_control_id if different from agent_call_control_id
+            const aiCallId = interaction?.metadata?.ai_call_control_id;
+            if (aiCallId && aiCallId !== agentCallControlId) {
+              result = await fetchConversationByCallControlId(aiCallId, false);
+              if (!cancelled && result.ok && result.conversation) {
+                setConversation(result.conversation);
+                conversationFound = true;
+              } else if (!result.ok || result.status === 403 || result.status === 404) {
+                shouldTryDemo = true;
               }
             }
-          } else if (!cancelled) {
-            setConversation(null);
+            
+            // If still not found and this is an AI call, try with demo API key
+            if (!conversationFound && hasAiCallControlId && shouldTryDemo) {
+              // Try with agent_call_control_id on demo account
+              result = await fetchConversationByCallControlId(agentCallControlId, true);
+              if (!cancelled && result.ok && result.conversation) {
+                setConversation(result.conversation);
+                setUsedDemoApiKey(true);
+                conversationFound = true;
+              } else if (aiCallId && aiCallId !== agentCallControlId) {
+                // Try with ai_call_control_id on demo account
+                result = await fetchConversationByCallControlId(aiCallId, true);
+                if (!cancelled && result.ok && result.conversation) {
+                  setConversation(result.conversation);
+                  setUsedDemoApiKey(true);
+                  conversationFound = true;
+                }
+              }
+            }
+            
+            if (!cancelled && !conversationFound) {
+              setConversation(null);
+            }
           }
         }
       } catch {
@@ -297,6 +369,7 @@ export default function AiConversationSheet({
       setIsPlaying(false);
       setCurrentTime(0);
       setDuration(0);
+      setUsedDemoApiKey(false);
     }
   }, [isOpen]);
 
@@ -630,6 +703,8 @@ export default function AiConversationSheet({
                 recording={recording}
                 currentTime={currentTime}
                 isPlaying={isPlaying}
+                useDemoApiKey={usedDemoApiKey}
+                hasAiCallControlId={hasAiCallControlId}
                 onMessagesLoaded={setMessages}
                 onSeek={(timeInSeconds) => {
                   if (wavesurferRef.current && duration > 0) {
@@ -655,6 +730,8 @@ export default function AiConversationSheet({
               <AiConversationInsightsTab
                 conversation={conversation}
                 enabled={isOpen && activeTab === "insights"}
+                useDemoApiKey={usedDemoApiKey}
+                hasAiCallControlId={hasAiCallControlId}
               />
             </TabsContent>
 
@@ -675,6 +752,8 @@ export default function AiConversationSheet({
               <AiConversationDynamicVariablesTab
                 conversation={conversation}
                 enabled={isOpen && activeTab === "dynamic"}
+                useDemoApiKey={usedDemoApiKey}
+                hasAiCallControlId={hasAiCallControlId}
               />
             </TabsContent>
           </Tabs>
