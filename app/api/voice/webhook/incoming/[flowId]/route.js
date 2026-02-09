@@ -725,6 +725,12 @@ export async function POST(request, { params }) {
               // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
               if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
                 await new Promise((resolve) => setTimeout(resolve, 500));
+
+                // Update body payload with the new client_state from the result
+                // This ensures the next node receives the updated client_state (including agent_assist_config)
+                if (result.client_state && body?.data?.payload) {
+                  body.data.payload.client_state = result.client_state;
+                }
               }
 
               await executeNodeChain(
@@ -1371,13 +1377,12 @@ async function executeNodeChain(
 
     if (result.success && isLogicalNode) {
       // Logical node - continue chain immediately after execution
-      // For set_queue_options, add a small delay to ensure client_state_update is processed
-      // and update body with the new client_state
-      if (nextNodeType === "set_queue_options") {
+      // For nodes that update client_state, add a small delay and update body with new client_state
+      if (nextNodeType === "set_queue_options" || nextNodeType === "agent_assist") {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Update body payload with the new client_state from the result
-        // This ensures the next node receives the updated client_state
+        // This ensures the next node receives the updated client_state (including agent_assist_config)
         if (result.client_state && body?.data?.payload) {
           body.data.payload.client_state = result.client_state;
         }
