@@ -41,6 +41,22 @@ import {
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const WORKFLOW_CATEGORIES = [
   "Sales",
@@ -87,6 +103,101 @@ export default function WorkflowEditorPage() {
   // Editing stage
   const [editingStageId, setEditingStageId] = useState(null);
   const [editingStageName, setEditingStageName] = useState("");
+
+  // DnD sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle stage reorder via drag & drop
+  async function handleStageReorder(event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = stages.findIndex((s) => s.id === active.id);
+    const newIndex = stages.findIndex((s) => s.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reorderedStages = arrayMove(stages, oldIndex, newIndex);
+    setStages(reorderedStages);
+
+    // Persist order to backend
+    try {
+      const updates = reorderedStages.map((s, idx) => ({
+        id: s.id,
+        order_index: idx,
+      }));
+      for (const update of updates) {
+        await fetch(
+          `/api/admin/workflows/${workflowId}/stages/${update.id}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_index: update.order_index }),
+          }
+        );
+      }
+    } catch (err) {
+      notify({
+        title: "Reorder failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+      loadWorkflow();
+    }
+  }
+
+  // Handle item reorder via drag & drop
+  async function handleItemReorder(event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedStageId) return;
+
+    const currentItems = stages.find((s) => s.id === selectedStageId)?.items || [];
+    const oldIndex = currentItems.findIndex((i) => i.id === active.id);
+    const newIndex = currentItems.findIndex((i) => i.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reorderedItems = arrayMove(currentItems, oldIndex, newIndex);
+
+    // Update local state
+    setStages(
+      stages.map((s) =>
+        s.id === selectedStageId ? { ...s, items: reorderedItems } : s
+      )
+    );
+
+    // Persist order to backend
+    try {
+      const updates = reorderedItems.map((item, idx) => ({
+        id: item.id,
+        order_index: idx,
+      }));
+      for (const update of updates) {
+        await fetch(
+          `/api/admin/workflows/${workflowId}/items/${update.id}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order_index: update.order_index }),
+          }
+        );
+      }
+    } catch (err) {
+      notify({
+        title: "Reorder failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+      loadWorkflow();
+    }
+  }
 
   // Load workflow
   const loadWorkflow = useCallback(async () => {
@@ -524,132 +635,40 @@ export default function WorkflowEditorPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {stages.map((stage, idx) => (
-                    <div
-                      key={stage.id}
-                      className={cn(
-                        "group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors",
-                        selectedStageId === stage.id
-                          ? "bg-telnyx-green/10 border border-telnyx-green"
-                          : "hover:bg-muted"
-                      )}
-                      onClick={() => {
-                        setSelectedStageId(stage.id);
-                        setSelectedItemId(null);
-                      }}
-                    >
-                      <IconGripVertical className="size-4 text-muted-foreground flex-shrink-0" />
-                      
-                      {editingStageId === stage.id ? (
-                        <div className="flex-1 flex items-center gap-1">
-                          <Input
-                            value={editingStageName}
-                            onChange={(e) => setEditingStageName(e.target.value)}
-                            className="h-7 text-sm"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                updateStageName(stage.id, editingStageName);
-                              } else if (e.key === "Escape") {
-                                setEditingStageId(null);
-                              }
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updateStageName(stage.id, editingStageName);
-                            }}
-                          >
-                            <IconCheck className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingStageId(null);
-                            }}
-                          >
-                            <IconX className="size-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">
-                              {stage.name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {stage.items?.length || 0} items
-                            </div>
-                          </div>
-                          <div className="hidden group-hover:flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingStageId(stage.id);
-                                setEditingStageName(stage.name);
-                              }}
-                            >
-                              <IconEdit className="size-3" />
-                            </Button>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0 text-red-500"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <IconTrash className="size-3" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent onClick={(e) => e.stopPropagation()}>
-                                <DialogHeader>
-                                  <DialogTitle>Delete stage?</DialogTitle>
-                                  <DialogDescription>
-                                    This will permanently delete "{stage.name}" and all
-                                    its items.
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex justify-end gap-2 pt-2">
-                                  <DialogClose asChild>
-                                    <Button variant="outline">Cancel</Button>
-                                  </DialogClose>
-                                  <DialogClose asChild>
-                                    <Button
-                                      variant="destructive"
-                                      onClick={() => deleteStage(stage.id)}
-                                    >
-                                      Delete
-                                    </Button>
-                                  </DialogClose>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                          <IconChevronRight
-                            className={cn(
-                              "size-4 flex-shrink-0 transition-colors",
-                              selectedStageId === stage.id
-                                ? "text-telnyx-green"
-                                : "text-muted-foreground"
-                            )}
-                          />
-                        </>
-                      )}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleStageReorder}
+                >
+                  <SortableContext
+                    items={stages.map((s) => s.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {stages.map((stage) => (
+                        <SortableStage
+                          key={stage.id}
+                          stage={stage}
+                          isSelected={selectedStageId === stage.id}
+                          isEditing={editingStageId === stage.id}
+                          editingStageName={editingStageName}
+                          setEditingStageName={setEditingStageName}
+                          onSelect={() => {
+                            setSelectedStageId(stage.id);
+                            setSelectedItemId(null);
+                          }}
+                          onEdit={() => {
+                            setEditingStageId(stage.id);
+                            setEditingStageName(stage.name);
+                          }}
+                          onCancelEdit={() => setEditingStageId(null)}
+                          onSaveName={() => updateStageName(stage.id, editingStageName)}
+                          onDelete={() => deleteStage(stage.id)}
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </CardContent>
           </Card>
@@ -691,74 +710,28 @@ export default function WorkflowEditorPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {stageItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        "group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors",
-                        selectedItemId === item.id
-                          ? "bg-telnyx-green/10 border border-telnyx-green"
-                          : "hover:bg-muted"
-                      )}
-                      onClick={() => setSelectedItemId(item.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {item.label}
-                        </div>
-                        {item.description && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            {item.description}
-                          </div>
-                        )}
-                      </div>
-                      <div className="hidden group-hover:flex items-center gap-1">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 text-red-500"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <IconTrash className="size-3" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent onClick={(e) => e.stopPropagation()}>
-                            <DialogHeader>
-                              <DialogTitle>Delete item?</DialogTitle>
-                              <DialogDescription>
-                                This will permanently delete "{item.label}".
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="flex justify-end gap-2 pt-2">
-                              <DialogClose asChild>
-                                <Button variant="outline">Cancel</Button>
-                              </DialogClose>
-                              <DialogClose asChild>
-                                <Button
-                                  variant="destructive"
-                                  onClick={() => deleteItem(item.id)}
-                                >
-                                  Delete
-                                </Button>
-                              </DialogClose>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                      <IconChevronRight
-                        className={cn(
-                          "size-4 flex-shrink-0 transition-colors",
-                          selectedItemId === item.id
-                            ? "text-telnyx-green"
-                            : "text-muted-foreground"
-                        )}
-                      />
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleItemReorder}
+                >
+                  <SortableContext
+                    items={stageItems.map((i) => i.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {stageItems.map((item) => (
+                        <SortableItem
+                          key={item.id}
+                          item={item}
+                          isSelected={selectedItemId === item.id}
+                          onSelect={() => setSelectedItemId(item.id)}
+                          onDelete={() => deleteItem(item.id)}
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </SortableContext>
+                </DndContext>
               )}
             </CardContent>
           </Card>
@@ -1072,6 +1045,206 @@ function ItemEditor({ item, onSave }) {
           )}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// Sortable Stage Component
+function SortableStage({
+  stage,
+  isSelected,
+  isEditing,
+  editingStageName,
+  setEditingStageName,
+  onSelect,
+  onEdit,
+  onCancelEdit,
+  onSaveName,
+  onDelete,
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors",
+        isSelected
+          ? "bg-telnyx-green/10 border border-telnyx-green"
+          : "hover:bg-muted",
+        isDragging && "shadow-lg"
+      )}
+      onClick={onSelect}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <IconGripVertical className="size-4 text-muted-foreground flex-shrink-0" />
+      </div>
+
+      {isEditing ? (
+        <div className="flex-1 flex items-center gap-1">
+          <Input
+            value={editingStageName}
+            onChange={(e) => setEditingStageName(e.target.value)}
+            className="h-7 text-sm"
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSaveName();
+              else if (e.key === "Escape") onCancelEdit();
+            }}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSaveName();
+            }}
+          >
+            <IconCheck className="size-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelEdit();
+            }}
+          >
+            <IconX className="size-3" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{stage.name}</div>
+            <div className="text-xs text-muted-foreground">
+              {stage.items?.length || 0} items
+            </div>
+          </div>
+          <div className="hidden group-hover:flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+            >
+              <IconEdit className="size-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-red-500"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <IconTrash className="size-3" />
+            </Button>
+          </div>
+          <IconChevronRight
+            className={cn(
+              "size-4 flex-shrink-0 transition-colors",
+              isSelected ? "text-telnyx-green" : "text-muted-foreground"
+            )}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+// Sortable Item Component
+function SortableItem({ item, isSelected, onSelect, onDelete }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors",
+        isSelected
+          ? "bg-telnyx-green/10 border border-telnyx-green"
+          : "hover:bg-muted",
+        isDragging && "shadow-lg"
+      )}
+      onClick={onSelect}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <IconGripVertical className="size-4 text-muted-foreground flex-shrink-0" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{item.label}</div>
+        {item.description && (
+          <div className="text-xs text-muted-foreground truncate">
+            {item.description}
+          </div>
+        )}
+      </div>
+      <div className="hidden group-hover:flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 text-red-500"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <IconTrash className="size-3" />
+        </Button>
+      </div>
+      <IconChevronRight
+        className={cn(
+          "size-4 flex-shrink-0 transition-colors",
+          isSelected ? "text-telnyx-green" : "text-muted-foreground"
+        )}
+      />
     </div>
   );
 }
