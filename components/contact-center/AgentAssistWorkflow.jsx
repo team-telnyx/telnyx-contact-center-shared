@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useCallback, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Accordion,
   AccordionContent,
@@ -20,7 +21,6 @@ import {
   MessageSquare,
   Sparkles,
   CheckCircle,
-  Circle,
   Loader2,
   Copy,
   CheckCheck,
@@ -31,6 +31,9 @@ import {
   Smile,
   Meh,
   Frown,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 
@@ -137,41 +140,50 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
     );
   }
 
+  // Find the current slot that needs filling (for suggested response)
+  const currentSlotNeedingFill = useMemo(() => {
+    for (const stage of stages) {
+      for (const item of stage.items || []) {
+        const status = itemStatuses[item.id];
+        if (status?.status !== "completed" && status?.status !== "skipped") {
+          return { stage, item };
+        }
+      }
+    }
+    return null;
+  }, [stages, itemStatuses]);
+
   return (
-    <div className="flex flex-col h-full gap-3 overflow-hidden">
-      {/* Main 3-column layout */}
-      <div className="flex-1 min-h-0 grid grid-cols-12 gap-3">
+    <div className="flex flex-col h-full">
+      {/* 3 karty - równa szerokość, scrollable */}
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: Workflow Stages & Items */}
-        <div className="col-span-5">
-          <WorkflowStagesCard
-            stages={stages}
-            itemStatuses={itemStatuses}
-            isAnalyzing={isAnalyzing}
-            onCompleteItem={completeItem}
-            onSkipItem={skipItem}
-          />
-        </div>
+        <WorkflowStagesCard
+          stages={stages}
+          itemStatuses={itemStatuses}
+          isAnalyzing={isAnalyzing}
+          onCompleteItem={completeItem}
+          onSkipItem={skipItem}
+        />
 
         {/* Center: Live Transcription */}
-        <div className="col-span-4">
-          <LiveTranscriptionCard transcriptions={transcriptions} />
-        </div>
+        <LiveTranscriptionCard transcriptions={transcriptions} />
 
-        {/* Right: Suggested Responses */}
-        <div className="col-span-3">
-          <SuggestedResponsesCard transcriptions={transcriptions} />
-        </div>
+        {/* Right: Suggested Response (single) */}
+        <SuggestedResponseCard currentSlot={currentSlotNeedingFill} />
       </div>
 
-      {/* Bottom: Progress Bar */}
-      <WorkflowProgressBar
-        stages={stages}
-        itemStatuses={itemStatuses}
-        completionPercentage={completionPercentage}
-        completedItems={completedItems}
-        totalItems={totalItems}
-        isComplete={session?.status === "completed"}
-      />
+      {/* Progress bar - fixed na dole */}
+      <div className="shrink-0 mt-4">
+        <WorkflowProgressBar
+          stages={stages}
+          itemStatuses={itemStatuses}
+          completionPercentage={session?.completion_percentage ?? completionPercentage}
+          completedItems={completedItems}
+          totalItems={totalItems}
+          isComplete={session?.status === "completed"}
+        />
+      </div>
     </div>
   );
 }
@@ -180,6 +192,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
  * Workflow Stages Card with Accordions
  */
 function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem }) {
+  // Track which stage is expanded (user can manually toggle)
+  const [expandedStage, setExpandedStage] = useState(null);
+
   // Find currently active stage (first stage with incomplete items)
   const activeStageId = useMemo(() => {
     for (const stage of stages) {
@@ -189,11 +204,21 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
       });
       if (hasIncomplete) return stage.id;
     }
-    return stages[0]?.id;
+    return stages[stages.length - 1]?.id; // All complete - show last
   }, [stages, itemStatuses]);
 
+  // Auto-expand next section when current section completes
+  useEffect(() => {
+    if (!expandedStage || expandedStage === activeStageId) {
+      setExpandedStage(activeStageId);
+    }
+  }, [activeStageId]);
+
+  // Track editing state for slot values
+  const [editingItemId, setEditingItemId] = useState(null);
+  const [editValue, setEditValue] = useState("");
+
   // Find recently completed item (for highlighting)
-  const recentlyCompletedRef = useRef(null);
   const [highlightedItemId, setHighlightedItemId] = useState(null);
 
   useEffect(() => {
@@ -204,9 +229,29 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     }
   }, [highlightedItemId]);
 
+  const handleStartEdit = (item, currentValue) => {
+    setEditingItemId(item.id);
+    setEditValue(currentValue || "");
+  };
+
+  const handleSaveEdit = (itemId) => {
+    // Here you would call an API to update the slot value
+    // For now, we just complete the item with the value
+    if (editValue.trim()) {
+      onCompleteItem(itemId, editValue.trim());
+    }
+    setEditingItemId(null);
+    setEditValue("");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setEditValue("");
+  };
+
   return (
-    <Card className="h-full flex flex-col border-2 border-border">
-      <CardHeader className="pb-2 flex-shrink-0">
+    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+      <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <ClipboardList className="h-4 w-4 text-purple-500" />
           Workflow Checklist
@@ -218,14 +263,14 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-0">
+      <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="px-4 pb-4">
             <Accordion
               type="single"
               collapsible
-              defaultValue={activeStageId}
-              value={activeStageId}
+              value={expandedStage}
+              onValueChange={setExpandedStage}
               className="w-full"
             >
               {stages.map((stage, stageIndex) => {
@@ -239,6 +284,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                     className={`border-b-0 mb-2 rounded-lg border ${
                       isActive
                         ? "border-purple-500/50 bg-purple-500/5"
+                        : stageCompletion.isComplete
+                        ? "border-green-500/50 bg-green-500/5"
                         : "border-border"
                     }`}
                   >
@@ -277,6 +324,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const isCompleted = status.status === "completed";
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
+                          const isEditing = editingItemId === item.id;
+                          const slotValue = status.value || status.extracted_value;
+                          const isAiFilled = status.auto_filled || status.confidence_score;
 
                           return (
                             <div
@@ -305,16 +355,92 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                 }`}
                               />
                               <div className="flex-1 min-w-0">
-                                <p
-                                  className={`text-sm leading-tight ${
-                                    isCompleted || isSkipped
-                                      ? "line-through text-muted-foreground"
-                                      : ""
-                                  }`}
-                                >
-                                  {item.label}
-                                </p>
-                                {status.confidence_score && (
+                                <div className="flex items-center gap-2">
+                                  <p
+                                    className={`text-sm leading-tight ${
+                                      isCompleted || isSkipped
+                                        ? "line-through text-muted-foreground"
+                                        : ""
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </p>
+                                  <ItemTypeBadge type={item.type} />
+                                </div>
+                                
+                                {/* Slot value display/edit */}
+                                {item.type === "slot" && (
+                                  <div className="mt-1.5">
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-1">
+                                        <Input
+                                          value={editValue}
+                                          onChange={(e) => setEditValue(e.target.value)}
+                                          className="h-7 text-sm"
+                                          placeholder={`Enter ${item.label.toLowerCase()}`}
+                                          autoFocus
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleSaveEdit(item.id);
+                                            if (e.key === "Escape") handleCancelEdit();
+                                          }}
+                                        />
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-green-500 hover:text-green-600"
+                                          onClick={() => handleSaveEdit(item.id)}
+                                        >
+                                          <Check className="h-3.5 w-3.5" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                          onClick={handleCancelEdit}
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </div>
+                                    ) : slotValue ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-sm font-medium text-foreground">
+                                          {slotValue}
+                                        </span>
+                                        {isAiFilled && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[10px] px-1 py-0 bg-purple-500/10 text-purple-500 border-purple-500/50"
+                                          >
+                                            AI
+                                          </Badge>
+                                        )}
+                                        {!isCompleted && (
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                            onClick={() => handleStartEdit(item, slotValue)}
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    ) : !isCompleted && !isSkipped ? (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                        onClick={() => handleStartEdit(item, "")}
+                                      >
+                                        <Pencil className="h-3 w-3 mr-1" />
+                                        Enter value
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                )}
+                                
+                                {/* Confidence score for non-slot items */}
+                                {item.type !== "slot" && status.confidence_score && (
                                   <div className="flex items-center gap-1 mt-1">
                                     <Badge
                                       variant="outline"
@@ -329,7 +455,6 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                   </div>
                                 )}
                               </div>
-                              <ItemTypeBadge type={item.type} />
                             </div>
                           );
                         })}
@@ -381,8 +506,8 @@ function LiveTranscriptionCard({ transcriptions }) {
   const finalTranscriptions = transcriptions.filter((t) => t.isFinal);
 
   return (
-    <Card className="h-full flex flex-col border-2 border-border">
-      <CardHeader className="pb-2 flex-shrink-0">
+    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+      <CardHeader className="pb-2 shrink-0">
         <CardTitle className="text-sm flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-blue-500" />
           Live Transcription
@@ -393,7 +518,7 @@ function LiveTranscriptionCard({ transcriptions }) {
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-0">
+      <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollRef}>
           <div className="px-4 pb-4 space-y-3">
             {finalTranscriptions.length === 0 ? (
@@ -479,76 +604,66 @@ function TranscriptionBubble({ transcription }) {
 }
 
 /**
- * Suggested Responses Card
+ * Suggested Response Card - Single suggestion for current slot
  */
-function SuggestedResponsesCard({ transcriptions }) {
-  // Generate suggested responses based on latest transcription
-  // In a real implementation, these would come from LLM analysis
-  const suggestions = useMemo(() => {
-    const latestCustomer = [...transcriptions]
-      .reverse()
-      .find((t) => t.track === "inbound" && t.isFinal);
-
-    if (!latestCustomer) return [];
-
-    // Mock suggestions - in production, these come from the analyze API
-    const mockSuggestions = [
-      {
-        id: "1",
-        text: "Thank you for your patience. Let me help you with that.",
-        type: "empathy",
-      },
-      {
-        id: "2",
-        text: "I understand your concern. I'll resolve this right away.",
-        type: "resolution",
-      },
-      {
-        id: "3",
-        text: "Could you please provide me with your account number?",
-        type: "information",
-      },
-    ];
-
-    return mockSuggestions;
-  }, [transcriptions]);
-
-  return (
-    <Card className="h-full flex flex-col border-2 border-border">
-      <CardHeader className="pb-2 flex-shrink-0">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-amber-500" />
-          AI Suggestions
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 p-0">
-        <ScrollArea className="h-full">
-          <div className="px-4 pb-4 space-y-2">
-            {suggestions.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Listening for context...</p>
-                <p className="text-xs mt-1">Suggestions appear as conversation develops</p>
-              </div>
-            ) : (
-              suggestions.map((suggestion) => (
-                <SuggestionBubble key={suggestion.id} suggestion={suggestion} />
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Single suggestion bubble
- */
-function SuggestionBubble({ suggestion }) {
+function SuggestedResponseCard({ currentSlot }) {
   const [copied, setCopied] = useState(false);
 
+  // Generate a suggested question based on the current item needing fill
+  const suggestion = useMemo(() => {
+    if (!currentSlot) return null;
+    
+    const { stage, item } = currentSlot;
+    
+    // Generate contextual question based on item type and label
+    const questionTemplates = {
+      slot: {
+        name: "Could you please tell me your full name?",
+        "customer name": "Could you please tell me your full name?",
+        email: "What email address should I use for your account?",
+        phone: "What's the best phone number to reach you?",
+        address: "Could you provide your current address?",
+        account: "Could you please provide your account number?",
+        "account number": "Could you please provide your account number?",
+        order: "What is your order number?",
+        "order number": "What is your order number?",
+        product: "Which product are you inquiring about?",
+        issue: "Could you describe the issue you're experiencing?",
+        default: `Could you please provide your ${item.label.toLowerCase()}?`,
+      },
+      question: {
+        default: `${item.label}`,
+      },
+      action: {
+        default: `I'll now ${item.label.toLowerCase()}.`,
+      },
+      topic: {
+        default: `Let me help you with ${item.label.toLowerCase()}.`,
+      },
+    };
+
+    const templates = questionTemplates[item.type] || questionTemplates.slot;
+    const labelLower = item.label.toLowerCase();
+    
+    // Find matching template or use default
+    let text = templates.default;
+    for (const [key, value] of Object.entries(templates)) {
+      if (key !== "default" && labelLower.includes(key)) {
+        text = value;
+        break;
+      }
+    }
+
+    return {
+      text,
+      stageName: stage.name,
+      itemLabel: item.label,
+      itemType: item.type,
+    };
+  }, [currentSlot]);
+
   const handleCopy = () => {
+    if (!suggestion) return;
     navigator.clipboard.writeText(suggestion.text);
     setCopied(true);
     notify({
@@ -559,47 +674,70 @@ function SuggestionBubble({ suggestion }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const typeConfig = {
-    empathy: { color: "bg-pink-500/10 text-pink-500 border-pink-500/50" },
-    resolution: { color: "bg-green-500/10 text-green-500 border-green-500/50" },
-    information: { color: "bg-blue-500/10 text-blue-500 border-blue-500/50" },
-  };
-
   return (
-    <div
-      className="group p-3 rounded-lg border border-border bg-card hover:border-amber-500/50 hover:bg-amber-500/5 transition-all cursor-pointer"
-      onClick={handleCopy}
-    >
-      <div className="flex items-start gap-2">
-        <Bot className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm leading-relaxed">{suggestion.text}</p>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge
-              variant="outline"
-              className={`text-[10px] capitalize ${
-                typeConfig[suggestion.type]?.color || "bg-muted"
-              }`}
-            >
-              {suggestion.type}
-            </Badge>
-            <span className="text-xs text-muted-foreground group-hover:text-amber-500 flex items-center gap-1 ml-auto">
-              {copied ? (
-                <>
-                  <CheckCheck className="h-3 w-3" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3 w-3" />
-                  Click to copy
-                </>
-              )}
-            </span>
+    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+      <CardHeader className="pb-2 shrink-0">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-amber-500" />
+          Suggested Response
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="px-4 pb-4">
+            {!suggestion ? (
+              <div className="text-center text-muted-foreground py-8">
+                <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500 opacity-50" />
+                <p className="text-sm">All items completed!</p>
+                <p className="text-xs mt-1">Great job finishing the workflow</p>
+              </div>
+            ) : (
+              <div
+                className="group p-4 rounded-lg border-2 border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60 hover:bg-amber-500/10 transition-all cursor-pointer"
+                onClick={handleCopy}
+              >
+                {/* Current context badge */}
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="outline" className="text-[10px] bg-purple-500/10 text-purple-500 border-purple-500/50">
+                    {suggestion.stageName}
+                  </Badge>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                  <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/50">
+                    {suggestion.itemLabel}
+                  </Badge>
+                </div>
+
+                {/* Suggestion text */}
+                <div className="flex items-start gap-3">
+                  <Bot className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base leading-relaxed font-medium">
+                      "{suggestion.text}"
+                    </p>
+                    
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className="text-xs text-muted-foreground group-hover:text-amber-500 flex items-center gap-1">
+                        {copied ? (
+                          <>
+                            <CheckCheck className="h-3.5 w-3.5" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            Click to copy
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
-    </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -614,11 +752,15 @@ function WorkflowProgressBar({
   totalItems,
   isComplete,
 }) {
+  // Calculate percentage from items if not provided
+  const displayPercentage = completionPercentage ?? 
+    (totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0);
+
   return (
-    <div className="bg-card border-2 border-border rounded-lg p-3 flex-shrink-0">
+    <div className="bg-card border-2 border-border rounded-lg p-3">
       <div className="flex items-center gap-4">
         {/* Stage indicators */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {stages.map((stage, index) => {
             const completion = getStageCompletion(stage, itemStatuses);
             return (
@@ -653,13 +795,13 @@ function WorkflowProgressBar({
         {/* Progress bar */}
         <div className="flex-1">
           <Progress
-            value={completionPercentage}
+            value={displayPercentage}
             className="h-2"
           />
         </div>
 
         {/* Percentage and count */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="text-sm text-muted-foreground">
             {completedItems}/{totalItems}
           </span>
@@ -671,7 +813,7 @@ function WorkflowProgressBar({
                 : "bg-purple-500/10 text-purple-500 border-purple-500/50"
             }`}
           >
-            {completionPercentage}%
+            {displayPercentage}%
           </Badge>
         </div>
       </div>
