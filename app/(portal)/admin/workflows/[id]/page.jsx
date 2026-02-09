@@ -81,7 +81,7 @@ export default function WorkflowEditorPage() {
 
   // New item dialog
   const [showNewItemDialog, setShowNewItemDialog] = useState(false);
-  const [newItemForm, setNewItemForm] = useState({ name: "", description: "" });
+  const [newItemForm, setNewItemForm] = useState({ label: "", description: "" });
   const [savingItem, setSavingItem] = useState(false);
 
   // Editing stage
@@ -267,7 +267,7 @@ export default function WorkflowEditorPage() {
 
   // Add new item
   async function addItem() {
-    if (!newItemForm.name.trim() || !selectedStageId) return;
+    if (!newItemForm.label.trim() || !selectedStageId) return;
 
     setSavingItem(true);
     try {
@@ -277,7 +277,7 @@ export default function WorkflowEditorPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: newItemForm.name.trim(),
+            label: newItemForm.label.trim(),
             description: newItemForm.description.trim(),
             sort_order: stageItems.length,
           }),
@@ -295,7 +295,7 @@ export default function WorkflowEditorPage() {
         )
       );
       setSelectedItemId(data.item.id);
-      setNewItemForm({ name: "", description: "" });
+      setNewItemForm({ label: "", description: "" });
       setShowNewItemDialog(false);
       notify({
         title: "Item created",
@@ -705,7 +705,7 @@ export default function WorkflowEditorPage() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">
-                          {item.name}
+                          {item.label}
                         </div>
                         {item.description && (
                           <div className="text-xs text-muted-foreground truncate">
@@ -729,7 +729,7 @@ export default function WorkflowEditorPage() {
                             <DialogHeader>
                               <DialogTitle>Delete item?</DialogTitle>
                               <DialogDescription>
-                                This will permanently delete "{item.name}".
+                                This will permanently delete "{item.label}".
                               </DialogDescription>
                             </DialogHeader>
                             <div className="flex justify-end gap-2 pt-2">
@@ -934,14 +934,14 @@ export default function WorkflowEditorPage() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label htmlFor="new-item-name">Item Name</Label>
+              <Label htmlFor="new-item-label">Item Label</Label>
               <Input
-                id="new-item-name"
-                value={newItemForm.name}
+                id="new-item-label"
+                value={newItemForm.label}
                 onChange={(e) =>
-                  setNewItemForm((f) => ({ ...f, name: e.target.value }))
+                  setNewItemForm((f) => ({ ...f, label: e.target.value }))
                 }
-                placeholder="Enter item name..."
+                placeholder="Enter item label..."
               />
             </div>
             <div className="space-y-2">
@@ -962,7 +962,7 @@ export default function WorkflowEditorPage() {
               variant="outline"
               onClick={() => {
                 setShowNewItemDialog(false);
-                setNewItemForm({ name: "", description: "" });
+                setNewItemForm({ label: "", description: "" });
               }}
               disabled={savingItem}
             >
@@ -970,7 +970,7 @@ export default function WorkflowEditorPage() {
             </Button>
             <Button
               onClick={addItem}
-              disabled={savingItem || !newItemForm.name.trim()}
+              disabled={savingItem || !newItemForm.label.trim()}
             >
               {savingItem ? (
                 <>
@@ -991,7 +991,7 @@ export default function WorkflowEditorPage() {
 // Item Editor Component
 function ItemEditor({ item, onSave }) {
   const [form, setForm] = useState({
-    name: item.name,
+    label: item.label || "",
     description: item.description || "",
   });
   const [saving, setSaving] = useState(false);
@@ -1000,25 +1000,25 @@ function ItemEditor({ item, onSave }) {
   // Reset form when item changes
   useEffect(() => {
     setForm({
-      name: item.name,
+      label: item.label || "",
       description: item.description || "",
     });
     setHasChanges(false);
-  }, [item.id, item.name, item.description]);
+  }, [item.id, item.label, item.description]);
 
   // Check for changes
   useEffect(() => {
     const changed =
-      form.name !== item.name ||
+      form.label !== (item.label || "") ||
       form.description !== (item.description || "");
     setHasChanges(changed);
   }, [form, item]);
 
   async function handleSave() {
-    if (!form.name.trim()) {
+    if (!form.label.trim()) {
       notify({
         title: "Validation Error",
-        description: "Item name is required",
+        description: "Item label is required",
         variant: "error",
       });
       return;
@@ -1027,7 +1027,7 @@ function ItemEditor({ item, onSave }) {
     setSaving(true);
     try {
       await onSave({
-        name: form.name.trim(),
+        label: form.label.trim(),
         description: form.description.trim(),
       });
       setHasChanges(false);
@@ -1039,11 +1039,11 @@ function ItemEditor({ item, onSave }) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="item-name">Name</Label>
+        <Label htmlFor="item-label">Label</Label>
         <Input
-          id="item-name"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          id="item-label"
+          value={form.label}
+          onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
         />
       </div>
       <div className="space-y-2">
