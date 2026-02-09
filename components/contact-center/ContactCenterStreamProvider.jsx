@@ -48,6 +48,8 @@ export function ContactCenterStreamProvider({ children }) {
                   assignedAt: data.interaction.assignedAt,
                   direction: "inbound",
                   status: data.interaction.state || "ringing",
+                  // Include full metadata for agent assist config
+                  metadata: data.interaction.metadata || {},
                 });
               }
               // Dispatch event to trigger interaction list refresh

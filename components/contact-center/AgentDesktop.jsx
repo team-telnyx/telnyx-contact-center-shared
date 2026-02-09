@@ -193,9 +193,10 @@ export function AgentDesktop() {
           created_at: new Date(call.callStartTime || Date.now()).toISOString(),
           assigned_at: call.assignedAt || null,
           queued_at: call.queuedAt || null,
-          metadata: call.aiCallControlId
+          // Use full metadata from call (includes agent_assist_config from SSE)
+          metadata: call.metadata || (call.aiCallControlId
             ? { ai_call_control_id: call.aiCallControlId }
-            : {},
+            : {}),
           ai_call_control_id: call.aiCallControlId || null,
         }));
 
