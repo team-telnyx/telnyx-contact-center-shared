@@ -122,6 +122,12 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
+          title: "Workflows",
+          url: "/admin/workflows",
+          icon: IconGitBranch,
+          role_access: ["admin", "owner"],
+        },
+        {
           title: "Media Library",
           url: "/admin/media-library",
           icon: IconFileMusic,
