@@ -82,8 +82,8 @@ export default function AdminWorkflowsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to fetch workflows");
-      setItems(data.items || []);
-      setTotal(Number(data.total || 0));
+      setItems(data.workflows || data.items || []);
+      setTotal(Number(data.count || data.total || 0));
     } catch (err) {
       notify({
         title: "Load failed",
