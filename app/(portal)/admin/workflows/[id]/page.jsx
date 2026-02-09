@@ -749,10 +749,12 @@ export default function WorkflowEditorPage() {
                 <p className="text-sm">Select an item to edit</p>
               </CardContent>
             ) : (
-              <ItemEditor
-                item={selectedItem}
-                onSave={(updates) => updateItem(selectedItem.id, updates)}
-              />
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ItemEditor
+                  item={selectedItem}
+                  onSave={(updates) => updateItem(selectedItem.id, updates)}
+                />
+              </div>
             )}
           </Card>
         </div>
@@ -975,6 +977,22 @@ const ITEM_TYPES = [
   { value: "slot", label: "Data Slot", description: "Data to collect from customer" },
 ];
 
+// Predefined hint colors for variety
+const HINT_COLORS = [
+  { border: "border-blue-500", text: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950" },
+  { border: "border-green-500", text: "text-green-600", bg: "bg-green-50 dark:bg-green-950" },
+  { border: "border-purple-500", text: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950" },
+  { border: "border-orange-500", text: "text-orange-600", bg: "bg-orange-50 dark:bg-orange-950" },
+  { border: "border-pink-500", text: "text-pink-600", bg: "bg-pink-50 dark:bg-pink-950" },
+  { border: "border-cyan-500", text: "text-cyan-600", bg: "bg-cyan-50 dark:bg-cyan-950" },
+  { border: "border-amber-500", text: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950" },
+  { border: "border-indigo-500", text: "text-indigo-600", bg: "bg-indigo-50 dark:bg-indigo-950" },
+];
+
+function getHintColor(index) {
+  return HINT_COLORS[index % HINT_COLORS.length];
+}
+
 // Item Editor Component with all slot fields
 function ItemEditor({ item, onSave }) {
   const [form, setForm] = useState({
@@ -986,10 +1004,12 @@ function ItemEditor({ item, onSave }) {
     slot_type: item.slot_type || "text",
     slot_options: item.slot_options || [],
     slot_validation: item.slot_validation || "",
+    hints: item.hints || [],
   });
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [newOption, setNewOption] = useState("");
+  const [newHint, setNewHint] = useState("");
 
   // Reset form when item changes
   useEffect(() => {
@@ -1002,14 +1022,17 @@ function ItemEditor({ item, onSave }) {
       slot_type: item.slot_type || "text",
       slot_options: Array.isArray(item.slot_options) ? item.slot_options : [],
       slot_validation: item.slot_validation || "",
+      hints: Array.isArray(item.hints) ? item.hints : [],
     });
     setHasChanges(false);
     setNewOption("");
+    setNewHint("");
   }, [item.id]);
 
   // Check for changes
   useEffect(() => {
     const originalOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
+    const originalHints = Array.isArray(item.hints) ? item.hints : [];
     const changed =
       form.label !== (item.label || "") ||
       form.description !== (item.description || "") ||
@@ -1018,7 +1041,8 @@ function ItemEditor({ item, onSave }) {
       form.slot_name !== (item.slot_name || "") ||
       form.slot_type !== (item.slot_type || "text") ||
       JSON.stringify(form.slot_options) !== JSON.stringify(originalOptions) ||
-      form.slot_validation !== (item.slot_validation || "");
+      form.slot_validation !== (item.slot_validation || "") ||
+      JSON.stringify(form.hints) !== JSON.stringify(originalHints);
     setHasChanges(changed);
   }, [form, item]);
 
@@ -1043,6 +1067,30 @@ function ItemEditor({ item, onSave }) {
     setForm((f) => ({
       ...f,
       slot_options: f.slot_options.filter((opt) => opt !== optionToRemove),
+    }));
+  }
+
+  function addHint() {
+    if (!newHint.trim()) return;
+    if (form.hints.includes(newHint.trim())) {
+      notify({
+        title: "Duplicate hint",
+        description: "This hint already exists",
+        variant: "error",
+      });
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      hints: [...f.hints, newHint.trim()],
+    }));
+    setNewHint("");
+  }
+
+  function removeHint(hintToRemove) {
+    setForm((f) => ({
+      ...f,
+      hints: f.hints.filter((h) => h !== hintToRemove),
     }));
   }
 
@@ -1077,6 +1125,7 @@ function ItemEditor({ item, onSave }) {
         slot_type: form.type === "slot" ? form.slot_type : null,
         slot_options: form.type === "slot" && form.slot_type === "select" ? form.slot_options : null,
         slot_validation: form.type === "slot" ? form.slot_validation.trim() : null,
+        hints: form.hints.length > 0 ? form.hints : null,
       });
       setHasChanges(false);
     } finally {
@@ -1161,6 +1210,73 @@ function ItemEditor({ item, onSave }) {
         </div>
       </div>
 
+      {/* Prompt Hints Section */}
+      <div className="space-y-4 border-t pt-4">
+        <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Prompt Hints
+        </h4>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Keywords or phrases to help AI detect when this item is completed
+        </p>
+
+        {/* Current hints as colored badges */}
+        {form.hints.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {form.hints.map((hint, index) => {
+              const color = getHintColor(index);
+              return (
+                <Badge
+                  key={hint}
+                  variant="outline"
+                  className={cn(
+                    "flex items-center gap-1 pr-1 border-2",
+                    color.border,
+                    color.text,
+                    color.bg
+                  )}
+                >
+                  {hint}
+                  <button
+                    type="button"
+                    onClick={() => removeHint(hint)}
+                    className={cn(
+                      "ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
+                      color.text
+                    )}
+                  >
+                    <IconX className="size-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add new hint */}
+        <div className="flex items-center gap-2">
+          <Input
+            value={newHint}
+            onChange={(e) => setNewHint(e.target.value)}
+            placeholder="Add a hint..."
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addHint();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addHint}
+            disabled={!newHint.trim()}
+          >
+            <IconPlus className="size-4" />
+          </Button>
+        </div>
+      </div>
+
       {/* Slot Configuration Section - Only visible when type is "slot" */}
       {isSlotType && (
         <div className="space-y-4 border-t pt-4">
@@ -1216,25 +1332,36 @@ function ItemEditor({ item, onSave }) {
             Customer must choose one of these options
           </p>
 
-          {/* Current options as badges */}
+          {/* Current options as colored badges */}
           {form.slot_options.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {form.slot_options.map((opt) => (
-                <Badge
-                  key={opt}
-                  variant="secondary"
-                  className="flex items-center gap-1 pr-1"
-                >
-                  {opt}
-                  <button
-                    type="button"
-                    onClick={() => removeOption(opt)}
-                    className="ml-1 rounded-full hover:bg-destructive hover:text-destructive-foreground p-0.5 transition-colors"
+              {form.slot_options.map((opt, index) => {
+                const color = getHintColor(index);
+                return (
+                  <Badge
+                    key={opt}
+                    variant="outline"
+                    className={cn(
+                      "flex items-center gap-1 pr-1 border-2",
+                      color.border,
+                      color.text,
+                      color.bg
+                    )}
                   >
-                    <IconX className="size-3" />
-                  </button>
-                </Badge>
-              ))}
+                    {opt}
+                    <button
+                      type="button"
+                      onClick={() => removeOption(opt)}
+                      className={cn(
+                        "ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
+                        color.text
+                      )}
+                    >
+                      <IconX className="size-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
             </div>
           )}
 
