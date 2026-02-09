@@ -639,16 +639,21 @@ export function AgentDesktop() {
     selectedInteraction?.call_control_id,
   ]);
 
-  // Clear selected interaction immediately when it disappears from the list
+  // Sync selected interaction with latest data from interactions list
+  // This ensures metadata (like agent_assist_config) is updated after SSE refresh
   useEffect(() => {
     if (!selectedInteraction) return;
-    const stillExists = interactions.some(
+    const updatedInteraction = interactions.find(
       (interaction) =>
         interaction.id === selectedInteraction.id ||
         interaction.call_control_id === selectedInteraction.call_control_id,
     );
-    if (!stillExists) {
+    if (!updatedInteraction) {
+      // Interaction no longer exists, clear selection
       setSelectedInteraction(null);
+    } else if (updatedInteraction !== selectedInteraction) {
+      // Update with latest data (including metadata with agent_assist_config)
+      setSelectedInteraction(updatedInteraction);
     }
   }, [interactions, selectedInteraction]);
 
