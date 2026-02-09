@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "FAST_REFRESH=false next dev --hostname 0.0.0.0 --port 3000 --experimental-https",
+    "dev": "FAST_REFRESH=false next dev --hostname 0.0.0.0 --port 3000",
     "dev:webpack": "FAST_REFRESH=false next dev --hostname 0.0.0.0 --port 3000 --webpack",
     "dev:no-hmr": "WATCHPACK_POLLING=false CHOKIDAR_USEPOLLING=false next dev --hostname 0.0.0.0 --port 3000 --webpack",
     "build": "next build",
