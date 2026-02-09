@@ -327,13 +327,19 @@ export function AgentDesktop() {
   // No polling - SSE handles all real-time updates
   useEffect(() => {
     const loadInteractions = async () => {
+      console.log("[AgentDesktop] loadInteractions called");
       try {
         const res = await fetch(
           "/api/contact-center/agent/interactions?limit=50&activeOnly=true",
           { cache: "no-store" },
         );
         const data = await res.json();
+        console.log("[AgentDesktop] loadInteractions response:", data.interactions?.length, "interactions");
         if (data.ok && Array.isArray(data.interactions)) {
+          // DEBUG: Log metadata for first interaction
+          if (data.interactions.length > 0) {
+            console.log("[AgentDesktop] First interaction metadata:", data.interactions[0].metadata);
+          }
           // Filter out timeout re-enqueued interactions on the client side as well
           const filtered = data.interactions.filter((interaction) => {
             const metadata = interaction.metadata || {};
