@@ -29,13 +29,20 @@ export function InteractionDetail({ interaction }) {
       return;
     }
 
+    // DEBUG: Log what we receive
+    console.log("[InteractionDetail] interaction.id:", interaction.id);
+    console.log("[InteractionDetail] interaction.metadata:", interaction.metadata);
+    console.log("[InteractionDetail] agent_assist_config:", interaction.metadata?.agent_assist_config);
+
     // Check interaction metadata for agent_assist_config (set by call flow node)
     const metadataConfig = interaction.metadata?.agent_assist_config;
     if (metadataConfig) {
+      console.log("[InteractionDetail] Using config from metadata:", metadataConfig);
       setAssistConfig(metadataConfig);
       return;
     }
 
+    console.log("[InteractionDetail] No agent_assist_config found, using default KB Articles");
     // Default: KB Articles mode
     setAssistConfig({
       enabled: true,
