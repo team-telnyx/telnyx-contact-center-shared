@@ -34,7 +34,7 @@ export function WorkflowProgress() {
             </Badge>
           )}
         </div>
-        <span className="text-sm font-bold text-purple-500">
+        <span className="text-sm font-bold text-green-500">
           {completionPercentage}%
         </span>
       </div>
@@ -42,7 +42,7 @@ export function WorkflowProgress() {
       <Progress 
         value={completionPercentage} 
         className="h-2 bg-muted"
-        indicatorClassName={isComplete ? "bg-green-500" : "bg-purple-500"}
+        indicatorClassName="bg-green-500"
       />
       
       <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
