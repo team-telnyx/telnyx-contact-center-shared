@@ -253,8 +253,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
 
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
-      <CardHeader className="pb-2 shrink-0">
-        <CardTitle className="text-sm flex items-center gap-2">
+      <CardHeader className="py-3 px-4 border-b shrink-0">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
           <ClipboardList className="h-4 w-4 text-purple-500" />
           Workflow Checklist
           {isAnalyzing && (
@@ -509,8 +509,8 @@ function LiveTranscriptionCard({ transcriptions }) {
 
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
-      <CardHeader className="pb-2 shrink-0">
-        <CardTitle className="text-sm flex items-center gap-2">
+      <CardHeader className="py-3 px-4 border-b shrink-0">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-blue-500" />
           Live Transcription
           {finalTranscriptions.length > 0 && (
@@ -712,8 +712,8 @@ function SuggestedResponseCard({ currentSlot }) {
 
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
-      <CardHeader className="pb-2 shrink-0">
-        <CardTitle className="text-sm flex items-center gap-2">
+      <CardHeader className="py-3 px-4 border-b shrink-0">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
           Suggested Responses
           {suggestions.length > 0 && (
