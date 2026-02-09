@@ -715,14 +715,15 @@ export async function POST(request, { params }) {
               "logic_gate",
               "flow_end",
               "set_queue_options",
+              "agent_assist",
             ];
 
             const isLogical = logicalNodeTypes.includes(nodeType);
 
             if (isLogical) {
               // Logical nodes execute and immediately continue to next node
-              // For set_queue_options, add a small delay to ensure client_state_update is processed
-              if (nodeType === "set_queue_options") {
+              // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
+              if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
                 await new Promise((resolve) => setTimeout(resolve, 500));
               }
 
@@ -1116,15 +1117,16 @@ export async function POST(request, { params }) {
                 "logic_gate",
                 "flow_end",
                 "set_queue_options",
+                "agent_assist",
               ];
 
               const isLogical = logicalNodeTypes.includes(nodeType);
 
               if (isLogical) {
                 // Logical nodes execute and immediately continue to next node
-                // For set_queue_options, add a small delay to ensure client_state_update is processed
+                // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
                 // and update body with the new client_state
-                if (nodeType === "set_queue_options") {
+                if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
                   await new Promise((resolve) => setTimeout(resolve, 500));
 
                   // Update body payload with the new client_state from the result
