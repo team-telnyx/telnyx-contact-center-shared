@@ -104,11 +104,12 @@ export default function WorkflowEditorPage() {
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
       });
-      setStages(data.stages || []);
+      const workflowStages = data.workflow.stages || data.stages || [];
+      setStages(workflowStages);
 
       // Select first stage if none selected
-      if (!selectedStageId && data.stages?.length > 0) {
-        setSelectedStageId(data.stages[0].id);
+      if (!selectedStageId && workflowStages.length > 0) {
+        setSelectedStageId(workflowStages[0].id);
       }
     } catch (err) {
       notify({
