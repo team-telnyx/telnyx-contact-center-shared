@@ -29,6 +29,7 @@ export function ContactCenterStreamProvider({ children }) {
 
             if (data.type === "new_interaction") {
               if (data.interaction?.callControlId) {
+                // First, add to calls store with SSE data
                 useCallsStore.getState().addCall({
                   callControlId: data.interaction.callControlId,
                   callSessionId: data.interaction.callSessionId,
@@ -51,6 +52,28 @@ export function ContactCenterStreamProvider({ children }) {
                   // Include full metadata for agent assist config
                   metadata: data.interaction.metadata || {},
                 });
+
+                // Then, fetch full interaction from DB by call_session_id to get complete metadata
+                // This ensures we have agent_assist_config even if SSE data was incomplete
+                if (data.interaction.callSessionId) {
+                  fetch(`/api/contact-center/interactions/by-call-session-id?callSessionId=${encodeURIComponent(data.interaction.callSessionId)}`)
+                    .then(res => res.json())
+                    .then(result => {
+                      if (result.ok && result.interaction?.metadata) {
+                        // Update calls store with full metadata from DB
+                        useCallsStore.getState().updateCall(data.interaction.callControlId, {
+                          metadata: result.interaction.metadata,
+                        });
+                        // Trigger refresh to update UI
+                        window.dispatchEvent(
+                          new CustomEvent("contact-center:refresh-interactions"),
+                        );
+                      }
+                    })
+                    .catch(err => {
+                      console.error("[ContactCenterStreamProvider] Failed to fetch full interaction:", err);
+                    });
+                }
               }
               // Dispatch event to trigger interaction list refresh
               window.dispatchEvent(
