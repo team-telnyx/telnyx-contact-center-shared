@@ -1363,6 +1363,7 @@ async function executeNodeChain(
       "logic_gate",
       "flow_end",
       "set_queue_options",
+      "agent_assist",
     ];
     const isLogicalNode = logicalNodeTypes.includes(nextNodeType);
 
