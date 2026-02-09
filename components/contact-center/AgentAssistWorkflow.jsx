@@ -104,6 +104,21 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
     return () => clearTimeout(timer);
   }, [session, transcriptions, analyzeTranscript]);
 
+  // Find the current slot that needs filling (for suggested response)
+  // MUST be before any conditional returns to maintain hook order
+  const currentSlotNeedingFill = useMemo(() => {
+    if (!stages || stages.length === 0) return null;
+    for (const stage of stages) {
+      for (const item of stage.items || []) {
+        const status = itemStatuses[item.id];
+        if (status?.status !== "completed" && status?.status !== "skipped") {
+          return { stage, item };
+        }
+      }
+    }
+    return null;
+  }, [stages, itemStatuses]);
+
   // Loading state
   if (isLoading && !session) {
     return (
@@ -139,19 +154,6 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
       </div>
     );
   }
-
-  // Find the current slot that needs filling (for suggested response)
-  const currentSlotNeedingFill = useMemo(() => {
-    for (const stage of stages) {
-      for (const item of stage.items || []) {
-        const status = itemStatuses[item.id];
-        if (status?.status !== "completed" && status?.status !== "skipped") {
-          return { stage, item };
-        }
-      }
-    }
-    return null;
-  }, [stages, itemStatuses]);
 
   return (
     <div className="flex flex-col h-full">
