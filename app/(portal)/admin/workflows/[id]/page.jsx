@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -838,29 +839,21 @@ export default function WorkflowEditorPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-llm-model">LLM Model</Label>
-              <Select
+              <Combobox
                 value={workflowForm.llm_model}
-                onValueChange={(value) =>
+                onChange={(value) =>
                   setWorkflowForm((f) => ({ ...f, llm_model: value }))
                 }
+                options={llmModels.map((model) => ({
+                  value: model.id,
+                  label: `${model.id} (${model.parameters} • ${model.tier})`,
+                }))}
+                placeholder={loadingModels ? "Loading models..." : "Select model..."}
                 disabled={loadingModels}
-              >
-                <SelectTrigger id="edit-llm-model">
-                  <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model..."} />
-                </SelectTrigger>
-                <SelectContent>
-                  {llmModels.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col">
-                        <span>{model.id}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {model.parameters} • {model.tier}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                searchable={true}
+                triggerClassName="w-full"
+                contentClassName="w-[450px]"
+              />
               <p className="text-xs text-muted-foreground">
                 Model used for workflow analysis and suggestions
               </p>
