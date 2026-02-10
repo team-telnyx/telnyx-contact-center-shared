@@ -267,7 +267,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full">
-          <div className="px-4 pb-4">
+          <div className="p-4">
             <Accordion
               type="single"
               collapsible
@@ -526,7 +526,7 @@ function LiveTranscriptionCard({ transcriptions }) {
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="px-4 pb-4 space-y-3">
+          <div className="p-4 space-y-3">
             {finalTranscriptions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -729,7 +729,7 @@ function SuggestedResponseCard({ currentSlot }) {
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="px-4 pb-4 space-y-3">
+          <div className="p-4 space-y-3">
             {suggestions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
