@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -32,6 +33,7 @@ import {
   IconBrain,
   IconCheck,
   IconAlertCircle,
+  IconHeadphones,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 
@@ -71,6 +73,10 @@ export default function CreateAgentSheet({
   const [sttModel, setSttModel] = useState("nova-2");
   const [sttLanguage, setSttLanguage] = useState("en");
   
+  // Noise suppression
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
+  const [noiseSuppressionEngine, setNoiseSuppressionEngine] = useState("krisp");
+  
   // Agent name (defaults to workflow name)
   const [agentName, setAgentName] = useState("");
   
@@ -107,6 +113,11 @@ export default function CreateAgentSheet({
     { value: "pt", label: "Portuguese" },
     { value: "pl", label: "Polish" },
     { value: "auto", label: "Auto-detect" },
+  ];
+  
+  const NOISE_SUPPRESSION_ENGINES = [
+    { value: "krisp", label: "Krisp (Recommended)" },
+    { value: "amazon", label: "Amazon" },
   ];
 
   // Reset state when sheet opens
@@ -256,7 +267,16 @@ export default function CreateAgentSheet({
           model: sttProvider === "deepgram" ? `${sttProvider}/${sttModel}` : sttModel,
           language: sttLanguage,
         },
-        // Add silence detection settings
+        // Noise suppression
+        noise_suppression: noiseSuppressionEnabled ? {
+          enabled: true,
+          engine: noiseSuppressionEngine,
+        } : { enabled: false },
+        // Enable voice channel for testing
+        channels: ["voice"],
+        // Allow unauthenticated calls for AI widget testing
+        allow_unauthenticated: true,
+        // Silence detection settings
         silence_timeout_ms: 500,
         max_silence_count: 2,
       };
@@ -533,6 +553,40 @@ export default function CreateAgentSheet({
                         </Select>
                       </div>
                     </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Noise Suppression Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <IconHeadphones className="size-4 text-orange-500" />
+                        <h3 className="font-semibold">Noise Suppression</h3>
+                      </div>
+                      <Switch
+                        checked={noiseSuppressionEnabled}
+                        onCheckedChange={setNoiseSuppressionEnabled}
+                      />
+                    </div>
+                    
+                    {noiseSuppressionEnabled && (
+                      <div className="space-y-2">
+                        <Label>Engine</Label>
+                        <Select value={noiseSuppressionEngine} onValueChange={setNoiseSuppressionEngine}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select engine" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NOISE_SUPPRESSION_ENGINES.map((engine) => (
+                              <SelectItem key={engine.value} value={engine.value}>
+                                {engine.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
 
                   <Separator />
