@@ -254,7 +254,7 @@ export default function CreateAgentSheet({
     try {
       const instructions = generateInstructions();
       
-      // Build the agent payload
+      // Build the agent payload (without channels/unauthenticated - must be set in separate request)
       const payload = {
         name: agentName.trim() || "Test Agent",
         model: selectedModel,
@@ -273,10 +273,6 @@ export default function CreateAgentSheet({
           enabled: true,
           engine: noiseSuppressionEngine,
         } : { enabled: false },
-        // Enable voice channel for testing
-        channels: ["voice"],
-        // Allow unauthenticated calls for AI widget testing
-        allow_unauthenticated: true,
         // Silence detection settings
         silence_timeout_ms: 500,
         max_silence_count: 2,
@@ -292,6 +288,24 @@ export default function CreateAgentSheet({
       
       if (!res.ok || !data.ok) {
         throw new Error(data.error || "Failed to create AI agent");
+      }
+
+      const assistantId = data.assistant?.id;
+      
+      // Enable voice channel and unauthenticated calls in separate request
+      if (assistantId) {
+        try {
+          await fetch(`/api/ai/assistants/${assistantId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              channels: ["voice"],
+              allow_unauthenticated: true,
+            }),
+          });
+        } catch (err) {
+          console.error("Failed to enable voice channel:", err);
+        }
       }
 
       setCreatedAgent(data.assistant);
