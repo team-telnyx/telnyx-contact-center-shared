@@ -88,7 +88,12 @@ export default function WorkflowEditorPage() {
     description: "",
     category: "",
     is_active: false,
+    llm_model: "openai/gpt-4o",
   });
+  
+  // LLM models
+  const [llmModels, setLlmModels] = useState([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -214,6 +219,7 @@ export default function WorkflowEditorPage() {
         description: data.workflow.description || "",
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
+        llm_model: data.workflow.llm_model || "openai/gpt-4o",
       });
       const workflowStages = data.workflow.stages || data.stages || [];
       setStages(workflowStages);
@@ -237,6 +243,25 @@ export default function WorkflowEditorPage() {
   useEffect(() => {
     loadWorkflow();
   }, [loadWorkflow]);
+  
+  // Load available LLM models
+  useEffect(() => {
+    async function fetchModels() {
+      setLoadingModels(true);
+      try {
+        const res = await fetch("/api/ai/models");
+        const data = await res.json();
+        if (data.ok && data.models) {
+          setLlmModels(data.models);
+        }
+      } catch (err) {
+        console.error("Failed to load models:", err);
+      } finally {
+        setLoadingModels(false);
+      }
+    }
+    fetchModels();
+  }, []);
 
   // Get selected stage and its items
   const selectedStage = stages.find((s) => s.id === selectedStageId);
@@ -811,6 +836,35 @@ export default function WorkflowEditorPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-llm-model">LLM Model</Label>
+              <Select
+                value={workflowForm.llm_model}
+                onValueChange={(value) =>
+                  setWorkflowForm((f) => ({ ...f, llm_model: value }))
+                }
+                disabled={loadingModels}
+              >
+                <SelectTrigger id="edit-llm-model">
+                  <SelectValue placeholder={loadingModels ? "Loading models..." : "Select model..."} />
+                </SelectTrigger>
+                <SelectContent>
+                  {llmModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col">
+                        <span>{model.id}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {model.parameters} • {model.tier}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Model used for workflow analysis and suggestions
+              </p>
+            </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-active">Active</Label>
               <Switch
@@ -977,6 +1031,12 @@ const ITEM_TYPES = [
   { value: "slot", label: "Data Slot", description: "Data to collect from customer" },
 ];
 
+const COMPLETION_TRIGGERS = [
+  { value: "agent", label: "Agent", description: "Completed when agent addresses it" },
+  { value: "customer", label: "Customer", description: "Completed when customer responds" },
+  { value: "either", label: "Either", description: "Completed when either party addresses it" },
+];
+
 // Predefined hint colors for variety (border + text only, no background)
 const HINT_COLORS = [
   { border: "border-blue-500", text: "text-blue-500" },
@@ -995,6 +1055,12 @@ function getHintColor(index) {
 
 // Item Editor Component with all slot fields
 function ItemEditor({ item, onSave }) {
+  // Determine default completion_trigger based on type
+  const getDefaultCompletionTrigger = (itemType) => {
+    if (itemType === "slot") return "customer";
+    return "agent";
+  };
+
   const [form, setForm] = useState({
     label: item.label || "",
     description: item.description || "",
@@ -1005,6 +1071,7 @@ function ItemEditor({ item, onSave }) {
     slot_options: item.slot_options || [],
     slot_validation: item.slot_validation || "",
     hints: item.hints || [],
+    completion_trigger: item.completion_trigger || getDefaultCompletionTrigger(item.type || "action"),
   });
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -1013,6 +1080,7 @@ function ItemEditor({ item, onSave }) {
 
   // Reset form when item changes
   useEffect(() => {
+    const defaultTrigger = getDefaultCompletionTrigger(item.type || "action");
     setForm({
       label: item.label || "",
       description: item.description || "",
@@ -1023,6 +1091,7 @@ function ItemEditor({ item, onSave }) {
       slot_options: Array.isArray(item.slot_options) ? item.slot_options : [],
       slot_validation: item.slot_validation || "",
       hints: Array.isArray(item.hints) ? item.hints : [],
+      completion_trigger: item.completion_trigger || defaultTrigger,
     });
     setHasChanges(false);
     setNewOption("");
@@ -1033,6 +1102,7 @@ function ItemEditor({ item, onSave }) {
   useEffect(() => {
     const originalOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
     const originalHints = Array.isArray(item.hints) ? item.hints : [];
+    const defaultTrigger = getDefaultCompletionTrigger(item.type || "action");
     const changed =
       form.label !== (item.label || "") ||
       form.description !== (item.description || "") ||
@@ -1042,7 +1112,8 @@ function ItemEditor({ item, onSave }) {
       form.slot_type !== (item.slot_type || "text") ||
       JSON.stringify(form.slot_options) !== JSON.stringify(originalOptions) ||
       form.slot_validation !== (item.slot_validation || "") ||
-      JSON.stringify(form.hints) !== JSON.stringify(originalHints);
+      JSON.stringify(form.hints) !== JSON.stringify(originalHints) ||
+      form.completion_trigger !== (item.completion_trigger || defaultTrigger);
     setHasChanges(changed);
   }, [form, item]);
 
@@ -1121,6 +1192,7 @@ function ItemEditor({ item, onSave }) {
         description: form.description.trim(),
         type: form.type,
         is_required: form.is_required,
+        completion_trigger: form.completion_trigger,
         slot_name: form.type === "slot" ? form.slot_name.trim() : null,
         slot_type: form.type === "slot" ? form.slot_type : null,
         slot_options: form.type === "slot" && form.slot_type === "select" ? form.slot_options : null,
@@ -1207,6 +1279,35 @@ function ItemEditor({ item, onSave }) {
               setForm((f) => ({ ...f, is_required: checked }))
             }
           />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="completion-trigger">Completion Trigger</Label>
+          <Select
+            value={form.completion_trigger}
+            onValueChange={(value) =>
+              setForm((f) => ({ ...f, completion_trigger: value }))
+            }
+          >
+            <SelectTrigger id="completion-trigger">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {COMPLETION_TRIGGERS.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  <div className="flex flex-col">
+                    <span>{t.label}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {t.description}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Who needs to speak for this item to be marked complete
+          </p>
         </div>
       </div>
 

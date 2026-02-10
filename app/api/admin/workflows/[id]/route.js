@@ -109,7 +109,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active } = body;
+    const { name, description, category, is_active, llm_model } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -131,6 +131,10 @@ export async function PUT(request, { params }) {
     if (is_active !== undefined) {
       updates.push(`is_active = $${paramIndex++}`);
       values.push(is_active);
+    }
+    if (llm_model !== undefined) {
+      updates.push(`llm_model = $${paramIndex++}`);
+      values.push(llm_model);
     }
 
     if (updates.length === 0) {

@@ -723,10 +723,70 @@ function TranscriptionBubble({ transcription }) {
 }
 
 /**
- * Generate a suggestion based on the item
+ * Generate a dynamic suggestion using LLM
  */
-function generateSuggestion(stage, item) {
-  // Generate contextual question based on item type and label
+async function generateSuggestion(stage, item, session, transcriptions) {
+  try {
+    // Prepare conversation context (last 5 messages)
+    const previousConversation = transcriptions
+      .filter(t => t.isFinal)
+      .slice(-5)
+      .map(t => ({
+        speaker: t.track === "inbound" ? "Customer" : "Agent",
+        text: t.transcript,
+      }));
+
+    // Call API to generate suggestion
+    const res = await fetch("/api/agent-assist/workflow/generate-suggestion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        itemId: item.id,
+        itemLabel: item.label,
+        itemDescription: item.description,
+        itemType: item.type,
+        slotOptions: Array.isArray(item.slot_options) ? item.slot_options : null,
+        workflowId: session?.workflow_id,
+        agentName: session?.agent_name || "the agent",
+        brandName: session?.brand_name,
+        previousConversation,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[generateSuggestion] API error:", res.status);
+      // Fallback to static template
+      return generateStaticSuggestion(stage, item);
+    }
+
+    const data = await res.json();
+    if (!data.suggestion) {
+      return generateStaticSuggestion(stage, item);
+    }
+
+    const slotOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
+
+    return {
+      id: `${item.id}-${Date.now()}`,
+      text: data.suggestion,
+      stageName: stage.name,
+      itemId: item.id,
+      itemLabel: item.label,
+      itemType: item.type,
+      slotOptions: slotOptions.length > 0 ? slotOptions : null,
+      timestamp: new Date(),
+      model: data.model,
+    };
+  } catch (error) {
+    console.error("[generateSuggestion] Error:", error);
+    return generateStaticSuggestion(stage, item);
+  }
+}
+
+/**
+ * Fallback: Generate a static suggestion (when API fails)
+ */
+function generateStaticSuggestion(stage, item) {
   const questionTemplates = {
     slot: {
       name: "Could you please tell me your full name?",
@@ -756,7 +816,6 @@ function generateSuggestion(stage, item) {
   const templates = questionTemplates[item.type] || questionTemplates.slot;
   const labelLower = item.label.toLowerCase();
   
-  // Find matching template or use default
   let text = templates.default;
   for (const [key, value] of Object.entries(templates)) {
     if (key !== "default" && labelLower.includes(key)) {
@@ -765,7 +824,6 @@ function generateSuggestion(stage, item) {
     }
   }
 
-  // For select type slots, add options to the suggestion
   const slotOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
   if (item.type === "slot" && item.slot_type === "select" && slotOptions.length > 0) {
     text = `${text}\n\nPlease select: ${slotOptions.join(", ")}`;
@@ -789,9 +847,14 @@ function generateSuggestion(stage, item) {
 function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
   const [suggestions, setSuggestions] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
+  const [generatingSuggestion, setGeneratingSuggestion] = useState(false);
   const scrollRef = useRef(null);
   const endRef = useRef(null);
   const lastItemIdRef = useRef(null);
+  
+  // Get session and transcriptions from stores
+  const session = useWorkflowStore((state) => state.session);
+  const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
   // Add new suggestion when currentSlot changes to a new item
   useEffect(() => {
@@ -802,17 +865,28 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
     // Only add suggestion if this is a new item
     if (lastItemIdRef.current !== item.id) {
       lastItemIdRef.current = item.id;
-      const newSuggestion = generateSuggestion(stage, item);
-      setSuggestions((prev) => {
-        const updated = [...prev, newSuggestion];
-        // Notify parent of suggestion change
-        if (onSuggestionsChange) {
-          onSuggestionsChange(updated);
-        }
-        return updated;
-      });
+      
+      // Generate suggestion asynchronously
+      setGeneratingSuggestion(true);
+      generateSuggestion(stage, item, session, transcriptions)
+        .then((newSuggestion) => {
+          setSuggestions((prev) => {
+            const updated = [...prev, newSuggestion];
+            // Notify parent of suggestion change
+            if (onSuggestionsChange) {
+              onSuggestionsChange(updated);
+            }
+            return updated;
+          });
+        })
+        .catch((err) => {
+          console.error("[SuggestedResponseCard] Failed to generate suggestion:", err);
+        })
+        .finally(() => {
+          setGeneratingSuggestion(false);
+        });
     }
-  }, [currentSlot, onSuggestionsChange]);
+  }, [currentSlot, session, transcriptions, onSuggestionsChange]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {
@@ -840,7 +914,13 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
           Suggested Responses
-          {suggestions.length > 0 && (
+          {generatingSuggestion && (
+            <Badge variant="outline" className="ml-auto text-xs animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/50">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Generating...
+            </Badge>
+          )}
+          {!generatingSuggestion && suggestions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs">
               {suggestions.length} suggestions
             </Badge>

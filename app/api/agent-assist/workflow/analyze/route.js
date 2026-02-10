@@ -69,6 +69,7 @@ export async function POST(request) {
         i.slot_name,
         i.slot_type,
         i.slot_validation,
+        i.completion_trigger,
         s.name as stage_name,
         s.order_index as stage_order,
         ist.status as current_status
@@ -108,8 +109,26 @@ export async function POST(request) {
       await client.query("BEGIN");
 
       for (const completed of analysisResult.completed_items || []) {
-        // Only auto-complete if confidence is high enough
-        if (completed.confidence >= 0.85) {
+        // Get item details including completion_trigger
+        const item = pendingItems.find(p => p.item_id === completed.item_id);
+        if (!item) continue;
+        
+        // Check if completion_trigger matches speaker
+        const speakerType = speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : null;
+        const completionTrigger = item.completion_trigger || "agent";
+        
+        // Determine if we should complete based on trigger
+        let shouldComplete = false;
+        if (completionTrigger === "either") {
+          shouldComplete = true;
+        } else if (completionTrigger === "customer" && speakerType === "customer") {
+          shouldComplete = true;
+        } else if (completionTrigger === "agent" && speakerType === "agent") {
+          shouldComplete = true;
+        }
+        
+        // Only auto-complete if confidence is high enough AND trigger matches
+        if (shouldComplete && completed.confidence >= 0.85) {
           // Update item status
           await client.query(
             `UPDATE aa_workflow_item_status 
@@ -122,7 +141,7 @@ export async function POST(request) {
                  updated_at = NOW()
              WHERE session_id = $5 AND item_id = $6`,
             [
-              speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : "auto",
+              speakerType || "auto",
               completed.extracted_value || null,
               completed.confidence,
               transcript,
@@ -132,7 +151,6 @@ export async function POST(request) {
           );
 
           // If this is a slot item with a value, update slots_filled
-          const item = pendingItems.find(p => p.item_id === completed.item_id);
           if (item?.slot_name && completed.extracted_value) {
             slotsFilled[item.slot_name] = completed.extracted_value;
           }
@@ -152,6 +170,7 @@ export async function POST(request) {
             confidence: completed.confidence,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
+            completion_trigger_pending: !shouldComplete,
           });
         }
       }

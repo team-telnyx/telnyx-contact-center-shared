@@ -55,6 +55,7 @@ export async function PUT(request, { params }) {
       slot_type,
       slot_options,
       slot_validation,
+      completion_trigger,
     } = body;
 
     // Build dynamic update query
@@ -111,6 +112,16 @@ export async function PUT(request, { params }) {
     if (slot_validation !== undefined) {
       updates.push(`slot_validation = $${paramIndex++}`);
       values.push(slot_validation);
+    }
+    if (completion_trigger !== undefined) {
+      if (!["agent", "customer", "either"].includes(completion_trigger)) {
+        return NextResponse.json(
+          { error: "Invalid completion_trigger. Must be one of: agent, customer, either" },
+          { status: 400 }
+        );
+      }
+      updates.push(`completion_trigger = $${paramIndex++}`);
+      values.push(completion_trigger);
     }
 
     if (updates.length === 0) {
