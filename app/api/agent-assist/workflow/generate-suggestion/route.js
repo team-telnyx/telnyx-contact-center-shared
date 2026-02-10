@@ -105,13 +105,24 @@ export async function POST(request) {
     }
 
     const data = await response.json();
-    const suggestion = data.choices?.[0]?.message?.content;
+    let suggestion = data.choices?.[0]?.message?.content;
 
     if (!suggestion) {
       return NextResponse.json(
         { error: "No suggestion generated" },
         { status: 500 }
       );
+    }
+
+    // Clean up the suggestion - remove quotes, leading/trailing whitespace
+    suggestion = suggestion.trim();
+    // Remove wrapping quotes (single or double, including fancy quotes)
+    suggestion = suggestion.replace(/^["'"'„"«»]+|["'"'"»«]+$/g, '');
+    // Replace [Your Name] placeholders with actual agent name
+    if (agentName && agentName !== "the agent") {
+      suggestion = suggestion.replace(/\[Your Name\]/gi, agentName);
+      suggestion = suggestion.replace(/\[Agent Name\]/gi, agentName);
+      suggestion = suggestion.replace(/\[Name\]/gi, agentName);
     }
 
     return NextResponse.json({

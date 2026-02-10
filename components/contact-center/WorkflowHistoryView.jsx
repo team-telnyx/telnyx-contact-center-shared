@@ -69,7 +69,35 @@ export default function WorkflowHistoryView({ interactionId }) {
         
         // Merge session with transcriptions and suggestions from metadata
         if (sessionData.session) {
-          sessionData.session.transcriptions = agentAssist.transcriptions || [];
+          // Get transcriptions from metadata or from item statuses as fallback
+          let transcriptions = agentAssist.transcriptions || [];
+          
+          // If no transcriptions in metadata, try to reconstruct from item statuses
+          if (transcriptions.length === 0 && sessionData.session.stages) {
+            const reconstructed = [];
+            let seenTranscripts = new Set();
+            
+            sessionData.session.stages.forEach(stage => {
+              stage.items?.forEach(item => {
+                const status = item.status;
+                if (status?.source_transcript && !seenTranscripts.has(status.source_transcript)) {
+                  seenTranscripts.add(status.source_transcript);
+                  reconstructed.push({
+                    id: `reconstructed-${reconstructed.length}`,
+                    transcript: status.source_transcript,
+                    track: status.completed_by === 'customer' ? 'inbound' : 'outbound',
+                    isFinal: true,
+                  });
+                }
+              });
+            });
+            
+            if (reconstructed.length > 0) {
+              transcriptions = reconstructed;
+            }
+          }
+          
+          sessionData.session.transcriptions = transcriptions;
           sessionData.session.suggestions = agentAssist.suggestions || [];
         }
 
