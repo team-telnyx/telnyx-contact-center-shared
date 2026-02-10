@@ -143,7 +143,7 @@ export default function WorkflowHistoryView({ interactionId }) {
   return (
     <div className="flex flex-col gap-4">
       {/* 3 cards layout */}
-      <div className="grid grid-cols-3 gap-4 h-[700px]">
+      <div className="grid grid-cols-3 gap-4 h-[600px]">
         {/* Left: Workflow Stages & Items (Read-only) */}
         <WorkflowStagesCardReadOnly
           stages={stages}
