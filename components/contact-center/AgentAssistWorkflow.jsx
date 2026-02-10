@@ -416,12 +416,15 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             AI
                                           </Badge>
                                         )}
-                                        {!isCompleted && (
+                                        {!isSkipped && (
                                           <Button
                                             size="icon"
                                             variant="ghost"
                                             className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                            onClick={() => handleStartEdit(item, slotValue)}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleStartEdit(item, slotValue);
+                                            }}
                                           >
                                             <Pencil className="h-3 w-3" />
                                           </Button>
