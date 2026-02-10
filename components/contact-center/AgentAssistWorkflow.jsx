@@ -67,29 +67,33 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
   // Get transcriptions from active call store
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
-  // Track suggestions for saving to history
-  const [allSuggestions, setAllSuggestions] = useState([]);
+  // Track suggestions for saving to history (use refs directly for unmount access)
   const suggestionsRef = useRef([]);
   const transcriptionsRef = useRef([]);
+  const sessionIdRef = useRef(null);
 
-  // Keep refs updated for cleanup function
-  useEffect(() => {
-    suggestionsRef.current = allSuggestions;
-  }, [allSuggestions]);
-
-  useEffect(() => {
-    transcriptionsRef.current = transcriptions;
-  }, [transcriptions]);
+  // Keep refs updated synchronously
+  transcriptionsRef.current = transcriptions;
+  if (session?.id) {
+    sessionIdRef.current = session.id;
+  }
 
   // Save workflow history when component unmounts (call ends)
   useEffect(() => {
     return () => {
       // Only save if we have a session and some data
-      if (!session?.id) return;
+      const currentSessionId = sessionIdRef.current;
+      if (!currentSessionId) return;
       
       const currentTranscriptions = transcriptionsRef.current;
       const currentSuggestions = suggestionsRef.current;
       
+      console.log("[AgentAssistWorkflow] Saving history on unmount:", {
+        sessionId: currentSessionId,
+        transcriptionsCount: currentTranscriptions.length,
+        suggestionsCount: currentSuggestions.length,
+      });
+
       if (currentTranscriptions.length === 0 && currentSuggestions.length === 0) return;
 
       // Fire and forget - save history data
@@ -97,7 +101,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: session.id,
+          sessionId: currentSessionId,
           transcriptions: currentTranscriptions.filter(t => t.isFinal).map(t => ({
             id: t.id,
             transcript: t.transcript,
@@ -124,11 +128,11 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
         console.error("[AgentAssistWorkflow] Failed to save history:", err);
       });
     };
-  }, [session?.id]);
+  }, []);
 
-  // Callback for when suggestions change
+  // Callback for when suggestions change - update ref directly for unmount access
   const handleSuggestionsChange = useCallback((suggestions) => {
-    setAllSuggestions(suggestions);
+    suggestionsRef.current = suggestions;
   }, []);
 
   // Initialize workflow session

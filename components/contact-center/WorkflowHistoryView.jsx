@@ -390,6 +390,8 @@ function TranscriptionCardReadOnly({ transcriptions }) {
 function TranscriptionBubbleReadOnly({ transcription }) {
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
+  const sentimentScore = transcription.sentimentScore;
+  const intent = transcription.intent;
 
   const SentimentIcon = sentiment === "positive" ? Smile :
     sentiment === "negative" ? Frown : Meh;
@@ -414,9 +416,24 @@ function TranscriptionBubbleReadOnly({ transcription }) {
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
       </div>
 
-      {sentiment && (
-        <div className={`flex items-center gap-0.5 mt-1 ${sentimentColor}`}>
-          <SentimentIcon className="h-3.5 w-3.5" />
+      {/* Intent and sentiment badges */}
+      {(intent || sentiment) && (
+        <div className={`flex items-center gap-1.5 mt-1 ${
+          isCustomer ? "" : "flex-row-reverse"
+        }`}>
+          {intent && (
+            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50">
+              {intent}
+            </Badge>
+          )}
+          {sentiment && (
+            <div className={`flex items-center gap-0.5 ${sentimentColor}`}>
+              <SentimentIcon className="h-3.5 w-3.5" />
+              {typeof sentimentScore === "number" && (
+                <span className="text-[10px]">{sentimentScore}</span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
