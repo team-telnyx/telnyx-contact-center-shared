@@ -39,7 +39,10 @@ import {
   IconChevronRight,
   IconCheck,
   IconX,
+  IconRobot,
+  IconTestPipe2,
 } from "@tabler/icons-react";
+import CreateAgentSheet from "@/components/workflows/CreateAgentSheet";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import {
@@ -95,6 +98,10 @@ export default function WorkflowEditorPage() {
   // LLM models
   const [llmModels, setLlmModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
+  
+  // AI Agent
+  const [showCreateAgentSheet, setShowCreateAgentSheet] = useState(false);
+  const [createdAgentId, setCreatedAgentId] = useState(null);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -622,6 +629,24 @@ export default function WorkflowEditorPage() {
             <IconEdit className="size-4 mr-1" />
             Edit Details
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCreateAgentSheet(true)}
+          >
+            <IconRobot className="size-4 mr-1" />
+            Create AI Agent
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/admin/workflows/${workflowId}/test`)}
+            disabled={!createdAgentId}
+            title={!createdAgentId ? "Create an AI Agent first" : "Test AI Agent"}
+          >
+            <IconTestPipe2 className="size-4 mr-1" />
+            Test AI Agent
+          </Button>
         </div>
       </div>
 
@@ -1003,6 +1028,18 @@ export default function WorkflowEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Create AI Agent Sheet */}
+      <CreateAgentSheet
+        open={showCreateAgentSheet}
+        onOpenChange={setShowCreateAgentSheet}
+        workflow={workflow}
+        stages={stages}
+        onAgentCreated={(agentId) => {
+          setCreatedAgentId(agentId);
+          notify.success("AI Agent created successfully!");
+        }}
+      />
     </div>
   );
 }

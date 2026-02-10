@@ -213,7 +213,7 @@ export default function TestAgentPage() {
           description: err.message,
           variant: "error",
         });
-        router.push(`/admin/call-flows/${flowId}`);
+        router.push(`/admin/workflows/${flowId}`);
       } finally {
         setLoading(false);
       }
@@ -569,7 +569,7 @@ export default function TestAgentPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => router.push(`/admin/call-flows/${flowId}`)}
+                onClick={() => router.push(`/admin/workflows/${flowId}`)}
               >
                 <IconArrowLeft className="size-4 mr-2" />
                 Back to Workflow

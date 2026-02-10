@@ -130,7 +130,6 @@ import {
   IconLoader2,
   IconSettings,
   IconList,
-  IconTestPipe2,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -159,7 +158,6 @@ import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
 import AgentAssistNodeEditor from "@/components/voice-flow/AgentAssistNodeEditor";
-import CreateAgentSheet from "@/components/call-flows/CreateAgentSheet";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
@@ -1303,8 +1301,6 @@ export default function FlowBuilderPage() {
   const [rightPanelTab, setRightPanelTab] = useState("config");
   const [showGlobalVariablesPanel, setShowGlobalVariablesPanel] =
     useState(false);
-  const [showCreateAgentSheet, setShowCreateAgentSheet] = useState(false);
-  const [createdAgentId, setCreatedAgentId] = useState(null);
 
   // Real-time monitoring state
   const [activeNodes, setActiveNodes] = useState(new Set());
@@ -2630,22 +2626,6 @@ export default function FlowBuilderPage() {
                       </Popover>
                     )}
                   </div>
-
-                  {/* AI Agent Testing Buttons */}
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowCreateAgentSheet(true)}
-                  >
-                    <IconRobot className="h-4 w-4 mr-2" />
-                    Create AI Agent
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/admin/call-flows/${flowId}/test`)}
-                  >
-                    <IconTestPipe2 className="h-4 w-4 mr-2" />
-                    Test AI Agent
-                  </Button>
 
                   {(() => {
                     // Show Monitor button for all flows with an initiator
@@ -4380,26 +4360,6 @@ export default function FlowBuilderPage() {
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* Create AI Agent Sheet */}
-      <CreateAgentSheet
-        open={showCreateAgentSheet}
-        onOpenChange={setShowCreateAgentSheet}
-        workflow={{
-          name: flowName,
-          description: flowDescription,
-          nodes: nodes,
-          edges: edges,
-        }}
-        onAgentCreated={(agent) => {
-          setCreatedAgentId(agent.id);
-          notify({
-            title: "AI Agent Created",
-            description: "You can now test the agent using the 'Test AI Agent' button.",
-            variant: "success",
-          });
-        }}
-      />
 
       {/* Monitor Panel */}
       {showMonitor && (

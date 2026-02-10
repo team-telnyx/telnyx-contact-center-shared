@@ -40,13 +40,15 @@ import { notify } from "@/components/ToastNotify";
  * @param {object} props
  * @param {boolean} props.open - Whether the sheet is open
  * @param {function} props.onOpenChange - Callback when sheet open state changes
- * @param {object} props.workflow - The workflow/call-flow data
+ * @param {object} props.workflow - The workflow data
+ * @param {array} props.stages - The workflow stages with items
  * @param {function} props.onAgentCreated - Callback when agent is created successfully
  */
 export default function CreateAgentSheet({
   open,
   onOpenChange,
   workflow,
+  stages = [],
   onAgentCreated,
 }) {
   const [loading, setLoading] = useState(false);
@@ -170,39 +172,68 @@ export default function CreateAgentSheet({
     return model?.voices || [];
   };
 
-  // Generate instructions from workflow
+  // Generate instructions from workflow stages
   const generateInstructions = () => {
     if (customInstructions.trim()) {
       return customInstructions;
     }
     
-    // Generate from workflow description
-    let instructions = workflow?.description || "";
+    let instructions = `# ${workflow?.name || 'AI Assistant'}\n\n`;
+    instructions += workflow?.description || "You are a helpful AI assistant.";
+    instructions += "\n\n";
     
-    // Add workflow structure if available
-    if (workflow?.nodes && workflow?.edges) {
-      instructions += "\n\n## Workflow Steps:\n";
-      const sortedNodes = [...workflow.nodes].sort((a, b) => {
-        // Sort by nodeNumber if available
-        return (a.data?.nodeNumber || 0) - (b.data?.nodeNumber || 0);
-      });
+    // Generate from workflow stages and items
+    if (stages && stages.length > 0) {
+      instructions += "## Conversation Flow:\n\n";
       
-      sortedNodes.forEach((node, idx) => {
-        const nodeType = node.data?.nodeType;
-        const label = node.data?.label;
-        const config = node.data?.config || {};
-        
-        if (nodeType === "speak" || nodeType === "gather_speak") {
-          instructions += `${idx + 1}. ${label}: Say "${config.text || config.payload || ''}"\n`;
-        } else if (nodeType === "condition") {
-          instructions += `${idx + 1}. ${label}: Decision point\n`;
-        } else if (nodeType === "enqueue") {
-          instructions += `${idx + 1}. ${label}: Transfer to queue "${config.queue_name || 'agent'}"\n`;
+      stages.forEach((stage, stageIdx) => {
+        instructions += `### Stage ${stageIdx + 1}: ${stage.name}\n`;
+        if (stage.description) {
+          instructions += `${stage.description}\n`;
         }
+        instructions += "\n";
+        
+        if (stage.items && stage.items.length > 0) {
+          stage.items.forEach((item, itemIdx) => {
+            const itemType = item.item_type || item.type;
+            const label = item.label || item.name;
+            const description = item.description || "";
+            
+            if (itemType === "question") {
+              instructions += `- **Ask**: ${label}`;
+              if (description) instructions += ` (${description})`;
+              instructions += "\n";
+            } else if (itemType === "action") {
+              instructions += `- **Action**: ${label}`;
+              if (description) instructions += ` - ${description}`;
+              instructions += "\n";
+            } else if (itemType === "topic") {
+              instructions += `- **Cover topic**: ${label}`;
+              if (description) instructions += ` - ${description}`;
+              instructions += "\n";
+            } else if (itemType === "slot") {
+              instructions += `- **Collect**: ${label}`;
+              if (item.slot_type) instructions += ` (${item.slot_type})`;
+              if (description) instructions += ` - ${description}`;
+              instructions += "\n";
+            } else {
+              instructions += `- ${label}`;
+              if (description) instructions += `: ${description}`;
+              instructions += "\n";
+            }
+          });
+        }
+        instructions += "\n";
       });
     }
     
-    return instructions || "You are a helpful AI assistant. Help the caller with their request.";
+    instructions += "\n## Guidelines:\n";
+    instructions += "- Be professional and helpful\n";
+    instructions += "- Follow the conversation flow above\n";
+    instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
+    instructions += "- Confirm important information before proceeding\n";
+    
+    return instructions;
   };
 
   // Create the AI agent
