@@ -416,31 +416,32 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             AI
                                           </Badge>
                                         )}
-                                        {!isSkipped && (
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="h-5 w-5 text-muted-foreground hover:text-foreground"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleStartEdit(item, slotValue);
-                                            }}
-                                          >
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                        )}
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleStartEdit(item, slotValue);
+                                          }}
+                                        >
+                                          <Pencil className="h-3 w-3" />
+                                        </Button>
                                       </div>
-                                    ) : !isCompleted && !isSkipped ? (
+                                    ) : (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                                        onClick={() => handleStartEdit(item, "")}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartEdit(item, "");
+                                        }}
                                       >
                                         <Pencil className="h-3 w-3 mr-1" />
                                         Enter value
                                       </Button>
-                                    ) : null}
+                                    )}
                                   </div>
                                 )}
                                 
