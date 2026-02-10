@@ -64,13 +64,16 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
     skipItem,
   } = useWorkflowStore();
 
-  // Get transcriptions from active call store
+  // Get transcriptions and call state from active call store
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
+  const callState = useActiveCallStore((state) => state.call?.state);
+  const activeCall = useActiveCallStore((state) => state.call);
 
   // Track suggestions for saving to history (use refs directly for unmount access)
   const suggestionsRef = useRef([]);
   const transcriptionsRef = useRef([]);
   const sessionIdRef = useRef(null);
+  const hasSavedRef = useRef(false);
 
   // Keep refs updated synchronously
   transcriptionsRef.current = transcriptions;
@@ -78,57 +81,96 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
     sessionIdRef.current = session.id;
   }
 
-  // Save workflow history when component unmounts (call ends)
+  // Function to save workflow history
+  const saveWorkflowHistory = useCallback(() => {
+    const currentSessionId = sessionIdRef.current;
+    if (!currentSessionId) {
+      console.log("[AgentAssistWorkflow] Cannot save - no session ID");
+      return;
+    }
+    
+    if (hasSavedRef.current) {
+      console.log("[AgentAssistWorkflow] Already saved, skipping");
+      return;
+    }
+    
+    const currentTranscriptions = transcriptionsRef.current;
+    const currentSuggestions = suggestionsRef.current;
+    
+    console.log("[AgentAssistWorkflow] Saving history:", {
+      sessionId: currentSessionId,
+      transcriptionsCount: currentTranscriptions.length,
+      suggestionsCount: currentSuggestions.length,
+    });
+
+    if (currentTranscriptions.length === 0 && currentSuggestions.length === 0) {
+      console.log("[AgentAssistWorkflow] No data to save");
+      return;
+    }
+
+    hasSavedRef.current = true;
+
+    // Fire and forget - save history data
+    fetch("/api/agent-assist/workflow/save-history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: currentSessionId,
+        transcriptions: currentTranscriptions.filter(t => t.isFinal).map(t => ({
+          id: t.id,
+          transcript: t.transcript,
+          track: t.track,
+          timestamp: t.timestamp,
+          isFinal: t.isFinal,
+          sentiment: t.sentiment,
+          sentimentScore: t.sentimentScore,
+          intent: t.intent,
+          tags: t.tags,
+        })),
+        suggestions: currentSuggestions.map(s => ({
+          id: s.id,
+          text: s.text,
+          stageName: s.stageName,
+          itemId: s.itemId,
+          itemLabel: s.itemLabel,
+          itemType: s.itemType,
+          slotOptions: s.slotOptions,
+          timestamp: s.timestamp,
+        })),
+      }),
+    }).then(res => {
+      if (res.ok) {
+        console.log("[AgentAssistWorkflow] History saved successfully");
+      } else {
+        console.error("[AgentAssistWorkflow] Failed to save history:", res.status);
+        hasSavedRef.current = false; // Allow retry
+      }
+    }).catch(err => {
+      console.error("[AgentAssistWorkflow] Failed to save history:", err);
+      hasSavedRef.current = false; // Allow retry
+    });
+  }, []);
+
+  // Save when call ends (detected by call state change or call becoming null)
+  useEffect(() => {
+    // If call state changes to hangup/completed, or call becomes null
+    if (!activeCall || callState === "hangup" || callState === "completed") {
+      if (sessionIdRef.current && !hasSavedRef.current) {
+        console.log("[AgentAssistWorkflow] Call ended, saving history. callState:", callState);
+        saveWorkflowHistory();
+      }
+    }
+  }, [activeCall, callState, saveWorkflowHistory]);
+
+  // Also save on unmount as backup
   useEffect(() => {
     return () => {
-      // Only save if we have a session and some data
-      const currentSessionId = sessionIdRef.current;
-      if (!currentSessionId) return;
-      
-      const currentTranscriptions = transcriptionsRef.current;
-      const currentSuggestions = suggestionsRef.current;
-      
-      console.log("[AgentAssistWorkflow] Saving history on unmount:", {
-        sessionId: currentSessionId,
-        transcriptionsCount: currentTranscriptions.length,
-        suggestionsCount: currentSuggestions.length,
-      });
-
-      if (currentTranscriptions.length === 0 && currentSuggestions.length === 0) return;
-
-      // Fire and forget - save history data
-      fetch("/api/agent-assist/workflow/save-history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: currentSessionId,
-          transcriptions: currentTranscriptions.filter(t => t.isFinal).map(t => ({
-            id: t.id,
-            transcript: t.transcript,
-            track: t.track,
-            timestamp: t.timestamp,
-            isFinal: t.isFinal,
-            sentiment: t.sentiment,
-            sentimentScore: t.sentimentScore,
-            intent: t.intent,
-            tags: t.tags,
-          })),
-          suggestions: currentSuggestions.map(s => ({
-            id: s.id,
-            text: s.text,
-            stageName: s.stageName,
-            itemId: s.itemId,
-            itemLabel: s.itemLabel,
-            itemType: s.itemType,
-            slotOptions: s.slotOptions,
-            timestamp: s.timestamp,
-          })),
-        }),
-      }).catch(err => {
-        console.error("[AgentAssistWorkflow] Failed to save history:", err);
-      });
+      if (!hasSavedRef.current) {
+        console.log("[AgentAssistWorkflow] Unmounting, saving history");
+        saveWorkflowHistory();
+      }
     };
-  }, []);
+  }, [saveWorkflowHistory]);
 
   // Callback for when suggestions change - update ref directly for unmount access
   const handleSuggestionsChange = useCallback((suggestions) => {
