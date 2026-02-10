@@ -101,7 +101,6 @@ export default function WorkflowEditorPage() {
   
   // AI Agent
   const [showCreateAgentSheet, setShowCreateAgentSheet] = useState(false);
-  const [createdAgentId, setCreatedAgentId] = useState(null);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -633,6 +632,8 @@ export default function WorkflowEditorPage() {
             variant="outline"
             size="sm"
             onClick={() => setShowCreateAgentSheet(true)}
+            disabled={!!workflow?.ai_assistant_id}
+            title={workflow?.ai_assistant_id ? "AI Agent already created" : "Create AI Agent"}
           >
             <IconRobot className="size-4 mr-1" />
             Create AI Agent
@@ -641,8 +642,8 @@ export default function WorkflowEditorPage() {
             variant="outline"
             size="sm"
             onClick={() => router.push(`/admin/workflows/${workflowId}/test`)}
-            disabled={!createdAgentId}
-            title={!createdAgentId ? "Create an AI Agent first" : "Test AI Agent"}
+            disabled={!workflow?.ai_assistant_id}
+            title={!workflow?.ai_assistant_id ? "Create an AI Agent first" : "Test AI Agent"}
           >
             <IconTestPipe2 className="size-4 mr-1" />
             Test AI Agent
@@ -1036,7 +1037,8 @@ export default function WorkflowEditorPage() {
         workflow={workflow}
         stages={stages}
         onAgentCreated={(agentId) => {
-          setCreatedAgentId(agentId);
+          // Refresh workflow to get updated ai_assistant_id
+          setWorkflow(prev => prev ? { ...prev, ai_assistant_id: agentId } : prev);
           notify.success("AI Agent created successfully!");
         }}
       />

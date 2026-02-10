@@ -44,7 +44,7 @@ import { notify } from "@/components/ToastNotify";
  * @param {function} props.onOpenChange - Callback when sheet open state changes
  * @param {object} props.workflow - The workflow data
  * @param {array} props.stages - The workflow stages with items
- * @param {function} props.onAgentCreated - Callback when agent is created successfully
+ * @param {function} props.onAgentCreated - Callback when agent is created successfully (receives agentId)
  */
 export default function CreateAgentSheet({
   open,
@@ -53,6 +53,7 @@ export default function CreateAgentSheet({
   stages = [],
   onAgentCreated,
 }) {
+  const workflowId = workflow?.id;
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   
@@ -294,6 +295,20 @@ export default function CreateAgentSheet({
       }
 
       setCreatedAgent(data.assistant);
+      
+      // Save AI assistant ID to workflow
+      if (workflowId && data.assistant?.id) {
+        try {
+          await fetch(`/api/admin/workflows/${workflowId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ai_assistant_id: data.assistant.id }),
+          });
+        } catch (err) {
+          console.error("Failed to save assistant ID to workflow:", err);
+        }
+      }
+      
       notify({
         title: "AI Agent Created",
         description: `Agent "${agentName}" has been created successfully.`,
@@ -301,7 +316,7 @@ export default function CreateAgentSheet({
       });
       
       if (onAgentCreated) {
-        onAgentCreated(data.assistant);
+        onAgentCreated(data.assistant.id);
       }
     } catch (err) {
       notify({

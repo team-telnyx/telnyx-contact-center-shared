@@ -109,7 +109,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model } = body;
+    const { name, description, category, is_active, llm_model, ai_assistant_id } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -135,6 +135,10 @@ export async function PUT(request, { params }) {
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);
       values.push(llm_model);
+    }
+    if (ai_assistant_id !== undefined) {
+      updates.push(`ai_assistant_id = $${paramIndex++}`);
+      values.push(ai_assistant_id);
     }
 
     if (updates.length === 0) {
