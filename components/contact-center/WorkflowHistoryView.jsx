@@ -25,7 +25,6 @@ import {
   Meh,
   Frown,
   SkipForward,
-  Clock,
 } from "lucide-react";
 
 /**
@@ -40,25 +39,41 @@ export default function WorkflowHistoryView({ interactionId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch workflow session data
+  // Fetch workflow session data and interaction metadata
   useEffect(() => {
     if (!interactionId) return;
 
-    const fetchSession = async () => {
+    const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const url = new URL("/api/agent-assist/workflow/session", window.location.origin);
-        url.searchParams.set("interactionId", interactionId);
+        // Fetch workflow session
+        const sessionUrl = new URL("/api/agent-assist/workflow/session", window.location.origin);
+        sessionUrl.searchParams.set("interactionId", interactionId);
         
-        const response = await fetch(url.toString());
-        const data = await response.json();
+        const sessionResponse = await fetch(sessionUrl.toString());
+        const sessionData = await sessionResponse.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch workflow session");
+        if (!sessionResponse.ok) {
+          throw new Error(sessionData.error || "Failed to fetch workflow session");
         }
 
-        setSession(data.session || null);
+        // Fetch interaction metadata for transcriptions and suggestions
+        const interactionResponse = await fetch(
+          `/api/contact-center/interactions/${interactionId}`
+        );
+        const interactionData = await interactionResponse.json();
+
+        // Extract agent_assist data from interaction metadata
+        const agentAssist = interactionData?.interaction?.metadata?.agent_assist || {};
+        
+        // Merge session with transcriptions and suggestions from metadata
+        if (sessionData.session) {
+          sessionData.session.transcriptions = agentAssist.transcriptions || [];
+          sessionData.session.suggestions = agentAssist.suggestions || [];
+        }
+
+        setSession(sessionData.session || null);
       } catch (err) {
         console.error("[WorkflowHistoryView] Error:", err);
         setError(err.message);
@@ -67,7 +82,7 @@ export default function WorkflowHistoryView({ interactionId }) {
       }
     };
 
-    fetchSession();
+    fetchData();
   }, [interactionId]);
 
   // Extract data from session
@@ -88,8 +103,9 @@ export default function WorkflowHistoryView({ interactionId }) {
   const completedItems = session?.completedItems || 0;
   const completionPercentage = session?.completionPercentage || 0;
 
-  // Get transcriptions from session metadata if available
+  // Get transcriptions and suggestions from session/metadata
   const transcriptions = session?.transcriptions || [];
+  const suggestions = session?.suggestions || [];
 
   if (loading) {
     return (
@@ -138,12 +154,8 @@ export default function WorkflowHistoryView({ interactionId }) {
         {/* Center: Transcription History */}
         <TranscriptionCardReadOnly transcriptions={transcriptions} />
 
-        {/* Right: Collected Data Summary */}
-        <CollectedDataCard 
-          stages={stages} 
-          itemStatuses={itemStatuses}
-          slotsFilled={session.slots_filled || {}}
-        />
+        {/* Right: Suggested Responses History */}
+        <SuggestionsHistoryCard suggestions={suggestions} />
       </div>
 
       {/* Progress bar */}
@@ -412,81 +424,77 @@ function TranscriptionBubbleReadOnly({ transcription }) {
 }
 
 /**
- * Collected Data Summary Card
+ * Suggestions History Card
  */
-function CollectedDataCard({ stages, itemStatuses, slotsFilled }) {
-  // Extract all slots and their values
-  const collectedSlots = [];
-  stages.forEach((stage) => {
-    stage.items?.forEach((item) => {
-      if (item.type === "slot") {
-        const status = itemStatuses[item.id] || {};
-        const value = status.extracted_value || status.value || slotsFilled[item.slot_name];
-        collectedSlots.push({
-          label: item.label,
-          slotName: item.slot_name,
-          value: value || null,
-          isCompleted: status.status === "completed",
-          isAiFilled: status.auto_filled || status.confidence_score,
-        });
-      }
-    });
-  });
-
-  const filledCount = collectedSlots.filter(s => s.value).length;
-
+function SuggestionsHistoryCard({ suggestions }) {
   return (
     <Card className="flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />
-          Collected Data
-          <Badge variant="outline" className="ml-auto text-xs">
-            {filledCount}/{collectedSlots.length} slots
-          </Badge>
+          Suggested Responses
+          {suggestions.length > 0 && (
+            <Badge variant="outline" className="ml-auto text-xs">
+              {suggestions.length} suggestions
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-3">
-            {collectedSlots.length === 0 ? (
+            {suggestions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No data slots in workflow</p>
+                <p className="text-sm">No suggestions recorded</p>
+                <p className="text-xs mt-1">Suggestions will appear when workflow data is saved</p>
               </div>
             ) : (
-              collectedSlots.map((slot, idx) => (
+              suggestions.map((suggestion, idx) => (
                 <div
-                  key={slot.slotName || idx}
-                  className={`p-3 rounded-lg border ${
-                    slot.value
-                      ? "border-green-500/50 bg-green-500/5"
-                      : "border-border bg-muted/30"
-                  }`}
+                  key={suggestion.id || idx}
+                  className="p-3 rounded-lg border-2 border-border bg-muted/30"
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">{slot.label}</span>
-                    {slot.isAiFilled && slot.value && (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] px-1 py-0 bg-purple-500/10 text-purple-500 border-purple-500/50"
-                      >
-                        AI
-                      </Badge>
-                    )}
+                  {/* Context badge */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] bg-purple-500/10 text-purple-500 border-purple-500/50"
+                    >
+                      {suggestion.stageName}
+                    </Badge>
+                    <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    <Badge 
+                      variant="outline" 
+                      className="text-[10px] bg-amber-500/10 text-amber-500 border-amber-500/50"
+                    >
+                      {suggestion.itemLabel}
+                    </Badge>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {slot.value ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                        <span className="text-sm font-medium">{slot.value}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-muted-foreground italic">Not collected</span>
-                      </>
-                    )}
+
+                  {/* Suggestion text */}
+                  <div className="flex items-start gap-2">
+                    <Bot className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        "{suggestion.text}"
+                      </p>
+                      
+                      {/* Slot options badges */}
+                      {suggestion.slotOptions && suggestion.slotOptions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {suggestion.slotOptions.map((opt) => (
+                            <Badge 
+                              key={opt} 
+                              variant="outline" 
+                              className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50"
+                            >
+                              {opt}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))

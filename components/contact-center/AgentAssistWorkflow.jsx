@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,70 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
 
   // Get transcriptions from active call store
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
+
+  // Track suggestions for saving to history
+  const [allSuggestions, setAllSuggestions] = useState([]);
+  const suggestionsRef = useRef([]);
+  const transcriptionsRef = useRef([]);
+
+  // Keep refs updated for cleanup function
+  useEffect(() => {
+    suggestionsRef.current = allSuggestions;
+  }, [allSuggestions]);
+
+  useEffect(() => {
+    transcriptionsRef.current = transcriptions;
+  }, [transcriptions]);
+
+  // Save workflow history when component unmounts (call ends)
+  useEffect(() => {
+    return () => {
+      // Only save if we have a session and some data
+      if (!session?.id) return;
+      
+      const currentTranscriptions = transcriptionsRef.current;
+      const currentSuggestions = suggestionsRef.current;
+      
+      if (currentTranscriptions.length === 0 && currentSuggestions.length === 0) return;
+
+      // Fire and forget - save history data
+      fetch("/api/agent-assist/workflow/save-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.id,
+          transcriptions: currentTranscriptions.filter(t => t.isFinal).map(t => ({
+            id: t.id,
+            transcript: t.transcript,
+            track: t.track,
+            timestamp: t.timestamp,
+            isFinal: t.isFinal,
+            sentiment: t.sentiment,
+            sentimentScore: t.sentimentScore,
+            intent: t.intent,
+            tags: t.tags,
+          })),
+          suggestions: currentSuggestions.map(s => ({
+            id: s.id,
+            text: s.text,
+            stageName: s.stageName,
+            itemId: s.itemId,
+            itemLabel: s.itemLabel,
+            itemType: s.itemType,
+            slotOptions: s.slotOptions,
+            timestamp: s.timestamp,
+          })),
+        }),
+      }).catch(err => {
+        console.error("[AgentAssistWorkflow] Failed to save history:", err);
+      });
+    };
+  }, [session?.id]);
+
+  // Callback for when suggestions change
+  const handleSuggestionsChange = useCallback((suggestions) => {
+    setAllSuggestions(suggestions);
+  }, []);
 
   // Initialize workflow session
   useEffect(() => {
@@ -172,7 +236,10 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
         <LiveTranscriptionCard transcriptions={transcriptions} />
 
         {/* Right: Suggested Response (single) */}
-        <SuggestedResponseCard currentSlot={currentSlotNeedingFill} />
+        <SuggestedResponseCard 
+          currentSlot={currentSlotNeedingFill} 
+          onSuggestionsChange={handleSuggestionsChange}
+        />
       </div>
 
       {/* Progress bar - fixed na dole */}
@@ -673,7 +740,7 @@ function generateSuggestion(stage, item) {
 /**
  * Suggested Response Card - Accumulating list of suggestions
  */
-function SuggestedResponseCard({ currentSlot }) {
+function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
   const [suggestions, setSuggestions] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const scrollRef = useRef(null);
@@ -690,9 +757,16 @@ function SuggestedResponseCard({ currentSlot }) {
     if (lastItemIdRef.current !== item.id) {
       lastItemIdRef.current = item.id;
       const newSuggestion = generateSuggestion(stage, item);
-      setSuggestions((prev) => [...prev, newSuggestion]);
+      setSuggestions((prev) => {
+        const updated = [...prev, newSuggestion];
+        // Notify parent of suggestion change
+        if (onSuggestionsChange) {
+          onSuggestionsChange(updated);
+        }
+        return updated;
+      });
     }
-  }, [currentSlot]);
+  }, [currentSlot, onSuggestionsChange]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {

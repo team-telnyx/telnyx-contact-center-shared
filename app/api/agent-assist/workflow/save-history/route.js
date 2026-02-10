@@ -1,0 +1,113 @@
+/**
+ * Agent Assist Workflow - Save History API
+ * POST - Save transcriptions and suggestions to workflow session for history viewing
+ */
+
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+
+// POST /api/agent-assist/workflow/save-history - Save workflow history data
+export async function POST(request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const pool = getPostgresPool();
+    if (!pool) {
+      return NextResponse.json(
+        { error: "Database not configured" },
+        { status: 503 }
+      );
+    }
+
+    const body = await request.json();
+    const { sessionId, interactionId, transcriptions, suggestions } = body;
+
+    if (!sessionId && !interactionId) {
+      return NextResponse.json(
+        { error: "sessionId or interactionId is required" },
+        { status: 400 }
+      );
+    }
+
+    // Find workflow session
+    let workflowSession;
+    if (sessionId) {
+      const { rows: [s] } = await pool.query(
+        `SELECT * FROM aa_workflow_sessions WHERE id = $1`,
+        [sessionId]
+      );
+      workflowSession = s;
+    } else {
+      const { rows: [s] } = await pool.query(
+        `SELECT * FROM aa_workflow_sessions WHERE interaction_id = $1`,
+        [interactionId]
+      );
+      workflowSession = s;
+    }
+
+    if (!workflowSession) {
+      return NextResponse.json(
+        { error: "Workflow session not found" },
+        { status: 404 }
+      );
+    }
+
+    // Update interaction metadata with agent_assist data (transcriptions + suggestions)
+    const effectiveInteractionId = workflowSession.interaction_id;
+
+    // Get current metadata
+    const { rows: [interaction] } = await pool.query(
+      `SELECT metadata FROM cc_interactions WHERE id = $1`,
+      [effectiveInteractionId]
+    );
+
+    if (!interaction) {
+      return NextResponse.json(
+        { error: "Interaction not found" },
+        { status: 404 }
+      );
+    }
+
+    // Parse existing metadata
+    let metadata = interaction.metadata;
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = {};
+      }
+    }
+    if (!metadata || typeof metadata !== "object") metadata = {};
+
+    // Add/update agent_assist data for workflow mode
+    metadata.agent_assist = {
+      ...(metadata.agent_assist || {}),
+      transcriptions: transcriptions || [],
+      suggestions: suggestions || [],
+      workflow_session_id: workflowSession.id,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Save updated metadata
+    await pool.query(
+      `UPDATE cc_interactions SET metadata = $1, updated_at = NOW() WHERE id = $2`,
+      [JSON.stringify(metadata), effectiveInteractionId]
+    );
+
+    return NextResponse.json({
+      ok: true,
+      message: "Workflow history saved successfully",
+    });
+  } catch (error) {
+    console.error("[Agent Assist Workflow] Save history error:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to save workflow history" },
+      { status: 500 }
+    );
+  }
+}
