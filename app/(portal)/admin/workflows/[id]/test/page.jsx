@@ -201,7 +201,7 @@ export default function TestAgentPage() {
   useEffect(() => {
     async function loadWorkflow() {
       try {
-        const res = await fetch(`/api/voice/flows/${flowId}`);
+        const res = await fetch(`/api/admin/workflows/${flowId}`);
         const data = await res.json();
         if (!res.ok || !data.ok) {
           throw new Error(data.error || "Failed to load workflow");

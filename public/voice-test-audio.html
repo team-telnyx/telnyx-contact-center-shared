@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Test - Audio Injection</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #18181b;
+            color: #fafafa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { margin-bottom: 8px; }
+        .subtitle { color: #71717a; margin-bottom: 24px; }
+        .card {
+            background: #27272a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .card h2 { margin-top: 0; font-size: 18px; }
+        input, select, button {
+            font-size: 14px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: 1px solid #3f3f46;
+            background: #3f3f46;
+            color: #fafafa;
+        }
+        input:focus, select:focus { outline: 2px solid #22c55e; }
+        button { cursor: pointer; font-weight: 600; }
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #22c55e; border-color: #22c55e; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
+        .btn-blue { background: #3b82f6; border-color: #3b82f6; }
+        .btn-purple { background: #8b5cf6; border-color: #8b5cf6; }
+        .flex { display: flex; gap: 12px; align-items: center; }
+        .flex-1 { flex: 1; }
+        .mb-4 { margin-bottom: 16px; }
+        .text-sm { font-size: 14px; }
+        .text-xs { font-size: 12px; }
+        .text-muted { color: #a1a1aa; }
+        .text-green { color: #22c55e; }
+        .text-blue { color: #3b82f6; }
+        .text-yellow { color: #eab308; }
+        .text-red { color: #ef4444; }
+        .text-purple { color: #a855f7; }
+        .log-entry { padding: 4px 0; font-family: monospace; font-size: 12px; }
+        .scroll-box { max-height: 250px; overflow-y: auto; }
+        .status-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+        .audio-viz {
+            height: 60px;
+            background: #3f3f46;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .transcript-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 8px;
+            background: #3f3f46;
+            border-left: 4px solid;
+        }
+        .transcript-ai { border-color: #22c55e; }
+        .transcript-user { border-color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Test - Audio Injection (Phase 2)</h1>
+        <p class="subtitle">Real voice testing with TTS audio injection into WebRTC stream</p>
+
+        <!-- Config -->
+        <div class="card" id="config-section">
+            <h2>⚙️ Configuration</h2>
+            <div class="mb-4">
+                <label class="text-sm text-muted">Assistant ID</label>
+                <input type="text" id="assistant-id" 
+                    value="assistant-06fd0ed6-69fd-4235-986b-72e5ae1af71c"
+                    style="width: 100%; margin-top: 4px" />
+            </div>
+            <div class="mb-4">
+                <label class="text-sm text-muted">TTS Server URL (for generating audio)</label>
+                <input type="text" id="tts-server" 
+                    value="http://localhost:3000/api/tts"
+                    style="width: 100%; margin-top: 4px" />
+            </div>
+            <div class="mb-4">
+                <label class="text-sm text-muted">Test Scenario</label>
+                <select id="scenario" style="width: 100%; margin-top: 4px">
+                    <option value="full_workflow">Full Healthcare Intake Workflow</option>
+                    <option value="simple_test">Simple Test (3 exchanges)</option>
+                    <option value="manual">Manual Mode</option>
+                </select>
+            </div>
+            <button class="btn-primary" style="width: 100%" onclick="startTest()">
+                🚀 Start Voice Test with Audio Injection
+            </button>
+        </div>
+
+        <!-- Test Section -->
+        <div id="test-section" style="display: none;">
+            <!-- Status -->
+            <div class="card">
+                <div class="flex">
+                    <span class="status-indicator" id="status-badge" style="background: #3f3f46;">Idle</span>
+                    <div class="flex-1">
+                        <strong id="scenario-name">Test</strong>
+                        <div class="text-sm text-muted">
+                            Step: <span id="current-step">0</span>/<span id="total-steps">0</span> |
+                            Agent: <span id="agent-state">-</span>
+                        </div>
+                    </div>
+                    <button class="btn-purple" id="inject-btn" onclick="injectTestAudio()" disabled>
+                        🔊 Inject Audio
+                    </button>
+                    <button class="btn-blue" onclick="toggleLocalAudio()" id="local-audio-btn">🔊 Local Audio: ON</button>
+                    <button class="btn-danger" onclick="endTest()">End Test</button>
+                </div>
+            </div>
+
+            <!-- Audio Status -->
+            <div class="card">
+                <h2>🔊 Audio System</h2>
+                <div class="grid-2">
+                    <div>
+                        <div class="text-sm text-muted">Microphone Stream (Mock)</div>
+                        <div class="audio-viz" id="mic-viz">
+                            <span class="text-muted">Mock microphone ready</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-muted">AI Audio (Remote)</div>
+                        <div class="audio-viz" id="ai-viz">
+                            <span class="text-muted">Waiting for AI...</span>
+                        </div>
+                    </div>
+                </div>
+                <audio id="remote-audio" autoplay playsinline></audio>
+            </div>
+
+            <!-- Manual Audio Injection -->
+            <div class="card">
+                <h2>🎙️ Manual Audio Injection</h2>
+                <div class="flex">
+                    <input type="text" id="manual-text" placeholder="Text to speak..." style="flex: 1" />
+                    <button class="btn-blue" onclick="speakText()" id="speak-btn" disabled>
+                        Generate & Inject TTS
+                    </button>
+                </div>
+                <div class="text-xs text-muted" style="margin-top: 8px;">
+                    This will generate TTS audio and inject it into the call as if you're speaking
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <!-- Transcript -->
+                <div class="card">
+                    <h2>📝 Transcript</h2>
+                    <div class="scroll-box" id="transcript-box">
+                        <div class="text-muted" style="text-align: center; padding: 20px;">
+                            Waiting for conversation...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log -->
+                <div class="card">
+                    <h2>📋 Log</h2>
+                    <div class="scroll-box" id="log-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="card">
+            <h2>🔬 How Audio Injection Works</h2>
+            <ol class="text-sm text-muted" style="line-height: 1.8;">
+                <li><strong>Mock getUserMedia</strong> - We override the browser's microphone API to return our controlled stream</li>
+                <li><strong>AudioContext</strong> - Create an audio context with a MediaStreamDestination</li>
+                <li><strong>TTS Generation</strong> - When we need to "speak", we call Telnyx TTS API to generate audio</li>
+                <li><strong>Audio Injection</strong> - The TTS audio is decoded and played into our mock microphone stream</li>
+                <li><strong>WebRTC Sends</strong> - The Telnyx library sends our injected audio to the AI assistant</li>
+                <li><strong>AI Responds</strong> - AI hears real audio and responds with voice</li>
+            </ol>
+        </div>
+    </div>
+
+    <script type="module">
+        import { TelnyxAIAgent } from 'https://esm.sh/@telnyx/ai-agent-lib@0.1.9';
+        window.TelnyxAIAgent = TelnyxAIAgent;
+        window.libraryLoaded = true;
+        log('✅ Telnyx AI Agent library loaded', 'success');
+    </script>
+
+    <script>
+        // ============================================
+        // MOCK MICROPHONE SYSTEM
+        // ============================================
+        
+        class MockMicrophone {
+            constructor() {
+                this.audioContext = null;
+                this.destination = null;
+                this.stream = null;
+                this.isPlaying = false;
+            }
+            
+            async init() {
+                // Create audio context
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 48000
+                });
+                
+                // Create destination that outputs to a MediaStream
+                this.destination = this.audioContext.createMediaStreamDestination();
+                this.stream = this.destination.stream;
+                
+                // Create a silent oscillator to keep the stream active
+                const oscillator = this.audioContext.createOscillator();
+                const gain = this.audioContext.createGain();
+                gain.gain.value = 0; // Silent
+                oscillator.connect(gain);
+                gain.connect(this.destination);
+                oscillator.start();
+                
+                log('🎤 Mock microphone initialized (48kHz)', 'success');
+                return this.stream;
+            }
+            
+            async injectAudio(audioBuffer) {
+                if (!this.audioContext || !this.destination) {
+                    throw new Error('Mock microphone not initialized');
+                }
+                
+                this.isPlaying = true;
+                updateMicViz('🔊 Playing audio...');
+                
+                return new Promise((resolve, reject) => {
+                    try {
+                        const source = this.audioContext.createBufferSource();
+                        source.buffer = audioBuffer;
+                        source.connect(this.destination);
+                        
+                        source.onended = () => {
+                            this.isPlaying = false;
+                            updateMicViz('Mock microphone ready');
+                            resolve();
+                        };
+                        
+                        source.start();
+                        log(`🔊 Injecting ${audioBuffer.duration.toFixed(2)}s of audio`, 'info');
+                    } catch (err) {
+                        this.isPlaying = false;
+                        reject(err);
+                    }
+                });
+            }
+            
+            async injectAudioFromUrl(url) {
+                log(`📥 Loading audio from: ${url}`, 'info');
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                
+                return this.injectAudio(audioBuffer);
+            }
+            
+            async injectAudioFromBase64(base64Data, mimeType = 'audio/mp3') {
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                const audioBuffer = await this.audioContext.decodeAudioData(bytes.buffer);
+                return this.injectAudio(audioBuffer);
+            }
+            
+            getStream() {
+                return this.stream;
+            }
+        }
+        
+        // ============================================
+        // TTS SERVICE
+        // ============================================
+        
+        class TTSService {
+            constructor(serverUrl) {
+                this.serverUrl = serverUrl;
+            }
+            
+            async generateAudio(text) {
+                log(`🗣️ Generating TTS for: "${text.substring(0, 50)}..."`, 'info');
+                
+                try {
+                    const response = await fetch(this.serverUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            text,
+                            voice: 'Minimax.speech-2.8-turbo.English_magnetic_voiced_man' // English voice
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`TTS server error: ${response.status}`);
+                    }
+                    
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    log('✅ TTS audio generated', 'success');
+                    return audioUrl;
+                } catch (err) {
+                    log(`❌ TTS error: ${err.message}`, 'error');
+                    throw err;
+                }
+            }
+        }
+        
+        // ============================================
+        // TEST SCENARIOS
+        // ============================================
+        
+        const TEST_SCENARIOS = {
+            full_workflow: {
+                name: "Full Healthcare Intake",
+                responses: [
+                    { waitForGreeting: true, text: "Hello, I need to arrange a medical transport" },
+                    { keywords: ["name", "who"], text: "My name is John Smith" },
+                    { keywords: ["facility", "calling from"], text: "I'm calling from Memorial Hospital" },
+                    { keywords: ["callback", "number", "reach"], text: "You can reach me at 555-123-4567" },
+                    { keywords: ["correct", "confirm"], text: "Yes, that's correct" },
+                    { keywords: ["help", "assist"], text: "I need a new transport" },
+                    { keywords: ["patient", "name"], text: "The patient is Maria Garcia" },
+                    { keywords: ["birth", "dob"], text: "Date of birth is March 15, 1965" },
+                    { keywords: ["weight"], text: "She weighs about 140 pounds" },
+                    { keywords: ["gender"], text: "Female" },
+                    { keywords: ["pickup", "where"], text: "Memorial Hospital, Room 302 ICU" },
+                    { keywords: ["reason", "diagnosis"], text: "Cardiac surgery" },
+                    { keywords: ["iv", "drip"], text: "2 IV drips" },
+                    { keywords: ["equipment"], text: "Oxygen support" },
+                    { keywords: ["accompany"], text: "Yes, her husband" },
+                    { keywords: ["isolation", "precaution"], text: "No isolation needed" },
+                    { keywords: ["confirm", "correct"], text: "Yes, all correct" },
+                    { keywords: ["anything else", "help"], text: "No, thank you!" },
+                ]
+            },
+            simple_test: {
+                name: "Simple Test",
+                responses: [
+                    { waitForGreeting: true, text: "Hello, I need help" },
+                    { keywords: ["name", "who", "help"], text: "My name is Test User" },
+                    { keywords: ["facility", "calling", "assist"], text: "I'm from Test Hospital" },
+                ]
+            },
+            manual: {
+                name: "Manual Mode",
+                responses: []
+            }
+        };
+        
+        // ============================================
+        // STATE
+        // ============================================
+        
+        let mockMic = null;
+        let ttsService = null;
+        let client = null;
+        let transcript = [];
+        let currentStep = 0;
+        let currentScenario = null;
+        let agentState = 'idle';
+        let isCallActive = false;
+        let greetingReceived = false;
+        
+        // ============================================
+        // UI HELPERS
+        // ============================================
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: 'text-muted', success: 'text-green', error: 'text-red',
+                warning: 'text-yellow', user: 'text-blue', ai: 'text-green'
+            };
+            
+            const logBox = document.getElementById('log-box');
+            if (logBox) {
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${colors[type] || 'text-muted'}`;
+                entry.textContent = `[${timestamp}] ${message}`;
+                logBox.appendChild(entry);
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+            console.log(`[${timestamp}] [${type}] ${message}`);
+        }
+        
+        function updateStatus(status, color = '#3f3f46') {
+            const badge = document.getElementById('status-badge');
+            if (badge) {
+                badge.textContent = status;
+                badge.style.background = color;
+            }
+        }
+        
+        function updateMicViz(text) {
+            const viz = document.getElementById('mic-viz');
+            if (viz) viz.innerHTML = `<span class="text-muted">${text}</span>`;
+        }
+        
+        function updateAiViz(text) {
+            const viz = document.getElementById('ai-viz');
+            if (viz) viz.innerHTML = `<span class="text-muted">${text}</span>`;
+        }
+        
+        function updateTranscript() {
+            const box = document.getElementById('transcript-box');
+            if (!box) return;
+            
+            if (transcript.length === 0) {
+                box.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px">Waiting...</div>';
+                return;
+            }
+            
+            box.innerHTML = transcript.map(item => `
+                <div class="transcript-item transcript-${item.role === 'assistant' ? 'ai' : 'user'}">
+                    <div class="text-xs text-muted">${item.role === 'assistant' ? '🤖 AI' : '👤 You'}</div>
+                    <div>${item.content}</div>
+                </div>
+            `).join('');
+            box.scrollTop = box.scrollHeight;
+        }
+        
+        // ============================================
+        // MAIN FUNCTIONS
+        // ============================================
+        
+        async function startTest() {
+            if (!window.libraryLoaded) {
+                alert('Library not loaded yet, please wait...');
+                return;
+            }
+            
+            const assistantId = document.getElementById('assistant-id').value.trim();
+            const ttsServer = document.getElementById('tts-server').value.trim();
+            const scenarioKey = document.getElementById('scenario').value;
+            
+            currentScenario = TEST_SCENARIOS[scenarioKey];
+            currentStep = 0;
+            transcript = [];
+            greetingReceived = false;
+            
+            // Show test section
+            document.getElementById('config-section').style.display = 'none';
+            document.getElementById('test-section').style.display = 'block';
+            document.getElementById('scenario-name').textContent = currentScenario.name;
+            document.getElementById('total-steps').textContent = currentScenario.responses.length;
+            
+            updateStatus('Initializing...', '#eab308');
+            
+            try {
+                // Initialize mock microphone
+                log('Initializing mock microphone...');
+                mockMic = new MockMicrophone();
+                await mockMic.init();
+                
+                // Initialize TTS service
+                ttsService = new TTSService(ttsServer);
+                
+                // Override getUserMedia BEFORE creating client
+                const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                navigator.mediaDevices.getUserMedia = async (constraints) => {
+                    if (constraints.audio) {
+                        log('🎤 getUserMedia intercepted - returning mock stream', 'success');
+                        return mockMic.getStream();
+                    }
+                    return originalGetUserMedia(constraints);
+                };
+                
+                // Create Telnyx client
+                log('Creating Telnyx AI Agent client...');
+                client = new window.TelnyxAIAgent({
+                    agentId: assistantId,
+                    debug: true
+                });
+                
+                // Set up event handlers
+                setupEventHandlers();
+                
+                // Connect
+                log('Connecting to Telnyx...');
+                updateStatus('Connecting...', '#eab308');
+                await client.connect();
+                
+                // Wait a moment
+                await new Promise(r => setTimeout(r, 1000));
+                
+                // Start conversation
+                log('Starting conversation...');
+                await client.startConversation({
+                    callerName: 'Audio Test Harness',
+                    audio: true
+                });
+                
+                log('🎤 Conversation started!', 'success');
+                updateStatus('In Call', '#22c55e');
+                isCallActive = true;
+                
+                // Enable buttons
+                document.getElementById('inject-btn').disabled = false;
+                document.getElementById('speak-btn').disabled = false;
+                
+            } catch (err) {
+                log(`❌ Error: ${err.message}`, 'error');
+                updateStatus('Error', '#ef4444');
+            }
+        }
+        
+        function setupEventHandlers() {
+            // Debug: log ALL events from client
+            const originalEmit = client.emit?.bind(client);
+            if (originalEmit) {
+                client.emit = (event, ...args) => {
+                    if (!['agent.state'].includes(event)) { // Skip noisy events
+                        console.log(`[EVENT] ${event}`, args);
+                    }
+                    return originalEmit(event, ...args);
+                };
+            }
+            
+            // Also try alternative transcript events
+            client.on('transcript', (data) => {
+                log(`📝 transcript: ${JSON.stringify(data).substring(0, 100)}`, 'info');
+            });
+            
+            client.on('transcription', (data) => {
+                log(`📝 transcription: ${JSON.stringify(data).substring(0, 100)}`, 'info');
+            });
+            
+            client.on('message', (data) => {
+                log(`💬 message: ${JSON.stringify(data).substring(0, 100)}`, 'info');
+            });
+            
+            client.on('agent.connected', () => {
+                log('✅ Connected to platform', 'success');
+            });
+            
+            client.on('agent.disconnected', () => {
+                log('Disconnected', 'info');
+                isCallActive = false;
+                updateStatus('Disconnected', '#71717a');
+            });
+            
+            client.on('agent.error', (err) => {
+                log(`❌ Agent error: ${err}`, 'error');
+            });
+            
+            let lastConvState = null;
+            client.on('conversation.update', (conv) => {
+                const state = conv?.call?.state || 'unknown';
+                // Only log meaningful state changes
+                if (state === lastConvState) return;
+                if (['active', 'hangup', 'destroy'].includes(state)) {
+                    log(`Conversation: ${state}`, 'info');
+                }
+                lastConvState = state;
+                
+                if (conv?.call?.state === 'active') {
+                    isCallActive = true;
+                    updateStatus('Active', '#22c55e');
+                    
+                    // Connect remote audio
+                    if (conv.call.remoteStream) {
+                        const audio = document.getElementById('remote-audio');
+                        if (audio) {
+                            audio.srcObject = conv.call.remoteStream;
+                            log('🔊 Remote audio connected', 'success');
+                        }
+                    }
+                }
+            });
+            
+            let lastAgentState = null;
+            let respondingInProgress = false;
+            
+            client.on('conversation.agent.state', (state) => {
+                // Only log state changes
+                if (state === lastAgentState) return;
+                
+                const prevState = lastAgentState;
+                lastAgentState = state;
+                agentState = state;
+                document.getElementById('agent-state').textContent = state;
+                log(`Agent: ${prevState || 'init'} → ${state}`, 'info');
+                
+                if (state === 'speaking') {
+                    updateAiViz('🗣️ AI is speaking...');
+                    // Mark greeting received when AI starts speaking for the first time
+                    if (!greetingReceived) {
+                        greetingReceived = true;
+                        log('AI started speaking (greeting)', 'success');
+                    }
+                } else if (state === 'listening') {
+                    updateAiViz('👂 AI is listening...');
+                    
+                    // Auto-respond after AI finishes speaking (speaking → listening transition)
+                    if (prevState === 'speaking' && greetingReceived && !respondingInProgress) {
+                        if (currentScenario && currentStep < currentScenario.responses.length) {
+                            respondingInProgress = true;
+                            // Delay to ensure AI is ready to listen
+                            setTimeout(async () => {
+                                await handleAutoResponse();
+                                respondingInProgress = false;
+                            }, 1000);
+                        }
+                    }
+                } else if (state === 'thinking') {
+                    updateAiViz('🤔 AI is thinking...');
+                }
+            });
+            
+            // Listen for transcript items from the library
+            client.on('transcript.item', (item) => {
+                log(`📝 [${item.role}] ${item.content?.substring(0, 50)}...`, item.role === 'assistant' ? 'ai' : 'user');
+                
+                const existing = transcript.findIndex(t => t.id === item.id);
+                if (existing >= 0) {
+                    transcript[existing] = item;
+                } else {
+                    transcript.push(item);
+                }
+                updateTranscript();
+                
+                // Mark greeting received
+                if (item.role === 'assistant' && !greetingReceived) {
+                    greetingReceived = true;
+                    log('Greeting received from AI', 'success');
+                }
+            });
+            
+            // Also try to access transcript directly from client if available
+            setInterval(() => {
+                if (client.transcript && client.transcript.length > transcript.length) {
+                    const newItems = client.transcript.slice(transcript.length);
+                    newItems.forEach(item => {
+                        log(`📝 [polled] [${item.role}] ${item.content?.substring(0, 50)}...`, item.role === 'assistant' ? 'ai' : 'user');
+                        transcript.push(item);
+                    });
+                    updateTranscript();
+                }
+            }, 1000);
+        }
+        
+        // Generic confirmation responses (used when AI asks "Is that correct?" but no specific step matches)
+        const CONFIRMATION_KEYWORDS = ['correct', 'confirm', 'is that right', 'did i get that right'];
+        const CONFIRMATION_RESPONSE = "Yes, that's correct";
+        let lastConfirmationTime = 0;
+        
+        async function handleAutoResponse() {
+            if (!currentScenario || currentStep >= currentScenario.responses.length) {
+                log('✅ All steps completed!', 'success');
+                return;
+            }
+            
+            const step = currentScenario.responses[currentStep];
+            
+            // Simply respond with the next step
+            log(`Step ${currentStep + 1}/${currentScenario.responses.length}: "${step.text}"`, 'user');
+            currentStep++;
+            document.getElementById('current-step').textContent = currentStep;
+            await speakTextDirect(step.text);
+        }
+        
+        async function speakText() {
+            const text = document.getElementById('manual-text').value.trim();
+            if (!text) return;
+            
+            document.getElementById('manual-text').value = '';
+            await speakTextDirect(text);
+        }
+        
+        async function speakTextDirect(text) {
+            if (!mockMic || !ttsService) {
+                log('System not ready', 'error');
+                return;
+            }
+            
+            try {
+                // Add to transcript immediately
+                transcript.push({
+                    id: Date.now(),
+                    role: 'user',
+                    content: text,
+                    isFinal: true
+                });
+                updateTranscript();
+                
+                // Generate TTS
+                const audioUrl = await ttsService.generateAudio(text);
+                
+                // Inject into stream
+                await mockMic.injectAudioFromUrl(audioUrl);
+                
+                // Play locally so we can hear our side too
+                if (playLocalAudioEnabled) {
+                    const localAudio = new Audio(audioUrl);
+                    localAudio.volume = 0.7; // Slightly quieter than AI
+                    localAudio.play().catch(e => log(`Local playback error: ${e.message}`, 'warning'));
+                }
+                
+                // Clean up after a delay (give time for local playback)
+                setTimeout(() => URL.revokeObjectURL(audioUrl), 5000);
+                
+                log('✅ Audio injected successfully', 'success');
+            } catch (err) {
+                log(`❌ Failed to speak: ${err.message}`, 'error');
+            }
+        }
+        
+        // Toggle for local audio playback
+        let playLocalAudioEnabled = true;
+        
+        function toggleLocalAudio() {
+            playLocalAudioEnabled = !playLocalAudioEnabled;
+            const btn = document.getElementById('local-audio-btn');
+            btn.textContent = playLocalAudioEnabled ? '🔊 Local Audio: ON' : '🔇 Local Audio: OFF';
+            btn.className = playLocalAudioEnabled ? 'btn-blue' : 'btn-secondary';
+            log(`Local audio playback: ${playLocalAudioEnabled ? 'enabled' : 'disabled'}`, 'info');
+        }
+        
+        async function injectTestAudio() {
+            // Test with a simple beep or tone
+            if (!mockMic) return;
+            
+            log('Injecting test tone...', 'info');
+            
+            const ctx = mockMic.audioContext;
+            const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            
+            // Generate 440Hz tone
+            for (let i = 0; i < data.length; i++) {
+                data[i] = Math.sin(2 * Math.PI * 440 * i / ctx.sampleRate) * 0.3;
+            }
+            
+            await mockMic.injectAudio(buffer);
+            log('Test tone injected', 'success');
+        }
+        
+        function endTest() {
+            if (client) {
+                try {
+                    client.endConversation();
+                    client.disconnect();
+                } catch (e) {}
+                client = null;
+            }
+            
+            isCallActive = false;
+            document.getElementById('config-section').style.display = 'block';
+            document.getElementById('test-section').style.display = 'none';
+            updateStatus('Ended', '#71717a');
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Voice Test Audio Injection initialized', 'info');
+        });
+    </script>
+</body>
+</html>

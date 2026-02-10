@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Test Harness</title>
+    <script src="https://unpkg.com/react@19/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@19/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #18181b;
+            color: #fafafa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { margin-bottom: 8px; }
+        .subtitle { color: #71717a; margin-bottom: 24px; }
+        .card {
+            background: #27272a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .card h2 { margin-top: 0; font-size: 18px; }
+        input, select, button {
+            font-size: 14px;
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: 1px solid #3f3f46;
+            background: #3f3f46;
+            color: #fafafa;
+        }
+        input:focus, select:focus { outline: 2px solid #22c55e; }
+        button { cursor: pointer; font-weight: 600; }
+        button:hover { opacity: 0.9; }
+        .btn-primary { background: #22c55e; border-color: #22c55e; }
+        .btn-danger { background: #ef4444; border-color: #ef4444; }
+        .btn-secondary { background: #52525b; border-color: #52525b; }
+        .flex { display: flex; gap: 12px; align-items: center; }
+        .flex-1 { flex: 1; }
+        .mb-4 { margin-bottom: 16px; }
+        .text-sm { font-size: 14px; }
+        .text-xs { font-size: 12px; }
+        .text-muted { color: #a1a1aa; }
+        .text-green { color: #22c55e; }
+        .text-blue { color: #3b82f6; }
+        .text-yellow { color: #eab308; }
+        .text-red { color: #ef4444; }
+        .log-entry { padding: 4px 0; font-family: monospace; font-size: 12px; }
+        .transcript-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 8px;
+            background: #3f3f46;
+            border-left: 4px solid;
+        }
+        .transcript-ai { border-color: #22c55e; }
+        .transcript-user { border-color: #3b82f6; }
+        .step-item {
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .step-done { color: #22c55e; }
+        .step-current { color: #3b82f6; background: rgba(59,130,246,0.1); border-radius: 6px; }
+        .step-pending { color: #71717a; }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-connecting { background: #eab308; }
+        .status-connected { background: #22c55e; animation: pulse 2s infinite; }
+        .status-error { background: #ef4444; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .scroll-box { max-height: 200px; overflow-y: auto; }
+        .result-box {
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .result-pass { background: rgba(34,197,94,0.2); border: 2px solid #22c55e; }
+        .result-fail { background: rgba(239,68,68,0.2); border: 2px solid #ef4444; }
+        .result-stat { display: inline-block; margin: 0 20px; }
+        .result-stat-value { font-size: 32px; font-weight: bold; }
+        .result-stat-label { font-size: 12px; color: #a1a1aa; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Test scenarios
+        const TEST_SCENARIOS = {
+            full_workflow: {
+                name: "Full Healthcare Intake Workflow",
+                responses: [
+                    { trigger: "greeting", response: "Hello, I need to arrange a medical transport", waitForAI: true },
+                    { trigger: "name", response: "My name is John Smith", keywords: ["name", "who"] },
+                    { trigger: "facility", response: "I'm calling from Memorial Hospital", keywords: ["facility", "calling from", "hospital"] },
+                    { trigger: "callback", response: "You can reach me at 555-123-4567", keywords: ["callback", "number", "reach"] },
+                    { trigger: "confirm_callback", response: "Yes, that's correct", keywords: ["correct", "confirm", "555"] },
+                    { trigger: "intent", response: "I need a new transport", keywords: ["help", "assist", "how can"] },
+                    { trigger: "confirm_intent", response: "Yes, that's correct", keywords: ["transport", "correct", "arrange"] },
+                    { trigger: "patient_name", response: "The patient is Maria Garcia", keywords: ["patient", "name", "full name"] },
+                    { trigger: "patient_dob", response: "Date of birth is March 15, 1965", keywords: ["birth", "dob", "born"] },
+                    { trigger: "patient_weight", response: "She weighs about 140 pounds", keywords: ["weight", "weighs"] },
+                    { trigger: "patient_gender", response: "Female", keywords: ["gender"] },
+                    { trigger: "pickup_facility", response: "Pickup from Memorial Hospital", keywords: ["picking up", "pickup", "where"] },
+                    { trigger: "pickup_location", response: "Room 302 in the ICU", keywords: ["room", "location", "department", "floor"] },
+                    { trigger: "transport_reason", response: "Cardiac surgery", keywords: ["reason", "diagnosis", "transport"] },
+                    { trigger: "iv_count", response: "2 IV drips", keywords: ["iv", "drip", "infusion"] },
+                    { trigger: "special_equipment", response: "Oxygen support only", keywords: ["equipment", "ventilator", "oxygen"] },
+                    { trigger: "accompanying", response: "Yes, her husband will accompany", keywords: ["accompany", "family", "someone"] },
+                    { trigger: "isolation", response: "No isolation precautions needed", keywords: ["isolation", "precaution", "covid", "ppe"] },
+                    { trigger: "confirm_all", response: "Yes, all information is correct", keywords: ["correct", "confirm", "change"] },
+                    { trigger: "close", response: "No, that's all. Thank you!", keywords: ["anything else", "thank you", "goodbye"] },
+                ],
+            },
+            transfer_early: {
+                name: "Early Transfer to Human",
+                responses: [
+                    { trigger: "greeting", response: "Hello", waitForAI: true },
+                    { trigger: "name", response: "My name is Jane Doe from City Hospital", keywords: ["name"] },
+                    { trigger: "transfer", response: "I need to speak to a human agent please", keywords: ["callback", "help", "how can"] },
+                ],
+            },
+        };
+
+        // Simple TelnyxAIAgent class (mock for standalone use)
+        // In real implementation, this would use the actual @telnyx/ai-agent-lib
+        class MockTelnyxAIAgent {
+            constructor(agentId) {
+                this.agentId = agentId;
+                this.transcript = [];
+                this.listeners = {};
+                this.connected = false;
+            }
+
+            on(event, callback) {
+                if (!this.listeners[event]) this.listeners[event] = [];
+                this.listeners[event].push(callback);
+            }
+
+            emit(event, data) {
+                if (this.listeners[event]) {
+                    this.listeners[event].forEach(cb => cb(data));
+                }
+            }
+
+            async connect() {
+                this.emit('agent.connecting');
+                // Simulate connection delay
+                await new Promise(r => setTimeout(r, 1000));
+                this.connected = true;
+                this.emit('agent.connected');
+            }
+
+            async startConversation(options) {
+                // In real implementation, this would start WebRTC call
+                this.emit('conversation.started');
+                
+                // Simulate AI greeting after a short delay
+                setTimeout(() => {
+                    this.addTranscriptItem({
+                        role: 'assistant',
+                        content: 'Thank you for calling Global Medical Response. My name is your AI assistant. How may I assist you today?',
+                        isFinal: true
+                    });
+                    this.emit('conversation.agent.state', 'listening');
+                }, 1500);
+            }
+
+            sendConversationMessage(text) {
+                // Add user message to transcript
+                this.addTranscriptItem({
+                    role: 'user',
+                    content: text,
+                    isFinal: true
+                });
+
+                // Simulate AI processing and response
+                this.emit('conversation.agent.state', 'thinking');
+                
+                setTimeout(() => {
+                    this.emit('conversation.agent.state', 'speaking');
+                    
+                    // Generate contextual response based on user input
+                    const response = this.generateAIResponse(text);
+                    
+                    setTimeout(() => {
+                        this.addTranscriptItem({
+                            role: 'assistant',
+                            content: response,
+                            isFinal: true
+                        });
+                        this.emit('conversation.agent.state', 'listening');
+                    }, 500);
+                }, 800);
+            }
+
+            generateAIResponse(userInput) {
+                const input = userInput.toLowerCase();
+                
+                if (input.includes('name') && input.includes('smith')) {
+                    return 'Thank you, John. Which facility are you calling from?';
+                }
+                if (input.includes('hospital') || input.includes('facility')) {
+                    return 'Thank you. What is the best callback number to reach you?';
+                }
+                if (input.includes('555') || input.includes('number')) {
+                    return 'Let me confirm: 555-123-4567. Is that correct?';
+                }
+                if (input.includes('correct') && !input.includes('patient')) {
+                    return 'How can I help you today?';
+                }
+                if (input.includes('transport') || input.includes('arrange')) {
+                    return 'So you need to arrange a new medical transport. Is that correct?';
+                }
+                if (input.includes('patient') && input.includes('maria')) {
+                    return 'Thank you. What is the patient\'s date of birth?';
+                }
+                if (input.includes('march') || input.includes('birth') || input.includes('1965')) {
+                    return 'Thank you. What is the patient\'s weight?';
+                }
+                if (input.includes('pound') || input.includes('weight') || input.includes('140')) {
+                    return 'And the patient\'s gender?';
+                }
+                if (input.includes('female') || input.includes('gender')) {
+                    return 'Where will we be picking up the patient?';
+                }
+                if (input.includes('pickup') || input.includes('memorial')) {
+                    return 'What is the specific room or department?';
+                }
+                if (input.includes('room') || input.includes('icu') || input.includes('302')) {
+                    return 'What is the reason for transport?';
+                }
+                if (input.includes('cardiac') || input.includes('surgery') || input.includes('reason')) {
+                    return 'How many IV drips does the patient have?';
+                }
+                if (input.includes('iv') || input.includes('drip')) {
+                    return 'Does the patient require any special equipment?';
+                }
+                if (input.includes('oxygen') || input.includes('equipment')) {
+                    return 'Will anyone be accompanying the patient?';
+                }
+                if (input.includes('husband') || input.includes('accompany')) {
+                    return 'Are there any isolation precautions needed?';
+                }
+                if (input.includes('isolation') || input.includes('no ')) {
+                    return 'Let me confirm the details: Patient Maria Garcia, DOB March 15 1965, Female, 140 lbs. Pickup from Memorial Hospital Room 302 ICU. Reason: Cardiac surgery. 2 IVs, oxygen support. Husband accompanying. No isolation. Is this correct?';
+                }
+                if (input.includes('all') && input.includes('correct')) {
+                    return 'Your transport request has been submitted. Reference number: GMR-123456. Is there anything else I can help with?';
+                }
+                if (input.includes('thank') || input.includes('that\'s all')) {
+                    return 'Thank you for calling Global Medical Response. Have a great day!';
+                }
+                if (input.includes('human') || input.includes('agent') || input.includes('person')) {
+                    return 'I understand you\'d like to speak with a team member. Let me transfer you now. I\'ve collected: caller name and facility. Transferring...';
+                }
+                
+                return 'Could you please provide more details?';
+            }
+
+            addTranscriptItem(item) {
+                const fullItem = {
+                    ...item,
+                    id: Date.now(),
+                    timestamp: new Date()
+                };
+                this.transcript.push(fullItem);
+                this.emit('transcript.item', fullItem);
+            }
+
+            endConversation() {
+                this.emit('conversation.ended');
+            }
+
+            disconnect() {
+                this.connected = false;
+                this.emit('agent.disconnected');
+            }
+        }
+
+        function App() {
+            const [assistantId, setAssistantId] = useState('assistant-06fd0ed6-69fd-4235-986b-72e5ae1af71c');
+            const [scenario, setScenario] = useState('full_workflow');
+            const [isRunning, setIsRunning] = useState(false);
+            const [status, setStatus] = useState('idle');
+            const [transcript, setTranscript] = useState([]);
+            const [logs, setLogs] = useState([]);
+            const [currentStep, setCurrentStep] = useState(0);
+            const [testResult, setTestResult] = useState(null);
+            const [autoMode, setAutoMode] = useState(true);
+            const [manualInput, setManualInput] = useState('');
+            const [agentState, setAgentState] = useState('');
+            
+            const clientRef = useRef(null);
+            const lastProcessedRef = useRef(-1);
+            const startTimeRef = useRef(null);
+
+            const testScenario = TEST_SCENARIOS[scenario];
+
+            const log = useCallback((message, type = 'info') => {
+                const timestamp = new Date().toLocaleTimeString();
+                setLogs(prev => [...prev, { timestamp, message, type }]);
+            }, []);
+
+            const findMatchingResponse = useCallback((aiMessage) => {
+                const lowerMessage = aiMessage.toLowerCase();
+                const responses = testScenario.responses;
+                
+                for (let i = currentStep; i < responses.length; i++) {
+                    const step = responses[i];
+                    if (step.keywords) {
+                        const hasMatch = step.keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
+                        if (hasMatch) {
+                            return { step, index: i };
+                        }
+                    }
+                }
+                
+                if (currentStep === 0 && responses[0]?.waitForAI) {
+                    return { step: responses[0], index: 0 };
+                }
+                
+                return null;
+            }, [currentStep, testScenario]);
+
+            const sendResponse = useCallback((text) => {
+                if (!clientRef.current) return;
+                log(`📤 Sending: "${text}"`, 'user');
+                clientRef.current.sendConversationMessage(text);
+            }, [log]);
+
+            const startTest = useCallback(async () => {
+                setIsRunning(true);
+                setStatus('connecting');
+                setTranscript([]);
+                setLogs([]);
+                setCurrentStep(0);
+                setTestResult(null);
+                lastProcessedRef.current = -1;
+                startTimeRef.current = Date.now();
+
+                log('Creating AI Agent client...', 'info');
+                
+                const client = new MockTelnyxAIAgent(assistantId);
+                clientRef.current = client;
+
+                client.on('agent.connecting', () => {
+                    setStatus('connecting');
+                    log('Connecting to Telnyx platform...', 'info');
+                });
+
+                client.on('agent.connected', () => {
+                    setStatus('connected');
+                    log('Connected!', 'success');
+                });
+
+                client.on('conversation.started', () => {
+                    setStatus('in_call');
+                    log('Conversation started!', 'success');
+                });
+
+                client.on('conversation.agent.state', (state) => {
+                    setAgentState(state);
+                    log(`Agent state: ${state}`, 'state');
+                });
+
+                client.on('transcript.item', (item) => {
+                    setTranscript(prev => [...prev, item]);
+                });
+
+                client.on('conversation.ended', () => {
+                    setStatus('ended');
+                    log('Conversation ended', 'info');
+                });
+
+                try {
+                    await client.connect();
+                    await client.startConversation({
+                        callerName: 'Voice Test Harness',
+                        customHeaders: [
+                            { name: 'X-Test-Run', value: 'true' },
+                            { name: 'X-Scenario', value: scenario },
+                        ],
+                    });
+                } catch (error) {
+                    log(`Error: ${error.message}`, 'error');
+                    setStatus('error');
+                }
+            }, [assistantId, scenario, log]);
+
+            // Process transcript changes
+            useEffect(() => {
+                if (!autoMode || transcript.length === 0) return;
+                
+                const latestIndex = transcript.length - 1;
+                if (latestIndex <= lastProcessedRef.current) return;
+                
+                const latest = transcript[latestIndex];
+                if (latest.role !== 'assistant' || !latest.isFinal) return;
+                
+                lastProcessedRef.current = latestIndex;
+                log(`🤖 AI: "${latest.content}"`, 'assistant');
+
+                // Find and send matching response
+                setTimeout(() => {
+                    const match = findMatchingResponse(latest.content);
+                    
+                    if (match) {
+                        setCurrentStep(match.index + 1);
+                        sendResponse(match.step.response);
+                        
+                        // Check if done
+                        if (match.index >= testScenario.responses.length - 1) {
+                            setTimeout(() => {
+                                const duration = (Date.now() - startTimeRef.current) / 1000;
+                                setTestResult({
+                                    passed: true,
+                                    steps: match.index + 1,
+                                    duration,
+                                });
+                                setStatus('completed');
+                                log(`✅ Test completed in ${duration.toFixed(1)}s`, 'success');
+                            }, 2000);
+                        }
+                    } else {
+                        log(`⚠️ No matching response for step ${currentStep}`, 'warning');
+                    }
+                }, 500);
+            }, [transcript, autoMode, findMatchingResponse, sendResponse, currentStep, testScenario, log]);
+
+            const handleEndCall = () => {
+                if (clientRef.current) {
+                    clientRef.current.endConversation();
+                    clientRef.current.disconnect();
+                }
+                setIsRunning(false);
+                setStatus('idle');
+            };
+
+            const handleManualSend = () => {
+                if (manualInput.trim()) {
+                    sendResponse(manualInput.trim());
+                    setManualInput('');
+                }
+            };
+
+            if (!isRunning) {
+                return (
+                    <div className="container">
+                        <h1>🎤 Voice Test Harness</h1>
+                        <p className="subtitle">Test AI Assistant workflows using voice call + text injection</p>
+                        
+                        <div className="card">
+                            <h2>Configuration</h2>
+                            <div className="mb-4">
+                                <label className="text-sm text-muted">Assistant ID</label>
+                                <input
+                                    type="text"
+                                    value={assistantId}
+                                    onChange={(e) => setAssistantId(e.target.value)}
+                                    style={{ width: '100%', marginTop: 4 }}
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="text-sm text-muted">Test Scenario</label>
+                                <select
+                                    value={scenario}
+                                    onChange={(e) => setScenario(e.target.value)}
+                                    style={{ width: '100%', marginTop: 4 }}
+                                >
+                                    {Object.entries(TEST_SCENARIOS).map(([key, s]) => (
+                                        <option key={key} value={key}>{s.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <button className="btn-primary" style={{ width: '100%' }} onClick={startTest}>
+                                🚀 Start Voice Test
+                            </button>
+                        </div>
+
+                        <div className="card">
+                            <h2>ℹ️ About This Tool</h2>
+                            <p className="text-sm text-muted">
+                                This harness simulates voice conversations with your AI Assistant. 
+                                It uses text injection via <code>sendConversationMessage()</code> to 
+                                send responses during an active call, testing the full workflow without 
+                                requiring actual audio.
+                            </p>
+                            <p className="text-sm text-muted" style={{ marginTop: 12 }}>
+                                <strong>Note:</strong> This demo uses a mock client. 
+                                For real testing, integrate with @telnyx/ai-agent-lib in a proper React app.
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="container">
+                    <h1>🎤 Voice Test Harness</h1>
+                    
+                    {/* Status Bar */}
+                    <div className="card">
+                        <div className="flex">
+                            <span className={`status-dot ${
+                                status === 'in_call' ? 'status-connected' :
+                                status === 'error' ? 'status-error' : 'status-connecting'
+                            }`}></span>
+                            <div className="flex-1">
+                                <div><strong>{testScenario.name}</strong></div>
+                                <div className="text-sm text-muted">
+                                    Status: {status} | Step: {currentStep}/{testScenario.responses.length} | Agent: {agentState || 'N/A'}
+                                </div>
+                            </div>
+                            <button 
+                                className={autoMode ? 'btn-primary' : 'btn-secondary'} 
+                                onClick={() => setAutoMode(!autoMode)}
+                                style={{ marginRight: 8 }}
+                            >
+                                {autoMode ? 'Auto' : 'Manual'}
+                            </button>
+                            <button className="btn-danger" onClick={handleEndCall}>
+                                End Test
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Manual Input */}
+                    {!autoMode && (
+                        <div className="card">
+                            <div className="flex">
+                                <input
+                                    className="flex-1"
+                                    value={manualInput}
+                                    onChange={(e) => setManualInput(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handleManualSend()}
+                                    placeholder="Type message..."
+                                />
+                                <button className="btn-primary" onClick={handleManualSend}>Send</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Test Result */}
+                    {testResult && (
+                        <div className={`result-box ${testResult.passed ? 'result-pass' : 'result-fail'}`}>
+                            <h2>{testResult.passed ? '✅ Test Passed!' : '❌ Test Failed'}</h2>
+                            <div style={{ marginTop: 16 }}>
+                                <div className="result-stat">
+                                    <div className="result-stat-value">{testResult.steps}</div>
+                                    <div className="result-stat-label">Steps</div>
+                                </div>
+                                <div className="result-stat">
+                                    <div className="result-stat-value">{testResult.duration.toFixed(1)}s</div>
+                                    <div className="result-stat-label">Duration</div>
+                                </div>
+                                <div className="result-stat">
+                                    <div className="result-stat-value">{transcript.length}</div>
+                                    <div className="result-stat-label">Messages</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Transcript */}
+                    <div className="card">
+                        <h2>📝 Live Transcript</h2>
+                        <div className="scroll-box">
+                            {transcript.length === 0 ? (
+                                <div className="text-muted" style={{ textAlign: 'center', padding: 20 }}>
+                                    Waiting for conversation...
+                                </div>
+                            ) : (
+                                transcript.map((item, i) => (
+                                    <div key={i} className={`transcript-item ${item.role === 'assistant' ? 'transcript-ai' : 'transcript-user'}`}>
+                                        <div className="text-xs text-muted">
+                                            {item.role === 'assistant' ? '🤖 AI' : '👤 User'}
+                                        </div>
+                                        <div>{item.content}</div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Log */}
+                    <div className="card">
+                        <h2>📋 Test Log</h2>
+                        <div className="scroll-box">
+                            {logs.map((entry, i) => (
+                                <div key={i} className={`log-entry ${
+                                    entry.type === 'error' ? 'text-red' :
+                                    entry.type === 'success' ? 'text-green' :
+                                    entry.type === 'warning' ? 'text-yellow' :
+                                    entry.type === 'user' ? 'text-blue' :
+                                    'text-muted'
+                                }`}>
+                                    [{entry.timestamp}] {entry.message}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Steps */}
+                    <div className="card">
+                        <h2>📋 Expected Steps</h2>
+                        <div>
+                            {testScenario.responses.map((step, i) => (
+                                <div key={i} className={`step-item ${
+                                    i < currentStep ? 'step-done' :
+                                    i === currentStep ? 'step-current' : 'step-pending'
+                                }`}>
+                                    <span style={{ width: 24 }}>
+                                        {i < currentStep ? '✓' : i === currentStep ? '→' : '○'}
+                                    </span>
+                                    <span style={{ fontWeight: 500 }}>{step.trigger}:</span>
+                                    <span className="text-muted text-sm" style={{ 
+                                        overflow: 'hidden', 
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        flex: 1
+                                    }}>
+                                        {step.response}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
