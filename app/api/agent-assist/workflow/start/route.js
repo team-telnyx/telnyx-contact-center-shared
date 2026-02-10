@@ -156,16 +156,28 @@ export async function POST(request) {
  * Helper function to get complete workflow session state
  */
 async function getWorkflowSessionState(pool, sessionId) {
-  // Get session
+  // Get session with interaction and agent info
   const { rows: [session] } = await pool.query(
-    `SELECT s.*, w.name as workflow_name, w.category as workflow_category
+    `SELECT s.*, 
+            w.name as workflow_name, 
+            w.category as workflow_category,
+            i.agent_username,
+            u.first_name as agent_first_name,
+            u.last_name as agent_last_name
      FROM aa_workflow_sessions s
      JOIN aa_workflows w ON s.workflow_id = w.id
+     LEFT JOIN cc_interactions i ON s.interaction_id = i.id
+     LEFT JOIN users u ON i.agent_username = u.username
      WHERE s.id = $1`,
     [sessionId]
   );
 
   if (!session) return null;
+  
+  // Build agent_name from user record
+  const agentName = session.agent_first_name 
+    ? `${session.agent_first_name}${session.agent_last_name ? ' ' + session.agent_last_name : ''}`
+    : session.agent_username || null;
 
   // Get stages with items
   const { rows: stages } = await pool.query(
@@ -217,6 +229,7 @@ async function getWorkflowSessionState(pool, sessionId) {
 
   return {
     ...session,
+    agent_name: agentName,
     stages,
     currentStageIndex: currentStageIndex >= 0 ? currentStageIndex : 0,
   };

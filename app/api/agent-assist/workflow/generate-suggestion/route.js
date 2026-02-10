@@ -116,13 +116,19 @@ export async function POST(request) {
 
     // Clean up the suggestion - remove quotes, leading/trailing whitespace
     suggestion = suggestion.trim();
-    // Remove wrapping quotes (single or double, including fancy quotes)
-    suggestion = suggestion.replace(/^["'"'„"«»]+|["'"'"»«]+$/g, '');
+    // Remove wrapping quotes (single or double, including fancy quotes) - run multiple times for nested quotes
+    for (let i = 0; i < 3; i++) {
+      suggestion = suggestion.replace(/^["'"'„"«»]|["'"'"»«]$/g, '').trim();
+    }
     // Replace [Your Name] placeholders with actual agent name
-    if (agentName && agentName !== "the agent") {
-      suggestion = suggestion.replace(/\[Your Name\]/gi, agentName);
-      suggestion = suggestion.replace(/\[Agent Name\]/gi, agentName);
-      suggestion = suggestion.replace(/\[Name\]/gi, agentName);
+    const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
+    if (finalAgentName) {
+      suggestion = suggestion.replace(/\[Your Name\]/gi, finalAgentName);
+      suggestion = suggestion.replace(/\[Agent Name\]/gi, finalAgentName);
+      suggestion = suggestion.replace(/\[Agent's Name\]/gi, finalAgentName);
+      suggestion = suggestion.replace(/\[Name\]/gi, finalAgentName);
+      suggestion = suggestion.replace(/\{Your Name\}/gi, finalAgentName);
+      suggestion = suggestion.replace(/\{Agent Name\}/gi, finalAgentName);
     }
 
     return NextResponse.json({
