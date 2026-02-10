@@ -84,11 +84,14 @@ export async function POST(request) {
     }
     if (!metadata || typeof metadata !== "object") metadata = {};
 
-    // Add/update agent_assist data for workflow mode
+    // Merge with existing agent_assist data (don't overwrite if empty)
+    const existingAgentAssist = metadata.agent_assist || {};
     metadata.agent_assist = {
-      ...(metadata.agent_assist || {}),
-      transcriptions: transcriptions || [],
-      suggestions: suggestions || [],
+      ...existingAgentAssist,
+      // Only update transcriptions if provided and non-empty
+      ...(transcriptions && transcriptions.length > 0 ? { transcriptions } : {}),
+      // Only update suggestions if provided and non-empty
+      ...(suggestions && suggestions.length > 0 ? { suggestions } : {}),
       workflow_session_id: workflowSession.id,
       updated_at: new Date().toISOString(),
     };

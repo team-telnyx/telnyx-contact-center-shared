@@ -132,7 +132,10 @@ export async function POST(request, { params }) {
     }
     if (!metadata || typeof metadata !== "object") metadata = {};
 
+    // Merge with existing agent_assist data (preserve suggestions from workflow mode)
+    const existingAgentAssist = metadata.agent_assist || {};
     metadata.agent_assist = {
+      ...existingAgentAssist,
       transcriptions,
       summary,
       updated_at: new Date().toISOString(),
