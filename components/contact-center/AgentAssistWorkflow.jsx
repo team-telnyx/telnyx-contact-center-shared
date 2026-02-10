@@ -1031,6 +1031,7 @@ function WorkflowProgressBar({
           <Progress
             value={displayPercentage}
             className="h-2"
+            indicatorClassName="bg-green-500"
           />
         </div>
 
