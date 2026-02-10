@@ -24,6 +24,7 @@ import InteractionTimeline from "@/components/contact-center/InteractionTimeline
 import RoutingMetadataTimeline from "@/components/contact-center/RoutingMetadataTimeline";
 import RecordingPlayer from "@/components/contact-center/RecordingPlayer";
 import TranscriptionHistory from "@/components/contact-center/TranscriptionHistory";
+import WorkflowHistoryView from "@/components/contact-center/WorkflowHistoryView";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
 
 function formatDateTime(value) {
@@ -86,6 +87,10 @@ export default function SupervisorCallHistoryDetailPage() {
 
   const transcriptions =
     interaction?.metadata?.agent_assist?.transcriptions || [];
+
+  // Check if this interaction used workflow mode
+  const assistConfig = interaction?.metadata?.agent_assist_config;
+  const isWorkflowMode = assistConfig?.assist_type === "workflows" && assistConfig?.workflow_id;
 
   const startedAt =
     interaction?.answered_at ||
@@ -443,7 +448,9 @@ export default function SupervisorCallHistoryDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="transcript" className="mt-4 space-y-4">
-                  {Array.isArray(transcriptions) &&
+                  {isWorkflowMode ? (
+                    <WorkflowHistoryView interactionId={interaction.id} />
+                  ) : Array.isArray(transcriptions) &&
                   transcriptions.length > 0 ? (
                     <TranscriptionHistory transcriptions={transcriptions} />
                   ) : (
