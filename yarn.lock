@@ -2381,6 +2381,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@telnyx/webrtc@npm:^2.25.17":
+  version: 2.25.18
+  resolution: "@telnyx/webrtc@npm:2.25.18"
+  dependencies:
+    "@peermetrics/webrtc-stats": "npm:^5.7.1"
+    loglevel: "npm:^1.6.8"
+    uuid: "npm:^7.0.3"
+  checksum: 10c0/05174119579ec2d02bf7d7cf293df65a066b9b932eba44edf37b27aaa71c091df487f761567de1fedb3d5eb5efd2d8b793500a5d14f2ce0f6a753efc6bf4b25c
+  languageName: node
+  linkType: hard
+
 "@tybys/wasm-util@npm:^0.10.0, @tybys/wasm-util@npm:^0.10.1":
   version: 0.10.1
   resolution: "@tybys/wasm-util@npm:0.10.1"
@@ -8862,7 +8873,11 @@ __metadata:
 
 "typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
+<<<<<<< HEAD
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
+=======
+  resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=d69c25"
+>>>>>>> 6b18941 (chore: Add @telnyx/ai-agent-lib dependency to package.json and update yarn.lock)
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
