@@ -165,6 +165,118 @@ function Message({ message, isUser }) {
   );
 }
 
+// ============================================
+// MOCK MICROPHONE FOR VOICE TESTS
+// ============================================
+
+class MockMicrophone {
+  constructor() {
+    this.audioContext = null;
+    this.destination = null;
+    this.stream = null;
+    this.isPlaying = false;
+  }
+
+  async init() {
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 48000,
+    });
+
+    this.destination = this.audioContext.createMediaStreamDestination();
+    this.stream = this.destination.stream;
+
+    // Silent oscillator to keep stream active
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    gain.gain.value = 0;
+    oscillator.connect(gain);
+    gain.connect(this.destination);
+    oscillator.start();
+
+    console.log("[MockMic] Initialized (48kHz)");
+    return this.stream;
+  }
+
+  async injectAudio(audioBuffer) {
+    if (!this.audioContext || !this.destination) {
+      throw new Error("Mock microphone not initialized");
+    }
+
+    this.isPlaying = true;
+
+    return new Promise((resolve, reject) => {
+      try {
+        const source = this.audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(this.destination);
+
+        source.onended = () => {
+          this.isPlaying = false;
+          resolve();
+        };
+
+        source.start();
+        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio`);
+      } catch (err) {
+        this.isPlaying = false;
+        reject(err);
+      }
+    });
+  }
+
+  async injectAudioFromUrl(url) {
+    console.log(`[MockMic] Loading audio from: ${url}`);
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch audio: ${response.status}`);
+
+    const arrayBuffer = await response.arrayBuffer();
+    const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+    return this.injectAudio(audioBuffer);
+  }
+
+  getStream() {
+    return this.stream;
+  }
+
+  cleanup() {
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
+    }
+    this.destination = null;
+    this.stream = null;
+  }
+}
+
+// ============================================
+// TTS SERVICE FOR VOICE TESTS
+// ============================================
+
+async function generateTTS(text) {
+  console.log(`[TTS] Generating for: "${text.substring(0, 50)}..."`);
+
+  const response = await fetch("/api/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      voice: "Minimax.speech-2.8-turbo.English_magnetic_voiced_man",
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TTS server error: ${response.status}`);
+  }
+
+  const audioBlob = await response.blob();
+  const audioUrl = URL.createObjectURL(audioBlob);
+
+  console.log("[TTS] Audio generated");
+  return audioUrl;
+}
+
 export default function TestAgentPage() {
   const router = useRouter();
   const params = useParams();
@@ -202,13 +314,20 @@ export default function TestAgentPage() {
   const messagesEndRef = useRef(null);
   const voiceClientRef = useRef(null);
   const audioContextRef = useRef(null);
+  const mockMicRef = useRef(null); // Mock microphone for audio injection
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
   const welcomeMessageReceivedRef = useRef(false); // Track if welcome message was received
+  const currentStepRef = useRef(0); // Track current step in ref for voice callbacks
+  const respondingInProgressRef = useRef(false); // Prevent double responses
   
-  // Keep autoModeRef in sync
+  // Keep refs in sync with state
   useEffect(() => {
     autoModeRef.current = isAutoMode;
   }, [isAutoMode]);
+
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
   // Load workflow data
   useEffect(() => {
@@ -569,6 +688,13 @@ export default function TestAgentPage() {
       }
       voiceClientRef.current = null;
     }
+    
+    // Clean up mock microphone
+    if (mockMicRef.current) {
+      mockMicRef.current.cleanup();
+      mockMicRef.current = null;
+    }
+    
     setVoiceStatus("idle");
   }, []);
 
@@ -578,13 +704,88 @@ export default function TestAgentPage() {
     setIsPaused(false);
     setMessages([]);
     setCurrentStep(0);
+    currentStepRef.current = 0;
     setVoiceStatus("idle");
     setAgentState("idle");
     setHasReceivedWelcomeMessage(false);
     welcomeMessageReceivedRef.current = false;
+    respondingInProgressRef.current = false;
+    
+    // Clean up mock microphone
+    if (mockMicRef.current) {
+      mockMicRef.current.cleanup();
+      mockMicRef.current = null;
+    }
   }, []);
 
-  // Start voice test
+  // Speak text via TTS and inject into mock microphone
+  const speakTextViaAudio = useCallback(async (text) => {
+    if (!mockMicRef.current) {
+      console.error("[Voice] Mock mic not initialized");
+      return;
+    }
+
+    try {
+      // Add to messages immediately
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `user-${Date.now()}`,
+          role: "user",
+          content: text,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+
+      // Generate TTS audio
+      const audioUrl = await generateTTS(text);
+
+      // Inject into mock microphone stream
+      await mockMicRef.current.injectAudioFromUrl(audioUrl);
+
+      // Cleanup
+      setTimeout(() => URL.revokeObjectURL(audioUrl), 5000);
+
+      console.log("[Voice] Audio injected successfully");
+    } catch (err) {
+      console.error("[Voice] Failed to speak:", err);
+      notify({
+        title: "TTS Error",
+        description: err.message,
+        variant: "error",
+      });
+    }
+  }, []);
+
+  // Handle auto-response when AI finishes speaking
+  const handleVoiceAutoResponse = useCallback(async () => {
+    if (!autoModeRef.current || respondingInProgressRef.current) return;
+    if (currentStepRef.current >= currentScenario.responses.length) {
+      console.log("[Voice] All steps completed!");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: "system-complete",
+          role: "system",
+          content: "✅ Test scenario completed successfully!",
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      return;
+    }
+
+    respondingInProgressRef.current = true;
+
+    const step = currentScenario.responses[currentStepRef.current];
+    console.log(`[Voice] Step ${currentStepRef.current + 1}/${currentScenario.responses.length}: "${step.text}"`);
+
+    setCurrentStep((prev) => prev + 1);
+    await speakTextViaAudio(step.text);
+
+    respondingInProgressRef.current = false;
+  }, [currentScenario, speakTextViaAudio]);
+
+  // Start voice test with audio injection
   const startVoiceTest = useCallback(async () => {
     if (!agentId) {
       notify({
@@ -599,17 +800,35 @@ export default function TestAgentPage() {
     setVoiceStatus("connecting");
     setHasReceivedWelcomeMessage(false);
     welcomeMessageReceivedRef.current = false;
+    respondingInProgressRef.current = false;
     setCurrentStep(0);
+    currentStepRef.current = 0;
     setMessages([
       {
         id: "system-voice-start",
         role: "system",
-        content: `Starting voice test: ${currentScenario.name}`,
+        content: `Starting voice test with audio injection: ${currentScenario.name}`,
         timestamp: new Date().toISOString(),
       },
     ]);
 
     try {
+      // Initialize mock microphone
+      console.log("[Voice] Initializing mock microphone...");
+      const mockMic = new MockMicrophone();
+      await mockMic.init();
+      mockMicRef.current = mockMic;
+
+      // Override getUserMedia to return our mock stream
+      const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = async (constraints) => {
+        if (constraints.audio) {
+          console.log("[Voice] getUserMedia intercepted - returning mock stream");
+          return mockMic.getStream();
+        }
+        return originalGetUserMedia(constraints);
+      };
+
       // Dynamic import of TelnyxAIAgent
       const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
 
@@ -619,6 +838,7 @@ export default function TestAgentPage() {
       });
 
       voiceClientRef.current = client;
+      let lastAgentState = null;
 
       // Set up event handlers
       client.on("agent.connected", () => {
@@ -628,7 +848,7 @@ export default function TestAgentPage() {
           {
             id: "system-connected",
             role: "system",
-            content: "Connected to AI Agent",
+            content: "✅ Connected to AI Agent (audio injection mode)",
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -637,6 +857,11 @@ export default function TestAgentPage() {
       client.on("agent.disconnected", () => {
         setVoiceStatus("idle");
         setIsTestRunning(false);
+        // Cleanup mock mic
+        if (mockMicRef.current) {
+          mockMicRef.current.cleanup();
+          mockMicRef.current = null;
+        }
       });
 
       client.on("agent.error", (err) => {
@@ -653,7 +878,6 @@ export default function TestAgentPage() {
           } else if (err.error?.message) {
             errorMessage = err.error.message;
           } else if (typeof err === 'object') {
-            // Try to extract meaningful error info
             if (err.code && err.message) {
               errorMessage = `Error ${err.code}: ${err.message}`;
             } else {
@@ -672,13 +896,34 @@ export default function TestAgentPage() {
         console.error("[Voice Test] Agent error:", err);
       });
 
+      // Handle agent state changes for auto-response
       client.on("conversation.agent.state", (state) => {
+        const prevState = lastAgentState;
+        lastAgentState = state;
         setAgentState(state);
+
+        console.log(`[Voice] Agent: ${prevState || "init"} → ${state}`);
+
+        if (state === "speaking") {
+          // Mark greeting received when AI starts speaking for the first time
+          if (!welcomeMessageReceivedRef.current) {
+            welcomeMessageReceivedRef.current = true;
+            setHasReceivedWelcomeMessage(true);
+            console.log("[Voice] AI started speaking (greeting)");
+          }
+        } else if (state === "listening") {
+          // Auto-respond after AI finishes speaking (speaking → listening transition)
+          if (prevState === "speaking" && welcomeMessageReceivedRef.current) {
+            // Delay to ensure AI is ready to listen
+            setTimeout(() => {
+              handleVoiceAutoResponse();
+            }, 1000);
+          }
+        }
       });
 
       client.on("transcript.item", (item) => {
         const isAssistant = item.role === "assistant";
-        const isFinal = item.isFinal !== false; // Default to true if not specified
         
         setMessages((prev) => [
           ...prev,
@@ -689,48 +934,26 @@ export default function TestAgentPage() {
             timestamp: new Date().toISOString(),
           },
         ]);
-        
-        // Wait for assistant's welcome message before sending scenario responses
-        if (isAssistant && isFinal && !welcomeMessageReceivedRef.current) {
-          welcomeMessageReceivedRef.current = true;
-          setHasReceivedWelcomeMessage(true);
-          
-          // If auto mode is enabled and we have scenario responses, start sending after welcome
-          if (autoModeRef.current && currentScenario.responses.length > 0) {
-            const firstStep = currentScenario.responses[0];
-            if (firstStep.waitForGreeting) {
-              // Wait a bit after welcome message, then send first response
-              setTimeout(() => {
-                if (voiceClientRef.current) {
-                  voiceClientRef.current.sendConversationMessage(firstStep.text);
-                  setMessages((prev) => [
-                    ...prev,
-                    {
-                      id: `user-${Date.now()}`,
-                      role: "user",
-                      content: firstStep.text,
-                      timestamp: new Date().toISOString(),
-                    },
-                  ]);
-                  setCurrentStep(1);
-                }
-              }, 1500);
-            }
-          }
-        }
       });
 
       await client.connect();
+      await new Promise((r) => setTimeout(r, 1000));
+
       await client.startConversation({
-        callerName: "Test User",
+        callerName: "Voice Test Harness",
         audio: true,
       });
-      
-      // Note: We wait for the assistant's welcome message before sending any scenario responses
-      // This is handled in the transcript.item event handler
+
+      console.log("[Voice] Conversation started - waiting for AI greeting...");
     } catch (err) {
       setVoiceStatus("error");
       setIsTestRunning(false);
+      
+      // Cleanup mock mic on error
+      if (mockMicRef.current) {
+        mockMicRef.current.cleanup();
+        mockMicRef.current = null;
+      }
       
       let errorMessage = "An unknown error occurred";
       if (err) {
@@ -760,7 +983,7 @@ export default function TestAgentPage() {
       });
       console.error("[Voice Test] Failed to start:", err);
     }
-  }, [agentId, currentScenario]);
+  }, [agentId, currentScenario, handleVoiceAutoResponse]);
 
   if (loading) {
     return (
