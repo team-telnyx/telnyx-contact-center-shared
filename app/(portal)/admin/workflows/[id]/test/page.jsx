@@ -366,6 +366,33 @@ export default function TestAgentPage() {
     }
   }, [currentScenario, isPaused, sendChatMessage]);
 
+  // Create a new conversation via Telnyx API
+  const createConversation = useCallback(async () => {
+    try {
+      const res = await fetch("/api/ai/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Test: ${currentScenario.name}`,
+          metadata: {
+            test_scenario: selectedScenario,
+            assistant_id: agentId,
+          },
+        }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Failed to create conversation");
+      }
+      
+      return data.id;
+    } catch (err) {
+      console.error("Failed to create conversation:", err);
+      throw err;
+    }
+  }, [currentScenario, selectedScenario, agentId]);
+
   // Start chat test - uses REST API endpoint
   const startChatTest = useCallback(async () => {
     if (!agentId) {
@@ -377,9 +404,19 @@ export default function TestAgentPage() {
       return;
     }
 
-    // Generate new conversation ID
-    const newConversationId = crypto.randomUUID();
-    setConversationId(newConversationId);
+    // Create new conversation via API
+    let newConversationId;
+    try {
+      newConversationId = await createConversation();
+      setConversationId(newConversationId);
+    } catch (err) {
+      notify({
+        title: "Failed to create conversation",
+        description: err.message,
+        variant: "error",
+      });
+      return;
+    }
     
     setIsTestRunning(true);
     setMessages([]);
@@ -435,7 +472,7 @@ export default function TestAgentPage() {
         variant: "error",
       });
     }
-  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse]);
+  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse, createConversation]);
 
   // Send scenario message (manual mode) - uses REST API for chat, WebRTC for voice
   const sendScenarioMessage = useCallback(
