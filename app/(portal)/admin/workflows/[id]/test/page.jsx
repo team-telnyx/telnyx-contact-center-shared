@@ -189,6 +189,7 @@ export default function TestAgentPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [localAudioEnabled, setLocalAudioEnabled] = useState(true);
   const [agentState, setAgentState] = useState("idle");
+  const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
   
   // Agent state
   const [agentId, setAgentId] = useState(null);
@@ -202,6 +203,7 @@ export default function TestAgentPage() {
   const voiceClientRef = useRef(null);
   const audioContextRef = useRef(null);
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
+  const welcomeMessageReceivedRef = useRef(false); // Track if welcome message was received
   
   // Keep autoModeRef in sync
   useEffect(() => {
@@ -568,6 +570,8 @@ export default function TestAgentPage() {
     setCurrentStep(0);
     setVoiceStatus("idle");
     setAgentState("idle");
+    setHasReceivedWelcomeMessage(false);
+    welcomeMessageReceivedRef.current = false;
   }, []);
 
   // Start voice test
@@ -583,6 +587,9 @@ export default function TestAgentPage() {
 
     setIsTestRunning(true);
     setVoiceStatus("connecting");
+    setHasReceivedWelcomeMessage(false);
+    welcomeMessageReceivedRef.current = false;
+    setCurrentStep(0);
     setMessages([
       {
         id: "system-voice-start",
@@ -660,15 +667,47 @@ export default function TestAgentPage() {
       });
 
       client.on("transcript.item", (item) => {
+        const isAssistant = item.role === "assistant";
+        const isFinal = item.isFinal !== false; // Default to true if not specified
+        
         setMessages((prev) => [
           ...prev,
           {
             id: item.id || `transcript-${Date.now()}`,
-            role: item.role === "assistant" ? "assistant" : "user",
+            role: isAssistant ? "assistant" : "user",
             content: item.content,
             timestamp: new Date().toISOString(),
           },
         ]);
+        
+        // Wait for assistant's welcome message before sending scenario responses
+        if (isAssistant && isFinal && !welcomeMessageReceivedRef.current) {
+          welcomeMessageReceivedRef.current = true;
+          setHasReceivedWelcomeMessage(true);
+          
+          // If auto mode is enabled and we have scenario responses, start sending after welcome
+          if (autoModeRef.current && currentScenario.responses.length > 0) {
+            const firstStep = currentScenario.responses[0];
+            if (firstStep.waitForGreeting) {
+              // Wait a bit after welcome message, then send first response
+              setTimeout(() => {
+                if (voiceClientRef.current) {
+                  voiceClientRef.current.sendConversationMessage(firstStep.text);
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: `user-${Date.now()}`,
+                      role: "user",
+                      content: firstStep.text,
+                      timestamp: new Date().toISOString(),
+                    },
+                  ]);
+                  setCurrentStep(1);
+                }
+              }, 1500);
+            }
+          }
+        }
       });
 
       await client.connect();
@@ -676,6 +715,9 @@ export default function TestAgentPage() {
         callerName: "Test User",
         audio: true,
       });
+      
+      // Note: We wait for the assistant's welcome message before sending any scenario responses
+      // This is handled in the transcript.item event handler
     } catch (err) {
       setVoiceStatus("error");
       setIsTestRunning(false);
@@ -829,20 +871,18 @@ export default function TestAgentPage() {
                   </Tabs>
                 </div>
 
-                {/* Auto Mode Toggle (Chat only) */}
-                {channel === "chat" && (
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">
-                      Auto Mode
-                    </Label>
-                    <Switch
-                      id="auto-mode"
-                      checked={isAutoMode}
-                      onCheckedChange={setIsAutoMode}
-                      disabled={isTestRunning}
-                    />
-                  </div>
-                )}
+                {/* Auto Mode Toggle */}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">
+                    Auto Mode
+                  </Label>
+                  <Switch
+                    id="auto-mode"
+                    checked={isAutoMode}
+                    onCheckedChange={setIsAutoMode}
+                    disabled={isTestRunning}
+                  />
+                </div>
               </CardContent>
             </Card>
 
