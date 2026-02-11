@@ -793,7 +793,13 @@ export default function TestAgentPage() {
     console.log(`[Voice] Step ${currentStepRef.current + 1}/${currentScenario.responses.length}: "${step.text}"`);
 
     setCurrentStep((prev) => prev + 1);
+    
+    // Speak the response (this waits for audio injection to complete)
     await speakTextViaAudio(step.text);
+    
+    // Wait additional time for the audio to be processed by AI
+    // This prevents overlapping with the next AI response
+    await new Promise((r) => setTimeout(r, 2000));
 
     respondingInProgressRef.current = false;
   }, [currentScenario, speakTextViaAudio]);
@@ -927,10 +933,11 @@ export default function TestAgentPage() {
         } else if (state === "listening") {
           // Auto-respond after AI finishes speaking (speaking → listening transition)
           if (prevState === "speaking" && welcomeMessageReceivedRef.current) {
-            // Delay to ensure AI is ready to listen
+            // Wait for AI to be ready to listen before responding
+            // Longer delay prevents message overlap
             setTimeout(() => {
               handleVoiceAutoResponse();
-            }, 1000);
+            }, 1500);
           }
         }
       });
