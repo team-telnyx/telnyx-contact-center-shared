@@ -842,10 +842,8 @@ export default function TestAgentPage() {
         return originalGetUserMedia(constraints);
       };
 
-      // Dynamic import of TelnyxAIAgent from ESM CDN (same version as voice-test-audio.html)
-      // Using 0.1.9 which works with unauthenticated calls
-      const module = await import("https://esm.sh/@telnyx/ai-agent-lib@0.1.9");
-      const TelnyxAIAgent = module.TelnyxAIAgent;
+      // Dynamic import of TelnyxAIAgent (using v0.1.9 for unauthenticated calls)
+      const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
 
       const client = new TelnyxAIAgent({
         agentId: agentId,
