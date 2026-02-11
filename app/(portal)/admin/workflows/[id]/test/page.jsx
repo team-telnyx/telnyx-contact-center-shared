@@ -518,9 +518,9 @@ class MockMicrophone {
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
         
-        // Add gain node for potential amplification
+        // Add gain node for amplification (TTS audio is quieter than AI response)
         const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 1.0; // Can increase if needed
+        gainNode.gain.value = 3.0; // Boost TTS volume to match AI assistant level
         
         source.connect(gainNode);
         gainNode.connect(this.destination);
