@@ -680,7 +680,8 @@ export default function TestAgentPage() {
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
-  const [isRecording, setIsRecording] = useState(false); // Manual voice recording state
+  const [isRecording, setIsRecording] = useState(false); // Manual voice recording state (AUTO mode only)
+  const [isMuted, setIsMuted] = useState(false); // Microphone mute state (MANUAL mode)
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
@@ -721,6 +722,7 @@ export default function TestAgentPage() {
   // Refs
   const messagesEndRef = useRef(null);
   const voiceClientRef = useRef(null);
+  const activeCallRef = useRef(null); // Store active call for mute/unmute
   const audioContextRef = useRef(null);
   const mockMicRef = useRef(null); // Mock microphone for audio injection
   const remoteAudioRef = useRef(null); // Remote audio element for AI voice
@@ -1446,7 +1448,7 @@ export default function TestAgentPage() {
     }
   }, []);
 
-  // Toggle recording
+  // Toggle recording (AUTO mode only)
   const toggleRecording = useCallback(() => {
     if (isRecording) {
       stopRecording();
@@ -1454,6 +1456,33 @@ export default function TestAgentPage() {
       startRecording();
     }
   }, [isRecording, startRecording, stopRecording]);
+
+  // Toggle mute (MANUAL mode) - mute/unmute real microphone
+  const toggleMute = useCallback(() => {
+    const call = activeCallRef.current;
+    if (!call) {
+      console.warn("[Voice] No active call for mute toggle");
+      return;
+    }
+    
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
+    
+    // Get the active call's local stream and toggle audio tracks
+    try {
+      if (call.localStream) {
+        const audioTracks = call.localStream.getAudioTracks();
+        audioTracks.forEach((track) => {
+          track.enabled = !newMutedState;
+        });
+        console.log(`[Voice] Microphone ${newMutedState ? 'muted' : 'unmuted'} (${audioTracks.length} tracks)`);
+      } else {
+        console.warn("[Voice] No local stream available for mute toggle");
+      }
+    } catch (err) {
+      console.error("[Voice] Failed to toggle mute:", err);
+    }
+  }, [isMuted]);
 
   // Send manual message - uses REST API for chat, TTS+inject for voice
   const sendMessage = useCallback(async () => {
@@ -1664,6 +1693,7 @@ export default function TestAgentPage() {
     setWorkflowSlotsFilled({});
     setCustomerData(null); // Reset customer data for new voice test session
     setIsGeneratingResponse(false);
+    setIsMuted(false); // Reset mute state
     
     setMessages([
       {
@@ -1729,6 +1759,8 @@ export default function TestAgentPage() {
       client.on("agent.disconnected", () => {
         setVoiceStatus("idle");
         setIsTestRunning(false);
+        setIsMuted(false);
+        activeCallRef.current = null;
         // Cleanup mock mic
         if (mockMicRef.current) {
           mockMicRef.current.cleanup();
@@ -1814,11 +1846,22 @@ export default function TestAgentPage() {
         if (conv?.call?.state === "active") {
           console.log("[Voice] Call is active");
           
+          // Store call reference for mute/unmute
+          activeCallRef.current = conv.call;
+          
           // Connect remote audio stream so we can hear AI
           if (conv.call.remoteStream && remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = conv.call.remoteStream;
             console.log("[Voice] Remote audio stream connected");
           }
+          
+          // Log local stream info for debugging
+          if (conv.call.localStream) {
+            const tracks = conv.call.localStream.getAudioTracks();
+            console.log(`[Voice] Local stream has ${tracks.length} audio tracks`);
+          }
+        } else {
+          activeCallRef.current = null;
         }
       });
 
@@ -2346,20 +2389,37 @@ export default function TestAgentPage() {
                         }}
                         disabled={sendingMessage || isRecording}
                       />
-                      {/* REC button for voice mode - record from microphone */}
+                      {/* Voice mode button - REC (AUTO) or Mute (MANUAL) */}
                       {channel === "voice" && (
-                        <Button
-                          variant={isRecording ? "destructive" : "outline"}
-                          onClick={toggleRecording}
-                          disabled={sendingMessage}
-                          className={cn(isRecording && "animate-pulse")}
-                        >
-                          {isRecording ? (
-                            <IconMicrophoneOff className="size-4" />
-                          ) : (
-                            <IconMicrophone className="size-4" />
-                          )}
-                        </Button>
+                        isAutoMode ? (
+                          // AUTO mode: REC button to record and inject audio
+                          <Button
+                            variant={isRecording ? "destructive" : "outline"}
+                            onClick={toggleRecording}
+                            disabled={sendingMessage}
+                            className={cn(isRecording && "animate-pulse")}
+                          >
+                            {isRecording ? (
+                              <IconMicrophoneOff className="size-4" />
+                            ) : (
+                              <IconMicrophone className="size-4" />
+                            )}
+                          </Button>
+                        ) : (
+                          // MANUAL mode: Mute/Unmute button for real microphone
+                          <Button
+                            variant={isMuted ? "destructive" : "outline"}
+                            onClick={toggleMute}
+                            disabled={!isTestRunning}
+                            title={isMuted ? "Unmute microphone" : "Mute microphone"}
+                          >
+                            {isMuted ? (
+                              <IconMicrophoneOff className="size-4" />
+                            ) : (
+                              <IconMicrophone className="size-4" />
+                            )}
+                          </Button>
+                        )
                       )}
                       {/* Send button */}
                       <Button
@@ -2371,9 +2431,14 @@ export default function TestAgentPage() {
                     </div>
                     {channel === "voice" && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {isRecording 
-                          ? "🔴 Recording... Click microphone to stop and send"
-                          : "Type text for TTS or click 🎤 to record your voice"}
+                        {isAutoMode 
+                          ? (isRecording 
+                              ? "🔴 Recording... Click microphone to stop and send"
+                              : "Type text for TTS or click 🎤 to record your voice")
+                          : (isMuted 
+                              ? "🔇 Microphone muted - click to unmute"
+                              : "🎤 Microphone active - speak naturally or click to mute")
+                        }
                       </p>
                     )}
                   </div>
