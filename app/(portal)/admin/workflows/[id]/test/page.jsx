@@ -560,6 +560,7 @@ export default function TestAgentPage() {
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
+  const [isRecording, setIsRecording] = useState(false); // Manual voice recording state
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
@@ -613,6 +614,8 @@ export default function TestAgentPage() {
   const lastAnalyzedMessageIndexRef = useRef(-1);
   const workflowAnalysisInProgressRef = useRef(false);
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
+  const mediaRecorderRef = useRef(null); // MediaRecorder for manual voice recording
+  const recordedChunksRef = useRef([]); // Recorded audio chunks
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
@@ -1235,6 +1238,99 @@ export default function TestAgentPage() {
     }
   }, []);
 
+  // Start recording from user's microphone
+  const startRecording = useCallback(async () => {
+    if (!mockMicRef.current) {
+      notify({
+        title: "Recording Error",
+        description: "Voice test not active",
+        variant: "error",
+      });
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+      recordedChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (recordedChunksRef.current.length === 0) {
+          console.log("[Recording] No audio data recorded");
+          return;
+        }
+
+        // Create blob from recorded chunks
+        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(blob);
+
+        console.log("[Recording] Injecting recorded audio...");
+        
+        // Play locally so user can hear what they recorded
+        if (localAudioEnabledRef.current) {
+          const localAudio = new Audio(audioUrl);
+          localAudio.volume = 0.7;
+          localAudio.play().catch((e) => console.warn("[Recording] Local playback error:", e));
+        }
+
+        // Inject into mock microphone
+        try {
+          await mockMicRef.current.injectAudioFromUrl(audioUrl);
+          console.log("[Recording] Audio injected successfully");
+        } catch (err) {
+          console.error("[Recording] Failed to inject audio:", err);
+          notify({
+            title: "Recording Error",
+            description: "Failed to inject recorded audio",
+            variant: "error",
+          });
+        }
+
+        // Cleanup
+        setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      console.log("[Recording] Started recording");
+    } catch (err) {
+      console.error("[Recording] Failed to start:", err);
+      notify({
+        title: "Recording Error",
+        description: err.message || "Failed to access microphone",
+        variant: "error",
+      });
+    }
+  }, []);
+
+  // Stop recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      console.log("[Recording] Stopped recording");
+    }
+  }, []);
+
+  // Toggle recording
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [isRecording, startRecording, stopRecording]);
+
   // Send manual message - uses REST API for chat, TTS+inject for voice
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || sendingMessage) return;
@@ -1268,6 +1364,10 @@ export default function TestAgentPage() {
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
+    setIsRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
     setConversationId(null);
     setMessages((prev) => [
       ...prev,
@@ -1306,6 +1406,10 @@ export default function TestAgentPage() {
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
+    setIsRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
     setConversationId(null);
     setMessages([]);
     setMessageAnalysis({});
@@ -2095,22 +2199,36 @@ export default function TestAgentPage() {
                             sendMessage();
                           }
                         }}
-                        disabled={sendingMessage}
+                        disabled={sendingMessage || isRecording}
                       />
+                      {/* REC button for voice mode - record from microphone */}
+                      {channel === "voice" && (
+                        <Button
+                          variant={isRecording ? "destructive" : "outline"}
+                          onClick={toggleRecording}
+                          disabled={sendingMessage}
+                          className={cn(isRecording && "animate-pulse")}
+                        >
+                          {isRecording ? (
+                            <IconMicrophoneOff className="size-4" />
+                          ) : (
+                            <IconMicrophone className="size-4" />
+                          )}
+                        </Button>
+                      )}
+                      {/* Send button */}
                       <Button
                         onClick={sendMessage}
-                        disabled={sendingMessage || !inputMessage.trim()}
+                        disabled={sendingMessage || !inputMessage.trim() || isRecording}
                       >
-                        {channel === "voice" ? (
-                          <IconMicrophone className="size-4" />
-                        ) : (
-                          <IconSend className="size-4" />
-                        )}
+                        <IconSend className="size-4" />
                       </Button>
                     </div>
                     {channel === "voice" && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Text will be converted to speech and sent via TTS
+                        {isRecording 
+                          ? "🔴 Recording... Click microphone to stop and send"
+                          : "Type text for TTS or click 🎤 to record your voice"}
                       </p>
                     )}
                   </div>
