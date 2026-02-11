@@ -551,7 +551,9 @@ class MockMicrophone {
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
-    return this.injectAudio(audioBuffer, this.gain || 3.0);
+    const gainValue = this.gain || 3.0;
+    console.log(`[MockMic] Using gain: ${gainValue}x (this.gain=${this.gain})`);
+    return this.injectAudio(audioBuffer, gainValue);
   }
   
   setGain(value) {
@@ -808,6 +810,7 @@ export default function TestAgentPage() {
 
   // Keep ttsGainRef in sync with gain slider and update MockMic
   useEffect(() => {
+    console.log(`[Voice] ttsGain changed to ${ttsGain}, mockMicRef.current exists: ${!!mockMicRef.current}`);
     ttsGainRef.current = ttsGain;
     if (mockMicRef.current) {
       mockMicRef.current.setGain(ttsGain);
