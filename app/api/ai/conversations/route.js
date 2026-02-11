@@ -56,14 +56,17 @@ export async function POST(request) {
     }
 
     const data = await res.json();
+    
+    // Telnyx returns { data: { id, ... } }
+    const conversation = data.data || data;
 
     return NextResponse.json(
       {
         ok: true,
-        id: data.id,
-        name: data.name,
-        created_at: data.created_at,
-        metadata: data.metadata,
+        id: conversation.id,
+        name: conversation.name,
+        created_at: conversation.created_at,
+        metadata: conversation.metadata,
       },
       { headers: { "Cache-Control": "no-store" } }
     );

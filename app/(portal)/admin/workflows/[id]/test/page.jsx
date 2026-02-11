@@ -434,33 +434,22 @@ export default function TestAgentPage() {
     ]);
 
     try {
-      // Send initial greeting to get AI's first response
-      const greetingResponse = await sendChatMessage(
-        currentScenario.responses[0]?.waitForGreeting 
-          ? "Hello" 
-          : currentScenario.responses[0]?.text || "Hello",
-        newConversationId
-      );
+      // Send first scenario message directly (like Python script does)
+      const firstStep = currentScenario.responses[0];
+      if (!firstStep) {
+        throw new Error("No messages in scenario");
+      }
+
+      setCurrentStep(1);
+      const firstResponse = await sendChatMessage(firstStep.text, newConversationId);
       
-      if (!greetingResponse) {
+      if (!firstResponse) {
         throw new Error("No response from AI");
       }
 
-      // If auto mode and we have a waitForGreeting scenario, send the first real message
-      if (isAutoMode && currentScenario.responses[0]?.waitForGreeting) {
-        setCurrentStep(1);
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const firstStep = currentScenario.responses[0];
-        const firstResponse = await sendChatMessage(firstStep.text, newConversationId);
-        
-        if (firstResponse) {
-          await processAIResponse(firstResponse, newConversationId, 1);
-        }
-      } else if (isAutoMode && currentScenario.responses.length > 0) {
-        // Process the greeting response
-        setCurrentStep(1);
-        await processAIResponse(greetingResponse, newConversationId, 1);
+      // In auto mode, continue with remaining messages
+      if (isAutoMode && currentScenario.responses.length > 1) {
+        await processAIResponse(firstResponse, newConversationId, 1);
       }
 
     } catch (err) {
