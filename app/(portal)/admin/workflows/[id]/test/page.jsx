@@ -315,10 +315,12 @@ export default function TestAgentPage() {
   const voiceClientRef = useRef(null);
   const audioContextRef = useRef(null);
   const mockMicRef = useRef(null); // Mock microphone for audio injection
+  const remoteAudioRef = useRef(null); // Remote audio element for AI voice
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
   const welcomeMessageReceivedRef = useRef(false); // Track if welcome message was received
   const currentStepRef = useRef(0); // Track current step in ref for voice callbacks
   const respondingInProgressRef = useRef(false); // Prevent double responses
+  const localAudioEnabledRef = useRef(true); // Track local audio playback
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -328,6 +330,10 @@ export default function TestAgentPage() {
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
+
+  useEffect(() => {
+    localAudioEnabledRef.current = localAudioEnabled;
+  }, [localAudioEnabled]);
 
   // Load workflow data
   useEffect(() => {
@@ -743,8 +749,15 @@ export default function TestAgentPage() {
       // Inject into mock microphone stream
       await mockMicRef.current.injectAudioFromUrl(audioUrl);
 
-      // Cleanup
-      setTimeout(() => URL.revokeObjectURL(audioUrl), 5000);
+      // Also play locally so we can hear our side
+      if (localAudioEnabledRef.current) {
+        const localAudio = new Audio(audioUrl);
+        localAudio.volume = 0.7;
+        localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
+      }
+
+      // Cleanup after a delay
+      setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
 
       console.log("[Voice] Audio injected successfully");
     } catch (err) {
@@ -936,6 +949,19 @@ export default function TestAgentPage() {
         ]);
       });
 
+      // Handle conversation updates to connect remote audio stream
+      client.on("conversation.update", (conv) => {
+        if (conv?.call?.state === "active") {
+          console.log("[Voice] Call is active");
+          
+          // Connect remote audio stream so we can hear AI
+          if (conv.call.remoteStream && remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = conv.call.remoteStream;
+            console.log("[Voice] Remote audio stream connected");
+          }
+        }
+      });
+
       await client.connect();
       await new Promise((r) => setTimeout(r, 1000));
 
@@ -1006,6 +1032,9 @@ export default function TestAgentPage() {
 
   return (
     <div className="px-0 lg:px-6 py-0">
+      {/* Hidden audio element for AI voice playback */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
+      
       <Card className="w-full shadow-sm flex flex-col overflow-hidden" style={{ height: "90vh" }}>
         <CardHeader className="flex flex-row items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
