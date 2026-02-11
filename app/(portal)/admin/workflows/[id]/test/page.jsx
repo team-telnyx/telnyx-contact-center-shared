@@ -251,7 +251,7 @@ export default function TestAgentPage() {
   // Get current scenario
   const currentScenario = TEST_SCENARIOS[selectedScenario];
 
-  // Start chat test
+  // Start chat test - connects to real AI Agent via WebRTC
   const startChatTest = useCallback(async () => {
     if (!agentId) {
       notify({
@@ -265,44 +265,190 @@ export default function TestAgentPage() {
     setIsTestRunning(true);
     setMessages([]);
     setCurrentStep(0);
+    setAgentState("connecting");
 
     // Add system message
     setMessages([
       {
         id: "system-start",
         role: "system",
-        content: `Starting test: ${currentScenario.name}`,
+        content: `Starting real AI test: ${currentScenario.name}`,
         timestamp: new Date().toISOString(),
       },
     ]);
 
-    // Simulate AI greeting
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-greeting-${Date.now()}`,
-          role: "assistant",
-          content: "Hello! Thank you for calling. How can I help you today?",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+    try {
+      // Dynamic import of TelnyxAIAgent
+      const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
 
-      // If auto mode, send first response after greeting
-      if (isAutoMode && currentScenario.responses[0]?.waitForGreeting) {
-        setTimeout(() => {
-          sendScenarioMessage(0);
-        }, 1500);
-      }
-    }, 1000);
-  }, [agentId, currentScenario, isAutoMode]);
+      const client = new TelnyxAIAgent({
+        agentId: agentId,
+        debug: true,
+      });
 
-  // Send scenario message
+      voiceClientRef.current = client;
+      let firstMessageSent = false;
+      let waitingForAI = false;
+      let lastProcessedIndex = -1;
+
+      // Track transcript for auto-responses
+      const processTranscript = (transcript) => {
+        if (!isAutoMode || waitingForAI) return;
+        
+        const latestAssistant = [...transcript].reverse().find(t => t.role === "assistant" && t.isFinal);
+        if (!latestAssistant) return;
+        
+        const latestIndex = transcript.indexOf(latestAssistant);
+        if (latestIndex <= lastProcessedIndex) return;
+        lastProcessedIndex = latestIndex;
+
+        // Find matching response
+        const lowerMessage = (latestAssistant.content || "").toLowerCase();
+        const scenario = currentScenario;
+        
+        for (let i = currentStep; i < scenario.responses.length; i++) {
+          const step = scenario.responses[i];
+          if (step.keywords) {
+            const hasMatch = step.keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
+            if (hasMatch) {
+              setTimeout(() => {
+                setCurrentStep(i + 1);
+                client.sendConversationMessage(step.text);
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `user-${Date.now()}`,
+                    role: "user",
+                    content: step.text,
+                    timestamp: new Date().toISOString(),
+                  },
+                ]);
+                
+                if (i >= scenario.responses.length - 1) {
+                  setTimeout(() => {
+                    setMessages((prev) => [
+                      ...prev,
+                      {
+                        id: "system-complete",
+                        role: "system",
+                        content: "✅ Test scenario completed successfully!",
+                        timestamp: new Date().toISOString(),
+                      },
+                    ]);
+                  }, 2000);
+                }
+              }, 1000);
+              return;
+            }
+          }
+        }
+      };
+
+      client.on("agent.connected", () => {
+        setAgentState("connected");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "system-connected",
+            role: "system",
+            content: "✅ Connected to real AI Agent",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+      });
+
+      client.on("agent.disconnected", () => {
+        setAgentState("idle");
+        setIsTestRunning(false);
+      });
+
+      client.on("agent.error", (err) => {
+        setAgentState("error");
+        notify({
+          title: "AI Agent Error",
+          description: String(err),
+          variant: "error",
+        });
+      });
+
+      client.on("conversation.agent.state", (state) => {
+        setAgentState(state);
+        
+        // When AI starts speaking, it received our message
+        if (state === "speaking") {
+          waitingForAI = false;
+        }
+        
+        // Send first message when AI is ready to listen
+        if (state === "listening" && !firstMessageSent && currentScenario.responses[0]?.waitForGreeting && isAutoMode) {
+          firstMessageSent = true;
+          waitingForAI = true;
+          const firstStep = currentScenario.responses[0];
+          setTimeout(() => {
+            setCurrentStep(1);
+            client.sendConversationMessage(firstStep.text);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `user-${Date.now()}`,
+                role: "user",
+                content: firstStep.text,
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+          }, 500);
+        }
+        
+        // Process transcript when AI finishes speaking
+        if (state === "listening" && firstMessageSent && client.transcript) {
+          processTranscript(client.transcript);
+        }
+      });
+
+      client.on("transcript.item", (item) => {
+        // Only add assistant messages (user messages added when we send them)
+        if (item.role === "assistant" && item.isFinal) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: item.id || `ai-${Date.now()}`,
+              role: "assistant",
+              content: item.content,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }
+      });
+
+      client.on("conversation.update", (conv) => {
+        if (conv?.call?.state === "active") {
+          setAgentState("active");
+        }
+      });
+
+      // Connect and start conversation (audio muted for chat mode)
+      await client.connect();
+      await client.startConversation({
+        callerName: "Chat Test User",
+        audio: true, // Required for WebRTC, but we won't use mic
+      });
+
+    } catch (err) {
+      setAgentState("error");
+      setIsTestRunning(false);
+      notify({
+        title: "Failed to start chat test",
+        description: err.message,
+        variant: "error",
+      });
+    }
+  }, [agentId, currentScenario, isAutoMode, currentStep]);
+
+  // Send scenario message (manual mode) - uses real AI
   const sendScenarioMessage = useCallback(
     async (stepIndex) => {
       const scenario = currentScenario;
       if (!scenario || stepIndex >= scenario.responses.length) {
-        // Test complete
         setMessages((prev) => [
           ...prev,
           {
@@ -312,11 +458,16 @@ export default function TestAgentPage() {
             timestamp: new Date().toISOString(),
           },
         ]);
-        setIsTestRunning(false);
         return;
       }
 
       const step = scenario.responses[stepIndex];
+      
+      // Send to real AI via WebRTC client
+      if (voiceClientRef.current) {
+        voiceClientRef.current.sendConversationMessage(step.text);
+      }
+      
       const userMessage = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -326,98 +477,30 @@ export default function TestAgentPage() {
 
       setMessages((prev) => [...prev, userMessage]);
       setCurrentStep(stepIndex + 1);
-
-      // Simulate AI response
-      setSendingMessage(true);
-      setTimeout(() => {
-        // Generate AI response based on scenario flow
-        let aiResponse = "I understand. ";
-        
-        if (stepIndex < scenario.responses.length - 1) {
-          const nextStep = scenario.responses[stepIndex + 1];
-          if (nextStep.keywords) {
-            // Generate a question that would trigger the next response
-            if (nextStep.keywords.includes("name")) {
-              aiResponse += "May I have your name please?";
-            } else if (nextStep.keywords.includes("facility")) {
-              aiResponse += "Which facility are you calling from?";
-            } else if (nextStep.keywords.includes("callback") || nextStep.keywords.includes("number")) {
-              aiResponse += "What's the best callback number to reach you?";
-            } else if (nextStep.keywords.includes("confirm") || nextStep.keywords.includes("correct")) {
-              aiResponse += "Can you confirm that information is correct?";
-            } else if (nextStep.keywords.includes("patient")) {
-              aiResponse += "What is the patient's name?";
-            } else if (nextStep.keywords.includes("birth") || nextStep.keywords.includes("dob")) {
-              aiResponse += "What is the patient's date of birth?";
-            } else if (nextStep.keywords.includes("weight")) {
-              aiResponse += "What is the patient's approximate weight?";
-            } else if (nextStep.keywords.includes("gender")) {
-              aiResponse += "And what is the patient's gender?";
-            } else if (nextStep.keywords.includes("pickup") || nextStep.keywords.includes("address")) {
-              aiResponse += "What is the pickup location?";
-            } else if (nextStep.keywords.includes("transfer") || nextStep.keywords.includes("connect")) {
-              aiResponse += "I'll be happy to transfer you to an agent. Just a moment please.";
-            } else if (nextStep.keywords.includes("else") || nextStep.keywords.includes("help")) {
-              aiResponse += "Is there anything else I can help you with?";
-            } else {
-              aiResponse += "Let me help you with that. Can you provide more details?";
-            }
-          }
-        } else {
-          aiResponse = "Thank you for calling. Have a great day!";
-        }
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `ai-${Date.now()}`,
-            role: "assistant",
-            content: aiResponse,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-
-        setSendingMessage(false);
-
-        // Continue auto mode if enabled
-        if (isAutoMode && !isPaused && stepIndex < scenario.responses.length - 1) {
-          setTimeout(() => {
-            sendScenarioMessage(stepIndex + 1);
-          }, 2000);
-        }
-      }, 1500);
     },
-    [currentScenario, isAutoMode, isPaused]
+    [currentScenario]
   );
 
-  // Send manual message
+  // Send manual message - uses real AI
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || sendingMessage) return;
+
+    const messageText = inputMessage.trim();
+    
+    // Send to real AI via WebRTC client
+    if (voiceClientRef.current) {
+      voiceClientRef.current.sendConversationMessage(messageText);
+    }
 
     const userMessage = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: inputMessage.trim(),
+      content: messageText,
       timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
-    setSendingMessage(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-${Date.now()}`,
-          role: "assistant",
-          content: "I understand. How can I assist you further?",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-      setSendingMessage(false);
-    }, 1500);
   }, [inputMessage, sendingMessage]);
 
   // Stop test
@@ -818,8 +901,8 @@ export default function TestAgentPage() {
               </Card>
             )}
 
-            {/* Voice Status */}
-            {channel === "voice" && isTestRunning && (
+            {/* Agent Status (Chat & Voice) */}
+            {isTestRunning && (
               <Card className="shrink-0">
                 <CardHeader>
                   <CardTitle className="text-sm">Voice Status</CardTitle>
