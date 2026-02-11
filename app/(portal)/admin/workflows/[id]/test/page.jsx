@@ -655,6 +655,8 @@ export default function TestAgentPage() {
   selectedScenarioRef.current = selectedScenario;
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
+  const messagesRef = useRef([]); // Track messages for async access without stale closures
+  messagesRef.current = messages;
 
   // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
   const waitForAnalysisAndDelay = useCallback(async () => {
@@ -678,6 +680,13 @@ export default function TestAgentPage() {
   
   // Generate dynamic customer response via LLM (on-the-fly, no pre-generated scenario)
   const generateDynamicResponse = useCallback(async (lastAiMessage, conversationHistory) => {
+    console.log("[generateDynamicResponse] Called with:", {
+      lastAiMessage: lastAiMessage?.substring(0, 50) + "...",
+      historyLength: conversationHistory?.length,
+      persona: selectedPersona,
+      hasCustomerData: !!customerDataRef.current,
+    });
+    
     try {
       const res = await fetch(`/api/admin/workflows/${flowId}/generate-response`, {
         method: "POST",
@@ -693,6 +702,8 @@ export default function TestAgentPage() {
       });
 
       const data = await res.json();
+      console.log("[generateDynamicResponse] API response:", { ok: res.ok, response: data.response?.substring(0, 50) });
+      
       if (!res.ok) throw new Error(data.error || "Failed to generate response");
 
       // Store customer data for consistency across the test session
@@ -702,7 +713,7 @@ export default function TestAgentPage() {
 
       return data.response;
     } catch (err) {
-      console.error("[Dynamic Response] Error:", err);
+      console.error("[generateDynamicResponse] Error:", err);
       notify({
         title: "Response Generation Failed",
         description: err.message,
@@ -1089,33 +1100,67 @@ export default function TestAgentPage() {
   // Process AI response and send next customer response if in auto mode
   const processAIResponse = useCallback(async (aiContent, convId, currentStepIndex) => {
     if (!autoModeRef.current || isPaused || !isTestRunningRef.current) return;
-    if (chatProcessingRef.current) return; // Prevent double processing
-    chatProcessingRef.current = true;
+    
+    // For legacy mode, prevent double processing. Dynamic mode handles this differently (iterative loop).
+    if (!useDynamicResponses) {
+      if (chatProcessingRef.current) return;
+      chatProcessingRef.current = true;
+    }
     
     try {
       // ===== DYNAMIC RESPONSE MODE (on-the-fly LLM generation) =====
       if (useDynamicResponses) {
-        // Build conversation history from messages
-        const conversationHistory = messages
-          .filter(m => m.role === "user" || m.role === "assistant")
-          .map(m => ({ role: m.role, content: m.content }));
+        let currentAiMessage = aiContent;
+        let stepNum = currentStepIndex;
+        const MAX_TURNS = 50; // Safety limit to prevent infinite loops
+        
+        for (let turn = 0; turn < MAX_TURNS; turn++) {
+          if (!isTestRunningRef.current || isPaused) {
+            console.log("[Dynamic] Test stopped or paused");
+            break;
+          }
+          if (!autoModeRef.current) {
+            console.log("[Dynamic] Auto mode disabled");
+            break;
+          }
 
-        await waitForAnalysisAndDelay();
-        if (!isTestRunningRef.current) return;
+          // Build conversation history from messages ref (avoid stale closure)
+          const conversationHistory = messagesRef.current
+            .filter(m => m.role === "user" || m.role === "assistant")
+            .map(m => ({ role: m.role, content: m.content }));
 
-        // Generate dynamic response based on AI's message
-        const dynamicResponse = await generateDynamicResponse(aiContent, conversationHistory);
-        if (!dynamicResponse || !isTestRunningRef.current) return;
+          console.log(`[Dynamic] Turn ${turn + 1}: Processing AI response:`, currentAiMessage?.substring(0, 50) + "...");
 
-        setCurrentStep((prev) => prev + 1);
+          await waitForAnalysisAndDelay();
+          if (!isTestRunningRef.current) break;
 
-        // Send the generated response
-        const nextAiResponse = await sendChatMessage(dynamicResponse, convId, currentStepIndex);
-        if (!isTestRunningRef.current) return;
+          // Generate dynamic response based on AI's message
+          const dynamicResponse = await generateDynamicResponse(currentAiMessage, conversationHistory);
+          
+          if (!dynamicResponse) {
+            console.error("[Dynamic] Failed to generate response, stopping");
+            break;
+          }
+          if (!isTestRunningRef.current) break;
 
-        // Continue the conversation if we got a response
-        if (nextAiResponse) {
-          await processAIResponse(nextAiResponse, convId, currentStepIndex + 1);
+          console.log("[Dynamic] Generated response:", dynamicResponse?.substring(0, 50) + "...");
+          setCurrentStep(++stepNum);
+
+          // Send the generated response
+          const nextAiResponse = await sendChatMessage(dynamicResponse, convId, stepNum);
+          
+          if (!isTestRunningRef.current) break;
+
+          if (!nextAiResponse) {
+            console.log("[Dynamic] No AI response received, stopping");
+            break;
+          }
+
+          console.log("[Dynamic] AI responded:", nextAiResponse?.substring(0, 50) + "...");
+          currentAiMessage = nextAiResponse;
+
+          // Small delay before next iteration to prevent tight loops
+          await new Promise(r => setTimeout(r, 300));
         }
         return;
       }
@@ -1225,9 +1270,11 @@ export default function TestAgentPage() {
         }
       }
     } finally {
-      chatProcessingRef.current = false;
+      if (!useDynamicResponses) {
+        chatProcessingRef.current = false;
+      }
     }
-  }, [currentScenario, isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay, useDynamicResponses, messages, generateDynamicResponse]);
+  }, [currentScenario, isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay, useDynamicResponses, generateDynamicResponse]);
 
   // Create a new conversation via Telnyx API
   const createConversation = useCallback(async () => {
