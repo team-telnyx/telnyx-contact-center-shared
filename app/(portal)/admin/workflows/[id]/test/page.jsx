@@ -799,7 +799,7 @@ export default function TestAgentPage() {
     
     // Wait additional time for the audio to be processed by AI
     // This prevents overlapping with the next AI response
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 4000));
 
     respondingInProgressRef.current = false;
   }, [currentScenario, speakTextViaAudio]);
@@ -937,7 +937,7 @@ export default function TestAgentPage() {
             // Longer delay prevents message overlap
             setTimeout(() => {
               handleVoiceAutoResponse();
-            }, 1500);
+            }, 3000);
           }
         }
       });
