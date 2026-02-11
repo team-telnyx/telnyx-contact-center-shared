@@ -2389,37 +2389,20 @@ export default function TestAgentPage() {
                         }}
                         disabled={sendingMessage || isRecording}
                       />
-                      {/* Voice mode button - REC (AUTO) or Mute (MANUAL) */}
-                      {channel === "voice" && (
-                        isAutoMode ? (
-                          // AUTO mode: REC button to record and inject audio
-                          <Button
-                            variant={isRecording ? "destructive" : "outline"}
-                            onClick={toggleRecording}
-                            disabled={sendingMessage}
-                            className={cn(isRecording && "animate-pulse")}
-                          >
-                            {isRecording ? (
-                              <IconMicrophoneOff className="size-4" />
-                            ) : (
-                              <IconMicrophone className="size-4" />
-                            )}
-                          </Button>
-                        ) : (
-                          // MANUAL mode: Mute/Unmute button for real microphone
-                          <Button
-                            variant={isMuted ? "destructive" : "outline"}
-                            onClick={toggleMute}
-                            disabled={!isTestRunning}
-                            title={isMuted ? "Unmute microphone" : "Mute microphone"}
-                          >
-                            {isMuted ? (
-                              <IconMicrophoneOff className="size-4" />
-                            ) : (
-                              <IconMicrophone className="size-4" />
-                            )}
-                          </Button>
-                        )
+                      {/* Voice mode: Mute/Unmute button (MANUAL mode only) */}
+                      {channel === "voice" && !isAutoMode && (
+                        <Button
+                          variant={isMuted ? "destructive" : "outline"}
+                          onClick={toggleMute}
+                          disabled={!isTestRunning}
+                          title={isMuted ? "Unmute microphone" : "Mute microphone"}
+                        >
+                          {isMuted ? (
+                            <IconMicrophoneOff className="size-4" />
+                          ) : (
+                            <IconMicrophone className="size-4" />
+                          )}
+                        </Button>
                       )}
                       {/* Send button */}
                       <Button
@@ -2432,9 +2415,7 @@ export default function TestAgentPage() {
                     {channel === "voice" && (
                       <p className="text-xs text-muted-foreground mt-1">
                         {isAutoMode 
-                          ? (isRecording 
-                              ? "🔴 Recording... Click microphone to stop and send"
-                              : "Type text for TTS or click 🎤 to record your voice")
+                          ? "Type text → converted to speech via TTS → sent to AI"
                           : (isMuted 
                               ? "🔇 Microphone muted - click to unmute"
                               : "🎤 Microphone active - speak naturally or click to mute")
