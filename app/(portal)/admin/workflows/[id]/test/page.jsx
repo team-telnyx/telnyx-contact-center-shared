@@ -1696,6 +1696,8 @@ export default function TestAgentPage() {
 
       // Handle conversation updates to connect remote audio stream
       client.on("conversation.update", (conv) => {
+        console.log("[Voice] conversation.update:", conv?.call?.state, conv);
+        
         if (conv?.call?.state === "active") {
           console.log("[Voice] Call is active");
           
@@ -1711,7 +1713,12 @@ export default function TestAgentPage() {
           // Log local stream info for debugging
           if (conv.call.localStream) {
             const tracks = conv.call.localStream.getAudioTracks();
-            console.log(`[Voice] Local stream has ${tracks.length} audio tracks`);
+            console.log(`[Voice] Local stream has ${tracks.length} audio tracks:`);
+            tracks.forEach((track, i) => {
+              console.log(`[Voice]   Track ${i}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+            });
+          } else {
+            console.warn("[Voice] NO LOCAL STREAM - microphone not connected!");
           }
         } else {
           activeCallRef.current = null;
@@ -2075,31 +2082,31 @@ export default function TestAgentPage() {
             {isTestRunning && channel === "voice" && (
               <div className="pt-2 border-t">
                 <h3 className="text-sm font-semibold mb-3">Voice Status</h3>
-                {/* Agent State Badge - full width */}
-                <div
+                <Badge
+                  variant="outline"
                   className={cn(
-                    "w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium",
-                    agentState === "listening" && "text-blue-600 border-blue-300 bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:bg-blue-950",
-                    agentState === "speaking" && "text-green-600 border-green-300 bg-green-50 dark:text-green-400 dark:border-green-800 dark:bg-green-950",
-                    agentState === "thinking" && "text-yellow-600 border-yellow-300 bg-yellow-50 dark:text-yellow-400 dark:border-yellow-800 dark:bg-yellow-950",
-                    agentState === "idle" && "text-gray-600 border-gray-300 bg-gray-50 dark:text-gray-400 dark:border-gray-700 dark:bg-gray-900",
-                    voiceStatus === "connecting" && "text-yellow-600 border-yellow-300 bg-yellow-50 dark:text-yellow-400 dark:border-yellow-800 dark:bg-yellow-950",
-                    voiceStatus === "error" && "text-red-600 border-red-300 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-950"
+                    "w-full justify-center gap-1.5",
+                    agentState === "listening" && "text-blue-500 border-blue-500",
+                    agentState === "speaking" && "text-green-500 border-green-500",
+                    agentState === "thinking" && "text-yellow-500 border-yellow-500",
+                    agentState === "idle" && "text-muted-foreground",
+                    voiceStatus === "connecting" && "text-yellow-500 border-yellow-500",
+                    voiceStatus === "error" && "text-red-500 border-red-500"
                   )}
                 >
                   <div className={cn(
-                    "w-3 h-3 rounded-full",
+                    "w-2 h-2 rounded-full",
                     agentState === "listening" && "bg-blue-500",
                     agentState === "speaking" && "bg-green-500 animate-pulse",
                     agentState === "thinking" && "bg-yellow-500 animate-pulse",
-                    agentState === "idle" && "bg-gray-400",
+                    agentState === "idle" && "bg-muted-foreground",
                     voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
                     voiceStatus === "error" && "bg-red-500"
                   )} />
                   {voiceStatus === "connecting" ? "Connecting..." : 
                    voiceStatus === "error" ? "Error" :
                    agentState.charAt(0).toUpperCase() + agentState.slice(1)}
-                </div>
+                </Badge>
               </div>
             )}
             </CardContent>
