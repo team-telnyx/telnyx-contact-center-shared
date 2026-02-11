@@ -480,8 +480,19 @@ class MockMicrophone {
 
     console.log(`[MockMic] Initialized (48kHz), AudioContext state: ${this.audioContext.state}`);
     
-    // Debug: Monitor stream activity
+    // Try to disable AGC/noise suppression on the track
     const track = this.stream.getAudioTracks()[0];
+    try {
+      await track.applyConstraints({
+        autoGainControl: false,
+        noiseSuppression: false,
+        echoCancellation: false,
+      });
+      console.log(`[MockMic] Disabled AGC/noise suppression on track`);
+    } catch (e) {
+      console.warn(`[MockMic] Could not disable AGC:`, e.message);
+    }
+    
     console.log(`[MockMic] Audio track: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
     
     return this.stream;
