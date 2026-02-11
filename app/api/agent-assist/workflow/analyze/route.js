@@ -93,12 +93,20 @@ export async function POST(request) {
     // Get current slots filled
     const slotsFilled = workflowSession.slots_filled || {};
 
-    // Call LLM analyzer
+    // Get workflow's llm_model
+    const { rows: [workflow] } = await pool.query(
+      `SELECT llm_model FROM aa_workflows WHERE id = $1`,
+      [workflowSession.workflow_id]
+    );
+    const llmModel = workflow?.llm_model || "openai/gpt-4o";
+
+    // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
       pendingItems,
       slotsFilled,
+      model: llmModel,
     });
 
     // Process completed items

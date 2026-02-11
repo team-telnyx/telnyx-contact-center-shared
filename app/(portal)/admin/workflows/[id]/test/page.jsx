@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,12 +13,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   IconArrowLeft,
   IconPlayerPlay,
@@ -37,103 +44,357 @@ import {
   IconCheck,
   IconX,
   IconAlertCircle,
+  IconCircleCheck,
+  IconChevronRight,
+  IconClipboardList,
+  IconSettings,
+  IconMoodSmile,
+  IconMoodSad,
+  IconMoodNeutral,
+  IconTarget,
+  IconPencil,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
+import { getIntentLabel } from "@/lib/agent-assist/sentiment-analysis";
 
 // TTS options will be loaded dynamically from API
 
-// Test scenarios for AI agent testing
-const TEST_SCENARIOS = {
-  healthcare_intake: {
-    id: "healthcare_intake",
-    name: "Complete Workflow",
-    description: "Full patient intake process with all information collection",
-    responses: [
-      { waitForGreeting: true, text: "Hello, I need to arrange a medical transport" },
-      { keywords: ["name", "who"], text: "My name is John Smith" },
-      { keywords: ["facility", "calling from"], text: "I'm calling from Memorial Hospital" },
-      { keywords: ["callback", "number", "reach"], text: "You can reach me at 555-123-4567" },
-      { keywords: ["correct", "confirm"], text: "Yes, that's correct" },
-      { keywords: ["help", "assist"], text: "I need a new transport" },
-      { keywords: ["patient", "name"], text: "The patient is Maria Garcia" },
-      { keywords: ["birth", "dob"], text: "Date of birth is March 15, 1965" },
-      { keywords: ["weight"], text: "She weighs about 140 pounds" },
-      { keywords: ["gender"], text: "Female" },
-      { keywords: ["pickup", "where"], text: "Memorial Hospital, Room 302 ICU" },
-      { keywords: ["reason", "diagnosis"], text: "Cardiac surgery" },
-      { keywords: ["iv", "drip"], text: "2 IV drips" },
-      { keywords: ["equipment"], text: "Oxygen support" },
-      { keywords: ["accompany"], text: "Yes, her husband" },
-      { keywords: ["isolation", "precaution"], text: "No isolation needed" },
-      { keywords: ["confirm", "correct"], text: "Yes, all correct" },
-      { keywords: ["anything else", "help"], text: "No, thank you!" },
-    ],
-  },
-  early_transfer: {
-    id: "early_transfer",
-    name: "Early Transfer to Human Agent",
-    description: "Customer immediately requests to speak with a human",
-    responses: [
-      { waitForGreeting: true, text: "I need to speak with a real person please" },
-      { keywords: ["help", "assist", "sure"], text: "No, I really just want a human agent" },
-      { keywords: ["transfer", "connect"], text: "Yes, please transfer me now" },
-    ],
-  },
-  mid_workflow_transfer: {
-    id: "mid_workflow_transfer",
-    name: "Mid-Workflow Transfer",
-    description: "Customer starts the process but requests transfer midway",
-    responses: [
-      { waitForGreeting: true, text: "Hello, I need help with my account" },
-      { keywords: ["name", "who"], text: "My name is Sarah Johnson" },
-      { keywords: ["account", "number"], text: "Actually, this is getting complicated. Can I speak to someone?" },
-      { keywords: ["transfer", "help"], text: "Yes, please transfer me to an agent" },
-    ],
-  },
-  out_of_order: {
-    id: "out_of_order",
-    name: "Out of Order Information",
-    description: "Customer provides information in unexpected order",
-    responses: [
-      { waitForGreeting: true, text: "Hi, I'm John from City Hospital and the patient is Jane Doe born June 1980" },
-      { keywords: ["confirm", "correct"], text: "Yes that's right" },
-      { keywords: ["callback", "number"], text: "My number is 555-987-6543" },
-      { keywords: ["help", "need"], text: "I need to schedule a transport for tomorrow" },
-      { keywords: ["pickup", "address"], text: "Room 415, City Hospital on Main Street" },
-      { keywords: ["anything else"], text: "No, that's everything" },
-    ],
-  },
-  status_check: {
-    id: "status_check",
-    name: "Status Check Intent",
-    description: "Customer wants to check existing request status",
-    responses: [
-      { waitForGreeting: true, text: "I want to check on a transport I scheduled" },
-      { keywords: ["confirmation", "number", "id"], text: "The confirmation number is TR-12345" },
-      { keywords: ["name", "verify"], text: "John Smith" },
-      { keywords: ["else", "help"], text: "Can you tell me the ETA?" },
-      { keywords: ["anything", "else"], text: "No thank you, that's all I needed" },
-    ],
-  },
-  frustrated_customer: {
-    id: "frustrated_customer",
-    name: "Frustrated Customer",
-    description: "Customer is upset and expresses frustration",
-    responses: [
-      { waitForGreeting: true, text: "I've been trying to get help all day and nobody can assist me!" },
-      { keywords: ["sorry", "understand", "help"], text: "I just need someone who knows what they're doing" },
-      { keywords: ["assist", "happy"], text: "Fine. I need to reschedule a transport" },
-      { keywords: ["confirmation", "details"], text: "The confirmation is TR-99999" },
-      { keywords: ["new", "time", "when"], text: "Tomorrow at 2 PM instead of today" },
-      { keywords: ["confirm"], text: "Yes, that's fine" },
-      { keywords: ["else"], text: "No. Goodbye." },
-    ],
-  },
-};
+/** Generate unique message ID to avoid React key collisions and doubled rendering */
+function uniqueMessageId(prefix = "msg") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
 
-// Message component
-function Message({ message, isUser }) {
+/**
+ * Test scenarios - all LLM-generated via /api/admin/workflows/[id]/generate-test-scenario
+ * Each scenario has predefined instructions; data is regenerated on selection change and Reset.
+ */
+import { SCENARIO_TYPES } from "@/lib/agent-assist/generate-test-scenario";
+
+const SCENARIO_LIST = Object.values(SCENARIO_TYPES);
+
+/**
+ * Find the scenario step that best matches the last AI message.
+ * Uses keyword matching (same as processAIResponse) - finds the first step whose
+ * keywords appear in the AI's message, so the response is relevant to what the AI asked.
+ * Also considers workflow state: prefers steps that correspond to pending workflow items.
+ */
+function findScenarioStepForLastAiMessage(messages, scenario, workflowStages, itemStatuses = {}) {
+  if (!scenario?.responses?.length) return 0;
+
+  const lastAiMessage = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.content?.trim());
+  const lastAiText = (lastAiMessage?.content || "").toLowerCase();
+
+  if (!lastAiText) return 0;
+
+  let bestMatch = { index: -1, score: 0 };
+  for (let i = 0; i < scenario.responses.length; i++) {
+    const step = scenario.responses[i];
+    if (!step.keywords) continue;
+
+    const matchCount = step.keywords.filter((kw) =>
+      lastAiText.includes(String(kw).toLowerCase())
+    ).length;
+    if (matchCount === 0) continue;
+
+    const score = matchCount;
+    if (score > bestMatch.score) {
+      bestMatch = { index: i, score };
+    }
+  }
+
+  return bestMatch.score > 0 ? bestMatch.index : 0;
+}
+
+// Helper: get stage completion from item statuses
+function getStageCompletion(stage, itemStatuses) {
+  if (!stage?.items) return { completed: 0, total: 0, isComplete: false };
+  const total = stage.items.length;
+  const completed = stage.items.filter((item) => {
+    const status = itemStatuses[item.id];
+    return status?.status === "completed";
+  }).length;
+  return {
+    completed,
+    total,
+    isComplete: completed === total && total > 0,
+  };
+}
+
+// Analyze a single message for workflow item completion (same LLM as live agent desktop)
+async function analyzeWorkflowMessage(workflowId, transcript, speaker, itemStatuses, slotsFilled) {
+  const res = await fetch(`/api/admin/workflows/${workflowId}/analyze-test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      transcript,
+      speaker,
+      itemStatuses,
+      slotsFilled,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Analysis failed");
+  return data;
+}
+
+// Workflow agent view - stages in accordions, crossed out when complete
+function WorkflowAgentView({ stages, itemStatuses }) {
+  const [expandedStage, setExpandedStage] = useState(null);
+  const activeStageId = useMemo(() => {
+    for (const stage of stages || []) {
+      const hasIncomplete = stage.items?.some((item) => {
+        const status = itemStatuses[item.id]?.status;
+        return status !== "completed" && status !== "skipped";
+      });
+      if (hasIncomplete) return stage.id;
+    }
+    return stages?.[stages.length - 1]?.id;
+  }, [stages, itemStatuses]);
+
+  // When active stage changes (e.g. current stage completed), collapse the old and expand the next
+  useEffect(() => {
+    if (activeStageId) {
+      setExpandedStage(activeStageId);
+    }
+  }, [activeStageId]);
+
+  if (!stages?.length) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center py-12 text-muted-foreground">
+        <IconClipboardList className="size-12 opacity-30 mb-4" />
+        <p className="text-sm">No workflow stages</p>
+        <p className="text-xs mt-1">Configure stages in the workflow editor</p>
+      </div>
+    );
+  }
+
+  return (
+    <ScrollArea className="h-full">
+      <div className="p-4">
+        <Accordion
+          type="single"
+          collapsible
+          value={expandedStage}
+          onValueChange={setExpandedStage}
+          className="w-full"
+        >
+          {stages.map((stage, stageIndex) => {
+            const stageCompletion = getStageCompletion(stage, itemStatuses);
+            const isActive = stage.id === activeStageId;
+            return (
+              <AccordionItem
+                key={stage.id}
+                value={stage.id}
+                className={cn(
+                  "border-b-0 mb-2 rounded-lg border",
+                  isActive && "border-purple-500/50 bg-purple-500/5",
+                  stageCompletion.isComplete && "border-green-500/50 bg-green-500/5",
+                  !isActive && !stageCompletion.isComplete && "border-border"
+                )}
+              >
+                <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span
+                      className={cn(
+                        "flex items-center justify-center w-5 h-5 rounded-full text-xs font-medium",
+                        stageCompletion.isComplete && "bg-green-500 text-white",
+                        isActive && "bg-purple-500 text-white",
+                        !stageCompletion.isComplete && !isActive && "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {stageCompletion.isComplete ? (
+                        <IconCircleCheck className="size-3" />
+                      ) : (
+                        stageIndex + 1
+                      )}
+                    </span>
+                    <span className="font-medium text-sm">{stage.name}</span>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "ml-auto text-xs",
+                        stageCompletion.isComplete &&
+                          "bg-green-500/10 text-green-500 border-green-500/50",
+                        !stageCompletion.isComplete && "bg-muted"
+                      )}
+                    >
+                      {stageCompletion.completed}/{stageCompletion.total}
+                    </Badge>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-3 pb-3">
+                  <div className="space-y-1.5 pt-1">
+                    {stage.items?.map((item) => {
+                      const status = itemStatuses[item.id] || {
+                        status: "pending",
+                      };
+                      const isCompleted = status.status === "completed";
+                      const slotValue =
+                        status.value || status.extracted_value;
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            "flex items-start gap-2 p-2 rounded-md",
+                            isCompleted && "bg-green-500/10",
+                            !isCompleted && "hover:bg-muted/50"
+                          )}
+                        >
+                          <span className="mt-0.5">
+                            {isCompleted ? (
+                              <IconCircleCheck className="size-4 text-green-500 shrink-0" />
+                            ) : (
+                              <span className="w-4 h-4 rounded-full border border-muted-foreground/50 shrink-0 inline-block" />
+                            )}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p
+                              className={cn(
+                                "text-sm leading-tight",
+                                isCompleted && "line-through text-muted-foreground"
+                              )}
+                            >
+                              {item.label}
+                            </p>
+                            {item.type === "slot" && slotValue && (
+                              <p className="text-sm font-medium text-foreground mt-1">
+                                {slotValue}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      </div>
+    </ScrollArea>
+  );
+}
+
+// Progress bar matching agent desktop format
+function TestWorkflowProgressBar({
+  stages,
+  itemStatuses,
+  completedItems,
+  totalItems,
+  currentStep,
+  totalScenarioSteps,
+}) {
+  const displayPercentage =
+    totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+  const isComplete = completedItems >= totalItems && totalItems > 0;
+  const hasStages = stages?.length > 0;
+
+  return (
+    <div className="bg-card border-2 border-border rounded-lg p-3">
+      <div className="flex items-center gap-4">
+        {/* Stage indicators (left) */}
+        <div className="flex items-center gap-1 shrink-0">
+          {hasStages ? stages.map((stage, index) => {
+            const completion = getStageCompletion(stage, itemStatuses);
+            return (
+              <div
+                key={stage.id}
+                className={cn(
+                  "flex items-center",
+                  index < (stages?.length || 1) - 1 && "gap-1"
+                )}
+                title={`${stage.name}: ${completion.completed}/${completion.total}`}
+              >
+                <div
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all",
+                    completion.isComplete && "bg-green-500 text-white",
+                    completion.completed > 0 && "bg-purple-500/50 text-white",
+                    completion.completed === 0 && "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {completion.isComplete ? (
+                    <IconCircleCheck className="size-3.5" />
+                  ) : (
+                    index + 1
+                  )}
+                </div>
+                {index < (stages?.length || 1) - 1 && (
+                  <IconChevronRight className="size-3 text-muted-foreground" />
+                )}
+              </div>
+            );
+          }) : (
+            <span className="text-sm text-muted-foreground">No stages</span>
+          )}
+        </div>
+        <div className="flex-1">
+          <Progress
+            value={displayPercentage}
+            className="h-2"
+            indicatorClassName="bg-green-500"
+          />
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm text-muted-foreground">
+            {completedItems}/{totalItems}
+          </span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-sm font-bold",
+              isComplete
+                ? "bg-green-500/10 text-green-500 border-green-500/50"
+                : "bg-purple-500/10 text-purple-500 border-purple-500/50"
+            )}
+          >
+            {displayPercentage}%
+          </Badge>
+          <span className="text-sm text-muted-foreground">
+            Step {currentStep}/{totalScenarioSteps}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Sentiment icon helper (matches agent desktop)
+function getSentimentIcon(sentiment) {
+  const iconProps = { className: "size-3.5 shrink-0" };
+  switch (sentiment) {
+    case "positive":
+      return <IconMoodSmile {...iconProps} />;
+    case "negative":
+      return <IconMoodSad {...iconProps} />;
+    default:
+      return <IconMoodNeutral {...iconProps} />;
+  }
+}
+
+function getSentimentColor(sentiment) {
+  switch (sentiment) {
+    case "positive":
+      return "text-green-600 dark:text-green-400";
+    case "negative":
+      return "text-red-500 dark:text-red-400";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+// Message component with intent/sentiment badges (same as agent desktop)
+function Message({ message, isUser, analysis }) {
+  const sentiment = analysis?.sentiment;
+  const sentimentScore = analysis?.sentimentScore;
+  const intent = analysis?.intent;
+  const isManual = message.manual === true;
+
   return (
     <div className={cn("flex gap-3 mb-4", isUser && "flex-row-reverse")}>
       <div
@@ -150,18 +411,60 @@ function Message({ message, isUser }) {
           <IconRobot className="size-4 text-green-600 dark:text-green-400" />
         )}
       </div>
-      <div
-        className={cn(
-          "rounded-lg px-4 py-2 max-w-[80%]",
-          isUser
-            ? "bg-blue-500 text-white"
-            : "bg-muted"
+      <div className={cn("flex flex-col max-w-[80%]", isUser && "items-end")}>
+        <div
+          className={cn(
+            "rounded-lg px-4 py-2",
+            isUser
+              ? "bg-blue-500 text-white"
+              : "bg-muted"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm flex-1">{message.content}</p>
+            {isManual && isUser && (
+              <IconPencil
+                className="size-3.5 shrink-0 mt-0.5 opacity-80"
+                title="Manually provided (auto flow stopped)"
+              />
+            )}
+          </div>
+          <span className="text-xs opacity-70 mt-1 block">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </span>
+        </div>
+        {/* Intent and sentiment badges (same as agent desktop) */}
+        {(intent || sentiment) && (
+          <div
+            className={cn(
+              "flex items-center gap-1.5 mt-1 flex-wrap",
+              isUser ? "flex-row-reverse" : ""
+            )}
+          >
+            {intent && (
+              <Badge
+                variant="outline"
+                className="text-[10px] bg-purple-500/10 text-purple-500 border-purple-500/50 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/50"
+              >
+                <IconTarget className="size-3 mr-0.5" />
+                {getIntentLabel(intent)}
+              </Badge>
+            )}
+            {sentiment && (
+              <div
+                className={cn(
+                  "flex items-center gap-0.5",
+                  getSentimentColor(sentiment)
+                )}
+              >
+                {getSentimentIcon(sentiment)}
+                {typeof sentimentScore === "number" && (
+                  <span className="text-[10px]">{sentimentScore}</span>
+                )}
+              </div>
+            )}
+          </div>
         )}
-      >
-        <p className="text-sm">{message.content}</p>
-        <span className="text-xs opacity-70 mt-1 block">
-          {new Date(message.timestamp).toLocaleTimeString()}
-        </span>
       </div>
     </div>
   );
@@ -286,7 +589,8 @@ export default function TestAgentPage() {
 
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState(null);
-  const [selectedScenario, setSelectedScenario] = useState("healthcare_intake");
+  const [selectedScenario, setSelectedScenario] = useState("workflow_specific");
+  const [generatedScenario, setGeneratedScenario] = useState(null);
   const [channel, setChannel] = useState("chat"); // "chat" or "voice"
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -312,12 +616,18 @@ export default function TestAgentPage() {
   const [ttsVoice, setTtsVoice] = useState("");
   const [ttsVoiceId, setTtsVoiceId] = useState(""); // Full voice ID like "Minimax.speech-2.8-turbo.English_male"
   
-  // Agent state
+  // Agent state (from workflow config - no dropdown)
   const [agentId, setAgentId] = useState(null);
-  const [availableAgents, setAvailableAgents] = useState([]);
+  const [assistantName, setAssistantName] = useState(null);
   
   // Chat conversation state
   const [conversationId, setConversationId] = useState(null);
+
+  // Workflow analysis state (LLM-based, same as live agent desktop)
+  const [workflowItemStatuses, setWorkflowItemStatuses] = useState({});
+  const [workflowSlotsFilled, setWorkflowSlotsFilled] = useState({});
+  const [isAnalyzingWorkflow, setIsAnalyzingWorkflow] = useState(false);
+  const [messageAnalysis, setMessageAnalysis] = useState({}); // index -> { intent, sentiment, sentimentScore }
   
   // Refs
   const messagesEndRef = useRef(null);
@@ -326,11 +636,38 @@ export default function TestAgentPage() {
   const mockMicRef = useRef(null); // Mock microphone for audio injection
   const remoteAudioRef = useRef(null); // Remote audio element for AI voice
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
+  const isTestRunningRef = useRef(false); // Track test running for async stop checks
   const welcomeMessageReceivedRef = useRef(false); // Track if welcome message was received
   const currentStepRef = useRef(0); // Track current step in ref for voice callbacks
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
+  const lastAnalyzedMessageIndexRef = useRef(-1);
+  const workflowAnalysisInProgressRef = useRef(false);
+  const scenarioFetchInProgressRef = useRef(false);
+  const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
+  const selectedScenarioRef = useRef(selectedScenario);
+  selectedScenarioRef.current = selectedScenario;
+
+  // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
+  const waitForAnalysisAndDelay = useCallback(async () => {
+    // Let React commit so analysis useEffect can run and process new messages
+    await new Promise((r) => setTimeout(r, 600));
+    // Wait for analysis to finish (poll, max 15s)
+    const maxWait = 15000;
+    const pollInterval = 200;
+    const start = Date.now();
+    while (workflowAnalysisInProgressRef.current && Date.now() - start < maxWait) {
+      await new Promise((r) => setTimeout(r, pollInterval));
+    }
+    // Brief delay so workflow UI updates
+    await new Promise((r) => setTimeout(r, 800));
+  }, []);
+  const workflowItemStatusesRef = useRef({});
+  const workflowSlotsFilledRef = useRef({});
+  const [analysisRetryTrigger, setAnalysisRetryTrigger] = useState(0);
+  workflowItemStatusesRef.current = workflowItemStatuses;
+  workflowSlotsFilledRef.current = workflowSlotsFilled;
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -340,6 +677,10 @@ export default function TestAgentPage() {
   useEffect(() => {
     currentStepRef.current = currentStep;
   }, [currentStep]);
+
+  useEffect(() => {
+    isTestRunningRef.current = isTestRunning;
+  }, [isTestRunning]);
 
   useEffect(() => {
     localAudioEnabledRef.current = localAudioEnabled;
@@ -417,7 +758,13 @@ export default function TestAgentPage() {
         if (!res.ok || !data.ok) {
           throw new Error(data.error || "Failed to load workflow");
         }
-        setWorkflow(data.flow);
+        const w = data.workflow;
+        setWorkflow(w);
+        if (w?.ai_assistant_id) {
+          setAgentId(w.ai_assistant_id);
+        } else {
+          setAgentId(null);
+        }
       } catch (err) {
         notify({
           title: "Error",
@@ -432,36 +779,211 @@ export default function TestAgentPage() {
     loadWorkflow();
   }, [flowId, router]);
 
-  // Load available agents (only those assigned to workflows)
+  // Resolve assistant name for display (workflow's assigned AI assistant)
   useEffect(() => {
-    async function loadAgents() {
+    if (!workflow?.ai_assistant_id) {
+      setAssistantName(null);
+      return;
+    }
+    async function resolveAssistantName() {
       try {
         const res = await fetch("/api/ai/assistants?pageSize=100&onlyWorkflowAssistants=true");
         const data = await res.json();
         if (data.ok && data.items) {
-          setAvailableAgents(data.items);
-          // Auto-select first agent if available
-          if (data.items.length > 0 && !agentId) {
-            setAgentId(data.items[0].id);
-          }
+          const assistant = data.items.find((a) => a.id === workflow.ai_assistant_id);
+          setAssistantName(assistant?.name || workflow.ai_assistant_id);
+        } else {
+          setAssistantName(workflow.ai_assistant_id);
         }
       } catch (err) {
-        console.error("Failed to load agents:", err);
+        setAssistantName(workflow.ai_assistant_id);
       }
     }
-    loadAgents();
-  }, [agentId]);
+    resolveAssistantName();
+  }, [workflow?.ai_assistant_id]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Get current scenario
-  const currentScenario = TEST_SCENARIOS[selectedScenario];
+  // LLM-generated scenario - all scenarios use same flow
+  const [isScenarioGenerating, setIsScenarioGenerating] = useState(false);
+
+  const fetchScenario = useCallback(async (scenarioType) => {
+    if (!flowId) return null;
+    // workflow_specific requires stages; others work with just workflow name
+    if (scenarioType === "workflow_specific" && !workflow?.stages?.length) return null;
+    scenarioFetchInProgressRef.current = true;
+    setIsScenarioGenerating(true);
+    setGeneratedScenario(null);
+    try {
+      const res = await fetch(`/api/admin/workflows/${flowId}/generate-test-scenario`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ scenarioType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate scenario");
+      // Only set if user hasn't switched to a different scenario during fetch
+      if (data.scenario && selectedScenarioRef.current === data.scenario.id) {
+        setGeneratedScenario(data.scenario);
+      }
+      return data.scenario;
+    } catch (err) {
+      notify({
+        title: "Scenario generation failed",
+        description: err.message,
+        variant: "error",
+      });
+      return null;
+    } finally {
+      scenarioFetchInProgressRef.current = false;
+      setIsScenarioGenerating(false);
+    }
+  }, [flowId, workflow?.stages?.length]);
+
+  // Generate scenario when selection changes
+  useEffect(() => {
+    if (!selectedScenario || !flowId) return;
+    if (selectedScenario === "workflow_specific" && !workflow?.stages?.length) return;
+    fetchScenario(selectedScenario);
+  }, [selectedScenario, flowId, workflow?.stages?.length, fetchScenario]);
+
+  // Resolve current scenario - use generated or placeholder
+  const scenarioConfig = SCENARIO_LIST.find((s) => s.id === selectedScenario);
+  const currentScenario =
+    generatedScenario && generatedScenario.id === selectedScenario
+      ? generatedScenario
+      : {
+          id: selectedScenario,
+          name: scenarioConfig?.name || selectedScenario,
+          description: scenarioConfig?.description || "Generating…",
+          responses: [],
+        };
+
+  // Available scenarios - Complete Workflow only when workflow has stages
+  const availableScenarios = useMemo(() => {
+    if (workflow?.stages?.length) {
+      return SCENARIO_LIST;
+    }
+    return SCENARIO_LIST.filter((s) => s.id !== "workflow_specific");
+  }, [workflow?.stages?.length]);
+
+  // Ensure selectedScenario is valid; default to Complete Workflow when it becomes available
+  const usedFallbackRef = useRef(false);
+  useEffect(() => {
+    const hasWorkflowSpecific = availableScenarios.some((s) => s.id === "workflow_specific");
+    const valid = availableScenarios.some((s) => s.id === selectedScenario);
+
+    if (!valid && availableScenarios.length > 0) {
+      usedFallbackRef.current = true;
+      setSelectedScenario(hasWorkflowSpecific ? "workflow_specific" : availableScenarios[0].id);
+    } else if (hasWorkflowSpecific && usedFallbackRef.current) {
+      // Recover: we had fallen back before workflow loaded, now switch to Complete Workflow
+      usedFallbackRef.current = false;
+      setSelectedScenario("workflow_specific");
+    }
+  }, [availableScenarios, selectedScenario]);
+  const totalScenarioSteps = currentScenario?.responses?.length ?? 0;
+
+  const workflowStages = workflow?.stages ?? [];
+  const totalWorkflowItems = workflowStages.reduce(
+    (sum, s) => sum + (s.items?.length ?? 0),
+    0
+  );
+  const completedWorkflowItems = Object.values(workflowItemStatuses).filter(
+    (s) => s?.status === "completed"
+  ).length;
+
+  // Analyze new messages with LLM (same approach as live agent desktop)
+  useEffect(() => {
+    if (!flowId || !workflow?.stages?.length || !isTestRunning) return;
+
+    const analyzableMessages = messages
+      .map((m, i) => ({ ...m, index: i }))
+      .filter((m) => m.role !== "system" && m.content?.trim());
+    const toAnalyze = analyzableMessages.filter(
+      (m) => m.index > lastAnalyzedMessageIndexRef.current
+    );
+    if (toAnalyze.length === 0) return;
+
+    if (workflowAnalysisInProgressRef.current) {
+      // Analysis in progress, retry shortly so we process these messages when it finishes
+      const t = setTimeout(() => setAnalysisRetryTrigger((r) => r + 1), 400);
+      return () => clearTimeout(t);
+    }
+
+    let cancelled = false;
+    workflowAnalysisInProgressRef.current = true;
+    setIsAnalyzingWorkflow(true);
+
+    (async () => {
+      let statuses = { ...workflowItemStatusesRef.current };
+      let slots = { ...workflowSlotsFilledRef.current };
+
+      for (const msg of toAnalyze) {
+        if (cancelled) break;
+        const speaker = msg.role === "user" ? "customer" : "agent";
+        try {
+          const result = await analyzeWorkflowMessage(
+            flowId,
+            msg.content,
+            speaker,
+            statuses,
+            slots
+          );
+          if (result.updates?.length) {
+            for (const u of result.updates) {
+              if (u.status === "completed") {
+                statuses = {
+                  ...statuses,
+                  [u.item_id]: {
+                    status: "completed",
+                    extracted_value: u.extracted_value,
+                    value: u.extracted_value,
+                    confidence_score: u.confidence,
+                  },
+                };
+              }
+            }
+          }
+          if (result.slotsFilled && Object.keys(result.slotsFilled).length > 0) {
+            slots = { ...slots, ...result.slotsFilled };
+          }
+          // Store intent/sentiment for message display (same as agent desktop)
+          if (result.intent || result.sentiment) {
+            setMessageAnalysis((prev) => ({
+              ...prev,
+              [msg.index]: {
+                intent: result.intent,
+                sentiment: result.sentiment,
+                sentimentScore: result.sentimentScore,
+              },
+            }));
+          }
+        } catch (err) {
+          console.error("[Workflow Test] Analyze error:", err);
+        }
+        lastAnalyzedMessageIndexRef.current = msg.index;
+      }
+
+      if (!cancelled) {
+        setWorkflowItemStatuses(statuses);
+        setWorkflowSlotsFilled(slots);
+      }
+      workflowAnalysisInProgressRef.current = false;
+      setIsAnalyzingWorkflow(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [flowId, workflow?.stages?.length, isTestRunning, messages, analysisRetryTrigger]);
 
   // Send chat message via REST API
-  const sendChatMessage = useCallback(async (messageText, convId, stepIndex = null) => {
+  const sendChatMessage = useCallback(async (messageText, convId, stepIndex = null, options = {}) => {
     if (!agentId || !convId) return null;
     
     setSendingMessage(true);
@@ -470,10 +992,11 @@ export default function TestAgentPage() {
     setMessages((prev) => [
       ...prev,
       {
-        id: `user-${Date.now()}`,
+        id: uniqueMessageId("user"),
         role: "user",
         content: messageText,
         timestamp: new Date().toISOString(),
+        manual: options.manual === true,
       },
     ]);
 
@@ -501,7 +1024,7 @@ export default function TestAgentPage() {
       setMessages((prev) => [
         ...prev,
         {
-          id: `ai-${Date.now()}`,
+          id: uniqueMessageId("ai"),
           role: "assistant",
           content: aiContent,
           timestamp: new Date().toISOString(),
@@ -522,49 +1045,109 @@ export default function TestAgentPage() {
 
   // Process AI response and send next scenario step if in auto mode
   const processAIResponse = useCallback(async (aiContent, convId, currentStepIndex) => {
-    if (!autoModeRef.current || isPaused) return;
-    
+    if (!autoModeRef.current || isPaused || !isTestRunningRef.current) return;
+    if (chatProcessingRef.current) return; // Prevent double processing
+    chatProcessingRef.current = true;
+    try {
     const scenario = currentScenario;
     if (!scenario?.responses?.length) return;
-    
+
     const lowerMessage = (aiContent || "").toLowerCase();
-    
-    // Find matching response based on keywords
+
+    // Collectible workflow items (same order as scenario for workflow_specific)
+    const collectibleItems = selectedScenarioRef.current === "workflow_specific"
+      ? (workflow?.stages?.flatMap((s) => s.items ?? [])
+          .filter((item) => (item.item_type || item.type || "action") !== "action") ?? [])
+      : [];
+
+    /** Extract significant words (length > 2) from label, prompt_hint, slot_name for matching */
+    const getItemWords = (item) => {
+      if (!item) return [];
+      const parts = [
+        item.label,
+        item.name,
+        item.prompt_hint,
+        item.slot_name?.replace(/_/g, " "),
+      ].filter(Boolean);
+      const text = parts.join(" ");
+      return [...new Set(text.toLowerCase().split(/[\s,;:|]+/).filter((w) => w.length > 2))];
+    };
+
+    // Find BEST matching step: prefer keyword match, then label/prompt_hint match
+    let bestStep = null;
+    let bestScore = 0;
     for (let i = currentStepIndex; i < scenario.responses.length; i++) {
       const step = scenario.responses[i];
-      if (step.keywords) {
-        const hasMatch = step.keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
-        if (hasMatch) {
-          setCurrentStep(i + 1);
-          
-          // Small delay before sending next message
-          await new Promise(r => setTimeout(r, 1000));
-          
-          const nextResponse = await sendChatMessage(step.text, convId, i);
-          
-          // Check if test is complete
-          if (i >= scenario.responses.length - 1) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: "system-complete",
-                role: "system",
-                content: "✅ Test scenario completed successfully!",
-                timestamp: new Date().toISOString(),
-              },
-            ]);
-            return;
-          }
-          
-          // Continue processing if we got a response
-          if (nextResponse) {
-            await processAIResponse(nextResponse, convId, i + 1);
-          }
-          return;
-        }
+
+      // Skip if workflow_specific and this step's item is already completed
+      if (collectibleItems[i]?.id && workflowItemStatusesRef.current?.[collectibleItems[i].id]?.status === "completed") {
+        continue;
+      }
+
+      // Try keyword match first
+      const matchCount = step.keywords?.length
+        ? step.keywords.filter((kw) => lowerMessage.includes(String(kw).toLowerCase())).length
+        : 0;
+
+      // Fallback: match workflow item label/prompt_hint (handles e.g. "Callback number" when AI says "confirm your callback number")
+      let itemMatchCount = 0;
+      if (matchCount === 0 && collectibleItems[i]) {
+        const itemWords = getItemWords(collectibleItems[i]);
+        itemMatchCount = itemWords.filter((w) => lowerMessage.includes(w)).length;
+      }
+
+      const totalMatch = matchCount || itemMatchCount;
+      if (totalMatch === 0) continue;
+
+      const score = totalMatch * 1000 + i;
+      if (score > bestScore) {
+        bestScore = score;
+        bestStep = { index: i, step };
       }
     }
-  }, [currentScenario, isPaused, sendChatMessage]);
+
+    // Fallback: when no match, use next step in sequence (AI phrasing may differ)
+    let stepToUse = bestStep;
+    if (!stepToUse && currentStepIndex < scenario.responses.length) {
+      const nextStep = scenario.responses[currentStepIndex];
+      const item = collectibleItems[currentStepIndex];
+      const itemCompleted = item?.id && workflowItemStatusesRef.current?.[item.id]?.status === "completed";
+      if (nextStep?.text?.trim() && !itemCompleted) {
+        stepToUse = { index: currentStepIndex, step: nextStep };
+      }
+    }
+
+    if (stepToUse) {
+      const { index: i, step } = stepToUse;
+      setCurrentStep(i + 1);
+
+      await waitForAnalysisAndDelay();
+      if (!isTestRunningRef.current) return;
+
+      const nextResponse = await sendChatMessage(step.text, convId, i);
+      if (!isTestRunningRef.current) return;
+
+      if (i >= scenario.responses.length - 1) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "system-complete",
+            role: "system",
+            content: "✅ Test scenario completed successfully!",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        return;
+      }
+
+      if (nextResponse) {
+        await processAIResponse(nextResponse, convId, i + 1);
+      }
+    }
+    } finally {
+      chatProcessingRef.current = false;
+    }
+  }, [currentScenario, isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay]);
 
   // Create a new conversation via Telnyx API
   const createConversation = useCallback(async () => {
@@ -620,7 +1203,12 @@ export default function TestAgentPage() {
     
     setIsTestRunning(true);
     setMessages([]);
+    setMessageAnalysis({});
     setCurrentStep(0);
+    currentStepRef.current = 0;
+    lastAnalyzedMessageIndexRef.current = -1;
+    setWorkflowItemStatuses({});
+    setWorkflowSlotsFilled({});
     setAgentState("active");
 
     // Add system message
@@ -641,8 +1229,8 @@ export default function TestAgentPage() {
         throw new Error("No welcome message from AI");
       }
 
-      // Wait a moment before sending first scenario message
-      await new Promise(r => setTimeout(r, 1000));
+      // Wait for workflow analysis of welcome exchange before sending first scenario message
+      await waitForAnalysisAndDelay();
 
       // Step 2: Send first scenario message
       const firstStep = currentScenario.responses[0];
@@ -671,7 +1259,7 @@ export default function TestAgentPage() {
         variant: "error",
       });
     }
-  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse, createConversation]);
+  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysisAndDelay]);
 
   // Send scenario message (manual mode) - uses REST API for chat, WebRTC for voice
   const sendScenarioMessage = useCallback(
@@ -702,7 +1290,7 @@ export default function TestAgentPage() {
         setMessages((prev) => [
           ...prev,
           {
-            id: `user-${Date.now()}`,
+            id: uniqueMessageId("user"),
             role: "user",
             content: step.text,
             timestamp: new Date().toISOString(),
@@ -722,8 +1310,8 @@ export default function TestAgentPage() {
     setInputMessage("");
     
     if (channel === "chat" && conversationId) {
-      // Chat mode - use REST API
-      const response = await sendChatMessage(messageText, conversationId);
+      // Chat mode - use REST API (mark as manual - user typed because auto flow stopped)
+      const response = await sendChatMessage(messageText, conversationId, undefined, { manual: true });
       // In auto mode, process the response for next steps
       if (isAutoMode && response) {
         await processAIResponse(response, conversationId, currentStep);
@@ -734,19 +1322,23 @@ export default function TestAgentPage() {
       setMessages((prev) => [
         ...prev,
         {
-          id: `user-${Date.now()}`,
+          id: uniqueMessageId("user"),
           role: "user",
           content: messageText,
           timestamp: new Date().toISOString(),
+          manual: true,
         },
       ]);
     }
   }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep]);
 
-  // Stop test
+  // Stop test - also clear conversation so no further messages can be sent
   const stopTest = useCallback(() => {
+    chatProcessingRef.current = false;
+    isTestRunningRef.current = false;
     setIsTestRunning(false);
     setIsPaused(false);
+    setConversationId(null);
     setMessages((prev) => [
       ...prev,
       {
@@ -777,13 +1369,22 @@ export default function TestAgentPage() {
     setVoiceStatus("idle");
   }, []);
 
-  // Reset test
+  // Reset test - regenerate scenario for current selection
   const resetTest = useCallback(() => {
+    chatProcessingRef.current = false;
+    isTestRunningRef.current = false;
     setIsTestRunning(false);
     setIsPaused(false);
+    setConversationId(null);
     setMessages([]);
+    setMessageAnalysis({});
     setCurrentStep(0);
     currentStepRef.current = 0;
+    lastAnalyzedMessageIndexRef.current = -1;
+    workflowAnalysisInProgressRef.current = false;
+    setWorkflowItemStatuses({});
+    setWorkflowSlotsFilled({});
+    fetchScenario(selectedScenario);
     setVoiceStatus("idle");
     setAgentState("idle");
     setHasReceivedWelcomeMessage(false);
@@ -795,7 +1396,7 @@ export default function TestAgentPage() {
       mockMicRef.current.cleanup();
       mockMicRef.current = null;
     }
-  }, []);
+  }, [selectedScenario, fetchScenario]);
 
   // Speak text via TTS and inject into mock microphone
   const speakTextViaAudio = useCallback(async (text) => {
@@ -809,7 +1410,7 @@ export default function TestAgentPage() {
       setMessages((prev) => [
         ...prev,
         {
-          id: `user-${Date.now()}`,
+          id: uniqueMessageId("user"),
           role: "user",
           content: text,
           timestamp: new Date().toISOString(),
@@ -895,6 +1496,9 @@ export default function TestAgentPage() {
     respondingInProgressRef.current = false;
     setCurrentStep(0);
     currentStepRef.current = 0;
+    lastAnalyzedMessageIndexRef.current = -1;
+    setWorkflowItemStatuses({});
+    setWorkflowSlotsFilled({});
     setMessages([
       {
         id: "system-voice-start",
@@ -1021,7 +1625,7 @@ export default function TestAgentPage() {
         setMessages((prev) => [
           ...prev,
           {
-            id: item.id || `transcript-${Date.now()}`,
+            id: item.id || uniqueMessageId("transcript"),
             role: isAssistant ? "assistant" : "user",
             content: item.content,
             timestamp: new Date().toISOString(),
@@ -1135,39 +1739,43 @@ export default function TestAgentPage() {
               {workflow?.name || "Workflow"}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={isTestRunning ? "default" : "secondary"}>
-              {isTestRunning ? "Test Running" : "Ready"}
-            </Badge>
-          </div>
         </CardHeader>
-        <CardContent className="p-0 h-full flex flex-col overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full p-6 items-stretch">
-          {/* Settings Panel */}
-          <div className="flex flex-col gap-4 h-full min-h-0">
-            <Card className="shrink-0">
-              <CardHeader>
-                <CardTitle className="text-sm">Test Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Agent Selection */}
+        <CardContent className="p-4 md:p-6 h-full flex flex-col overflow-hidden">
+          <div className="flex h-full min-h-0 gap-6">
+          {/* Left: narrow config panel as Card */}
+          <Card className="w-64 shrink-0 flex flex-col overflow-hidden">
+            <div className="shrink-0 border-b px-4 py-3 mb-4">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <IconSettings className="size-4 text-blue-500" />
+                Configuration
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Test setup and controls</p>
+            </div>
+            <CardContent className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Model</label>
+                <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                  {workflow?.llm_model || "openai/gpt-4o"}
+                </div>
+              </div>
+              <div className="space-y-4">
+                {/* AI Assistant (from workflow config) */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">AI Assistant</label>
-                  <Select value={agentId || ""} onValueChange={setAgentId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an assistant" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableAgents.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.name || agent.id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {availableAgents.length === 0 && (
+                  <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                    {agentId ? (
+                      assistantName ? (
+                        assistantName
+                      ) : (
+                        <span className="text-muted-foreground">Loading…</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">Not assigned</span>
+                    )}
+                  </div>
+                  {!agentId && (
                     <p className="text-xs text-muted-foreground">
-                      No assistants found. Create one first using "Create AI Agent" and assign it to a workflow.
+                      Create an AI Agent from the workflow page and assign it to this workflow.
                     </p>
                   )}
                 </div>
@@ -1184,7 +1792,7 @@ export default function TestAgentPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.values(TEST_SCENARIOS).map((scenario) => (
+                      {availableScenarios.map((scenario) => (
                         <SelectItem key={scenario.id} value={scenario.id}>
                           {scenario.name}
                         </SelectItem>
@@ -1291,20 +1899,50 @@ export default function TestAgentPage() {
                     </Select>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
 
-            {/* Test Controls */}
-            <Card className="shrink-0">
-              <CardHeader>
-                <CardTitle className="text-sm">Controls</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <div className="pt-2 border-t">
+              <h3 className="text-sm font-semibold mb-2">Controls</h3>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "mb-3 w-full justify-center py-1 text-sm font-medium",
+                  isScenarioGenerating
+                    ? "border-amber-500 text-amber-600 dark:border-amber-400 dark:text-amber-400"
+                    : isTestRunning
+                    ? "border-green-500 text-green-600 dark:border-green-400 dark:text-green-400"
+                    : generatedScenario && generatedScenario.id === selectedScenario
+                    ? "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                    : "border-muted-foreground/60 text-muted-foreground"
+                )}
+              >
+                {isScenarioGenerating ? (
+                  <>
+                    <IconLoader2 className="size-3 animate-spin mr-1.5" />
+                    Generating scenario…
+                  </>
+                ) : isTestRunning ? (
+                  "Test Running"
+                ) : generatedScenario && generatedScenario.id === selectedScenario ? (
+                  <>
+                    <IconCheck className="size-3 mr-1.5" />
+                    Scenario ready
+                  </>
+                ) : (
+                  "Ready"
+                )}
+              </Badge>
+              <div className="space-y-3">
                 {!isTestRunning ? (
                   <Button
                     className="w-full"
                     onClick={channel === "chat" ? startChatTest : startVoiceTest}
-                    disabled={!agentId}
+                    disabled={
+                      !agentId ||
+                      isScenarioGenerating ||
+                      !generatedScenario ||
+                      generatedScenario.id !== selectedScenario
+                    }
                   >
                     <IconPlayerPlay className="size-4 mr-2" />
                     Start Test
@@ -1344,48 +1982,17 @@ export default function TestAgentPage() {
                   variant="outline"
                   className="w-full"
                   onClick={resetTest}
-                  disabled={isTestRunning}
                 >
                   <IconRefresh className="size-4 mr-2" />
                   Reset
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            {/* Progress */}
-            {isTestRunning && channel === "chat" && (
-              <Card className="shrink-0">
-                <CardHeader>
-                  <CardTitle className="text-sm">Progress</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Step</span>
-                      <span>
-                        {currentStep} / {currentScenario.responses.length}
-                      </span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-telnyx-green h-2 rounded-full transition-all"
-                        style={{
-                          width: `${(currentStep / currentScenario.responses.length) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Agent Status (Chat & Voice) */}
-            {isTestRunning && (
-              <Card className="shrink-0">
-                <CardHeader>
-                  <CardTitle className="text-sm">Voice Status</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+            {isTestRunning && channel === "voice" && (
+              <div className="pt-2 border-t">
+                <h3 className="text-sm font-semibold mb-3">Voice Status</h3>
+                <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Badge
                       variant={
@@ -1428,30 +2035,61 @@ export default function TestAgentPage() {
                       )}
                     </Button>
                   </div>
+                </div>
+              </div>
+            )}
+            </CardContent>
+          </Card>
+
+          {/* Middle: Agent View (50%) + Conversation (50%) as separate Cards */}
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 gap-6">
+            <div className="flex-1 grid grid-cols-2 gap-6 min-h-0">
+              {/* Workflow Card */}
+              <Card className="flex flex-col min-h-0 overflow-hidden">
+                <div className="shrink-0 border-b px-4 py-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <IconClipboardList className="size-4 text-purple-500" />
+                    Workflow
+                    {isAnalyzingWorkflow && (
+                      <Badge variant="outline" className="ml-auto text-xs animate-pulse bg-purple-500/10 text-purple-500 border-purple-500/50">
+                        <IconLoader2 className="size-3 mr-1 animate-spin" />
+                        Analyzing
+                      </Badge>
+                    )}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    LLM analyzes conversation for intent & slot extraction
+                  </p>
+                </div>
+                <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+                  <WorkflowAgentView
+                    stages={workflowStages}
+                    itemStatuses={workflowItemStatuses}
+                  />
                 </CardContent>
               </Card>
-            )}
-          </div>
 
-          {/* Chat/Voice Panel */}
-          <div className="lg:col-span-2 flex flex-col h-full min-h-0">
-            <Card className="h-full flex flex-col min-h-0 overflow-hidden">
-              <CardHeader className="shrink-0">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  {channel === "chat" ? (
-                    <>
-                      <IconMessageCircle className="size-4" />
-                      Chat Test
-                    </>
-                  ) : (
-                    <>
-                      <IconPhone className="size-4" />
-                      Voice Test
-                    </>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
+              {/* Simulated Conversation Card */}
+              <Card className="flex flex-col min-h-0 overflow-hidden">
+                <div className="shrink-0 border-b px-4 py-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    {channel === "chat" ? (
+                      <>
+                        <IconMessageCircle className="size-4 text-green-500" />
+                        Simulated Conversation
+                      </>
+                    ) : (
+                      <>
+                        <IconPhone className="size-4 text-green-500" />
+                        Simulated Conversation
+                      </>
+                    )}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Chat or voice messages from the test run
+                  </p>
+                </div>
+                <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
                 {/* Messages Area */}
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <ScrollArea className="h-full">
@@ -1467,11 +2105,12 @@ export default function TestAgentPage() {
                         </p>
                       </div>
                     ) : (
-                      messages.map((message) => {
+                      messages.map((message, idx) => {
+                        const key = `${message.id}-${idx}`;
                         if (message.role === "system") {
                           return (
                             <div
-                              key={message.id}
+                              key={key}
                               className="text-center text-xs text-muted-foreground py-2"
                             >
                               {message.content}
@@ -1480,9 +2119,10 @@ export default function TestAgentPage() {
                         }
                         return (
                           <Message
-                            key={message.id}
+                            key={key}
                             message={message}
                             isUser={message.role === "user"}
+                            analysis={messageAnalysis[idx]}
                           />
                         );
                       })
@@ -1521,13 +2161,21 @@ export default function TestAgentPage() {
                         <IconSend className="size-4" />
                       </Button>
                     </div>
-                    {!isAutoMode && isTestRunning && currentStep < currentScenario.responses.length && (
+                    {!isAutoMode && isTestRunning && currentScenario?.responses?.length > 0 && (
                       <div className="mt-2">
                         <Button
                           variant="outline"
                           size="sm"
                           className="w-full"
-                          onClick={() => sendScenarioMessage(currentStep)}
+                          onClick={() => {
+                            const stepIndex = findScenarioStepForLastAiMessage(
+                              messages,
+                              currentScenario,
+                              workflowStages,
+                              workflowItemStatuses
+                            );
+                            sendScenarioMessage(stepIndex);
+                          }}
                         >
                           Send Next Scenario Response
                         </Button>
@@ -1535,8 +2183,21 @@ export default function TestAgentPage() {
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Progress panel at bottom */}
+            <div className="shrink-0">
+              <TestWorkflowProgressBar
+                stages={workflowStages}
+                itemStatuses={workflowItemStatuses}
+                completedItems={completedWorkflowItems}
+                totalItems={totalWorkflowItems}
+                currentStep={currentStep}
+                totalScenarioSteps={totalScenarioSteps}
+              />
+            </div>
           </div>
           </div>
         </CardContent>

@@ -6,12 +6,18 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  // Allowed dev origins from environment variable (comma-separated)
-  // Falls back to empty array if not set
-  allowedDevOrigins: (process.env.ALLOWED_DEV_ORIGINS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean),
+  // Allowed dev origins - required when using a reverse proxy (e.g. api.tokaj.synology.me)
+  // Prevents "Blocked cross-origin request" which breaks HMR and causes ~40s page refreshes
+  // Set ALLOWED_DEV_ORIGINS env var to override (comma-separated).
+  allowedDevOrigins: [
+    "api.tokaj.synology.me",
+    "http://api.tokaj.synology.me",
+    "https://api.tokaj.synology.me",
+    ...(process.env.ALLOWED_DEV_ORIGINS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ],
   // Configure static file serving for media files
   async rewrites() {
     return [
@@ -23,32 +29,11 @@ const nextConfig = {
   },
   // Server-side externals for Turbopack (Next.js 16+)
   serverExternalPackages: ["pg", "pgpass", "pg-connection-string"],
-  // Turbopack configuration to prevent unnecessary file watching
+  // Turbopack configuration (used when not passing --webpack)
   turbopack: {
-    // Ensure Turbopack resolves from this repo root
     root: process.cwd(),
-    // Ignore files and directories that shouldn't trigger reloads
     resolveAlias: {},
-    // Configure file watching to exclude unnecessary directories
-    // This prevents auto-refresh when files in these directories change
-    // Disable automatic reloads when FAST_REFRESH is false
-    ...(process.env.FAST_REFRESH === "false" && {
-      // Try to minimize file watching
-      resolveExtensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
-    }),
   },
-  // Completely disable automatic reloads in dev mode
-  // This prevents modals/sheets from closing during testing
-  onDemandEntries: {
-    // Keep pages in memory indefinitely to prevent reloads
-    maxInactiveAge: 25 * 60 * 60 * 1000, // 25 hours (effectively never)
-    pagesBufferLength: 100, // Keep many pages in memory
-  },
-  // Disable automatic reloads in development when FAST_REFRESH is false
-  ...(process.env.FAST_REFRESH === "false" && {
-    // Prevent Next.js from automatically reloading pages
-    reactStrictMode: false, // Disable strict mode to prevent double renders
-  }),
   // Webpack configuration (only used when --webpack flag is explicitly set)
   webpack: (config, { isServer, dev }) => {
     if (isServer) {
@@ -65,65 +50,40 @@ const nextConfig = {
         };
       }
     }
-    // In dev mode, configure file watching to prevent unnecessary reloads
+    // In dev mode, configure file watching for reliable HMR
     if (dev) {
-      // Configure watchOptions to be very restrictive
-      // Only watch actual source files, ignore everything else
       config.watchOptions = {
         ignored: [
-          // Ignore build and cache directories
           "**/node_modules/**",
           "**/.next/**",
           "**/.git/**",
           "**/dist/**",
           "**/build/**",
           "**/coverage/**",
-          // Ignore logs and system files
           "**/*.log",
           "**/.DS_Store",
           "**/yarn-error.log",
           "**/npm-debug.log",
           "**/.yarn/**",
-          // Ignore documentation and planning files
           "**/plan/**",
           "**/docs/**",
-          // Ignore static assets (changes here shouldn't trigger reload)
           "**/public/**",
-          // Ignore config and lock files
           "**/.env*",
           "**/yarn.lock",
           "**/package-lock.json",
-          // Ignore test files
+          // Ignore test directories (not app routes like workflows/[id]/test/)
+          "**/__tests__/**",
           "**/tests/**",
-          "**/test/**",
           "**/*.test.*",
           "**/*.spec.*",
-          // Ignore scripts directory
           "**/scripts/**",
-          // Ignore docker files
           "**/docker/**",
-          // Ignore any markdown files
           "**/*.md",
         ],
-        // Aggregate multiple changes into a single rebuild
-        // Increased timeout significantly to prevent rapid reloads
-        aggregateTimeout: 10000, // Wait 10 seconds after the last change before rebuilding
-        // Use native file watching (not polling) for better performance
+        aggregateTimeout: 300,
         poll: false,
-        // Follow symlinks (usually not needed, but can cause issues if enabled)
         followSymlinks: false,
       };
-
-      // Disable file watching entirely if FAST_REFRESH is explicitly false
-      // This will require manual server restart for changes
-      if (process.env.FAST_REFRESH === "false") {
-        // Set watch to false to completely disable file watching
-        // Note: This means you'll need to manually restart the server for changes
-        // Uncomment the line below if you want to completely disable watching:
-        // config.watch = false;
-        // Instead, we'll just make the watchOptions very restrictive above
-        // and rely on FAST_REFRESH=false to prevent actual refreshes
-      }
     }
     return config;
   },

@@ -46,7 +46,7 @@ export async function GET(request, { params }) {
   }
 }
 
-// PUT/PATCH update assistant
+// PUT update assistant (forwards as POST to Telnyx - their API uses POST for updates)
 export async function PUT(request, { params }) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
@@ -61,7 +61,7 @@ export async function PUT(request, { params }) {
     const payload = await request.json().catch(() => ({}));
 
     const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${id}`), {
-      method: "PATCH",
+      method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",

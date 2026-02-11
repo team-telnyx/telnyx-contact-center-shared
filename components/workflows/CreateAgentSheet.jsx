@@ -75,6 +75,13 @@ function regionToFlag(region) {
   }
 }
 
+function formatProviderLabel(providerId) {
+  if (!providerId) return "";
+  const id = String(providerId).toLowerCase();
+  if (id === "aws") return "AWS";
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 /**
  * CreateAgentSheet - Creates a Telnyx AI Agent from workflow instructions
  * @param {object} props
@@ -100,12 +107,13 @@ export default function CreateAgentSheet({
   const [loadingModels, setLoadingModels] = useState(false);
   const [selectedModel, setSelectedModel] = useState("openai/gpt-4o");
   
-  // TTS settings
+  // TTS settings (default: Telnyx NaturalHD Astra)
+  const DEFAULT_TTS_VOICE = "Telnyx.NaturalHD.astra";
   const [ttsProviders, setTtsProviders] = useState([]);
   const [loadingTts, setLoadingTts] = useState(false);
-  const [ttsProvider, setTtsProvider] = useState("AWS");
-  const [ttsModel, setTtsModel] = useState("Polly");
-  const [ttsVoice, setTtsVoice] = useState("AWS.Polly.Joanna");
+  const [ttsProvider, setTtsProvider] = useState("telnyx");
+  const [ttsModel, setTtsModel] = useState("NaturalHD");
+  const [ttsVoice, setTtsVoice] = useState(DEFAULT_TTS_VOICE);
   const [ttsLanguageFilter, setTtsLanguageFilter] = useState("");
   const [ttsLanguageSearch, setTtsLanguageSearch] = useState("");
   const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = useState(false);
@@ -128,21 +136,28 @@ export default function CreateAgentSheet({
   // Created agent
   const [createdAgent, setCreatedAgent] = useState(null);
 
-  // Available STT providers and models
+  // Available STT providers and models (from Telnyx OpenAPI TranscriptionSettings)
   const STT_PROVIDERS = [
     { value: "deepgram", label: "Deepgram" },
-    { value: "telnyx", label: "Telnyx" },
+    { value: "azure", label: "Azure" },
+    { value: "distil-whisper", label: "Distil-Whisper" },
+    { value: "openai", label: "OpenAI Whisper" },
   ];
-  
+
   const STT_MODELS = {
     deepgram: [
       { value: "nova-2", label: "Nova 2 (Recommended)" },
-      { value: "nova", label: "Nova" },
-      { value: "enhanced", label: "Enhanced" },
-      { value: "base", label: "Base" },
+      { value: "nova-3", label: "Nova 3 (Multi-lingual)" },
+      { value: "flux", label: "Flux (Turn-taking, English)" },
     ],
-    telnyx: [
-      { value: "default", label: "Default" },
+    azure: [
+      { value: "fast", label: "Fast" },
+    ],
+    "distil-whisper": [
+      { value: "distil-large-v2", label: "Distil Large v2 (Low latency, English)" },
+    ],
+    openai: [
+      { value: "whisper-large-v3-turbo", label: "Whisper Large v3 Turbo (Multi-lingual)" },
     ],
   };
   
@@ -162,15 +177,18 @@ export default function CreateAgentSheet({
     { value: "amazon", label: "Amazon" },
   ];
 
-  // Reset state when sheet opens
+  // Reset state when sheet opens (not when workflow changes - e.g. after onAgentCreated updates ai_assistant_id)
   useEffect(() => {
     if (open) {
       setAgentName(workflow?.name ? `${workflow.name} Agent` : "Test Agent");
       setCustomInstructions("");
       setCreatedAgent(null);
       setSelectedModel(workflow?.llm_model || "openai/gpt-4o");
+      setTtsProvider("telnyx");
+      setTtsModel("NaturalHD");
+      setTtsVoice(DEFAULT_TTS_VOICE);
     }
-  }, [open, workflow]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- only reset when sheet opens
 
   // Load LLM models
   useEffect(() => {
@@ -212,15 +230,51 @@ export default function CreateAgentSheet({
     fetchVoices();
   }, [open]);
 
+  // Preselect default voice when providers load (Telnyx.NaturalHD.astra)
+  useEffect(() => {
+    if (!open || !ttsProviders.length || loadingTts) return;
+    const targetVoiceId = DEFAULT_TTS_VOICE;
+    for (const prov of ttsProviders) {
+      for (const m of prov.models || []) {
+        const voice = (m.voices || []).find(
+          (v) => String(v?.id || "").toLowerCase() === targetVoiceId.toLowerCase()
+        );
+        if (voice) {
+          setTtsProvider(prov.id);
+          setTtsModel(m.id);
+          setTtsVoice(voice.id);
+          return;
+        }
+      }
+    }
+    // Fallback: use first Telnyx provider/model/voice if default not found
+    const telnyxProv = ttsProviders.find(
+      (p) => String(p?.id || "").toLowerCase() === "telnyx"
+    );
+    if (telnyxProv?.models?.length) {
+      const firstModel = telnyxProv.models[0];
+      const firstVoice = firstModel?.voices?.[0];
+      if (firstVoice) {
+        setTtsProvider(telnyxProv.id);
+        setTtsModel(firstModel.id);
+        setTtsVoice(firstVoice.id);
+      }
+    }
+  }, [open, ttsProviders, loadingTts]);
+
   // Get available models for selected TTS provider
   const getTtsModels = () => {
-    const provider = ttsProviders.find(p => p.id === ttsProvider);
+    const provider = ttsProviders.find(
+      (p) => String(p?.id || "").toLowerCase() === String(ttsProvider || "").toLowerCase()
+    );
     return provider?.models || [];
   };
   
   // Get all voices for selected TTS provider and model (before language filtering)
   const allTtsVoices = useMemo(() => {
-    const provider = ttsProviders.find(p => p.id === ttsProvider);
+    const provider = ttsProviders.find(
+      (p) => String(p?.id || "").toLowerCase() === String(ttsProvider || "").toLowerCase()
+    );
     if (!provider?.models) return [];
     
     // If no model selected, get all voices from all models
@@ -276,7 +330,7 @@ export default function CreateAgentSheet({
     );
   }, [ttsLanguageOptions, ttsLanguageSearch]);
 
-  // Filter voices by language
+  // Filter voices by language and dedupe by id (same voice can appear in multiple models)
   const getTtsVoices = () => {
     let filtered = allTtsVoices;
     if (ttsLanguageFilter) {
@@ -284,7 +338,12 @@ export default function CreateAgentSheet({
         (v) => normalizeLocaleCode(v?.language) === ttsLanguageFilter
       );
     }
-    return filtered;
+    const seen = new Set();
+    return filtered.filter((v) => {
+      if (!v?.id || seen.has(v.id)) return false;
+      seen.add(v.id);
+      return true;
+    });
   };
 
   // Get selected language display info
@@ -363,7 +422,7 @@ export default function CreateAgentSheet({
     try {
       const instructions = generateInstructions();
       
-      // Build the agent payload (without channels/unauthenticated - must be set in separate request)
+      // Build the agent payload (per Telnyx CreateAssistantRequest)
       const payload = {
         name: agentName.trim() || "Test Agent",
         model: selectedModel,
@@ -373,16 +432,19 @@ export default function CreateAgentSheet({
           voice_id: ttsVoice,
         },
         transcription: {
-          provider: sttProvider,
-          model: sttProvider === "deepgram" ? `${sttProvider}/${sttModel}` : sttModel,
+          model: `${sttProvider}/${sttModel}`,
           language: sttLanguage,
         },
-        // Noise suppression
+        enabled_features: ["telephony"],
+        telephony_settings: {
+          supports_unauthenticated_web_calls: true,
+          recording_settings: { channels: "dual", format: "mp3" },
+        },
+        // Noise suppression (noise_suppression in telephony_settings if needed)
         noise_suppression: noiseSuppressionEnabled ? {
           enabled: true,
           engine: noiseSuppressionEngine,
         } : { enabled: false },
-        // Silence detection settings
         silence_timeout_ms: 500,
         max_silence_count: 2,
       };
@@ -401,19 +463,27 @@ export default function CreateAgentSheet({
 
       const assistantId = data.assistant?.id;
       
-      // Enable voice channel and unauthenticated calls in separate request
+      // Enable telephony (voice) and unauthenticated web calls per Telnyx UpdateAssistantRequest
       if (assistantId) {
         try {
-          await fetch(`/api/ai/assistants/${assistantId}`, {
+          const updateRes = await fetch(`/api/ai/assistants/${assistantId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              channels: ["voice"],
-              allow_unauthenticated: true,
+              enabled_features: ["telephony"],
+              telephony_settings: {
+                supports_unauthenticated_web_calls: true,
+                recording_settings: { channels: "dual", format: "mp3" },
+              },
             }),
           });
+          const updateData = await updateRes.json().catch(() => ({}));
+          if (!updateRes.ok) {
+            throw new Error(updateData?.error || `Failed to enable voice: ${updateRes.status}`);
+          }
         } catch (err) {
           console.error("Failed to enable voice channel:", err);
+          throw err;
         }
       }
 
@@ -561,7 +631,9 @@ export default function CreateAgentSheet({
                             onValueChange={(v) => {
                               setTtsProvider(v);
                               // Reset model, voice and language filter when provider changes
-                              const provider = ttsProviders.find(p => p.id === v);
+                              const provider = ttsProviders.find(
+                                (p) => String(p?.id || "").toLowerCase() === String(v || "").toLowerCase()
+                              );
                               const firstModel = provider?.models?.[0];
                               setTtsModel(firstModel?.id || "");
                               setTtsVoice("");
@@ -574,7 +646,7 @@ export default function CreateAgentSheet({
                             <SelectContent>
                               {ttsProviders.map((provider) => (
                                 <SelectItem key={provider.id} value={provider.id}>
-                                  {provider.name}
+                                  {formatProviderLabel(provider.id)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -738,7 +810,7 @@ export default function CreateAgentSheet({
                             setSttProvider(v);
                             // Reset model when provider changes
                             const firstModel = STT_MODELS[v]?.[0];
-                            setSttModel(firstModel?.value || "default");
+                            setSttModel(firstModel?.value || "");
                           }}
                         >
                           <SelectTrigger>
@@ -844,7 +916,7 @@ export default function CreateAgentSheet({
         </div>
 
         {!createdAgent && (
-          <SheetFooter className="px-6 py-4 border-t">
+          <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}

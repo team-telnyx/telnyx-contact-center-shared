@@ -10,7 +10,7 @@ Telnyx Contact Center is a Next.js 15 application providing a complete contact c
 
 ```bash
 # Development
-yarn dev                 # Start dev server (hostname 0.0.0.0:3000, FAST_REFRESH disabled)
+yarn dev                 # Start dev server (hostname 0.0.0.0:3000, HMR enabled)
 yarn build              # Build for production
 yarn start              # Start production server
 

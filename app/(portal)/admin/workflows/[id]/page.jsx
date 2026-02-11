@@ -41,6 +41,7 @@ import {
   IconX,
   IconRobot,
   IconTestPipe2,
+  IconRefresh,
 } from "@tabler/icons-react";
 import CreateAgentSheet from "@/components/workflows/CreateAgentSheet";
 import { notify } from "@/components/ToastNotify";
@@ -101,6 +102,8 @@ export default function WorkflowEditorPage() {
   
   // AI Agent
   const [showCreateAgentSheet, setShowCreateAgentSheet] = useState(false);
+  const [updatingAssistant, setUpdatingAssistant] = useState(false);
+  const [assistantExists, setAssistantExists] = useState(true);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -250,6 +253,49 @@ export default function WorkflowEditorPage() {
   useEffect(() => {
     loadWorkflow();
   }, [loadWorkflow]);
+
+  // Verify assigned AI assistant still exists on Telnyx; clear from workflow if deleted
+  useEffect(() => {
+    if (!workflow?.ai_assistant_id) {
+      setAssistantExists(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/ai/assistants/${workflow.ai_assistant_id}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data.ok) {
+          if (res.status === 404) {
+            setAssistantExists(false);
+            const putRes = await fetch(`/api/admin/workflows/${workflowId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ai_assistant_id: null }),
+            });
+            if (putRes.ok) {
+              setWorkflow((prev) =>
+                prev ? { ...prev, ai_assistant_id: null } : prev
+              );
+              notify({
+                title: "AI Assistant Removed",
+                description: "The assigned AI assistant was deleted on Telnyx. You can create a new one.",
+                variant: "info",
+              });
+            }
+          }
+        } else {
+          setAssistantExists(true);
+        }
+      } catch (err) {
+        if (!cancelled) setAssistantExists(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workflow?.ai_assistant_id, workflowId]);
   
   // Load available LLM models
   useEffect(() => {
@@ -632,18 +678,67 @@ export default function WorkflowEditorPage() {
             variant="outline"
             size="sm"
             onClick={() => setShowCreateAgentSheet(true)}
-            disabled={!!workflow?.ai_assistant_id}
-            title={workflow?.ai_assistant_id ? "AI Agent already created" : "Create AI Agent"}
+            disabled={!!workflow?.ai_assistant_id && assistantExists}
+            title={
+              workflow?.ai_assistant_id && assistantExists
+                ? "AI Agent already created"
+                : "Create AI Agent"
+            }
           >
             <IconRobot className="size-4 mr-1" />
             Create AI Agent
           </Button>
+          {workflow?.ai_assistant_id && assistantExists && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setUpdatingAssistant(true);
+                try {
+                  const res = await fetch(
+                    `/api/admin/workflows/${workflowId}/update-assistant`,
+                    { method: "POST" }
+                  );
+                  const data = await res.json();
+                  if (!res.ok) {
+                    throw new Error(data.error || "Failed to update assistant");
+                  }
+                  notify({
+                    title: "AI Agent Updated",
+                    description: "Assistant instructions have been synced with the current workflow.",
+                    variant: "success",
+                  });
+                } catch (err) {
+                  notify({
+                    title: "Update Failed",
+                    description: err.message || "Failed to update AI agent",
+                    variant: "error",
+                  });
+                } finally {
+                  setUpdatingAssistant(false);
+                }
+              }}
+              disabled={updatingAssistant}
+              title="Sync assistant instructions with current workflow"
+            >
+              {updatingAssistant ? (
+                <IconLoader2 className="size-4 mr-1 animate-spin" />
+              ) : (
+                <IconRefresh className="size-4 mr-1" />
+              )}
+              Update AI Agent
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
             onClick={() => router.push(`/admin/workflows/${workflowId}/test`)}
-            disabled={!workflow?.ai_assistant_id}
-            title={!workflow?.ai_assistant_id ? "Create an AI Agent first" : "Test AI Agent"}
+            disabled={!workflow?.ai_assistant_id || !assistantExists}
+            title={
+              !workflow?.ai_assistant_id || !assistantExists
+                ? "Create an AI Agent first"
+                : "Test AI Agent"
+            }
           >
             <IconTestPipe2 className="size-4 mr-1" />
             Test AI Agent
@@ -1039,7 +1134,7 @@ export default function WorkflowEditorPage() {
         onAgentCreated={(agentId) => {
           // Refresh workflow to get updated ai_assistant_id
           setWorkflow(prev => prev ? { ...prev, ai_assistant_id: agentId } : prev);
-          notify.success("AI Agent created successfully!");
+          notify({ title: "Success", description: "AI Agent created successfully!", variant: "success" });
         }}
       />
     </div>
