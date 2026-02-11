@@ -41,6 +41,51 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 
+// TTS Provider/Model/Voice options
+const TTS_OPTIONS = {
+  Minimax: {
+    "speech-2.8-turbo": [
+      "English_magnetic_voiced_man",
+      "English_female_calm_soothing",
+      "English_male_deep_narrator",
+      "English_female_bright_cheerful",
+    ],
+  },
+  AWS: {
+    Polly: [
+      "Joanna",
+      "Matthew",
+      "Amy",
+      "Brian",
+      "Ivy",
+      "Kendra",
+      "Salli",
+      "Joey",
+    ],
+  },
+  Azure: {
+    "en-US": [
+      "JennyNeural",
+      "GuyNeural",
+      "AriaNeural",
+      "DavisNeural",
+      "AmberNeural",
+      "AshleyNeural",
+    ],
+  },
+  ElevenLabs: {
+    "eleven_turbo_v2_5": [
+      "Rachel",
+      "Adam",
+      "Antoni",
+      "Bella",
+      "Domi",
+      "Elli",
+      "Josh",
+    ],
+  },
+};
+
 // Test scenarios for AI agent testing
 const TEST_SCENARIOS = {
   healthcare_intake: {
@@ -254,15 +299,15 @@ class MockMicrophone {
 // TTS SERVICE FOR VOICE TESTS
 // ============================================
 
-async function generateTTS(text) {
-  console.log(`[TTS] Generating for: "${text.substring(0, 50)}..."`);
+async function generateTTS(text, voice) {
+  console.log(`[TTS] Generating for: "${text.substring(0, 50)}..." with voice: ${voice}`);
 
   const response = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       text,
-      voice: "Minimax.speech-2.8-turbo.English_magnetic_voiced_man",
+      voice,
     }),
   });
 
@@ -303,6 +348,11 @@ export default function TestAgentPage() {
   const [agentState, setAgentState] = useState("idle");
   const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
   
+  // TTS configuration
+  const [ttsProvider, setTtsProvider] = useState("Minimax");
+  const [ttsModel, setTtsModel] = useState("speech-2.8-turbo");
+  const [ttsVoice, setTtsVoice] = useState("English_magnetic_voiced_man");
+  
   // Agent state
   const [agentId, setAgentId] = useState(null);
   const [availableAgents, setAvailableAgents] = useState([]);
@@ -321,6 +371,7 @@ export default function TestAgentPage() {
   const currentStepRef = useRef(0); // Track current step in ref for voice callbacks
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
+  const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -334,6 +385,29 @@ export default function TestAgentPage() {
   useEffect(() => {
     localAudioEnabledRef.current = localAudioEnabled;
   }, [localAudioEnabled]);
+
+  // Build TTS voice string and keep ref in sync
+  useEffect(() => {
+    ttsVoiceRef.current = `${ttsProvider}.${ttsModel}.${ttsVoice}`;
+  }, [ttsProvider, ttsModel, ttsVoice]);
+
+  // Reset model and voice when provider changes
+  useEffect(() => {
+    const models = Object.keys(TTS_OPTIONS[ttsProvider] || {});
+    if (models.length > 0 && !TTS_OPTIONS[ttsProvider][ttsModel]) {
+      setTtsModel(models[0]);
+      const voices = TTS_OPTIONS[ttsProvider][models[0]] || [];
+      setTtsVoice(voices[0] || "");
+    }
+  }, [ttsProvider, ttsModel]);
+
+  // Reset voice when model changes
+  useEffect(() => {
+    const voices = TTS_OPTIONS[ttsProvider]?.[ttsModel] || [];
+    if (voices.length > 0 && !voices.includes(ttsVoice)) {
+      setTtsVoice(voices[0]);
+    }
+  }, [ttsProvider, ttsModel, ttsVoice]);
 
   // Load workflow data
   useEffect(() => {
@@ -743,8 +817,8 @@ export default function TestAgentPage() {
         },
       ]);
 
-      // Generate TTS audio
-      const audioUrl = await generateTTS(text);
+      // Generate TTS audio with selected voice
+      const audioUrl = await generateTTS(text, ttsVoiceRef.current);
 
       // Inject into mock microphone stream
       await mockMicRef.current.injectAudioFromUrl(audioUrl);
@@ -1152,6 +1226,67 @@ export default function TestAgentPage() {
                     disabled={isTestRunning}
                   />
                 </div>
+
+                {/* TTS Configuration (Voice channel only) */}
+                {channel === "voice" && (
+                  <div className="space-y-3 pt-3 border-t">
+                    <label className="text-sm font-medium">TTS Voice</label>
+                    
+                    {/* Provider */}
+                    <Select
+                      value={ttsProvider}
+                      onValueChange={setTtsProvider}
+                      disabled={isTestRunning}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Provider" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(TTS_OPTIONS).map((provider) => (
+                          <SelectItem key={provider} value={provider}>
+                            {provider}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Model */}
+                    <Select
+                      value={ttsModel}
+                      onValueChange={setTtsModel}
+                      disabled={isTestRunning}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Model" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(TTS_OPTIONS[ttsProvider] || {}).map((model) => (
+                          <SelectItem key={model} value={model}>
+                            {model}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Voice */}
+                    <Select
+                      value={ttsVoice}
+                      onValueChange={setTtsVoice}
+                      disabled={isTestRunning}
+                    >
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="Voice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(TTS_OPTIONS[ttsProvider]?.[ttsModel] || []).map((voice) => (
+                          <SelectItem key={voice} value={voice}>
+                            {voice}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
