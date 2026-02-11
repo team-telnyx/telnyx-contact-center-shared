@@ -1785,7 +1785,7 @@ export default function TestAgentPage() {
       });
       console.error("[Voice Test] Failed to start:", err);
     }
-  }, [agentId, selectedPersona, handleVoiceAutoResponse]);
+  }, [agentId, selectedPersona, handleVoiceAutoResponse, isAutoMode]);
 
   if (loading) {
     return (
