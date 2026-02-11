@@ -1501,17 +1501,9 @@ export default function TestAgentPage() {
       }
     } else if (voiceClientRef.current) {
       // Voice mode - use WebRTC
+      // Don't add message here - transcript.item callback will handle it
+      // when Telnyx transcribes our message
       voiceClientRef.current.sendConversationMessage(messageText);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uniqueMessageId("user"),
-          role: "user",
-          content: messageText,
-          timestamp: new Date().toISOString(),
-          manual: true,
-        },
-      ]);
     }
   }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep]);
 
@@ -1594,29 +1586,26 @@ export default function TestAgentPage() {
     }
 
     try {
-      // Add to messages immediately
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uniqueMessageId("user"),
-          role: "user",
-          content: text,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      // Don't add message here - let transcript.item from Telnyx handle it
+      // This prevents duplicate messages
 
       // Generate TTS audio with selected voice
       const audioUrl = await generateTTS(text, ttsVoiceRef.current);
 
-      // Inject into mock microphone stream
-      await mockMicRef.current.injectAudioFromUrl(audioUrl);
-
-      // Also play locally so we can hear our side
+      // Start local playback immediately (in parallel with injection)
+      // This ensures we hear our response at the same time it's being sent
+      let localPlaybackPromise = Promise.resolve();
       if (localAudioEnabledRef.current) {
         const localAudio = new Audio(audioUrl);
         localAudio.volume = 0.7;
-        localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
+        localPlaybackPromise = localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
       }
+
+      // Inject into mock microphone stream (runs in parallel with local playback)
+      await mockMicRef.current.injectAudioFromUrl(audioUrl);
+
+      // Wait for local playback to start (usually instant)
+      await localPlaybackPromise;
 
       // Cleanup after a delay
       setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
