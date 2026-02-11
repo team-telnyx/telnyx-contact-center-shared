@@ -597,6 +597,7 @@ export default function TestAgentPage() {
   const [selectedPersona, setSelectedPersona] = useState("cooperative");
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [useDynamicResponses, setUseDynamicResponses] = useState(true); // Toggle between dynamic and pre-generated
+  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
@@ -1165,7 +1166,9 @@ export default function TestAgentPage() {
           if (!isTestRunningRef.current) break;
 
           // Generate dynamic response based on AI's message
+          setIsGeneratingResponse(true);
           const dynamicResponse = await generateDynamicResponse(currentAiMessage, conversationHistory);
+          setIsGeneratingResponse(false);
           
           if (!dynamicResponse) {
             console.error("[Dynamic] Failed to generate response, stopping");
@@ -1518,6 +1521,7 @@ export default function TestAgentPage() {
     isTestRunningRef.current = false;
     setIsTestRunning(false);
     setIsPaused(false);
+    setIsGeneratingResponse(false);
     setConversationId(null);
     setMessages((prev) => [
       ...prev,
@@ -1555,6 +1559,7 @@ export default function TestAgentPage() {
     isTestRunningRef.current = false;
     setIsTestRunning(false);
     setIsPaused(false);
+    setIsGeneratingResponse(false);
     setConversationId(null);
     setMessages([]);
     setMessageAnalysis({});
@@ -2359,6 +2364,12 @@ export default function TestAgentPage() {
                           />
                         );
                       })
+                    )}
+                    {isGeneratingResponse && (
+                      <div className="flex items-center gap-2 text-purple-400 justify-end">
+                        <span className="text-sm">Customer is thinking...</span>
+                        <IconLoader2 className="size-4 animate-spin" />
+                      </div>
                     )}
                     {sendingMessage && (
                       <div className="flex items-center gap-2 text-muted-foreground">
