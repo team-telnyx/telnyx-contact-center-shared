@@ -494,7 +494,7 @@ class MockMicrophone {
     return `enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`;
   }
 
-  async injectAudio(audioBuffer) {
+  async injectAudio(audioBuffer, gain = 3.0) {
     if (!this.audioContext || !this.destination) {
       throw new Error("Mock microphone not initialized");
     }
@@ -511,7 +511,7 @@ class MockMicrophone {
       sumSquares += channelData[i] * channelData[i];
     }
     const rms = Math.sqrt(sumSquares / channelData.length);
-    console.log(`[MockMic] Audio analysis: duration=${audioBuffer.duration.toFixed(2)}s, sampleRate=${audioBuffer.sampleRate}Hz, channels=${audioBuffer.numberOfChannels}, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}`);
+    console.log(`[MockMic] Audio analysis: duration=${audioBuffer.duration.toFixed(2)}s, sampleRate=${audioBuffer.sampleRate}Hz, channels=${audioBuffer.numberOfChannels}, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}, gain=${gain}x`);
 
     return new Promise((resolve, reject) => {
       try {
@@ -520,7 +520,7 @@ class MockMicrophone {
         
         // Add gain node for amplification (TTS audio is quieter than AI response)
         const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 3.0; // Boost TTS volume to match AI assistant level
+        gainNode.gain.value = gain;
         
         source.connect(gainNode);
         gainNode.connect(this.destination);
@@ -550,7 +550,11 @@ class MockMicrophone {
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
-    return this.injectAudio(audioBuffer);
+    return this.injectAudio(audioBuffer, this.gain || 3.0);
+  }
+  
+  setGain(value) {
+    this.gain = value;
   }
 
   getStream() {
@@ -621,6 +625,7 @@ export default function TestAgentPage() {
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
+  const [ttsGain, setTtsGain] = useState(3.0); // TTS audio gain/volume multiplier
   const [isMuted, setIsMuted] = useState(false); // Microphone mute state (MANUAL mode)
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -672,6 +677,7 @@ export default function TestAgentPage() {
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
+  const ttsGainRef = useRef(3.0); // TTS gain for MockMicrophone
   const lastAnalyzedMessageIndexRef = useRef(-1);
   const workflowAnalysisInProgressRef = useRef(false);
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
@@ -797,6 +803,14 @@ export default function TestAgentPage() {
   useEffect(() => {
     ttsVoiceRef.current = ttsVoiceId;
   }, [ttsVoiceId]);
+
+  // Keep ttsGainRef in sync with gain slider and update MockMic
+  useEffect(() => {
+    ttsGainRef.current = ttsGain;
+    if (mockMicRef.current) {
+      mockMicRef.current.setGain(ttsGain);
+    }
+  }, [ttsGain]);
 
   // Reset model and voice when provider changes
   useEffect(() => {
@@ -2011,23 +2025,73 @@ export default function TestAgentPage() {
                         <span>8s</span>
                       </div>
                     </div>
+
+                    {/* TTS Volume/Gain */}
+                    <div className="pt-2">
+                      <label className="text-sm font-medium">TTS Volume</label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Audio gain multiplier ({ttsGain.toFixed(1)}x)
+                      </p>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="5"
+                        step="0.5"
+                        value={ttsGain}
+                        onChange={(e) => setTtsGain(Number(e.target.value))}
+                        className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>0.5x</span>
+                        <span>5x</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
 
             <div className="pt-2 border-t">
               <h3 className="text-sm font-semibold mb-2">Controls</h3>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "mb-3 w-full justify-center py-1 text-sm font-medium",
-                  isTestRunning
-                    ? "border-green-500 text-green-600 dark:border-green-400 dark:text-green-400"
-                    : "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
-                )}
-              >
-                {isTestRunning ? "Test Running" : "Ready"}
-              </Badge>
+              {/* Status Badge - shows Voice Status when voice test active, otherwise Ready/Test Running */}
+              {isTestRunning && channel === "voice" ? (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "mb-3 w-full justify-center gap-1.5",
+                    agentState === "listening" && "text-blue-500 border-blue-500",
+                    agentState === "speaking" && "text-green-500 border-green-500",
+                    agentState === "thinking" && "text-yellow-500 border-yellow-500",
+                    agentState === "idle" && "text-muted-foreground",
+                    voiceStatus === "connecting" && "text-yellow-500 border-yellow-500",
+                    voiceStatus === "error" && "text-red-500 border-red-500"
+                  )}
+                >
+                  <div className={cn(
+                    "w-2 h-2 rounded-full",
+                    agentState === "listening" && "bg-blue-500",
+                    agentState === "speaking" && "bg-green-500 animate-pulse",
+                    agentState === "thinking" && "bg-yellow-500 animate-pulse",
+                    agentState === "idle" && "bg-muted-foreground",
+                    voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
+                    voiceStatus === "error" && "bg-red-500"
+                  )} />
+                  {voiceStatus === "connecting" ? "Connecting..." : 
+                   voiceStatus === "error" ? "Error" :
+                   agentState.charAt(0).toUpperCase() + agentState.slice(1)}
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "mb-3 w-full justify-center py-1 text-sm font-medium",
+                    isTestRunning
+                      ? "border-green-500 text-green-600 dark:border-green-400 dark:text-green-400"
+                      : "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                  )}
+                >
+                  {isTestRunning ? "Test Running" : "Ready"}
+                </Badge>
+              )}
               <div className="space-y-3">
                 {!isTestRunning ? (
                   <Button
@@ -2080,36 +2144,6 @@ export default function TestAgentPage() {
               </div>
             </div>
 
-            {isTestRunning && channel === "voice" && (
-              <div className="pt-2 border-t">
-                <h3 className="text-sm font-semibold mb-3">Voice Status</h3>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-center gap-1.5",
-                    agentState === "listening" && "text-blue-500 border-blue-500",
-                    agentState === "speaking" && "text-green-500 border-green-500",
-                    agentState === "thinking" && "text-yellow-500 border-yellow-500",
-                    agentState === "idle" && "text-muted-foreground",
-                    voiceStatus === "connecting" && "text-yellow-500 border-yellow-500",
-                    voiceStatus === "error" && "text-red-500 border-red-500"
-                  )}
-                >
-                  <div className={cn(
-                    "w-2 h-2 rounded-full",
-                    agentState === "listening" && "bg-blue-500",
-                    agentState === "speaking" && "bg-green-500 animate-pulse",
-                    agentState === "thinking" && "bg-yellow-500 animate-pulse",
-                    agentState === "idle" && "bg-muted-foreground",
-                    voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
-                    voiceStatus === "error" && "bg-red-500"
-                  )} />
-                  {voiceStatus === "connecting" ? "Connecting..." : 
-                   voiceStatus === "error" ? "Error" :
-                   agentState.charAt(0).toUpperCase() + agentState.slice(1)}
-                </Badge>
-              </div>
-            )}
             </CardContent>
           </Card>
 
