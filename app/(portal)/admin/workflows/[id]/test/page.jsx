@@ -41,50 +41,7 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 
-// TTS Provider/Model/Voice options
-const TTS_OPTIONS = {
-  Minimax: {
-    "speech-2.8-turbo": [
-      "English_magnetic_voiced_man",
-      "English_female_calm_soothing",
-      "English_male_deep_narrator",
-      "English_female_bright_cheerful",
-    ],
-  },
-  AWS: {
-    Polly: [
-      "Joanna",
-      "Matthew",
-      "Amy",
-      "Brian",
-      "Ivy",
-      "Kendra",
-      "Salli",
-      "Joey",
-    ],
-  },
-  Azure: {
-    "en-US": [
-      "JennyNeural",
-      "GuyNeural",
-      "AriaNeural",
-      "DavisNeural",
-      "AmberNeural",
-      "AshleyNeural",
-    ],
-  },
-  ElevenLabs: {
-    "eleven_turbo_v2_5": [
-      "Rachel",
-      "Adam",
-      "Antoni",
-      "Bella",
-      "Domi",
-      "Elli",
-      "Josh",
-    ],
-  },
-};
+// TTS options will be loaded dynamically from API
 
 // Test scenarios for AI agent testing
 const TEST_SCENARIOS = {
@@ -349,9 +306,11 @@ export default function TestAgentPage() {
   const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
   
   // TTS configuration
-  const [ttsProvider, setTtsProvider] = useState("Minimax");
-  const [ttsModel, setTtsModel] = useState("speech-2.8-turbo");
-  const [ttsVoice, setTtsVoice] = useState("English_magnetic_voiced_man");
+  const [ttsVoices, setTtsVoices] = useState({});
+  const [ttsProvider, setTtsProvider] = useState("");
+  const [ttsModel, setTtsModel] = useState("");
+  const [ttsVoice, setTtsVoice] = useState("");
+  const [ttsVoiceId, setTtsVoiceId] = useState(""); // Full voice ID like "Minimax.speech-2.8-turbo.English_male"
   
   // Agent state
   const [agentId, setAgentId] = useState(null);
@@ -386,28 +345,68 @@ export default function TestAgentPage() {
     localAudioEnabledRef.current = localAudioEnabled;
   }, [localAudioEnabled]);
 
-  // Build TTS voice string and keep ref in sync
+  // Load TTS voices from API
   useEffect(() => {
-    ttsVoiceRef.current = `${ttsProvider}.${ttsModel}.${ttsVoice}`;
-  }, [ttsProvider, ttsModel, ttsVoice]);
+    async function loadVoices() {
+      try {
+        const res = await fetch("/api/tts/voices?language=en");
+        const data = await res.json();
+        if (data.ok && data.voices) {
+          setTtsVoices(data.voices);
+          // Set defaults
+          const providers = Object.keys(data.voices);
+          if (providers.length > 0) {
+            const defaultProvider = providers.includes("minimax") ? "minimax" : providers[0];
+            setTtsProvider(defaultProvider);
+            const models = Object.keys(data.voices[defaultProvider] || {});
+            if (models.length > 0) {
+              setTtsModel(models[0]);
+              const voices = data.voices[defaultProvider][models[0]] || [];
+              if (voices.length > 0) {
+                setTtsVoice(voices[0].name);
+                setTtsVoiceId(voices[0].id);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load TTS voices:", err);
+      }
+    }
+    loadVoices();
+  }, []);
+
+  // Keep ttsVoiceRef in sync with selected voice ID
+  useEffect(() => {
+    ttsVoiceRef.current = ttsVoiceId;
+  }, [ttsVoiceId]);
 
   // Reset model and voice when provider changes
   useEffect(() => {
-    const models = Object.keys(TTS_OPTIONS[ttsProvider] || {});
-    if (models.length > 0 && !TTS_OPTIONS[ttsProvider][ttsModel]) {
+    if (!ttsProvider || !ttsVoices[ttsProvider]) return;
+    const models = Object.keys(ttsVoices[ttsProvider] || {});
+    if (models.length > 0) {
       setTtsModel(models[0]);
-      const voices = TTS_OPTIONS[ttsProvider][models[0]] || [];
-      setTtsVoice(voices[0] || "");
+      const voices = ttsVoices[ttsProvider][models[0]] || [];
+      if (voices.length > 0) {
+        setTtsVoice(voices[0].name);
+        setTtsVoiceId(voices[0].id);
+      }
     }
-  }, [ttsProvider, ttsModel]);
+  }, [ttsProvider, ttsVoices]);
 
-  // Reset voice when model changes
+  // Reset voice when model changes  
   useEffect(() => {
-    const voices = TTS_OPTIONS[ttsProvider]?.[ttsModel] || [];
-    if (voices.length > 0 && !voices.includes(ttsVoice)) {
-      setTtsVoice(voices[0]);
+    if (!ttsProvider || !ttsModel || !ttsVoices[ttsProvider]) return;
+    const voices = ttsVoices[ttsProvider]?.[ttsModel] || [];
+    if (voices.length > 0) {
+      const currentVoice = voices.find(v => v.name === ttsVoice);
+      if (!currentVoice) {
+        setTtsVoice(voices[0].name);
+        setTtsVoiceId(voices[0].id);
+      }
     }
-  }, [ttsProvider, ttsModel, ttsVoice]);
+  }, [ttsModel, ttsProvider, ttsVoice, ttsVoices]);
 
   // Load workflow data
   useEffect(() => {
@@ -1242,9 +1241,9 @@ export default function TestAgentPage() {
                         <SelectValue placeholder="Provider" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.keys(TTS_OPTIONS).map((provider) => (
+                        {Object.keys(ttsVoices).map((provider) => (
                           <SelectItem key={provider} value={provider}>
-                            {provider}
+                            {provider.charAt(0).toUpperCase() + provider.slice(1)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1260,7 +1259,7 @@ export default function TestAgentPage() {
                         <SelectValue placeholder="Model" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.keys(TTS_OPTIONS[ttsProvider] || {}).map((model) => (
+                        {Object.keys(ttsVoices[ttsProvider] || {}).map((model) => (
                           <SelectItem key={model} value={model}>
                             {model}
                           </SelectItem>
@@ -1271,16 +1270,21 @@ export default function TestAgentPage() {
                     {/* Voice */}
                     <Select
                       value={ttsVoice}
-                      onValueChange={setTtsVoice}
+                      onValueChange={(name) => {
+                        const voices = ttsVoices[ttsProvider]?.[ttsModel] || [];
+                        const voice = voices.find(v => v.name === name);
+                        setTtsVoice(name);
+                        if (voice) setTtsVoiceId(voice.id);
+                      }}
                       disabled={isTestRunning}
                     >
                       <SelectTrigger className="h-8">
                         <SelectValue placeholder="Voice" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(TTS_OPTIONS[ttsProvider]?.[ttsModel] || []).map((voice) => (
-                          <SelectItem key={voice} value={voice}>
-                            {voice}
+                        {(ttsVoices[ttsProvider]?.[ttsModel] || []).map((voice) => (
+                          <SelectItem key={voice.id} value={voice.name}>
+                            {voice.name} {voice.gender ? `(${voice.gender})` : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>

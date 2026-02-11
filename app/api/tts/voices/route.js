@@ -1,100 +1,64 @@
-import { NextResponse } from "next/server";
-import { buildTelnyxV2Url } from "@/lib/telnyx.js";
+import { NextResponse } from 'next/server';
 
-export const dynamic = "force-dynamic";
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 
 export async function GET(request) {
   try {
-    const apiKey = process.env.TELNYX_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { ok: false, error: "Missing TELNYX_API_KEY" },
-        { status: 500, headers: { "Cache-Control": "no-store" } }
-      );
+    if (!TELNYX_API_KEY) {
+      return NextResponse.json({ error: 'TELNYX_API_KEY not configured' }, { status: 500 });
     }
 
-    const url = new URL(request.url);
-    const provider = url.searchParams.get("provider");
-    const elevenLabsRef =
-      url.searchParams.get("elevenlabs_api_key_ref") ||
-      process.env.ELEVENLABS_API_KEY_REF ||
-      null;
+    const { searchParams } = new URL(request.url);
+    const language = searchParams.get('language') || 'en';
 
-    const sp = new URLSearchParams();
-    if (provider) sp.set("provider", provider);
-    if (elevenLabsRef) sp.set("elevenlabs_api_key_ref", elevenLabsRef);
+    const response = await fetch('https://api.telnyx.com/v2/text-to-speech/voices', {
+      headers: {
+        'Authorization': `Bearer ${TELNYX_API_KEY}`,
+      },
+    });
 
-    const res = await fetch(
-      buildTelnyxV2Url(`/text-to-speech/voices?${sp.toString()}`),
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
+    if (!response.ok) {
+      throw new Error(`Telnyx API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Parse voices into provider/model/voice structure
+    const voicesMap = {};
+    
+    for (const voice of data) {
+      // Filter by language if specified
+      if (language && voice.language && !voice.language.toLowerCase().startsWith(language.toLowerCase())) {
+        continue;
       }
-    );
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        { ok: false, error: `Telnyx API error: ${res.status} ${text}` },
-        { status: 502, headers: { "Cache-Control": "no-store" } }
-      );
-    }
-
-    const data = await res.json();
-    const voices = Array.isArray(data?.voices) ? data.voices : [];
-
-    // Normalize to { providers: [{ id, name, models: [{ id, name, voices: [...] }] }] }
-    // The OpenAPI returns a flat list; derive groupings by parsing id/name if possible.
-    const byProviderModel = new Map();
-    for (const v of voices) {
-      const provider = String(v?.provider || "").trim();
-      // Try to extract model and voiceName from id or name when possible.
-      // Expect formats like Provider.Model.VoiceId
-      const idStr = String(v?.id || v?.name || "");
-      const parts = idStr.split(".");
-      const inferredProvider = (parts[0] || provider || "").trim();
-      const model = parts.length >= 3 ? parts[1] : "";
-      const groupKey = `${inferredProvider}::${model}`;
-      if (!byProviderModel.has(groupKey)) {
-        byProviderModel.set(groupKey, {
-          provider: inferredProvider,
-          model,
-          voices: [],
-        });
+      
+      const provider = voice.provider || 'unknown';
+      const model = voice.model_id || 'default';
+      
+      if (!voicesMap[provider]) {
+        voicesMap[provider] = {};
       }
-      byProviderModel.get(groupKey).voices.push(v);
-    }
-
-    const providersMap = new Map();
-    for (const { provider, model, voices: list } of byProviderModel.values()) {
-      if (!providersMap.has(provider)) {
-        providersMap.set(provider, {
-          id: provider,
-          name: provider,
-          models: [],
-        });
+      if (!voicesMap[provider][model]) {
+        voicesMap[provider][model] = [];
       }
-      providersMap
-        .get(provider)
-        .models.push({ id: model, name: model, voices: list });
+      
+      voicesMap[provider][model].push({
+        id: voice.id,
+        name: voice.name,
+        label: voice.label || voice.name,
+        language: voice.language,
+        gender: voice.gender,
+        age: voice.age,
+      });
     }
-    const providers = Array.from(providersMap.values()).map((p) => ({
-      ...p,
-      models: p.models.sort((a, b) => a.name.localeCompare(b.name)),
-    }));
 
-    return NextResponse.json(
-      { ok: true, providers, raw: voices },
-      { headers: { "Cache-Control": "no-store" } }
-    );
-  } catch (err) {
-    return NextResponse.json(
-      { ok: false, error: err?.message || String(err) },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
+    return NextResponse.json({
+      ok: true,
+      voices: voicesMap,
+      total: data.length,
+    });
+  } catch (error) {
+    console.error('[TTS Voices] Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
