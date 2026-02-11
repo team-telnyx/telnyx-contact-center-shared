@@ -444,6 +444,8 @@ class MockMicrophone {
     this.destination = null;
     this.stream = null;
     this.isPlaying = false;
+    this.silentOscillator = null; // Keep reference to prevent GC
+    this.silentGain = null;
   }
 
   async init() {
@@ -451,18 +453,24 @@ class MockMicrophone {
       sampleRate: 48000,
     });
 
+    // Resume context if suspended (browser autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      console.log("[MockMic] AudioContext suspended, resuming...");
+      await this.audioContext.resume();
+    }
+
     this.destination = this.audioContext.createMediaStreamDestination();
     this.stream = this.destination.stream;
 
-    // Silent oscillator to keep stream active
-    const oscillator = this.audioContext.createOscillator();
-    const gain = this.audioContext.createGain();
-    gain.gain.value = 0;
-    oscillator.connect(gain);
-    gain.connect(this.destination);
-    oscillator.start();
+    // Silent oscillator to keep stream active (store as properties to prevent GC)
+    this.silentOscillator = this.audioContext.createOscillator();
+    this.silentGain = this.audioContext.createGain();
+    this.silentGain.gain.value = 0.0001; // Tiny value instead of 0 to ensure data flows
+    this.silentOscillator.connect(this.silentGain);
+    this.silentGain.connect(this.destination);
+    this.silentOscillator.start();
 
-    console.log("[MockMic] Initialized (48kHz)");
+    console.log(`[MockMic] Initialized (48kHz), AudioContext state: ${this.audioContext.state}`);
     
     // Debug: Monitor stream activity
     const track = this.stream.getAudioTracks()[0];
@@ -543,6 +551,16 @@ class MockMicrophone {
   }
 
   cleanup() {
+    if (this.silentOscillator) {
+      try {
+        this.silentOscillator.stop();
+      } catch (e) {
+        // Ignore if already stopped
+      }
+      this.silentOscillator = null;
+    }
+    this.silentGain = null;
+    
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;
@@ -649,6 +667,7 @@ export default function TestAgentPage() {
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
   const mediaRecorderRef = useRef(null); // MediaRecorder for manual voice recording
   const recordedChunksRef = useRef([]); // Recorded audio chunks
+  const originalGetUserMediaRef = useRef(null); // Store original getUserMedia for recording
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
@@ -1283,7 +1302,11 @@ export default function TestAgentPage() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Use ORIGINAL getUserMedia to get real microphone, not mock stream
+      const getUserMedia = originalGetUserMediaRef.current || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      console.log("[Recording] Getting real microphone stream...");
+      const stream = await getUserMedia({ audio: true });
+      console.log(`[Recording] Got stream with ${stream.getAudioTracks().length} audio tracks`);
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       recordedChunksRef.current = [];
@@ -1601,6 +1624,10 @@ export default function TestAgentPage() {
       // IMPORTANT: Override getUserMedia AFTER TelnyxAIAgent is created
       // The library wraps getUserMedia in its constructor, so we must override after
       const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      
+      // Save original for recording (before any overrides)
+      originalGetUserMediaRef.current = libGetUserMedia;
+      
       navigator.mediaDevices.getUserMedia = async (constraints) => {
         if (constraints.audio) {
           console.log("[Voice] getUserMedia intercepted (post-init) - returning mock stream");
