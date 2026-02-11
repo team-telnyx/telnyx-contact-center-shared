@@ -170,9 +170,9 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Verify item belongs to workflow
+    // Verify item belongs to workflow and get its stage_id and order_index
     const { rows: [existing] } = await pool.query(
-      `SELECT i.id FROM aa_workflow_items i
+      `SELECT i.id, i.stage_id, i.order_index FROM aa_workflow_items i
        JOIN aa_workflow_stages s ON i.stage_id = s.id
        WHERE i.id = $1 AND s.workflow_id = $2`,
       [itemId, workflowId]
@@ -185,8 +185,18 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    const { stage_id, order_index } = existing;
+
     // Delete item
     await pool.query(`DELETE FROM aa_workflow_items WHERE id = $1`, [itemId]);
+
+    // Renumber remaining items in the same stage (close the gap)
+    await pool.query(
+      `UPDATE aa_workflow_items 
+       SET order_index = order_index - 1, updated_at = NOW()
+       WHERE stage_id = $1 AND order_index > $2`,
+      [stage_id, order_index]
+    );
 
     return NextResponse.json({
       ok: true,

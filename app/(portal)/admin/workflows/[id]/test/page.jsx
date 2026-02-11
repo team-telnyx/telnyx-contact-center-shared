@@ -1074,13 +1074,19 @@ export default function TestAgentPage() {
     };
 
     // Find BEST matching step: prefer keyword match, then label/prompt_hint match
+    // NOTE: For workflow_specific, scenario.responses[0] is greeting (waitForGreeting),
+    // responses[1+] correspond to collectibleItems[0+]. So item index = response index - 1.
     let bestStep = null;
     let bestScore = 0;
     for (let i = currentStepIndex; i < scenario.responses.length; i++) {
       const step = scenario.responses[i];
+      
+      // Map response index to collectible item index (responses[0] = greeting, no item)
+      const itemIndex = i > 0 ? i - 1 : null;
+      const item = itemIndex !== null ? collectibleItems[itemIndex] : null;
 
       // Skip if workflow_specific and this step's item is already completed
-      if (collectibleItems[i]?.id && workflowItemStatusesRef.current?.[collectibleItems[i].id]?.status === "completed") {
+      if (item?.id && workflowItemStatusesRef.current?.[item.id]?.status === "completed") {
         continue;
       }
 
@@ -1091,8 +1097,8 @@ export default function TestAgentPage() {
 
       // Fallback: match workflow item label/prompt_hint (handles e.g. "Callback number" when AI says "confirm your callback number")
       let itemMatchCount = 0;
-      if (matchCount === 0 && collectibleItems[i]) {
-        const itemWords = getItemWords(collectibleItems[i]);
+      if (matchCount === 0 && item) {
+        const itemWords = getItemWords(item);
         itemMatchCount = itemWords.filter((w) => lowerMessage.includes(w)).length;
       }
 
@@ -1110,7 +1116,9 @@ export default function TestAgentPage() {
     let stepToUse = bestStep;
     if (!stepToUse && currentStepIndex < scenario.responses.length) {
       const nextStep = scenario.responses[currentStepIndex];
-      const item = collectibleItems[currentStepIndex];
+      // Map response index to collectible item index
+      const itemIndex = currentStepIndex > 0 ? currentStepIndex - 1 : null;
+      const item = itemIndex !== null ? collectibleItems[itemIndex] : null;
       const itemCompleted = item?.id && workflowItemStatusesRef.current?.[item.id]?.status === "completed";
       if (nextStep?.text?.trim() && !itemCompleted) {
         stepToUse = { index: currentStepIndex, step: nextStep };
