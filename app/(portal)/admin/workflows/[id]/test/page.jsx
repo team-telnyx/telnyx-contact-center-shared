@@ -446,6 +446,7 @@ class MockMicrophone {
     this.isPlaying = false;
     this.silentOscillator = null;
     this.silentGain = null;
+    this.gain = 3.0; // TTS audio gain multiplier
   }
 
   async init() {
@@ -555,6 +556,7 @@ class MockMicrophone {
   
   setGain(value) {
     this.gain = value;
+    console.log(`[MockMic] Gain set to ${value}x`);
   }
 
   getStream() {
@@ -2083,12 +2085,16 @@ export default function TestAgentPage() {
                 <Badge
                   variant="outline"
                   className={cn(
-                    "mb-3 w-full justify-center py-1 text-sm font-medium",
+                    "mb-3 w-full justify-center gap-1.5",
                     isTestRunning
-                      ? "border-green-500 text-green-600 dark:border-green-400 dark:text-green-400"
-                      : "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
+                      ? "text-green-500 border-green-500"
+                      : "text-emerald-500 border-emerald-500"
                   )}
                 >
+                  <div className={cn(
+                    "w-2 h-2 rounded-full",
+                    isTestRunning ? "bg-green-500 animate-pulse" : "bg-emerald-500"
+                  )} />
                   {isTestRunning ? "Test Running" : "Ready"}
                 </Badge>
               )}
