@@ -1724,15 +1724,16 @@ export default function TestAgentPage() {
       // Start conversation - pass mock stream in AUTO mode, let library use real mic in MANUAL mode
       const conversationOptions = {
         callerName: "Voice Test Harness",
-        audio: true,
       };
       
       if (isAutoMode && mockMicRef.current) {
         const mockStream = mockMicRef.current.getStream();
         console.log(`[Voice] AUTO mode - passing mock localStream: ${mockMicRef.current.debugStreamStatus()}`);
         conversationOptions.localStream = mockStream;
+        conversationOptions.audio = true;
       } else {
-        console.log("[Voice] MANUAL mode - library will use real microphone");
+        console.log("[Voice] MANUAL mode - library will request microphone");
+        // Don't pass audio or localStream - let library handle it naturally
       }
       
       await client.startConversation(conversationOptions);
@@ -2074,41 +2075,30 @@ export default function TestAgentPage() {
             {isTestRunning && channel === "voice" && (
               <div className="pt-2 border-t">
                 <h3 className="text-sm font-semibold mb-3">Voice Status</h3>
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Agent State Badge */}
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "text-xs",
-                      agentState === "listening" && "text-blue-500 border-blue-500 bg-blue-500/10",
-                      agentState === "speaking" && "text-green-500 border-green-500 bg-green-500/10",
-                      agentState === "thinking" && "text-yellow-500 border-yellow-500 bg-yellow-500/10",
-                      agentState === "idle" && "text-gray-500 border-gray-500 bg-gray-500/10"
-                    )}
-                  >
-                    <div className={cn(
-                      "w-2 h-2 rounded-full mr-1.5",
-                      agentState === "listening" && "bg-blue-500",
-                      agentState === "speaking" && "bg-green-500 animate-pulse",
-                      agentState === "thinking" && "bg-yellow-500 animate-pulse",
-                      agentState === "idle" && "bg-gray-500"
-                    )} />
-                    {agentState.charAt(0).toUpperCase() + agentState.slice(1)}
-                  </Badge>
-                  
-                  {/* Connection Status Badge */}
-                  {voiceStatus === "connecting" && (
-                    <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500 bg-yellow-500/10">
-                      <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse mr-1.5" />
-                      Connecting
-                    </Badge>
+                {/* Agent State Badge - full width */}
+                <div
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border text-sm font-medium",
+                    agentState === "listening" && "text-blue-600 border-blue-300 bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:bg-blue-950",
+                    agentState === "speaking" && "text-green-600 border-green-300 bg-green-50 dark:text-green-400 dark:border-green-800 dark:bg-green-950",
+                    agentState === "thinking" && "text-yellow-600 border-yellow-300 bg-yellow-50 dark:text-yellow-400 dark:border-yellow-800 dark:bg-yellow-950",
+                    agentState === "idle" && "text-gray-600 border-gray-300 bg-gray-50 dark:text-gray-400 dark:border-gray-700 dark:bg-gray-900",
+                    voiceStatus === "connecting" && "text-yellow-600 border-yellow-300 bg-yellow-50 dark:text-yellow-400 dark:border-yellow-800 dark:bg-yellow-950",
+                    voiceStatus === "error" && "text-red-600 border-red-300 bg-red-50 dark:text-red-400 dark:border-red-800 dark:bg-red-950"
                   )}
-                  {voiceStatus === "error" && (
-                    <Badge variant="outline" className="text-xs text-red-500 border-red-500 bg-red-500/10">
-                      <div className="w-2 h-2 rounded-full bg-red-500 mr-1.5" />
-                      Error
-                    </Badge>
-                  )}
+                >
+                  <div className={cn(
+                    "w-3 h-3 rounded-full",
+                    agentState === "listening" && "bg-blue-500",
+                    agentState === "speaking" && "bg-green-500 animate-pulse",
+                    agentState === "thinking" && "bg-yellow-500 animate-pulse",
+                    agentState === "idle" && "bg-gray-400",
+                    voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
+                    voiceStatus === "error" && "bg-red-500"
+                  )} />
+                  {voiceStatus === "connecting" ? "Connecting..." : 
+                   voiceStatus === "error" ? "Error" :
+                   agentState.charAt(0).toUpperCase() + agentState.slice(1)}
                 </div>
               </div>
             )}
