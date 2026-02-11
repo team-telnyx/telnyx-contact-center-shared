@@ -1206,13 +1206,17 @@ export default function TestAgentPage() {
       if (isAutoMode && response) {
         await processAIResponse(response, conversationId, currentStep);
       }
-    } else if (voiceClientRef.current) {
-      // Voice mode - use WebRTC
-      // Don't add message here - transcript.item callback will handle it
-      // when Telnyx transcribes our message
-      voiceClientRef.current.sendConversationMessage(messageText);
+    } else if (channel === "voice" && voiceClientRef.current) {
+      // Voice mode - convert text to TTS and inject into WebRTC
+      // This is the same as auto mode but with user-typed text
+      setSendingMessage(true);
+      try {
+        await speakTextViaAudio(messageText);
+      } finally {
+        setSendingMessage(false);
+      }
     }
-  }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep]);
+  }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep, speakTextViaAudio]);
 
   // Stop test - also clear conversation so no further messages can be sent
   const stopTest = useCallback(() => {
@@ -2077,29 +2081,38 @@ export default function TestAgentPage() {
                   </ScrollArea>
                 </div>
 
-                {/* Input Area (Chat only) */}
-                {channel === "chat" && (
+                {/* Input Area (Chat and Voice) */}
+                {isTestRunning && (
                   <div className="shrink-0 border-t p-4">
                     <div className="flex gap-2">
                       <Input
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
-                        placeholder="Type a message..."
+                        placeholder={channel === "voice" ? "Type to speak via TTS..." : "Type a message..."}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
                             sendMessage();
                           }
                         }}
-                        disabled={!isTestRunning || sendingMessage}
+                        disabled={sendingMessage}
                       />
                       <Button
                         onClick={sendMessage}
-                        disabled={!isTestRunning || sendingMessage || !inputMessage.trim()}
+                        disabled={sendingMessage || !inputMessage.trim()}
                       >
-                        <IconSend className="size-4" />
+                        {channel === "voice" ? (
+                          <IconMicrophone className="size-4" />
+                        ) : (
+                          <IconSend className="size-4" />
+                        )}
                       </Button>
                     </div>
+                    {channel === "voice" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Text will be converted to speech and sent via TTS
+                      </p>
+                    )}
                   </div>
                 )}
                 </CardContent>
