@@ -1739,8 +1739,9 @@ export default function TestAgentPage() {
         conversationOptions.localStream = mockStream;
         conversationOptions.audio = true;
       } else {
-        console.log("[Voice] MANUAL mode - library will request microphone");
-        // Don't pass audio or localStream - let library handle it naturally
+        console.log("[Voice] MANUAL mode - library will request real microphone");
+        // Explicitly request audio - library will call getUserMedia
+        conversationOptions.audio = true;
       }
       
       await client.startConversation(conversationOptions);
