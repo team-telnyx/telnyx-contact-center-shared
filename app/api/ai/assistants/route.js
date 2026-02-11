@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export async function GET(request) {
     const qName = (searchParams.get("name") || "").trim().toLowerCase();
     const qId = (searchParams.get("id") || "").trim().toLowerCase();
     const qModel = (searchParams.get("model") || "").trim().toLowerCase();
+    const onlyWorkflowAssistants = searchParams.get("onlyWorkflowAssistants") === "true";
 
     const res = await fetch(buildTelnyxV2Url("/ai/assistants"), {
       method: "GET",
@@ -41,7 +43,27 @@ export async function GET(request) {
     }
 
     const data = await res.json();
-    const list = Array.isArray(data?.data) ? data.data : [];
+    let list = Array.isArray(data?.data) ? data.data : [];
+
+    // Filter by workflows if requested
+    if (onlyWorkflowAssistants) {
+      const pool = getPostgresPool();
+      if (pool) {
+        try {
+          const { rows } = await pool.query(
+            `SELECT DISTINCT ai_assistant_id 
+             FROM aa_workflows 
+             WHERE ai_assistant_id IS NOT NULL AND ai_assistant_id != ''`
+          );
+          const workflowAssistantIds = new Set(
+            rows.map((r) => r.ai_assistant_id).filter(Boolean)
+          );
+          list = list.filter((a) => workflowAssistantIds.has(a.id));
+        } catch (err) {
+          console.error("[Assistants] Error filtering by workflows:", err);
+        }
+      }
+    }
 
     const filtered = list.filter((a) => {
       const name = String(a?.name || "").toLowerCase();

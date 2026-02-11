@@ -10,6 +10,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -43,7 +45,7 @@ import { cn } from "@/lib/utils";
 const TEST_SCENARIOS = {
   healthcare_intake: {
     id: "healthcare_intake",
-    name: "Complete Healthcare Intake Workflow",
+    name: "Complete Workflow",
     description: "Full patient intake process with all information collection",
     responses: [
       { waitForGreeting: true, text: "Hello, I need to arrange a medical transport" },
@@ -134,7 +136,7 @@ function Message({ message, isUser }) {
     <div className={cn("flex gap-3 mb-4", isUser && "flex-row-reverse")}>
       <div
         className={cn(
-          "flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0",
+          "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
           isUser
             ? "bg-blue-100 dark:bg-blue-900/50"
             : "bg-green-100 dark:bg-green-900/50"
@@ -221,11 +223,11 @@ export default function TestAgentPage() {
     loadWorkflow();
   }, [flowId, router]);
 
-  // Load available agents
+  // Load available agents (only those assigned to workflows)
   useEffect(() => {
     async function loadAgents() {
       try {
-        const res = await fetch("/api/ai/assistants?pageSize=100");
+        const res = await fetch("/api/ai/assistants?pageSize=100&onlyWorkflowAssistants=true");
         const data = await res.json();
         if (data.ok && data.items) {
           setAvailableAgents(data.items);
@@ -253,8 +255,8 @@ export default function TestAgentPage() {
   const startChatTest = useCallback(async () => {
     if (!agentId) {
       notify({
-        title: "No Agent Selected",
-        description: "Please select or create an AI agent first.",
+        title: "No Assistant Selected",
+        description: "Please select or create an AI assistant first.",
         variant: "error",
       });
       return;
@@ -459,8 +461,8 @@ export default function TestAgentPage() {
   const startVoiceTest = useCallback(async () => {
     if (!agentId) {
       notify({
-        title: "No Agent Selected",
-        description: "Please select or create an AI agent first.",
+        title: "No Assistant Selected",
+        description: "Please select or create an AI assistant first.",
         variant: "error",
       });
       return;
@@ -509,11 +511,35 @@ export default function TestAgentPage() {
 
       client.on("agent.error", (err) => {
         setVoiceStatus("error");
+        let errorMessage = "An unknown error occurred";
+        
+        if (err) {
+          if (typeof err === 'string') {
+            errorMessage = err;
+          } else if (err.message) {
+            errorMessage = err.message;
+          } else if (err.description) {
+            errorMessage = err.description;
+          } else if (err.error?.message) {
+            errorMessage = err.error.message;
+          } else if (typeof err === 'object') {
+            // Try to extract meaningful error info
+            if (err.code && err.message) {
+              errorMessage = `Error ${err.code}: ${err.message}`;
+            } else {
+              errorMessage = JSON.stringify(err);
+            }
+          } else {
+            errorMessage = String(err);
+          }
+        }
+        
         notify({
           title: "Voice Error",
-          description: String(err),
+          description: errorMessage,
           variant: "error",
         });
+        console.error("[Voice Test] Agent error:", err);
       });
 
       client.on("conversation.agent.state", (state) => {
@@ -540,73 +566,99 @@ export default function TestAgentPage() {
     } catch (err) {
       setVoiceStatus("error");
       setIsTestRunning(false);
+      
+      let errorMessage = "An unknown error occurred";
+      if (err) {
+        if (typeof err === 'string') {
+          errorMessage = err;
+        } else if (err.message) {
+          errorMessage = err.message;
+        } else if (err.description) {
+          errorMessage = err.description;
+        } else if (err.error?.message) {
+          errorMessage = err.error.message;
+        } else if (typeof err === 'object') {
+          if (err.code && err.message) {
+            errorMessage = `Error ${err.code}: ${err.message}`;
+          } else {
+            errorMessage = JSON.stringify(err);
+          }
+        } else {
+          errorMessage = String(err);
+        }
+      }
+      
       notify({
         title: "Failed to start voice test",
-        description: err.message,
+        description: errorMessage,
         variant: "error",
       });
+      console.error("[Voice Test] Failed to start:", err);
     }
   }, [agentId, currentScenario]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-[600px] w-full" />
-        </div>
+      <div className="p-4">
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <IconRobot className="h-5 w-5 text-telnyx-green" />
+              Test AI Agent
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-[600px] w-full" />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/admin/workflows/${flowId}`)}
-              >
-                <IconArrowLeft className="size-4 mr-2" />
-                Back to Workflow
-              </Button>
-              <Separator orientation="vertical" className="h-6" />
-              <div>
-                <h1 className="text-xl font-bold">Test AI Agent</h1>
-                <p className="text-sm text-muted-foreground">
-                  {workflow?.name || "Workflow"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={isTestRunning ? "default" : "secondary"}>
-                {isTestRunning ? "Test Running" : "Ready"}
-              </Badge>
+    <div className="px-0 lg:px-6 py-0">
+      <Card className="w-full shadow-sm flex flex-col overflow-hidden" style={{ height: "90vh" }}>
+        <CardHeader className="flex flex-row items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push(`/admin/workflows/${flowId}`)}
+            >
+              <IconArrowLeft className="size-4 mr-2" />
+              Back to Workflow
+            </Button>
+            <Separator orientation="vertical" className="h-6" />
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <IconRobot className="h-5 w-5 text-telnyx-green" />
+              Test AI Agent
+            </CardTitle>
+            <div className="text-sm text-muted-foreground">
+              {workflow?.name || "Workflow"}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="flex items-center gap-2">
+            <Badge variant={isTestRunning ? "default" : "secondary"}>
+              {isTestRunning ? "Test Running" : "Ready"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0 h-full flex flex-col overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full p-6 items-stretch">
           {/* Settings Panel */}
-          <div className="space-y-4">
-            <Card>
+          <div className="flex flex-col gap-4 h-full min-h-0">
+            <Card className="shrink-0">
               <CardHeader>
                 <CardTitle className="text-sm">Test Configuration</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Agent Selection */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">AI Agent</label>
+                  <label className="text-sm font-medium">AI Assistant</label>
                   <Select value={agentId || ""} onValueChange={setAgentId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select an agent" />
+                      <SelectValue placeholder="Select an assistant" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableAgents.map((agent) => (
@@ -618,7 +670,7 @@ export default function TestAgentPage() {
                   </Select>
                   {availableAgents.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      No agents found. Create one first using "Create AI Agent".
+                      No assistants found. Create one first using "Create AI Agent" and assign it to a workflow.
                     </p>
                   )}
                 </div>
@@ -667,22 +719,22 @@ export default function TestAgentPage() {
                 {/* Auto Mode Toggle (Chat only) */}
                 {channel === "chat" && (
                   <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">Auto Mode</label>
-                    <Button
-                      variant={isAutoMode ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setIsAutoMode(!isAutoMode)}
+                    <Label htmlFor="auto-mode" className="text-sm font-medium cursor-pointer">
+                      Auto Mode
+                    </Label>
+                    <Switch
+                      id="auto-mode"
+                      checked={isAutoMode}
+                      onCheckedChange={setIsAutoMode}
                       disabled={isTestRunning}
-                    >
-                      {isAutoMode ? "On" : "Off"}
-                    </Button>
+                    />
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {/* Test Controls */}
-            <Card>
+            <Card className="shrink-0">
               <CardHeader>
                 <CardTitle className="text-sm">Controls</CardTitle>
               </CardHeader>
@@ -741,7 +793,7 @@ export default function TestAgentPage() {
 
             {/* Progress */}
             {isTestRunning && channel === "chat" && (
-              <Card>
+              <Card className="shrink-0">
                 <CardHeader>
                   <CardTitle className="text-sm">Progress</CardTitle>
                 </CardHeader>
@@ -768,7 +820,7 @@ export default function TestAgentPage() {
 
             {/* Voice Status */}
             {channel === "voice" && isTestRunning && (
-              <Card>
+              <Card className="shrink-0">
                 <CardHeader>
                   <CardTitle className="text-sm">Voice Status</CardTitle>
                 </CardHeader>
@@ -821,9 +873,9 @@ export default function TestAgentPage() {
           </div>
 
           {/* Chat/Voice Panel */}
-          <div className="lg:col-span-2">
-            <Card className="h-[600px] flex flex-col">
-              <CardHeader className="flex-shrink-0">
+          <div className="lg:col-span-2 flex flex-col h-full min-h-0">
+            <Card className="h-full flex flex-col min-h-0 overflow-hidden">
+              <CardHeader className="shrink-0">
                 <CardTitle className="text-sm flex items-center gap-2">
                   {channel === "chat" ? (
                     <>
@@ -838,10 +890,11 @@ export default function TestAgentPage() {
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
+              <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
                 {/* Messages Area */}
-                <ScrollArea className="flex-1 px-4">
-                  <div className="space-y-1 py-4">
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <ScrollArea className="h-full">
+                    <div className="space-y-1 py-4 px-4">
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-12">
                         <IconRobot className="size-12 text-muted-foreground/50 mb-4" />
@@ -880,12 +933,13 @@ export default function TestAgentPage() {
                       </div>
                     )}
                     <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
+                    </div>
+                  </ScrollArea>
+                </div>
 
                 {/* Input Area (Chat only) */}
                 {channel === "chat" && (
-                  <div className="flex-shrink-0 border-t p-4">
+                  <div className="shrink-0 border-t p-4">
                     <div className="flex gap-2">
                       <Input
                         value={inputMessage}
@@ -923,8 +977,9 @@ export default function TestAgentPage() {
               </CardContent>
             </Card>
           </div>
-        </div>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

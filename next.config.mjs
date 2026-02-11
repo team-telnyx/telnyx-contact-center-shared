@@ -31,6 +31,11 @@ const nextConfig = {
     resolveAlias: {},
     // Configure file watching to exclude unnecessary directories
     // This prevents auto-refresh when files in these directories change
+    // Disable automatic reloads when FAST_REFRESH is false
+    ...(process.env.FAST_REFRESH === "false" && {
+      // Try to minimize file watching
+      resolveExtensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
+    }),
   },
   // Completely disable automatic reloads in dev mode
   // This prevents modals/sheets from closing during testing
@@ -39,6 +44,11 @@ const nextConfig = {
     maxInactiveAge: 25 * 60 * 60 * 1000, // 25 hours (effectively never)
     pagesBufferLength: 100, // Keep many pages in memory
   },
+  // Disable automatic reloads in development when FAST_REFRESH is false
+  ...(process.env.FAST_REFRESH === "false" && {
+    // Prevent Next.js from automatically reloading pages
+    reactStrictMode: false, // Disable strict mode to prevent double renders
+  }),
   // Webpack configuration (only used when --webpack flag is explicitly set)
   webpack: (config, { isServer, dev }) => {
     if (isServer) {
