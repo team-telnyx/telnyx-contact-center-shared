@@ -194,10 +194,19 @@ export default function TestAgentPage() {
   const [agentId, setAgentId] = useState(null);
   const [availableAgents, setAvailableAgents] = useState([]);
   
+  // Chat conversation state
+  const [conversationId, setConversationId] = useState(null);
+  
   // Refs
   const messagesEndRef = useRef(null);
   const voiceClientRef = useRef(null);
   const audioContextRef = useRef(null);
+  const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
+  
+  // Keep autoModeRef in sync
+  useEffect(() => {
+    autoModeRef.current = isAutoMode;
+  }, [isAutoMode]);
 
   // Load workflow data
   useEffect(() => {
@@ -251,7 +260,113 @@ export default function TestAgentPage() {
   // Get current scenario
   const currentScenario = TEST_SCENARIOS[selectedScenario];
 
-  // Start chat test - connects to real AI Agent via WebRTC
+  // Send chat message via REST API
+  const sendChatMessage = useCallback(async (messageText, convId, stepIndex = null) => {
+    if (!agentId || !convId) return null;
+    
+    setSendingMessage(true);
+    
+    // Add user message to UI
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: messageText,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
+
+    try {
+      const res = await fetch(`/api/ai/assistants/${agentId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: messageText,
+          conversation_id: convId,
+          name: "Test User",
+        }),
+      });
+      
+      const data = await res.json();
+      setSendingMessage(false);
+      
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Chat request failed");
+      }
+      
+      const aiContent = data.content || data.response || "";
+      
+      // Add AI response to UI
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai-${Date.now()}`,
+          role: "assistant",
+          content: aiContent,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      
+      return aiContent;
+    } catch (err) {
+      setSendingMessage(false);
+      notify({
+        title: "Chat Error",
+        description: err.message,
+        variant: "error",
+      });
+      return null;
+    }
+  }, [agentId]);
+
+  // Process AI response and send next scenario step if in auto mode
+  const processAIResponse = useCallback(async (aiContent, convId, currentStepIndex) => {
+    if (!autoModeRef.current || isPaused) return;
+    
+    const scenario = currentScenario;
+    if (!scenario?.responses?.length) return;
+    
+    const lowerMessage = (aiContent || "").toLowerCase();
+    
+    // Find matching response based on keywords
+    for (let i = currentStepIndex; i < scenario.responses.length; i++) {
+      const step = scenario.responses[i];
+      if (step.keywords) {
+        const hasMatch = step.keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
+        if (hasMatch) {
+          setCurrentStep(i + 1);
+          
+          // Small delay before sending next message
+          await new Promise(r => setTimeout(r, 1000));
+          
+          const nextResponse = await sendChatMessage(step.text, convId, i);
+          
+          // Check if test is complete
+          if (i >= scenario.responses.length - 1) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: "system-complete",
+                role: "system",
+                content: "✅ Test scenario completed successfully!",
+                timestamp: new Date().toISOString(),
+              },
+            ]);
+            return;
+          }
+          
+          // Continue processing if we got a response
+          if (nextResponse) {
+            await processAIResponse(nextResponse, convId, i + 1);
+          }
+          return;
+        }
+      }
+    }
+  }, [currentScenario, isPaused, sendChatMessage]);
+
+  // Start chat test - uses REST API endpoint
   const startChatTest = useCallback(async () => {
     if (!agentId) {
       notify({
@@ -262,176 +377,54 @@ export default function TestAgentPage() {
       return;
     }
 
+    // Generate new conversation ID
+    const newConversationId = crypto.randomUUID();
+    setConversationId(newConversationId);
+    
     setIsTestRunning(true);
     setMessages([]);
     setCurrentStep(0);
-    setAgentState("connecting");
+    setAgentState("active");
 
     // Add system message
     setMessages([
       {
         id: "system-start",
         role: "system",
-        content: `Starting real AI test: ${currentScenario.name}`,
+        content: `Starting chat test: ${currentScenario.name} (REST API)`,
         timestamp: new Date().toISOString(),
       },
     ]);
 
     try {
-      // Dynamic import of TelnyxAIAgent
-      const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
+      // Send initial greeting to get AI's first response
+      const greetingResponse = await sendChatMessage(
+        currentScenario.responses[0]?.waitForGreeting 
+          ? "Hello" 
+          : currentScenario.responses[0]?.text || "Hello",
+        newConversationId
+      );
+      
+      if (!greetingResponse) {
+        throw new Error("No response from AI");
+      }
 
-      const client = new TelnyxAIAgent({
-        agentId: agentId,
-        debug: true,
-      });
-
-      voiceClientRef.current = client;
-      let firstMessageSent = false;
-      let waitingForAI = false;
-      let lastProcessedIndex = -1;
-
-      // Track transcript for auto-responses
-      const processTranscript = (transcript) => {
-        if (!isAutoMode || waitingForAI) return;
+      // If auto mode and we have a waitForGreeting scenario, send the first real message
+      if (isAutoMode && currentScenario.responses[0]?.waitForGreeting) {
+        setCurrentStep(1);
+        await new Promise(r => setTimeout(r, 1000));
         
-        const latestAssistant = [...transcript].reverse().find(t => t.role === "assistant" && t.isFinal);
-        if (!latestAssistant) return;
+        const firstStep = currentScenario.responses[0];
+        const firstResponse = await sendChatMessage(firstStep.text, newConversationId);
         
-        const latestIndex = transcript.indexOf(latestAssistant);
-        if (latestIndex <= lastProcessedIndex) return;
-        lastProcessedIndex = latestIndex;
-
-        // Find matching response
-        const lowerMessage = (latestAssistant.content || "").toLowerCase();
-        const scenario = currentScenario;
-        
-        for (let i = currentStep; i < scenario.responses.length; i++) {
-          const step = scenario.responses[i];
-          if (step.keywords) {
-            const hasMatch = step.keywords.some(kw => lowerMessage.includes(kw.toLowerCase()));
-            if (hasMatch) {
-              setTimeout(() => {
-                setCurrentStep(i + 1);
-                client.sendConversationMessage(step.text);
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `user-${Date.now()}`,
-                    role: "user",
-                    content: step.text,
-                    timestamp: new Date().toISOString(),
-                  },
-                ]);
-                
-                if (i >= scenario.responses.length - 1) {
-                  setTimeout(() => {
-                    setMessages((prev) => [
-                      ...prev,
-                      {
-                        id: "system-complete",
-                        role: "system",
-                        content: "✅ Test scenario completed successfully!",
-                        timestamp: new Date().toISOString(),
-                      },
-                    ]);
-                  }, 2000);
-                }
-              }, 1000);
-              return;
-            }
-          }
+        if (firstResponse) {
+          await processAIResponse(firstResponse, newConversationId, 1);
         }
-      };
-
-      client.on("agent.connected", () => {
-        setAgentState("connected");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-connected",
-            role: "system",
-            content: "✅ Connected to real AI Agent",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      });
-
-      client.on("agent.disconnected", () => {
-        setAgentState("idle");
-        setIsTestRunning(false);
-      });
-
-      client.on("agent.error", (err) => {
-        setAgentState("error");
-        notify({
-          title: "AI Agent Error",
-          description: String(err),
-          variant: "error",
-        });
-      });
-
-      client.on("conversation.agent.state", (state) => {
-        setAgentState(state);
-        
-        // When AI starts speaking, it received our message
-        if (state === "speaking") {
-          waitingForAI = false;
-        }
-        
-        // Send first message when AI is ready to listen
-        if (state === "listening" && !firstMessageSent && currentScenario.responses[0]?.waitForGreeting && isAutoMode) {
-          firstMessageSent = true;
-          waitingForAI = true;
-          const firstStep = currentScenario.responses[0];
-          setTimeout(() => {
-            setCurrentStep(1);
-            client.sendConversationMessage(firstStep.text);
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `user-${Date.now()}`,
-                role: "user",
-                content: firstStep.text,
-                timestamp: new Date().toISOString(),
-              },
-            ]);
-          }, 500);
-        }
-        
-        // Process transcript when AI finishes speaking
-        if (state === "listening" && firstMessageSent && client.transcript) {
-          processTranscript(client.transcript);
-        }
-      });
-
-      client.on("transcript.item", (item) => {
-        // Only add assistant messages (user messages added when we send them)
-        if (item.role === "assistant" && item.isFinal) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: item.id || `ai-${Date.now()}`,
-              role: "assistant",
-              content: item.content,
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-        }
-      });
-
-      client.on("conversation.update", (conv) => {
-        if (conv?.call?.state === "active") {
-          setAgentState("active");
-        }
-      });
-
-      // Connect and start conversation (audio muted for chat mode)
-      await client.connect();
-      await client.startConversation({
-        callerName: "Chat Test User",
-        audio: true, // Required for WebRTC, but we won't use mic
-      });
+      } else if (isAutoMode && currentScenario.responses.length > 0) {
+        // Process the greeting response
+        setCurrentStep(1);
+        await processAIResponse(greetingResponse, newConversationId, 1);
+      }
 
     } catch (err) {
       setAgentState("error");
@@ -442,9 +435,9 @@ export default function TestAgentPage() {
         variant: "error",
       });
     }
-  }, [agentId, currentScenario, isAutoMode, currentStep]);
+  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse]);
 
-  // Send scenario message (manual mode) - uses real AI
+  // Send scenario message (manual mode) - uses REST API for chat, WebRTC for voice
   const sendScenarioMessage = useCallback(
     async (stepIndex) => {
       const scenario = currentScenario;
@@ -463,45 +456,56 @@ export default function TestAgentPage() {
 
       const step = scenario.responses[stepIndex];
       
-      // Send to real AI via WebRTC client
-      if (voiceClientRef.current) {
+      if (channel === "chat" && conversationId) {
+        // Chat mode - use REST API
+        await sendChatMessage(step.text, conversationId, stepIndex);
+        setCurrentStep(stepIndex + 1);
+      } else if (voiceClientRef.current) {
+        // Voice mode - use WebRTC
         voiceClientRef.current.sendConversationMessage(step.text);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `user-${Date.now()}`,
+            role: "user",
+            content: step.text,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        setCurrentStep(stepIndex + 1);
       }
-      
-      const userMessage = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: step.text,
-        timestamp: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, userMessage]);
-      setCurrentStep(stepIndex + 1);
     },
-    [currentScenario]
+    [currentScenario, channel, conversationId, sendChatMessage]
   );
 
-  // Send manual message - uses real AI
+  // Send manual message - uses REST API for chat, WebRTC for voice
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || sendingMessage) return;
 
     const messageText = inputMessage.trim();
-    
-    // Send to real AI via WebRTC client
-    if (voiceClientRef.current) {
-      voiceClientRef.current.sendConversationMessage(messageText);
-    }
-
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: messageText,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
     setInputMessage("");
-  }, [inputMessage, sendingMessage]);
+    
+    if (channel === "chat" && conversationId) {
+      // Chat mode - use REST API
+      const response = await sendChatMessage(messageText, conversationId);
+      // In auto mode, process the response for next steps
+      if (isAutoMode && response) {
+        await processAIResponse(response, conversationId, currentStep);
+      }
+    } else if (voiceClientRef.current) {
+      // Voice mode - use WebRTC
+      voiceClientRef.current.sendConversationMessage(messageText);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `user-${Date.now()}`,
+          role: "user",
+          content: messageText,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    }
+  }, [inputMessage, sendingMessage, channel, conversationId, sendChatMessage, isAutoMode, processAIResponse, currentStep]);
 
   // Stop test
   const stopTest = useCallback(() => {
