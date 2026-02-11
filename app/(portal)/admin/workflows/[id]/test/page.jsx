@@ -502,8 +502,25 @@ class MockMicrophone {
 
     this.isPlaying = true;
 
-    // Analyze audio level
-    const channelData = audioBuffer.getChannelData(0);
+    // Apply gain directly to audio buffer (more reliable than gain node with WebRTC AGC)
+    const amplifiedBuffer = this.audioContext.createBuffer(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
+    
+    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
+      const inputData = audioBuffer.getChannelData(channel);
+      const outputData = amplifiedBuffer.getChannelData(channel);
+      
+      for (let i = 0; i < inputData.length; i++) {
+        // Apply gain and clip to prevent distortion
+        outputData[i] = Math.max(-1, Math.min(1, inputData[i] * gain));
+      }
+    }
+
+    // Analyze amplified audio level
+    const channelData = amplifiedBuffer.getChannelData(0);
     let maxLevel = 0;
     let sumSquares = 0;
     for (let i = 0; i < channelData.length; i++) {
@@ -512,20 +529,14 @@ class MockMicrophone {
       sumSquares += channelData[i] * channelData[i];
     }
     const rms = Math.sqrt(sumSquares / channelData.length);
-    console.log(`[MockMic] Audio analysis: duration=${audioBuffer.duration.toFixed(2)}s, sampleRate=${audioBuffer.sampleRate}Hz, channels=${audioBuffer.numberOfChannels}, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}, gain=${gain}x`);
+    console.log(`[MockMic] Audio after ${gain}x gain: duration=${amplifiedBuffer.duration.toFixed(2)}s, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}`);
 
     return new Promise((resolve, reject) => {
       try {
         const source = this.audioContext.createBufferSource();
-        source.buffer = audioBuffer;
+        source.buffer = amplifiedBuffer;
         
-        // Add gain node for amplification (TTS audio is quieter than AI response)
-        const gainNode = this.audioContext.createGain();
-        // Use setValueAtTime for more reliable gain setting
-        gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime);
-        
-        source.connect(gainNode);
-        gainNode.connect(this.destination);
+        source.connect(this.destination);
 
         source.onended = () => {
           this.isPlaying = false;
@@ -534,7 +545,7 @@ class MockMicrophone {
         };
 
         source.start();
-        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio via gain node (gain=${gain}x)`);
+        console.log(`[MockMic] Injecting ${amplifiedBuffer.duration.toFixed(2)}s of audio (gain=${gain}x applied to buffer)`);
         console.log(`[MockMic] Stream status: ${this.debugStreamStatus()}`);
       } catch (err) {
         this.isPlaying = false;
