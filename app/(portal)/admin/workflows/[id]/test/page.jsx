@@ -438,49 +438,18 @@ function Message({ message, isUser, analysis }) {
 // MOCK MICROPHONE FOR VOICE TESTS
 // ============================================
 
-// Store ORIGINAL getUserMedia before any overrides (module level)
-const ORIGINAL_GET_USER_MEDIA = typeof navigator !== 'undefined' && navigator.mediaDevices 
-  ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) 
-  : null;
-
 class MockMicrophone {
   constructor() {
     this.audioContext = null;
     this.destination = null;
     this.stream = null;
     this.isPlaying = false;
-    this.silentOscillator = null; // Keep reference to prevent GC
+    this.silentOscillator = null;
     this.silentGain = null;
-    this.realMicStream = null; // Real microphone stream (muted, for WebRTC compatibility)
-    this.healthCheckInterval = null;
   }
 
   async init() {
-    // Use real microphone stream and mix our audio into it
-    // This ensures WebRTC gets a "real" MediaStream that it recognizes
-    
-    try {
-      // Get real microphone stream using ORIGINAL getUserMedia (before any overrides)
-      // This ensures we get the real mic, not our mock
-      if (ORIGINAL_GET_USER_MEDIA) {
-        this.realMicStream = await ORIGINAL_GET_USER_MEDIA({ 
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          }
-        });
-        console.log("[MockMic] Got real microphone stream via original getUserMedia");
-      } else {
-        console.warn("[MockMic] Original getUserMedia not available");
-        this.realMicStream = null;
-      }
-    } catch (e) {
-      console.warn("[MockMic] Could not get real mic, using synthetic stream:", e.message);
-      this.realMicStream = null;
-    }
-
-    // Create AudioContext at 48kHz (WebRTC standard)
+    // Create AudioContext at 48kHz (WebRTC standard for Opus codec)
     this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
       sampleRate: 48000,
     });
@@ -491,27 +460,19 @@ class MockMicrophone {
       await this.audioContext.resume();
     }
 
+    // Create destination that produces a MediaStream
     this.destination = this.audioContext.createMediaStreamDestination();
-    
-    // If we have real mic, mute it and mix with our destination
-    if (this.realMicStream) {
-      const realMicSource = this.audioContext.createMediaStreamSource(this.realMicStream);
-      const muteGain = this.audioContext.createGain();
-      muteGain.gain.value = 0; // Mute real mic
-      realMicSource.connect(muteGain);
-      muteGain.connect(this.destination);
-      
-      // Use the tracks from destination (which includes muted mic signal)
-      this.stream = this.destination.stream;
-    } else {
-      this.stream = this.destination.stream;
-    }
+    this.stream = this.destination.stream;
 
-    // Silent oscillator to keep stream active (store as properties to prevent GC)
+    // Create a constant low-level tone to keep the stream "alive"
+    // WebRTC needs continuous audio data flow
     this.silentOscillator = this.audioContext.createOscillator();
-    this.silentOscillator.frequency.value = 1; // Very low frequency
+    this.silentOscillator.type = 'sine';
+    this.silentOscillator.frequency.value = 100; // 100 Hz tone
+    
     this.silentGain = this.audioContext.createGain();
-    this.silentGain.gain.value = 0.001; // Tiny value to ensure data flows
+    this.silentGain.gain.value = 0.001; // Barely audible
+    
     this.silentOscillator.connect(this.silentGain);
     this.silentGain.connect(this.destination);
     this.silentOscillator.start();
@@ -521,14 +482,6 @@ class MockMicrophone {
     // Debug: Monitor stream activity
     const track = this.stream.getAudioTracks()[0];
     console.log(`[MockMic] Audio track: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
-    
-    // Set up periodic check for stream health
-    this.healthCheckInterval = setInterval(() => {
-      const status = this.debugStreamStatus();
-      if (status.includes("ended")) {
-        console.error("[MockMic] Stream ended unexpectedly! Status:", status);
-      }
-    }, 5000);
     
     return this.stream;
   }
@@ -605,12 +558,6 @@ class MockMicrophone {
   }
 
   cleanup() {
-    // Stop health check interval
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-      this.healthCheckInterval = null;
-    }
-    
     // Stop silent oscillator
     if (this.silentOscillator) {
       try {
@@ -621,12 +568,6 @@ class MockMicrophone {
       this.silentOscillator = null;
     }
     this.silentGain = null;
-    
-    // Stop real microphone tracks
-    if (this.realMicStream) {
-      this.realMicStream.getTracks().forEach(track => track.stop());
-      this.realMicStream = null;
-    }
     
     if (this.audioContext) {
       this.audioContext.close();
