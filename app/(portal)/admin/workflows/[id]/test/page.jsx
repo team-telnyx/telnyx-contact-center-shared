@@ -65,13 +65,7 @@ function uniqueMessageId(prefix = "msg") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-/**
- * Test scenarios - all LLM-generated via /api/admin/workflows/[id]/generate-test-scenario
- * Each scenario has predefined instructions; data is regenerated on selection change and Reset.
- */
-import { SCENARIO_TYPES } from "@/lib/agent-assist/generate-test-scenario";
-
-const SCENARIO_LIST = Object.values(SCENARIO_TYPES);
+// All test responses are generated dynamically via LLM based on AI assistant's messages
 
 /**
  * Find the scenario step that best matches the last AI message.
@@ -79,35 +73,6 @@ const SCENARIO_LIST = Object.values(SCENARIO_TYPES);
  * keywords appear in the AI's message, so the response is relevant to what the AI asked.
  * Also considers workflow state: prefers steps that correspond to pending workflow items.
  */
-function findScenarioStepForLastAiMessage(messages, scenario, workflowStages, itemStatuses = {}) {
-  if (!scenario?.responses?.length) return 0;
-
-  const lastAiMessage = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant" && m.content?.trim());
-  const lastAiText = (lastAiMessage?.content || "").toLowerCase();
-
-  if (!lastAiText) return 0;
-
-  let bestMatch = { index: -1, score: 0 };
-  for (let i = 0; i < scenario.responses.length; i++) {
-    const step = scenario.responses[i];
-    if (!step.keywords) continue;
-
-    const matchCount = step.keywords.filter((kw) =>
-      lastAiText.includes(String(kw).toLowerCase())
-    ).length;
-    if (matchCount === 0) continue;
-
-    const score = matchCount;
-    if (score > bestMatch.score) {
-      bestMatch = { index: i, score };
-    }
-  }
-
-  return bestMatch.score > 0 ? bestMatch.index : 0;
-}
-
 // Helper: get stage completion from item statuses
 function getStageCompletion(stage, itemStatuses) {
   if (!stage?.items) return { completed: 0, total: 0, isComplete: false };
@@ -287,7 +252,6 @@ function TestWorkflowProgressBar({
   completedItems,
   totalItems,
   currentStep,
-  totalScenarioSteps,
 }) {
   const displayPercentage =
     totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
@@ -356,7 +320,7 @@ function TestWorkflowProgressBar({
             {displayPercentage}%
           </Badge>
           <span className="text-sm text-muted-foreground">
-            Step {currentStep}/{totalScenarioSteps}
+            Turn {currentStep}
           </span>
         </div>
       </div>
@@ -589,15 +553,13 @@ export default function TestAgentPage() {
 
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState(null);
-  const [selectedScenario, setSelectedScenario] = useState("workflow_specific");
-  const [generatedScenario, setGeneratedScenario] = useState(null);
   const [channel, setChannel] = useState("chat"); // "chat" or "voice"
   
   // Dynamic response generation (on-the-fly customer simulation)
   const [selectedPersona, setSelectedPersona] = useState("cooperative");
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
-  const [useDynamicResponses, setUseDynamicResponses] = useState(true); // Toggle between dynamic and pre-generated
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
+  const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
@@ -650,10 +612,7 @@ export default function TestAgentPage() {
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
   const lastAnalyzedMessageIndexRef = useRef(-1);
   const workflowAnalysisInProgressRef = useRef(false);
-  const scenarioFetchInProgressRef = useRef(false);
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
-  const selectedScenarioRef = useRef(selectedScenario);
-  selectedScenarioRef.current = selectedScenario;
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
@@ -862,86 +821,14 @@ export default function TestAgentPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // LLM-generated scenario - all scenarios use same flow
-  const [isScenarioGenerating, setIsScenarioGenerating] = useState(false);
-
-  const fetchScenario = useCallback(async (scenarioType) => {
-    if (!flowId) return null;
-    // workflow_specific requires stages; others work with just workflow name
-    if (scenarioType === "workflow_specific" && !workflow?.stages?.length) return null;
-    scenarioFetchInProgressRef.current = true;
-    setIsScenarioGenerating(true);
-    setGeneratedScenario(null);
-    try {
-      const res = await fetch(`/api/admin/workflows/${flowId}/generate-test-scenario`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ scenarioType }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to generate scenario");
-      // Only set if user hasn't switched to a different scenario during fetch
-      if (data.scenario && selectedScenarioRef.current === data.scenario.id) {
-        setGeneratedScenario(data.scenario);
-      }
-      return data.scenario;
-    } catch (err) {
-      notify({
-        title: "Scenario generation failed",
-        description: err.message,
-        variant: "error",
-      });
-      return null;
-    } finally {
-      scenarioFetchInProgressRef.current = false;
-      setIsScenarioGenerating(false);
-    }
-  }, [flowId, workflow?.stages?.length]);
-
-  // Generate scenario when selection changes
-  useEffect(() => {
-    if (!selectedScenario || !flowId) return;
-    if (selectedScenario === "workflow_specific" && !workflow?.stages?.length) return;
-    fetchScenario(selectedScenario);
-  }, [selectedScenario, flowId, workflow?.stages?.length, fetchScenario]);
-
-  // Resolve current scenario - use generated or placeholder
-  const scenarioConfig = SCENARIO_LIST.find((s) => s.id === selectedScenario);
-  const currentScenario =
-    generatedScenario && generatedScenario.id === selectedScenario
-      ? generatedScenario
-      : {
-          id: selectedScenario,
-          name: scenarioConfig?.name || selectedScenario,
-          description: scenarioConfig?.description || "Generating…",
-          responses: [],
-        };
-
-  // Available scenarios - Complete Workflow only when workflow has stages
-  const availableScenarios = useMemo(() => {
-    if (workflow?.stages?.length) {
-      return SCENARIO_LIST;
-    }
-    return SCENARIO_LIST.filter((s) => s.id !== "workflow_specific");
-  }, [workflow?.stages?.length]);
-
-  // Ensure selectedScenario is valid; default to Complete Workflow when it becomes available
-  const usedFallbackRef = useRef(false);
-  useEffect(() => {
-    const hasWorkflowSpecific = availableScenarios.some((s) => s.id === "workflow_specific");
-    const valid = availableScenarios.some((s) => s.id === selectedScenario);
-
-    if (!valid && availableScenarios.length > 0) {
-      usedFallbackRef.current = true;
-      setSelectedScenario(hasWorkflowSpecific ? "workflow_specific" : availableScenarios[0].id);
-    } else if (hasWorkflowSpecific && usedFallbackRef.current) {
-      // Recover: we had fallen back before workflow loaded, now switch to Complete Workflow
-      usedFallbackRef.current = false;
-      setSelectedScenario("workflow_specific");
-    }
-  }, [availableScenarios, selectedScenario]);
-  const totalScenarioSteps = currentScenario?.responses?.length ?? 0;
+  // Persona descriptions for UI
+  const PERSONA_DESCRIPTIONS = {
+    cooperative: "Friendly customer who answers questions directly",
+    frustrated: "Impatient customer, but still provides info",
+    confused: "Sometimes misunderstands, asks for clarification",
+    wants_transfer: "Prefers talking to a human agent",
+    verbose: "Talkative, provides extra context",
+  };
 
   const workflowStages = workflow?.stages ?? [];
   const totalWorkflowItems = workflowStages.reduce(
@@ -1102,15 +989,8 @@ export default function TestAgentPage() {
   const processAIResponse = useCallback(async (aiContent, convId, currentStepIndex) => {
     if (!autoModeRef.current || isPaused || !isTestRunningRef.current) return;
     
-    // For legacy mode, prevent double processing. Dynamic mode handles this differently (iterative loop).
-    if (!useDynamicResponses) {
-      if (chatProcessingRef.current) return;
-      chatProcessingRef.current = true;
-    }
-    
     try {
-      // ===== DYNAMIC RESPONSE MODE (on-the-fly LLM generation) =====
-      if (useDynamicResponses) {
+      // Dynamic response generation loop
         let currentAiMessage = aiContent;
         let stepNum = currentStepIndex;
         const MAX_TURNS = 50; // Safety limit to prevent infinite loops
@@ -1195,119 +1075,11 @@ export default function TestAgentPage() {
           // Small delay before next iteration to prevent tight loops
           await new Promise(r => setTimeout(r, 300));
         }
-        return;
       }
-
-      // ===== LEGACY MODE (pre-generated scenario with keyword matching) =====
-      const scenario = currentScenario;
-      if (!scenario?.responses?.length) return;
-
-      const lowerMessage = (aiContent || "").toLowerCase();
-
-      // Collectible workflow items (same order as scenario for workflow_specific)
-      const collectibleItems = selectedScenarioRef.current === "workflow_specific"
-        ? (workflow?.stages?.flatMap((s) => s.items ?? [])
-            .filter((item) => (item.item_type || item.type || "action") !== "action") ?? [])
-        : [];
-
-      /** Extract significant words (length > 2) from label, prompt_hint, slot_name for matching */
-      const getItemWords = (item) => {
-        if (!item) return [];
-        const parts = [
-          item.label,
-          item.name,
-          item.prompt_hint,
-          item.slot_name?.replace(/_/g, " "),
-        ].filter(Boolean);
-        const text = parts.join(" ");
-        return [...new Set(text.toLowerCase().split(/[\s,;:|]+/).filter((w) => w.length > 2))];
-      };
-
-      // Find BEST matching step: prefer keyword match, then label/prompt_hint match
-      // NOTE: For workflow_specific, scenario.responses[0] is greeting (waitForGreeting),
-      // responses[1+] correspond to collectibleItems[0+]. So item index = response index - 1.
-      let bestStep = null;
-      let bestScore = 0;
-      for (let i = currentStepIndex; i < scenario.responses.length; i++) {
-        const step = scenario.responses[i];
-        
-        // Map response index to collectible item index (responses[0] = greeting, no item)
-        const itemIndex = i > 0 ? i - 1 : null;
-        const item = itemIndex !== null ? collectibleItems[itemIndex] : null;
-
-        // Skip if workflow_specific and this step's item is already completed
-        if (item?.id && workflowItemStatusesRef.current?.[item.id]?.status === "completed") {
-          continue;
-        }
-
-        // Try keyword match first
-        const matchCount = step.keywords?.length
-          ? step.keywords.filter((kw) => lowerMessage.includes(String(kw).toLowerCase())).length
-          : 0;
-
-        // Fallback: match workflow item label/prompt_hint (handles e.g. "Callback number" when AI says "confirm your callback number")
-        let itemMatchCount = 0;
-        if (matchCount === 0 && item) {
-          const itemWords = getItemWords(item);
-          itemMatchCount = itemWords.filter((w) => lowerMessage.includes(w)).length;
-        }
-
-        const totalMatch = matchCount || itemMatchCount;
-        if (totalMatch === 0) continue;
-
-        const score = totalMatch * 1000 + i;
-        if (score > bestScore) {
-          bestScore = score;
-          bestStep = { index: i, step };
-        }
-      }
-
-      // Fallback: when no match, use next step in sequence (AI phrasing may differ)
-      let stepToUse = bestStep;
-      if (!stepToUse && currentStepIndex < scenario.responses.length) {
-        const nextStep = scenario.responses[currentStepIndex];
-        // Map response index to collectible item index
-        const itemIndex = currentStepIndex > 0 ? currentStepIndex - 1 : null;
-        const item = itemIndex !== null ? collectibleItems[itemIndex] : null;
-        const itemCompleted = item?.id && workflowItemStatusesRef.current?.[item.id]?.status === "completed";
-        if (nextStep?.text?.trim() && !itemCompleted) {
-          stepToUse = { index: currentStepIndex, step: nextStep };
-        }
-      }
-
-      if (stepToUse) {
-        const { index: i, step } = stepToUse;
-        setCurrentStep(i + 1);
-
-        await waitForAnalysisAndDelay();
-        if (!isTestRunningRef.current) return;
-
-        const nextResponse = await sendChatMessage(step.text, convId, i);
-        if (!isTestRunningRef.current) return;
-
-        if (i >= scenario.responses.length - 1) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: "system-complete",
-              role: "system",
-              content: "✅ Test scenario completed successfully!",
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-          return;
-        }
-
-        if (nextResponse) {
-          await processAIResponse(nextResponse, convId, i + 1);
-        }
-      }
-    } finally {
-      if (!useDynamicResponses) {
-        chatProcessingRef.current = false;
-      }
+    } catch (err) {
+      console.error("[Dynamic] Error in processAIResponse:", err);
     }
-  }, [currentScenario, isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay, useDynamicResponses, generateDynamicResponse]);
+  }, [isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay, generateDynamicResponse]);
 
   // Create a new conversation via Telnyx API
   const createConversation = useCallback(async () => {
@@ -1316,9 +1088,9 @@ export default function TestAgentPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `Test: ${currentScenario.name}`,
+          name: `Workflow Test (${selectedPersona})`,
           metadata: {
-            test_scenario: selectedScenario,
+            persona: selectedPersona,
             assistant_id: agentId,
           },
         }),
@@ -1334,7 +1106,7 @@ export default function TestAgentPage() {
       console.error("Failed to create conversation:", err);
       throw err;
     }
-  }, [currentScenario, selectedScenario, agentId]);
+  }, [selectedPersona, agentId]);
 
   // Start chat test - uses REST API endpoint
   const startChatTest = useCallback(async () => {
@@ -1373,14 +1145,11 @@ export default function TestAgentPage() {
     setAgentState("active");
 
     // Add system message
-    const testModeName = useDynamicResponses 
-      ? `Dynamic Simulation (${selectedPersona})` 
-      : currentScenario?.name || "Test";
     setMessages([
       {
         id: "system-start",
         role: "system",
-        content: `Starting chat test: ${testModeName} (REST API)`,
+        content: `Starting chat test: ${selectedPersona} persona (REST API)`,
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1396,41 +1165,21 @@ export default function TestAgentPage() {
       // Wait for workflow analysis of welcome exchange before sending first response
       await waitForAnalysisAndDelay();
 
-      if (useDynamicResponses) {
-        // Dynamic mode: generate first customer response based on AI's welcome
-        setCurrentStep(1);
-        const dynamicFirstResponse = await generateDynamicResponse(welcomeResponse, [
-          { role: "user", content: "Hello" },
-          { role: "assistant", content: welcomeResponse },
-        ]);
-        
-        if (!dynamicFirstResponse) {
-          throw new Error("Failed to generate customer response");
-        }
+      // Generate first customer response based on AI's welcome
+      setCurrentStep(1);
+      const dynamicFirstResponse = await generateDynamicResponse(welcomeResponse, [
+        { role: "user", content: "Hello" },
+        { role: "assistant", content: welcomeResponse },
+      ]);
+      
+      if (!dynamicFirstResponse) {
+        throw new Error("Failed to generate customer response");
+      }
 
-        const firstAiResponse = await sendChatMessage(dynamicFirstResponse, newConversationId);
-        
-        if (isAutoMode && firstAiResponse) {
-          await processAIResponse(firstAiResponse, newConversationId, 2);
-        }
-      } else {
-        // Legacy mode: use pre-generated scenario
-        const firstStep = currentScenario.responses[0];
-        if (!firstStep) {
-          throw new Error("No messages in scenario");
-        }
-
-        setCurrentStep(1);
-        const firstResponse = await sendChatMessage(firstStep.text, newConversationId);
-        
-        if (!firstResponse) {
-          throw new Error("No response from AI");
-        }
-
-        // In auto mode, continue with remaining messages
-        if (isAutoMode && currentScenario.responses.length > 1) {
-          await processAIResponse(firstResponse, newConversationId, 1);
-        }
+      const firstAiResponse = await sendChatMessage(dynamicFirstResponse, newConversationId);
+      
+      if (isAutoMode && firstAiResponse) {
+        await processAIResponse(firstAiResponse, newConversationId, 2);
       }
 
     } catch (err) {
@@ -1442,48 +1191,7 @@ export default function TestAgentPage() {
         variant: "error",
       });
     }
-  }, [agentId, currentScenario, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysisAndDelay, useDynamicResponses, selectedPersona, generateDynamicResponse]);
-
-  // Send scenario message (manual mode) - uses REST API for chat, WebRTC for voice
-  const sendScenarioMessage = useCallback(
-    async (stepIndex) => {
-      const scenario = currentScenario;
-      if (!scenario || stepIndex >= scenario.responses.length) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-complete",
-            role: "system",
-            content: "✅ Test scenario completed successfully!",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        return;
-      }
-
-      const step = scenario.responses[stepIndex];
-      
-      if (channel === "chat" && conversationId) {
-        // Chat mode - use REST API
-        await sendChatMessage(step.text, conversationId, stepIndex);
-        setCurrentStep(stepIndex + 1);
-      } else if (voiceClientRef.current) {
-        // Voice mode - use WebRTC
-        voiceClientRef.current.sendConversationMessage(step.text);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: uniqueMessageId("user"),
-            role: "user",
-            content: step.text,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        setCurrentStep(stepIndex + 1);
-      }
-    },
-    [currentScenario, channel, conversationId, sendChatMessage]
-  );
+  }, [agentId, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysisAndDelay, selectedPersona, generateDynamicResponse]);
 
   // Send manual message - uses REST API for chat, WebRTC for voice
   const sendMessage = useCallback(async () => {
@@ -1562,9 +1270,6 @@ export default function TestAgentPage() {
     setWorkflowItemStatuses({});
     setWorkflowSlotsFilled({});
     setCustomerData(null); // Reset customer data for new test session
-    if (!useDynamicResponses) {
-      fetchScenario(selectedScenario);
-    }
     setVoiceStatus("idle");
     setAgentState("idle");
     setHasReceivedWelcomeMessage(false);
@@ -1576,7 +1281,7 @@ export default function TestAgentPage() {
       mockMicRef.current.cleanup();
       mockMicRef.current = null;
     }
-  }, [selectedScenario, fetchScenario, useDynamicResponses]);
+  }, []);
 
   // Speak text via TTS and inject into mock microphone
   const speakTextViaAudio = useCallback(async (text) => {
@@ -1629,7 +1334,17 @@ export default function TestAgentPage() {
     respondingInProgressRef.current = true;
     
     try {
-      // Get the last AI message from transcript
+      // Wait for configured delay to allow AI to send multiple transcript messages
+      // This prevents us from responding too quickly and interrupting the AI
+      console.log(`[Voice] Waiting ${voiceResponseDelay}ms before generating response...`);
+      await new Promise(r => setTimeout(r, voiceResponseDelay));
+      
+      if (!isTestRunningRef.current) {
+        respondingInProgressRef.current = false;
+        return;
+      }
+
+      // Get the last AI message from transcript (after delay, we have all messages)
       const lastAiMessage = messagesRef.current
         .filter(m => m.role === "assistant")
         .pop()?.content;
@@ -1664,44 +1379,21 @@ export default function TestAgentPage() {
         return;
       }
 
-      let responseText;
+      // Generate dynamic response based on AI message
+      console.log("[Voice] Generating response for:", lastAiMessage.substring(0, 50) + "...");
+      setIsGeneratingResponse(true);
+      
+      const conversationHistory = messagesRef.current
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => ({ role: m.role, content: m.content }));
 
-      if (useDynamicResponses) {
-        // Dynamic mode: generate response based on AI message
-        console.log("[Voice] Generating dynamic response for:", lastAiMessage.substring(0, 50) + "...");
-        setIsGeneratingResponse(true);
-        
-        const conversationHistory = messagesRef.current
-          .filter(m => m.role === "user" || m.role === "assistant")
-          .map(m => ({ role: m.role, content: m.content }));
+      const responseText = await generateDynamicResponse(lastAiMessage, conversationHistory);
+      setIsGeneratingResponse(false);
 
-        responseText = await generateDynamicResponse(lastAiMessage, conversationHistory);
-        setIsGeneratingResponse(false);
-
-        if (!responseText) {
-          console.error("[Voice] Failed to generate dynamic response");
-          respondingInProgressRef.current = false;
-          return;
-        }
-      } else {
-        // Legacy mode: use pre-generated scenario
-        if (currentStepRef.current >= currentScenario.responses.length) {
-          console.log("[Voice] All scenario steps completed!");
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: "system-complete",
-              role: "system",
-              content: "✅ Test scenario completed successfully!",
-              timestamp: new Date().toISOString(),
-            },
-          ]);
-          respondingInProgressRef.current = false;
-          return;
-        }
-
-        const step = currentScenario.responses[currentStepRef.current];
-        responseText = step.text;
+      if (!responseText) {
+        console.error("[Voice] Failed to generate response");
+        respondingInProgressRef.current = false;
+        return;
       }
 
       console.log(`[Voice] Responding: "${responseText.substring(0, 50)}..."`);
@@ -1711,12 +1403,12 @@ export default function TestAgentPage() {
       // Speak the response (this waits for audio injection to complete)
       await speakTextViaAudio(responseText);
       
-      // Wait additional time for the audio to be processed by AI
-      await new Promise((r) => setTimeout(r, 4000));
+      // Wait for audio to be processed by AI
+      await new Promise((r) => setTimeout(r, 2000));
     } finally {
       respondingInProgressRef.current = false;
     }
-  }, [currentScenario, speakTextViaAudio, useDynamicResponses, generateDynamicResponse]);
+  }, [speakTextViaAudio, generateDynamicResponse, voiceResponseDelay]);
 
   // Start voice test with audio injection
   const startVoiceTest = useCallback(async () => {
@@ -1742,14 +1434,11 @@ export default function TestAgentPage() {
     setCustomerData(null); // Reset customer data for new voice test session
     setIsGeneratingResponse(false);
     
-    const testModeName = useDynamicResponses 
-      ? `Dynamic Simulation (${selectedPersona})` 
-      : currentScenario?.name || "Test";
     setMessages([
       {
         id: "system-voice-start",
         role: "system",
-        content: `Starting voice test: ${testModeName}`,
+        content: `Starting voice test: ${selectedPersona} persona`,
         timestamp: new Date().toISOString(),
       },
     ]);
@@ -1939,7 +1628,7 @@ export default function TestAgentPage() {
       });
       console.error("[Voice Test] Failed to start:", err);
     }
-  }, [agentId, currentScenario, handleVoiceAutoResponse]);
+  }, [agentId, selectedPersona, handleVoiceAutoResponse]);
 
   if (loading) {
     return (
@@ -2026,78 +1715,28 @@ export default function TestAgentPage() {
                   )}
                 </div>
 
-                {/* Dynamic Response Toggle */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="dynamic-mode" className="text-sm font-medium cursor-pointer">
-                      Dynamic Simulation
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Generate responses on-the-fly via LLM
-                    </p>
-                  </div>
-                  <Switch
-                    id="dynamic-mode"
-                    checked={useDynamicResponses}
-                    onCheckedChange={setUseDynamicResponses}
-                    disabled={isTestRunning}
-                  />
-                </div>
-
-                {/* Customer Persona (Dynamic mode) or Test Scenario (Legacy mode) */}
+                {/* Customer Persona */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {useDynamicResponses ? "Customer Persona" : "Test Scenario"}
-                  </label>
-                  {useDynamicResponses ? (
-                    <>
-                      <Select
-                        value={selectedPersona}
-                        onValueChange={setSelectedPersona}
-                        disabled={isTestRunning}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cooperative">Cooperative Customer</SelectItem>
-                          <SelectItem value="frustrated">Frustrated Customer</SelectItem>
-                          <SelectItem value="confused">Confused Customer</SelectItem>
-                          <SelectItem value="wants_transfer">Wants Human Agent</SelectItem>
-                          <SelectItem value="verbose">Verbose Customer</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedPersona === "cooperative" && "Friendly customer who answers questions directly"}
-                        {selectedPersona === "frustrated" && "Impatient customer, but still provides info"}
-                        {selectedPersona === "confused" && "Sometimes misunderstands, asks for clarification"}
-                        {selectedPersona === "wants_transfer" && "Prefers talking to a human agent"}
-                        {selectedPersona === "verbose" && "Talkative, provides extra context"}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Select
-                        value={selectedScenario}
-                        onValueChange={setSelectedScenario}
-                        disabled={isTestRunning}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableScenarios.map((scenario) => (
-                            <SelectItem key={scenario.id} value={scenario.id}>
-                              {scenario.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {currentScenario?.description}
-                      </p>
-                    </>
-                  )}
+                  <label className="text-sm font-medium">Customer Persona</label>
+                  <Select
+                    value={selectedPersona}
+                    onValueChange={setSelectedPersona}
+                    disabled={isTestRunning}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cooperative">Cooperative Customer</SelectItem>
+                      <SelectItem value="frustrated">Frustrated Customer</SelectItem>
+                      <SelectItem value="confused">Confused Customer</SelectItem>
+                      <SelectItem value="wants_transfer">Wants Human Agent</SelectItem>
+                      <SelectItem value="verbose">Verbose Customer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {PERSONA_DESCRIPTIONS[selectedPersona]}
+                  </p>
                 </div>
 
                 {/* Channel Selection */}
@@ -2193,6 +1832,28 @@ export default function TestAgentPage() {
                         ))}
                       </SelectContent>
                     </Select>
+
+                    {/* Response Delay */}
+                    <div className="pt-2">
+                      <label className="text-sm font-medium">Response Delay</label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Wait time before generating response ({voiceResponseDelay / 1000}s)
+                      </p>
+                      <input
+                        type="range"
+                        min="1000"
+                        max="8000"
+                        step="500"
+                        value={voiceResponseDelay}
+                        onChange={(e) => setVoiceResponseDelay(Number(e.target.value))}
+                        disabled={isTestRunning}
+                        className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>1s</span>
+                        <span>8s</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2203,42 +1864,19 @@ export default function TestAgentPage() {
                 variant="outline"
                 className={cn(
                   "mb-3 w-full justify-center py-1 text-sm font-medium",
-                  isScenarioGenerating
-                    ? "border-amber-500 text-amber-600 dark:border-amber-400 dark:text-amber-400"
-                    : isTestRunning
+                  isTestRunning
                     ? "border-green-500 text-green-600 dark:border-green-400 dark:text-green-400"
-                    : generatedScenario && generatedScenario.id === selectedScenario
-                    ? "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
-                    : "border-muted-foreground/60 text-muted-foreground"
+                    : "border-emerald-500 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400"
                 )}
               >
-                {isScenarioGenerating ? (
-                  <>
-                    <IconLoader2 className="size-3 animate-spin mr-1.5" />
-                    Generating scenario…
-                  </>
-                ) : isTestRunning ? (
-                  "Test Running"
-                ) : generatedScenario && generatedScenario.id === selectedScenario ? (
-                  <>
-                    <IconCheck className="size-3 mr-1.5" />
-                    Scenario ready
-                  </>
-                ) : (
-                  "Ready"
-                )}
+                {isTestRunning ? "Test Running" : "Ready"}
               </Badge>
               <div className="space-y-3">
                 {!isTestRunning ? (
                   <Button
                     className="w-full"
                     onClick={channel === "chat" ? startChatTest : startVoiceTest}
-                    disabled={
-                      !agentId ||
-                      isScenarioGenerating ||
-                      !generatedScenario ||
-                      generatedScenario.id !== selectedScenario
-                    }
+                    disabled={!agentId}
                   >
                     <IconPlayerPlay className="size-4 mr-2" />
                     Start Test
@@ -2463,26 +2101,6 @@ export default function TestAgentPage() {
                         <IconSend className="size-4" />
                       </Button>
                     </div>
-                    {!isAutoMode && isTestRunning && currentScenario?.responses?.length > 0 && (
-                      <div className="mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => {
-                            const stepIndex = findScenarioStepForLastAiMessage(
-                              messages,
-                              currentScenario,
-                              workflowStages,
-                              workflowItemStatuses
-                            );
-                            sendScenarioMessage(stepIndex);
-                          }}
-                        >
-                          Send Next Scenario Response
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 )}
                 </CardContent>
@@ -2497,7 +2115,6 @@ export default function TestAgentPage() {
                 completedItems={completedWorkflowItems}
                 totalItems={totalWorkflowItems}
                 currentStep={currentStep}
-                totalScenarioSteps={totalScenarioSteps}
               />
             </div>
           </div>
