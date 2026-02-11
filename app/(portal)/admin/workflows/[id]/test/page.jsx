@@ -2041,7 +2041,7 @@ export default function TestAgentPage() {
                       <input
                         type="range"
                         min="0.5"
-                        max="5"
+                        max="10"
                         step="0.5"
                         value={ttsGain}
                         onChange={(e) => setTtsGain(Number(e.target.value))}
@@ -2049,7 +2049,7 @@ export default function TestAgentPage() {
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-1">
                         <span>0.5x</span>
-                        <span>5x</span>
+                        <span>10x</span>
                       </div>
                     </div>
                   </div>
