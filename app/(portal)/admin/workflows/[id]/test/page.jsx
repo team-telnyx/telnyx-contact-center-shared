@@ -1635,36 +1635,99 @@ export default function TestAgentPage() {
   // Handle auto-response when AI finishes speaking
   const handleVoiceAutoResponse = useCallback(async () => {
     if (!autoModeRef.current || respondingInProgressRef.current) return;
-    if (currentStepRef.current >= currentScenario.responses.length) {
-      console.log("[Voice] All steps completed!");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: "system-complete",
-          role: "system",
-          content: "✅ Test scenario completed successfully!",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-      return;
-    }
+    if (!isTestRunningRef.current) return;
 
     respondingInProgressRef.current = true;
-
-    const step = currentScenario.responses[currentStepRef.current];
-    console.log(`[Voice] Step ${currentStepRef.current + 1}/${currentScenario.responses.length}: "${step.text}"`);
-
-    setCurrentStep((prev) => prev + 1);
     
-    // Speak the response (this waits for audio injection to complete)
-    await speakTextViaAudio(step.text);
-    
-    // Wait additional time for the audio to be processed by AI
-    // This prevents overlapping with the next AI response
-    await new Promise((r) => setTimeout(r, 4000));
+    try {
+      // Get the last AI message from transcript
+      const lastAiMessage = messagesRef.current
+        .filter(m => m.role === "assistant")
+        .pop()?.content;
 
-    respondingInProgressRef.current = false;
-  }, [currentScenario, speakTextViaAudio]);
+      if (!lastAiMessage) {
+        console.log("[Voice] No AI message to respond to");
+        respondingInProgressRef.current = false;
+        return;
+      }
+
+      // Check for conversation ending phrases
+      const ENDING_PHRASES = [
+        "goodbye", "good bye", "bye", "have a great day", "have a nice day",
+        "take care", "thank you for calling", "thanks for calling",
+      ];
+      const isEnding = ENDING_PHRASES.some(phrase => 
+        lastAiMessage.toLowerCase().includes(phrase)
+      );
+
+      if (isEnding) {
+        console.log("[Voice] Detected conversation ending, completing test");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: "system-complete",
+            role: "system",
+            content: "✅ Test completed - conversation ended naturally",
+            timestamp: new Date().toISOString(),
+          },
+        ]);
+        respondingInProgressRef.current = false;
+        return;
+      }
+
+      let responseText;
+
+      if (useDynamicResponses) {
+        // Dynamic mode: generate response based on AI message
+        console.log("[Voice] Generating dynamic response for:", lastAiMessage.substring(0, 50) + "...");
+        setIsGeneratingResponse(true);
+        
+        const conversationHistory = messagesRef.current
+          .filter(m => m.role === "user" || m.role === "assistant")
+          .map(m => ({ role: m.role, content: m.content }));
+
+        responseText = await generateDynamicResponse(lastAiMessage, conversationHistory);
+        setIsGeneratingResponse(false);
+
+        if (!responseText) {
+          console.error("[Voice] Failed to generate dynamic response");
+          respondingInProgressRef.current = false;
+          return;
+        }
+      } else {
+        // Legacy mode: use pre-generated scenario
+        if (currentStepRef.current >= currentScenario.responses.length) {
+          console.log("[Voice] All scenario steps completed!");
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: "system-complete",
+              role: "system",
+              content: "✅ Test scenario completed successfully!",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          respondingInProgressRef.current = false;
+          return;
+        }
+
+        const step = currentScenario.responses[currentStepRef.current];
+        responseText = step.text;
+      }
+
+      console.log(`[Voice] Responding: "${responseText.substring(0, 50)}..."`);
+      setCurrentStep((prev) => prev + 1);
+      currentStepRef.current += 1;
+      
+      // Speak the response (this waits for audio injection to complete)
+      await speakTextViaAudio(responseText);
+      
+      // Wait additional time for the audio to be processed by AI
+      await new Promise((r) => setTimeout(r, 4000));
+    } finally {
+      respondingInProgressRef.current = false;
+    }
+  }, [currentScenario, speakTextViaAudio, useDynamicResponses, generateDynamicResponse]);
 
   // Start voice test with audio injection
   const startVoiceTest = useCallback(async () => {
@@ -1687,11 +1750,17 @@ export default function TestAgentPage() {
     lastAnalyzedMessageIndexRef.current = -1;
     setWorkflowItemStatuses({});
     setWorkflowSlotsFilled({});
+    setCustomerData(null); // Reset customer data for new voice test session
+    setIsGeneratingResponse(false);
+    
+    const testModeName = useDynamicResponses 
+      ? `Dynamic Simulation (${selectedPersona})` 
+      : currentScenario?.name || "Test";
     setMessages([
       {
         id: "system-voice-start",
         role: "system",
-        content: `Starting voice test with audio injection: ${currentScenario.name}`,
+        content: `Starting voice test: ${testModeName}`,
         timestamp: new Date().toISOString(),
       },
     ]);
