@@ -463,7 +463,20 @@ class MockMicrophone {
     oscillator.start();
 
     console.log("[MockMic] Initialized (48kHz)");
+    
+    // Debug: Monitor stream activity
+    const track = this.stream.getAudioTracks()[0];
+    console.log(`[MockMic] Audio track: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+    
     return this.stream;
+  }
+  
+  // Method to verify stream is active
+  debugStreamStatus() {
+    if (!this.stream) return "No stream";
+    const track = this.stream.getAudioTracks()[0];
+    if (!track) return "No audio track";
+    return `enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`;
   }
 
   async injectAudio(audioBuffer) {
@@ -473,19 +486,39 @@ class MockMicrophone {
 
     this.isPlaying = true;
 
+    // Analyze audio level
+    const channelData = audioBuffer.getChannelData(0);
+    let maxLevel = 0;
+    let sumSquares = 0;
+    for (let i = 0; i < channelData.length; i++) {
+      const sample = Math.abs(channelData[i]);
+      if (sample > maxLevel) maxLevel = sample;
+      sumSquares += channelData[i] * channelData[i];
+    }
+    const rms = Math.sqrt(sumSquares / channelData.length);
+    console.log(`[MockMic] Audio analysis: duration=${audioBuffer.duration.toFixed(2)}s, sampleRate=${audioBuffer.sampleRate}Hz, channels=${audioBuffer.numberOfChannels}, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}`);
+
     return new Promise((resolve, reject) => {
       try {
         const source = this.audioContext.createBufferSource();
         source.buffer = audioBuffer;
-        source.connect(this.destination);
+        
+        // Add gain node for potential amplification
+        const gainNode = this.audioContext.createGain();
+        gainNode.gain.value = 1.0; // Can increase if needed
+        
+        source.connect(gainNode);
+        gainNode.connect(this.destination);
 
         source.onended = () => {
           this.isPlaying = false;
+          console.log(`[MockMic] Audio injection completed`);
           resolve();
         };
 
         source.start();
-        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio`);
+        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio via gain node`);
+        console.log(`[MockMic] Stream status: ${this.debugStreamStatus()}`);
       } catch (err) {
         this.isPlaying = false;
         reject(err);
@@ -1557,16 +1590,6 @@ export default function TestAgentPage() {
       await mockMic.init();
       mockMicRef.current = mockMic;
 
-      // Override getUserMedia to return our mock stream
-      const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = async (constraints) => {
-        if (constraints.audio) {
-          console.log("[Voice] getUserMedia intercepted - returning mock stream");
-          return mockMic.getStream();
-        }
-        return originalGetUserMedia(constraints);
-      };
-
       // Dynamic import of TelnyxAIAgent (using v0.1.9 for unauthenticated calls)
       const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
 
@@ -1574,6 +1597,18 @@ export default function TestAgentPage() {
         agentId: agentId,
         debug: true,
       });
+
+      // IMPORTANT: Override getUserMedia AFTER TelnyxAIAgent is created
+      // The library wraps getUserMedia in its constructor, so we must override after
+      const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = async (constraints) => {
+        if (constraints.audio) {
+          console.log("[Voice] getUserMedia intercepted (post-init) - returning mock stream");
+          console.log(`[Voice] Mock stream status: ${mockMic.debugStreamStatus()}`);
+          return mockMic.getStream();
+        }
+        return libGetUserMedia(constraints);
+      };
 
       voiceClientRef.current = client;
       let lastAgentState = null;
@@ -1691,9 +1726,14 @@ export default function TestAgentPage() {
       await client.connect();
       await new Promise((r) => setTimeout(r, 1000));
 
+      // Get the mock stream to pass directly
+      const mockStream = mockMic.getStream();
+      console.log(`[Voice] Passing localStream directly: ${mockMic.debugStreamStatus()}`);
+      
       await client.startConversation({
         callerName: "Voice Test Harness",
         audio: true,
+        localStream: mockStream, // Pass mock stream directly instead of relying on getUserMedia
       });
 
       console.log("[Voice] Conversation started - waiting for AI greeting...");
