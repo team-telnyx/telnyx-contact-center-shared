@@ -28,7 +28,8 @@ const nextConfig = {
     ];
   },
   // Server-side externals for Turbopack (Next.js 16+)
-  serverExternalPackages: ["pg", "pgpass", "pg-connection-string"],
+  // ws, bufferutil, utf-8-validate are needed for Telnyx WebSocket TTS
+  serverExternalPackages: ["pg", "pgpass", "pg-connection-string", "ws", "bufferutil", "utf-8-validate"],
   // Turbopack configuration (used when not passing --webpack)
   turbopack: {
     root: process.cwd(),
@@ -38,12 +39,14 @@ const nextConfig = {
   webpack: (config, { isServer, dev }) => {
     if (isServer) {
       // Handle externals properly for server-side code
+      // Includes ws and native deps for Telnyx WebSocket TTS
+      const serverExternals = ["pg", "pgpass", "pg-connection-string", "ws", "bufferutil", "utf-8-validate"];
       if (Array.isArray(config.externals)) {
-        config.externals.push("pg", "pgpass", "pg-connection-string");
+        config.externals.push(...serverExternals);
       } else if (typeof config.externals === "function") {
         const originalExternals = config.externals;
         config.externals = async (context, request, callback) => {
-          if (["pg", "pgpass", "pg-connection-string"].includes(request)) {
+          if (serverExternals.includes(request)) {
             return callback(null, `commonjs ${request}`);
           }
           return originalExternals(context, request, callback);
