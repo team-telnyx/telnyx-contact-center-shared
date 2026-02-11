@@ -693,7 +693,6 @@ export default function TestAgentPage() {
   
   // Voice state
   const [voiceStatus, setVoiceStatus] = useState("idle"); // idle, connecting, active, error
-  const [isMuted, setIsMuted] = useState(false);
   const [localAudioEnabled, setLocalAudioEnabled] = useState(true);
   const [agentState, setAgentState] = useState("idle");
   const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
