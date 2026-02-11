@@ -438,6 +438,11 @@ function Message({ message, isUser, analysis }) {
 // MOCK MICROPHONE FOR VOICE TESTS
 // ============================================
 
+// Store ORIGINAL getUserMedia before any overrides (module level)
+const ORIGINAL_GET_USER_MEDIA = typeof navigator !== 'undefined' && navigator.mediaDevices 
+  ? navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices) 
+  : null;
+
 class MockMicrophone {
   constructor() {
     this.audioContext = null;
@@ -446,9 +451,36 @@ class MockMicrophone {
     this.isPlaying = false;
     this.silentOscillator = null; // Keep reference to prevent GC
     this.silentGain = null;
+    this.realMicStream = null; // Real microphone stream (muted, for WebRTC compatibility)
+    this.healthCheckInterval = null;
   }
 
   async init() {
+    // Use real microphone stream and mix our audio into it
+    // This ensures WebRTC gets a "real" MediaStream that it recognizes
+    
+    try {
+      // Get real microphone stream using ORIGINAL getUserMedia (before any overrides)
+      // This ensures we get the real mic, not our mock
+      if (ORIGINAL_GET_USER_MEDIA) {
+        this.realMicStream = await ORIGINAL_GET_USER_MEDIA({ 
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        });
+        console.log("[MockMic] Got real microphone stream via original getUserMedia");
+      } else {
+        console.warn("[MockMic] Original getUserMedia not available");
+        this.realMicStream = null;
+      }
+    } catch (e) {
+      console.warn("[MockMic] Could not get real mic, using synthetic stream:", e.message);
+      this.realMicStream = null;
+    }
+
+    // Create AudioContext at 48kHz (WebRTC standard)
     this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
       sampleRate: 48000,
     });
@@ -460,12 +492,26 @@ class MockMicrophone {
     }
 
     this.destination = this.audioContext.createMediaStreamDestination();
-    this.stream = this.destination.stream;
+    
+    // If we have real mic, mute it and mix with our destination
+    if (this.realMicStream) {
+      const realMicSource = this.audioContext.createMediaStreamSource(this.realMicStream);
+      const muteGain = this.audioContext.createGain();
+      muteGain.gain.value = 0; // Mute real mic
+      realMicSource.connect(muteGain);
+      muteGain.connect(this.destination);
+      
+      // Use the tracks from destination (which includes muted mic signal)
+      this.stream = this.destination.stream;
+    } else {
+      this.stream = this.destination.stream;
+    }
 
     // Silent oscillator to keep stream active (store as properties to prevent GC)
     this.silentOscillator = this.audioContext.createOscillator();
+    this.silentOscillator.frequency.value = 1; // Very low frequency
     this.silentGain = this.audioContext.createGain();
-    this.silentGain.gain.value = 0.0001; // Tiny value instead of 0 to ensure data flows
+    this.silentGain.gain.value = 0.001; // Tiny value to ensure data flows
     this.silentOscillator.connect(this.silentGain);
     this.silentGain.connect(this.destination);
     this.silentOscillator.start();
@@ -475,6 +521,14 @@ class MockMicrophone {
     // Debug: Monitor stream activity
     const track = this.stream.getAudioTracks()[0];
     console.log(`[MockMic] Audio track: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
+    
+    // Set up periodic check for stream health
+    this.healthCheckInterval = setInterval(() => {
+      const status = this.debugStreamStatus();
+      if (status.includes("ended")) {
+        console.error("[MockMic] Stream ended unexpectedly! Status:", status);
+      }
+    }, 5000);
     
     return this.stream;
   }
@@ -551,6 +605,13 @@ class MockMicrophone {
   }
 
   cleanup() {
+    // Stop health check interval
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+    
+    // Stop silent oscillator
     if (this.silentOscillator) {
       try {
         this.silentOscillator.stop();
@@ -561,12 +622,20 @@ class MockMicrophone {
     }
     this.silentGain = null;
     
+    // Stop real microphone tracks
+    if (this.realMicStream) {
+      this.realMicStream.getTracks().forEach(track => track.stop());
+      this.realMicStream = null;
+    }
+    
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;
     }
     this.destination = null;
     this.stream = null;
+    
+    console.log("[MockMic] Cleaned up");
   }
 }
 
@@ -667,7 +736,6 @@ export default function TestAgentPage() {
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
   const mediaRecorderRef = useRef(null); // MediaRecorder for manual voice recording
   const recordedChunksRef = useRef([]); // Recorded audio chunks
-  const originalGetUserMediaRef = useRef(null); // Store original getUserMedia for recording
   const customerDataRef = useRef(null); // Persist customer data across async calls
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
@@ -1303,8 +1371,8 @@ export default function TestAgentPage() {
 
     try {
       // Use ORIGINAL getUserMedia to get real microphone, not mock stream
-      const getUserMedia = originalGetUserMediaRef.current || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      console.log("[Recording] Getting real microphone stream...");
+      const getUserMedia = ORIGINAL_GET_USER_MEDIA || navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      console.log("[Recording] Getting real microphone stream via original getUserMedia...");
       const stream = await getUserMedia({ audio: true });
       console.log(`[Recording] Got stream with ${stream.getAudioTracks().length} audio tracks`);
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -1624,9 +1692,6 @@ export default function TestAgentPage() {
       // IMPORTANT: Override getUserMedia AFTER TelnyxAIAgent is created
       // The library wraps getUserMedia in its constructor, so we must override after
       const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      
-      // Save original for recording (before any overrides)
-      originalGetUserMediaRef.current = libGetUserMedia;
       
       navigator.mediaDevices.getUserMedia = async (constraints) => {
         if (constraints.audio) {
