@@ -1114,6 +1114,21 @@ export default function TestAgentPage() {
         let stepNum = currentStepIndex;
         const MAX_TURNS = 50; // Safety limit to prevent infinite loops
         
+        // Phrases that indicate conversation is ending
+        const ENDING_PHRASES = [
+          "goodbye", "good bye", "bye", "have a great day", "have a nice day",
+          "take care", "thank you for calling", "thanks for calling",
+          "end the call", "ending the call", "disconnect", "hanging up",
+          "is there anything else", "anything else i can help",
+        ];
+        
+        // Check if message indicates conversation ending
+        const isConversationEnding = (message) => {
+          if (!message) return false;
+          const lower = message.toLowerCase();
+          return ENDING_PHRASES.some(phrase => lower.includes(phrase));
+        };
+        
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           if (!isTestRunningRef.current || isPaused) {
             console.log("[Dynamic] Test stopped or paused");
@@ -1121,6 +1136,21 @@ export default function TestAgentPage() {
           }
           if (!autoModeRef.current) {
             console.log("[Dynamic] Auto mode disabled");
+            break;
+          }
+          
+          // Check if AI is saying goodbye - if so, end the test
+          if (isConversationEnding(currentAiMessage)) {
+            console.log("[Dynamic] Detected conversation ending phrase, completing test");
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: "system-complete",
+                role: "system",
+                content: "✅ Test completed - conversation ended naturally",
+                timestamp: new Date().toISOString(),
+              },
+            ]);
             break;
           }
 
