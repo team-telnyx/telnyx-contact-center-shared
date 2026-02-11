@@ -1564,8 +1564,29 @@ export default function TestAgentPage() {
           return libGetUserMedia(constraints);
         };
       } else {
-        console.log("[Voice] MANUAL mode - using real microphone directly");
+        console.log("[Voice] MANUAL mode - requesting microphone permissions...");
         mockMicRef.current = null;
+        
+        // Request microphone permissions BEFORE connecting (like demo-portal)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: false 
+          });
+          // Stop the stream - we just needed permission
+          stream.getTracks().forEach((track) => track.stop());
+          console.log("[Voice] MANUAL mode - microphone permissions granted");
+        } catch (audioError) {
+          console.error("[Voice] Microphone permission denied:", audioError);
+          notify({
+            title: "Microphone Required",
+            description: "Please allow microphone access for voice testing",
+            variant: "error",
+          });
+          setVoiceStatus("error");
+          setIsTestRunning(false);
+          return;
+        }
       }
 
       voiceClientRef.current = client;
@@ -2053,49 +2074,41 @@ export default function TestAgentPage() {
             {isTestRunning && channel === "voice" && (
               <div className="pt-2 border-t">
                 <h3 className="text-sm font-semibold mb-3">Voice Status</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        voiceStatus === "active"
-                          ? "default"
-                          : voiceStatus === "connecting"
-                          ? "secondary"
-                          : voiceStatus === "error"
-                          ? "destructive"
-                          : "outline"
-                      }
-                    >
-                      {voiceStatus}
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Agent State Badge */}
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-xs",
+                      agentState === "listening" && "text-blue-500 border-blue-500 bg-blue-500/10",
+                      agentState === "speaking" && "text-green-500 border-green-500 bg-green-500/10",
+                      agentState === "thinking" && "text-yellow-500 border-yellow-500 bg-yellow-500/10",
+                      agentState === "idle" && "text-gray-500 border-gray-500 bg-gray-500/10"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-2 h-2 rounded-full mr-1.5",
+                      agentState === "listening" && "bg-blue-500",
+                      agentState === "speaking" && "bg-green-500 animate-pulse",
+                      agentState === "thinking" && "bg-yellow-500 animate-pulse",
+                      agentState === "idle" && "bg-gray-500"
+                    )} />
+                    {agentState.charAt(0).toUpperCase() + agentState.slice(1)}
+                  </Badge>
+                  
+                  {/* Connection Status Badge */}
+                  {voiceStatus === "connecting" && (
+                    <Badge variant="outline" className="text-xs text-yellow-500 border-yellow-500 bg-yellow-500/10">
+                      <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse mr-1.5" />
+                      Connecting
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      Agent: {agentState}
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsMuted(!isMuted)}
-                    >
-                      {isMuted ? (
-                        <IconMicrophoneOff className="size-4" />
-                      ) : (
-                        <IconMicrophone className="size-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLocalAudioEnabled(!localAudioEnabled)}
-                    >
-                      {localAudioEnabled ? (
-                        <IconVolume className="size-4" />
-                      ) : (
-                        <IconVolumeOff className="size-4" />
-                      )}
-                    </Button>
-                  </div>
+                  )}
+                  {voiceStatus === "error" && (
+                    <Badge variant="outline" className="text-xs text-red-500 border-red-500 bg-red-500/10">
+                      <div className="w-2 h-2 rounded-full bg-red-500 mr-1.5" />
+                      Error
+                    </Badge>
+                  )}
                 </div>
               </div>
             )}
