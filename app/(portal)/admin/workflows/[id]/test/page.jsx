@@ -1192,7 +1192,50 @@ export default function TestAgentPage() {
     }
   }, [agentId, isAutoMode, sendChatMessage, processAIResponse, createConversation, waitForAnalysisAndDelay, selectedPersona, generateDynamicResponse]);
 
-  // Send manual message - uses REST API for chat, WebRTC for voice
+  // Speak text via TTS and inject into mock microphone
+  const speakTextViaAudio = useCallback(async (text) => {
+    if (!mockMicRef.current) {
+      console.error("[Voice] Mock mic not initialized");
+      return;
+    }
+
+    try {
+      // Don't add message here - let transcript.item from Telnyx handle it
+      // This prevents duplicate messages
+
+      // Generate TTS audio with selected voice
+      const audioUrl = await generateTTS(text, ttsVoiceRef.current);
+
+      // Start local playback immediately (in parallel with injection)
+      // This ensures we hear our response at the same time it's being sent
+      let localPlaybackPromise = Promise.resolve();
+      if (localAudioEnabledRef.current) {
+        const localAudio = new Audio(audioUrl);
+        localAudio.volume = 0.7;
+        localPlaybackPromise = localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
+      }
+
+      // Inject into mock microphone stream (runs in parallel with local playback)
+      await mockMicRef.current.injectAudioFromUrl(audioUrl);
+
+      // Wait for local playback to start (usually instant)
+      await localPlaybackPromise;
+
+      // Cleanup after a delay
+      setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
+
+      console.log("[Voice] Audio injected successfully");
+    } catch (err) {
+      console.error("[Voice] Failed to speak:", err);
+      notify({
+        title: "TTS Error",
+        description: err.message,
+        variant: "error",
+      });
+    }
+  }, []);
+
+  // Send manual message - uses REST API for chat, TTS+inject for voice
   const sendMessage = useCallback(async () => {
     if (!inputMessage.trim() || sendingMessage) return;
 
@@ -1283,49 +1326,6 @@ export default function TestAgentPage() {
     if (mockMicRef.current) {
       mockMicRef.current.cleanup();
       mockMicRef.current = null;
-    }
-  }, []);
-
-  // Speak text via TTS and inject into mock microphone
-  const speakTextViaAudio = useCallback(async (text) => {
-    if (!mockMicRef.current) {
-      console.error("[Voice] Mock mic not initialized");
-      return;
-    }
-
-    try {
-      // Don't add message here - let transcript.item from Telnyx handle it
-      // This prevents duplicate messages
-
-      // Generate TTS audio with selected voice
-      const audioUrl = await generateTTS(text, ttsVoiceRef.current);
-
-      // Start local playback immediately (in parallel with injection)
-      // This ensures we hear our response at the same time it's being sent
-      let localPlaybackPromise = Promise.resolve();
-      if (localAudioEnabledRef.current) {
-        const localAudio = new Audio(audioUrl);
-        localAudio.volume = 0.7;
-        localPlaybackPromise = localAudio.play().catch((e) => console.warn("[Voice] Local playback error:", e));
-      }
-
-      // Inject into mock microphone stream (runs in parallel with local playback)
-      await mockMicRef.current.injectAudioFromUrl(audioUrl);
-
-      // Wait for local playback to start (usually instant)
-      await localPlaybackPromise;
-
-      // Cleanup after a delay
-      setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
-
-      console.log("[Voice] Audio injected successfully");
-    } catch (err) {
-      console.error("[Voice] Failed to speak:", err);
-      notify({
-        title: "TTS Error",
-        description: err.message,
-        variant: "error",
-      });
     }
   }, []);
 
