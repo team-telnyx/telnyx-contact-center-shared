@@ -2064,8 +2064,8 @@ export default function TestAgentPage() {
                   />
                 </div>
 
-                {/* TTS Configuration (Voice channel only) */}
-                {channel === "voice" && (
+                {/* TTS Configuration (Voice channel + AUTO mode only) */}
+                {channel === "voice" && isAutoMode && (
                   <div className="space-y-3 pt-3 border-t">
                     <label className="text-sm font-medium">TTS Voice</label>
                     
