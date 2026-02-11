@@ -1669,19 +1669,13 @@ export default function TestAgentPage() {
       {
         id: "system-voice-start",
         role: "system",
-        content: `Starting voice test: ${selectedPersona} persona`,
+        content: `Starting voice test: ${selectedPersona} persona (${isAutoMode ? 'AUTO - TTS injection' : 'MANUAL - real microphone'})`,
         timestamp: new Date().toISOString(),
       },
     ]);
 
     try {
-      // Initialize mock microphone
-      console.log("[Voice] Initializing mock microphone...");
-      const mockMic = new MockMicrophone();
-      await mockMic.init();
-      mockMicRef.current = mockMic;
-
-      // Dynamic import of TelnyxAIAgent (using v0.1.9 for unauthenticated calls)
+      // Dynamic import of TelnyxAIAgent
       const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
 
       const client = new TelnyxAIAgent({
@@ -1689,23 +1683,34 @@ export default function TestAgentPage() {
         debug: true,
       });
 
-      // IMPORTANT: Override getUserMedia AFTER TelnyxAIAgent is created
-      // The library wraps getUserMedia in its constructor, so we must override after
-      const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      
-      navigator.mediaDevices.getUserMedia = async (constraints) => {
-        if (constraints.audio) {
-          console.log("[Voice] getUserMedia intercepted (post-init) - returning mock stream");
-          console.log(`[Voice] Mock stream status: ${mockMic.debugStreamStatus()}`);
-          return mockMic.getStream();
-        }
-        return libGetUserMedia(constraints);
-      };
+      // AUTO MODE: Initialize mock microphone for TTS injection
+      // MANUAL MODE: Use real microphone directly (library handles it)
+      if (isAutoMode) {
+        console.log("[Voice] AUTO mode - initializing mock microphone for TTS injection...");
+        const mockMic = new MockMicrophone();
+        await mockMic.init();
+        mockMicRef.current = mockMic;
+
+        // Override getUserMedia to return mock stream for WebRTC
+        const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        navigator.mediaDevices.getUserMedia = async (constraints) => {
+          if (constraints.audio) {
+            console.log("[Voice] getUserMedia intercepted - returning mock stream");
+            console.log(`[Voice] Mock stream status: ${mockMic.debugStreamStatus()}`);
+            return mockMic.getStream();
+          }
+          return libGetUserMedia(constraints);
+        };
+      } else {
+        console.log("[Voice] MANUAL mode - using real microphone directly");
+        mockMicRef.current = null;
+      }
 
       voiceClientRef.current = client;
       let lastAgentState = null;
 
       // Set up event handlers
+      const currentAutoMode = isAutoMode; // Capture for closure
       client.on("agent.connected", () => {
         setVoiceStatus("active");
         setMessages((prev) => [
@@ -1713,7 +1718,9 @@ export default function TestAgentPage() {
           {
             id: "system-connected",
             role: "system",
-            content: "✅ Connected to AI Agent (audio injection mode)",
+            content: currentAutoMode 
+              ? "✅ Connected to AI Agent (AUTO mode - TTS injection)"
+              : "✅ Connected to AI Agent (MANUAL mode - real microphone)",
             timestamp: new Date().toISOString(),
           },
         ]);
@@ -1818,17 +1825,23 @@ export default function TestAgentPage() {
       await client.connect();
       await new Promise((r) => setTimeout(r, 1000));
 
-      // Get the mock stream to pass directly
-      const mockStream = mockMic.getStream();
-      console.log(`[Voice] Passing localStream directly: ${mockMic.debugStreamStatus()}`);
-      
-      await client.startConversation({
+      // Start conversation - pass mock stream in AUTO mode, let library use real mic in MANUAL mode
+      const conversationOptions = {
         callerName: "Voice Test Harness",
         audio: true,
-        localStream: mockStream, // Pass mock stream directly instead of relying on getUserMedia
-      });
+      };
+      
+      if (isAutoMode && mockMicRef.current) {
+        const mockStream = mockMicRef.current.getStream();
+        console.log(`[Voice] AUTO mode - passing mock localStream: ${mockMicRef.current.debugStreamStatus()}`);
+        conversationOptions.localStream = mockStream;
+      } else {
+        console.log("[Voice] MANUAL mode - library will use real microphone");
+      }
+      
+      await client.startConversation(conversationOptions);
 
-      console.log("[Voice] Conversation started - waiting for AI greeting...");
+      console.log(`[Voice] Conversation started (${isAutoMode ? 'AUTO' : 'MANUAL'} mode) - waiting for AI greeting...`);
     } catch (err) {
       setVoiceStatus("error");
       setIsTestRunning(false);
