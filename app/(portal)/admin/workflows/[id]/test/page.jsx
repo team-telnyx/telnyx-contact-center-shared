@@ -991,95 +991,94 @@ export default function TestAgentPage() {
     
     try {
       // Dynamic response generation loop
-        let currentAiMessage = aiContent;
-        let stepNum = currentStepIndex;
-        const MAX_TURNS = 50; // Safety limit to prevent infinite loops
-        
-        // Phrases that indicate conversation is ending
-        const ENDING_PHRASES = [
-          "goodbye", "good bye", "bye", "have a great day", "have a nice day",
-          "take care", "thank you for calling", "thanks for calling",
-          "end the call", "ending the call", "disconnect", "hanging up",
-          "is there anything else", "anything else i can help",
-        ];
-        
-        // Check if message indicates conversation ending
-        const isConversationEnding = (message) => {
-          if (!message) return false;
-          const lower = message.toLowerCase();
-          return ENDING_PHRASES.some(phrase => lower.includes(phrase));
-        };
-        
-        for (let turn = 0; turn < MAX_TURNS; turn++) {
-          if (!isTestRunningRef.current || isPaused) {
-            console.log("[Dynamic] Test stopped or paused");
-            break;
-          }
-          if (!autoModeRef.current) {
-            console.log("[Dynamic] Auto mode disabled");
-            break;
-          }
-          
-          // Check if AI is saying goodbye - if so, end the test
-          if (isConversationEnding(currentAiMessage)) {
-            console.log("[Dynamic] Detected conversation ending phrase, completing test");
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: "system-complete",
-                role: "system",
-                content: "✅ Test completed - conversation ended naturally",
-                timestamp: new Date().toISOString(),
-              },
-            ]);
-            break;
-          }
-
-          // Build conversation history from messages ref (avoid stale closure)
-          const conversationHistory = messagesRef.current
-            .filter(m => m.role === "user" || m.role === "assistant")
-            .map(m => ({ role: m.role, content: m.content }));
-
-          console.log(`[Dynamic] Turn ${turn + 1}: Processing AI response:`, currentAiMessage?.substring(0, 50) + "...");
-
-          await waitForAnalysisAndDelay();
-          if (!isTestRunningRef.current) break;
-
-          // Generate dynamic response based on AI's message
-          setIsGeneratingResponse(true);
-          const dynamicResponse = await generateDynamicResponse(currentAiMessage, conversationHistory);
-          setIsGeneratingResponse(false);
-          
-          if (!dynamicResponse) {
-            console.error("[Dynamic] Failed to generate response, stopping");
-            break;
-          }
-          if (!isTestRunningRef.current) break;
-
-          console.log("[Dynamic] Generated response:", dynamicResponse?.substring(0, 50) + "...");
-          setCurrentStep(++stepNum);
-
-          // Send the generated response
-          const nextAiResponse = await sendChatMessage(dynamicResponse, convId, stepNum);
-          
-          if (!isTestRunningRef.current) break;
-
-          if (!nextAiResponse) {
-            console.log("[Dynamic] No AI response received, stopping");
-            break;
-          }
-
-          console.log("[Dynamic] AI responded:", nextAiResponse?.substring(0, 50) + "...");
-          currentAiMessage = nextAiResponse;
-
-          // Small delay before next iteration to prevent tight loops
-          await new Promise(r => setTimeout(r, 300));
+      let currentAiMessage = aiContent;
+      let stepNum = currentStepIndex;
+      const MAX_TURNS = 50; // Safety limit to prevent infinite loops
+      
+      // Phrases that indicate conversation is ending
+      const ENDING_PHRASES = [
+        "goodbye", "good bye", "bye", "have a great day", "have a nice day",
+        "take care", "thank you for calling", "thanks for calling",
+        "end the call", "ending the call", "disconnect", "hanging up",
+        "is there anything else", "anything else i can help",
+      ];
+      
+      // Check if message indicates conversation ending
+      const isConversationEnding = (message) => {
+        if (!message) return false;
+        const lower = message.toLowerCase();
+        return ENDING_PHRASES.some(phrase => lower.includes(phrase));
+      };
+      
+      for (let turn = 0; turn < MAX_TURNS; turn++) {
+        if (!isTestRunningRef.current || isPaused) {
+          console.log("[Dynamic] Test stopped or paused");
+          break;
         }
+        if (!autoModeRef.current) {
+          console.log("[Dynamic] Auto mode disabled");
+          break;
+        }
+        
+        // Check if AI is saying goodbye - if so, end the test
+        if (isConversationEnding(currentAiMessage)) {
+          console.log("[Dynamic] Detected conversation ending phrase, completing test");
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: "system-complete",
+              role: "system",
+              content: "✅ Test completed - conversation ended naturally",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          break;
+        }
+
+        // Build conversation history from messages ref (avoid stale closure)
+        const conversationHistory = messagesRef.current
+          .filter(m => m.role === "user" || m.role === "assistant")
+          .map(m => ({ role: m.role, content: m.content }));
+
+        console.log(`[Dynamic] Turn ${turn + 1}: Processing AI response:`, currentAiMessage?.substring(0, 50) + "...");
+
+        await waitForAnalysisAndDelay();
+        if (!isTestRunningRef.current) break;
+
+        // Generate dynamic response based on AI's message
+        setIsGeneratingResponse(true);
+        const dynamicResponse = await generateDynamicResponse(currentAiMessage, conversationHistory);
+        setIsGeneratingResponse(false);
+        
+        if (!dynamicResponse) {
+          console.error("[Dynamic] Failed to generate response, stopping");
+          break;
+        }
+        if (!isTestRunningRef.current) break;
+
+        console.log("[Dynamic] Generated response:", dynamicResponse?.substring(0, 50) + "...");
+        setCurrentStep(++stepNum);
+
+        // Send the generated response
+        const nextAiResponse = await sendChatMessage(dynamicResponse, convId, stepNum);
+        
+        if (!isTestRunningRef.current) break;
+
+        if (!nextAiResponse) {
+          console.log("[Dynamic] No AI response received, stopping");
+          break;
+        }
+
+        console.log("[Dynamic] AI responded:", nextAiResponse?.substring(0, 50) + "...");
+        currentAiMessage = nextAiResponse;
+
+        // Small delay before next iteration to prevent tight loops
+        await new Promise(r => setTimeout(r, 300));
       }
     } catch (err) {
       console.error("[Dynamic] Error in processAIResponse:", err);
     }
-  }, [isPaused, workflow, sendChatMessage, waitForAnalysisAndDelay, generateDynamicResponse]);
+  }, [isPaused, sendChatMessage, waitForAnalysisAndDelay, generateDynamicResponse]);
 
   // Create a new conversation via Telnyx API
   const createConversation = useCallback(async () => {
