@@ -8,9 +8,6 @@ export async function GET(request) {
       return NextResponse.json({ error: 'TELNYX_API_KEY not configured' }, { status: 500 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const language = searchParams.get('language') || 'en';
-
     const response = await fetch('https://api.telnyx.com/v2/text-to-speech/voices', {
       headers: {
         'Authorization': `Bearer ${TELNYX_API_KEY}`,
@@ -24,14 +21,10 @@ export async function GET(request) {
     const data = await response.json();
     
     // Parse voices into provider/model/voice structure
+    // Result format: { providerId: { modelId: [voices] } }
     const voicesMap = {};
     
     for (const voice of data) {
-      // Filter by language if specified
-      if (language && voice.language && !voice.language.toLowerCase().startsWith(language.toLowerCase())) {
-        continue;
-      }
-      
       const provider = voice.provider || 'unknown';
       const model = voice.model_id || 'default';
       
@@ -52,9 +45,23 @@ export async function GET(request) {
       });
     }
 
+    // Convert to providers array format expected by frontend components
+    // Format: [{ id, name, models: [{ id, name, voices: [...] }] }]
+    const providers = Object.entries(voicesMap).map(([providerId, models]) => ({
+      id: providerId,
+      name: providerId,
+      provider: providerId,
+      models: Object.entries(models).map(([modelId, voices]) => ({
+        id: modelId,
+        name: modelId,
+        voices: voices,
+      })),
+    }));
+
     return NextResponse.json({
       ok: true,
-      voices: voicesMap,
+      providers: providers,
+      voices: voicesMap, // Keep for backwards compatibility
       total: data.length,
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -26,6 +26,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
   IconRobot,
   IconLoader2,
   IconVolume,
@@ -34,8 +46,34 @@ import {
   IconCheck,
   IconAlertCircle,
   IconHeadphones,
+  IconWorld,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
+
+// Helper functions for language filtering
+function normalizeLocaleCode(code) {
+  try {
+    const s = String(code || "").replace(/_/g, "-");
+    const m = s.match(/^([a-zA-Z]{2,3})-([a-zA-Z]{2}|\d{3})$/);
+    if (!m) return null;
+    const lang = m[1].toLowerCase();
+    const region = m[2].toUpperCase();
+    return `${lang}-${region}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function regionToFlag(region) {
+  try {
+    const r = String(region || "").toUpperCase();
+    if (!/^[A-Z]{2}$/.test(r)) return "";
+    const codePoints = [...r].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65));
+    return String.fromCodePoint(...codePoints);
+  } catch (_) {
+    return "";
+  }
+}
 
 /**
  * CreateAgentSheet - Creates a Telnyx AI Agent from workflow instructions
@@ -68,6 +106,9 @@ export default function CreateAgentSheet({
   const [ttsProvider, setTtsProvider] = useState("AWS");
   const [ttsModel, setTtsModel] = useState("Polly");
   const [ttsVoice, setTtsVoice] = useState("AWS.Polly.Joanna");
+  const [ttsLanguageFilter, setTtsLanguageFilter] = useState("");
+  const [ttsLanguageSearch, setTtsLanguageSearch] = useState("");
+  const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = useState(false);
   
   // STT settings
   const [sttProvider, setSttProvider] = useState("deepgram");
@@ -177,12 +218,80 @@ export default function CreateAgentSheet({
     return provider?.models || [];
   };
   
-  // Get available voices for selected TTS provider and model
-  const getTtsVoices = () => {
+  // Get all voices for selected TTS provider and model (before language filtering)
+  const allTtsVoices = useMemo(() => {
     const provider = ttsProviders.find(p => p.id === ttsProvider);
-    const model = provider?.models?.find(m => m.id === ttsModel);
-    return model?.voices || [];
+    if (!provider?.models) return [];
+    
+    // If no model selected, get all voices from all models
+    if (!ttsModel) {
+      const allVoices = [];
+      for (const m of provider.models) {
+        const modelVoices = typeof m === "object" && m.voices ? m.voices : [];
+        allVoices.push(...modelVoices);
+      }
+      return allVoices.filter((v) => v?.id);
+    }
+    
+    // Find specific model and return its voices
+    const model = provider.models.find(m => m.id === ttsModel);
+    return model?.voices?.filter((v) => v?.id) || [];
+  }, [ttsProviders, ttsProvider, ttsModel]);
+
+  // Extract available languages from voices
+  const ttsLanguageOptions = useMemo(() => {
+    const map = new Map();
+    let langNames = null;
+    let regionNames = null;
+    try {
+      langNames = new Intl.DisplayNames(undefined, { type: "language" });
+      regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+    } catch (_) {}
+
+    for (const v of allTtsVoices) {
+      const norm = normalizeLocaleCode(v?.language);
+      if (!norm || map.has(norm)) continue;
+      const [lang, region] = norm.split("-");
+      let label = norm.toUpperCase();
+      try {
+        const ln = langNames?.of(lang) || lang.toUpperCase();
+        const rn = regionNames?.of(region) || region.toUpperCase();
+        label = `${ln} (${rn})`;
+      } catch (_) {}
+      const flag = regionToFlag(region);
+      map.set(norm, { value: norm, label, flag });
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [allTtsVoices]);
+
+  const filteredTtsLanguageOptions = useMemo(() => {
+    if (!ttsLanguageSearch.trim()) return ttsLanguageOptions;
+    const search = ttsLanguageSearch.toLowerCase();
+    return ttsLanguageOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(search) ||
+        option.value.toLowerCase().includes(search)
+    );
+  }, [ttsLanguageOptions, ttsLanguageSearch]);
+
+  // Filter voices by language
+  const getTtsVoices = () => {
+    let filtered = allTtsVoices;
+    if (ttsLanguageFilter) {
+      filtered = filtered.filter(
+        (v) => normalizeLocaleCode(v?.language) === ttsLanguageFilter
+      );
+    }
+    return filtered;
   };
+
+  // Get selected language display info
+  const selectedTtsLanguageInfo = useMemo(() => {
+    if (!ttsLanguageFilter) return null;
+    return ttsLanguageOptions.find((opt) => opt.value === ttsLanguageFilter);
+  }, [ttsLanguageFilter, ttsLanguageOptions]);
 
   // Generate instructions from workflow stages
   const generateInstructions = () => {
@@ -441,6 +550,7 @@ export default function CreateAgentSheet({
                         <Skeleton className="h-10 w-full" />
                         <Skeleton className="h-10 w-full" />
                         <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
                       </div>
                     ) : (
                       <div className="grid gap-3">
@@ -450,12 +560,12 @@ export default function CreateAgentSheet({
                             value={ttsProvider} 
                             onValueChange={(v) => {
                               setTtsProvider(v);
-                              // Reset model and voice when provider changes
+                              // Reset model, voice and language filter when provider changes
                               const provider = ttsProviders.find(p => p.id === v);
                               const firstModel = provider?.models?.[0];
                               setTtsModel(firstModel?.id || "");
-                              const firstVoice = firstModel?.voices?.[0];
-                              setTtsVoice(firstVoice?.id || "");
+                              setTtsVoice("");
+                              setTtsLanguageFilter("");
                             }}
                           >
                             <SelectTrigger>
@@ -477,11 +587,9 @@ export default function CreateAgentSheet({
                             value={ttsModel} 
                             onValueChange={(v) => {
                               setTtsModel(v);
-                              // Reset voice when model changes
-                              const provider = ttsProviders.find(p => p.id === ttsProvider);
-                              const model = provider?.models?.find(m => m.id === v);
-                              const firstVoice = model?.voices?.[0];
-                              setTtsVoice(firstVoice?.id || "");
+                              // Reset voice and language filter when model changes
+                              setTtsVoice("");
+                              setTtsLanguageFilter("");
                             }}
                           >
                             <SelectTrigger>
@@ -496,6 +604,94 @@ export default function CreateAgentSheet({
                             </SelectContent>
                           </Select>
                         </div>
+
+                        {/* Language Filter */}
+                        {ttsLanguageOptions.length > 0 && (
+                          <div className="space-y-2">
+                            <Label>Language Filter</Label>
+                            <Popover
+                              open={ttsLanguagePopoverOpen}
+                              onOpenChange={setTtsLanguagePopoverOpen}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between"
+                                  disabled={loadingTts}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {selectedTtsLanguageInfo ? (
+                                      <>
+                                        <span>{selectedTtsLanguageInfo.flag}</span>
+                                        <span>{selectedTtsLanguageInfo.label}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <IconWorld className="h-4 w-4" />
+                                        <span>All languages</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0" align="start">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="Search languages..."
+                                    value={ttsLanguageSearch}
+                                    onValueChange={setTtsLanguageSearch}
+                                    className="h-9"
+                                  />
+                                  <CommandEmpty>No language found.</CommandEmpty>
+                                  <CommandGroup className="max-h-[300px] overflow-auto">
+                                    <CommandItem
+                                      value="__any__"
+                                      onSelect={() => {
+                                        setTtsLanguageFilter("");
+                                        setTtsVoice("");
+                                        setTtsLanguagePopoverOpen(false);
+                                      }}
+                                    >
+                                      <IconCheck
+                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                          !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                        }`}
+                                      />
+                                      <IconWorld className="size-4 mr-2" />
+                                      <span>Any</span>
+                                    </CommandItem>
+                                    {filteredTtsLanguageOptions.map((opt) => (
+                                      <CommandItem
+                                        key={opt.value}
+                                        value={`${opt.label}-${opt.value}`}
+                                        onSelect={() => {
+                                          setTtsLanguageFilter(opt.value);
+                                          setTtsVoice("");
+                                          setTtsLanguagePopoverOpen(false);
+                                        }}
+                                      >
+                                        <IconCheck
+                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                            ttsLanguageFilter === opt.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          }`}
+                                        />
+                                        <span className="mr-2">{opt.flag}</span>
+                                        <span>{opt.label}</span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                            <p className="text-xs text-muted-foreground">
+                              Filter voices by language ({ttsLanguageOptions.length} language
+                              {ttsLanguageOptions.length !== 1 ? "s" : ""} available)
+                            </p>
+                          </div>
+                        )}
                         
                         <div className="space-y-2">
                           <Label>Voice</Label>
@@ -506,11 +702,19 @@ export default function CreateAgentSheet({
                             <SelectContent className="max-h-[200px]">
                               {getTtsVoices().map((voice) => (
                                 <SelectItem key={voice.id} value={voice.id}>
-                                  {voice.name || voice.id}
+                                  {voice.language 
+                                    ? `${voice.name || voice.id} (${voice.language})`
+                                    : voice.name || voice.id}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
+                          {ttsLanguageFilter && (
+                            <p className="text-xs text-muted-foreground">
+                              Showing {getTtsVoices().length} voice{getTtsVoices().length !== 1 ? "s" : ""} for{" "}
+                              {selectedTtsLanguageInfo?.label || ttsLanguageFilter}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}

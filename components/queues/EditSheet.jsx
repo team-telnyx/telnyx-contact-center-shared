@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Sheet,
   SheetContent,
@@ -28,12 +28,51 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
   IconFileMusic,
   IconPlayerPlay,
   IconPlayerStop,
   IconStar,
   IconStarFilled,
+  IconWorld,
+  IconCheck,
 } from "@tabler/icons-react";
+
+// Helper functions for language filtering
+function normalizeLocaleCode(code) {
+  try {
+    const s = String(code || "").replace(/_/g, "-");
+    const m = s.match(/^([a-zA-Z]{2,3})-([a-zA-Z]{2}|\d{3})$/);
+    if (!m) return null;
+    const lang = m[1].toLowerCase();
+    const region = m[2].toUpperCase();
+    return `${lang}-${region}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+function regionToFlag(region) {
+  try {
+    const r = String(region || "").toUpperCase();
+    if (!/^[A-Z]{2}$/.test(r)) return "";
+    const codePoints = [...r].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65));
+    return String.fromCodePoint(...codePoints);
+  } catch (_) {
+    return "";
+  }
+}
 
 const ROUTING_STRATEGIES = [
   { value: "FIFO", label: "FIFO" },
@@ -209,6 +248,9 @@ export default function EditSheet({
   const [ttsProvider, setTtsProvider] = React.useState("AWS");
   const [ttsModel, setTtsModel] = React.useState("");
   const [ttsVoiceName, setTtsVoiceName] = React.useState("");
+  const [ttsLanguageFilter, setTtsLanguageFilter] = React.useState("");
+  const [ttsLanguageSearch, setTtsLanguageSearch] = React.useState("");
+  const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = React.useState(false);
   const [isPlayingMedia, setIsPlayingMedia] = React.useState(false);
   const audioRef = React.useRef(null);
   const [isTestingTts, setIsTestingTts] = React.useState(false);
@@ -228,6 +270,86 @@ export default function EditSheet({
   const [slaTargetPercentage, setSlaTargetPercentage] = React.useState(80);
   const [userAssignmentsWithCapacity, setUserAssignmentsWithCapacity] =
     React.useState({}); // { userId: { priority } }
+
+  // Get all voices for selected TTS provider and model (before language filtering)
+  const allTtsVoices = useMemo(() => {
+    const provider = ttsProviders.find((p) => p.id === ttsProvider || p.provider === ttsProvider);
+    if (!provider?.models) return [];
+    
+    // If no model selected, get all voices from all models
+    if (!ttsModel || ttsModel === "__default__") {
+      const allVoices = [];
+      for (const m of provider.models) {
+        const modelVoices = typeof m === "object" && m.voices ? m.voices : [];
+        allVoices.push(...modelVoices);
+      }
+      return allVoices.filter((v) => v?.id);
+    }
+    
+    // Find specific model and return its voices
+    const modelObj = provider.models.find(
+      (m) => (typeof m === "object" ? m.id || m.name : m) === ttsModel
+    );
+    if (modelObj && typeof modelObj === "object" && modelObj.voices) {
+      return modelObj.voices.filter((v) => v?.id);
+    }
+    return [];
+  }, [ttsProviders, ttsProvider, ttsModel]);
+
+  // Extract available languages from voices
+  const ttsLanguageOptions = useMemo(() => {
+    const map = new Map();
+    let langNames = null;
+    let regionNames = null;
+    try {
+      langNames = new Intl.DisplayNames(undefined, { type: "language" });
+      regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+    } catch (_) {}
+
+    for (const v of allTtsVoices) {
+      const norm = normalizeLocaleCode(v?.language);
+      if (!norm || map.has(norm)) continue;
+      const [lang, region] = norm.split("-");
+      let label = norm.toUpperCase();
+      try {
+        const ln = langNames?.of(lang) || lang.toUpperCase();
+        const rn = regionNames?.of(region) || region.toUpperCase();
+        label = `${ln} (${rn})`;
+      } catch (_) {}
+      const flag = regionToFlag(region);
+      map.set(norm, { value: norm, label, flag });
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [allTtsVoices]);
+
+  const filteredTtsLanguageOptions = useMemo(() => {
+    if (!ttsLanguageSearch.trim()) return ttsLanguageOptions;
+    const search = ttsLanguageSearch.toLowerCase();
+    return ttsLanguageOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(search) ||
+        option.value.toLowerCase().includes(search)
+    );
+  }, [ttsLanguageOptions, ttsLanguageSearch]);
+
+  // Filter voices by language
+  const filteredTtsVoices = useMemo(() => {
+    let filtered = allTtsVoices;
+    if (ttsLanguageFilter) {
+      filtered = filtered.filter(
+        (v) => normalizeLocaleCode(v?.language) === ttsLanguageFilter
+      );
+    }
+    return filtered;
+  }, [allTtsVoices, ttsLanguageFilter]);
+
+  // Get selected language display info
+  const selectedTtsLanguageInfo = useMemo(() => {
+    if (!ttsLanguageFilter) return null;
+    return ttsLanguageOptions.find((opt) => opt.value === ttsLanguageFilter);
+  }, [ttsLanguageFilter, ttsLanguageOptions]);
 
   // Load queue data when queueId changes
   React.useEffect(() => {
@@ -259,6 +381,7 @@ export default function EditSheet({
           setTtsProvider("AWS");
           setTtsModel("");
           setTtsVoiceName("");
+          setTtsLanguageFilter("");
           setQueuePriority(1);
           setDefaultCallPriority(3);
           setSkillRelaxationEnabled(false);
@@ -1331,6 +1454,7 @@ export default function EditSheet({
                                       setTtsProvider(value);
                                       setTtsModel("");
                                       setTtsVoiceName("");
+                                      setTtsLanguageFilter("");
                                     }}
                                     disabled={ttsLoading}
                                   >
@@ -1416,6 +1540,7 @@ export default function EditSheet({
                                                 : value;
                                             setTtsModel(actualModel);
                                             setTtsVoiceName("");
+                                            setTtsLanguageFilter("");
                                           }}
                                           disabled={ttsLoading}
                                         >
@@ -1446,80 +1571,127 @@ export default function EditSheet({
                                   return null;
                                 })()}
 
-                                {/* Voice */}
-                                {(() => {
-                                  const selectedProvider = ttsProviders.find(
-                                    (p) =>
-                                      p.id === ttsProvider ||
-                                      p.provider === ttsProvider,
-                                  );
-                                  const allVoices = [];
-                                  if (selectedProvider?.models) {
-                                    if (
-                                      !ttsModel ||
-                                      ttsModel === "__default__"
-                                    ) {
-                                      for (const m of selectedProvider.models) {
-                                        const modelVoices =
-                                          typeof m === "object" && m.voices
-                                            ? m.voices
-                                            : [];
-                                        allVoices.push(...modelVoices);
-                                      }
-                                    } else {
-                                      const modelObj =
-                                        selectedProvider.models.find(
-                                          (m) =>
-                                            (typeof m === "object"
-                                              ? m.id || m.name
-                                              : m) === ttsModel,
-                                        );
-                                      if (
-                                        modelObj &&
-                                        typeof modelObj === "object" &&
-                                        modelObj.voices
-                                      ) {
-                                        allVoices.push(...modelObj.voices);
-                                      }
-                                    }
-                                  }
-                                  const voices = allVoices.filter((v) => v?.id);
-
-                                  if (voices.length > 0) {
-                                    return (
-                                      <div className="grid gap-2">
-                                        <Label className="text-sm">
-                                          Voice{" "}
-                                          <span className="text-red-500">
-                                            *
-                                          </span>
-                                        </Label>
-                                        <div className="flex items-center gap-2">
-                                          <div className="flex-1">
-                                            <Combobox
-                                              value={ttsVoiceName}
-                                              onChange={(value) => {
-                                                setTtsVoiceName(value);
-                                                const voiceStr =
-                                                  buildVoiceString(
-                                                    ttsProvider,
-                                                    ttsModel,
-                                                    value,
-                                                  );
-                                                setQueueAudioTtsVoice(voiceStr);
-                                              }}
-                                              options={voices
-                                                .filter((v) => v?.id)
-                                                .map((v) => ({
-                                                  value: v.id,
-                                                  label: v.name || v.id,
-                                                }))}
-                                              placeholder="Select voice"
-                                              searchable={true}
-                                            />
+                                {/* Language Filter */}
+                                {ttsLanguageOptions.length > 0 && (
+                                  <div className="grid gap-2">
+                                    <Label className="text-sm">Language Filter</Label>
+                                    <Popover
+                                      open={ttsLanguagePopoverOpen}
+                                      onOpenChange={setTtsLanguagePopoverOpen}
+                                    >
+                                      <PopoverTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          role="combobox"
+                                          className="w-full justify-between"
+                                          disabled={ttsLoading}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            {selectedTtsLanguageInfo ? (
+                                              <>
+                                                <span>{selectedTtsLanguageInfo.flag}</span>
+                                                <span>{selectedTtsLanguageInfo.label}</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <IconWorld className="h-4 w-4" />
+                                                <span>All languages</span>
+                                              </>
+                                            )}
                                           </div>
-                                          {ttsVoiceName &&
-                                            queueAudioTtsVoice && (
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                          <CommandInput
+                                            placeholder="Search languages..."
+                                            value={ttsLanguageSearch}
+                                            onValueChange={setTtsLanguageSearch}
+                                            className="h-9"
+                                          />
+                                          <CommandEmpty>No language found.</CommandEmpty>
+                                          <CommandGroup className="max-h-[300px] overflow-auto">
+                                            <CommandItem
+                                              value="__any__"
+                                              onSelect={() => {
+                                                setTtsLanguageFilter("");
+                                                setTtsVoiceName("");
+                                                setTtsLanguagePopoverOpen(false);
+                                              }}
+                                            >
+                                              <IconCheck
+                                                className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                                  !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                                }`}
+                                              />
+                                              <IconWorld className="size-4 mr-2" />
+                                              <span>Any</span>
+                                            </CommandItem>
+                                            {filteredTtsLanguageOptions.map((opt) => (
+                                              <CommandItem
+                                                key={opt.value}
+                                                value={`${opt.label}-${opt.value}`}
+                                                onSelect={() => {
+                                                  setTtsLanguageFilter(opt.value);
+                                                  setTtsVoiceName("");
+                                                  setTtsLanguagePopoverOpen(false);
+                                                }}
+                                              >
+                                                <IconCheck
+                                                  className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                                    ttsLanguageFilter === opt.value
+                                                      ? "opacity-100"
+                                                      : "opacity-0"
+                                                  }`}
+                                                />
+                                                <span className="mr-2">{opt.flag}</span>
+                                                <span>{opt.label}</span>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        </Command>
+                                      </PopoverContent>
+                                    </Popover>
+                                    <p className="text-xs text-muted-foreground">
+                                      Filter voices by language ({ttsLanguageOptions.length} language
+                                      {ttsLanguageOptions.length !== 1 ? "s" : ""} available)
+                                    </p>
+                                  </div>
+                                )}
+
+                                {/* Voice */}
+                                {filteredTtsVoices.length > 0 && (
+                                  <div className="grid gap-2">
+                                    <Label className="text-sm">
+                                      Voice{" "}
+                                      <span className="text-red-500">*</span>
+                                    </Label>
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex-1">
+                                        <Combobox
+                                          value={ttsVoiceName}
+                                          onChange={(value) => {
+                                            setTtsVoiceName(value);
+                                            const voiceStr = buildVoiceString(
+                                              ttsProvider,
+                                              ttsModel,
+                                              value
+                                            );
+                                            setQueueAudioTtsVoice(voiceStr);
+                                          }}
+                                          options={filteredTtsVoices
+                                            .filter((v) => v?.id)
+                                            .map((v) => ({
+                                              value: v.id,
+                                              label: v.language 
+                                                ? `${v.name || v.id} (${v.language})`
+                                                : v.name || v.id,
+                                            }))}
+                                          placeholder="Select voice"
+                                          searchable={true}
+                                        />
+                                      </div>
+                                      {ttsVoiceName && queueAudioTtsVoice && (
                                               <Button
                                                 type="button"
                                                 variant="outline"
@@ -1663,14 +1835,18 @@ export default function EditSheet({
                                                 ) : (
                                                   <IconPlayerPlay className="size-4" />
                                                 )}
-                                              </Button>
-                                            )}
-                                        </div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
+                                        </Button>
+                                      )}
+                                    </div>
+                                    {ttsLanguageFilter && (
+                                      <p className="text-xs text-muted-foreground">
+                                        Showing {filteredTtsVoices.length} voice
+                                        {filteredTtsVoices.length !== 1 ? "s" : ""} for{" "}
+                                        {selectedTtsLanguageInfo?.label || ttsLanguageFilter}
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
 
                                 {/* API Key Reference (for ElevenLabs) */}
                                 {ttsProvider === "ElevenLabs" && (
