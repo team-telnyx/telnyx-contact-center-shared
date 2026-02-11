@@ -436,7 +436,17 @@ export default function TestAgentPage() {
     ]);
 
     try {
-      // Send first scenario message directly (like Python script does)
+      // Step 1: Send "Hello" to get welcome message from AI
+      const welcomeResponse = await sendChatMessage("Hello", newConversationId);
+      
+      if (!welcomeResponse) {
+        throw new Error("No welcome message from AI");
+      }
+
+      // Wait a moment before sending first scenario message
+      await new Promise(r => setTimeout(r, 1000));
+
+      // Step 2: Send first scenario message
       const firstStep = currentScenario.responses[0];
       if (!firstStep) {
         throw new Error("No messages in scenario");
