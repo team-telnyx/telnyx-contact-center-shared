@@ -19,12 +19,13 @@ export async function GET(request) {
     }
 
     const data = await response.json();
+    const voicesList = data.voices || [];
     
     // Parse voices into provider/model/voice structure
     // Result format: { providerId: { modelId: [voices] } }
     const voicesMap = {};
     
-    for (const voice of data) {
+    for (const voice of voicesList) {
       const provider = voice.provider || 'unknown';
       const model = voice.model_id || 'default';
       
@@ -62,7 +63,7 @@ export async function GET(request) {
       ok: true,
       providers: providers,
       voices: voicesMap, // Keep for backwards compatibility
-      total: data.length,
+      total: voicesList.length,
     });
   } catch (error) {
     console.error('[TTS Voices] Error:', error);
