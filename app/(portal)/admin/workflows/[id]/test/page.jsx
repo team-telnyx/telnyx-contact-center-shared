@@ -446,7 +446,6 @@ class MockMicrophone {
     this.isPlaying = false;
     this.silentOscillator = null;
     this.silentGain = null;
-    this.gain = 3.0; // TTS audio gain multiplier
   }
 
   async init() {
@@ -506,46 +505,17 @@ class MockMicrophone {
     return `enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`;
   }
 
-  async injectAudio(audioBuffer, gain = 3.0) {
+  async injectAudio(audioBuffer) {
     if (!this.audioContext || !this.destination) {
       throw new Error("Mock microphone not initialized");
     }
 
     this.isPlaying = true;
 
-    // Apply gain directly to audio buffer (more reliable than gain node with WebRTC AGC)
-    const amplifiedBuffer = this.audioContext.createBuffer(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
-    
-    for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
-      const inputData = audioBuffer.getChannelData(channel);
-      const outputData = amplifiedBuffer.getChannelData(channel);
-      
-      for (let i = 0; i < inputData.length; i++) {
-        // Apply gain and clip to prevent distortion
-        outputData[i] = Math.max(-1, Math.min(1, inputData[i] * gain));
-      }
-    }
-
-    // Analyze amplified audio level
-    const channelData = amplifiedBuffer.getChannelData(0);
-    let maxLevel = 0;
-    let sumSquares = 0;
-    for (let i = 0; i < channelData.length; i++) {
-      const sample = Math.abs(channelData[i]);
-      if (sample > maxLevel) maxLevel = sample;
-      sumSquares += channelData[i] * channelData[i];
-    }
-    const rms = Math.sqrt(sumSquares / channelData.length);
-    console.log(`[MockMic] Audio after ${gain}x gain: duration=${amplifiedBuffer.duration.toFixed(2)}s, maxLevel=${maxLevel.toFixed(4)}, RMS=${rms.toFixed(4)}`);
-
     return new Promise((resolve, reject) => {
       try {
         const source = this.audioContext.createBufferSource();
-        source.buffer = amplifiedBuffer;
+        source.buffer = audioBuffer;
         
         source.connect(this.destination);
 
@@ -556,8 +526,7 @@ class MockMicrophone {
         };
 
         source.start();
-        console.log(`[MockMic] Injecting ${amplifiedBuffer.duration.toFixed(2)}s of audio (gain=${gain}x applied to buffer)`);
-        console.log(`[MockMic] Stream status: ${this.debugStreamStatus()}`);
+        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio`);
       } catch (err) {
         this.isPlaying = false;
         reject(err);
@@ -574,14 +543,7 @@ class MockMicrophone {
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
 
-    const gainValue = this.gain || 3.0;
-    console.log(`[MockMic] Using gain: ${gainValue}x (this.gain=${this.gain})`);
-    return this.injectAudio(audioBuffer, gainValue);
-  }
-  
-  setGain(value) {
-    this.gain = value;
-    console.log(`[MockMic] Gain set to ${value}x`);
+    return this.injectAudio(audioBuffer);
   }
 
   getStream() {
@@ -652,7 +614,6 @@ export default function TestAgentPage() {
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
-  const [ttsGain, setTtsGain] = useState(3.0); // TTS audio gain/volume multiplier
   const [isMuted, setIsMuted] = useState(false); // Microphone mute state (MANUAL mode)
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -704,7 +665,6 @@ export default function TestAgentPage() {
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
-  const ttsGainRef = useRef(3.0); // TTS gain for MockMicrophone
   const lastAnalyzedMessageIndexRef = useRef(-1);
   const workflowAnalysisInProgressRef = useRef(false);
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
@@ -830,15 +790,6 @@ export default function TestAgentPage() {
   useEffect(() => {
     ttsVoiceRef.current = ttsVoiceId;
   }, [ttsVoiceId]);
-
-  // Keep ttsGainRef in sync with gain slider and update MockMic
-  useEffect(() => {
-    console.log(`[Voice] ttsGain changed to ${ttsGain}, mockMicRef.current exists: ${!!mockMicRef.current}`);
-    ttsGainRef.current = ttsGain;
-    if (mockMicRef.current) {
-      mockMicRef.current.setGain(ttsGain);
-    }
-  }, [ttsGain]);
 
   // Reset model and voice when provider changes
   useEffect(() => {
@@ -2051,27 +2002,6 @@ export default function TestAgentPage() {
                       <div className="flex justify-between text-xs text-muted-foreground mt-1">
                         <span>1s</span>
                         <span>8s</span>
-                      </div>
-                    </div>
-
-                    {/* TTS Volume/Gain */}
-                    <div className="pt-2">
-                      <label className="text-sm font-medium">TTS Volume</label>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Audio gain multiplier ({ttsGain.toFixed(1)}x)
-                      </p>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="10"
-                        step="0.5"
-                        value={ttsGain}
-                        onChange={(e) => setTtsGain(Number(e.target.value))}
-                        className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
-                      />
-                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>0.5x</span>
-                        <span>10x</span>
                       </div>
                     </div>
                   </div>
