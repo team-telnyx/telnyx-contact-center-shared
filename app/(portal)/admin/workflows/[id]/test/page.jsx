@@ -521,7 +521,8 @@ class MockMicrophone {
         
         // Add gain node for amplification (TTS audio is quieter than AI response)
         const gainNode = this.audioContext.createGain();
-        gainNode.gain.value = gain;
+        // Use setValueAtTime for more reliable gain setting
+        gainNode.gain.setValueAtTime(gain, this.audioContext.currentTime);
         
         source.connect(gainNode);
         gainNode.connect(this.destination);
@@ -533,7 +534,7 @@ class MockMicrophone {
         };
 
         source.start();
-        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio via gain node`);
+        console.log(`[MockMic] Injecting ${audioBuffer.duration.toFixed(2)}s of audio via gain node (gain=${gain}x)`);
         console.log(`[MockMic] Stream status: ${this.debugStreamStatus()}`);
       } catch (err) {
         this.isPlaying = false;
