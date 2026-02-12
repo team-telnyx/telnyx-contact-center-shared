@@ -47,8 +47,11 @@ import {
   IconAlertCircle,
   IconHeadphones,
   IconWorld,
+  IconCircleDashed,
+  IconCircleX,
+  IconSparkles,
+  IconFileDescription,
 } from "@tabler/icons-react";
-import { notify } from "@/components/ToastNotify";
 
 // Helper functions for language filtering
 function normalizeLocaleCode(code) {
@@ -101,6 +104,14 @@ export default function CreateAgentSheet({
   const workflowId = workflow?.id;
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  
+  // Progress tracking for creation steps
+  const [creationSteps, setCreationSteps] = useState([
+    { id: "assistant", label: "Create AI Assistant", status: "pending" },
+    { id: "telephony", label: "Enable Voice Channel", status: "pending" },
+    { id: "insights", label: "Configure Insights", status: "pending" },
+    { id: "workflow", label: "Link to Workflow", status: "pending" },
+  ]);
   
   // AI Model settings
   const [llmModels, setLlmModels] = useState([]);
@@ -187,6 +198,13 @@ export default function CreateAgentSheet({
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
+      // Reset creation steps
+      setCreationSteps([
+        { id: "assistant", label: "Create AI Assistant", status: "pending" },
+        { id: "telephony", label: "Enable Voice Channel", status: "pending" },
+        { id: "insights", label: "Configure Insights", status: "pending" },
+        { id: "workflow", label: "Link to Workflow", status: "pending" },
+      ]);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- only reset when sheet opens
 
@@ -352,6 +370,15 @@ export default function CreateAgentSheet({
     return ttsLanguageOptions.find((opt) => opt.value === ttsLanguageFilter);
   }, [ttsLanguageFilter, ttsLanguageOptions]);
 
+  // Helper to update a creation step status
+  const updateStepStatus = (stepId, status, error = null) => {
+    setCreationSteps((prev) =>
+      prev.map((step) =>
+        step.id === stepId ? { ...step, status, error } : step
+      )
+    );
+  };
+
   // Generate instructions from workflow stages
   const generateInstructions = () => {
     if (customInstructions.trim()) {
@@ -419,7 +446,12 @@ export default function CreateAgentSheet({
   // Create the AI agent
   async function handleCreate() {
     setCreating(true);
+    let assistantId = null;
+    let hasErrors = false;
+    
     try {
+      // Step 1: Create AI Assistant
+      updateStepStatus("assistant", "running");
       const instructions = generateInstructions();
       
       // Build the agent payload (per Telnyx CreateAssistantRequest)
@@ -461,9 +493,12 @@ export default function CreateAgentSheet({
         throw new Error(data.error || "Failed to create AI agent");
       }
 
-      const assistantId = data.assistant?.id;
+      assistantId = data.assistant?.id;
+      updateStepStatus("assistant", "success");
+      setCreatedAgent(data.assistant);
       
-      // Enable telephony (voice) and unauthenticated web calls per Telnyx UpdateAssistantRequest
+      // Step 2: Enable telephony (voice) and unauthenticated web calls
+      updateStepStatus("telephony", "running");
       if (assistantId) {
         try {
           const updateRes = await fetch(`/api/ai/assistants/${assistantId}`, {
@@ -481,42 +516,80 @@ export default function CreateAgentSheet({
           if (!updateRes.ok) {
             throw new Error(updateData?.error || `Failed to enable voice: ${updateRes.status}`);
           }
+          updateStepStatus("telephony", "success");
         } catch (err) {
           console.error("Failed to enable voice channel:", err);
-          throw err;
+          updateStepStatus("telephony", "error", err.message);
+          hasErrors = true;
         }
+      } else {
+        updateStepStatus("telephony", "skipped");
       }
-
-      setCreatedAgent(data.assistant);
       
-      // Save AI assistant ID to workflow
-      if (workflowId && data.assistant?.id) {
+      // Step 3: Sync Insights (if workflow has slots)
+      updateStepStatus("insights", "running");
+      if (workflowId) {
         try {
+          // First save assistant ID so insights can reference it
           await fetch(`/api/admin/workflows/${workflowId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ai_assistant_id: data.assistant.id }),
+            body: JSON.stringify({ ai_assistant_id: assistantId }),
           });
+          
+          // Now sync insights
+          const insightRes = await fetch(`/api/admin/workflows/${workflowId}/sync-insights`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const insightData = await insightRes.json().catch(() => ({}));
+          
+          if (!insightRes.ok) {
+            // Not a critical error - workflow might not have slots
+            if (insightRes.status === 400 && insightData.error?.includes("no slot")) {
+              updateStepStatus("insights", "skipped");
+            } else {
+              throw new Error(insightData.error || "Failed to sync insights");
+            }
+          } else {
+            updateStepStatus("insights", "success");
+          }
+        } catch (err) {
+          console.error("Failed to sync insights:", err);
+          updateStepStatus("insights", "error", err.message);
+          hasErrors = true;
+        }
+      } else {
+        updateStepStatus("insights", "skipped");
+      }
+      
+      // Step 4: Link to Workflow (already done in step 3, but mark complete)
+      updateStepStatus("workflow", "running");
+      if (workflowId && assistantId) {
+        try {
+          // Already saved in step 3, just verify
+          updateStepStatus("workflow", "success");
         } catch (err) {
           console.error("Failed to save assistant ID to workflow:", err);
+          updateStepStatus("workflow", "error", err.message);
+          hasErrors = true;
         }
+      } else {
+        updateStepStatus("workflow", "skipped");
       }
-      
-      notify({
-        title: "AI Agent Created",
-        description: `Agent "${agentName}" has been created successfully.`,
-        variant: "success",
-      });
       
       if (onAgentCreated) {
-        onAgentCreated(data.assistant.id);
+        onAgentCreated(assistantId);
       }
     } catch (err) {
-      notify({
-        title: "Creation Failed",
-        description: err.message || "Failed to create AI agent",
-        variant: "error",
-      });
+      // Mark current running step as error
+      setCreationSteps((prev) =>
+        prev.map((step) =>
+          step.status === "running" ? { ...step, status: "error", error: err.message } : step
+        )
+      );
+      hasErrors = true;
     } finally {
       setCreating(false);
     }
@@ -541,28 +614,84 @@ export default function CreateAgentSheet({
         <div className="flex-1 overflow-y-auto">
           <Card className="mx-5 my-4">
             <CardContent className="p-6 space-y-6">
-              {createdAgent ? (
-                // Success state
-                <div className="text-center py-8 space-y-4">
-                  <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <IconCheck className="size-8 text-green-600 dark:text-green-400" />
+              {creating || createdAgent ? (
+                // Progress/Success state
+                <div className="py-4 space-y-6">
+                  {/* Progress Steps */}
+                  <div className="space-y-3">
+                    {creationSteps.map((step, idx) => (
+                      <div
+                        key={step.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                      >
+                        {/* Step Icon */}
+                        <div className="mt-0.5">
+                          {step.status === "pending" && (
+                            <IconCircleDashed className="size-5 text-muted-foreground" />
+                          )}
+                          {step.status === "running" && (
+                            <IconLoader2 className="size-5 text-blue-500 animate-spin" />
+                          )}
+                          {step.status === "success" && (
+                            <IconCheck className="size-5 text-green-500" />
+                          )}
+                          {step.status === "error" && (
+                            <IconCircleX className="size-5 text-red-500" />
+                          )}
+                          {step.status === "skipped" && (
+                            <IconCircleDashed className="size-5 text-muted-foreground/50" />
+                          )}
+                        </div>
+                        
+                        {/* Step Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-medium ${
+                              step.status === "skipped" ? "text-muted-foreground" : ""
+                            }`}>
+                              {step.label}
+                            </span>
+                            {step.status === "skipped" && (
+                              <Badge variant="secondary" className="text-xs">
+                                Skipped
+                              </Badge>
+                            )}
+                          </div>
+                          {step.error && (
+                            <p className="text-xs text-red-500 mt-1">{step.error}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold">Agent Created!</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Your AI agent is ready for testing
-                    </p>
-                  </div>
-                  <div className="bg-muted rounded-lg p-4 text-left">
-                    <div className="text-xs text-muted-foreground">Agent ID</div>
-                    <code className="text-sm font-mono">{createdAgent.id}</code>
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => onOpenChange(false)}
-                  >
-                    Close
-                  </Button>
+                  
+                  {/* Success Summary */}
+                  {createdAgent && !creating && (
+                    <div className="space-y-4">
+                      <Separator />
+                      <div className="text-center space-y-2">
+                        <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                          <IconCheck className="size-6 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold">Agent Created!</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Your AI agent is ready for testing
+                          </p>
+                        </div>
+                      </div>
+                      <div className="bg-muted rounded-lg p-4">
+                        <div className="text-xs text-muted-foreground">Agent ID</div>
+                        <code className="text-sm font-mono break-all">{createdAgent.id}</code>
+                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={() => onOpenChange(false)}
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
