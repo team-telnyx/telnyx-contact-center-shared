@@ -146,6 +146,39 @@ async function markEventReadyForSession(eventId, interactionId) {
 }
 
 /**
+ * Filter out invalid slot values (null strings, low confidence)
+ * @param {Object} slots - Raw slots object from insight
+ * @returns {Object} Filtered slots
+ */
+function filterValidSlots(slots) {
+  const filtered = {};
+  
+  for (const [slotName, slotData] of Object.entries(slots || {})) {
+    // Skip if no data
+    if (!slotData) continue;
+    
+    const value = slotData.value;
+    const confidence = slotData.confidence;
+    
+    // Skip null/undefined values
+    if (value === null || value === undefined) continue;
+    
+    // Skip string "null" or "None" (LLM artifact)
+    if (typeof value === "string" && ["null", "none", "n/a", ""].includes(value.toLowerCase().trim())) {
+      continue;
+    }
+    
+    // Skip low confidence (< 0.5)
+    if (typeof confidence === "number" && confidence < 0.5) continue;
+    
+    // Valid slot - include it
+    filtered[slotName] = slotData;
+  }
+  
+  return filtered;
+}
+
+/**
  * Parse insight results from webhook payload
  * @param {Array} results - Array of insight results
  * @param {Object} workflow - Workflow with insight IDs
@@ -167,7 +200,8 @@ function parseInsightResults(results, workflow) {
       // Slots insight - structured JSON
       try {
         const parsed = typeof content === "string" ? JSON.parse(content) : content;
-        data.slots = parsed?.slots || {};
+        // Filter out invalid values (null strings, low confidence)
+        data.slots = filterValidSlots(parsed?.slots || {});
         data.completedStages = parsed?.completed_stages || [];
       } catch (err) {
         console.error(`${LOG_PREFIX} Failed to parse slots result:`, err);
@@ -377,66 +411,22 @@ function verifyApiKeyHeader(request) {
  * Webhook endpoint for receiving Telnyx Conversation Insights.
  * Called when AI assistant conversation ends (transfer or hangup).
  * 
- * NOTE: Telnyx AI Assistant webhooks don't support authentication,
- * so this endpoint is currently open. We log all request details
- * to help identify potential security measures.
+ * Authentication: Telnyx Ed25519 signature verification
  */
 export async function POST(request) {
   const startTime = Date.now();
   const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   
   try {
-    // ============================================================
-    // DETAILED REQUEST LOGGING (for security analysis)
-    // ============================================================
-    console.log(`${LOG_PREFIX} ========== INCOMING REQUEST [${requestId}] ==========`);
-    console.log(`${LOG_PREFIX} Timestamp: ${new Date().toISOString()}`);
-    console.log(`${LOG_PREFIX} Method: ${request.method}`);
-    console.log(`${LOG_PREFIX} URL: ${request.url}`);
-    
-    // Log all headers
-    console.log(`${LOG_PREFIX} --- HEADERS ---`);
-    const headers = {};
-    request.headers.forEach((value, key) => {
-      headers[key] = value;
-      // Mask potential sensitive values but show structure
-      const displayValue = key.toLowerCase().includes('auth') || key.toLowerCase().includes('key') || key.toLowerCase().includes('secret')
-        ? `${value.slice(0, 4)}...${value.slice(-4)} (${value.length} chars)`
-        : value;
-      console.log(`${LOG_PREFIX}   ${key}: ${displayValue}`);
-    });
-    
-    // Log IP information
-    const forwardedFor = request.headers.get('x-forwarded-for');
-    const realIp = request.headers.get('x-real-ip');
-    const cfConnectingIp = request.headers.get('cf-connecting-ip');
-    console.log(`${LOG_PREFIX} --- IP INFO ---`);
-    console.log(`${LOG_PREFIX}   x-forwarded-for: ${forwardedFor || 'not set'}`);
-    console.log(`${LOG_PREFIX}   x-real-ip: ${realIp || 'not set'}`);
-    console.log(`${LOG_PREFIX}   cf-connecting-ip: ${cfConnectingIp || 'not set'}`);
-    
-    // Log Telnyx-specific headers
-    console.log(`${LOG_PREFIX} --- TELNYX HEADERS ---`);
-    console.log(`${LOG_PREFIX}   telnyx-signature-ed25519: ${request.headers.get('telnyx-signature-ed25519') || 'not set'}`);
-    console.log(`${LOG_PREFIX}   telnyx-timestamp: ${request.headers.get('telnyx-timestamp') || 'not set'}`);
-    
-    // Read raw body
+    // Read raw body for signature verification
     const rawBody = await request.text();
-    console.log(`${LOG_PREFIX} --- BODY ---`);
-    console.log(`${LOG_PREFIX}   Raw body length: ${rawBody.length} bytes`);
     
-    // Verify authentication - Telnyx signature is required
+    // Verify Telnyx signature
     const apiKeyValid = verifyApiKeyHeader(request);
     const signatureValid = await verifyTelnyxSignature(request, rawBody);
-    console.log(`${LOG_PREFIX} --- AUTH STATUS ---`);
-    console.log(`${LOG_PREFIX}   API Key valid: ${apiKeyValid}`);
-    console.log(`${LOG_PREFIX}   Telnyx signature valid: ${signatureValid}`);
-    console.log(`${LOG_PREFIX}   Auth status: ${apiKeyValid ? 'API_KEY' : signatureValid ? 'TELNYX_SIGNATURE' : 'UNAUTHENTICATED'}`);
-    console.log(`${LOG_PREFIX} ========== END REQUEST INFO ==========`);
     
-    // Block unauthenticated requests
     if (!apiKeyValid && !signatureValid) {
-      console.warn(`${LOG_PREFIX} [${requestId}] REJECTED - No valid authentication`);
+      console.warn(`${LOG_PREFIX} [${requestId}] REJECTED - invalid signature`);
       return NextResponse.json(
         { ok: false, error: "Unauthorized - invalid signature" },
         { status: 401 }
@@ -448,25 +438,18 @@ export async function POST(request) {
     try {
       payload = JSON.parse(rawBody);
     } catch (err) {
-      console.error(`${LOG_PREFIX} Invalid JSON payload:`, err);
+      console.error(`${LOG_PREFIX} [${requestId}] Invalid JSON payload`);
       return NextResponse.json(
         { ok: false, error: "Invalid JSON" },
         { status: 400 }
       );
     }
 
-    // Log full payload immediately (before any filtering)
-    console.log(`${LOG_PREFIX} [${requestId}] === FULL PAYLOAD ===`);
-    console.log(JSON.stringify(payload, null, 2));
-    console.log(`${LOG_PREFIX} [${requestId}] === END FULL PAYLOAD ===`);
-
     // Validate event type
     // Telnyx AI sends "conversation_insight_result", not "call.conversation_insights.generated"
     const eventType = payload?.data?.event_type || payload?.event_type;
     const validEventTypes = ["conversation_insight_result", "call.conversation_insights.generated"];
     if (!validEventTypes.includes(eventType)) {
-      console.log(`${LOG_PREFIX} [${requestId}] Event type '${eventType}' - not a conversation insights event, ignoring`);
-      console.log(`${LOG_PREFIX} [${requestId}] Available fields: ${Object.keys(payload?.data || payload || {}).join(', ')}`);
       return NextResponse.json({ ok: true, ignored: true, eventType });
     }
 
@@ -482,29 +465,7 @@ export async function POST(request) {
     const insightGroupId = eventPayload.insight_group_id;
     const results = eventPayload.results || [];
 
-    console.log(`${LOG_PREFIX} [${requestId}] Processing conversation_insights webhook:`, {
-      callControlId: callControlId ? `${callControlId.slice(0, 20)}...` : 'N/A',
-      callSessionId: callSessionId || 'N/A',
-      callLegId: callLegId || 'N/A',
-      insightGroupId: insightGroupId || 'N/A',
-      resultsCount: results?.length || 0,
-    });
-
-    // Log each insight result with details
-    if (results?.length) {
-      console.log(`${LOG_PREFIX} [${requestId}] === INSIGHT RESULTS (${results.length}) ===`);
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        console.log(`${LOG_PREFIX} [${requestId}] Result ${i + 1}/${results.length}:`);
-        console.log(`${LOG_PREFIX} [${requestId}]   insight_id: ${result.insight_id}`);
-        console.log(`${LOG_PREFIX} [${requestId}]   insight_name: ${result.insight_name || 'N/A'}`);
-        console.log(`${LOG_PREFIX} [${requestId}]   result type: ${typeof result.result}`);
-        console.log(`${LOG_PREFIX} [${requestId}]   result:`, JSON.stringify(result.result, null, 2));
-      }
-      console.log(`${LOG_PREFIX} [${requestId}] === END INSIGHT RESULTS ===`);
-    } else {
-      console.log(`${LOG_PREFIX} [${requestId}] No insight results in payload`);
-    }
+    console.log(`${LOG_PREFIX} [${requestId}] Processing insights: group=${insightGroupId}, results=${results?.length || 0}`);
 
     // Find workflow by insight_group_id
     const workflow = await findWorkflowByInsightGroup(insightGroupId);
