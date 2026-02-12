@@ -514,14 +514,9 @@ export default function CreateAgentSheet({
       const tools = [
         {
           type: "hangup",
-          function: {
-            name: "hangup",
+          timeout_ms: 5000,
+          hangup: {
             description: "To be used whenever the conversation has ended and it would be appropriate to hangup the call.",
-            parameters: {
-              type: "object",
-              properties: {},
-              required: [],
-            },
           },
         },
       ];
@@ -530,20 +525,15 @@ export default function CreateAgentSheet({
       if (transferSipUri) {
         tools.push({
           type: "transfer",
-          function: {
-            name: "transfer",
-            description: "Transfer the call to a human agent in the contact center.",
-            parameters: {
-              type: "object",
-              properties: {},
-              required: [],
-            },
-          },
-          // Transfer-specific configuration
-          transfer_settings: {
+          timeout_ms: 5000,
+          transfer: {
             from: "{{telnyx_end_user_target}}",
-            to: transferSipUri,
-            to_display_name: "contact_center",
+            targets: [
+              {
+                name: "contact_center",
+                to: transferSipUri,
+              },
+            ],
             custom_headers: [
               {
                 name: "X-AI-Call-ID",
