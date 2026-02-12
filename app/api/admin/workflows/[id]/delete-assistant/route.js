@@ -2,11 +2,13 @@
  * Delete AI Assistant and associated Insights
  * DELETE /api/admin/workflows/[id]/delete-assistant
  * 
- * Deletes:
- * - AI Assistant from Telnyx
- * - Insight Group
- * - Insight Templates (slots, summary, sentiment)
- * - Clears workflow references
+ * Supports step-by-step deletion via ?step= query parameter:
+ * - step=assistant: Delete AI Assistant from Telnyx
+ * - step=insights: Delete Insight Templates
+ * - step=group: Delete Insight Group
+ * - step=cleanup: Clear workflow references in database
+ * 
+ * Without step parameter, deletes everything at once (legacy mode).
  */
 
 import { NextResponse } from "next/server";
@@ -14,7 +16,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import { deleteWorkflowInsights } from "@/lib/telnyx-insights";
+import { 
+  deleteInsight, 
+  deleteInsightGroup,
+  unassignInsightFromGroup 
+} from "@/lib/telnyx-insights";
 
 const LOG_PREFIX = "[Delete Assistant]";
 
@@ -34,6 +40,9 @@ export async function DELETE(request, { params }) {
     }
 
     const { id: workflowId } = await params;
+    const { searchParams } = new URL(request.url);
+    const step = searchParams.get("step");
+    
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json(
@@ -57,165 +66,13 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    if (!workflow.ai_assistant_id) {
-      return NextResponse.json(
-        { error: "No AI assistant assigned to this workflow" },
-        { status: 400 }
-      );
+    // Step-by-step deletion mode
+    if (step) {
+      return handleStepDeletion(step, workflow, workflowId, apiKey, pool);
     }
 
-    const deletionResults = {
-      assistant: { deleted: false, error: null },
-      insights: { deleted: false, error: null },
-      group: { deleted: false, error: null },
-    };
-
-    // 1. Delete AI Assistant from Telnyx
-    console.log(`${LOG_PREFIX} Deleting AI assistant: ${workflow.ai_assistant_id}`);
-    try {
-      const res = await fetch(
-        buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`),
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          cache: "no-store",
-        }
-      );
-
-      if (!res.ok && res.status !== 404) {
-        const text = await res.text();
-        throw new Error(`Telnyx API error: ${res.status} ${text}`);
-      }
-
-      deletionResults.assistant.deleted = true;
-      console.log(`${LOG_PREFIX} AI assistant deleted successfully`);
-    } catch (err) {
-      console.error(`${LOG_PREFIX} Failed to delete assistant:`, err);
-      deletionResults.assistant.error = err.message;
-    }
-
-    // 2. Delete Insight Templates
-    const hasInsightTemplates = workflow.insight_slots_id || 
-        workflow.insight_summary_id || workflow.insight_sentiment_id;
-    
-    if (hasInsightTemplates) {
-      console.log(`${LOG_PREFIX} Deleting insight templates for workflow: ${workflow.name}`);
-      try {
-        // Delete each template individually to track errors
-        const templateErrors = [];
-        
-        if (workflow.insight_slots_id) {
-          try {
-            await deleteWorkflowInsights({ 
-              ...workflow, 
-              insight_summary_id: null, 
-              insight_sentiment_id: null,
-              insight_group_id: null 
-            });
-          } catch (e) {
-            templateErrors.push(`slots: ${e.message}`);
-          }
-        }
-        
-        if (workflow.insight_summary_id) {
-          try {
-            await deleteWorkflowInsights({ 
-              ...workflow, 
-              insight_slots_id: null, 
-              insight_sentiment_id: null,
-              insight_group_id: null 
-            });
-          } catch (e) {
-            templateErrors.push(`summary: ${e.message}`);
-          }
-        }
-        
-        if (workflow.insight_sentiment_id) {
-          try {
-            await deleteWorkflowInsights({ 
-              ...workflow, 
-              insight_slots_id: null, 
-              insight_summary_id: null,
-              insight_group_id: null 
-            });
-          } catch (e) {
-            templateErrors.push(`sentiment: ${e.message}`);
-          }
-        }
-        
-        if (templateErrors.length > 0) {
-          throw new Error(templateErrors.join("; "));
-        }
-        
-        deletionResults.insights.deleted = true;
-        console.log(`${LOG_PREFIX} Insight templates deleted successfully`);
-      } catch (err) {
-        console.error(`${LOG_PREFIX} Failed to delete insight templates:`, err);
-        deletionResults.insights.error = err.message;
-        deletionResults.insights.deleted = true; // Mark as attempted
-      }
-    } else {
-      deletionResults.insights.deleted = true; // Nothing to delete
-    }
-
-    // 3. Delete Insight Group
-    if (workflow.insight_group_id) {
-      console.log(`${LOG_PREFIX} Deleting insight group: ${workflow.insight_group_id}`);
-      try {
-        await deleteWorkflowInsights({ 
-          ...workflow, 
-          insight_slots_id: null, 
-          insight_summary_id: null,
-          insight_sentiment_id: null 
-        });
-        deletionResults.group.deleted = true;
-        console.log(`${LOG_PREFIX} Insight group deleted successfully`);
-      } catch (err) {
-        console.error(`${LOG_PREFIX} Failed to delete insight group:`, err);
-        deletionResults.group.error = err.message;
-      }
-    } else {
-      deletionResults.group.deleted = true; // Nothing to delete
-    }
-
-    // 4. Clear workflow references in database
-    console.log(`${LOG_PREFIX} Clearing workflow references`);
-    await pool.query(
-      `UPDATE aa_workflows SET
-        ai_assistant_id = NULL,
-        insight_group_id = NULL,
-        insight_slots_id = NULL,
-        insight_summary_id = NULL,
-        insight_sentiment_id = NULL,
-        updated_at = NOW()
-       WHERE id = $1`,
-      [workflowId]
-    );
-
-    // Check if any deletions failed
-    const hasErrors = deletionResults.assistant.error || 
-                      deletionResults.insights.error || 
-                      deletionResults.group.error;
-
-    if (hasErrors) {
-      console.warn(`${LOG_PREFIX} Completed with some errors:`, deletionResults);
-      return NextResponse.json({
-        ok: true,
-        partial: true,
-        message: "AI agent deleted with some errors",
-        details: deletionResults,
-      });
-    }
-
-    console.log(`${LOG_PREFIX} All resources deleted successfully`);
-    return NextResponse.json({
-      ok: true,
-      message: "AI agent and all associated resources deleted successfully",
-      details: deletionResults,
-    });
+    // Legacy mode: delete everything at once
+    return handleFullDeletion(workflow, workflowId, apiKey, pool);
 
   } catch (err) {
     console.error(`${LOG_PREFIX} Error:`, err);
@@ -224,4 +81,239 @@ export async function DELETE(request, { params }) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Handle step-by-step deletion
+ */
+async function handleStepDeletion(step, workflow, workflowId, apiKey, pool) {
+  switch (step) {
+    case "assistant":
+      return deleteAssistantStep(workflow, apiKey);
+    case "insights":
+      return deleteInsightsStep(workflow);
+    case "group":
+      return deleteGroupStep(workflow);
+    case "cleanup":
+      return cleanupStep(workflowId, pool);
+    default:
+      return NextResponse.json(
+        { error: `Invalid step: ${step}` },
+        { status: 400 }
+      );
+  }
+}
+
+/**
+ * Step 1: Delete AI Assistant from Telnyx
+ */
+async function deleteAssistantStep(workflow, apiKey) {
+  if (!workflow.ai_assistant_id) {
+    return NextResponse.json({ ok: true, skipped: true, message: "No assistant to delete" });
+  }
+
+  console.log(`${LOG_PREFIX} Deleting AI assistant: ${workflow.ai_assistant_id}`);
+  
+  const res = await fetch(
+    buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`),
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    }
+  );
+
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    console.error(`${LOG_PREFIX} Failed to delete assistant:`, text);
+    return NextResponse.json(
+      { error: `Telnyx API error: ${res.status}` },
+      { status: 502 }
+    );
+  }
+
+  console.log(`${LOG_PREFIX} AI assistant deleted successfully`);
+  return NextResponse.json({ ok: true, message: "AI assistant deleted" });
+}
+
+/**
+ * Step 2: Delete Insight Templates
+ */
+async function deleteInsightsStep(workflow) {
+  const insightIds = [
+    workflow.insight_slots_id,
+    workflow.insight_summary_id,
+    workflow.insight_sentiment_id,
+  ].filter(Boolean);
+
+  if (insightIds.length === 0) {
+    return NextResponse.json({ ok: true, skipped: true, message: "No insight templates to delete" });
+  }
+
+  console.log(`${LOG_PREFIX} Deleting ${insightIds.length} insight templates`);
+  
+  const errors = [];
+  
+  for (const insightId of insightIds) {
+    try {
+      // Unassign from group first if group exists
+      if (workflow.insight_group_id) {
+        try {
+          await unassignInsightFromGroup(insightId, workflow.insight_group_id);
+        } catch (e) {
+          // Ignore unassign errors
+        }
+      }
+      await deleteInsight(insightId);
+    } catch (err) {
+      if (err.status !== 404) {
+        errors.push(`${insightId}: ${err.message}`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error(`${LOG_PREFIX} Some insight deletions failed:`, errors);
+    return NextResponse.json(
+      { error: errors.join("; ") },
+      { status: 502 }
+    );
+  }
+
+  console.log(`${LOG_PREFIX} Insight templates deleted successfully`);
+  return NextResponse.json({ ok: true, message: "Insight templates deleted" });
+}
+
+/**
+ * Step 3: Delete Insight Group
+ */
+async function deleteGroupStep(workflow) {
+  if (!workflow.insight_group_id) {
+    return NextResponse.json({ ok: true, skipped: true, message: "No insight group to delete" });
+  }
+
+  console.log(`${LOG_PREFIX} Deleting insight group: ${workflow.insight_group_id}`);
+  
+  try {
+    await deleteInsightGroup(workflow.insight_group_id);
+  } catch (err) {
+    if (err.status !== 404) {
+      console.error(`${LOG_PREFIX} Failed to delete insight group:`, err);
+      return NextResponse.json(
+        { error: err.message },
+        { status: 502 }
+      );
+    }
+  }
+
+  console.log(`${LOG_PREFIX} Insight group deleted successfully`);
+  return NextResponse.json({ ok: true, message: "Insight group deleted" });
+}
+
+/**
+ * Step 4: Clear workflow references in database
+ */
+async function cleanupStep(workflowId, pool) {
+  console.log(`${LOG_PREFIX} Clearing workflow references`);
+  
+  await pool.query(
+    `UPDATE aa_workflows SET
+      ai_assistant_id = NULL,
+      insight_group_id = NULL,
+      insight_slots_id = NULL,
+      insight_summary_id = NULL,
+      insight_sentiment_id = NULL,
+      updated_at = NOW()
+     WHERE id = $1`,
+    [workflowId]
+  );
+
+  console.log(`${LOG_PREFIX} Workflow references cleared`);
+  return NextResponse.json({ ok: true, message: "Workflow references cleared" });
+}
+
+/**
+ * Legacy mode: Delete everything at once
+ */
+async function handleFullDeletion(workflow, workflowId, apiKey, pool) {
+  if (!workflow.ai_assistant_id) {
+    return NextResponse.json(
+      { error: "No AI assistant assigned to this workflow" },
+      { status: 400 }
+    );
+  }
+
+  const results = { assistant: null, insights: null, group: null, cleanup: null };
+
+  // Delete assistant
+  try {
+    const res = await fetch(
+      buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`),
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      }
+    );
+    results.assistant = res.ok || res.status === 404 ? "deleted" : "error";
+  } catch (err) {
+    results.assistant = "error";
+  }
+
+  // Delete insights
+  const insightIds = [
+    workflow.insight_slots_id,
+    workflow.insight_summary_id,
+    workflow.insight_sentiment_id,
+  ].filter(Boolean);
+  
+  if (insightIds.length > 0) {
+    try {
+      for (const id of insightIds) {
+        if (workflow.insight_group_id) {
+          try { await unassignInsightFromGroup(id, workflow.insight_group_id); } catch {}
+        }
+        await deleteInsight(id);
+      }
+      results.insights = "deleted";
+    } catch {
+      results.insights = "error";
+    }
+  } else {
+    results.insights = "skipped";
+  }
+
+  // Delete group
+  if (workflow.insight_group_id) {
+    try {
+      await deleteInsightGroup(workflow.insight_group_id);
+      results.group = "deleted";
+    } catch {
+      results.group = "error";
+    }
+  } else {
+    results.group = "skipped";
+  }
+
+  // Cleanup
+  await pool.query(
+    `UPDATE aa_workflows SET
+      ai_assistant_id = NULL,
+      insight_group_id = NULL,
+      insight_slots_id = NULL,
+      insight_summary_id = NULL,
+      insight_sentiment_id = NULL,
+      updated_at = NOW()
+     WHERE id = $1`,
+    [workflowId]
+  );
+  results.cleanup = "done";
+
+  return NextResponse.json({ ok: true, results });
 }

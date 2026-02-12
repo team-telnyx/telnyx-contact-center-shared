@@ -444,7 +444,7 @@ export default function WorkflowEditorPage() {
     setDeletingAgent(true);
     setDeletionComplete(false);
     
-    // Reset steps to running state
+    // Reset steps
     setDeletionSteps([
       { id: "assistant", label: "Delete AI Assistant", status: "pending" },
       { id: "insights", label: "Delete Insight Templates", status: "pending" },
@@ -452,56 +452,91 @@ export default function WorkflowEditorPage() {
       { id: "cleanup", label: "Clear Workflow References", status: "pending" },
     ]);
 
+    let hasErrors = false;
+
     try {
       // Step 1: Delete AI Assistant
       updateDeletionStep("assistant", "running");
-      const res = await fetch(
-        `/api/admin/workflows/${workflowId}/delete-assistant`,
-        { method: "DELETE" }
-      );
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to delete assistant");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/delete-assistant?step=assistant`,
+          { method: "DELETE" }
+        );
+        const data = await res.json();
+        if (!res.ok && res.status !== 404) {
+          throw new Error(data.error || "Failed to delete assistant");
+        }
+        updateDeletionStep("assistant", "success");
+      } catch (err) {
+        updateDeletionStep("assistant", "error", err.message);
+        hasErrors = true;
       }
 
-      // Update steps based on API response
-      if (data.details) {
-        // Assistant
-        if (data.details.assistant?.deleted && !data.details.assistant?.error) {
-          updateDeletionStep("assistant", "success");
-        } else if (data.details.assistant?.error) {
-          updateDeletionStep("assistant", "error", data.details.assistant.error);
-        } else {
-          updateDeletionStep("assistant", "success");
+      // Small delay for visual feedback
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 2: Delete Insight Templates
+      updateDeletionStep("insights", "running");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/delete-assistant?step=insights`,
+          { method: "DELETE" }
+        );
+        const data = await res.json();
+        if (!res.ok && res.status !== 404) {
+          throw new Error(data.error || "Failed to delete insights");
         }
-        
-        // Insight Templates
-        if (data.details.insights?.deleted && !data.details.insights?.error) {
+        if (data.skipped) {
+          updateDeletionStep("insights", "skipped");
+        } else {
           updateDeletionStep("insights", "success");
-        } else if (data.details.insights?.error) {
-          updateDeletionStep("insights", "error", data.details.insights.error);
-        } else {
-          updateDeletionStep("insights", "success");
         }
-        
-        // Insight Group
-        if (data.details.group?.deleted && !data.details.group?.error) {
-          updateDeletionStep("group", "success");
-        } else if (data.details.group?.error) {
-          updateDeletionStep("group", "error", data.details.group.error);
-        } else {
-          updateDeletionStep("group", "success");
-        }
-      } else {
-        // No detailed response - assume all succeeded
-        updateDeletionStep("assistant", "success");
-        updateDeletionStep("insights", "success");
-        updateDeletionStep("group", "success");
+      } catch (err) {
+        updateDeletionStep("insights", "error", err.message);
+        hasErrors = true;
       }
-      
-      // Step 4: Cleanup always succeeds if we got here
-      updateDeletionStep("cleanup", "success");
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 3: Delete Insight Group
+      updateDeletionStep("group", "running");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/delete-assistant?step=group`,
+          { method: "DELETE" }
+        );
+        const data = await res.json();
+        if (!res.ok && res.status !== 404) {
+          throw new Error(data.error || "Failed to delete insight group");
+        }
+        if (data.skipped) {
+          updateDeletionStep("group", "skipped");
+        } else {
+          updateDeletionStep("group", "success");
+        }
+      } catch (err) {
+        updateDeletionStep("group", "error", err.message);
+        hasErrors = true;
+      }
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 4: Clear workflow references
+      updateDeletionStep("cleanup", "running");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/delete-assistant?step=cleanup`,
+          { method: "DELETE" }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to clear references");
+        }
+        updateDeletionStep("cleanup", "success");
+      } catch (err) {
+        updateDeletionStep("cleanup", "error", err.message);
+        hasErrors = true;
+      }
       
       // Update local state
       setWorkflow((prev) => prev ? { 
@@ -516,7 +551,7 @@ export default function WorkflowEditorPage() {
       setDeletionComplete(true);
       
     } catch (err) {
-      // Mark current running step as error
+      // Unexpected error
       setDeletionSteps((prev) =>
         prev.map((step) =>
           step.status === "running" ? { ...step, status: "error", error: err.message } : step
