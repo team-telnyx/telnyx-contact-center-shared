@@ -67,6 +67,7 @@ export async function DELETE(request, { params }) {
     const deletionResults = {
       assistant: { deleted: false, error: null },
       insights: { deleted: false, error: null },
+      group: { deleted: false, error: null },
     };
 
     // 1. Delete AI Assistant from Telnyx
@@ -96,23 +97,91 @@ export async function DELETE(request, { params }) {
       deletionResults.assistant.error = err.message;
     }
 
-    // 2. Delete Insights (group and templates)
-    if (workflow.insight_group_id || workflow.insight_slots_id || 
-        workflow.insight_summary_id || workflow.insight_sentiment_id) {
-      console.log(`${LOG_PREFIX} Deleting insights for workflow: ${workflow.name}`);
+    // 2. Delete Insight Templates
+    const hasInsightTemplates = workflow.insight_slots_id || 
+        workflow.insight_summary_id || workflow.insight_sentiment_id;
+    
+    if (hasInsightTemplates) {
+      console.log(`${LOG_PREFIX} Deleting insight templates for workflow: ${workflow.name}`);
       try {
-        await deleteWorkflowInsights(workflow);
+        // Delete each template individually to track errors
+        const templateErrors = [];
+        
+        if (workflow.insight_slots_id) {
+          try {
+            await deleteWorkflowInsights({ 
+              ...workflow, 
+              insight_summary_id: null, 
+              insight_sentiment_id: null,
+              insight_group_id: null 
+            });
+          } catch (e) {
+            templateErrors.push(`slots: ${e.message}`);
+          }
+        }
+        
+        if (workflow.insight_summary_id) {
+          try {
+            await deleteWorkflowInsights({ 
+              ...workflow, 
+              insight_slots_id: null, 
+              insight_sentiment_id: null,
+              insight_group_id: null 
+            });
+          } catch (e) {
+            templateErrors.push(`summary: ${e.message}`);
+          }
+        }
+        
+        if (workflow.insight_sentiment_id) {
+          try {
+            await deleteWorkflowInsights({ 
+              ...workflow, 
+              insight_slots_id: null, 
+              insight_summary_id: null,
+              insight_group_id: null 
+            });
+          } catch (e) {
+            templateErrors.push(`sentiment: ${e.message}`);
+          }
+        }
+        
+        if (templateErrors.length > 0) {
+          throw new Error(templateErrors.join("; "));
+        }
+        
         deletionResults.insights.deleted = true;
-        console.log(`${LOG_PREFIX} Insights deleted successfully`);
+        console.log(`${LOG_PREFIX} Insight templates deleted successfully`);
       } catch (err) {
-        console.error(`${LOG_PREFIX} Failed to delete insights:`, err);
+        console.error(`${LOG_PREFIX} Failed to delete insight templates:`, err);
         deletionResults.insights.error = err.message;
+        deletionResults.insights.deleted = true; // Mark as attempted
       }
     } else {
       deletionResults.insights.deleted = true; // Nothing to delete
     }
 
-    // 3. Clear workflow references in database
+    // 3. Delete Insight Group
+    if (workflow.insight_group_id) {
+      console.log(`${LOG_PREFIX} Deleting insight group: ${workflow.insight_group_id}`);
+      try {
+        await deleteWorkflowInsights({ 
+          ...workflow, 
+          insight_slots_id: null, 
+          insight_summary_id: null,
+          insight_sentiment_id: null 
+        });
+        deletionResults.group.deleted = true;
+        console.log(`${LOG_PREFIX} Insight group deleted successfully`);
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Failed to delete insight group:`, err);
+        deletionResults.group.error = err.message;
+      }
+    } else {
+      deletionResults.group.deleted = true; // Nothing to delete
+    }
+
+    // 4. Clear workflow references in database
     console.log(`${LOG_PREFIX} Clearing workflow references`);
     await pool.query(
       `UPDATE aa_workflows SET
@@ -127,7 +196,9 @@ export async function DELETE(request, { params }) {
     );
 
     // Check if any deletions failed
-    const hasErrors = deletionResults.assistant.error || deletionResults.insights.error;
+    const hasErrors = deletionResults.assistant.error || 
+                      deletionResults.insights.error || 
+                      deletionResults.group.error;
 
     if (hasErrors) {
       console.warn(`${LOG_PREFIX} Completed with some errors:`, deletionResults);
@@ -143,6 +214,7 @@ export async function DELETE(request, { params }) {
     return NextResponse.json({
       ok: true,
       message: "AI agent and all associated resources deleted successfully",
+      details: deletionResults,
     });
 
   } catch (err) {

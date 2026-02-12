@@ -42,6 +42,8 @@ import {
   IconRobot,
   IconTestPipe2,
   IconRefresh,
+  IconCircleDashed,
+  IconCircleX,
 } from "@tabler/icons-react";
 import CreateAgentSheet from "@/components/workflows/CreateAgentSheet";
 import { notify } from "@/components/ToastNotify";
@@ -107,6 +109,13 @@ export default function WorkflowEditorPage() {
   const [showUpdateConfirmDialog, setShowUpdateConfirmDialog] = useState(false);
   const [showDeleteAgentDialog, setShowDeleteAgentDialog] = useState(false);
   const [deletingAgent, setDeletingAgent] = useState(false);
+  const [deletionSteps, setDeletionSteps] = useState([
+    { id: "assistant", label: "Delete AI Assistant", status: "pending" },
+    { id: "insights", label: "Delete Insight Templates", status: "pending" },
+    { id: "group", label: "Delete Insight Group", status: "pending" },
+    { id: "cleanup", label: "Clear Workflow References", status: "pending" },
+  ]);
+  const [deletionComplete, setDeletionComplete] = useState(false);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -353,18 +362,90 @@ export default function WorkflowEditorPage() {
     }
   }
 
-  // Delete AI Agent handler
+  // Helper to update deletion step status
+  const updateDeletionStep = (stepId, status, error = null) => {
+    setDeletionSteps((prev) =>
+      prev.map((step) =>
+        step.id === stepId ? { ...step, status, error } : step
+      )
+    );
+  };
+
+  // Reset deletion steps when dialog opens
+  const resetDeletionSteps = () => {
+    setDeletionSteps([
+      { id: "assistant", label: "Delete AI Assistant", status: "pending" },
+      { id: "insights", label: "Delete Insight Templates", status: "pending" },
+      { id: "group", label: "Delete Insight Group", status: "pending" },
+      { id: "cleanup", label: "Clear Workflow References", status: "pending" },
+    ]);
+    setDeletionComplete(false);
+  };
+
+  // Delete AI Agent handler with step-by-step progress
   async function handleDeleteAgent() {
     setDeletingAgent(true);
+    setDeletionComplete(false);
+    
+    // Reset steps to running state
+    setDeletionSteps([
+      { id: "assistant", label: "Delete AI Assistant", status: "pending" },
+      { id: "insights", label: "Delete Insight Templates", status: "pending" },
+      { id: "group", label: "Delete Insight Group", status: "pending" },
+      { id: "cleanup", label: "Clear Workflow References", status: "pending" },
+    ]);
+
     try {
+      // Step 1: Delete AI Assistant
+      updateDeletionStep("assistant", "running");
       const res = await fetch(
         `/api/admin/workflows/${workflowId}/delete-assistant`,
         { method: "DELETE" }
       );
       const data = await res.json();
+      
       if (!res.ok) {
         throw new Error(data.error || "Failed to delete assistant");
       }
+
+      // Update steps based on API response
+      if (data.details) {
+        // Assistant
+        if (data.details.assistant?.deleted && !data.details.assistant?.error) {
+          updateDeletionStep("assistant", "success");
+        } else if (data.details.assistant?.error) {
+          updateDeletionStep("assistant", "error", data.details.assistant.error);
+        } else {
+          updateDeletionStep("assistant", "success");
+        }
+        
+        // Insight Templates
+        if (data.details.insights?.deleted && !data.details.insights?.error) {
+          updateDeletionStep("insights", "success");
+        } else if (data.details.insights?.error) {
+          updateDeletionStep("insights", "error", data.details.insights.error);
+        } else {
+          updateDeletionStep("insights", "success");
+        }
+        
+        // Insight Group
+        if (data.details.group?.deleted && !data.details.group?.error) {
+          updateDeletionStep("group", "success");
+        } else if (data.details.group?.error) {
+          updateDeletionStep("group", "error", data.details.group.error);
+        } else {
+          updateDeletionStep("group", "success");
+        }
+      } else {
+        // No detailed response - assume all succeeded
+        updateDeletionStep("assistant", "success");
+        updateDeletionStep("insights", "success");
+        updateDeletionStep("group", "success");
+      }
+      
+      // Step 4: Cleanup always succeeds if we got here
+      updateDeletionStep("cleanup", "success");
+      
       // Update local state
       setWorkflow((prev) => prev ? { 
         ...prev, 
@@ -374,18 +455,17 @@ export default function WorkflowEditorPage() {
         insight_summary_id: null,
         insight_sentiment_id: null,
       } : prev);
-      setShowDeleteAgentDialog(false);
-      notify({
-        title: "AI Agent Deleted",
-        description: "The AI assistant and all associated insights have been removed.",
-        variant: "success",
-      });
+      
+      setDeletionComplete(true);
+      
     } catch (err) {
-      notify({
-        title: "Delete Failed",
-        description: err.message || "Failed to delete AI agent",
-        variant: "error",
-      });
+      // Mark current running step as error
+      setDeletionSteps((prev) =>
+        prev.map((step) =>
+          step.status === "running" ? { ...step, status: "error", error: err.message } : step
+        )
+      );
+      setDeletionComplete(true);
     } finally {
       setDeletingAgent(false);
     }
@@ -1248,52 +1328,143 @@ export default function WorkflowEditorPage() {
       </Dialog>
 
       {/* Delete AI Agent Confirmation Dialog */}
-      <Dialog open={showDeleteAgentDialog} onOpenChange={setShowDeleteAgentDialog}>
+      <Dialog 
+        open={showDeleteAgentDialog} 
+        onOpenChange={(open) => {
+          if (!open && !deletingAgent) {
+            resetDeletionSteps();
+          }
+          setShowDeleteAgentDialog(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-red-600">Delete AI Agent</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this AI agent? This action cannot be undone.
+              {deletingAgent || deletionComplete
+                ? "Deleting AI agent and associated resources..."
+                : "Are you sure you want to delete this AI agent? This action cannot be undone."}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground">
-              The following will be permanently deleted:
-            </p>
-            <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-red-600">
-              <li>AI Assistant on Telnyx</li>
-              <li>Insight Group</li>
-              <li>Insight Templates (slots, summary, sentiment)</li>
-            </ul>
-            <p className="mt-4 text-sm text-muted-foreground">
-              The workflow definition will remain intact. You can create a new AI agent at any time.
-            </p>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeleteAgentDialog(false)}
-              disabled={deletingAgent}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAgent}
-              disabled={deletingAgent}
-            >
-              {deletingAgent ? (
-                <>
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <IconTrash className="size-4 mr-1" />
-                  Delete Agent
-                </>
+          
+          {/* Show progress steps when deleting or complete */}
+          {(deletingAgent || deletionComplete) ? (
+            <div className="py-4 space-y-3">
+              {deletionSteps.map((step) => (
+                <div
+                  key={step.id}
+                  className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                >
+                  {/* Step Icon */}
+                  <div className="mt-0.5">
+                    {step.status === "pending" && (
+                      <IconCircleDashed className="size-5 text-muted-foreground" />
+                    )}
+                    {step.status === "running" && (
+                      <IconLoader2 className="size-5 text-blue-500 animate-spin" />
+                    )}
+                    {step.status === "success" && (
+                      <IconCheck className="size-5 text-green-500" />
+                    )}
+                    {step.status === "error" && (
+                      <IconCircleX className="size-5 text-red-500" />
+                    )}
+                    {step.status === "skipped" && (
+                      <IconCircleDashed className="size-5 text-muted-foreground/50" />
+                    )}
+                  </div>
+                  
+                  {/* Step Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium ${
+                        step.status === "skipped" ? "text-muted-foreground" : ""
+                      }`}>
+                        {step.label}
+                      </span>
+                      {step.status === "skipped" && (
+                        <Badge variant="secondary" className="text-xs">
+                          Skipped
+                        </Badge>
+                      )}
+                    </div>
+                    {step.error && (
+                      <p className="text-xs text-red-500 mt-1">{step.error}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Completion message */}
+              {deletionComplete && (
+                <div className="pt-2 text-center">
+                  {deletionSteps.every(s => s.status === "success") ? (
+                    <p className="text-sm text-green-600 font-medium">
+                      All resources deleted successfully!
+                    </p>
+                  ) : deletionSteps.some(s => s.status === "error") ? (
+                    <p className="text-sm text-amber-600 font-medium">
+                      Completed with some errors. Workflow references have been cleared.
+                    </p>
+                  ) : null}
+                </div>
               )}
-            </Button>
+            </div>
+          ) : (
+            /* Initial confirmation view */
+            <div className="py-4">
+              <p className="text-sm text-muted-foreground">
+                The following will be permanently deleted:
+              </p>
+              <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-red-600">
+                <li>AI Assistant on Telnyx</li>
+                <li>Insight Templates (slots, summary, sentiment)</li>
+                <li>Insight Group</li>
+              </ul>
+              <p className="mt-4 text-sm text-muted-foreground">
+                The workflow definition will remain intact. You can create a new AI agent at any time.
+              </p>
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-2">
+            {deletionComplete ? (
+              <Button
+                onClick={() => {
+                  setShowDeleteAgentDialog(false);
+                  resetDeletionSteps();
+                }}
+              >
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteAgentDialog(false)}
+                  disabled={deletingAgent}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteAgent}
+                  disabled={deletingAgent}
+                >
+                  {deletingAgent ? (
+                    <>
+                      <IconLoader2 className="size-4 mr-1 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <IconTrash className="size-4 mr-1" />
+                      Delete Agent
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
