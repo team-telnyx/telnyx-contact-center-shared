@@ -445,6 +445,23 @@ export async function POST(request) {
       resultsCount: results?.length || 0,
     });
 
+    // Log full payload for debugging
+    console.log(`${LOG_PREFIX} === RAW PAYLOAD ===`);
+    console.log(JSON.stringify(payload, null, 2));
+    console.log(`${LOG_PREFIX} === END PAYLOAD ===`);
+
+    // Log each insight result
+    if (results?.length) {
+      console.log(`${LOG_PREFIX} === INSIGHT RESULTS ===`);
+      for (const result of results) {
+        console.log(`${LOG_PREFIX} Insight ID: ${result.insight_id}`);
+        console.log(`${LOG_PREFIX} Insight Name: ${result.insight_name || 'N/A'}`);
+        console.log(`${LOG_PREFIX} Result:`, JSON.stringify(result.result, null, 2));
+        console.log(`${LOG_PREFIX} ---`);
+      }
+      console.log(`${LOG_PREFIX} === END RESULTS ===`);
+    }
+
     // Find workflow by insight_group_id
     const workflow = await findWorkflowByInsightGroup(insightGroupId);
     if (!workflow) {
