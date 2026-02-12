@@ -377,37 +377,62 @@ function verifyApiKeyHeader(request) {
  * Webhook endpoint for receiving Telnyx Conversation Insights.
  * Called when AI assistant conversation ends (transfer or hangup).
  * 
- * Authentication (either one must pass):
- * 1. Telnyx webhook signature verification
- * 2. API key via Authorization: Bearer <key> or X-API-Key: <key>
- *    (key defined in TELNYX_AI_API_KEY_REF env var)
+ * NOTE: Telnyx AI Assistant webhooks don't support authentication,
+ * so this endpoint is currently open. We log all request details
+ * to help identify potential security measures.
  */
 export async function POST(request) {
   const startTime = Date.now();
+  const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   
   try {
-    // Read raw body for signature verification
+    // ============================================================
+    // DETAILED REQUEST LOGGING (for security analysis)
+    // ============================================================
+    console.log(`${LOG_PREFIX} ========== INCOMING REQUEST [${requestId}] ==========`);
+    console.log(`${LOG_PREFIX} Timestamp: ${new Date().toISOString()}`);
+    console.log(`${LOG_PREFIX} Method: ${request.method}`);
+    console.log(`${LOG_PREFIX} URL: ${request.url}`);
+    
+    // Log all headers
+    console.log(`${LOG_PREFIX} --- HEADERS ---`);
+    const headers = {};
+    request.headers.forEach((value, key) => {
+      headers[key] = value;
+      // Mask potential sensitive values but show structure
+      const displayValue = key.toLowerCase().includes('auth') || key.toLowerCase().includes('key') || key.toLowerCase().includes('secret')
+        ? `${value.slice(0, 4)}...${value.slice(-4)} (${value.length} chars)`
+        : value;
+      console.log(`${LOG_PREFIX}   ${key}: ${displayValue}`);
+    });
+    
+    // Log IP information
+    const forwardedFor = request.headers.get('x-forwarded-for');
+    const realIp = request.headers.get('x-real-ip');
+    const cfConnectingIp = request.headers.get('cf-connecting-ip');
+    console.log(`${LOG_PREFIX} --- IP INFO ---`);
+    console.log(`${LOG_PREFIX}   x-forwarded-for: ${forwardedFor || 'not set'}`);
+    console.log(`${LOG_PREFIX}   x-real-ip: ${realIp || 'not set'}`);
+    console.log(`${LOG_PREFIX}   cf-connecting-ip: ${cfConnectingIp || 'not set'}`);
+    
+    // Log Telnyx-specific headers
+    console.log(`${LOG_PREFIX} --- TELNYX HEADERS ---`);
+    console.log(`${LOG_PREFIX}   telnyx-signature-ed25519: ${request.headers.get('telnyx-signature-ed25519') || 'not set'}`);
+    console.log(`${LOG_PREFIX}   telnyx-timestamp: ${request.headers.get('telnyx-timestamp') || 'not set'}`);
+    
+    // Read raw body
     const rawBody = await request.text();
+    console.log(`${LOG_PREFIX} --- BODY ---`);
+    console.log(`${LOG_PREFIX}   Raw body length: ${rawBody.length} bytes`);
     
-    // Try API key authentication first (faster, no crypto)
+    // Check authentication (log only, don't block)
     const apiKeyValid = verifyApiKeyHeader(request);
-    
-    // If no API key, verify Telnyx webhook signature
-    let signatureValid = false;
-    if (!apiKeyValid) {
-      signatureValid = await verifyTelnyxSignature(request, rawBody);
-    }
-    
-    if (!apiKeyValid && !signatureValid) {
-      console.warn(`${LOG_PREFIX} Authentication failed - neither API key nor signature valid`);
-      return NextResponse.json(
-        { ok: false, error: "Unauthorized - invalid API key or signature" },
-        { status: 401 }
-      );
-    }
-    
-    console.log(`${LOG_PREFIX} Authenticated via ${apiKeyValid ? 'API key' : 'Telnyx signature'}`);
-
+    const signatureValid = await verifyTelnyxSignature(request, rawBody);
+    console.log(`${LOG_PREFIX} --- AUTH STATUS ---`);
+    console.log(`${LOG_PREFIX}   API Key valid: ${apiKeyValid}`);
+    console.log(`${LOG_PREFIX}   Telnyx signature valid: ${signatureValid}`);
+    console.log(`${LOG_PREFIX}   Auth status: ${apiKeyValid ? 'API_KEY' : signatureValid ? 'TELNYX_SIGNATURE' : 'UNAUTHENTICATED'}`);
+    console.log(`${LOG_PREFIX} ========== END REQUEST INFO ==========`);
 
     // Parse payload
     let payload;
@@ -421,11 +446,17 @@ export async function POST(request) {
       );
     }
 
+    // Log full payload immediately (before any filtering)
+    console.log(`${LOG_PREFIX} [${requestId}] === FULL PAYLOAD ===`);
+    console.log(JSON.stringify(payload, null, 2));
+    console.log(`${LOG_PREFIX} [${requestId}] === END FULL PAYLOAD ===`);
+
     // Validate event type
     const eventType = payload?.data?.event_type || payload?.event_type;
     if (eventType !== "call.conversation_insights.generated") {
-      console.log(`${LOG_PREFIX} Ignoring event type: ${eventType}`);
-      return NextResponse.json({ ok: true, ignored: true });
+      console.log(`${LOG_PREFIX} [${requestId}] Event type '${eventType}' - not conversation_insights, logging and returning`);
+      console.log(`${LOG_PREFIX} [${requestId}] Available fields: ${Object.keys(payload?.data || payload || {}).join(', ')}`);
+      return NextResponse.json({ ok: true, ignored: true, eventType });
     }
 
     // Extract key data from payload
@@ -438,28 +469,28 @@ export async function POST(request) {
       results,
     } = eventPayload;
 
-    console.log(`${LOG_PREFIX} Processing insights webhook:`, {
-      callControlId: callControlId?.slice(0, 20) + "...",
-      callSessionId,
-      insightGroupId,
+    console.log(`${LOG_PREFIX} [${requestId}] Processing conversation_insights webhook:`, {
+      callControlId: callControlId ? `${callControlId.slice(0, 20)}...` : 'N/A',
+      callSessionId: callSessionId || 'N/A',
+      callLegId: callLegId || 'N/A',
+      insightGroupId: insightGroupId || 'N/A',
       resultsCount: results?.length || 0,
     });
 
-    // Log full payload for debugging
-    console.log(`${LOG_PREFIX} === RAW PAYLOAD ===`);
-    console.log(JSON.stringify(payload, null, 2));
-    console.log(`${LOG_PREFIX} === END PAYLOAD ===`);
-
-    // Log each insight result
+    // Log each insight result with details
     if (results?.length) {
-      console.log(`${LOG_PREFIX} === INSIGHT RESULTS ===`);
-      for (const result of results) {
-        console.log(`${LOG_PREFIX} Insight ID: ${result.insight_id}`);
-        console.log(`${LOG_PREFIX} Insight Name: ${result.insight_name || 'N/A'}`);
-        console.log(`${LOG_PREFIX} Result:`, JSON.stringify(result.result, null, 2));
-        console.log(`${LOG_PREFIX} ---`);
+      console.log(`${LOG_PREFIX} [${requestId}] === INSIGHT RESULTS (${results.length}) ===`);
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        console.log(`${LOG_PREFIX} [${requestId}] Result ${i + 1}/${results.length}:`);
+        console.log(`${LOG_PREFIX} [${requestId}]   insight_id: ${result.insight_id}`);
+        console.log(`${LOG_PREFIX} [${requestId}]   insight_name: ${result.insight_name || 'N/A'}`);
+        console.log(`${LOG_PREFIX} [${requestId}]   result type: ${typeof result.result}`);
+        console.log(`${LOG_PREFIX} [${requestId}]   result:`, JSON.stringify(result.result, null, 2));
       }
-      console.log(`${LOG_PREFIX} === END RESULTS ===`);
+      console.log(`${LOG_PREFIX} [${requestId}] === END INSIGHT RESULTS ===`);
+    } else {
+      console.log(`${LOG_PREFIX} [${requestId}] No insight results in payload`);
     }
 
     // Find workflow by insight_group_id
