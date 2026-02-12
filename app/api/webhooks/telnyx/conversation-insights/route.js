@@ -425,7 +425,7 @@ export async function POST(request) {
     console.log(`${LOG_PREFIX} --- BODY ---`);
     console.log(`${LOG_PREFIX}   Raw body length: ${rawBody.length} bytes`);
     
-    // Check authentication (log only, don't block)
+    // Verify authentication - Telnyx signature is required
     const apiKeyValid = verifyApiKeyHeader(request);
     const signatureValid = await verifyTelnyxSignature(request, rawBody);
     console.log(`${LOG_PREFIX} --- AUTH STATUS ---`);
@@ -433,6 +433,15 @@ export async function POST(request) {
     console.log(`${LOG_PREFIX}   Telnyx signature valid: ${signatureValid}`);
     console.log(`${LOG_PREFIX}   Auth status: ${apiKeyValid ? 'API_KEY' : signatureValid ? 'TELNYX_SIGNATURE' : 'UNAUTHENTICATED'}`);
     console.log(`${LOG_PREFIX} ========== END REQUEST INFO ==========`);
+    
+    // Block unauthenticated requests
+    if (!apiKeyValid && !signatureValid) {
+      console.warn(`${LOG_PREFIX} [${requestId}] REJECTED - No valid authentication`);
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized - invalid signature" },
+        { status: 401 }
+      );
+    }
 
     // Parse payload
     let payload;
@@ -452,22 +461,26 @@ export async function POST(request) {
     console.log(`${LOG_PREFIX} [${requestId}] === END FULL PAYLOAD ===`);
 
     // Validate event type
+    // Telnyx AI sends "conversation_insight_result", not "call.conversation_insights.generated"
     const eventType = payload?.data?.event_type || payload?.event_type;
-    if (eventType !== "call.conversation_insights.generated") {
-      console.log(`${LOG_PREFIX} [${requestId}] Event type '${eventType}' - not conversation_insights, logging and returning`);
+    const validEventTypes = ["conversation_insight_result", "call.conversation_insights.generated"];
+    if (!validEventTypes.includes(eventType)) {
+      console.log(`${LOG_PREFIX} [${requestId}] Event type '${eventType}' - not a conversation insights event, ignoring`);
       console.log(`${LOG_PREFIX} [${requestId}] Available fields: ${Object.keys(payload?.data || payload || {}).join(', ')}`);
       return NextResponse.json({ ok: true, ignored: true, eventType });
     }
 
     // Extract key data from payload
+    // Telnyx AI uses payload.payload structure with metadata containing call info
     const eventPayload = payload?.data?.payload || payload?.payload || {};
-    const {
-      call_control_id: callControlId,
-      call_session_id: callSessionId,
-      call_leg_id: callLegId,
-      insight_group_id: insightGroupId,
-      results,
-    } = eventPayload;
+    const metadata = eventPayload?.metadata || {};
+    
+    // Call identifiers can be in eventPayload directly OR in metadata
+    const callControlId = eventPayload.call_control_id || metadata.call_control_id;
+    const callSessionId = eventPayload.call_session_id || metadata.call_session_id;
+    const callLegId = eventPayload.call_leg_id || metadata.call_leg_id;
+    const insightGroupId = eventPayload.insight_group_id;
+    const results = eventPayload.results || [];
 
     console.log(`${LOG_PREFIX} [${requestId}] Processing conversation_insights webhook:`, {
       callControlId: callControlId ? `${callControlId.slice(0, 20)}...` : 'N/A',
