@@ -471,6 +471,11 @@ export default function CreateAgentSheet({
     instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
     instructions += "- Confirm important information before proceeding\n";
     
+    // Add call context with system variables
+    instructions += "\n## Call Context\n\n";
+    instructions += "The call is taking place via the {{telnyx_conversation_channel}} channel on {{telnyx_current_time}}. ";
+    instructions += "The agent is at {{telnyx_agent_target}}, and the client is at {{telnyx_end_user_target}}.\n";
+
     // Add tool usage instructions
     instructions += "\n## Available Tools:\n\n";
     instructions += "### Transfer Tool\n";
