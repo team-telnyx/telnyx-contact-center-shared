@@ -116,6 +116,14 @@ export default function WorkflowEditorPage() {
     { id: "cleanup", label: "Clear Workflow References", status: "pending" },
   ]);
   const [deletionComplete, setDeletionComplete] = useState(false);
+  
+  // Update progress tracking
+  const [updateSteps, setUpdateSteps] = useState([
+    { id: "instructions", label: "Update Assistant Instructions", status: "pending" },
+    { id: "insights", label: "Sync Insight Templates", status: "pending" },
+    { id: "group", label: "Update Insight Group", status: "pending" },
+  ]);
+  const [updateComplete, setUpdateComplete] = useState(false);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -333,30 +341,79 @@ export default function WorkflowEditorPage() {
   const stageItems = selectedStage?.items || [];
   const selectedItem = stageItems.find((i) => i.id === selectedItemId);
 
-  // Update AI Agent handler
+  // Helper to update update step status
+  const updateUpdateStep = (stepId, status, error = null) => {
+    setUpdateSteps((prev) =>
+      prev.map((step) =>
+        step.id === stepId ? { ...step, status, error } : step
+      )
+    );
+  };
+
+  // Reset update steps
+  const resetUpdateSteps = () => {
+    setUpdateSteps([
+      { id: "instructions", label: "Update Assistant Instructions", status: "pending" },
+      { id: "insights", label: "Sync Insight Templates", status: "pending" },
+      { id: "group", label: "Update Insight Group", status: "pending" },
+    ]);
+    setUpdateComplete(false);
+  };
+
+  // Update AI Agent handler with progress tracking
   async function handleUpdateAgent() {
     setUpdatingAssistant(true);
-    setShowUpdateConfirmDialog(false);
+    setUpdateComplete(false);
+    
+    // Reset steps
+    setUpdateSteps([
+      { id: "instructions", label: "Update Assistant Instructions", status: "pending" },
+      { id: "insights", label: "Sync Insight Templates", status: "pending" },
+      { id: "group", label: "Update Insight Group", status: "pending" },
+    ]);
+
     try {
+      // Start all steps as running initially
+      updateUpdateStep("instructions", "running");
+      
       const res = await fetch(
         `/api/admin/workflows/${workflowId}/update-assistant`,
         { method: "POST" }
       );
       const data = await res.json();
+      
       if (!res.ok) {
         throw new Error(data.error || "Failed to update assistant");
       }
-      notify({
-        title: "AI Agent Updated",
-        description: "Assistant instructions and insights have been synced with the current workflow.",
-        variant: "success",
-      });
+      
+      // Update steps based on response
+      updateUpdateStep("instructions", "success");
+      
+      if (data.insightsSynced) {
+        updateUpdateStep("insights", "success");
+        updateUpdateStep("group", "success");
+      } else if (data.insightGroupId) {
+        // Insights existed but weren't synced (no slots maybe)
+        updateUpdateStep("insights", "skipped");
+        updateUpdateStep("group", "success");
+      } else {
+        // No insights configured
+        updateUpdateStep("insights", "skipped");
+        updateUpdateStep("group", "skipped");
+      }
+      
+      setUpdateComplete(true);
+      
     } catch (err) {
-      notify({
-        title: "Update Failed",
-        description: err.message || "Failed to update AI agent",
-        variant: "error",
-      });
+      // Mark current running step as error
+      setUpdateSteps((prev) =>
+        prev.map((step) =>
+          step.status === "running" || step.status === "pending" 
+            ? { ...step, status: step.status === "running" ? "error" : "pending", error: step.status === "running" ? err.message : null } 
+            : step
+        )
+      );
+      setUpdateComplete(true);
     } finally {
       setUpdatingAssistant(false);
     }
@@ -1281,48 +1338,151 @@ export default function WorkflowEditorPage() {
       />
 
       {/* Update AI Agent Confirmation Dialog */}
-      <Dialog open={showUpdateConfirmDialog} onOpenChange={setShowUpdateConfirmDialog}>
+      <Dialog 
+        open={showUpdateConfirmDialog} 
+        onOpenChange={(open) => {
+          if (!open && !updatingAssistant) {
+            resetUpdateSteps();
+          }
+          setShowUpdateConfirmDialog(open);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Update AI Agent</DialogTitle>
             <DialogDescription>
-              This will sync the AI assistant&apos;s instructions and insights with the current workflow configuration.
+              {updatingAssistant || updateComplete
+                ? "Updating AI agent with current workflow configuration..."
+                : "This will sync the AI assistant with the current workflow configuration."}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground">
-              The following will be updated:
-            </p>
-            <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
-              <li>Assistant instructions (from workflow stages)</li>
-              <li>Insight templates (slot extraction, summary, sentiment)</li>
-              <li>Insight group assignment</li>
-            </ul>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowUpdateConfirmDialog(false)}
-              disabled={updatingAssistant}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdateAgent}
-              disabled={updatingAssistant}
-            >
-              {updatingAssistant ? (
-                <>
-                  <IconLoader2 className="size-4 mr-1 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <IconRefresh className="size-4 mr-1" />
-                  Update Agent
-                </>
+          
+          {/* Show progress steps when updating or complete */}
+          {(updatingAssistant || updateComplete) ? (
+            <div className="py-4 space-y-3">
+              {updateSteps.map((step) => (
+                <div
+                  key={step.id}
+                  className="flex items-start gap-3 p-3 rounded-lg border bg-card"
+                >
+                  {/* Step Icon */}
+                  <div className="mt-0.5">
+                    {step.status === "pending" && (
+                      <IconCircleDashed className="size-5 text-muted-foreground" />
+                    )}
+                    {step.status === "running" && (
+                      <IconLoader2 className="size-5 text-blue-500 animate-spin" />
+                    )}
+                    {step.status === "success" && (
+                      <IconCheck className="size-5 text-green-500" />
+                    )}
+                    {step.status === "error" && (
+                      <IconCircleX className="size-5 text-red-500" />
+                    )}
+                    {step.status === "skipped" && (
+                      <IconCircleDashed className="size-5 text-muted-foreground/50" />
+                    )}
+                  </div>
+                  
+                  {/* Step Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium ${
+                        step.status === "skipped" ? "text-muted-foreground" : ""
+                      }`}>
+                        {step.label}
+                      </span>
+                      {step.status === "skipped" && (
+                        <Badge variant="secondary" className="text-xs">
+                          Skipped
+                        </Badge>
+                      )}
+                    </div>
+                    {step.error && (
+                      <p className="text-xs text-red-500 mt-1">{step.error}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Completion message */}
+              {updateComplete && (
+                <div className="pt-2 text-center">
+                  {updateSteps.some(s => s.status === "error") ? (
+                    <p className="text-sm text-red-600 font-medium">
+                      Update failed. Please check the errors above.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-green-600 font-medium">
+                      AI Agent updated successfully!
+                    </p>
+                  )}
+                </div>
               )}
-            </Button>
+            </div>
+          ) : (
+            /* Initial confirmation view */
+            <div className="py-4 space-y-4">
+              {/* Warning about overwriting */}
+              <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                  ⚠️ Warning: Manual changes will be overwritten
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  Any changes made directly to the AI assistant in Telnyx Portal will be replaced with the workflow configuration.
+                </p>
+              </div>
+              
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  The following will be updated:
+                </p>
+                <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+                  <li>Assistant instructions (from workflow stages)</li>
+                  <li>Insight templates (slot extraction, summary, sentiment)</li>
+                  <li>Insight group assignment</li>
+                </ul>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex justify-end gap-2">
+            {updateComplete ? (
+              <Button
+                onClick={() => {
+                  setShowUpdateConfirmDialog(false);
+                  resetUpdateSteps();
+                }}
+              >
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowUpdateConfirmDialog(false)}
+                  disabled={updatingAssistant}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdateAgent}
+                  disabled={updatingAssistant}
+                >
+                  {updatingAssistant ? (
+                    <>
+                      <IconLoader2 className="size-4 mr-1 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <IconRefresh className="size-4 mr-1" />
+                      Update Agent
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
