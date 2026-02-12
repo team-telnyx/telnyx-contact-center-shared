@@ -510,12 +510,18 @@ export default function CreateAgentSheet({
         ? `sip:username@${selectedCallFlowId}.sip.telnyx.com`
         : null;
 
-      // Build tools array
+      // Build tools array using Telnyx built-in tool format
       const tools = [
         {
           type: "hangup",
           function: {
+            name: "hangup",
             description: "To be used whenever the conversation has ended and it would be appropriate to hangup the call.",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
           },
         },
       ];
@@ -525,18 +531,25 @@ export default function CreateAgentSheet({
         tools.push({
           type: "transfer",
           function: {
+            name: "transfer",
             description: "Transfer the call to a human agent in the contact center.",
             parameters: {
-              from: "{{telnyx_end_user_target}}",
-              to: transferSipUri,
-              to_display_name: "contact_center",
-              custom_headers: [
-                {
-                  name: "X-AI-Call-ID",
-                  value: "{{call_control_id}}",
-                },
-              ],
+              type: "object",
+              properties: {},
+              required: [],
             },
+          },
+          // Transfer-specific configuration
+          transfer_settings: {
+            from: "{{telnyx_end_user_target}}",
+            to: transferSipUri,
+            to_display_name: "contact_center",
+            custom_headers: [
+              {
+                name: "X-AI-Call-ID",
+                value: "{{call_control_id}}",
+              },
+            ],
           },
         });
       }
