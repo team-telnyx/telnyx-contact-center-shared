@@ -1,8 +1,13 @@
 /**
  * Update AI Assistant - Sync assistant instructions with current workflow
  * POST /api/admin/workflows/[id]/update-assistant
- * Regenerates instructions from workflow stages and PATCHes the Telnyx assistant.
- * Also syncs insight_settings with the insight group if available.
+ * 
+ * Supports step-by-step updates via ?step= query parameter:
+ * - step=instructions: Update assistant instructions only
+ * - step=insights: Sync insight templates
+ * - step=group: Update insight group assignment on assistant
+ * 
+ * Without step parameter, updates everything at once (legacy mode).
  */
 
 import { NextResponse } from "next/server";
@@ -25,6 +30,48 @@ function getInsightsWebhookUrl() {
   return `${baseUrl.replace(/\/$/, "")}/api/webhooks/telnyx/conversation-insights`;
 }
 
+/**
+ * Load workflow with stages and items
+ */
+async function loadWorkflowWithStages(pool, workflowId) {
+  const { rows: [workflow] } = await pool.query(
+    `SELECT id, name, description, ai_assistant_id, insight_group_id, 
+            insight_slots_id, insight_summary_id, insight_sentiment_id
+     FROM aa_workflows WHERE id = $1`,
+    [workflowId]
+  );
+
+  if (!workflow) return null;
+
+  const { rows: stages } = await pool.query(
+    `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
+    [workflowId]
+  );
+
+  const stageIds = stages.map((s) => s.id);
+  let items = [];
+  if (stageIds.length > 0) {
+    const { rows: itemRows } = await pool.query(
+      `SELECT * FROM aa_workflow_items WHERE stage_id = ANY($1) ORDER BY stage_id, order_index`,
+      [stageIds]
+    );
+    items = itemRows;
+  }
+
+  const itemsByStage = items.reduce((acc, item) => {
+    if (!acc[item.stage_id]) acc[item.stage_id] = [];
+    acc[item.stage_id].push(item);
+    return acc;
+  }, {});
+
+  const stagesWithItems = stages.map((s) => ({
+    ...s,
+    items: itemsByStage[s.id] || [],
+  }));
+
+  return { workflow, stages: stagesWithItems, items };
+}
+
 export async function POST(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -41,6 +88,9 @@ export async function POST(request, { params }) {
     }
 
     const { id: workflowId } = await params;
+    const { searchParams } = new URL(request.url);
+    const step = searchParams.get("step");
+
     const pool = getPostgresPool();
     if (!pool) {
       return NextResponse.json(
@@ -49,30 +99,12 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Parse request body for options
-    let options = {};
-    try {
-      const body = await request.json();
-      options = body || {};
-    } catch {
-      // Empty body is OK
+    const data = await loadWorkflowWithStages(pool, workflowId);
+    if (!data) {
+      return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }
 
-    const { syncInsights: requestSyncInsights = true } = options;
-
-    const { rows: [workflow] } = await pool.query(
-      `SELECT id, name, description, ai_assistant_id, insight_group_id, 
-              insight_slots_id, insight_summary_id, insight_sentiment_id
-       FROM aa_workflows WHERE id = $1`,
-      [workflowId]
-    );
-
-    if (!workflow) {
-      return NextResponse.json(
-        { error: "Workflow not found" },
-        { status: 404 }
-      );
-    }
+    const { workflow, stages, items } = data;
 
     if (!workflow.ai_assistant_id) {
       return NextResponse.json(
@@ -81,125 +113,14 @@ export async function POST(request, { params }) {
       );
     }
 
-    const { rows: stages } = await pool.query(
-      `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
-      [workflowId]
-    );
-
-    const stageIds = stages.map((s) => s.id);
-    let items = [];
-    if (stageIds.length > 0) {
-      const { rows: itemRows } = await pool.query(
-        `SELECT * FROM aa_workflow_items WHERE stage_id = ANY($1) ORDER BY stage_id, order_index`,
-        [stageIds]
-      );
-      items = itemRows;
+    // Step-by-step mode
+    if (step) {
+      return handleStepUpdate(step, workflow, stages, items, workflowId, apiKey, pool);
     }
 
-    const itemsByStage = items.reduce((acc, item) => {
-      if (!acc[item.stage_id]) acc[item.stage_id] = [];
-      acc[item.stage_id].push(item);
-      return acc;
-    }, {});
+    // Legacy mode: update everything at once
+    return handleFullUpdate(workflow, stages, items, workflowId, apiKey, pool);
 
-    const stagesWithItems = stages.map((s) => ({
-      ...s,
-      items: itemsByStage[s.id] || [],
-    }));
-
-    // Generate instructions
-    const instructions = generateWorkflowInstructions(workflow, stagesWithItems);
-
-    // Check if we need to sync insights
-    let insightGroupId = workflow.insight_group_id;
-    let insightsSynced = false;
-    const hasSlots = items.some((item) => item.type === "slot" && item.slot_name);
-    const webhookUrl = getInsightsWebhookUrl();
-
-    // Sync insights if:
-    // - requestSyncInsights is true (default)
-    // - Workflow has slots
-    // - Webhook URL is configured
-    // - Either no insight group exists OR we want to ensure it's up to date
-    if (requestSyncInsights && hasSlots && webhookUrl) {
-      try {
-        console.log(`${LOG_PREFIX} Syncing insights for workflow: ${workflow.name}`);
-        
-        const workflowWithStages = {
-          ...workflow,
-          stages: stagesWithItems,
-        };
-
-        const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
-        insightGroupId = insightResult.groupId;
-
-        // Update workflow with insight IDs
-        await pool.query(
-          `UPDATE aa_workflows SET
-            insight_group_id = $1,
-            insight_slots_id = $2,
-            insight_summary_id = $3,
-            insight_sentiment_id = $4,
-            updated_at = NOW()
-           WHERE id = $5`,
-          [
-            insightResult.groupId,
-            insightResult.slotsInsightId,
-            insightResult.summaryInsightId,
-            insightResult.sentimentInsightId,
-            workflowId,
-          ]
-        );
-
-        insightsSynced = true;
-        console.log(`${LOG_PREFIX} Insights synced successfully`);
-      } catch (syncErr) {
-        console.warn(`${LOG_PREFIX} Warning: Failed to sync insights:`, syncErr.message);
-        // Continue with assistant update
-      }
-    }
-
-    // Build assistant update payload
-    const assistantPayload = { instructions };
-
-    // Include insight_settings if we have an insight group
-    if (insightGroupId) {
-      assistantPayload.insight_settings = {
-        insight_group_id: insightGroupId,
-      };
-    }
-
-    // Update the assistant
-    const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(assistantPayload),
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        {
-          ok: false,
-          error: res.status === 404
-            ? "AI assistant not found on Telnyx (may have been deleted)"
-            : `Telnyx API error: ${res.status} ${text}`,
-        },
-        { status: res.status === 404 ? 404 : 502 }
-      );
-    }
-
-    const data = await res.json();
-    return NextResponse.json({
-      ok: true,
-      assistant: data?.data || data,
-      insightsSynced,
-      insightGroupId,
-    });
   } catch (err) {
     console.error(`${LOG_PREFIX} Error:`, err);
     return NextResponse.json(
@@ -207,4 +128,215 @@ export async function POST(request, { params }) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Handle step-by-step update
+ */
+async function handleStepUpdate(step, workflow, stages, items, workflowId, apiKey, pool) {
+  switch (step) {
+    case "instructions":
+      return updateInstructionsStep(workflow, stages, apiKey);
+    case "insights":
+      return syncInsightsStep(workflow, stages, items, workflowId, pool);
+    case "group":
+      return updateGroupAssignmentStep(workflow, workflowId, apiKey, pool);
+    default:
+      return NextResponse.json({ error: `Invalid step: ${step}` }, { status: 400 });
+  }
+}
+
+/**
+ * Step 1: Update assistant instructions
+ */
+async function updateInstructionsStep(workflow, stages, apiKey) {
+  console.log(`${LOG_PREFIX} Updating instructions for: ${workflow.name}`);
+
+  const instructions = generateWorkflowInstructions(workflow, stages);
+
+  const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ instructions }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return NextResponse.json(
+      { error: res.status === 404 ? "AI assistant not found on Telnyx" : `Telnyx error: ${res.status}` },
+      { status: res.status === 404 ? 404 : 502 }
+    );
+  }
+
+  console.log(`${LOG_PREFIX} Instructions updated successfully`);
+  return NextResponse.json({ ok: true, message: "Instructions updated" });
+}
+
+/**
+ * Step 2: Sync insight templates
+ */
+async function syncInsightsStep(workflow, stages, items, workflowId, pool) {
+  const hasSlots = items.some((item) => item.type === "slot" && item.slot_name);
+  const webhookUrl = getInsightsWebhookUrl();
+
+  if (!hasSlots) {
+    return NextResponse.json({ ok: true, skipped: true, message: "No slots to sync" });
+  }
+
+  if (!webhookUrl) {
+    return NextResponse.json({ ok: true, skipped: true, message: "Webhook URL not configured" });
+  }
+
+  console.log(`${LOG_PREFIX} Syncing insights for: ${workflow.name}`);
+
+  try {
+    const workflowWithStages = { ...workflow, stages };
+    const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
+
+    // Update workflow with insight IDs
+    await pool.query(
+      `UPDATE aa_workflows SET
+        insight_group_id = $1,
+        insight_slots_id = $2,
+        insight_summary_id = $3,
+        insight_sentiment_id = $4,
+        updated_at = NOW()
+       WHERE id = $5`,
+      [
+        insightResult.groupId,
+        insightResult.slotsInsightId,
+        insightResult.summaryInsightId,
+        insightResult.sentimentInsightId,
+        workflowId,
+      ]
+    );
+
+    console.log(`${LOG_PREFIX} Insights synced successfully`);
+    return NextResponse.json({ 
+      ok: true, 
+      message: "Insights synced",
+      insightGroupId: insightResult.groupId,
+    });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} Failed to sync insights:`, err);
+    return NextResponse.json({ error: err.message }, { status: 502 });
+  }
+}
+
+/**
+ * Step 3: Update insight group assignment on assistant
+ */
+async function updateGroupAssignmentStep(workflow, workflowId, apiKey, pool) {
+  // Re-fetch workflow to get latest insight_group_id (may have been updated in previous step)
+  const { rows: [currentWorkflow] } = await pool.query(
+    `SELECT insight_group_id FROM aa_workflows WHERE id = $1`,
+    [workflowId]
+  );
+
+  const insightGroupId = currentWorkflow?.insight_group_id || workflow.insight_group_id;
+
+  if (!insightGroupId) {
+    return NextResponse.json({ ok: true, skipped: true, message: "No insight group to assign" });
+  }
+
+  console.log(`${LOG_PREFIX} Updating insight group assignment: ${insightGroupId}`);
+
+  const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      insight_settings: { insight_group_id: insightGroupId },
+    }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return NextResponse.json(
+      { error: `Telnyx error: ${res.status}` },
+      { status: 502 }
+    );
+  }
+
+  console.log(`${LOG_PREFIX} Insight group assignment updated`);
+  return NextResponse.json({ ok: true, message: "Insight group assigned" });
+}
+
+/**
+ * Legacy mode: Update everything at once
+ */
+async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, pool) {
+  const instructions = generateWorkflowInstructions(workflow, stages);
+
+  let insightGroupId = workflow.insight_group_id;
+  let insightsSynced = false;
+  const hasSlots = items.some((item) => item.type === "slot" && item.slot_name);
+  const webhookUrl = getInsightsWebhookUrl();
+
+  if (hasSlots && webhookUrl) {
+    try {
+      const workflowWithStages = { ...workflow, stages };
+      const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
+      insightGroupId = insightResult.groupId;
+
+      await pool.query(
+        `UPDATE aa_workflows SET
+          insight_group_id = $1,
+          insight_slots_id = $2,
+          insight_summary_id = $3,
+          insight_sentiment_id = $4,
+          updated_at = NOW()
+         WHERE id = $5`,
+        [
+          insightResult.groupId,
+          insightResult.slotsInsightId,
+          insightResult.summaryInsightId,
+          insightResult.sentimentInsightId,
+          workflowId,
+        ]
+      );
+
+      insightsSynced = true;
+    } catch (syncErr) {
+      console.warn(`${LOG_PREFIX} Warning: Failed to sync insights:`, syncErr.message);
+    }
+  }
+
+  const assistantPayload = { instructions };
+  if (insightGroupId) {
+    assistantPayload.insight_settings = { insight_group_id: insightGroupId };
+  }
+
+  const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(assistantPayload),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    return NextResponse.json(
+      { error: res.status === 404 ? "AI assistant not found" : `Telnyx error: ${res.status}` },
+      { status: res.status === 404 ? 404 : 502 }
+    );
+  }
+
+  const data = await res.json();
+  return NextResponse.json({
+    ok: true,
+    assistant: data?.data || data,
+    insightsSynced,
+    insightGroupId,
+  });
 }

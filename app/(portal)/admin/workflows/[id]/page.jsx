@@ -360,7 +360,7 @@ export default function WorkflowEditorPage() {
     setUpdateComplete(false);
   };
 
-  // Update AI Agent handler with progress tracking
+  // Update AI Agent handler with step-by-step progress
   async function handleUpdateAgent() {
     setUpdatingAssistant(true);
     setUpdateComplete(false);
@@ -373,44 +373,76 @@ export default function WorkflowEditorPage() {
     ]);
 
     try {
-      // Start all steps as running initially
+      // Step 1: Update Assistant Instructions
       updateUpdateStep("instructions", "running");
-      
-      const res = await fetch(
-        `/api/admin/workflows/${workflowId}/update-assistant`,
-        { method: "POST" }
-      );
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to update assistant");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/update-assistant?step=instructions`,
+          { method: "POST" }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to update instructions");
+        }
+        updateUpdateStep("instructions", "success");
+      } catch (err) {
+        updateUpdateStep("instructions", "error", err.message);
+        setUpdateComplete(true);
+        setUpdatingAssistant(false);
+        return; // Stop if instructions fail
       }
-      
-      // Update steps based on response
-      updateUpdateStep("instructions", "success");
-      
-      if (data.insightsSynced) {
-        updateUpdateStep("insights", "success");
-        updateUpdateStep("group", "success");
-      } else if (data.insightGroupId) {
-        // Insights existed but weren't synced (no slots maybe)
-        updateUpdateStep("insights", "skipped");
-        updateUpdateStep("group", "success");
-      } else {
-        // No insights configured
-        updateUpdateStep("insights", "skipped");
-        updateUpdateStep("group", "skipped");
+
+      // Small delay for visual feedback
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 2: Sync Insight Templates
+      updateUpdateStep("insights", "running");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/update-assistant?step=insights`,
+          { method: "POST" }
+        );
+        const data = await res.json();
+        if (!res.ok && res.status !== 400) {
+          throw new Error(data.error || "Failed to sync insights");
+        }
+        if (data.skipped) {
+          updateUpdateStep("insights", "skipped");
+        } else {
+          updateUpdateStep("insights", "success");
+        }
+      } catch (err) {
+        updateUpdateStep("insights", "error", err.message);
+      }
+
+      await new Promise(r => setTimeout(r, 300));
+
+      // Step 3: Update Insight Group assignment
+      updateUpdateStep("group", "running");
+      try {
+        const res = await fetch(
+          `/api/admin/workflows/${workflowId}/update-assistant?step=group`,
+          { method: "POST" }
+        );
+        const data = await res.json();
+        if (!res.ok && res.status !== 400) {
+          throw new Error(data.error || "Failed to update insight group");
+        }
+        if (data.skipped) {
+          updateUpdateStep("group", "skipped");
+        } else {
+          updateUpdateStep("group", "success");
+        }
+      } catch (err) {
+        updateUpdateStep("group", "error", err.message);
       }
       
       setUpdateComplete(true);
       
     } catch (err) {
-      // Mark current running step as error
       setUpdateSteps((prev) =>
         prev.map((step) =>
-          step.status === "running" || step.status === "pending" 
-            ? { ...step, status: step.status === "running" ? "error" : "pending", error: step.status === "running" ? err.message : null } 
-            : step
+          step.status === "running" ? { ...step, status: "error", error: err.message } : step
         )
       );
       setUpdateComplete(true);
