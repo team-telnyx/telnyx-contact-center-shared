@@ -51,6 +51,7 @@ import {
   IconCircleX,
   IconSparkles,
   IconFileDescription,
+  IconPhoneCall,
 } from "@tabler/icons-react";
 
 // Helper functions for language filtering
@@ -146,6 +147,11 @@ export default function CreateAgentSheet({
   
   // Created agent
   const [createdAgent, setCreatedAgent] = useState(null);
+  
+  // Call flows for transfer tool
+  const [callFlows, setCallFlows] = useState([]);
+  const [loadingCallFlows, setLoadingCallFlows] = useState(false);
+  const [selectedCallFlowId, setSelectedCallFlowId] = useState("");
 
   // Available STT providers and models (from Telnyx OpenAPI TranscriptionSettings)
   const STT_PROVIDERS = [
@@ -198,6 +204,7 @@ export default function CreateAgentSheet({
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
+      setSelectedCallFlowId("");
       // Reset creation steps
       setCreationSteps([
         { id: "assistant", label: "Create AI Assistant", status: "pending" },
@@ -227,6 +234,30 @@ export default function CreateAgentSheet({
     }
     fetchModels();
   }, [open]);
+
+  // Load call flows for transfer tool
+  useEffect(() => {
+    async function fetchCallFlows() {
+      if (!open) return;
+      setLoadingCallFlows(true);
+      try {
+        const res = await fetch("/api/voice/flows");
+        const data = await res.json();
+        if (data.ok && data.flows) {
+          setCallFlows(data.flows);
+          // Auto-select first flow if available
+          if (data.flows.length > 0 && !selectedCallFlowId) {
+            setSelectedCallFlowId(data.flows[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load call flows:", err);
+      } finally {
+        setLoadingCallFlows(false);
+      }
+    }
+    fetchCallFlows();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load TTS voices
   useEffect(() => {
@@ -440,6 +471,26 @@ export default function CreateAgentSheet({
     instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
     instructions += "- Confirm important information before proceeding\n";
     
+    // Add tool usage instructions
+    instructions += "\n## Available Tools:\n\n";
+    instructions += "### Transfer Tool\n";
+    instructions += "Use the **transfer** tool when:\n";
+    instructions += "- The caller explicitly requests to speak with a human agent\n";
+    instructions += "- The caller's issue is too complex for you to handle\n";
+    instructions += "- You have collected all required information and need to transfer to the contact center\n";
+    instructions += "- The caller is frustrated and insists on speaking with a person\n\n";
+    
+    instructions += "### Hangup Tool\n";
+    instructions += "Use the **hangup** tool when:\n";
+    instructions += "- The conversation has naturally concluded and the caller is satisfied\n";
+    instructions += "- The caller says goodbye or indicates they want to end the call\n";
+    instructions += "- The caller explicitly asks to hang up\n";
+    instructions += "- There is no further assistance needed\n\n";
+    
+    instructions += "**Important:** Always confirm with the caller before using either tool. ";
+    instructions += "For transfers, let them know they will be connected to a human agent. ";
+    instructions += "For hangups, thank them for calling and confirm they don't need anything else.\n";
+    
     return instructions;
   };
 
@@ -454,6 +505,42 @@ export default function CreateAgentSheet({
       updateStepStatus("assistant", "running");
       const instructions = generateInstructions();
       
+      // Build transfer tool SIP URI from selected call flow
+      const transferSipUri = selectedCallFlowId 
+        ? `sip:username@${selectedCallFlowId}.sip.telnyx.com`
+        : null;
+
+      // Build tools array
+      const tools = [
+        {
+          type: "hangup",
+          function: {
+            description: "To be used whenever the conversation has ended and it would be appropriate to hangup the call.",
+          },
+        },
+      ];
+
+      // Add transfer tool if call flow is selected
+      if (transferSipUri) {
+        tools.push({
+          type: "transfer",
+          function: {
+            description: "Transfer the call to a human agent in the contact center.",
+            parameters: {
+              from: "{{telnyx_end_user_target}}",
+              to: transferSipUri,
+              to_display_name: "contact_center",
+              custom_headers: [
+                {
+                  name: "X-AI-Call-ID",
+                  value: "{{call_control_id}}",
+                },
+              ],
+            },
+          },
+        });
+      }
+
       // Build the agent payload (per Telnyx CreateAssistantRequest)
       const payload = {
         name: agentName.trim() || "Test Agent",
@@ -479,6 +566,7 @@ export default function CreateAgentSheet({
         } : { enabled: false },
         silence_timeout_ms: 500,
         max_silence_count: 2,
+        tools: tools,
       };
 
       const res = await fetch("/api/ai/assistants", {
@@ -1021,6 +1109,48 @@ export default function CreateAgentSheet({
                         </Select>
                       </div>
                     )}
+                  </div>
+
+                  <Separator />
+
+                  {/* Transfer Call Flow Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <IconPhoneCall className="size-4 text-telnyx-green" />
+                      <h3 className="font-semibold">Transfer Destination</h3>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label>Call Flow for Agent Transfer</Label>
+                      {loadingCallFlows ? (
+                        <Skeleton className="h-10 w-full" />
+                      ) : callFlows.length === 0 ? (
+                        <div className="text-sm text-muted-foreground p-3 border rounded-lg bg-muted/50">
+                          No call flows available. Create a call flow first to enable agent transfers.
+                        </div>
+                      ) : (
+                        <Select value={selectedCallFlowId} onValueChange={setSelectedCallFlowId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select call flow" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {callFlows.map((flow) => (
+                              <SelectItem key={flow.id} value={flow.id}>
+                                {flow.name || flow.id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        When the AI transfers a call, it will be routed to this call flow.
+                        {selectedCallFlowId && (
+                          <span className="block mt-1 font-mono text-xs">
+                            SIP: sip:username@{selectedCallFlowId}.sip.telnyx.com
+                          </span>
+                        )}
+                      </p>
+                    </div>
                   </div>
 
                   <Separator />
