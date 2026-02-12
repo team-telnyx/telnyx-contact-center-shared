@@ -243,11 +243,11 @@ export default function CreateAgentSheet({
       try {
         const res = await fetch("/api/voice/flows");
         const data = await res.json();
-        if (data.ok && data.flows) {
-          setCallFlows(data.flows);
+        if (data.ok && data.items) {
+          setCallFlows(data.items);
           // Auto-select first flow if available
-          if (data.flows.length > 0 && !selectedCallFlowId) {
-            setSelectedCallFlowId(data.flows[0].id);
+          if (data.items.length > 0 && !selectedCallFlowId) {
+            setSelectedCallFlowId(data.items[0].id);
           }
         }
       } catch (err) {
