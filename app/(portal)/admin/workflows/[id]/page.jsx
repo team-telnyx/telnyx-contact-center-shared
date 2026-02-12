@@ -104,6 +104,9 @@ export default function WorkflowEditorPage() {
   const [showCreateAgentSheet, setShowCreateAgentSheet] = useState(false);
   const [updatingAssistant, setUpdatingAssistant] = useState(false);
   const [assistantExists, setAssistantExists] = useState(true);
+  const [showUpdateConfirmDialog, setShowUpdateConfirmDialog] = useState(false);
+  const [showDeleteAgentDialog, setShowDeleteAgentDialog] = useState(false);
+  const [deletingAgent, setDeletingAgent] = useState(false);
 
   // New stage dialog
   const [showNewStageDialog, setShowNewStageDialog] = useState(false);
@@ -320,6 +323,73 @@ export default function WorkflowEditorPage() {
   const selectedStage = stages.find((s) => s.id === selectedStageId);
   const stageItems = selectedStage?.items || [];
   const selectedItem = stageItems.find((i) => i.id === selectedItemId);
+
+  // Update AI Agent handler
+  async function handleUpdateAgent() {
+    setUpdatingAssistant(true);
+    setShowUpdateConfirmDialog(false);
+    try {
+      const res = await fetch(
+        `/api/admin/workflows/${workflowId}/update-assistant`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update assistant");
+      }
+      notify({
+        title: "AI Agent Updated",
+        description: "Assistant instructions and insights have been synced with the current workflow.",
+        variant: "success",
+      });
+    } catch (err) {
+      notify({
+        title: "Update Failed",
+        description: err.message || "Failed to update AI agent",
+        variant: "error",
+      });
+    } finally {
+      setUpdatingAssistant(false);
+    }
+  }
+
+  // Delete AI Agent handler
+  async function handleDeleteAgent() {
+    setDeletingAgent(true);
+    try {
+      const res = await fetch(
+        `/api/admin/workflows/${workflowId}/delete-assistant`,
+        { method: "DELETE" }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete assistant");
+      }
+      // Update local state
+      setWorkflow((prev) => prev ? { 
+        ...prev, 
+        ai_assistant_id: null,
+        insight_group_id: null,
+        insight_slots_id: null,
+        insight_summary_id: null,
+        insight_sentiment_id: null,
+      } : prev);
+      setShowDeleteAgentDialog(false);
+      notify({
+        title: "AI Agent Deleted",
+        description: "The AI assistant and all associated insights have been removed.",
+        variant: "success",
+      });
+    } catch (err) {
+      notify({
+        title: "Delete Failed",
+        description: err.message || "Failed to delete AI agent",
+        variant: "error",
+      });
+    } finally {
+      setDeletingAgent(false);
+    }
+  }
 
   // Save workflow details
   async function saveWorkflow() {
@@ -689,45 +759,37 @@ export default function WorkflowEditorPage() {
             Create AI Agent
           </Button>
           {workflow?.ai_assistant_id && assistantExists && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                setUpdatingAssistant(true);
-                try {
-                  const res = await fetch(
-                    `/api/admin/workflows/${workflowId}/update-assistant`,
-                    { method: "POST" }
-                  );
-                  const data = await res.json();
-                  if (!res.ok) {
-                    throw new Error(data.error || "Failed to update assistant");
-                  }
-                  notify({
-                    title: "AI Agent Updated",
-                    description: "Assistant instructions have been synced with the current workflow.",
-                    variant: "success",
-                  });
-                } catch (err) {
-                  notify({
-                    title: "Update Failed",
-                    description: err.message || "Failed to update AI agent",
-                    variant: "error",
-                  });
-                } finally {
-                  setUpdatingAssistant(false);
-                }
-              }}
-              disabled={updatingAssistant}
-              title="Sync assistant instructions with current workflow"
-            >
-              {updatingAssistant ? (
-                <IconLoader2 className="size-4 mr-1 animate-spin" />
-              ) : (
-                <IconRefresh className="size-4 mr-1" />
-              )}
-              Update AI Agent
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowUpdateConfirmDialog(true)}
+                disabled={updatingAssistant}
+                title="Sync assistant instructions with current workflow"
+              >
+                {updatingAssistant ? (
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />
+                ) : (
+                  <IconRefresh className="size-4 mr-1" />
+                )}
+                Update AI Agent
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteAgentDialog(true)}
+                disabled={deletingAgent}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                title="Delete AI Agent and associated insights"
+              >
+                {deletingAgent ? (
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />
+                ) : (
+                  <IconTrash className="size-4 mr-1" />
+                )}
+                Delete AI Agent
+              </Button>
+            </>
           )}
           <Button
             variant="outline"
@@ -1137,6 +1199,104 @@ export default function WorkflowEditorPage() {
           notify({ title: "Success", description: "AI Agent created successfully!", variant: "success" });
         }}
       />
+
+      {/* Update AI Agent Confirmation Dialog */}
+      <Dialog open={showUpdateConfirmDialog} onOpenChange={setShowUpdateConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update AI Agent</DialogTitle>
+            <DialogDescription>
+              This will sync the AI assistant&apos;s instructions and insights with the current workflow configuration.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              The following will be updated:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm list-disc list-inside">
+              <li>Assistant instructions (from workflow stages)</li>
+              <li>Insight templates (slot extraction, summary, sentiment)</li>
+              <li>Insight group assignment</li>
+            </ul>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowUpdateConfirmDialog(false)}
+              disabled={updatingAssistant}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateAgent}
+              disabled={updatingAssistant}
+            >
+              {updatingAssistant ? (
+                <>
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <IconRefresh className="size-4 mr-1" />
+                  Update Agent
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete AI Agent Confirmation Dialog */}
+      <Dialog open={showDeleteAgentDialog} onOpenChange={setShowDeleteAgentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete AI Agent</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this AI agent? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              The following will be permanently deleted:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-red-600">
+              <li>AI Assistant on Telnyx</li>
+              <li>Insight Group</li>
+              <li>Insight Templates (slots, summary, sentiment)</li>
+            </ul>
+            <p className="mt-4 text-sm text-muted-foreground">
+              The workflow definition will remain intact. You can create a new AI agent at any time.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteAgentDialog(false)}
+              disabled={deletingAgent}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAgent}
+              disabled={deletingAgent}
+            >
+              {deletingAgent ? (
+                <>
+                  <IconLoader2 className="size-4 mr-1 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <IconTrash className="size-4 mr-1" />
+                  Delete Agent
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
