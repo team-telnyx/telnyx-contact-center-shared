@@ -185,6 +185,58 @@ Queues can be created dynamically via the `enqueue` flow node or pre-configured 
 4. Call ends → status returns to "Available" (or "Wrap Up" if configured)
 5. Agent goes offline → deactivated from all queues
 
+## AI to Agent Workflow Handoff
+
+When a customer calls an AI assistant and requests transfer to a human agent, collected data is automatically passed to the agent's workflow.
+
+### Telnyx Insights Integration
+
+Each workflow with an AI assistant gets 3 Insight Templates synced to Telnyx:
+- **Slots insight**: Extracts structured data (customer name, issue type, etc.) with confidence scores
+- **Summary insight**: Markdown summary of the AI conversation for the agent
+- **Sentiment insight**: Customer sentiment analysis with actionable tips
+
+### Key Files
+
+- `lib/telnyx-insights.js` - Telnyx Insights API wrapper (groups, templates, assignments)
+- `lib/agent-assist/insight-schema-generator.js` - Generates JSON schemas from workflow slots
+- `lib/agent-assist/ai-handoff-processor.js` - Processes webhook events, updates workflow sessions
+- `app/api/webhooks/telnyx/conversation-insights/route.js` - Webhook endpoint for insights
+- `app/api/admin/workflows/[id]/sync-insights/route.js` - Manual insight sync endpoint
+- `app/api/agent-assist/workflow/ai-context/route.js` - Polling fallback for AI data
+
+### Environment Variables
+
+Required for AI Handoff:
+- `TELNYX_WEBHOOK_BASE_URL` - Base URL for webhook endpoints (e.g., `https://your-domain.com`)
+- `TELNYX_AI_API_KEY_REF` - Header name for API key authentication (e.g., `x-api-key`)
+- `TELNYX_AI_API_KEY` - Actual API key value for webhook authentication
+
+### Data Flow
+
+1. Admin creates workflow with slots → insights synced to Telnyx
+2. Customer calls AI assistant → slots collected during conversation
+3. Customer requests transfer → Telnyx sends `call.conversation_insights.generated` webhook
+4. Webhook handler stores event, updates workflow session, broadcasts via SSE
+5. Agent Desktop receives data → slots pre-filled, summary/sentiment displayed
+
+### Database Schema Additions
+
+- `aa_workflows`: Added `insight_group_id`, `insight_slots_id`, `insight_summary_id`, `insight_sentiment_id`
+- `aa_workflow_sessions`: Added `ai_summary`, `ai_sentiment`, `ai_handoff_received_at`, `ai_handoff_source`
+- `aa_ai_handoff_events`: New table for storing raw webhook events and processing state
+
+### Store Selectors (Frontend)
+
+```javascript
+import { useAiHandoff, useAiSummary, useAiSentiment, useAiDataReceived } from "@/lib/stores/workflow-store";
+
+const aiHandoff = useAiHandoff(); // Full AI handoff state
+const summary = useAiSummary();   // Markdown summary
+const sentiment = useAiSentiment(); // Sentiment analysis
+const received = useAiDataReceived(); // Boolean - has data arrived
+```
+
 ## Common Gotchas
 
 1. **Voice Flow Execution**: Flows execute one node at a time per webhook - don't expect synchronous execution across multiple nodes
@@ -192,6 +244,7 @@ Queues can be created dynamically via the `enqueue` flow node or pre-configured 
 3. **Skills vs Skill Names**: Database stores skill UUIDs, but routing engine converts to names
 4. **In-memory State**: Contact center state is primarily in-memory - restarts clear state (ghost call cleanup handles this)
 5. **Node Type vs Component Type**: In ReactFlow, `node.data.nodeType` contains the actual node type (e.g., "speak"), while `node.type` is often "customNode"
+6. **AI Handoff Race Condition**: Webhook may arrive 2-10s after transfer - use SSE + polling fallback
 
 ## Testing & Debugging
 

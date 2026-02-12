@@ -302,6 +302,10 @@
       "description": "OTA updates operations"
     },
     {
+      "name": "OpenAI Embeddings",
+      "description": "OpenAI-compatible embeddings endpoints for generating vector representations of text"
+    },
+    {
       "name": "Opt-Out Management",
       "description": "Opt-Out Management"
     },
@@ -8338,6 +8342,2257 @@
         "x-latency-category": "responsive"
       }
     },
+    "/ai/missions": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List missions",
+        "description": "List all missions for the organization",
+        "operationId": "get_public_missions_missions",
+        "parameters": [
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-based)",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "exclusiveMinimum": 0,
+              "description": "Number of items per page",
+              "default": 20,
+              "title": "Page[Size]",
+              "minimum": 0
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Create mission",
+        "description": "Create a new mission definition",
+        "operationId": "post_public_missions_missions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/events": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List recent events",
+        "description": "List recent events across all missions",
+        "operationId": "get_public_missions_missions_events",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-based)",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "exclusiveMinimum": 0,
+              "description": "Number of items per page",
+              "default": 50,
+              "title": "Page[Size]",
+              "minimum": 0
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/runs": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List recent runs",
+        "description": "List recent runs across all missions",
+        "operationId": "get_public_missions_missions_runs",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-based)",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "exclusiveMinimum": 0,
+              "description": "Number of items per page",
+              "default": 20,
+              "title": "Page[Size]",
+              "minimum": 0
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}": {
+      "delete": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Delete mission",
+        "description": "Delete a mission",
+        "operationId": "delete_public_missions_missions_mission_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get mission",
+        "description": "Get a mission by ID (includes tools, knowledge_bases, mcp_servers)",
+        "operationId": "get_public_missions_missions_mission_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "put": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update mission",
+        "description": "Update a mission definition",
+        "operationId": "put_public_missions_missions_mission_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMissionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/clone": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Clone mission",
+        "description": "Clone an existing mission",
+        "operationId": "post_public_missions_missions_mission_id_clone",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/knowledge-bases": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List knowledge bases",
+        "description": "List all knowledge bases for a mission",
+        "operationId": "get_public_missions_missions_mission_id_knowledge_bases",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Create knowledge base",
+        "description": "Create a new knowledge base for a mission",
+        "operationId": "post_public_missions_missions_mission_id_knowledge_bases",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/knowledge-bases/{knowledge_base_id}": {
+      "delete": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Delete knowledge base",
+        "description": "Delete a knowledge base from a mission",
+        "operationId": "delete_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Knowledge Base Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get knowledge base",
+        "description": "Get a specific knowledge base by ID",
+        "operationId": "get_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Knowledge Base Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "put": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update knowledge base",
+        "description": "Update a knowledge base definition",
+        "operationId": "put_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "knowledge_base_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Knowledge Base Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/mcp-servers": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List MCP servers",
+        "description": "List all MCP servers for a mission",
+        "operationId": "get_public_missions_missions_mission_id_mcp_servers",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Create MCP server",
+        "description": "Create a new MCP server for a mission",
+        "operationId": "post_public_missions_missions_mission_id_mcp_servers",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/mcp-servers/{mcp_server_id}": {
+      "delete": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Delete MCP server",
+        "description": "Delete an MCP server from a mission",
+        "operationId": "delete_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "mcp_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mcp Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get MCP server",
+        "description": "Get a specific MCP server by ID",
+        "operationId": "get_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "mcp_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mcp Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "put": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update MCP server",
+        "description": "Update an MCP server definition",
+        "operationId": "put_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "mcp_server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mcp Server Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List runs for mission",
+        "description": "List all runs for a specific mission",
+        "operationId": "get_public_missions_missions_mission_id_runs",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-based)",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "exclusiveMinimum": 0,
+              "description": "Number of items per page",
+              "default": 20,
+              "title": "Page[Size]",
+              "minimum": 0
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Start a run",
+        "description": "Start a new run for a mission",
+        "operationId": "post_public_missions_missions_mission_id_runs",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMissionRunRequest",
+                "default": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get run details",
+        "description": "Get details of a specific run",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update run",
+        "description": "Update run status and/or result",
+        "operationId": "patch_public_missions_missions_mission_id_runs_run_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMissionRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/cancel": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Cancel run",
+        "description": "Cancel a running or paused run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_cancel",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/events": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List events",
+        "description": "List events for a run (paginated)",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id_events",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          {
+            "name": "step_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Step Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number (1-based)",
+              "default": 1,
+              "title": "Page[Number]"
+            },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "exclusiveMinimum": 0,
+              "description": "Number of items per page",
+              "default": 50,
+              "title": "Page[Size]",
+              "minimum": 0
+            },
+            "description": "Number of items per page"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Log event",
+        "description": "Log an event for a run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_events",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/events/{event_id}": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get event details",
+        "description": "Get details of a specific event",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id_events_event_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/pause": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Pause run",
+        "description": "Pause a running run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_pause",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/plan": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get plan",
+        "description": "Get the plan (all steps) for a run",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id_plan",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Create initial plan",
+        "description": "Create the initial plan for a run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_plan",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanStepsCreatedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/plan/steps": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Add step(s) to plan",
+        "description": "Add one or more steps to an existing plan",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_plan_steps",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPlanStepsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanStepsCreatedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/plan/steps/{step_id}": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get step details",
+        "description": "Get details of a specific plan step",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id_plan_steps_step_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "step_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Step Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanStepResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update step status",
+        "description": "Update the status of a plan step",
+        "operationId": "patch_public_missions_missions_mission_id_runs_run_id_plan_steps_step_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "step_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Step Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlanStepRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanStepResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/resume": {
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Resume run",
+        "description": "Resume a paused run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_resume",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MissionRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/telnyx-agents": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List linked Telnyx agents",
+        "description": "List all Telnyx agents linked to a run",
+        "operationId": "get_public_missions_missions_mission_id_runs_run_id_telnyx_agents",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelnyxAgentsListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Link Telnyx agent to run",
+        "description": "Link a Telnyx AI agent (voice/messaging) to a run",
+        "operationId": "post_public_missions_missions_mission_id_runs_run_id_telnyx_agents",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTelnyxAgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelnyxAgentResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/runs/{run_id}/telnyx-agents/{telnyx_agent_id}": {
+      "delete": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Unlink Telnyx agent",
+        "description": "Unlink a Telnyx agent from a run",
+        "operationId": "delete_public_missions_missions_mission_id_runs_run_id_telnyx_agents_telnyx_agent_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "telnyx_agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Telnyx Agent Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/tools": {
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "List tools",
+        "description": "List all tools for a mission",
+        "operationId": "get_public_missions_missions_mission_id_tools",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Create tool",
+        "description": "Create a new tool for a mission",
+        "operationId": "post_public_missions_missions_mission_id_tools",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/missions/{mission_id}/tools/{tool_id}": {
+      "delete": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Delete tool",
+        "description": "Delete a tool from a mission",
+        "operationId": "delete_public_missions_missions_mission_id_tools_tool_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Get tool",
+        "description": "Get a specific tool by ID",
+        "operationId": "get_public_missions_missions_mission_id_tools_tool_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "put": {
+        "tags": [
+          "Missions"
+        ],
+        "summary": "Update tool",
+        "description": "Update a tool definition",
+        "operationId": "put_public_missions_missions_mission_id_tools_tool_id",
+        "parameters": [
+          {
+            "name": "mission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mission Id"
+            }
+          },
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/ai/models": {
       "get": {
         "tags": [
@@ -8353,6 +10608,86 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/openai/embeddings": {
+      "post": {
+        "tags": [
+          "OpenAI Embeddings"
+        ],
+        "summary": "Create embeddings",
+        "description": "Creates an embedding vector representing the input text. This endpoint is compatible with the [OpenAI Embeddings API](https://platform.openai.com/docs/api-reference/embeddings) and may be used with the OpenAI JS or Python SDK by setting the base URL to `https://api.telnyx.com/v2/ai/openai`.",
+        "operationId": "create_openai_embeddings",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAIEmbeddingRequest"
+              },
+              "example": {
+                "input": "The quick brown fox jumps over the lazy dog",
+                "model": "thenlper/gte-large"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIEmbeddingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/openai/embeddings/models": {
+      "get": {
+        "tags": [
+          "OpenAI Embeddings"
+        ],
+        "summary": "List embedding models",
+        "description": "Returns a list of available embedding models. This endpoint is compatible with the OpenAI Models API format.",
+        "operationId": "list_openai_embedding_models",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAIEmbeddingModelsResponse"
                 }
               }
             }
@@ -44940,16 +47275,7 @@
             {
               "$ref": "#/components/schemas/telnyx_models"
             }
-          ],
-          "discriminator": {
-            "propertyName": "transcription_engine",
-            "mapping": {
-              "Google": "#/components/schemas/google_models",
-              "Telnyx": "#/components/schemas/telnyx_models",
-              "Deepgram": "#/components/schemas/deepgram_models",
-              "Azure": "#/components/schemas/azure_models"
-            }
-          }
+          ]
         }
       },
       "notifications_FilterConsolidated": {
@@ -55387,6 +57713,22 @@
             "example": 50
           }
         }
+      },
+      "AddPlanStepsRequest": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/CreatePlanStepRequest"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "steps"
+        ],
+        "title": "AddPlanStepsRequest"
       },
       "Address": {
         "type": "object",
@@ -68398,12 +70740,12 @@
           },
           "metadata": {
             "type": "object",
-            "description": "Metadata associated with the conversation. Telnyx provides several pieces of metadata, but customers can also add their own.",
+            "description": "Metadata associated with the conversation. Telnyx provides several pieces of metadata, but customers can also add their own. The reserved field `ai_disabled` (boolean) can be set to `true` to prevent AI-generated responses on this conversation. When `ai_disabled` is `true`, calls to the chat endpoint will return a 400 error. Set to `false` or remove the field to re-enable AI responses. This is useful when a human agent needs to take over the conversation mid-stream (e.g., a technician stepping in while AI was messaging a resident).",
             "additionalProperties": {
               "type": "string"
             },
             "example": {
-              "telnyx_conversation_channel": "phone_call",
+              "telnyx_conversation_channel": "sms",
               "telnyx_agent_target": "+13128675309",
               "telnyx_end_user_target": "+13128675309",
               "assistant_id": "assistant-123"
@@ -69458,7 +71800,7 @@
           },
           "metadata": {
             "type": "object",
-            "description": "Metadata associated with the conversation.",
+            "description": "Metadata associated with the conversation. Set `ai_disabled` to `true` to create the conversation with AI message responses disabled.",
             "additionalProperties": {
               "type": "string"
             }
@@ -69692,6 +72034,41 @@
             "example": "MY REF 001"
           }
         }
+      },
+      "CreateEventRequest": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "payload": {
+            "title": "Payload",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "description": "Prevents duplicate events on retry",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "summary"
+        ],
+        "title": "CreateEventRequest"
       },
       "CreateExternalConnectionRequest": {
         "type": "object",
@@ -71109,6 +73486,56 @@
           ]
         }
       },
+      "CreateMissionRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "execution_mode": {
+            "$ref": "#/components/schemas/ExecutionMode",
+            "default": "external"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CreateMissionRequest"
+      },
+      "CreateMissionRunRequest": {
+        "properties": {
+          "input": {
+            "title": "Input",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "title": "CreateMissionRunRequest"
+      },
       "CreateMsgReq": {
         "properties": {
           "role": {
@@ -71675,6 +74102,54 @@
           }
         }
       },
+      "CreatePlanRequest": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/CreatePlanStepRequest"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "steps"
+        ],
+        "title": "CreatePlanRequest"
+      },
+      "CreatePlanStepRequest": {
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "title": "Step Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "parent_step_id": {
+            "title": "Parent Step Id",
+            "type": "string"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "description",
+          "sequence"
+        ],
+        "title": "CreatePlanStepRequest"
+      },
       "CreatePortingOrder": {
         "type": "object",
         "title": "CreatePortingOrder",
@@ -71898,6 +74373,14 @@
             "type": "object",
             "description": "Metadata associated with the conversation. Telnyx provides several pieces of metadata, but customers can also add their own.",
             "title": "Conversation Metadata"
+          },
+          "dynamic_variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "description": "A map of dynamic variable names to values. These variables can be referenced in the assistant's instructions and messages using {{variable_name}} syntax.",
+            "title": "Dynamic Variables"
           }
         },
         "type": "object",
@@ -75448,6 +77931,68 @@
           }
         }
       },
+      "EventData": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "payload": {
+            "title": "Payload",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "idempotency_key": {
+            "title": "Idempotency Key",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "run_id",
+          "type",
+          "summary",
+          "timestamp"
+        ],
+        "title": "EventData"
+      },
+      "EventResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EventData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "EventResponse"
+      },
       "EventStatus": {
         "type": "string",
         "enum": [
@@ -75457,6 +78002,49 @@
           "failed"
         ],
         "title": "EventStatus"
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "status_change",
+          "step_started",
+          "step_completed",
+          "step_failed",
+          "tool_call",
+          "tool_result",
+          "message",
+          "error",
+          "custom"
+        ],
+        "title": "EventType"
+      },
+      "EventsListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/EventData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "EventsListResponse"
+      },
+      "ExecutionMode": {
+        "type": "string",
+        "enum": [
+          "external",
+          "managed"
+        ],
+        "title": "ExecutionMode"
       },
       "ExportPortingOrdersCSVReport": {
         "description": "The parameters for generating a porting orders CSV report.",
@@ -77378,13 +79966,7 @@
               {
                 "$ref": "#/components/schemas/GoogleTranscriptionLanguage"
               }
-            ],
-            "discriminator": {
-              "propertyName": "transcription.model",
-              "mapping": {
-                "google": "#/components/schemas/GoogleTranscriptionLanguage"
-              }
-            }
+            ]
           },
           "voice": {
             "$ref": "#/components/schemas/VoiceConfig"
@@ -80221,6 +82803,125 @@
                 }
               }
             }
+          },
+          "voicemail_detection": {
+            "type": "object",
+            "description": "Configuration for voicemail detection (AMD - Answering Machine Detection) on the transferred call. Allows the assistant to detect when a voicemail system answers the transferred call and take appropriate action.",
+            "properties": {
+              "detection_mode": {
+                "type": "string",
+                "enum": [
+                  "disabled",
+                  "detect"
+                ],
+                "description": "The AMD detection mode to use. 'detect' enables answering machine detection (works best when warm transfer instructions are also set). 'disabled' turns off AMD detection."
+              },
+              "on_voicemail_detected": {
+                "type": "object",
+                "description": "Action to take when voicemail is detected on the transferred call.",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "stop_transfer",
+                      "leave_message_and_stop_transfer",
+                      "continue_transfer"
+                    ],
+                    "description": "The action to take when voicemail is detected. 'stop_transfer' hangs up immediately. 'leave_message_and_stop_transfer' leaves a message then hangs up. 'continue_transfer' bridges the call despite voicemail detection."
+                  },
+                  "voicemail_message": {
+                    "type": "object",
+                    "description": "Configuration for the voicemail message to leave. Only applicable when action is 'leave_message_and_stop_transfer'.",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "message",
+                          "warm_transfer_instructions"
+                        ],
+                        "description": "The type of voicemail message. Use 'message' to leave a specific TTS message, or 'warm_transfer_instructions' to play the warm transfer audio."
+                      },
+                      "message": {
+                        "type": "string",
+                        "description": "The specific message to leave as voicemail (converted to speech). Only applicable when type is 'message'."
+                      }
+                    }
+                  }
+                }
+              },
+              "detection_config": {
+                "type": "object",
+                "description": "Advanced AMD detection configuration parameters. All values are optional - Telnyx will use defaults if not specified.",
+                "properties": {
+                  "greeting_silence_duration_millis": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 50000,
+                    "description": "Duration of silence after the greeting to wait before considering the greeting complete."
+                  },
+                  "greeting_total_analysis_time_millis": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 300000,
+                    "description": "Maximum time to spend analyzing the greeting."
+                  },
+                  "after_greeting_silence_millis": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 5000,
+                    "description": "Duration of silence after greeting detection before finalizing the result."
+                  },
+                  "between_words_silence_millis": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 5000,
+                    "description": "Maximum silence duration between words during greeting."
+                  },
+                  "greeting_duration_millis": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 10000,
+                    "description": "Expected duration of greeting speech."
+                  },
+                  "initial_silence_millis": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 500000,
+                    "description": "Maximum silence duration at the start of the call before speech."
+                  },
+                  "maximum_number_of_words": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Maximum number of words expected in a human greeting."
+                  },
+                  "maximum_word_length_millis": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 5000,
+                    "description": "Maximum duration of a single word."
+                  },
+                  "silence_threshold": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "Audio level threshold for silence detection."
+                  },
+                  "total_analysis_time_millis": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 60000,
+                    "description": "Total time allowed for AMD analysis."
+                  },
+                  "min_word_length_millis": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "Minimum duration for audio to be considered a word."
+                  }
+                }
+              }
+            }
           }
         },
         "type": "object",
@@ -81763,6 +84464,20 @@
           "created_at": "2019-10-15T10:07:15.527Z",
           "updated_at": "2019-10-15T10:07:15.527Z"
         }
+      },
+      "LinkTelnyxAgentRequest": {
+        "properties": {
+          "telnyx_agent_id": {
+            "type": "string",
+            "title": "Telnyx Agent Id",
+            "description": "The Telnyx AI agent ID to link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "telnyx_agent_id"
+        ],
+        "title": "LinkTelnyxAgentRequest"
       },
       "ListPushCredentialsResponse": {
         "description": "Mobile mobile push credentials",
@@ -83722,25 +86437,25 @@
             "type": "number",
             "description": "Total number of pages based on pagination settings",
             "example": 13,
-            "format": "double"
+            "format": "integer"
           },
           "total_results": {
             "type": "number",
             "description": "Total number of results",
             "example": 13,
-            "format": "double"
+            "format": "integer"
           },
           "page_number": {
             "type": "number",
             "description": "Current Page based on pagination settings (included when defaults are used.)",
             "example": 3,
-            "format": "double"
+            "format": "integer"
           },
           "page_size": {
             "type": "number",
             "description": "Number of results to return per page based on pagination settings (included when defaults are used.)",
             "example": 1,
-            "format": "double"
+            "format": "integer"
           }
         }
       },
@@ -83883,6 +86598,186 @@
           "provider_auth",
           "bucket_name"
         ]
+      },
+      "MissionData": {
+        "properties": {
+          "mission_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mission Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "execution_mode": {
+            "$ref": "#/components/schemas/ExecutionMode"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mission_id",
+          "name",
+          "execution_mode",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MissionData"
+      },
+      "MissionResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MissionData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "MissionResponse"
+      },
+      "MissionRunData": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "mission_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Mission Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "input": {
+            "title": "Input",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "title": "Finished At",
+            "type": "string",
+            "format": "date-time"
+          },
+          "result_summary": {
+            "title": "Result Summary",
+            "type": "string"
+          },
+          "result_payload": {
+            "title": "Result Payload",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "mission_id",
+          "status",
+          "started_at",
+          "updated_at"
+        ],
+        "title": "MissionRunData"
+      },
+      "MissionRunResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MissionRunData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "MissionRunResponse"
+      },
+      "MissionRunsListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MissionRunData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "MissionRunsListResponse"
+      },
+      "MissionsListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MissionData"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "MissionsListResponse"
       },
       "MnoMetadata": {
         "title": "MnoMetadata",
@@ -86610,6 +89505,183 @@
           "scopes",
           "created_at"
         ]
+      },
+      "OpenAIEmbeddingData": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "default": "embedding",
+            "description": "The object type, always 'embedding'"
+          },
+          "embedding": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "The embedding vector"
+          },
+          "index": {
+            "type": "integer",
+            "description": "The index of the embedding in the list of embeddings"
+          }
+        },
+        "required": [
+          "object",
+          "embedding",
+          "index"
+        ],
+        "title": "OpenAIEmbeddingData"
+      },
+      "OpenAIEmbeddingModelMetadata": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The model identifier",
+            "example": "thenlper/gte-large"
+          },
+          "object": {
+            "type": "string",
+            "default": "model",
+            "description": "The object type, always 'model'"
+          },
+          "created": {
+            "type": "integer",
+            "description": "Unix timestamp of when the model was created"
+          },
+          "owned_by": {
+            "type": "string",
+            "description": "The organization that owns the model",
+            "example": "telnyx"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "created",
+          "owned_by"
+        ],
+        "title": "OpenAIEmbeddingModelMetadata"
+      },
+      "OpenAIEmbeddingModelsResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "default": "list",
+            "description": "The object type, always 'list'"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAIEmbeddingModelMetadata"
+            },
+            "description": "List of available embedding models"
+          }
+        },
+        "required": [
+          "object",
+          "data"
+        ],
+        "title": "OpenAIEmbeddingModelsResponse"
+      },
+      "OpenAIEmbeddingRequest": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "A single text string to embed"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "An array of text strings to embed"
+              }
+            ],
+            "description": "Input text to embed. Can be a string or array of strings."
+          },
+          "model": {
+            "type": "string",
+            "description": "ID of the model to use. Use the List embedding models endpoint to see available models.",
+            "example": "thenlper/gte-large"
+          },
+          "encoding_format": {
+            "type": "string",
+            "enum": [
+              "float",
+              "base64"
+            ],
+            "default": "float",
+            "description": "The format to return the embeddings in."
+          },
+          "dimensions": {
+            "type": "integer",
+            "description": "The number of dimensions the resulting output embeddings should have. Only supported in some models."
+          },
+          "user": {
+            "type": "string",
+            "description": "A unique identifier representing your end-user for monitoring and abuse detection."
+          }
+        },
+        "required": [
+          "input",
+          "model"
+        ],
+        "title": "OpenAIEmbeddingRequest"
+      },
+      "OpenAIEmbeddingResponse": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "default": "list",
+            "description": "The object type, always 'list'"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenAIEmbeddingData"
+            },
+            "description": "List of embedding objects"
+          },
+          "model": {
+            "type": "string",
+            "description": "The model used for embedding"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/OpenAIEmbeddingUsage"
+          }
+        },
+        "required": [
+          "object",
+          "data",
+          "model",
+          "usage"
+        ],
+        "title": "OpenAIEmbeddingResponse"
+      },
+      "OpenAIEmbeddingUsage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": {
+            "type": "integer",
+            "description": "Number of tokens in the input"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "description": "Total number of tokens used"
+          }
+        },
+        "required": [
+          "prompt_tokens",
+          "total_tokens"
+        ],
+        "title": "OpenAIEmbeddingUsage"
       },
       "OptOutItem": {
         "type": "object",
@@ -90321,6 +93393,102 @@
             }
           }
         }
+      },
+      "PlanResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStepData"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PlanResponse"
+      },
+      "PlanStepData": {
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "title": "Step Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "parent_step_id": {
+            "title": "Parent Step Id",
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "title": "Completed At",
+            "type": "string",
+            "format": "date-time"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "run_id",
+          "sequence",
+          "description",
+          "status"
+        ],
+        "title": "PlanStepData"
+      },
+      "PlanStepResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PlanStepData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PlanStepResponse"
+      },
+      "PlanStepsCreatedResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStepData"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "PlanStepsCreatedResponse"
       },
       "PlayAudioUrlRequest": {
         "type": "object",
@@ -96156,6 +99324,18 @@
           "record_type": "room_session"
         }
       },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "paused",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RunStatus"
+      },
       "S3ConfigurationData": {
         "type": "object",
         "title": "AWS S3 Storage Configuration Data",
@@ -97415,6 +100595,14 @@
             "type": "object",
             "title": "Conversation Metadata"
           },
+          "dynamic_variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "description": "A map of dynamic variable names to values. These variables can be referenced in the assistant's instructions and messages using {{variable_name}} syntax.",
+            "title": "Dynamic Variables"
+          },
           "errors": {
             "items": {
               "type": "string"
@@ -97501,6 +100689,14 @@
             },
             "type": "object",
             "title": "Conversation Metadata"
+          },
+          "dynamic_variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "description": "A map of dynamic variable names to values. These variables can be referenced in the assistant's instructions and messages using {{variable_name}} syntax.",
+            "title": "Dynamic Variables"
           },
           "errors": {
             "items": {
@@ -98788,19 +101984,19 @@
           "pitch": {
             "description": "Set the pitch directly, value should be > 0, default 1 (lower = lower tone)",
             "type": "number",
-            "format": "double",
+            "format": "float",
             "example": 0.8
           },
           "semitone": {
             "description": "Adjust the pitch in semitones, values should be between -14 and 14, default 0",
             "type": "number",
-            "format": "double",
+            "format": "float",
             "example": -10
           },
           "octaves": {
             "description": "Adjust the pitch in octaves, values should be between -1 and 1, default 0",
             "type": "number",
-            "format": "double",
+            "format": "float",
             "example": -0.5
           },
           "track": {
@@ -99146,7 +102342,7 @@
             "example": "A"
           },
           "transcription_language": {
-            "oneOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/GoogleTranscriptionLanguageLong"
               },
@@ -99156,15 +102352,7 @@
               {
                 "$ref": "#/components/schemas/DeepgramNova3TranscriptionLanguage"
               }
-            ],
-            "discriminator": {
-              "propertyName": "transcription_engine",
-              "mapping": {
-                "A": "#/components/schemas/GoogleTranscriptionLanguageLong",
-                "B": "#/components/schemas/TelnyxTranscriptionLanguage",
-                "deepgram/nova-3": "#/components/schemas/DeepgramNova3TranscriptionLanguage"
-              }
-            }
+            ]
           },
           "transcription_profanity_filter": {
             "description": "Enables profanity_filter. Applies to `google` engine only.",
@@ -99203,7 +102391,7 @@
           "timeout_secs": 0,
           "transcription": true,
           "transcription_engine": "B",
-          "transcription_language": "en-US"
+          "transcription_language": "en"
         }
       },
       "StartSiprecRequest": {
@@ -99339,6 +102527,17 @@
             "partial_automated_agent_reply": false
           }
         }
+      },
+      "StepStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "in_progress",
+          "completed",
+          "skipped",
+          "failed"
+        ],
+        "title": "StepStatus"
       },
       "StockExchange": {
         "title": "StockExchange",
@@ -101215,6 +104414,58 @@
         },
         "type": "object",
         "title": "TelephonySettings"
+      },
+      "TelnyxAgentData": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id"
+          },
+          "telnyx_agent_id": {
+            "type": "string",
+            "title": "Telnyx Agent Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "telnyx_agent_id",
+          "created_at"
+        ],
+        "title": "TelnyxAgentData"
+      },
+      "TelnyxAgentResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TelnyxAgentData"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TelnyxAgentResponse"
+      },
+      "TelnyxAgentsListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/TelnyxAgentData"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TelnyxAgentsListResponse"
       },
       "TelnyxBrand": {
         "title": "TelnyxBrand",
@@ -103917,7 +107168,7 @@
                 "properties": {
                   "confidence": {
                     "type": "number",
-                    "format": "double",
+                    "format": "float",
                     "example": 0.977219,
                     "description": "Speech recognition confidence level."
                   },
@@ -105952,7 +109203,7 @@
         "properties": {
           "metadata": {
             "type": "object",
-            "description": "Metadata associated with the conversation.",
+            "description": "Metadata associated with the conversation. Set `ai_disabled` to `true` to stop AI from responding to messages (e.g., when a human agent takes over). Set to `false` to re-enable AI responses.",
             "additionalProperties": {
               "type": "string"
             }
@@ -107034,6 +110285,63 @@
           "v1_secret": "rP1VamejkU2v0qIUxntqLW2c"
         }
       },
+      "UpdateMissionRequest": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "execution_mode": {
+            "$ref": "#/components/schemas/ExecutionMode"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "title": "UpdateMissionRequest"
+      },
+      "UpdateMissionRunRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "result_summary": {
+            "title": "Result Summary",
+            "type": "string"
+          },
+          "result_payload": {
+            "title": "Result Payload",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "title": "UpdateMissionRunRequest"
+      },
       "UpdateNumberOrderPhoneNumberRequest": {
         "properties": {
           "regulatory_requirements": {
@@ -107368,6 +110676,20 @@
           },
           "inbound_call_screening": "disabled"
         }
+      },
+      "UpdatePlanStepRequest": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/StepStatus"
+          },
+          "metadata": {
+            "title": "Metadata",
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "title": "UpdatePlanStepRequest"
       },
       "UpdatePortingOrder": {
         "type": "object",

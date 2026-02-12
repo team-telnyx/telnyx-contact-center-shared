@@ -8,14 +8,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import useWorkflowStore from "@/lib/stores/workflow-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import ReactMarkdown from "react-markdown";
 import {
   ClipboardList,
   MessageSquare,
@@ -34,6 +41,11 @@ import {
   Pencil,
   Check,
   X,
+  ChevronDown,
+  ChevronUp,
+  Brain,
+  Heart,
+  AlertCircle,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 
@@ -46,7 +58,7 @@ import { notify } from "@/components/ToastNotify";
  * 3. Suggested Responses (right) - AI suggestions to copy
  * 4. Progress Bar (bottom) - Overall completion
  */
-export function AgentAssistWorkflow({ interactionId, workflowId }) {
+export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) {
   const {
     session,
     stages,
@@ -57,17 +69,147 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
     completionPercentage,
     completedItems,
     totalItems,
+    aiHandoff,
     fetchSession,
     startWorkflow,
     analyzeTranscript,
     completeItem,
     skipItem,
+    setAiAssisted,
+    setAiDataLoading,
+    applyAiHandoffData,
   } = useWorkflowStore();
 
   // Get transcriptions and call state from active call store
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
   const callState = useActiveCallStore((state) => state.call?.state);
   const activeCall = useActiveCallStore((state) => state.call);
+
+  // AI Handoff polling timeout ref
+  const aiPollTimeoutRef = useRef(null);
+  const aiPollCountRef = useRef(0);
+  const AI_POLL_MAX_ATTEMPTS = 10; // 10 attempts * 3 seconds = 30 seconds
+  const AI_POLL_INTERVAL_MS = 3000;
+
+  // Check if interaction has ai_call_control_id (AI assisted call)
+  const aiCallControlId = useMemo(() => {
+    return interaction?.metadata?.ai_call_control_id || 
+           interaction?.ai_call_control_id || 
+           activeCall?.aiCallControlId ||
+           activeCall?.contactCenter?.aiCallControlId ||
+           null;
+  }, [interaction, activeCall]);
+
+  // Set AI assisted flag when ai_call_control_id is detected
+  useEffect(() => {
+    if (aiCallControlId && !aiHandoff.isAiAssisted) {
+      console.log("[AgentAssistWorkflow] AI-assisted call detected:", aiCallControlId);
+      setAiAssisted(true);
+    }
+  }, [aiCallControlId, aiHandoff.isAiAssisted, setAiAssisted]);
+
+  // SSE subscription for ai_handoff_data events
+  useEffect(() => {
+    if (!interactionId) return;
+
+    // Subscribe to SSE for AI handoff data
+    let eventSource = null;
+    try {
+      eventSource = new EventSource("/api/contact-center/agent/stream");
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "ai_handoff_data" && data.interactionId === interactionId) {
+            console.log("[AgentAssistWorkflow] Received AI handoff data via SSE:", data);
+            
+            // Apply the AI data to workflow state
+            applyAiHandoffData(data.data);
+            
+            // Count pre-filled slots
+            const slotCount = Object.keys(data.data?.slots_filled || {}).length;
+            notify({
+              title: "🤖 AI data received",
+              description: slotCount > 0 
+                ? `${slotCount} slot${slotCount !== 1 ? 's' : ''} pre-filled`
+                : "Call summary and sentiment available",
+              variant: "success",
+            });
+            
+            // Cancel any pending polling
+            if (aiPollTimeoutRef.current) {
+              clearTimeout(aiPollTimeoutRef.current);
+              aiPollTimeoutRef.current = null;
+            }
+          }
+        } catch (e) {
+          // Ignore parse errors for non-JSON messages
+        }
+      };
+    } catch (err) {
+      console.error("[AgentAssistWorkflow] Failed to set up SSE:", err);
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [interactionId, applyAiHandoffData]);
+
+  // Polling fallback for AI data when SSE hasn't delivered
+  useEffect(() => {
+    if (!aiHandoff.isAiAssisted || aiHandoff.aiDataReceived || !interactionId) {
+      return;
+    }
+
+    const pollAiContext = async () => {
+      if (aiPollCountRef.current >= AI_POLL_MAX_ATTEMPTS) {
+        console.log("[AgentAssistWorkflow] AI data poll timeout reached, giving up");
+        setAiDataLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `/api/agent-assist/workflow/ai-context?interactionId=${encodeURIComponent(interactionId)}`
+        );
+        const result = await res.json();
+
+        if (result.status === "available" && result.data) {
+          console.log("[AgentAssistWorkflow] AI data received via polling:", result.data);
+          applyAiHandoffData(result.data);
+          
+          const slotCount = Object.keys(result.data?.slots_filled || {}).length;
+          notify({
+            title: "🤖 AI data received",
+            description: slotCount > 0 
+              ? `${slotCount} slot${slotCount !== 1 ? 's' : ''} pre-filled`
+              : "Call summary and sentiment available",
+            variant: "success",
+          });
+          return;
+        }
+
+        // Still pending, schedule next poll
+        aiPollCountRef.current++;
+        aiPollTimeoutRef.current = setTimeout(pollAiContext, AI_POLL_INTERVAL_MS);
+      } catch (err) {
+        console.error("[AgentAssistWorkflow] AI context poll error:", err);
+        aiPollCountRef.current++;
+        aiPollTimeoutRef.current = setTimeout(pollAiContext, AI_POLL_INTERVAL_MS);
+      }
+    };
+
+    // Start polling after a short delay (give SSE a chance first)
+    aiPollTimeoutRef.current = setTimeout(pollAiContext, 2000);
+
+    return () => {
+      if (aiPollTimeoutRef.current) {
+        clearTimeout(aiPollTimeoutRef.current);
+      }
+    };
+  }, [aiHandoff.isAiAssisted, aiHandoff.aiDataReceived, interactionId, applyAiHandoffData, setAiDataLoading]);
 
   // Track suggestions for saving to history (use refs directly for unmount access)
   const suggestionsRef = useRef([]);
@@ -267,6 +409,27 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* AI Assisted Badge */}
+      {aiHandoff.isAiAssisted && (
+        <div className="shrink-0 mb-3">
+          <AiHandoffIndicator 
+            isLoading={aiHandoff.aiDataLoading}
+            isReceived={aiHandoff.aiDataReceived}
+            receivedAt={aiHandoff.receivedAt}
+          />
+        </div>
+      )}
+
+      {/* AI Summary & Sentiment Panel (when available) */}
+      {(aiHandoff.aiSummary || aiHandoff.aiSentiment) && (
+        <div className="shrink-0 mb-3">
+          <AiSummaryPanel 
+            summary={aiHandoff.aiSummary}
+            sentiment={aiHandoff.aiSentiment}
+          />
+        </div>
+      )}
+
       {/* 3 karty - równa szerokość, scrollable */}
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: Workflow Stages & Items */}
@@ -276,6 +439,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
           isAnalyzing={isAnalyzing}
           onCompleteItem={completeItem}
           onSkipItem={skipItem}
+          aiSlotsDetails={aiHandoff.slotsDetails}
         />
 
         {/* Center: Live Transcription */}
@@ -304,9 +468,155 @@ export function AgentAssistWorkflow({ interactionId, workflowId }) {
 }
 
 /**
+ * AI Handoff Indicator Component
+ * Shows when call was AI-assisted and data loading/received status
+ */
+function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
+  return (
+    <div className={`flex items-center gap-3 p-3 rounded-lg border-2 ${
+      isReceived 
+        ? "bg-green-500/5 border-green-500/30" 
+        : "bg-amber-500/5 border-amber-500/30 animate-pulse"
+    }`}>
+      <div className={`p-2 rounded-lg ${
+        isReceived ? "bg-green-500/10" : "bg-amber-500/10"
+      }`}>
+        <Bot className={`h-5 w-5 ${
+          isReceived ? "text-green-500" : "text-amber-500"
+        }`} />
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">🤖 AI Assisted Call</span>
+          {isReceived ? (
+            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/50">
+              <CheckCircle className="h-3 w-3 mr-1" />
+              Data Received
+            </Badge>
+          ) : isLoading ? (
+            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-500 border-amber-500/50">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Loading AI data...
+            </Badge>
+          ) : null}
+        </div>
+        {isReceived && receivedAt && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Received at {new Date(receivedAt).toLocaleTimeString()}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * AI Summary & Sentiment Panel
+ * Collapsible panel showing AI-generated summary and sentiment analysis
+ */
+function AiSummaryPanel({ summary, sentiment }) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  // Extract sentiment emoji from text if available
+  const getSentimentEmoji = () => {
+    if (!sentiment) return "😐";
+    const lower = sentiment.toLowerCase();
+    if (lower.includes("positive") || lower.includes("satisfied") || lower.includes("happy")) return "😊";
+    if (lower.includes("negative") || lower.includes("frustrated") || lower.includes("angry")) return "😠";
+    if (lower.includes("neutral")) return "😐";
+    return "🤔";
+  };
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <Card className="border-2 border-purple-500/30 bg-purple-500/5">
+        <CollapsibleTrigger className="w-full">
+          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-purple-500/5 transition-colors">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Brain className="h-4 w-4 text-purple-500" />
+              AI Call Analysis
+              <div className="flex items-center gap-2 ml-auto">
+                {sentiment && (
+                  <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-500 border-purple-500/50">
+                    {getSentimentEmoji()} Sentiment
+                  </Badge>
+                )}
+                {summary && (
+                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/50">
+                    📝 Summary
+                  </Badge>
+                )}
+                {isOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+            </CardTitle>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0 pb-4 px-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Summary Column */}
+              {summary && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium">Call Summary</span>
+                  </div>
+                  <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ ...props }) => <h1 className="text-sm font-bold mb-2" {...props} />,
+                        h2: ({ ...props }) => <h2 className="text-sm font-bold mb-2" {...props} />,
+                        p: ({ ...props }) => <p className="text-xs leading-relaxed mb-2" {...props} />,
+                        ul: ({ ...props }) => <ul className="list-disc list-inside text-xs mb-2" {...props} />,
+                        li: ({ ...props }) => <li className="mb-0.5" {...props} />,
+                        strong: ({ ...props }) => <strong className="font-bold" {...props} />,
+                      }}
+                    >
+                      {summary}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+              {/* Sentiment Column */}
+              {sentiment && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Heart className="h-4 w-4 text-pink-500" />
+                    <span className="text-sm font-medium">Sentiment Analysis</span>
+                  </div>
+                  <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ ...props }) => <h1 className="text-sm font-bold mb-2" {...props} />,
+                        h2: ({ ...props }) => <h2 className="text-sm font-bold mb-2" {...props} />,
+                        p: ({ ...props }) => <p className="text-xs leading-relaxed mb-2" {...props} />,
+                        ul: ({ ...props }) => <ul className="list-disc list-inside text-xs mb-2" {...props} />,
+                        li: ({ ...props }) => <li className="mb-0.5" {...props} />,
+                        strong: ({ ...props }) => <strong className="font-bold" {...props} />,
+                      }}
+                    >
+                      {sentiment}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
+/**
  * Workflow Stages Card with Accordions
  */
-function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem }) {
+function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {} }) {
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
 
@@ -441,7 +751,12 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
                           const slotValue = status.value || status.extracted_value;
-                          const isAiFilled = status.auto_filled || status.confidence_score;
+                          const completedBy = status.completed_by; // 'ai' | 'agent' | null
+                          const confidenceScore = status.confidence_score;
+                          // Check AI slots details for additional context
+                          const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
+                          const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
+                          const isAgentFilled = completedBy === "agent";
 
                           return (
                             <div
@@ -517,16 +832,30 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                         </Button>
                                       </div>
                                     ) : slotValue ? (
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-sm font-medium text-foreground">
                                           {slotValue}
                                         </span>
-                                        {isAiFilled && (
+                                        {/* Source indicator: AI or Agent */}
+                                        {isAiFilled ? (
+                                          <span className="text-sm" title="Filled by AI Assistant">🤖</span>
+                                        ) : isAgentFilled ? (
+                                          <span className="text-sm" title="Filled by Agent">👤</span>
+                                        ) : null}
+                                        {/* Confidence indicator for AI-filled slots */}
+                                        {isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
                                           <Badge
                                             variant="outline"
-                                            className="text-[10px] px-1 py-0 bg-purple-500/10 text-purple-500 border-purple-500/50"
+                                            className={`text-[10px] px-1.5 py-0 ${
+                                              confidenceScore >= 0.7
+                                                ? "bg-green-500/10 text-green-500 border-green-500/50"
+                                                : confidenceScore >= 0.5
+                                                ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
+                                                : "bg-red-500/10 text-red-500 border-red-500/50"
+                                            }`}
+                                            title={`AI confidence: ${Math.round(confidenceScore * 100)}%`}
                                           >
-                                            AI
+                                            {Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
                                         <Button
@@ -537,6 +866,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             e.stopPropagation();
                                             handleStartEdit(item, slotValue);
                                           }}
+                                          title="Edit value"
                                         >
                                           <Pencil className="h-3 w-3" />
                                         </Button>
@@ -558,19 +888,28 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                   </div>
                                 )}
                                 
-                                {/* Confidence score for non-slot items */}
-                                {item.type !== "slot" && status.confidence_score && (
-                                  <div className="flex items-center gap-1 mt-1">
-                                    <Badge
-                                      variant="outline"
-                                      className={`text-xs ${
-                                        status.confidence_score >= 0.85
-                                          ? "bg-green-500/10 text-green-500 border-green-500/50"
-                                          : "bg-amber-500/10 text-amber-500 border-amber-500/50"
-                                      }`}
-                                    >
-                                      AI: {Math.round(status.confidence_score * 100)}%
-                                    </Badge>
+                                {/* Source and confidence for non-slot completed items */}
+                                {item.type !== "slot" && isCompleted && (
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    {isAiFilled ? (
+                                      <span className="text-sm" title="Completed by AI Assistant">🤖</span>
+                                    ) : isAgentFilled ? (
+                                      <span className="text-sm" title="Completed by Agent">👤</span>
+                                    ) : null}
+                                    {isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
+                                      <Badge
+                                        variant="outline"
+                                        className={`text-xs ${
+                                          confidenceScore >= 0.7
+                                            ? "bg-green-500/10 text-green-500 border-green-500/50"
+                                            : confidenceScore >= 0.5
+                                            ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
+                                            : "bg-red-500/10 text-red-500 border-red-500/50"
+                                        }`}
+                                      >
+                                        {Math.round(confidenceScore * 100)}%
+                                      </Badge>
+                                    )}
                                   </div>
                                 )}
                               </div>

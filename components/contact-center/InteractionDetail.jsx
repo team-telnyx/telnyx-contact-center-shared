@@ -71,6 +71,7 @@ export function InteractionDetail({ interaction }) {
         <AgentAssistWorkflow 
           interactionId={interaction.id} 
           workflowId={workflowId}
+          interaction={interaction}
         />
       </div>
     );
