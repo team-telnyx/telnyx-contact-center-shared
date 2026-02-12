@@ -1,14 +1,15 @@
 /**
  * Admin Workflow [id] API
  * GET - Get workflow by ID with stages and items
- * PUT - Update workflow
- * DELETE - Delete workflow
+ * PUT - Update workflow (with optional insight sync)
+ * DELETE - Delete workflow (with insight cleanup)
  */
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { syncWorkflowInsights, deleteWorkflowInsights } from "@/lib/telnyx-insights";
 
 // GET /api/admin/workflows/[id] - Get workflow with stages and items
 export async function GET(request, { params }) {
@@ -109,7 +110,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, ai_assistant_id } = body;
+    const { name, description, category, is_active, llm_model, ai_assistant_id, syncInsights } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -163,9 +164,87 @@ export async function PUT(request, { params }) {
       );
     }
 
+    // Sync insights if requested AND workflow has AI assistant
+    let insightsSynced = false;
+    if (syncInsights && workflow.ai_assistant_id) {
+      try {
+        // Fetch stages with items for insight generation
+        const { rows: stages } = await pool.query(
+          `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
+          [id]
+        );
+
+        const stageIds = stages.map((s) => s.id);
+        let items = [];
+        if (stageIds.length > 0) {
+          const { rows } = await pool.query(
+            `SELECT * FROM aa_workflow_items WHERE stage_id = ANY($1) ORDER BY stage_id, order_index`,
+            [stageIds]
+          );
+          items = rows;
+        }
+
+        // Check if workflow has slots
+        const hasSlots = items.some((item) => item.type === "slot" && item.slot_name);
+        
+        if (hasSlots) {
+          // Attach items to stages
+          const itemsByStage = items.reduce((acc, item) => {
+            if (!acc[item.stage_id]) acc[item.stage_id] = [];
+            acc[item.stage_id].push(item);
+            return acc;
+          }, {});
+
+          const workflowWithStages = {
+            ...workflow,
+            stages: stages.map((stage) => ({
+              ...stage,
+              items: itemsByStage[stage.id] || [],
+            })),
+          };
+
+          // Get webhook URL
+          const baseUrl = process.env.TELNYX_WEBHOOK_BASE_URL || process.env.NEXTAUTH_URL;
+          if (baseUrl) {
+            const webhookUrl = `${baseUrl.replace(/\/$/, "")}/api/webhooks/telnyx/conversation-insights`;
+            
+            console.log(`[Admin Workflows] Syncing insights for workflow: ${workflow.name}`);
+            const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
+
+            // Update workflow with insight IDs
+            await pool.query(
+              `UPDATE aa_workflows SET
+                insight_group_id = $1,
+                insight_slots_id = $2,
+                insight_summary_id = $3,
+                insight_sentiment_id = $4
+               WHERE id = $5`,
+              [
+                insightResult.groupId,
+                insightResult.slotsInsightId,
+                insightResult.summaryInsightId,
+                insightResult.sentimentInsightId,
+                id,
+              ]
+            );
+
+            workflow.insight_group_id = insightResult.groupId;
+            workflow.insight_slots_id = insightResult.slotsInsightId;
+            workflow.insight_summary_id = insightResult.summaryInsightId;
+            workflow.insight_sentiment_id = insightResult.sentimentInsightId;
+            insightsSynced = true;
+          }
+        }
+      } catch (syncErr) {
+        console.warn("[Admin Workflows] Warning: Failed to sync insights:", syncErr.message);
+        // Don't fail the update if insight sync fails
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       workflow,
+      insightsSynced,
     });
   } catch (error) {
     console.error("[Admin Workflows] PUT [id] error:", error);
@@ -194,9 +273,10 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Check if workflow exists
+    // Fetch workflow with insight IDs for cleanup
     const { rows: [existing] } = await pool.query(
-      `SELECT id FROM aa_workflows WHERE id = $1`,
+      `SELECT id, name, insight_group_id, insight_slots_id, insight_summary_id, insight_sentiment_id
+       FROM aa_workflows WHERE id = $1`,
       [id]
     );
 
@@ -220,12 +300,27 @@ export async function DELETE(request, { params }) {
       );
     }
 
+    // Clean up Telnyx insights if they exist
+    let insightsDeleted = false;
+    if (existing.insight_group_id || existing.insight_slots_id || 
+        existing.insight_summary_id || existing.insight_sentiment_id) {
+      try {
+        console.log(`[Admin Workflows] Cleaning up insights for workflow: ${existing.name}`);
+        await deleteWorkflowInsights(existing);
+        insightsDeleted = true;
+      } catch (cleanupErr) {
+        // Log but don't fail deletion if insight cleanup fails
+        console.warn("[Admin Workflows] Warning: Failed to clean up insights:", cleanupErr.message);
+      }
+    }
+
     // Delete workflow (cascade will remove stages, items, and sessions)
     await pool.query(`DELETE FROM aa_workflows WHERE id = $1`, [id]);
 
     return NextResponse.json({
       ok: true,
       message: "Workflow deleted successfully",
+      insightsDeleted,
     });
   } catch (error) {
     console.error("[Admin Workflows] DELETE [id] error:", error);

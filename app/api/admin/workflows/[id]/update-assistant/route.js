@@ -2,6 +2,7 @@
  * Update AI Assistant - Sync assistant instructions with current workflow
  * POST /api/admin/workflows/[id]/update-assistant
  * Regenerates instructions from workflow stages and PATCHes the Telnyx assistant.
+ * Also syncs insight_settings with the insight group if available.
  */
 
 import { NextResponse } from "next/server";
@@ -10,6 +11,19 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { generateWorkflowInstructions } from "@/lib/agent-assist/workflow-instructions";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { syncWorkflowInsights } from "@/lib/telnyx-insights";
+
+const LOG_PREFIX = "[Update Assistant]";
+
+/**
+ * Get webhook URL for insights from environment
+ * @returns {string|null} Webhook URL or null if not configured
+ */
+function getInsightsWebhookUrl() {
+  const baseUrl = process.env.TELNYX_WEBHOOK_BASE_URL || process.env.NEXTAUTH_URL;
+  if (!baseUrl) return null;
+  return `${baseUrl.replace(/\/$/, "")}/api/webhooks/telnyx/conversation-insights`;
+}
 
 export async function POST(request, { params }) {
   try {
@@ -35,8 +49,21 @@ export async function POST(request, { params }) {
       );
     }
 
+    // Parse request body for options
+    let options = {};
+    try {
+      const body = await request.json();
+      options = body || {};
+    } catch {
+      // Empty body is OK
+    }
+
+    const { syncInsights: requestSyncInsights = true } = options;
+
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, name, description, ai_assistant_id FROM aa_workflows WHERE id = $1`,
+      `SELECT id, name, description, ai_assistant_id, insight_group_id, 
+              insight_slots_id, insight_summary_id, insight_sentiment_id
+       FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -80,15 +107,76 @@ export async function POST(request, { params }) {
       items: itemsByStage[s.id] || [],
     }));
 
+    // Generate instructions
     const instructions = generateWorkflowInstructions(workflow, stagesWithItems);
 
+    // Check if we need to sync insights
+    let insightGroupId = workflow.insight_group_id;
+    let insightsSynced = false;
+    const hasSlots = items.some((item) => item.type === "slot" && item.slot_name);
+    const webhookUrl = getInsightsWebhookUrl();
+
+    // Sync insights if:
+    // - requestSyncInsights is true (default)
+    // - Workflow has slots
+    // - Webhook URL is configured
+    // - Either no insight group exists OR we want to ensure it's up to date
+    if (requestSyncInsights && hasSlots && webhookUrl) {
+      try {
+        console.log(`${LOG_PREFIX} Syncing insights for workflow: ${workflow.name}`);
+        
+        const workflowWithStages = {
+          ...workflow,
+          stages: stagesWithItems,
+        };
+
+        const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
+        insightGroupId = insightResult.groupId;
+
+        // Update workflow with insight IDs
+        await pool.query(
+          `UPDATE aa_workflows SET
+            insight_group_id = $1,
+            insight_slots_id = $2,
+            insight_summary_id = $3,
+            insight_sentiment_id = $4,
+            updated_at = NOW()
+           WHERE id = $5`,
+          [
+            insightResult.groupId,
+            insightResult.slotsInsightId,
+            insightResult.summaryInsightId,
+            insightResult.sentimentInsightId,
+            workflowId,
+          ]
+        );
+
+        insightsSynced = true;
+        console.log(`${LOG_PREFIX} Insights synced successfully`);
+      } catch (syncErr) {
+        console.warn(`${LOG_PREFIX} Warning: Failed to sync insights:`, syncErr.message);
+        // Continue with assistant update
+      }
+    }
+
+    // Build assistant update payload
+    const assistantPayload = { instructions };
+
+    // Include insight_settings if we have an insight group
+    if (insightGroupId) {
+      assistantPayload.insight_settings = {
+        insight_group_id: insightGroupId,
+      };
+    }
+
+    // Update the assistant
     const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ instructions }),
+      body: JSON.stringify(assistantPayload),
       cache: "no-store",
     });
 
@@ -109,9 +197,11 @@ export async function POST(request, { params }) {
     return NextResponse.json({
       ok: true,
       assistant: data?.data || data,
+      insightsSynced,
+      insightGroupId,
     });
   } catch (err) {
-    console.error("[Update Assistant] Error:", err);
+    console.error(`${LOG_PREFIX} Error:`, err);
     return NextResponse.json(
       { error: err?.message || "Failed to update assistant" },
       { status: 500 }

@@ -1,12 +1,15 @@
 /**
  * Agent Assist Workflow - Start Session API
  * POST - Start a new workflow session for an interaction
+ * 
+ * Also checks for pending AI handoff data and applies it to the session.
  */
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { applyPendingAiHandoff, broadcastAiHandoffToAgent } from "@/lib/agent-assist/ai-handoff-processor";
 
 // POST /api/agent-assist/workflow/start - Start workflow session
 export async function POST(request) {
@@ -41,9 +44,9 @@ export async function POST(request) {
       );
     }
 
-    // Verify interaction exists
+    // Verify interaction exists and check for AI call control ID
     const { rows: [interaction] } = await pool.query(
-      `SELECT id FROM cc_interactions WHERE id = $1`,
+      `SELECT id, metadata, agent_username FROM cc_interactions WHERE id = $1`,
       [interactionId]
     );
 
@@ -53,6 +56,10 @@ export async function POST(request) {
         { status: 404 }
       );
     }
+
+    // Check if this interaction has AI call control ID (came from AI assistant)
+    const aiCallControlId = interaction.metadata?.ai_call_control_id;
+    const hasAiHandoff = Boolean(aiCallControlId);
 
     // Check if session already exists for this interaction
     const { rows: [existingSession] } = await pool.query(
@@ -130,12 +137,35 @@ export async function POST(request) {
 
       await client.query("COMMIT");
 
-      // Fetch complete session state
+      // Check for pending AI handoff data and apply it
+      let aiHandoffApplied = false;
+      let aiHandoffData = null;
+      if (hasAiHandoff) {
+        try {
+          console.log(`[Workflow Start] Checking for pending AI handoff for interaction: ${interactionId}`);
+          aiHandoffData = await applyPendingAiHandoff(interactionId, workflowSession.id);
+          if (aiHandoffData) {
+            aiHandoffApplied = true;
+            console.log(`[Workflow Start] Applied AI handoff data to session: ${workflowSession.id}`);
+            
+            // Broadcast AI handoff data to agent
+            await broadcastAiHandoffToAgent(interaction, workflowSession.id, aiHandoffData);
+          }
+        } catch (aiErr) {
+          console.warn("[Workflow Start] Warning: Failed to apply AI handoff:", aiErr.message);
+          // Don't fail session start if AI handoff fails
+        }
+      }
+
+      // Fetch complete session state (will include AI data if applied)
       const sessionState = await getWorkflowSessionState(pool, workflowSession.id);
 
       return NextResponse.json({
         ok: true,
         session: sessionState,
+        aiHandoffApplied,
+        hasAiHandoff,
+        aiCallControlId: aiCallControlId || null,
       });
     } catch (err) {
       await client.query("ROLLBACK");
