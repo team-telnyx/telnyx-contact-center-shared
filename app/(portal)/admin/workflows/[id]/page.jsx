@@ -1625,7 +1625,7 @@ export default function WorkflowEditorPage() {
               {/* Completion message */}
               {deletionComplete && (
                 <div className="pt-2 text-center">
-                  {deletionSteps.every(s => s.status === "success") ? (
+                  {deletionSteps.every(s => s.status === "success" || s.status === "skipped") ? (
                     <p className="text-sm text-green-600 font-medium">
                       All resources deleted successfully!
                     </p>
@@ -1639,18 +1639,28 @@ export default function WorkflowEditorPage() {
             </div>
           ) : (
             /* Initial confirmation view */
-            <div className="py-4">
-              <p className="text-sm text-muted-foreground">
-                The following will be permanently deleted:
-              </p>
-              <ul className="mt-2 space-y-1 text-sm list-disc list-inside text-red-600">
-                <li>AI Assistant on Telnyx</li>
-                <li>Insight Templates (slots, summary, sentiment)</li>
-                <li>Insight Group</li>
-              </ul>
-              <p className="mt-4 text-sm text-muted-foreground">
-                The workflow definition will remain intact. You can create a new AI agent at any time.
-              </p>
+            <div className="py-4 space-y-4">
+              {/* Warning box */}
+              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium">
+                  ⚠️ Warning: This action cannot be undone
+                </p>
+                <p className="text-xs text-red-700 dark:text-red-300 mt-1">
+                  All resources will be permanently deleted from Telnyx. The workflow definition will remain intact.
+                </p>
+              </div>
+              
+              {/* Items to be deleted */}
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  The following will be permanently deleted:
+                </p>
+                <ul className="space-y-1 text-sm list-disc list-inside text-red-600">
+                  <li>AI Assistant on Telnyx</li>
+                  <li>Insight Templates (slots, summary, sentiment)</li>
+                  <li>Insight Group</li>
+                </ul>
+              </div>
             </div>
           )}
           
