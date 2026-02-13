@@ -941,11 +941,13 @@ export default function CreateAgentSheet({
                                 <SelectValue placeholder="Select model" />
                               </SelectTrigger>
                               <SelectContent>
-                                {getTtsModels().map((model) => (
-                                  <SelectItem key={model.id} value={model.id}>
-                                    {model.name || model.id}
-                                  </SelectItem>
-                                ))}
+                                {getTtsModels()
+                                  .filter((model) => model.id)
+                                  .map((model) => (
+                                    <SelectItem key={model.id} value={model.id}>
+                                      {model.name || model.id}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </div>

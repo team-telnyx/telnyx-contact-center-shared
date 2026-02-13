@@ -20,6 +20,8 @@ export async function GET(request) {
       process.env.ELEVENLABS_API_KEY_REF ||
       null;
 
+    console.log("[TTS Voices] elevenLabsRef:", elevenLabsRef, "env:", process.env.ELEVENLABS_API_KEY_REF);
+
     const sp = new URLSearchParams();
     if (provider) sp.set("provider", provider);
     if (elevenLabsRef) sp.set("elevenlabs_api_key_ref", elevenLabsRef);
