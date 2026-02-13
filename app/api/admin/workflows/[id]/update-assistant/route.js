@@ -147,12 +147,21 @@ async function handleStepUpdate(step, workflow, stages, items, workflowId, apiKe
 }
 
 /**
- * Step 1: Update assistant instructions
+ * Generate greeting message based on workflow name
+ */
+function generateGreeting(workflowName) {
+  const title = workflowName || "AI Assistant";
+  return `Hello! I'm your AI assistant for ${title}. How may I help you today?`;
+}
+
+/**
+ * Step 1: Update assistant instructions and greeting
  */
 async function updateInstructionsStep(workflow, stages, apiKey) {
   console.log(`${LOG_PREFIX} Updating instructions for: ${workflow.name}`);
 
   const instructions = generateWorkflowInstructions(workflow, stages);
+  const greeting = generateGreeting(workflow.name);
 
   const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
     method: "POST",
@@ -160,7 +169,7 @@ async function updateInstructionsStep(workflow, stages, apiKey) {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ instructions }),
+    body: JSON.stringify({ instructions, greeting }),
     cache: "no-store",
   });
 
@@ -274,6 +283,7 @@ async function updateGroupAssignmentStep(workflow, workflowId, apiKey, pool) {
  */
 async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, pool) {
   const instructions = generateWorkflowInstructions(workflow, stages);
+  const greeting = generateGreeting(workflow.name);
 
   let insightGroupId = workflow.insight_group_id;
   let insightsSynced = false;
@@ -309,7 +319,7 @@ async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, poo
     }
   }
 
-  const assistantPayload = { instructions };
+  const assistantPayload = { instructions, greeting };
   if (insightGroupId) {
     assistantPayload.insight_settings = { insight_group_id: insightGroupId };
   }
