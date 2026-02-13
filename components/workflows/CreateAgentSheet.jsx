@@ -622,11 +622,17 @@ export default function CreateAgentSheet({
       // Build voice settings
       const voiceSettings = {
         voice: ttsVoice,
+        voice_speed: 1.0,
       };
       
-      // Add API key ref for ElevenLabs (from server config)
+      // Add ElevenLabs-specific settings (required for ElevenLabs voices)
       if (isElevenLabs && elevenLabsApiKeyRef) {
         voiceSettings.api_key_ref = elevenLabsApiKeyRef;
+        // ElevenLabs-specific parameters with default values from OpenAPI spec
+        voiceSettings.temperature = 0.5;       // Controls emotional range (lower = broader range)
+        voiceSettings.similarity_boost = 0.5;  // How closely AI adheres to original voice
+        voiceSettings.use_speaker_boost = true; // Amplifies similarity to original speaker
+        voiceSettings.style = 0;               // Style exaggeration (0 = no extra consumption)
       }
 
       // Build transcription config
