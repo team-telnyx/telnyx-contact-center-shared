@@ -1051,11 +1051,10 @@ export default function TestAgentPage() {
       const MAX_TURNS = 50; // Safety limit to prevent infinite loops
       
       // Phrases that indicate conversation is ending
+      // NOTE: Removed "thank you for calling" / "thanks for calling" - often used as greeting, not goodbye
       const ENDING_PHRASES = [
-        "goodbye", "good bye", "bye", "have a great day", "have a nice day",
-        "take care", "thank you for calling", "thanks for calling",
-        "end the call", "ending the call", "disconnect", "hanging up",
-        "is there anything else", "anything else i can help",
+        "goodbye", "good bye", "have a great day", "have a nice day",
+        "take care", "end the call", "ending the call", "disconnect", "hanging up",
       ];
       
       // Check if message indicates conversation ending
@@ -1441,9 +1440,10 @@ export default function TestAgentPage() {
       }
 
       // Check for conversation ending phrases
+      // NOTE: Removed "thank you for calling" / "thanks for calling" - often used as greeting
       const ENDING_PHRASES = [
-        "goodbye", "good bye", "bye", "have a great day", "have a nice day",
-        "take care", "thank you for calling", "thanks for calling",
+        "goodbye", "good bye", "have a great day", "have a nice day",
+        "take care", "end the call", "ending the call",
       ];
       const isEnding = ENDING_PHRASES.some(phrase => 
         lastAiMessage.toLowerCase().includes(phrase)
