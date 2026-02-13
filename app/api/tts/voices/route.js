@@ -86,7 +86,10 @@ export async function GET(request) {
           models: [],
         });
       }
-      providersMap.get(prov).models.push({ id: model, name: model, voices: list });
+      // Use "default" for empty model IDs (e.g., Azure)
+      const modelId = model || "default";
+      const modelName = model || "Default";
+      providersMap.get(prov).models.push({ id: modelId, name: modelName, voices: list });
     }
     
     const providers = Array.from(providersMap.values()).map((p) => ({
