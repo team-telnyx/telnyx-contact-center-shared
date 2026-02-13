@@ -38,6 +38,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   IconFileMusic,
@@ -1609,46 +1610,48 @@ export default function EditSheet({
                                             onValueChange={setTtsLanguageSearch}
                                             className="h-9"
                                           />
-                                          <CommandEmpty>No language found.</CommandEmpty>
-                                          <CommandGroup className="max-h-[300px] overflow-auto">
-                                            <CommandItem
-                                              value="__any__"
-                                              onSelect={() => {
-                                                setTtsLanguageFilter("");
-                                                setTtsVoiceName("");
-                                                setTtsLanguagePopoverOpen(false);
-                                              }}
-                                            >
-                                              <IconCheck
-                                                className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                                  !ttsLanguageFilter ? "opacity-100" : "opacity-0"
-                                                }`}
-                                              />
-                                              <IconWorld className="size-4 mr-2" />
-                                              <span>Any</span>
-                                            </CommandItem>
-                                            {filteredTtsLanguageOptions.map((opt) => (
+                                          <CommandList>
+                                            <CommandEmpty>No language found.</CommandEmpty>
+                                            <CommandGroup>
                                               <CommandItem
-                                                key={opt.value}
-                                                value={`${opt.label}-${opt.value}`}
+                                                value="__any__"
                                                 onSelect={() => {
-                                                  setTtsLanguageFilter(opt.value);
+                                                  setTtsLanguageFilter("");
                                                   setTtsVoiceName("");
                                                   setTtsLanguagePopoverOpen(false);
                                                 }}
                                               >
                                                 <IconCheck
                                                   className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                                    ttsLanguageFilter === opt.value
-                                                      ? "opacity-100"
-                                                      : "opacity-0"
+                                                    !ttsLanguageFilter ? "opacity-100" : "opacity-0"
                                                   }`}
                                                 />
-                                                <span className="mr-2">{opt.flag}</span>
-                                                <span>{opt.label}</span>
+                                                <IconWorld className="size-4 mr-2" />
+                                                <span>Any</span>
                                               </CommandItem>
-                                            ))}
-                                          </CommandGroup>
+                                              {filteredTtsLanguageOptions.map((opt) => (
+                                                <CommandItem
+                                                  key={opt.value}
+                                                  value={`${opt.label}-${opt.value}`}
+                                                  onSelect={() => {
+                                                    setTtsLanguageFilter(opt.value);
+                                                    setTtsVoiceName("");
+                                                    setTtsLanguagePopoverOpen(false);
+                                                  }}
+                                                >
+                                                  <IconCheck
+                                                    className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                                      ttsLanguageFilter === opt.value
+                                                        ? "opacity-100"
+                                                        : "opacity-0"
+                                                    }`}
+                                                  />
+                                                  <span className="mr-2">{opt.flag}</span>
+                                                  <span>{opt.label}</span>
+                                                </CommandItem>
+                                              ))}
+                                            </CommandGroup>
+                                          </CommandList>
                                         </Command>
                                       </PopoverContent>
                                     </Popover>

@@ -76,9 +76,11 @@ export function Combobox({
           <IconSelector className="size-4 opacity-60 shrink-0 ml-2" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className={`p-0 ${contentClassName || "w-[400px]"}`}>
+      <DropdownMenuContent 
+        className={`p-0 max-h-[min(400px,var(--radix-dropdown-menu-content-available-height))] flex flex-col ${contentClassName || "w-[400px]"}`}
+      >
         {searchable ? (
-          <div className="px-3 pt-3 pb-2 border-b sticky top-0 bg-popover z-10">
+          <div className="px-3 pt-3 pb-2 border-b sticky top-0 bg-popover z-10 shrink-0">
             <Input
               ref={inputRef}
               value={query}
@@ -88,7 +90,7 @@ export function Combobox({
             />
           </div>
         ) : null}
-        <div className="max-h-80 overflow-y-auto p-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-2">
           {filtered.length === 0 ? (
             <DropdownMenuItem disabled>{emptyLabel}</DropdownMenuItem>
           ) : (
