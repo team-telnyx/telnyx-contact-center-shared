@@ -36,7 +36,6 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList,
 } from "@/components/ui/command";
 import {
   IconRobot,
@@ -294,7 +293,20 @@ export default function CreateAgentSheet({
         const res = await fetch("/api/tts/voices");
         const data = await res.json();
         if (data.ok && data.providers) {
-          setTtsProviders(data.providers);
+          let providers = data.providers;
+          // Always ensure ElevenLabs is in the list if API key is configured
+          if (data.elevenLabsApiKeyRef) {
+            const hasElevenLabs = providers.some(
+              (p) => p.id?.toLowerCase() === "elevenlabs"
+            );
+            if (!hasElevenLabs) {
+              providers = [
+                ...providers,
+                { id: "ElevenLabs", name: "ElevenLabs", models: [] },
+              ];
+            }
+          }
+          setTtsProviders(providers);
         }
         // Store ElevenLabs API key ref if returned from server
         if (data.elevenLabsApiKeyRef) {
@@ -979,47 +991,45 @@ export default function CreateAgentSheet({
                                     className="h-9"
                                   />
                                   <CommandEmpty>No language found.</CommandEmpty>
-                                  <CommandList>
-                                    <CommandGroup>
+                                  <CommandGroup className="max-h-[300px] overflow-auto">
+                                    <CommandItem
+                                      value="__any__"
+                                      onSelect={() => {
+                                        setTtsLanguageFilter("");
+                                        setTtsVoice("");
+                                        setTtsLanguagePopoverOpen(false);
+                                      }}
+                                    >
+                                      <IconCheck
+                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                          !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                        }`}
+                                      />
+                                      <IconWorld className="size-4 mr-2" />
+                                      <span>All languages</span>
+                                    </CommandItem>
+                                    {filteredTtsLanguageOptions.map((opt) => (
                                       <CommandItem
-                                        value="__any__"
+                                        key={opt.value}
+                                        value={`${opt.label}-${opt.value}`}
                                         onSelect={() => {
-                                          setTtsLanguageFilter("");
+                                          setTtsLanguageFilter(opt.value);
                                           setTtsVoice("");
                                           setTtsLanguagePopoverOpen(false);
                                         }}
                                       >
                                         <IconCheck
                                           className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                            !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                            ttsLanguageFilter === opt.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
                                           }`}
                                         />
-                                        <IconWorld className="size-4 mr-2" />
-                                        <span>All languages</span>
+                                        <span className="mr-2">{opt.flag}</span>
+                                        <span>{opt.label}</span>
                                       </CommandItem>
-                                      {filteredTtsLanguageOptions.map((opt) => (
-                                        <CommandItem
-                                          key={opt.value}
-                                          value={`${opt.label}-${opt.value}`}
-                                          onSelect={() => {
-                                            setTtsLanguageFilter(opt.value);
-                                            setTtsVoice("");
-                                            setTtsLanguagePopoverOpen(false);
-                                          }}
-                                        >
-                                          <IconCheck
-                                            className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                              ttsLanguageFilter === opt.value
-                                                ? "opacity-100"
-                                                : "opacity-0"
-                                            }`}
-                                          />
-                                          <span className="mr-2">{opt.flag}</span>
-                                          <span>{opt.label}</span>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  </CommandList>
+                                    ))}
+                                  </CommandGroup>
                                 </Command>
                               </PopoverContent>
                             </Popover>
@@ -1147,30 +1157,28 @@ export default function CreateAgentSheet({
                                   className="h-9"
                                 />
                                 <CommandEmpty>No language found.</CommandEmpty>
-                                <CommandList>
-                                  <CommandGroup>
-                                    {filteredSttLanguageOptions.map((opt) => (
-                                      <CommandItem
-                                        key={opt.value}
-                                        value={`${opt.label}-${opt.value}`}
-                                        onSelect={() => {
-                                          setSttLanguage(opt.value);
-                                          setSttLanguagePopoverOpen(false);
-                                        }}
-                                      >
-                                        <IconCheck
-                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                            sttLanguage === opt.value
-                                              ? "opacity-100"
-                                              : "opacity-0"
-                                          }`}
-                                        />
-                                        <span className="mr-2">{opt.flag}</span>
-                                        <span>{opt.label}</span>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
+                                <CommandGroup className="max-h-[300px] overflow-auto">
+                                  {filteredSttLanguageOptions.map((opt) => (
+                                    <CommandItem
+                                      key={opt.value}
+                                      value={`${opt.label}-${opt.value}`}
+                                      onSelect={() => {
+                                        setSttLanguage(opt.value);
+                                        setSttLanguagePopoverOpen(false);
+                                      }}
+                                    >
+                                      <IconCheck
+                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                          sttLanguage === opt.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        }`}
+                                      />
+                                      <span className="mr-2">{opt.flag}</span>
+                                      <span>{opt.label}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
                               </Command>
                             </PopoverContent>
                           </Popover>
