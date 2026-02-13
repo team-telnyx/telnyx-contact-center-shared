@@ -626,7 +626,7 @@ export default function CreateAgentSheet({
       
       // Add API key ref for ElevenLabs (from server config)
       if (isElevenLabs && elevenLabsApiKeyRef) {
-        voiceSettings.voice_api_key_ref = elevenLabsApiKeyRef;
+        voiceSettings.api_key_ref = elevenLabsApiKeyRef;
       }
 
       // Build transcription config
