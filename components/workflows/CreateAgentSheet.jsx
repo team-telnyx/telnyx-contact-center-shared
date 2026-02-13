@@ -176,6 +176,8 @@ export default function CreateAgentSheet({
   const [ttsLanguageFilter, setTtsLanguageFilter] = useState("");
   const [ttsLanguageSearch, setTtsLanguageSearch] = useState("");
   const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = useState(false);
+  const [ttsVoiceSearch, setTtsVoiceSearch] = useState("");
+  const [ttsVoicePopoverOpen, setTtsVoicePopoverOpen] = useState(false);
   
   // ElevenLabs API Key Reference (loaded from server config)
   const [elevenLabsApiKeyRef, setElevenLabsApiKeyRef] = useState("");
@@ -422,6 +424,26 @@ export default function CreateAgentSheet({
     if (!ttsLanguageFilter) return null;
     return ttsLanguageOptions.find((opt) => opt.value === ttsLanguageFilter);
   }, [ttsLanguageFilter, ttsLanguageOptions]);
+
+  // Filter voices by search
+  const filteredTtsVoices = useMemo(() => {
+    const voices = getTtsVoices();
+    if (!ttsVoiceSearch.trim()) return voices;
+    const search = ttsVoiceSearch.toLowerCase();
+    return voices.filter(
+      (v) =>
+        (v.name || "").toLowerCase().includes(search) ||
+        (v.id || "").toLowerCase().includes(search) ||
+        (v.language || "").toLowerCase().includes(search)
+    );
+  }, [ttsVoiceSearch, getTtsVoices]);
+
+  // Get selected voice info
+  const selectedTtsVoiceInfo = useMemo(() => {
+    if (!ttsVoice) return null;
+    const voices = getTtsVoices();
+    return voices.find((v) => v.id === ttsVoice);
+  }, [ttsVoice, getTtsVoices]);
 
   // STT language options from TRANSCRIPTION_PROVIDERS
   const sttLanguageOptions = useMemo(() => {
@@ -992,7 +1014,7 @@ export default function CreateAgentSheet({
                                     className="h-9"
                                   />
                                   <CommandEmpty>No language found.</CommandEmpty>
-                                  <CommandGroup className="max-h-[300px] overflow-auto">
+                                  <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
                                     <CommandItem
                                       value="__any__"
                                       onSelect={() => {
@@ -1038,20 +1060,61 @@ export default function CreateAgentSheet({
                           
                           <div className="space-y-2">
                             <Label>Voice</Label>
-                            <Select value={ttsVoice} onValueChange={setTtsVoice}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select voice" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-[200px]">
-                                {getTtsVoices().map((voice) => (
-                                  <SelectItem key={voice.id} value={voice.id}>
-                                    {voice.language 
-                                      ? `${voice.name || voice.id} (${voice.language})`
-                                      : voice.name || voice.id}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Popover
+                              open={ttsVoicePopoverOpen}
+                              onOpenChange={setTtsVoicePopoverOpen}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between"
+                                  disabled={loadingTts}
+                                >
+                                  <span className="truncate">
+                                    {selectedTtsVoiceInfo
+                                      ? selectedTtsVoiceInfo.language
+                                        ? `${selectedTtsVoiceInfo.name || selectedTtsVoiceInfo.id} (${selectedTtsVoiceInfo.language})`
+                                        : selectedTtsVoiceInfo.name || selectedTtsVoiceInfo.id
+                                      : "Select voice"}
+                                  </span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0" align="start">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="Search voices..."
+                                    value={ttsVoiceSearch}
+                                    onValueChange={setTtsVoiceSearch}
+                                    className="h-9"
+                                  />
+                                  <CommandEmpty>No voice found.</CommandEmpty>
+                                  <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
+                                    {filteredTtsVoices.map((voice) => (
+                                      <CommandItem
+                                        key={voice.id}
+                                        value={`${voice.name}-${voice.id}`}
+                                        onSelect={() => {
+                                          setTtsVoice(voice.id);
+                                          setTtsVoicePopoverOpen(false);
+                                        }}
+                                      >
+                                        <IconCheck
+                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                            ttsVoice === voice.id ? "opacity-100" : "opacity-0"
+                                          }`}
+                                        />
+                                        <span>
+                                          {voice.language
+                                            ? `${voice.name || voice.id} (${voice.language})`
+                                            : voice.name || voice.id}
+                                        </span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
                           </div>
                         </div>
                       </div>
@@ -1158,7 +1221,7 @@ export default function CreateAgentSheet({
                                   className="h-9"
                                 />
                                 <CommandEmpty>No language found.</CommandEmpty>
-                                <CommandGroup className="max-h-[300px] overflow-auto">
+                                <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
                                   {filteredSttLanguageOptions.map((opt) => (
                                     <CommandItem
                                       key={opt.value}
