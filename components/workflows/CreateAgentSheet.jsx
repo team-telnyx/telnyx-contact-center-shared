@@ -555,8 +555,8 @@ export default function CreateAgentSheet({
         model: selectedModel,
         instructions: instructions,
         greeting: "Hello! How can I help you today?",
-        voice: {
-          voice_id: ttsVoice,
+        voice_settings: {
+          voice: ttsVoice,
         },
         transcription: {
           model: `${sttProvider}/${sttModel}`,
