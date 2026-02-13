@@ -92,8 +92,11 @@ export async function GET(request) {
       models: p.models.sort((a, b) => a.name.localeCompare(b.name)),
     }));
 
+    // Include ElevenLabs API key ref if configured
+    const elevenLabsApiKeyRef = process.env.ELEVENLABS_API_KEY_REF || null;
+
     return NextResponse.json(
-      { ok: true, providers, total: voices.length },
+      { ok: true, providers, total: voices.length, elevenLabsApiKeyRef },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

@@ -50,7 +50,6 @@ import {
   IconCircleDashed,
   IconCircleX,
   IconPhoneCall,
-  IconKey,
 } from "@tabler/icons-react";
 import { TRANSCRIPTION_PROVIDERS, AZURE_REGIONS } from "@/config/voice";
 
@@ -179,10 +178,8 @@ export default function CreateAgentSheet({
   const [ttsLanguageSearch, setTtsLanguageSearch] = useState("");
   const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = useState(false);
   
-  // ElevenLabs API Key Reference
-  const [ttsApiKeyRef, setTtsApiKeyRef] = useState("");
-  const [integrationSecrets, setIntegrationSecrets] = useState([]);
-  const [loadingSecrets, setLoadingSecrets] = useState(false);
+  // ElevenLabs API Key Reference (loaded from server config)
+  const [elevenLabsApiKeyRef, setElevenLabsApiKeyRef] = useState("");
   
   // STT settings - using TRANSCRIPTION_PROVIDERS from config
   const [sttModel, setSttModel] = useState("deepgram/nova-2");
@@ -231,7 +228,6 @@ export default function CreateAgentSheet({
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
-      setTtsApiKeyRef("");
       setTtsLanguageFilter("");
       setSttModel("deepgram/nova-2");
       setSttLanguage("auto");
@@ -289,33 +285,20 @@ export default function CreateAgentSheet({
     fetchCallFlows();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load TTS voices (reload when ElevenLabs API key changes)
+  // Load TTS voices (uses ELEVENLABS_API_KEY_REF from server .env)
   useEffect(() => {
     async function fetchVoices() {
       if (!open) return;
       setLoadingTts(true);
       try {
-        // Build URL with elevenlabs_api_key_ref if available
-        const params = new URLSearchParams();
-        if (ttsApiKeyRef) {
-          params.set("elevenlabs_api_key_ref", ttsApiKeyRef);
-        }
-        const url = `/api/tts/voices${params.toString() ? `?${params.toString()}` : ""}`;
-        const res = await fetch(url);
+        const res = await fetch("/api/tts/voices");
         const data = await res.json();
         if (data.ok && data.providers) {
-          let providers = data.providers;
-          // Ensure ElevenLabs is always in the list as an option
-          const hasElevenLabs = providers.some(
-            (p) => p.id?.toLowerCase() === "elevenlabs"
-          );
-          if (!hasElevenLabs) {
-            providers = [
-              ...providers,
-              { id: "ElevenLabs", name: "ElevenLabs", models: [] },
-            ];
-          }
-          setTtsProviders(providers);
+          setTtsProviders(data.providers);
+        }
+        // Store ElevenLabs API key ref if returned from server
+        if (data.elevenLabsApiKeyRef) {
+          setElevenLabsApiKeyRef(data.elevenLabsApiKeyRef);
         }
       } catch (err) {
         console.error("Failed to load TTS voices:", err);
@@ -324,26 +307,6 @@ export default function CreateAgentSheet({
       }
     }
     fetchVoices();
-  }, [open, ttsApiKeyRef]);
-
-  // Load integration secrets (for ElevenLabs API key)
-  useEffect(() => {
-    async function fetchSecrets() {
-      if (!open) return;
-      setLoadingSecrets(true);
-      try {
-        const res = await fetch("/api/integration-secrets");
-        const data = await res.json();
-        if (data.ok && data.secrets) {
-          setIntegrationSecrets(data.secrets);
-        }
-      } catch (err) {
-        console.error("Failed to load integration secrets:", err);
-      } finally {
-        setLoadingSecrets(false);
-      }
-    }
-    fetchSecrets();
   }, [open]);
 
   // Preselect default voice when providers load
@@ -627,9 +590,9 @@ export default function CreateAgentSheet({
         voice: ttsVoice,
       };
       
-      // Add API key ref for ElevenLabs
-      if (isElevenLabs && ttsApiKeyRef) {
-        voiceSettings.voice_api_key_ref = ttsApiKeyRef;
+      // Add API key ref for ElevenLabs (from server config)
+      if (isElevenLabs && elevenLabsApiKeyRef) {
+        voiceSettings.voice_api_key_ref = elevenLabsApiKeyRef;
       }
 
       // Build transcription config
@@ -977,117 +940,90 @@ export default function CreateAgentSheet({
                           </div>
                         </div>
 
-                        {/* Row 2: Language Filter (or API Key for ElevenLabs) + Voice */}
+                        {/* Row 2: Language Filter + Voice */}
                         <div className="grid grid-cols-2 gap-3">
-                          {isElevenLabs ? (
-                            // ElevenLabs: Show API Key selector instead of Language
-                            <div className="space-y-2">
-                              <Label className="flex items-center gap-1">
-                                <IconKey className="size-3" />
-                                API Key Reference
-                              </Label>
-                              {loadingSecrets ? (
-                                <Skeleton className="h-10 w-full" />
-                              ) : (
-                                <Select value={ttsApiKeyRef} onValueChange={setTtsApiKeyRef}>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select API key" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {integrationSecrets.map((secret) => (
-                                      <SelectItem key={secret.identifier} value={secret.identifier}>
-                                        {secret.identifier}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-                            </div>
-                          ) : (
-                            // Other providers: Show Language Filter
-                            <div className="space-y-2">
-                              <Label>Language</Label>
-                              <Popover
-                                open={ttsLanguagePopoverOpen}
-                                onOpenChange={setTtsLanguagePopoverOpen}
-                              >
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    role="combobox"
-                                    className="w-full justify-between"
-                                    disabled={loadingTts}
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      {selectedTtsLanguageInfo ? (
-                                        <>
-                                          <span>{selectedTtsLanguageInfo.flag}</span>
-                                          <span className="truncate">{selectedTtsLanguageInfo.label}</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <IconWorld className="h-4 w-4" />
-                                          <span>All languages</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
-                                  <Command>
-                                    <CommandInput
-                                      placeholder="Search languages..."
-                                      value={ttsLanguageSearch}
-                                      onValueChange={setTtsLanguageSearch}
-                                      className="h-9"
-                                    />
-                                    <CommandEmpty>No language found.</CommandEmpty>
-                                    <CommandList>
-                                      <CommandGroup>
+                          <div className="space-y-2">
+                            <Label>Language</Label>
+                            <Popover
+                              open={ttsLanguagePopoverOpen}
+                              onOpenChange={setTtsLanguagePopoverOpen}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between"
+                                  disabled={loadingTts}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    {selectedTtsLanguageInfo ? (
+                                      <>
+                                        <span>{selectedTtsLanguageInfo.flag}</span>
+                                        <span className="truncate">{selectedTtsLanguageInfo.label}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <IconWorld className="h-4 w-4" />
+                                        <span>All languages</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0" align="start">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="Search languages..."
+                                    value={ttsLanguageSearch}
+                                    onValueChange={setTtsLanguageSearch}
+                                    className="h-9"
+                                  />
+                                  <CommandEmpty>No language found.</CommandEmpty>
+                                  <CommandList>
+                                    <CommandGroup>
+                                      <CommandItem
+                                        value="__any__"
+                                        onSelect={() => {
+                                          setTtsLanguageFilter("");
+                                          setTtsVoice("");
+                                          setTtsLanguagePopoverOpen(false);
+                                        }}
+                                      >
+                                        <IconCheck
+                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                            !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                          }`}
+                                        />
+                                        <IconWorld className="size-4 mr-2" />
+                                        <span>All languages</span>
+                                      </CommandItem>
+                                      {filteredTtsLanguageOptions.map((opt) => (
                                         <CommandItem
-                                          value="__any__"
+                                          key={opt.value}
+                                          value={`${opt.label}-${opt.value}`}
                                           onSelect={() => {
-                                            setTtsLanguageFilter("");
+                                            setTtsLanguageFilter(opt.value);
                                             setTtsVoice("");
                                             setTtsLanguagePopoverOpen(false);
                                           }}
                                         >
                                           <IconCheck
                                             className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                              !ttsLanguageFilter ? "opacity-100" : "opacity-0"
+                                              ttsLanguageFilter === opt.value
+                                                ? "opacity-100"
+                                                : "opacity-0"
                                             }`}
                                           />
-                                          <IconWorld className="size-4 mr-2" />
-                                          <span>All languages</span>
+                                          <span className="mr-2">{opt.flag}</span>
+                                          <span>{opt.label}</span>
                                         </CommandItem>
-                                        {filteredTtsLanguageOptions.map((opt) => (
-                                          <CommandItem
-                                            key={opt.value}
-                                            value={`${opt.label}-${opt.value}`}
-                                            onSelect={() => {
-                                              setTtsLanguageFilter(opt.value);
-                                              setTtsVoice("");
-                                              setTtsLanguagePopoverOpen(false);
-                                            }}
-                                          >
-                                            <IconCheck
-                                              className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                                ttsLanguageFilter === opt.value
-                                                  ? "opacity-100"
-                                                  : "opacity-0"
-                                              }`}
-                                            />
-                                            <span className="mr-2">{opt.flag}</span>
-                                            <span>{opt.label}</span>
-                                          </CommandItem>
-                                        ))}
-                                      </CommandGroup>
-                                    </CommandList>
-                                  </Command>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          )}
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                           
                           <div className="space-y-2">
                             <Label>Voice</Label>
@@ -1354,7 +1290,7 @@ export default function CreateAgentSheet({
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !agentName.trim() || (isElevenLabs && !ttsApiKeyRef)}
+              disabled={creating || !agentName.trim()}
             >
               {creating ? (
                 <>
