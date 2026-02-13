@@ -191,7 +191,7 @@ export default function CreateAgentSheet({
   
   const NOISE_SUPPRESSION_ENGINES = [
     { value: "krisp", label: "Krisp (Recommended)" },
-    { value: "amazon", label: "Amazon" },
+    { value: "deepfilternet", label: "DeepFilterNet" },
   ];
 
   // Reset state when sheet opens (not when workflow changes - e.g. after onAgentCreated updates ai_assistant_id)
@@ -566,12 +566,8 @@ export default function CreateAgentSheet({
         telephony_settings: {
           supports_unauthenticated_web_calls: true,
           recording_settings: { channels: "dual", format: "mp3" },
+          noise_suppression: noiseSuppressionEnabled ? noiseSuppressionEngine : "disabled",
         },
-        // Noise suppression (noise_suppression in telephony_settings if needed)
-        noise_suppression: noiseSuppressionEnabled ? {
-          enabled: true,
-          engine: noiseSuppressionEngine,
-        } : { enabled: false },
         silence_timeout_ms: 500,
         max_silence_count: 2,
         tools: tools,
