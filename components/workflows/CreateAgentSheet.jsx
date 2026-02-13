@@ -294,11 +294,6 @@ export default function CreateAgentSheet({
       try {
         const res = await fetch("/api/tts/voices");
         const data = await res.json();
-        console.log("[CreateAgentSheet] TTS voices response:", {
-          ok: data.ok,
-          providersCount: data.providers?.length,
-          elevenLabsApiKeyRef: data.elevenLabsApiKeyRef || "(not set)",
-        });
         if (data.ok && data.providers) {
           let providers = data.providers;
           // Always ensure ElevenLabs is in the list if API key is configured
@@ -317,10 +312,7 @@ export default function CreateAgentSheet({
         }
         // Store ElevenLabs API key ref if returned from server
         if (data.elevenLabsApiKeyRef) {
-          console.log("[CreateAgentSheet] Setting elevenLabsApiKeyRef:", data.elevenLabsApiKeyRef);
           setElevenLabsApiKeyRef(data.elevenLabsApiKeyRef);
-        } else {
-          console.warn("[CreateAgentSheet] elevenLabsApiKeyRef not in API response!");
         }
       } catch (err) {
         console.error("Failed to load TTS voices:", err);
@@ -636,34 +628,15 @@ export default function CreateAgentSheet({
         voice_speed: 1.0,
       };
       
-      // Debug logging for ElevenLabs configuration
-      console.log("[CreateAgentSheet] Voice config:", {
-        ttsVoice,
-        ttsProvider,
-        isElevenLabs,
-        voiceIsElevenLabs,
-        elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
-      });
-      
       // Add ElevenLabs-specific settings (required for ElevenLabs voices)
-      // Use voiceIsElevenLabs as primary check (detected from voice string)
       if (voiceIsElevenLabs || isElevenLabs) {
-        // api_key_ref is REQUIRED for ElevenLabs - must match integration secret identifier
-        // Use state value or fallback to known default
-        const apiKeyRef = elevenLabsApiKeyRef || "elevenlabs-api-key";
-        
-        if (!elevenLabsApiKeyRef) {
-          console.warn("[CreateAgentSheet] elevenLabsApiKeyRef state is empty, using fallback: elevenlabs-api-key");
-        }
-        
-        voiceSettings.api_key_ref = apiKeyRef;
+        // api_key_ref is REQUIRED for ElevenLabs - use state value or fallback
+        voiceSettings.api_key_ref = elevenLabsApiKeyRef || "elevenlabs-api-key";
         // ElevenLabs-specific parameters - all must have values (not null)
-        voiceSettings.temperature = 0.5;       // Controls emotional range/randomness (0-1)
-        voiceSettings.similarity_boost = 0.5;  // How closely AI adheres to original voice (0-1)
-        voiceSettings.style = 0;               // Style exaggeration (0 = no extra consumption)
-        voiceSettings.use_speaker_boost = true; // Amplifies similarity to original speaker
-        
-        console.log("[CreateAgentSheet] ElevenLabs voice_settings:", voiceSettings);
+        voiceSettings.temperature = 0.5;
+        voiceSettings.similarity_boost = 0.5;
+        voiceSettings.style = 0;
+        voiceSettings.use_speaker_boost = true;
       }
 
       // Build transcription config
@@ -963,12 +936,6 @@ export default function CreateAgentSheet({
                             <Select 
                               value={ttsProvider} 
                               onValueChange={(v) => {
-                                console.log("[CreateAgentSheet] Provider changed:", {
-                                  from: ttsProvider,
-                                  to: v,
-                                  isElevenLabs: v?.toLowerCase() === "elevenlabs",
-                                  elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
-                                });
                                 setTtsProvider(v);
                                 const provider = ttsProviders.find(
                                   (p) => String(p?.id || "").toLowerCase() === String(v || "").toLowerCase()
@@ -1160,23 +1127,7 @@ export default function CreateAgentSheet({
                                           key={voice.id}
                                           value={`${voice.name}-${voice.id}`}
                                           onSelect={() => {
-                                            const voiceId = voice.id;
-                                            const isElevenLabsVoice = voiceId?.toLowerCase().startsWith("elevenlabs");
-                                            console.log("[CreateAgentSheet] Voice selected:", {
-                                              voiceId,
-                                              voiceName: voice.name,
-                                              isElevenLabsVoice,
-                                              currentProvider: ttsProvider,
-                                              elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
-                                              willUseSettings: isElevenLabsVoice ? {
-                                                api_key_ref: elevenLabsApiKeyRef || "elevenlabs-api-key (fallback)",
-                                                temperature: 0.5,
-                                                similarity_boost: 0.5,
-                                                style: 0,
-                                                use_speaker_boost: true,
-                                              } : "N/A (not ElevenLabs)",
-                                            });
-                                            setTtsVoice(voiceId);
+                                            setTtsVoice(voice.id);
                                             setTtsVoicePopoverOpen(false);
                                           }}
                                         >
