@@ -294,6 +294,11 @@ export default function CreateAgentSheet({
       try {
         const res = await fetch("/api/tts/voices");
         const data = await res.json();
+        console.log("[CreateAgentSheet] TTS voices response:", {
+          ok: data.ok,
+          providersCount: data.providers?.length,
+          elevenLabsApiKeyRef: data.elevenLabsApiKeyRef || "(not set)",
+        });
         if (data.ok && data.providers) {
           let providers = data.providers;
           // Always ensure ElevenLabs is in the list if API key is configured
@@ -312,7 +317,10 @@ export default function CreateAgentSheet({
         }
         // Store ElevenLabs API key ref if returned from server
         if (data.elevenLabsApiKeyRef) {
+          console.log("[CreateAgentSheet] Setting elevenLabsApiKeyRef:", data.elevenLabsApiKeyRef);
           setElevenLabsApiKeyRef(data.elevenLabsApiKeyRef);
+        } else {
+          console.warn("[CreateAgentSheet] elevenLabsApiKeyRef not in API response!");
         }
       } catch (err) {
         console.error("Failed to load TTS voices:", err);
@@ -619,6 +627,9 @@ export default function CreateAgentSheet({
         });
       }
 
+      // Detect ElevenLabs from voice string (more reliable than state)
+      const voiceIsElevenLabs = ttsVoice && String(ttsVoice).toLowerCase().startsWith("elevenlabs");
+      
       // Build voice settings
       const voiceSettings = {
         voice: ttsVoice,
@@ -630,16 +641,22 @@ export default function CreateAgentSheet({
         ttsVoice,
         ttsProvider,
         isElevenLabs,
+        voiceIsElevenLabs,
         elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
       });
       
       // Add ElevenLabs-specific settings (required for ElevenLabs voices)
-      if (isElevenLabs) {
+      // Use voiceIsElevenLabs as primary check (detected from voice string)
+      if (voiceIsElevenLabs || isElevenLabs) {
         // api_key_ref is REQUIRED for ElevenLabs - must match integration secret identifier
+        // Use state value or fallback to known default
+        const apiKeyRef = elevenLabsApiKeyRef || "elevenlabs-api-key";
+        
         if (!elevenLabsApiKeyRef) {
-          throw new Error("ElevenLabs API key reference is required. Please configure ELEVENLABS_API_KEY_REF environment variable on the server.");
+          console.warn("[CreateAgentSheet] elevenLabsApiKeyRef state is empty, using fallback: elevenlabs-api-key");
         }
-        voiceSettings.api_key_ref = elevenLabsApiKeyRef;
+        
+        voiceSettings.api_key_ref = apiKeyRef;
         // ElevenLabs-specific parameters - all must have values (not null)
         voiceSettings.temperature = 0.5;       // Controls emotional range/randomness (0-1)
         voiceSettings.similarity_boost = 0.5;  // How closely AI adheres to original voice (0-1)
