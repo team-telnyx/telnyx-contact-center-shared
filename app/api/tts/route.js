@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import WebSocket from 'ws';
+import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
+const ELEVENLABS_API_KEY_REF = process.env.ELEVENLABS_API_KEY_REF;
 
 export async function POST(request) {
   try {
-    const { text, voice = 'Minimax.speech-2.8-turbo.English_magnetic_voiced_man' } = await request.json();
+    const body = await request.json();
+    const { text, voice = 'Telnyx.NaturalHD.astra', voice_api_key_ref } = body;
     
     if (!text) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
@@ -15,9 +17,65 @@ export async function POST(request) {
       return NextResponse.json({ error: 'TELNYX_API_KEY not configured' }, { status: 500 });
     }
     
+    // Check if ElevenLabs voice
+    const isElevenLabs = /^ElevenLabs\./i.test(voice);
+    
+    // For ElevenLabs, api_key_ref is required
+    const apiKeyRef = voice_api_key_ref || ELEVENLABS_API_KEY_REF;
+    if (isElevenLabs && !apiKeyRef) {
+      return NextResponse.json({ 
+        error: 'ElevenLabs voice requires api_key_ref. Configure ELEVENLABS_API_KEY_REF or pass voice_api_key_ref.' 
+      }, { status: 400 });
+    }
+    
     console.log(`[TTS] Generating audio for: "${text.substring(0, 50)}..." with voice: ${voice}`);
     
-    const audioBuffer = await generateTTS(text, voice);
+    // Build request config
+    const config = {
+      voice,
+      text,
+    };
+    
+    // Add voice_settings for ElevenLabs
+    if (isElevenLabs) {
+      config.voice_settings = {
+        api_key_ref: apiKeyRef,
+        voice_speed: 1,
+      };
+    }
+    
+    const ttsUrl = buildTelnyxV2Url("/text-to-speech/speech");
+    
+    const upstream = await fetch(ttsUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${TELNYX_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(config),
+    });
+    
+    if (!upstream.ok) {
+      const textErr = await upstream.text();
+      console.error(`[TTS] Telnyx API error: ${upstream.status}`, textErr);
+      return NextResponse.json({ 
+        error: `TTS server error: ${upstream.status}` 
+      }, { status: upstream.status });
+    }
+    
+    const contentType = upstream.headers.get("content-type") || "";
+    
+    // Check if response is JSON (error)
+    if (contentType.startsWith("application/json")) {
+      const json = await upstream.json().catch(() => ({}));
+      console.error('[TTS] Unexpected JSON response:', json);
+      return NextResponse.json({ 
+        error: json?.error || json?.errors || 'Unexpected response' 
+      }, { status: 502 });
+    }
+    
+    const arrayBuf = await upstream.arrayBuffer();
+    const audioBuffer = Buffer.from(arrayBuf);
     
     if (!audioBuffer || audioBuffer.length === 0) {
       return NextResponse.json({ error: 'No audio generated' }, { status: 500 });
@@ -27,7 +85,7 @@ export async function POST(request) {
     
     return new NextResponse(audioBuffer, {
       headers: {
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType || 'audio/mpeg',
         'Content-Length': audioBuffer.length.toString(),
       },
     });
@@ -36,71 +94,4 @@ export async function POST(request) {
     console.error('[TTS] Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
-
-async function generateTTS(text, voice) {
-  return new Promise((resolve, reject) => {
-    const url = `wss://api.telnyx.com/v2/text-to-speech/speech?voice=${encodeURIComponent(voice)}`;
-    
-    const ws = new WebSocket(url, {
-      headers: {
-        'Authorization': `Bearer ${TELNYX_API_KEY}`
-      }
-    });
-    
-    const audioChunks = [];
-    let timeout;
-    
-    ws.on('open', () => {
-      console.log('[TTS] WebSocket connected');
-      
-      // Send initialization frame
-      ws.send(JSON.stringify({ text: ' ' }));
-      
-      // Send text frame
-      ws.send(JSON.stringify({ text: text }));
-      
-      // Send stop frame
-      ws.send(JSON.stringify({ text: '' }));
-      
-      // Timeout after 30 seconds
-      timeout = setTimeout(() => {
-        ws.close();
-        resolve(Buffer.concat(audioChunks));
-      }, 30000);
-    });
-    
-    ws.on('message', (data) => {
-      try {
-        const response = JSON.parse(data.toString());
-        
-        // Collect audio
-        if (response.audio) {
-          const audioData = Buffer.from(response.audio, 'base64');
-          audioChunks.push(audioData);
-        }
-        
-        // Final frame
-        if (response.isFinal) {
-          clearTimeout(timeout);
-          ws.close();
-          resolve(Buffer.concat(audioChunks));
-        }
-      } catch (e) {
-        console.error('[TTS] Message parse error:', e);
-      }
-    });
-    
-    ws.on('error', (error) => {
-      clearTimeout(timeout);
-      console.error('[TTS] WebSocket error:', error);
-      reject(error);
-    });
-    
-    ws.on('close', () => {
-      clearTimeout(timeout);
-      console.log('[TTS] WebSocket closed');
-      resolve(Buffer.concat(audioChunks));
-    });
-  });
 }

@@ -769,12 +769,21 @@ export default function TestAgentPage() {
             voicesMap[providerId] = {};
             for (const model of provider.models || []) {
               const modelId = model.id || model.name || "default";
-              voicesMap[providerId][modelId] = (model.voices || []).map(v => ({
-                id: v.id,
-                name: v.name || v.label || v.id,
-                gender: v.gender,
-                language: v.language,
-              }));
+              // Deduplicate voices by ID
+              const seenIds = new Set();
+              const uniqueVoices = [];
+              for (const v of model.voices || []) {
+                if (v.id && !seenIds.has(v.id)) {
+                  seenIds.add(v.id);
+                  uniqueVoices.push({
+                    id: v.id,
+                    name: v.name || v.label || v.id,
+                    gender: v.gender,
+                    language: v.language,
+                  });
+                }
+              }
+              voicesMap[providerId][modelId] = uniqueVoices;
             }
           }
           setTtsVoices(voicesMap);
