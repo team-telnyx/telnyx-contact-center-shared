@@ -1005,7 +1005,10 @@ export default function CreateAgentSheet({
                                   </div>
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0" align="start">
+                              <PopoverContent
+                                className="w-[300px] p-0"
+                                align="start"
+                              >
                                 <Command>
                                   <CommandInput
                                     placeholder="Search languages..."
@@ -1013,46 +1016,56 @@ export default function CreateAgentSheet({
                                     onValueChange={setTtsLanguageSearch}
                                     className="h-9"
                                   />
-                                  <CommandEmpty>No language found.</CommandEmpty>
-                                  <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
-                                    <CommandItem
-                                      value="__any__"
-                                      onSelect={() => {
-                                        setTtsLanguageFilter("");
-                                        setTtsVoice("");
-                                        setTtsLanguagePopoverOpen(false);
-                                      }}
-                                    >
-                                      <IconCheck
-                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                          !ttsLanguageFilter ? "opacity-100" : "opacity-0"
-                                        }`}
-                                      />
-                                      <IconWorld className="size-4 mr-2" />
-                                      <span>All languages</span>
-                                    </CommandItem>
-                                    {filteredTtsLanguageOptions.map((opt) => (
+                                  <div
+                                    className="max-h-[300px] overflow-y-auto overflow-x-hidden"
+                                    onWheel={(e) => {
+                                      const el = e.currentTarget;
+                                      el.scrollTop += e.deltaY;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                  >
+                                    <CommandEmpty>No language found.</CommandEmpty>
+                                    <CommandGroup>
                                       <CommandItem
-                                        key={opt.value}
-                                        value={`${opt.label}-${opt.value}`}
+                                        value="__any__"
                                         onSelect={() => {
-                                          setTtsLanguageFilter(opt.value);
+                                          setTtsLanguageFilter("");
                                           setTtsVoice("");
                                           setTtsLanguagePopoverOpen(false);
                                         }}
                                       >
                                         <IconCheck
                                           className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                            ttsLanguageFilter === opt.value
-                                              ? "opacity-100"
-                                              : "opacity-0"
+                                            !ttsLanguageFilter ? "opacity-100" : "opacity-0"
                                           }`}
                                         />
-                                        <span className="mr-2">{opt.flag}</span>
-                                        <span>{opt.label}</span>
+                                        <IconWorld className="size-4 mr-2" />
+                                        <span>All languages</span>
                                       </CommandItem>
-                                    ))}
-                                  </CommandGroup>
+                                      {filteredTtsLanguageOptions.map((opt) => (
+                                        <CommandItem
+                                          key={opt.value}
+                                          value={`${opt.label}-${opt.value}`}
+                                          onSelect={() => {
+                                            setTtsLanguageFilter(opt.value);
+                                            setTtsVoice("");
+                                            setTtsLanguagePopoverOpen(false);
+                                          }}
+                                        >
+                                          <IconCheck
+                                            className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                              ttsLanguageFilter === opt.value
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            }`}
+                                          />
+                                          <span className="mr-2">{opt.flag}</span>
+                                          <span>{opt.label}</span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </div>
                                 </Command>
                               </PopoverContent>
                             </Popover>
@@ -1088,30 +1101,40 @@ export default function CreateAgentSheet({
                                     onValueChange={setTtsVoiceSearch}
                                     className="h-9"
                                   />
-                                  <CommandEmpty>No voice found.</CommandEmpty>
-                                  <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
-                                    {filteredTtsVoices.map((voice) => (
-                                      <CommandItem
-                                        key={voice.id}
-                                        value={`${voice.name}-${voice.id}`}
-                                        onSelect={() => {
-                                          setTtsVoice(voice.id);
-                                          setTtsVoicePopoverOpen(false);
-                                        }}
-                                      >
-                                        <IconCheck
-                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                            ttsVoice === voice.id ? "opacity-100" : "opacity-0"
-                                          }`}
-                                        />
-                                        <span>
-                                          {voice.language
-                                            ? `${voice.name || voice.id} (${voice.language})`
-                                            : voice.name || voice.id}
-                                        </span>
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
+                                  <div
+                                    className="max-h-[300px] overflow-y-auto overflow-x-hidden"
+                                    onWheel={(e) => {
+                                      const el = e.currentTarget;
+                                      el.scrollTop += e.deltaY;
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                  >
+                                    <CommandEmpty>No voice found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {filteredTtsVoices.map((voice) => (
+                                        <CommandItem
+                                          key={voice.id}
+                                          value={`${voice.name}-${voice.id}`}
+                                          onSelect={() => {
+                                            setTtsVoice(voice.id);
+                                            setTtsVoicePopoverOpen(false);
+                                          }}
+                                        >
+                                          <IconCheck
+                                            className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                              ttsVoice === voice.id ? "opacity-100" : "opacity-0"
+                                            }`}
+                                          />
+                                          <span>
+                                            {voice.language
+                                              ? `${voice.name || voice.id} (${voice.language})`
+                                              : voice.name || voice.id}
+                                          </span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </div>
                                 </Command>
                               </PopoverContent>
                             </Popover>
@@ -1220,29 +1243,39 @@ export default function CreateAgentSheet({
                                   onValueChange={setSttLanguageSearch}
                                   className="h-9"
                                 />
-                                <CommandEmpty>No language found.</CommandEmpty>
-                                <CommandGroup style={{ maxHeight: "300px", overflowY: "auto" }}>
-                                  {filteredSttLanguageOptions.map((opt) => (
-                                    <CommandItem
-                                      key={opt.value}
-                                      value={`${opt.label}-${opt.value}`}
-                                      onSelect={() => {
-                                        setSttLanguage(opt.value);
-                                        setSttLanguagePopoverOpen(false);
-                                      }}
-                                    >
-                                      <IconCheck
-                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                          sttLanguage === opt.value
-                                            ? "opacity-100"
-                                            : "opacity-0"
-                                        }`}
-                                      />
-                                      <span className="mr-2">{opt.flag}</span>
-                                      <span>{opt.label}</span>
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
+                                <div
+                                  className="max-h-[300px] overflow-y-auto overflow-x-hidden"
+                                  onWheel={(e) => {
+                                    const el = e.currentTarget;
+                                    el.scrollTop += e.deltaY;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  <CommandEmpty>No language found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {filteredSttLanguageOptions.map((opt) => (
+                                      <CommandItem
+                                        key={opt.value}
+                                        value={`${opt.label}-${opt.value}`}
+                                        onSelect={() => {
+                                          setSttLanguage(opt.value);
+                                          setSttLanguagePopoverOpen(false);
+                                        }}
+                                      >
+                                        <IconCheck
+                                          className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                            sttLanguage === opt.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          }`}
+                                        />
+                                        <span className="mr-2">{opt.flag}</span>
+                                        <span>{opt.label}</span>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </div>
                               </Command>
                             </PopoverContent>
                           </Popover>
