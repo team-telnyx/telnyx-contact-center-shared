@@ -541,10 +541,15 @@ export default function CreateAgentSheet({
     }
     
     instructions += "\n## Guidelines:\n";
-    instructions += "- Be professional and helpful\n";
+    instructions += "- Be professional, friendly, and helpful\n";
     instructions += "- Follow the conversation flow above\n";
-    instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
+    instructions += "- **IMPORTANT: Ask for ONE piece of information at a time.** Never ask for multiple data points in a single question.\n";
+    instructions += "  - ✅ Good: \"Could you provide me your first and last name?\"\n";
+    instructions += "  - ✅ Good: \"What is your date of birth?\"\n";
+    instructions += "  - ❌ Bad: \"Could you provide your name, date of birth, email, and phone number?\"\n";
+    instructions += "- Wait for the caller to respond before asking for the next piece of information\n";
     instructions += "- Confirm important information before proceeding\n";
+    instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
     
     instructions += "\n## Call Context\n\n";
     instructions += "The call is taking place via the {{telnyx_conversation_channel}} channel on {{telnyx_current_time}}. ";
@@ -650,11 +655,15 @@ export default function CreateAgentSheet({
         transcriptionConfig.region = sttAzureRegion;
       }
 
+      // Generate a professional greeting based on workflow name
+      const workflowTitle = workflow?.name || "AI Assistant";
+      const greeting = `Hello! I'm your AI assistant for ${workflowTitle}. How may I help you today?`;
+
       const payload = {
         name: agentName.trim() || "Test Agent",
         model: selectedModel,
         instructions: instructions,
-        greeting: "Hello! How can I help you today?",
+        greeting: greeting,
         voice_settings: voiceSettings,
         transcription: transcriptionConfig,
         enabled_features: ["telephony"],
