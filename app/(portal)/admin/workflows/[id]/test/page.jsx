@@ -759,19 +759,36 @@ export default function TestAgentPage() {
   useEffect(() => {
     async function loadVoices() {
       try {
-        const res = await fetch("/api/tts/voices?language=en");
+        const res = await fetch("/api/tts/voices");
         const data = await res.json();
-        if (data.ok && data.voices) {
-          setTtsVoices(data.voices);
-          // Set defaults
-          const providers = Object.keys(data.voices);
-          if (providers.length > 0) {
-            const defaultProvider = providers.includes("minimax") ? "minimax" : providers[0];
+        if (data.ok && data.providers) {
+          // Transform providers array to nested object format: { provider: { model: [voices] } }
+          const voicesMap = {};
+          for (const provider of data.providers) {
+            const providerId = provider.id || provider.name;
+            voicesMap[providerId] = {};
+            for (const model of provider.models || []) {
+              const modelId = model.id || model.name || "default";
+              voicesMap[providerId][modelId] = (model.voices || []).map(v => ({
+                id: v.id,
+                name: v.name || v.label || v.id,
+                gender: v.gender,
+                language: v.language,
+              }));
+            }
+          }
+          setTtsVoices(voicesMap);
+          
+          // Set defaults - prefer Telnyx NaturalHD
+          const providerKeys = Object.keys(voicesMap);
+          if (providerKeys.length > 0) {
+            const defaultProvider = providerKeys.includes("Telnyx") ? "Telnyx" : providerKeys[0];
             setTtsProvider(defaultProvider);
-            const models = Object.keys(data.voices[defaultProvider] || {});
+            const models = Object.keys(voicesMap[defaultProvider] || {});
             if (models.length > 0) {
-              setTtsModel(models[0]);
-              const voices = data.voices[defaultProvider][models[0]] || [];
+              const defaultModel = models.includes("NaturalHD") ? "NaturalHD" : models[0];
+              setTtsModel(defaultModel);
+              const voices = voicesMap[defaultProvider][defaultModel] || [];
               if (voices.length > 0) {
                 setTtsVoice(voices[0].name);
                 setTtsVoiceId(voices[0].id);
