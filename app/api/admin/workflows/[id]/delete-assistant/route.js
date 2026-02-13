@@ -24,6 +24,75 @@ import {
 
 const LOG_PREFIX = "[Delete Assistant]";
 
+/**
+ * Get assistant details including telephony settings
+ */
+async function getAssistantDetails(assistantId, apiKey) {
+  const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${assistantId}`), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    if (res.status === 404) return null;
+    throw new Error(`Failed to fetch assistant: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data;
+}
+
+/**
+ * Find phone numbers assigned to a TeXML app (connection)
+ */
+async function findPhoneNumbersByConnection(connectionId, apiKey) {
+  const res = await fetch(buildTelnyxV2Url("/phone_numbers?page[size]=250"), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    console.error(`${LOG_PREFIX} Failed to fetch phone numbers: ${res.status}`);
+    return [];
+  }
+
+  const data = await res.json();
+  const numbers = data?.data || [];
+  
+  return numbers.filter((n) => n.connection_id === connectionId);
+}
+
+/**
+ * Unassign phone number from its connection
+ */
+async function unassignPhoneNumber(phoneNumberId, apiKey) {
+  const res = await fetch(buildTelnyxV2Url(`/phone_numbers/${phoneNumberId}`), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ connection_id: null }),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error(`${LOG_PREFIX} Failed to unassign phone number ${phoneNumberId}:`, text);
+    return false;
+  }
+
+  return true;
+}
+
 export async function DELETE(request, { params }) {
   try {
     const session = await getServerSession(authOptions);
@@ -106,6 +175,7 @@ async function handleStepDeletion(step, workflow, workflowId, apiKey, pool) {
 
 /**
  * Step 1: Delete AI Assistant from Telnyx
+ * First unassigns any phone numbers, then deletes the assistant
  */
 async function deleteAssistantStep(workflow, apiKey) {
   if (!workflow.ai_assistant_id) {
@@ -114,6 +184,30 @@ async function deleteAssistantStep(workflow, apiKey) {
 
   console.log(`${LOG_PREFIX} Deleting AI assistant: ${workflow.ai_assistant_id}`);
   
+  // Get assistant details to find TeXML app ID
+  const assistantData = await getAssistantDetails(workflow.ai_assistant_id, apiKey);
+  
+  if (assistantData) {
+    const texmlAppId = assistantData.telephony_settings?.default_texml_app_id;
+    
+    if (texmlAppId) {
+      console.log(`${LOG_PREFIX} Checking for phone numbers on TeXML app: ${texmlAppId}`);
+      
+      // Find phone numbers assigned to this TeXML app
+      const assignedNumbers = await findPhoneNumbersByConnection(texmlAppId, apiKey);
+      
+      if (assignedNumbers.length > 0) {
+        console.log(`${LOG_PREFIX} Unassigning ${assignedNumbers.length} phone number(s)`);
+        
+        for (const num of assignedNumbers) {
+          console.log(`${LOG_PREFIX} Unassigning ${num.phone_number} (${num.id})`);
+          await unassignPhoneNumber(num.id, apiKey);
+        }
+      }
+    }
+  }
+
+  // Now delete the assistant
   const res = await fetch(
     buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`),
     {
@@ -246,7 +340,28 @@ async function handleFullDeletion(workflow, workflowId, apiKey, pool) {
     );
   }
 
-  const results = { assistant: null, insights: null, group: null, cleanup: null };
+  const results = { assistant: null, insights: null, group: null, cleanup: null, phonesUnassigned: 0 };
+
+  // First, unassign phone numbers from assistant's TeXML app
+  try {
+    const assistantData = await getAssistantDetails(workflow.ai_assistant_id, apiKey);
+    
+    if (assistantData) {
+      const texmlAppId = assistantData.telephony_settings?.default_texml_app_id;
+      
+      if (texmlAppId) {
+        const assignedNumbers = await findPhoneNumbersByConnection(texmlAppId, apiKey);
+        
+        for (const num of assignedNumbers) {
+          console.log(`${LOG_PREFIX} Unassigning ${num.phone_number}`);
+          await unassignPhoneNumber(num.id, apiKey);
+          results.phonesUnassigned++;
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`${LOG_PREFIX} Error unassigning phone numbers:`, err.message);
+  }
 
   // Delete assistant
   try {
