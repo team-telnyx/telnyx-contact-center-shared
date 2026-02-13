@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { buildTelnyxV2Url } from "@/lib/telnyx.js";
+import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export async function GET() {
       );
     }
 
-    // Fetch all integration secrets with pagination to ensure we get all items
+    // Fetch all integration secrets with pagination
     const pageSize = 250;
     let pageNumber = 1;
     const allSecrets = [];

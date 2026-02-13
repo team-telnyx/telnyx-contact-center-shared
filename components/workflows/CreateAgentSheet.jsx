@@ -44,25 +44,28 @@ import {
   IconMicrophone,
   IconBrain,
   IconCheck,
-  IconAlertCircle,
   IconHeadphones,
   IconWorld,
   IconCircleDashed,
   IconCircleX,
-  IconSparkles,
-  IconFileDescription,
   IconPhoneCall,
+  IconKey,
 } from "@tabler/icons-react";
+import { TRANSCRIPTION_PROVIDERS, AZURE_REGIONS } from "@/config/voice";
 
 // Helper functions for language filtering
 function normalizeLocaleCode(code) {
   try {
     const s = String(code || "").replace(/_/g, "-");
-    const m = s.match(/^([a-zA-Z]{2,3})-([a-zA-Z]{2}|\d{3})$/);
-    if (!m) return null;
+    // Handle simple 2-letter codes
+    if (/^[a-zA-Z]{2}$/.test(s)) {
+      return s.toLowerCase();
+    }
+    const m = s.match(/^([a-zA-Z]{2,3})(?:-([a-zA-Z]{2,4}|\d{3}))?$/);
+    if (!m) return s.toLowerCase();
     const lang = m[1].toLowerCase();
-    const region = m[2].toUpperCase();
-    return `${lang}-${region}`;
+    const region = m[2] ? m[2].toUpperCase() : null;
+    return region ? `${lang}-${region}` : lang;
   } catch (_) {
     return null;
   }
@@ -83,17 +86,63 @@ function formatProviderLabel(providerId) {
   if (!providerId) return "";
   const id = String(providerId).toLowerCase();
   if (id === "aws") return "AWS";
+  if (id === "elevenlabs") return "ElevenLabs";
   return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+// Default region for language codes (for flags)
+const DEFAULT_REGION_MAP = {
+  en: "US", es: "ES", fr: "FR", de: "DE", it: "IT", pt: "PT", nl: "NL",
+  pl: "PL", ru: "RU", ja: "JP", ko: "KR", zh: "CN", ar: "SA", hi: "IN",
+  tr: "TR", vi: "VN", th: "TH", id: "ID", ms: "MY", sv: "SE", da: "DK",
+  fi: "FI", no: "NO", cs: "CZ", sk: "SK", hu: "HU", ro: "RO", bg: "BG",
+  uk: "UA", el: "GR", he: "IL", fa: "IR", ur: "PK", bn: "BD", ta: "IN",
+  te: "IN", mr: "IN", gu: "IN", kn: "IN", ml: "IN", pa: "IN", or: "IN",
+  as: "IN", ne: "NP", si: "LK", my: "MM", km: "KH", lo: "LA", ka: "GE",
+  hy: "AM", az: "AZ", kk: "KZ", uz: "UZ", tg: "TJ", ky: "KG", tk: "TM",
+  mn: "MN", et: "EE", lv: "LV", lt: "LT", sq: "AL", mk: "MK", bs: "BA",
+  hr: "HR", sr: "RS", sl: "SI", mt: "MT", is: "IS", ga: "IE", cy: "GB",
+  eu: "ES", ca: "ES", gl: "ES", af: "ZA", sw: "KE", ha: "NG", yo: "NG",
+  ig: "NG", zu: "ZA", xh: "ZA", am: "ET", so: "SO", mg: "MG", ht: "HT",
+  mi: "NZ", yue: "HK", auto: null,
+};
+
+function getLanguageDisplayInfo(langCode) {
+  const normalized = normalizeLocaleCode(langCode);
+  if (!normalized) return { value: langCode, label: langCode, flag: "🌐" };
+  
+  // Handle auto-detect variants
+  if (normalized === "auto" || normalized === "auto_detect") {
+    return { value: langCode, label: "Auto-detect", flag: "🌐" };
+  }
+  
+  const parts = normalized.split("-");
+  const lang = parts[0];
+  const region = parts[1] || DEFAULT_REGION_MAP[lang];
+  
+  let label = normalized.toUpperCase();
+  let flag = "🌐";
+  
+  try {
+    const langNames = new Intl.DisplayNames(undefined, { type: "language" });
+    const regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+    
+    const langName = langNames.of(lang) || lang.toUpperCase();
+    if (region) {
+      const regionName = regionNames.of(region) || region;
+      label = `${langName} (${regionName})`;
+      flag = regionToFlag(region);
+    } else {
+      label = langName;
+      flag = DEFAULT_REGION_MAP[lang] ? regionToFlag(DEFAULT_REGION_MAP[lang]) : "🌐";
+    }
+  } catch (_) {}
+  
+  return { value: langCode, label, flag };
 }
 
 /**
  * CreateAgentSheet - Creates a Telnyx AI Agent from workflow instructions
- * @param {object} props
- * @param {boolean} props.open - Whether the sheet is open
- * @param {function} props.onOpenChange - Callback when sheet open state changes
- * @param {object} props.workflow - The workflow data
- * @param {array} props.stages - The workflow stages with items
- * @param {function} props.onAgentCreated - Callback when agent is created successfully (receives agentId)
  */
 export default function CreateAgentSheet({
   open,
@@ -103,7 +152,6 @@ export default function CreateAgentSheet({
   onAgentCreated,
 }) {
   const workflowId = workflow?.id;
-  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   
   // Progress tracking for creation steps
@@ -130,10 +178,17 @@ export default function CreateAgentSheet({
   const [ttsLanguageSearch, setTtsLanguageSearch] = useState("");
   const [ttsLanguagePopoverOpen, setTtsLanguagePopoverOpen] = useState(false);
   
-  // STT settings
-  const [sttProvider, setSttProvider] = useState("deepgram");
-  const [sttModel, setSttModel] = useState("nova-2");
-  const [sttLanguage, setSttLanguage] = useState("en");
+  // ElevenLabs API Key Reference
+  const [ttsApiKeyRef, setTtsApiKeyRef] = useState("");
+  const [integrationSecrets, setIntegrationSecrets] = useState([]);
+  const [loadingSecrets, setLoadingSecrets] = useState(false);
+  
+  // STT settings - using TRANSCRIPTION_PROVIDERS from config
+  const [sttModel, setSttModel] = useState("deepgram/nova-2");
+  const [sttLanguage, setSttLanguage] = useState("auto");
+  const [sttLanguageSearch, setSttLanguageSearch] = useState("");
+  const [sttLanguagePopoverOpen, setSttLanguagePopoverOpen] = useState(false);
+  const [sttAzureRegion, setSttAzureRegion] = useState("westeurope");
   
   // Noise suppression
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
@@ -152,49 +207,20 @@ export default function CreateAgentSheet({
   const [callFlows, setCallFlows] = useState([]);
   const [loadingCallFlows, setLoadingCallFlows] = useState(false);
   const [selectedCallFlowId, setSelectedCallFlowId] = useState("");
-
-  // Available STT providers and models (from Telnyx OpenAPI TranscriptionSettings)
-  const STT_PROVIDERS = [
-    { value: "deepgram", label: "Deepgram" },
-    { value: "azure", label: "Azure" },
-    { value: "distil-whisper", label: "Distil-Whisper" },
-    { value: "openai", label: "OpenAI Whisper" },
-  ];
-
-  const STT_MODELS = {
-    deepgram: [
-      { value: "nova-2", label: "Nova 2 (Recommended)" },
-      { value: "nova-3", label: "Nova 3 (Multi-lingual)" },
-      { value: "flux", label: "Flux (Turn-taking, English)" },
-    ],
-    azure: [
-      { value: "fast", label: "Fast" },
-    ],
-    "distil-whisper": [
-      { value: "distil-large-v2", label: "Distil Large v2 (Low latency, English)" },
-    ],
-    openai: [
-      { value: "whisper-large-v3-turbo", label: "Whisper Large v3 Turbo (Multi-lingual)" },
-    ],
-  };
-  
-  const STT_LANGUAGES = [
-    { value: "en", label: "English" },
-    { value: "es", label: "Spanish" },
-    { value: "fr", label: "French" },
-    { value: "de", label: "German" },
-    { value: "it", label: "Italian" },
-    { value: "pt", label: "Portuguese" },
-    { value: "pl", label: "Polish" },
-    { value: "auto", label: "Auto-detect" },
-  ];
   
   const NOISE_SUPPRESSION_ENGINES = [
     { value: "krisp", label: "Krisp (Recommended)" },
     { value: "deepfilternet", label: "DeepFilterNet" },
   ];
 
-  // Reset state when sheet opens (not when workflow changes - e.g. after onAgentCreated updates ai_assistant_id)
+  // Check if ElevenLabs is selected
+  const isElevenLabs = ttsProvider?.toLowerCase() === "elevenlabs";
+  
+  // Check if selected STT model requires Azure region
+  const selectedSttProvider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
+  const sttRequiresRegion = selectedSttProvider?.requiresRegion === true;
+
+  // Reset state when sheet opens
   useEffect(() => {
     if (open) {
       setAgentName(workflow?.name ? `${workflow.name} Agent` : "Test Agent");
@@ -204,8 +230,12 @@ export default function CreateAgentSheet({
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
+      setTtsApiKeyRef("");
+      setTtsLanguageFilter("");
+      setSttModel("deepgram/nova-2");
+      setSttLanguage("auto");
+      setSttAzureRegion("westeurope");
       setSelectedCallFlowId("");
-      // Reset creation steps
       setCreationSteps([
         { id: "assistant", label: "Create AI Assistant", status: "pending" },
         { id: "telephony", label: "Enable Voice Channel", status: "pending" },
@@ -213,7 +243,7 @@ export default function CreateAgentSheet({
         { id: "workflow", label: "Link to Workflow", status: "pending" },
       ]);
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- only reset when sheet opens
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load LLM models
   useEffect(() => {
@@ -245,7 +275,6 @@ export default function CreateAgentSheet({
         const data = await res.json();
         if (data.ok && data.items) {
           setCallFlows(data.items);
-          // Auto-select first flow if available
           if (data.items.length > 0 && !selectedCallFlowId) {
             setSelectedCallFlowId(data.items[0].id);
           }
@@ -279,7 +308,27 @@ export default function CreateAgentSheet({
     fetchVoices();
   }, [open]);
 
-  // Preselect default voice when providers load (Telnyx.NaturalHD.astra)
+  // Load integration secrets (for ElevenLabs API key)
+  useEffect(() => {
+    async function fetchSecrets() {
+      if (!open) return;
+      setLoadingSecrets(true);
+      try {
+        const res = await fetch("/api/integration-secrets");
+        const data = await res.json();
+        if (data.ok && data.secrets) {
+          setIntegrationSecrets(data.secrets);
+        }
+      } catch (err) {
+        console.error("Failed to load integration secrets:", err);
+      } finally {
+        setLoadingSecrets(false);
+      }
+    }
+    fetchSecrets();
+  }, [open]);
+
+  // Preselect default voice when providers load
   useEffect(() => {
     if (!open || !ttsProviders.length || loadingTts) return;
     const targetVoiceId = DEFAULT_TTS_VOICE;
@@ -296,7 +345,6 @@ export default function CreateAgentSheet({
         }
       }
     }
-    // Fallback: use first Telnyx provider/model/voice if default not found
     const telnyxProv = ttsProviders.find(
       (p) => String(p?.id || "").toLowerCase() === "telnyx"
     );
@@ -319,14 +367,13 @@ export default function CreateAgentSheet({
     return provider?.models || [];
   };
   
-  // Get all voices for selected TTS provider and model (before language filtering)
+  // Get all voices for selected TTS provider and model
   const allTtsVoices = useMemo(() => {
     const provider = ttsProviders.find(
       (p) => String(p?.id || "").toLowerCase() === String(ttsProvider || "").toLowerCase()
     );
     if (!provider?.models) return [];
     
-    // If no model selected, get all voices from all models
     if (!ttsModel) {
       const allVoices = [];
       for (const m of provider.models) {
@@ -336,37 +383,20 @@ export default function CreateAgentSheet({
       return allVoices.filter((v) => v?.id);
     }
     
-    // Find specific model and return its voices
     const model = provider.models.find(m => m.id === ttsModel);
     return model?.voices?.filter((v) => v?.id) || [];
   }, [ttsProviders, ttsProvider, ttsModel]);
 
-  // Extract available languages from voices
+  // Extract available languages from TTS voices
   const ttsLanguageOptions = useMemo(() => {
     const map = new Map();
-    let langNames = null;
-    let regionNames = null;
-    try {
-      langNames = new Intl.DisplayNames(undefined, { type: "language" });
-      regionNames = new Intl.DisplayNames(undefined, { type: "region" });
-    } catch (_) {}
-
     for (const v of allTtsVoices) {
       const norm = normalizeLocaleCode(v?.language);
       if (!norm || map.has(norm)) continue;
-      const [lang, region] = norm.split("-");
-      let label = norm.toUpperCase();
-      try {
-        const ln = langNames?.of(lang) || lang.toUpperCase();
-        const rn = regionNames?.of(region) || region.toUpperCase();
-        label = `${ln} (${rn})`;
-      } catch (_) {}
-      const flag = regionToFlag(region);
-      map.set(norm, { value: norm, label, flag });
+      const info = getLanguageDisplayInfo(v?.language);
+      map.set(norm, info);
     }
-    return Array.from(map.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [allTtsVoices]);
 
   const filteredTtsLanguageOptions = useMemo(() => {
@@ -379,7 +409,7 @@ export default function CreateAgentSheet({
     );
   }, [ttsLanguageOptions, ttsLanguageSearch]);
 
-  // Filter voices by language and dedupe by id (same voice can appear in multiple models)
+  // Filter voices by language
   const getTtsVoices = () => {
     let filtered = allTtsVoices;
     if (ttsLanguageFilter) {
@@ -395,11 +425,42 @@ export default function CreateAgentSheet({
     });
   };
 
-  // Get selected language display info
   const selectedTtsLanguageInfo = useMemo(() => {
     if (!ttsLanguageFilter) return null;
     return ttsLanguageOptions.find((opt) => opt.value === ttsLanguageFilter);
   }, [ttsLanguageFilter, ttsLanguageOptions]);
+
+  // STT language options from TRANSCRIPTION_PROVIDERS
+  const sttLanguageOptions = useMemo(() => {
+    const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
+    if (!provider?.languages?.length) return [];
+    
+    return provider.languages
+      .map(lang => getLanguageDisplayInfo(lang))
+      .sort((a, b) => {
+        // Put "auto" and "auto_detect" first
+        const aIsAuto = a.value === "auto" || a.value === "auto_detect";
+        const bIsAuto = b.value === "auto" || b.value === "auto_detect";
+        if (aIsAuto && !bIsAuto) return -1;
+        if (!aIsAuto && bIsAuto) return 1;
+        return a.label.localeCompare(b.label);
+      });
+  }, [sttModel]);
+
+  const filteredSttLanguageOptions = useMemo(() => {
+    if (!sttLanguageSearch.trim()) return sttLanguageOptions;
+    const search = sttLanguageSearch.toLowerCase();
+    return sttLanguageOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(search) ||
+        option.value.toLowerCase().includes(search)
+    );
+  }, [sttLanguageOptions, sttLanguageSearch]);
+
+  const selectedSttLanguageInfo = useMemo(() => {
+    if (!sttLanguage) return null;
+    return sttLanguageOptions.find((opt) => opt.value === sttLanguage);
+  }, [sttLanguage, sttLanguageOptions]);
 
   // Helper to update a creation step status
   const updateStepStatus = (stepId, status, error = null) => {
@@ -420,7 +481,6 @@ export default function CreateAgentSheet({
     instructions += workflow?.description || "You are a helpful AI assistant.";
     instructions += "\n\n";
     
-    // Generate from workflow stages and items
     if (stages && stages.length > 0) {
       instructions += "## Conversation Flow:\n\n";
       
@@ -432,7 +492,7 @@ export default function CreateAgentSheet({
         instructions += "\n";
         
         if (stage.items && stage.items.length > 0) {
-          stage.items.forEach((item, itemIdx) => {
+          stage.items.forEach((item) => {
             const itemType = item.item_type || item.type;
             const label = item.label || item.name;
             const description = item.description || "";
@@ -471,12 +531,10 @@ export default function CreateAgentSheet({
     instructions += "- If the caller wants to speak to a human, offer to transfer them\n";
     instructions += "- Confirm important information before proceeding\n";
     
-    // Add call context with system variables
     instructions += "\n## Call Context\n\n";
     instructions += "The call is taking place via the {{telnyx_conversation_channel}} channel on {{telnyx_current_time}}. ";
     instructions += "The agent is at {{telnyx_agent_target}}, and the client is at {{telnyx_end_user_target}}.\n";
 
-    // Add tool usage instructions
     instructions += "\n## Available Tools:\n\n";
     instructions += "### Transfer Tool\n";
     instructions += "Use the **transfer** tool when:\n";
@@ -510,12 +568,10 @@ export default function CreateAgentSheet({
       updateStepStatus("assistant", "running");
       const instructions = generateInstructions();
       
-      // Build transfer tool SIP URI from selected call flow
       const transferSipUri = selectedCallFlowId 
         ? `sip:username@${selectedCallFlowId}.sip.telnyx.com`
         : null;
 
-      // Build tools array using Telnyx built-in tool format
       const tools = [
         {
           type: "hangup",
@@ -526,7 +582,6 @@ export default function CreateAgentSheet({
         },
       ];
 
-      // Add transfer tool if call flow is selected
       if (transferSipUri) {
         tools.push({
           type: "transfer",
@@ -549,19 +604,34 @@ export default function CreateAgentSheet({
         });
       }
 
-      // Build the agent payload (per Telnyx CreateAssistantRequest)
+      // Build voice settings
+      const voiceSettings = {
+        voice: ttsVoice,
+      };
+      
+      // Add API key ref for ElevenLabs
+      if (isElevenLabs && ttsApiKeyRef) {
+        voiceSettings.voice_api_key_ref = ttsApiKeyRef;
+      }
+
+      // Build transcription config
+      const transcriptionConfig = {
+        model: sttModel,
+        language: sttLanguage,
+      };
+      
+      // Add region for Azure
+      if (sttRequiresRegion && sttAzureRegion) {
+        transcriptionConfig.region = sttAzureRegion;
+      }
+
       const payload = {
         name: agentName.trim() || "Test Agent",
         model: selectedModel,
         instructions: instructions,
         greeting: "Hello! How can I help you today?",
-        voice_settings: {
-          voice: ttsVoice,
-        },
-        transcription: {
-          model: `${sttProvider}/${sttModel}`,
-          language: sttLanguage,
-        },
+        voice_settings: voiceSettings,
+        transcription: transcriptionConfig,
         enabled_features: ["telephony"],
         telephony_settings: {
           supports_unauthenticated_web_calls: true,
@@ -589,7 +659,7 @@ export default function CreateAgentSheet({
       updateStepStatus("assistant", "success");
       setCreatedAgent(data.assistant);
       
-      // Step 2: Enable telephony (voice) and unauthenticated web calls
+      // Step 2: Enable telephony
       updateStepStatus("telephony", "running");
       if (assistantId) {
         try {
@@ -618,18 +688,16 @@ export default function CreateAgentSheet({
         updateStepStatus("telephony", "skipped");
       }
       
-      // Step 3: Sync Insights (if workflow has slots)
+      // Step 3: Sync Insights
       updateStepStatus("insights", "running");
       if (workflowId) {
         try {
-          // First save assistant ID so insights can reference it
           await fetch(`/api/admin/workflows/${workflowId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ai_assistant_id: assistantId }),
           });
           
-          // Now sync insights
           const insightRes = await fetch(`/api/admin/workflows/${workflowId}/sync-insights`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -638,7 +706,6 @@ export default function CreateAgentSheet({
           const insightData = await insightRes.json().catch(() => ({}));
           
           if (!insightRes.ok) {
-            // Not a critical error - workflow might not have slots
             if (insightRes.status === 400 && insightData.error?.includes("no slot")) {
               updateStepStatus("insights", "skipped");
             } else {
@@ -656,11 +723,10 @@ export default function CreateAgentSheet({
         updateStepStatus("insights", "skipped");
       }
       
-      // Step 4: Link to Workflow (already done in step 3, but mark complete)
+      // Step 4: Link to Workflow
       updateStepStatus("workflow", "running");
       if (workflowId && assistantId) {
         try {
-          // Already saved in step 3, just verify
           updateStepStatus("workflow", "success");
         } catch (err) {
           console.error("Failed to save assistant ID to workflow:", err);
@@ -675,7 +741,6 @@ export default function CreateAgentSheet({
         onAgentCreated(assistantId);
       }
     } catch (err) {
-      // Mark current running step as error
       setCreationSteps((prev) =>
         prev.map((step) =>
           step.status === "running" ? { ...step, status: "error", error: err.message } : step
@@ -709,14 +774,12 @@ export default function CreateAgentSheet({
               {creating || createdAgent ? (
                 // Progress/Success state
                 <div className="py-4 space-y-6">
-                  {/* Progress Steps */}
                   <div className="space-y-3">
-                    {creationSteps.map((step, idx) => (
+                    {creationSteps.map((step) => (
                       <div
                         key={step.id}
                         className="flex items-start gap-3 p-3 rounded-lg border bg-card"
                       >
-                        {/* Step Icon */}
                         <div className="mt-0.5">
                           {step.status === "pending" && (
                             <IconCircleDashed className="size-5 text-muted-foreground" />
@@ -735,7 +798,6 @@ export default function CreateAgentSheet({
                           )}
                         </div>
                         
-                        {/* Step Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className={`text-sm font-medium ${
@@ -757,7 +819,6 @@ export default function CreateAgentSheet({
                     ))}
                   </div>
                   
-                  {/* Success Summary */}
                   {createdAgent && !creating && (
                     <div className="space-y-4">
                       <Separator />
@@ -840,174 +901,191 @@ export default function CreateAgentSheet({
                       <div className="space-y-2">
                         <Skeleton className="h-10 w-full" />
                         <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
                       </div>
                     ) : (
-                      <div className="grid gap-3">
-                        <div className="space-y-2">
-                          <Label>Provider</Label>
-                          <Select 
-                            value={ttsProvider} 
-                            onValueChange={(v) => {
-                              setTtsProvider(v);
-                              // Reset model, voice and language filter when provider changes
-                              const provider = ttsProviders.find(
-                                (p) => String(p?.id || "").toLowerCase() === String(v || "").toLowerCase()
-                              );
-                              const firstModel = provider?.models?.[0];
-                              setTtsModel(firstModel?.id || "");
-                              setTtsVoice("");
-                              setTtsLanguageFilter("");
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select provider" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ttsProviders.map((provider) => (
-                                <SelectItem key={provider.id} value={provider.id}>
-                                  {formatProviderLabel(provider.id)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label>Model</Label>
-                          <Select 
-                            value={ttsModel} 
-                            onValueChange={(v) => {
-                              setTtsModel(v);
-                              // Reset voice and language filter when model changes
-                              setTtsVoice("");
-                              setTtsLanguageFilter("");
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select model" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {getTtsModels().map((model) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  {model.name || model.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                      <div className="space-y-3">
+                        {/* Row 1: Provider + Model */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <Label>Provider</Label>
+                            <Select 
+                              value={ttsProvider} 
+                              onValueChange={(v) => {
+                                setTtsProvider(v);
+                                const provider = ttsProviders.find(
+                                  (p) => String(p?.id || "").toLowerCase() === String(v || "").toLowerCase()
+                                );
+                                const firstModel = provider?.models?.[0];
+                                setTtsModel(firstModel?.id || "");
+                                setTtsVoice("");
+                                setTtsLanguageFilter("");
+                                setTtsApiKeyRef("");
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select provider" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ttsProviders.map((provider) => (
+                                  <SelectItem key={provider.id} value={provider.id}>
+                                    {formatProviderLabel(provider.id)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label>Model</Label>
+                            <Select 
+                              value={ttsModel} 
+                              onValueChange={(v) => {
+                                setTtsModel(v);
+                                setTtsVoice("");
+                                setTtsLanguageFilter("");
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select model" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getTtsModels().map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.name || model.id}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
 
-                        {/* Language Filter */}
-                        {ttsLanguageOptions.length > 0 && (
-                          <div className="space-y-2">
-                            <Label>Language Filter</Label>
-                            <Popover
-                              open={ttsLanguagePopoverOpen}
-                              onOpenChange={setTtsLanguagePopoverOpen}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between"
-                                  disabled={loadingTts}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {selectedTtsLanguageInfo ? (
-                                      <>
-                                        <span>{selectedTtsLanguageInfo.flag}</span>
-                                        <span>{selectedTtsLanguageInfo.label}</span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <IconWorld className="h-4 w-4" />
-                                        <span>All languages</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0" align="start">
-                                <Command>
-                                  <CommandInput
-                                    placeholder="Search languages..."
-                                    value={ttsLanguageSearch}
-                                    onValueChange={setTtsLanguageSearch}
-                                    className="h-9"
-                                  />
-                                  <CommandEmpty>No language found.</CommandEmpty>
-                                  <CommandGroup className="max-h-[300px] overflow-auto">
-                                    <CommandItem
-                                      value="__any__"
-                                      onSelect={() => {
-                                        setTtsLanguageFilter("");
-                                        setTtsVoice("");
-                                        setTtsLanguagePopoverOpen(false);
-                                      }}
-                                    >
-                                      <IconCheck
-                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                          !ttsLanguageFilter ? "opacity-100" : "opacity-0"
-                                        }`}
-                                      />
-                                      <IconWorld className="size-4 mr-2" />
-                                      <span>Any</span>
-                                    </CommandItem>
-                                    {filteredTtsLanguageOptions.map((opt) => (
+                        {/* Row 2: Language Filter (or API Key for ElevenLabs) + Voice */}
+                        <div className="grid grid-cols-2 gap-3">
+                          {isElevenLabs ? (
+                            // ElevenLabs: Show API Key selector instead of Language
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-1">
+                                <IconKey className="size-3" />
+                                API Key Reference
+                              </Label>
+                              {loadingSecrets ? (
+                                <Skeleton className="h-10 w-full" />
+                              ) : (
+                                <Select value={ttsApiKeyRef} onValueChange={setTtsApiKeyRef}>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select API key" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {integrationSecrets.map((secret) => (
+                                      <SelectItem key={secret.identifier} value={secret.identifier}>
+                                        {secret.identifier}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          ) : (
+                            // Other providers: Show Language Filter
+                            <div className="space-y-2">
+                              <Label>Language</Label>
+                              <Popover
+                                open={ttsLanguagePopoverOpen}
+                                onOpenChange={setTtsLanguagePopoverOpen}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    className="w-full justify-between"
+                                    disabled={loadingTts}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {selectedTtsLanguageInfo ? (
+                                        <>
+                                          <span>{selectedTtsLanguageInfo.flag}</span>
+                                          <span className="truncate">{selectedTtsLanguageInfo.label}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <IconWorld className="h-4 w-4" />
+                                          <span>All languages</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput
+                                      placeholder="Search languages..."
+                                      value={ttsLanguageSearch}
+                                      onValueChange={setTtsLanguageSearch}
+                                      className="h-9"
+                                    />
+                                    <CommandEmpty>No language found.</CommandEmpty>
+                                    <CommandGroup className="max-h-[300px] overflow-y-auto">
                                       <CommandItem
-                                        key={opt.value}
-                                        value={`${opt.label}-${opt.value}`}
+                                        value="__any__"
                                         onSelect={() => {
-                                          setTtsLanguageFilter(opt.value);
+                                          setTtsLanguageFilter("");
                                           setTtsVoice("");
                                           setTtsLanguagePopoverOpen(false);
                                         }}
                                       >
                                         <IconCheck
                                           className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
-                                            ttsLanguageFilter === opt.value
-                                              ? "opacity-100"
-                                              : "opacity-0"
+                                            !ttsLanguageFilter ? "opacity-100" : "opacity-0"
                                           }`}
                                         />
-                                        <span className="mr-2">{opt.flag}</span>
-                                        <span>{opt.label}</span>
+                                        <IconWorld className="size-4 mr-2" />
+                                        <span>All languages</span>
                                       </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-                            <p className="text-xs text-muted-foreground">
-                              Filter voices by language ({ttsLanguageOptions.length} language
-                              {ttsLanguageOptions.length !== 1 ? "s" : ""} available)
-                            </p>
-                          </div>
-                        )}
-                        
-                        <div className="space-y-2">
-                          <Label>Voice</Label>
-                          <Select value={ttsVoice} onValueChange={setTtsVoice}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select voice" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px]">
-                              {getTtsVoices().map((voice) => (
-                                <SelectItem key={voice.id} value={voice.id}>
-                                  {voice.language 
-                                    ? `${voice.name || voice.id} (${voice.language})`
-                                    : voice.name || voice.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {ttsLanguageFilter && (
-                            <p className="text-xs text-muted-foreground">
-                              Showing {getTtsVoices().length} voice{getTtsVoices().length !== 1 ? "s" : ""} for{" "}
-                              {selectedTtsLanguageInfo?.label || ttsLanguageFilter}
-                            </p>
+                                      {filteredTtsLanguageOptions.map((opt) => (
+                                        <CommandItem
+                                          key={opt.value}
+                                          value={`${opt.label}-${opt.value}`}
+                                          onSelect={() => {
+                                            setTtsLanguageFilter(opt.value);
+                                            setTtsVoice("");
+                                            setTtsLanguagePopoverOpen(false);
+                                          }}
+                                        >
+                                          <IconCheck
+                                            className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                              ttsLanguageFilter === opt.value
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            }`}
+                                          />
+                                          <span className="mr-2">{opt.flag}</span>
+                                          <span>{opt.label}</span>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
                           )}
+                          
+                          <div className="space-y-2">
+                            <Label>Voice</Label>
+                            <Select value={ttsVoice} onValueChange={setTtsVoice}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select voice" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[200px]">
+                                {getTtsVoices().map((voice) => (
+                                  <SelectItem key={voice.id} value={voice.id}>
+                                    {voice.language 
+                                      ? `${voice.name || voice.id} (${voice.language})`
+                                      : voice.name || voice.id}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1022,62 +1100,127 @@ export default function CreateAgentSheet({
                       <h3 className="font-semibold">Speech-to-Text (STT)</h3>
                     </div>
                     
-                    <div className="grid gap-3">
-                      <div className="space-y-2">
-                        <Label>Provider</Label>
-                        <Select 
-                          value={sttProvider} 
-                          onValueChange={(v) => {
-                            setSttProvider(v);
-                            // Reset model when provider changes
-                            const firstModel = STT_MODELS[v]?.[0];
-                            setSttModel(firstModel?.value || "");
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select provider" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STT_PROVIDERS.map((provider) => (
-                              <SelectItem key={provider.value} value={provider.value}>
-                                {provider.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    <div className="space-y-3">
+                      {/* Row 1: Model + Region (if Azure) */}
+                      <div className={`grid gap-3 ${sttRequiresRegion ? "grid-cols-2" : "grid-cols-1"}`}>
+                        <div className="space-y-2">
+                          <Label>Model</Label>
+                          <Select 
+                            value={sttModel} 
+                            onValueChange={(v) => {
+                              setSttModel(v);
+                              // Reset language to auto if available, else first language
+                              const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === v);
+                              if (provider?.languages?.includes("auto") || provider?.languages?.includes("auto_detect")) {
+                                setSttLanguage(provider.languages.includes("auto") ? "auto" : "auto_detect");
+                              } else if (provider?.languages?.length > 0) {
+                                setSttLanguage(provider.languages[0]);
+                              } else {
+                                setSttLanguage("");
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select model" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TRANSCRIPTION_PROVIDERS.map((provider) => (
+                                <SelectItem key={provider.model_name} value={provider.model_name}>
+                                  {provider.label || provider.model_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        {/* Azure Region selector */}
+                        {sttRequiresRegion && (
+                          <div className="space-y-2">
+                            <Label>Azure Region</Label>
+                            <Select value={sttAzureRegion} onValueChange={setSttAzureRegion}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select region" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {AZURE_REGIONS.map((region) => (
+                                  <SelectItem key={region.value} value={region.value}>
+                                    {region.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                       
-                      <div className="space-y-2">
-                        <Label>Model</Label>
-                        <Select value={sttModel} onValueChange={setSttModel}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(STT_MODELS[sttProvider] || []).map((model) => (
-                              <SelectItem key={model.value} value={model.value}>
-                                {model.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label>Language</Label>
-                        <Select value={sttLanguage} onValueChange={setSttLanguage}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select language" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STT_LANGUAGES.map((lang) => (
-                              <SelectItem key={lang.value} value={lang.value}>
-                                {lang.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {/* Row 2: Language (with searchable popover like TTS) */}
+                      {sttLanguageOptions.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Language</Label>
+                          <Popover
+                            open={sttLanguagePopoverOpen}
+                            onOpenChange={setSttLanguagePopoverOpen}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between"
+                              >
+                                <div className="flex items-center gap-2">
+                                  {selectedSttLanguageInfo ? (
+                                    <>
+                                      <span>{selectedSttLanguageInfo.flag}</span>
+                                      <span className="truncate">{selectedSttLanguageInfo.label}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <IconWorld className="h-4 w-4" />
+                                      <span>Select language</span>
+                                    </>
+                                  )}
+                                </div>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0" align="start">
+                              <Command>
+                                <CommandInput
+                                  placeholder="Search languages..."
+                                  value={sttLanguageSearch}
+                                  onValueChange={setSttLanguageSearch}
+                                  className="h-9"
+                                />
+                                <CommandEmpty>No language found.</CommandEmpty>
+                                <CommandGroup className="max-h-[300px] overflow-y-auto">
+                                  {filteredSttLanguageOptions.map((opt) => (
+                                    <CommandItem
+                                      key={opt.value}
+                                      value={`${opt.label}-${opt.value}`}
+                                      onSelect={() => {
+                                        setSttLanguage(opt.value);
+                                        setSttLanguagePopoverOpen(false);
+                                      }}
+                                    >
+                                      <IconCheck
+                                        className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${
+                                          sttLanguage === opt.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        }`}
+                                      />
+                                      <span className="mr-2">{opt.flag}</span>
+                                      <span>{opt.label}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <p className="text-xs text-muted-foreground">
+                            {sttLanguageOptions.length} language{sttLanguageOptions.length !== 1 ? "s" : ""} available for this model
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1189,7 +1332,7 @@ export default function CreateAgentSheet({
             </Button>
             <Button
               onClick={handleCreate}
-              disabled={creating || !agentName.trim()}
+              disabled={creating || !agentName.trim() || (isElevenLabs && !ttsApiKeyRef)}
             >
               {creating ? (
                 <>
