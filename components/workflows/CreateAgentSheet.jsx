@@ -625,18 +625,28 @@ export default function CreateAgentSheet({
         voice_speed: 1.0,
       };
       
+      // Debug logging for ElevenLabs configuration
+      console.log("[CreateAgentSheet] Voice config:", {
+        ttsVoice,
+        ttsProvider,
+        isElevenLabs,
+        elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
+      });
+      
       // Add ElevenLabs-specific settings (required for ElevenLabs voices)
       if (isElevenLabs) {
+        // api_key_ref is REQUIRED for ElevenLabs - must match integration secret identifier
         if (!elevenLabsApiKeyRef) {
-          throw new Error("ElevenLabs API key reference is required. Please configure ELEVENLABS_API_KEY_REF in your environment.");
+          throw new Error("ElevenLabs API key reference is required. Please configure ELEVENLABS_API_KEY_REF environment variable on the server.");
         }
         voiceSettings.api_key_ref = elevenLabsApiKeyRef;
-        // ElevenLabs-specific parameters with default values
-        // These are REQUIRED - Telnyx API rejects null values
+        // ElevenLabs-specific parameters - all must have values (not null)
+        voiceSettings.temperature = 0.5;       // Controls emotional range/randomness (0-1)
         voiceSettings.similarity_boost = 0.5;  // How closely AI adheres to original voice (0-1)
-        voiceSettings.stability = 0.5;         // Voice stability/consistency (0-1)
         voiceSettings.style = 0;               // Style exaggeration (0 = no extra consumption)
         voiceSettings.use_speaker_boost = true; // Amplifies similarity to original speaker
+        
+        console.log("[CreateAgentSheet] ElevenLabs voice_settings:", voiceSettings);
       }
 
       // Build transcription config
