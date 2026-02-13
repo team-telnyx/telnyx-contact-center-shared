@@ -963,6 +963,12 @@ export default function CreateAgentSheet({
                             <Select 
                               value={ttsProvider} 
                               onValueChange={(v) => {
+                                console.log("[CreateAgentSheet] Provider changed:", {
+                                  from: ttsProvider,
+                                  to: v,
+                                  isElevenLabs: v?.toLowerCase() === "elevenlabs",
+                                  elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
+                                });
                                 setTtsProvider(v);
                                 const provider = ttsProviders.find(
                                   (p) => String(p?.id || "").toLowerCase() === String(v || "").toLowerCase()
@@ -1154,7 +1160,23 @@ export default function CreateAgentSheet({
                                           key={voice.id}
                                           value={`${voice.name}-${voice.id}`}
                                           onSelect={() => {
-                                            setTtsVoice(voice.id);
+                                            const voiceId = voice.id;
+                                            const isElevenLabsVoice = voiceId?.toLowerCase().startsWith("elevenlabs");
+                                            console.log("[CreateAgentSheet] Voice selected:", {
+                                              voiceId,
+                                              voiceName: voice.name,
+                                              isElevenLabsVoice,
+                                              currentProvider: ttsProvider,
+                                              elevenLabsApiKeyRef: elevenLabsApiKeyRef || "(empty)",
+                                              willUseSettings: isElevenLabsVoice ? {
+                                                api_key_ref: elevenLabsApiKeyRef || "elevenlabs-api-key (fallback)",
+                                                temperature: 0.5,
+                                                similarity_boost: 0.5,
+                                                style: 0,
+                                                use_speaker_boost: true,
+                                              } : "N/A (not ElevenLabs)",
+                                            });
+                                            setTtsVoice(voiceId);
                                             setTtsVoicePopoverOpen(false);
                                           }}
                                         >
