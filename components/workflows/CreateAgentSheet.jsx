@@ -982,7 +982,7 @@ export default function CreateAgentSheet({
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-[300px] p-0" align="start">
-                                <Command className="max-h-[350px] flex flex-col">
+                                <Command>
                                   <CommandInput
                                     placeholder="Search languages..."
                                     value={ttsLanguageSearch}
@@ -990,8 +990,7 @@ export default function CreateAgentSheet({
                                     className="h-9"
                                   />
                                   <CommandEmpty>No language found.</CommandEmpty>
-                                  <div className="flex-1 overflow-y-auto">
-                                  <CommandGroup>
+                                  <CommandGroup className="max-h-[300px] overflow-auto">
                                     <CommandItem
                                       value="__any__"
                                       onSelect={() => {
@@ -1030,7 +1029,6 @@ export default function CreateAgentSheet({
                                       </CommandItem>
                                     ))}
                                   </CommandGroup>
-                                  </div>
                                 </Command>
                               </PopoverContent>
                             </Popover>
@@ -1150,7 +1148,7 @@ export default function CreateAgentSheet({
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[300px] p-0" align="start">
-                              <Command className="max-h-[350px] flex flex-col">
+                              <Command>
                                 <CommandInput
                                   placeholder="Search languages..."
                                   value={sttLanguageSearch}
@@ -1158,8 +1156,7 @@ export default function CreateAgentSheet({
                                   className="h-9"
                                 />
                                 <CommandEmpty>No language found.</CommandEmpty>
-                                <div className="flex-1 overflow-y-auto">
-                                <CommandGroup>
+                                <CommandGroup className="max-h-[300px] overflow-auto">
                                   {filteredSttLanguageOptions.map((opt) => (
                                     <CommandItem
                                       key={opt.value}
@@ -1181,7 +1178,6 @@ export default function CreateAgentSheet({
                                     </CommandItem>
                                   ))}
                                 </CommandGroup>
-                                </div>
                               </Command>
                             </PopoverContent>
                           </Popover>
