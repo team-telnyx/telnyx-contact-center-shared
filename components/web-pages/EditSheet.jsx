@@ -382,6 +382,47 @@ export default function WebPageEditSheet({
                       </div>
                     </div>
                   </div>
+
+                  {/* Preview Section */}
+                  {url && !url.includes("{{") && (() => {
+                    try {
+                      new URL(url.trim());
+                      return true;
+                    } catch {
+                      return false;
+                    }
+                  })() && (
+                    <div className="pt-4 border-t">
+                      <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                        Preview
+                      </h3>
+                      <div className="relative w-full rounded-lg overflow-hidden border bg-muted/30">
+                        <iframe
+                          src={url.trim()}
+                          title="Page Preview"
+                          className="w-full h-64 border-0"
+                          sandbox="allow-scripts allow-same-origin allow-forms"
+                          loading="lazy"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Some pages may not display due to security restrictions (X-Frame-Options)
+                      </p>
+                    </div>
+                  )}
+
+                  {url && url.includes("{{") && (
+                    <div className="pt-4 border-t">
+                      <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                        Preview
+                      </h3>
+                      <div className="flex items-center justify-center h-32 rounded-lg border border-dashed bg-muted/20">
+                        <p className="text-sm text-muted-foreground">
+                          Preview unavailable when URL contains secret placeholders
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
