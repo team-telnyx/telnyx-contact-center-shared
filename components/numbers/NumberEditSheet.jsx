@@ -7,6 +7,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
+  SheetFooter,
 } from "@/components/ui/sheet";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,6 @@ import {
   IconSelector,
   IconMessageCircle,
   IconCalendar,
-  IconDeviceFloppy,
 } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { countries } from "@/lib/countries";
@@ -681,8 +681,7 @@ export default function NumberEditSheet({
           </Card>
         </div>
 
-        {/* Footer Actions */}
-        <div className="sticky bottom-0 bg-muted border-t pt-4 pb-2 flex gap-2 justify-end">
+        <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -690,15 +689,10 @@ export default function NumberEditSheet({
           >
             Cancel
           </Button>
-          <Button
-            onClick={handleSave}
-            disabled={loading}
-            className="bg-[#00C08B] hover:bg-[#00A074] text-white"
-          >
-            <IconDeviceFloppy className="size-4 mr-2" />
+          <Button onClick={handleSave} disabled={loading}>
             {loading ? "Saving..." : "Save Changes"}
           </Button>
-        </div>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   );
