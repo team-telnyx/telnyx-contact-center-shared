@@ -580,7 +580,7 @@ class MockMicrophone {
 async function generateTTS(text, voice) {
   console.log(`[TTS] Generating for: "${text.substring(0, 50)}..." with voice: ${voice}`);
 
-  const response = await fetch("/api/tts", {
+  const response = await fetch("/api/tts/speech", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
