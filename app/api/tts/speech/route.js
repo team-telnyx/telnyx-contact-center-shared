@@ -3,6 +3,8 @@ import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 
 export const dynamic = "force-dynamic";
 
+const ELEVENLABS_API_KEY_REF = process.env.ELEVENLABS_API_KEY_REF;
+
 export async function POST(request) {
   try {
     const apiKey = process.env.TELNYX_API_KEY;
@@ -22,7 +24,10 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const voice = String(body?.voice || body?.voice_id || "").trim();
     const text = String(body?.text || body?.payload || "").trim();
-    const voiceApiKeyRef = String(body?.voice_api_key_ref || "").trim();
+    const bodyApiKeyRef = String(body?.voice_api_key_ref || "").trim();
+    
+    // For ElevenLabs, use provided key or fallback to env var
+    const voiceApiKeyRef = bodyApiKeyRef || ELEVENLABS_API_KEY_REF || "";
 
     if (!voice || !text) {
       return new NextResponse(
@@ -37,13 +42,13 @@ export async function POST(request) {
       );
     }
 
-    // If using ElevenLabs provider, require API key reference to be provided
+    // If using ElevenLabs provider, require API key reference
     if (/^ElevenLabs\./i.test(voice) && !voiceApiKeyRef) {
       return new NextResponse(
         JSON.stringify({
           ok: false,
           error:
-            "ElevenLabs voice requires 'voice_api_key_ref' to be provided. Please select an API key from Integration Secrets.",
+            "ElevenLabs voice requires API key. Configure ELEVENLABS_API_KEY_REF in .env or pass voice_api_key_ref.",
         }),
         {
           status: 400,
