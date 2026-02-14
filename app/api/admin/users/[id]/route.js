@@ -150,7 +150,7 @@ export async function PUT(request, { params }) {
         for (const queueId of queuesToAdd) {
           await pool.query(
             `INSERT INTO cc_queue_user_assignments (id, queue_id, user_id, priority, enabled, activated_at, created_at, updated_at)
-             VALUES ($1, $2, $3, 0, true, NOW(), NOW(), NOW())
+             VALUES ($1, $2, $3, 1, true, NOW(), NOW(), NOW())
              ON CONFLICT (queue_id, user_id) DO UPDATE SET
                enabled = true,
                activated_at = NOW(),
