@@ -244,7 +244,6 @@ export default function EditSheet({
   }, [mediaFiles]);
 
   const [ttsProviders, setTtsProviders] = React.useState([]);
-  const [ttsSecrets, setTtsSecrets] = React.useState([]);
   const [ttsLoading, setTtsLoading] = React.useState(false);
   const [ttsProvider, setTtsProvider] = React.useState("AWS");
   const [ttsModel, setTtsModel] = React.useState("");
@@ -631,20 +630,7 @@ export default function EditSheet({
           setTtsLoading(false);
         }
 
-        // Load secrets for ElevenLabs
-        if (ttsProvider === "ElevenLabs") {
-          try {
-            const secretsRes = await fetch("/api/admin/secrets", {
-              cache: "no-store",
-            });
-            if (secretsRes.ok) {
-              const secretsData = await secretsRes.json();
-              setTtsSecrets(secretsData.secrets || []);
-            }
-          } catch (err) {
-            console.error("Failed to load secrets:", err);
-          }
-        }
+        // ElevenLabs API key is loaded from ELEVENLABS_API_KEY_REF env var server-side
       } catch (err) {
         console.error("Failed to load data:", err);
       }
@@ -1851,53 +1837,6 @@ export default function EditSheet({
                                   </div>
                                 )}
 
-                                {/* API Key Reference (for ElevenLabs) */}
-                                {ttsProvider === "ElevenLabs" && (
-                                  <div className="grid gap-2">
-                                    <Label className="text-sm">
-                                      Voice API Key Reference
-                                    </Label>
-                                    <Select
-                                      value={
-                                        queueAudioTtsVoiceApiKeyRef ||
-                                        "__none__"
-                                      }
-                                      onValueChange={(value) => {
-                                        const actualValue =
-                                          value === "__none__" ? "" : value;
-                                        setQueueAudioTtsVoiceApiKeyRef(
-                                          actualValue,
-                                        );
-                                      }}
-                                    >
-                                      <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select API key" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="__none__">
-                                          None
-                                        </SelectItem>
-                                        {ttsSecrets.map((secret) => (
-                                          <SelectItem
-                                            key={secret.id}
-                                            value={secret.name}
-                                          >
-                                            {secret.name}
-                                            {secret.description && (
-                                              <span className="text-muted-foreground ml-2">
-                                                — {secret.description}
-                                              </span>
-                                            )}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    <p className="text-xs text-muted-foreground">
-                                      API key reference for ElevenLabs voice
-                                      provider
-                                    </p>
-                                  </div>
-                                )}
                               </div>
                             </>
                           )}

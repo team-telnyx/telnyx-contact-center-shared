@@ -20,8 +20,8 @@ export async function POST(request) {
     // Check if ElevenLabs voice
     const isElevenLabs = /^ElevenLabs\./i.test(voice);
     
-    // For ElevenLabs, api_key_ref is required
-    const apiKeyRef = voice_api_key_ref || ELEVENLABS_API_KEY_REF;
+    // For ElevenLabs, api_key_ref is required (ignore empty strings)
+    const apiKeyRef = (voice_api_key_ref && voice_api_key_ref.trim()) || ELEVENLABS_API_KEY_REF;
     if (isElevenLabs && !apiKeyRef) {
       return NextResponse.json({ 
         error: 'ElevenLabs voice requires api_key_ref. Configure ELEVENLABS_API_KEY_REF or pass voice_api_key_ref.' 
