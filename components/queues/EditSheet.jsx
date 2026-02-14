@@ -634,12 +634,12 @@ export default function EditSheet({
         // Load secrets for ElevenLabs
         if (ttsProvider === "ElevenLabs") {
           try {
-            const secretsRes = await fetch("/api/admin/secrets?type=api_key", {
+            const secretsRes = await fetch("/api/admin/secrets", {
               cache: "no-store",
             });
             if (secretsRes.ok) {
               const secretsData = await secretsRes.json();
-              setTtsSecrets(secretsData.items || []);
+              setTtsSecrets(secretsData.secrets || []);
             }
           } catch (err) {
             console.error("Failed to load secrets:", err);
@@ -1880,9 +1880,14 @@ export default function EditSheet({
                                         {ttsSecrets.map((secret) => (
                                           <SelectItem
                                             key={secret.id}
-                                            value={secret.identifier}
+                                            value={secret.name}
                                           >
-                                            {secret.name || secret.identifier}
+                                            {secret.name}
+                                            {secret.description && (
+                                              <span className="text-muted-foreground ml-2">
+                                                — {secret.description}
+                                              </span>
+                                            )}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
