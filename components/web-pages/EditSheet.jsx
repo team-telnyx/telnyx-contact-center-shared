@@ -38,6 +38,8 @@ export default function WebPageEditSheet({
   const [secrets, setSecrets] = React.useState([]);
   const [showSecretSuggestions, setShowSecretSuggestions] = React.useState(false);
   const [secretInputPosition, setSecretInputPosition] = React.useState({ start: 0, end: 0 });
+  const [resolvedUrl, setResolvedUrl] = React.useState("");
+  const [resolvingUrl, setResolvingUrl] = React.useState(false);
   const urlInputRef = React.useRef(null);
 
   // Load page data when pageId changes
@@ -157,6 +159,50 @@ export default function WebPageEditSheet({
       secret.name.toLowerCase().includes(currentInput.toLowerCase())
     );
   }, [secrets, showSecretSuggestions, url, secretInputPosition]);
+
+  // Resolve URL with secrets for preview
+  React.useEffect(() => {
+    async function resolveUrl() {
+      // Clear resolved URL if no URL or URL doesn't contain secrets
+      if (!url || !url.includes("{{")) {
+        setResolvedUrl("");
+        return;
+      }
+
+      // Validate URL format first (with placeholders replaced)
+      const urlToValidate = url.trim().replace(/\{\{[^}]+\}\}/g, "placeholder");
+      try {
+        new URL(urlToValidate);
+      } catch {
+        setResolvedUrl("");
+        return;
+      }
+
+      setResolvingUrl(true);
+      try {
+        const r = await fetch("/api/admin/web-pages/resolve-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url.trim() }),
+        });
+        const d = await r.json();
+        if (r.ok && d.resolvedUrl) {
+          setResolvedUrl(d.resolvedUrl);
+        } else {
+          setResolvedUrl("");
+        }
+      } catch (err) {
+        console.error("Failed to resolve URL:", err);
+        setResolvedUrl("");
+      } finally {
+        setResolvingUrl(false);
+      }
+    }
+
+    // Debounce the resolution
+    const timeoutId = setTimeout(resolveUrl, 500);
+    return () => clearTimeout(timeoutId);
+  }, [url]);
 
   async function onSave() {
     // Validate required fields
@@ -384,9 +430,11 @@ export default function WebPageEditSheet({
                   </div>
 
                   {/* Preview Section */}
-                  {url && !url.includes("{{") && (() => {
+                  {url && (() => {
+                    // Check if URL is valid (with placeholders replaced for validation)
+                    const urlToValidate = url.trim().replace(/\{\{[^}]+\}\}/g, "placeholder");
                     try {
-                      new URL(url.trim());
+                      new URL(urlToValidate);
                       return true;
                     } catch {
                       return false;
@@ -396,31 +444,40 @@ export default function WebPageEditSheet({
                       <h3 className="text-sm font-semibold text-muted-foreground mb-3">
                         Preview
                       </h3>
-                      <div className="relative w-full rounded-lg overflow-hidden border bg-muted/30">
-                        <iframe
-                          src={url.trim()}
-                          title="Page Preview"
-                          className="w-full h-64 border-0"
-                          sandbox="allow-scripts allow-same-origin allow-forms"
-                          loading="lazy"
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Some pages may not display due to security restrictions (X-Frame-Options)
-                      </p>
-                    </div>
-                  )}
-
-                  {url && url.includes("{{") && (
-                    <div className="pt-4 border-t">
-                      <h3 className="text-sm font-semibold text-muted-foreground mb-3">
-                        Preview
-                      </h3>
-                      <div className="flex items-center justify-center h-32 rounded-lg border border-dashed bg-muted/20">
-                        <p className="text-sm text-muted-foreground">
-                          Preview unavailable when URL contains secret placeholders
-                        </p>
-                      </div>
+                      {resolvingUrl ? (
+                        <div className="flex items-center justify-center h-64 rounded-lg border bg-muted/30">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Resolving secrets...
+                          </div>
+                        </div>
+                      ) : url.includes("{{") && !resolvedUrl ? (
+                        <div className="flex items-center justify-center h-32 rounded-lg border border-dashed bg-muted/20">
+                          <p className="text-sm text-muted-foreground">
+                            Could not resolve secret placeholders. Check that secrets exist.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="relative w-full rounded-lg overflow-hidden border bg-muted/30">
+                            <iframe
+                              src={resolvedUrl || url.trim()}
+                              title="Page Preview"
+                              className="w-full h-64 border-0"
+                              sandbox="allow-scripts allow-same-origin allow-forms"
+                              loading="lazy"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {url.includes("{{") 
+                              ? "Preview with resolved secrets. Some pages may not display due to security restrictions."
+                              : "Some pages may not display due to security restrictions (X-Frame-Options)"}
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
                 </>
