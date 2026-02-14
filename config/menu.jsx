@@ -74,27 +74,15 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
-          title: "Data Sources",
-          url: "/admin/data-sources",
-          icon: IconDatabase,
-          role_access: ["admin", "owner"],
-        },
-        {
-          title: "Web Pages",
-          url: "/admin/web-pages",
-          icon: IconWorld,
-          role_access: ["admin", "owner"],
-        },
-        {
-          title: "Numbers",
-          url: "/admin/numbers",
-          icon: IconPhone,
-          role_access: ["admin", "owner"],
-        },
-        {
           title: "Queues",
           url: "/admin/queues",
           icon: IconList,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Skills",
+          url: "/admin/skills",
+          icon: IconAward,
           role_access: ["admin", "owner"],
         },
         {
@@ -110,27 +98,9 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
-          title: "Domains",
-          url: "/admin/domains",
-          icon: IconWorld,
-          role_access: ["admin", "owner"],
-        },
-        {
-          title: "Skills",
-          url: "/admin/skills",
-          icon: IconAward,
-          role_access: ["admin", "owner"],
-        },
-        {
           title: "Workflows",
           url: "/admin/workflows",
           icon: IconGitBranch,
-          role_access: ["admin", "owner"],
-        },
-        {
-          title: "Media Library",
-          url: "/admin/media-library",
-          icon: IconFileMusic,
           role_access: ["admin", "owner"],
         },
         {
@@ -140,9 +110,33 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
-          title: "CTI Testing",
-          url: "/admin/cti-testing",
-          icon: IconPhoneCall,
+          title: "Numbers",
+          url: "/admin/numbers",
+          icon: IconPhone,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Data Sources",
+          url: "/admin/data-sources",
+          icon: IconDatabase,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Web Pages",
+          url: "/admin/web-pages",
+          icon: IconWorld,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Media Library",
+          url: "/admin/media-library",
+          icon: IconFileMusic,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Domains",
+          url: "/admin/domains",
+          icon: IconWorld,
           role_access: ["admin", "owner"],
         },
         {
@@ -155,6 +149,12 @@ export const menuConfig = {
           title: "Theme Settings",
           url: "/settings",
           icon: IconPalette,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "CTI Testing",
+          url: "/admin/cti-testing",
+          icon: IconPhoneCall,
           role_access: ["admin", "owner"],
         },
       ],
