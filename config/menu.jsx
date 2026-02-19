@@ -20,9 +20,6 @@ import {
   IconDatabase,
   IconWorld,
   IconPhoneCall,
-  IconBrain,
-  IconPuzzle,
-  IconUsersGroup,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -159,30 +156,6 @@ export const menuConfig = {
           url: "/admin/cti-testing",
           icon: IconPhoneCall,
           role_access: ["admin", "owner"],
-        },
-      ],
-    },
-    {
-      label: "OPENCLAW",
-      icon: null,
-      items: [
-        {
-          title: "Insights",
-          url: "/openclaw/insights",
-          icon: IconBrain,
-          role_access: ["agent", "supervisor", "admin", "owner"],
-        },
-        {
-          title: "Skills",
-          url: "/openclaw/skills",
-          icon: IconPuzzle,
-          role_access: ["agent", "supervisor", "admin", "owner"],
-        },
-        {
-          title: "Community Hub",
-          url: "/openclaw/community",
-          icon: IconUsersGroup,
-          role_access: ["agent", "supervisor", "admin", "owner"],
         },
       ],
     },
