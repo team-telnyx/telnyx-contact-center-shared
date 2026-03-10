@@ -1041,7 +1041,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
           sourceCallControlId: transcription.callControlId,
           text: translation.text,
           targetLanguage: translation.targetLanguage || null,
-          targetLeg: "caller",
+          targetLeg: isCustomer ? "agent" : "caller",
         }),
       });
 
