@@ -26,7 +26,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { interactionId, sourceCallControlId, text, targetLanguage } = body;
+    const { interactionId, sourceCallControlId, text, targetLanguage, targetLeg } = body;
 
     if (!interactionId || !sourceCallControlId || !text) {
       return NextResponse.json(
@@ -54,7 +54,11 @@ export async function POST(request) {
     const agentCallControlId = metadata.agent_call_control_id;
 
     let targetCallControlId = null;
-    if (sourceCallControlId === originalCallControlId) {
+    if (targetLeg === "caller") {
+      targetCallControlId = originalCallControlId;
+    } else if (targetLeg === "agent") {
+      targetCallControlId = agentCallControlId;
+    } else if (sourceCallControlId === originalCallControlId) {
       targetCallControlId = agentCallControlId;
     } else if (sourceCallControlId === agentCallControlId) {
       targetCallControlId = originalCallControlId;
