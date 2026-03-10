@@ -322,6 +322,35 @@ export default function AgentAssistNodeEditor({
               onCheckedChange={(checked) => handleChange("auto_detect_completion", checked)}
             />
           </div>
+
+          {/* Online Translation */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable online translation</Label>
+              <p className="text-xs text-muted-foreground">
+                Translate live transcriptions between caller and agent
+              </p>
+            </div>
+            <Switch
+              checked={config.enable_translation === true}
+              onCheckedChange={(checked) => handleChange("enable_translation", checked)}
+            />
+          </div>
+
+          {/* Auto-send TTS */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Auto send response</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically speak translated text in the opposite call leg
+              </p>
+            </div>
+            <Switch
+              checked={config.auto_send_response === true}
+              onCheckedChange={(checked) => handleChange("auto_send_response", checked)}
+              disabled={!config.enable_translation}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -46,6 +46,7 @@ import {
   Brain,
   Heart,
   AlertCircle,
+  Volume2,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 
@@ -443,7 +444,11 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
         />
 
         {/* Center: Live Transcription */}
-        <LiveTranscriptionCard transcriptions={transcriptions} />
+        <LiveTranscriptionCard
+          transcriptions={transcriptions}
+          translationConfig={interaction?.metadata?.agent_assist_config || {}}
+          interactionId={interactionId}
+        />
 
         {/* Right: Suggested Response (single) */}
         <SuggestedResponseCard 
@@ -951,7 +956,7 @@ function ItemTypeBadge({ type }) {
 /**
  * Live Transcription Card with chat bubbles
  */
-function LiveTranscriptionCard({ transcriptions }) {
+function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId }) {
   const scrollRef = useRef(null);
   const endRef = useRef(null);
 
@@ -986,7 +991,12 @@ function LiveTranscriptionCard({ transcriptions }) {
               </div>
             ) : (
               finalTranscriptions.map((t) => (
-                <TranscriptionBubble key={t.id} transcription={t} />
+                <TranscriptionBubble
+                  key={t.id}
+                  transcription={t}
+                  translationConfig={translationConfig}
+                  interactionId={interactionId}
+                />
               ))
             )}
             <div ref={endRef} />
@@ -1000,17 +1010,54 @@ function LiveTranscriptionCard({ transcriptions }) {
 /**
  * Single transcription bubble
  */
-function TranscriptionBubble({ transcription }) {
+function TranscriptionBubble({ transcription, translationConfig, interactionId }) {
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
   const intent = transcription.intent;
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const SentimentIcon = sentiment === "positive" ? Smile :
     sentiment === "negative" ? Frown : Meh;
 
   const sentimentColor = sentiment === "positive" ? "text-green-500" :
     sentiment === "negative" ? "text-red-500" : "text-gray-400";
+
+  const translation = transcription.translation;
+  const showTranslation = Boolean(translation?.text);
+  const autoSendEnabled = translationConfig?.auto_send_response === true;
+  const manualAllowed = showTranslation && !autoSendEnabled;
+
+  const handleSpeakTranslation = async () => {
+    if (!manualAllowed || !interactionId || !transcription.callControlId || !translation?.text) return;
+
+    try {
+      setIsSpeaking(true);
+      const resp = await fetch("/api/agent-assist/workflow/speak-translation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interactionId,
+          sourceCallControlId: transcription.callControlId,
+          text: translation.text,
+          targetLanguage: translation.targetLanguage || null,
+        }),
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to speak translation");
+      }
+    } catch (err) {
+      notify({
+        title: "TTS failed",
+        description: err.message || "Failed to send TTS",
+        variant: "error",
+      });
+    } finally {
+      setIsSpeaking(false);
+    }
+  };
 
   return (
     <div className={`flex flex-col ${isCustomer ? "items-start" : "items-end"}`}>
@@ -1036,6 +1083,35 @@ function TranscriptionBubble({ transcription }) {
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
       </div>
+
+      {/* Translation bubble */}
+      {showTranslation && (
+        <div className={`max-w-[90%] rounded-xl px-3 py-2 mt-1 border ${
+          isCustomer
+            ? "bg-blue-500/10 border-blue-500/30 text-foreground rounded-tl-sm"
+            : "bg-emerald-500/10 border-emerald-500/30 text-foreground rounded-tr-sm"
+        }`}>
+          <div className="flex items-center gap-2">
+            <p className="text-sm leading-relaxed flex-1">{translation.text}</p>
+            {manualAllowed && (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={handleSpeakTranslation}
+                disabled={isSpeaking}
+                title="Play translation"
+              >
+                <Volume2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {autoSendEnabled && (
+              <Badge variant="outline" className="text-[10px]">auto</Badge>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Intent and sentiment badges */}
       {(intent || sentiment) && (

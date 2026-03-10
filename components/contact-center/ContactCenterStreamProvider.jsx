@@ -88,6 +88,7 @@ export function ContactCenterStreamProvider({ children }) {
                   is_final: data.transcription.is_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
+                  translation: data.transcription.translation || null,
                 });
 
                 const updateTranscriptionAnalysis =
