@@ -109,6 +109,22 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const callerLanguage = interaction?.metadata?.caller_language || null;
   const agentLanguage = interaction?.metadata?.agent_language || null;
 
+  const translationLanguages = useMemo(() => {
+    if (!Array.isArray(transcriptions)) return null;
+    const finalWithTranslation = transcriptions.filter(
+      (t) => t?.isFinal && t?.translation?.text,
+    );
+    if (finalWithTranslation.length === 0) return null;
+    const latest = finalWithTranslation[finalWithTranslation.length - 1];
+    return {
+      sourceLanguage:
+        latest?.translation?.sourceLanguage ||
+        latest?.translation?.detectedSourceLanguage ||
+        null,
+      targetLanguage: latest?.translation?.targetLanguage || null,
+    };
+  }, [transcriptions]);
+
   // Set AI assisted flag when ai_call_control_id is detected
   useEffect(() => {
     if (aiCallControlId && !aiHandoff.isAiAssisted) {
@@ -432,8 +448,8 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       {translationEnabled && (
         <div className="shrink-0 mb-3">
           <TranslationIndicator
-            sourceLanguage={callerLanguage}
-            targetLanguage={agentLanguage}
+            sourceLanguage={callerLanguage || translationLanguages?.sourceLanguage}
+            targetLanguage={agentLanguage || translationLanguages?.targetLanguage}
           />
         </div>
       )}
