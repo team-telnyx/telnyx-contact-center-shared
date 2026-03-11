@@ -47,6 +47,7 @@ import {
   Heart,
   AlertCircle,
   Volume2,
+  Languages,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 
@@ -100,6 +101,13 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
            activeCall?.contactCenter?.aiCallControlId ||
            null;
   }, [interaction, activeCall]);
+
+  const assistConfig = interaction?.metadata?.agent_assist_config || {};
+  const translationEnabled =
+    assistConfig.assist_type === "workflows" &&
+    assistConfig.enable_translation === true;
+  const callerLanguage = interaction?.metadata?.caller_language || null;
+  const agentLanguage = interaction?.metadata?.agent_language || null;
 
   // Set AI assisted flag when ai_call_control_id is detected
   useEffect(() => {
@@ -421,6 +429,15 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
         </div>
       )}
 
+      {translationEnabled && (
+        <div className="shrink-0 mb-3">
+          <TranslationIndicator
+            sourceLanguage={callerLanguage}
+            targetLanguage={agentLanguage}
+          />
+        </div>
+      )}
+
       {/* AI Summary & Sentiment Panel (when available) */}
       {(aiHandoff.aiSummary || aiHandoff.aiSentiment) && (
         <div className="shrink-0 mb-3">
@@ -467,6 +484,104 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           totalItems={totalItems}
           isComplete={session?.status === "completed"}
         />
+      </div>
+    </div>
+  );
+}
+
+function normalizeLanguageCode(language) {
+  if (!language) return null;
+  return String(language).toLowerCase();
+}
+
+function getLanguageFlag(language) {
+  const normalized = normalizeLanguageCode(language);
+  if (!normalized) return "🌐";
+
+  const full = normalized.replace("_", "-");
+  const base = full.split("-")[0];
+
+  switch (full) {
+    case "en-gb":
+      return "🇬🇧";
+    case "pt-br":
+      return "🇧🇷";
+    case "pt-pt":
+      return "🇵🇹";
+    case "zh-cn":
+    case "zh-hans":
+      return "🇨🇳";
+    case "zh-tw":
+    case "zh-hant":
+      return "🇹🇼";
+    default:
+      break;
+  }
+
+  switch (base) {
+    case "en":
+      return "🇺🇸";
+    case "pl":
+      return "🇵🇱";
+    case "es":
+      return "🇪🇸";
+    case "fr":
+      return "🇫🇷";
+    case "de":
+      return "🇩🇪";
+    case "it":
+      return "🇮🇹";
+    case "pt":
+      return "🇵🇹";
+    case "uk":
+      return "🇺🇦";
+    case "ru":
+      return "🇷🇺";
+    case "ja":
+      return "🇯🇵";
+    case "zh":
+      return "🇨🇳";
+    case "ko":
+      return "🇰🇷";
+    case "ar":
+      return "🇸🇦";
+    case "hi":
+      return "🇮🇳";
+    default:
+      return "🌐";
+  }
+}
+
+function formatLanguageLabel(language) {
+  if (!language) return "Detecting";
+  if (language === "auto") return "AUTO";
+  return String(language).toUpperCase();
+}
+
+function TranslationIndicator({ sourceLanguage, targetLanguage }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border-2 bg-blue-500/5 border-blue-500/30">
+      <div className="p-2 rounded-lg bg-blue-500/10">
+        <Languages className="h-5 w-5 text-blue-500" />
+      </div>
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">🌍 Live Translation Enabled</span>
+          <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/50">
+            Transcription + TTS
+          </Badge>
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
+          <span className="flex items-center gap-1">
+            {getLanguageFlag(sourceLanguage)}
+            <span>{formatLanguageLabel(sourceLanguage)}</span>
+          </span>
+          <span>↔</span>
+          <span className="flex items-center gap-1">
+            {getLanguageFlag(targetLanguage)}
+            <span>{formatLanguageLabel(targetLanguage)}</span>
+          </span>
+        </div>
       </div>
     </div>
   );
