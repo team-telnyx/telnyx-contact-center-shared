@@ -1222,9 +1222,6 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
                 <Volume2 className="h-3.5 w-3.5" />
               </Button>
             )}
-            {autoSendEnabled && (
-              <Badge variant="outline" className="text-[10px]">auto</Badge>
-            )}
           </div>
         </div>
       )}
