@@ -23,6 +23,7 @@ import {
   IconInfoCircle,
   IconStar,
   IconStarFilled,
+  IconUserPlus,
 } from "@tabler/icons-react";
 import {
   Table,
@@ -35,6 +36,7 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -154,6 +156,183 @@ function SkillsInfoCell({ user }) {
   );
 }
 
+function AddUserDialog({ onCreated }) {
+  const [open, setOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("agent");
+  const [nick, setNick] = useState("");
+  const [mobile, setMobile] = useState("");
+  const [sendInvite, setSendInvite] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function reset() {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setRole("agent");
+    setNick("");
+    setMobile("");
+    setSendInvite(true);
+    setError("");
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setError("");
+    if (!firstName.trim() || !lastName.trim() || !email.trim()) {
+      setError("First name, last name, and email are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          username: email.trim(),
+          roles: [role],
+          nick: nick.trim() || null,
+          mobile: mobile.trim() || null,
+          sendInvite,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to create user");
+      notify({
+        title: "User created",
+        description: sendInvite ? "Invite email sent." : "User created without invite.",
+        variant: "success",
+      });
+      setOpen(false);
+      reset();
+      onCreated && onCreated();
+    } catch (err) {
+      setError(err.message || "Failed to create user");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" className="gap-2">
+          <IconUserPlus className="size-4" />
+          Add User
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add New User</DialogTitle>
+          <DialogDescription>
+            Create a new user account. Optionally send an invite email.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-4 mt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="au-fn">First Name *</Label>
+              <Input
+                id="au-fn"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="John"
+                required
+                disabled={saving}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="au-ln">Last Name *</Label>
+              <Input
+                id="au-ln"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Doe"
+                required
+                disabled={saving}
+              />
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="au-email">Email (Username) *</Label>
+            <Input
+              id="au-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="john.doe@company.com"
+              required
+              disabled={saving}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="au-role">Role</Label>
+            <Select value={role} onValueChange={setRole} disabled={saving}>
+              <SelectTrigger id="au-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="agent">Agent</SelectItem>
+                <SelectItem value="supervisor">Supervisor</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="au-nick">Nickname</Label>
+              <Input
+                id="au-nick"
+                value={nick}
+                onChange={(e) => setNick(e.target.value)}
+                placeholder="Optional"
+                disabled={saving}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="au-mobile">Mobile</Label>
+              <Input
+                id="au-mobile"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                placeholder="+1234567890"
+                disabled={saving}
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox
+              id="au-invite"
+              checked={sendInvite}
+              onCheckedChange={(v) => setSendInvite(Boolean(v))}
+              disabled={saving}
+            />
+            <Label htmlFor="au-invite" className="cursor-pointer text-sm font-normal">
+              Send invite email immediately
+            </Label>
+          </div>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <DialogClose asChild>
+              <Button type="button" variant="outline" disabled={saving}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Creating..." : "Create User"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function AdminUsersPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -267,6 +446,7 @@ export default function AdminUsersPage() {
               <IconUsers className="size-6 text-telnyx-green" /> Users
             </div>
             <div className="flex gap-2">
+              <AddUserDialog onCreated={load} />
               <Button
                 variant="secondary"
                 onClick={() => setFilters({ role: "all", q: "" })}

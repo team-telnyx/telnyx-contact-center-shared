@@ -514,6 +514,10 @@
       "description": "Text to Speech commands operations"
     },
     {
+      "name": "Traffic Policy Profiles",
+      "description": "Traffic Policy Profiles operations"
+    },
+    {
       "name": "Usage Reports (BETA)",
       "description": "Usage data reporting across Telnyx products"
     },
@@ -592,6 +596,10 @@
     {
       "name": "Wireless Regions",
       "description": "Regions for wireless services"
+    },
+    {
+      "name": "x402 Payment Transactions",
+      "description": "Operations for x402 cryptocurrency payment transactions. Fund your Telnyx account using USDC stablecoin payments via the x402 protocol."
     }
   ],
   "paths": {
@@ -12045,6 +12053,8 @@
             "schema": {
               "type": "string",
               "enum": [
+                "bulk_disable_voice",
+                "bulk_enable_voice",
                 "bulk_set_public_ips"
               ],
               "example": "bulk_set_public_ips"
@@ -12753,6 +12763,44 @@
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/calls/{call_control_id}/actions/ai_assistant_join": {
+      "post": {
+        "summary": "Join AI Assistant Conversation",
+        "description": "Add a participant to an existing AI assistant conversation. Use this command to bring an additional call leg into a running AI conversation.",
+        "operationId": "CallJoinAIAssistant",
+        "tags": [
+          "Call Commands"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallControlId"
+          }
+        ],
+        "requestBody": {
+          "description": "AI Assistant Join request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIAssistantJoinRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CallControlCommandResponseWithConversationId"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/call-control_GenericErrorResponse"
           }
         },
         "x-latency-category": "interactive"
@@ -31779,31 +31827,6 @@
         "x-latency-category": "responsive"
       }
     },
-    "/porting/loa_configuration/preview": {
-      "post": {
-        "tags": [
-          "Porting Orders"
-        ],
-        "summary": "Preview the LOA configuration parameters",
-        "description": "Preview the LOA template that would be generated without need to create LOA configuration.",
-        "operationId": "PreviewLoaConfigurationParams",
-        "requestBody": {
-          "$ref": "#/components/requestBodies/CreatePortingLOAConfiguration"
-        },
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/DownloadLOATemplate"
-          },
-          "422": {
-            "description": "Unprocessable entity. Check message field in response for details."
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
     "/porting/loa_configurations": {
       "get": {
         "tags": [
@@ -31843,6 +31866,31 @@
         "responses": {
           "201": {
             "$ref": "#/components/responses/CreatePortingLOAConfiguration"
+          },
+          "422": {
+            "description": "Unprocessable entity. Check message field in response for details."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/porting/loa_configurations/preview": {
+      "post": {
+        "tags": [
+          "Porting Orders"
+        ],
+        "summary": "Preview the LOA configuration parameters",
+        "description": "Preview the LOA template that would be generated without need to create LOA configuration.",
+        "operationId": "PreviewLoaConfigurationParams",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CreatePortingLOAConfiguration"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DownloadLOATemplate"
           },
           "422": {
             "description": "Unprocessable entity. Check message field in response for details."
@@ -35308,6 +35356,45 @@
         "tags": [
           "Call Recordings"
         ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/call-recordings_PageConsolidated"
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "style": "deepObject",
+            "explode": true,
+            "description": "Filter recording transcriptions by various attributes.",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "recording_id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "example": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
+                  "description": "If present, transcriptions will be filtered to those associated with the given recording."
+                },
+                "created_at": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "gte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only transcriptions created later than or at given ISO 8601 datetime."
+                    },
+                    "lte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only transcriptions created earlier than or at given ISO 8601 datetime."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
         "responses": {
           "200": {
             "$ref": "#/components/responses/ListRecordingTranscriptionsResponse"
@@ -35400,7 +35487,7 @@
             "in": "query",
             "style": "deepObject",
             "explode": true,
-            "description": "Consolidated filter parameter (deepObject style). Originally: filter[conference_id], filter[created_at][gte], filter[created_at][lte], filter[call_leg_id], filter[call_session_id], filter[from], filter[to], filter[connection_id], filter[sip_call_id]",
+            "description": "Filter recordings by various attributes.",
             "schema": {
               "type": "object",
               "properties": {
@@ -35455,7 +35542,49 @@
                 "sip_call_id": {
                   "type": "string",
                   "example": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
-                  "description": "If present, recordings will be filtered to those with a matching `sip_call_id` attribute. Matching is case-sensitive"
+                  "description": "If present, recordings will be filtered to those with a matching `sip_call_id` attribute. Matching is case-sensitive."
+                },
+                "call_control_id": {
+                  "type": "string",
+                  "example": "v3:e-31OnvjEM7Y4wvxr3TKNk8M3QyLcGZPiUIzCGtwQtOtEjY-B0urkw",
+                  "description": "If present, recordings will be filtered to those with a matching `call_control_id`."
+                },
+                "conference_region": {
+                  "type": "string",
+                  "example": "us",
+                  "description": "If present, recordings will be filtered to those with a matching `conference_region`."
+                },
+                "start_time": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "gte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only recordings with a start time later than or equal to the given ISO 8601 datetime."
+                    },
+                    "lte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only recordings with a start time earlier than or equal to the given ISO 8601 datetime."
+                    }
+                  }
+                },
+                "end_time": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "gte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only recordings with an end time later than or equal to the given ISO 8601 datetime."
+                    },
+                    "lte": {
+                      "type": "string",
+                      "example": "2019-03-29T11:10:00Z",
+                      "description": "Returns only recordings with an end time earlier than or equal to the given ISO 8601 datetime."
+                    }
+                  }
                 }
               }
             }
@@ -35496,8 +35625,24 @@
           "$ref": "#/components/requestBodies/DeleteRecordingsRequest"
         },
         "responses": {
-          "204": {
-            "description": "The recordings have been successfully deleted."
+          "200": {
+            "description": "The recordings have been successfully deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ],
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
           },
           "default": {
             "$ref": "#/components/responses/call-recordings_GenericErrorResponse"
@@ -40380,6 +40525,18 @@
           },
           {
             "$ref": "#/components/parameters/model"
+          },
+          {
+            "$ref": "#/components/parameters/endpointing"
+          },
+          {
+            "$ref": "#/components/parameters/redact"
+          },
+          {
+            "$ref": "#/components/parameters/keyterm"
+          },
+          {
+            "$ref": "#/components/parameters/keywords"
           }
         ],
         "requestBody": {
@@ -43122,7 +43279,7 @@
     "/text-to-speech/speech": {
       "get": {
         "summary": "Stream text to speech over WebSocket",
-        "description": "Open a WebSocket connection to stream text and receive synthesized audio in real time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header. Send JSON frames with text to synthesize; receive JSON frames containing base64-encoded audio chunks.\n\nSupported providers: `aws`, `telnyx`, `azure`, `murfai`, `minimax`, `rime`, `resemble`, `elevenlabs`, `inworld`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying provider, voice, and model.\n2. Send an initial handshake message `{\"text\": \" \"}` (single space) with optional `voice_settings` to initialize the session.\n3. Send text messages as `{\"text\": \"Hello world\"}`.\n4. Receive audio chunks as JSON frames with base64-encoded audio.\n5. A final frame with `isFinal: true` indicates the end of audio for the current text.\n\nTo interrupt and restart synthesis mid-stream, send `{\"force\": true}` \u2014 the current worker is stopped and a new one is started.",
+        "description": "Open a WebSocket connection to stream text and receive synthesized audio in real time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header. Send JSON frames with text to synthesize; receive JSON frames containing base64-encoded audio chunks.\n\nSupported providers: `aws`, `telnyx`, `azure`, `murfai`, `minimax`, `rime`, `resemble`, `elevenlabs`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying provider, voice, and model.\n2. Send an initial handshake message `{\"text\": \" \"}` (single space) with optional `voice_settings` to initialize the session.\n3. Send text messages as `{\"text\": \"Hello world\"}`.\n4. Receive audio chunks as JSON frames with base64-encoded audio.\n5. A final frame with `isFinal: true` indicates the end of audio for the current text.\n\nTo interrupt and restart synthesis mid-stream, send `{\"force\": true}` \u2014 the current worker is stopped and a new one is started.\n\n**Note:** The Telnyx `Ultra` model is not available over WebSocket. Use the HTTP POST `/text-to-speech/speech` endpoint instead.",
         "operationId": "TextToSpeechOverWs",
         "tags": [
           "Text To Speech Commands"
@@ -43182,7 +43339,7 @@
       },
       "post": {
         "summary": "Generate speech from text",
-        "description": "Generate synthesized speech audio from text input. Returns audio in the requested format (binary audio stream, base64-encoded JSON, or an audio URL for later retrieval).\n\nAuthentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nThe `voice` parameter provides a convenient shorthand to specify provider, model, and voice in a single string (e.g. `telnyx.NaturalHD.Alloy`). Alternatively, specify `provider` explicitly along with provider-specific parameters.\n\nSupported providers: `aws`, `telnyx`, `azure`, `elevenlabs`, `minimax`, `rime`, `resemble`, `inworld`.",
+        "description": "Generate synthesized speech audio from text input. Returns audio in the requested format (binary audio stream, base64-encoded JSON, or an audio URL for later retrieval).\n\nAuthentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nThe `voice` parameter provides a convenient shorthand to specify provider, model, and voice in a single string (e.g. `telnyx.NaturalHD.Alloy` or `Telnyx.Ultra.<voice_id>`). Alternatively, specify `provider` explicitly along with provider-specific parameters.\n\nSupported providers: `aws`, `telnyx`, `azure`, `elevenlabs`, `minimax`, `rime`, `resemble`.\n\nThe Telnyx `Ultra` model supports 44 languages with emotion control, speed adjustment, and volume control. Use the `telnyx` provider-specific parameters to configure these features.",
         "operationId": "generateSpeech",
         "tags": [
           "Text To Speech Commands"
@@ -43265,8 +43422,7 @@
                 "elevenlabs",
                 "minimax",
                 "rime",
-                "resemble",
-                "inworld"
+                "resemble"
               ]
             }
           },
@@ -43306,6 +43462,357 @@
           }
         },
         "x-latency-category": "interactive"
+      }
+    },
+    "/traffic_policy_profiles": {
+      "get": {
+        "summary": "Get all traffic policy profiles",
+        "description": "Get all traffic policy profiles belonging to the user that match the given filters.",
+        "operationId": "GetTrafficPolicyProfiles",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/wireless_PageNumber"
+          },
+          {
+            "$ref": "#/components/parameters/wireless_PageSize"
+          },
+          {
+            "name": "filter[type]",
+            "description": "Filter by traffic policy profile type.",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "whitelist",
+                "blacklist",
+                "throttling"
+              ]
+            },
+            "example": "whitelist"
+          },
+          {
+            "name": "filter[service]",
+            "description": "Filter by service ID.",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "service_123"
+          },
+          {
+            "name": "sort",
+            "description": "Sorts traffic policy profiles by the given field. Defaults to ascending order unless field is prefixed with a minus sign.",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "service",
+                "-service",
+                "type",
+                "-type"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GetTrafficPolicyProfilesResponse"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "summary": "Create a traffic policy profile",
+        "description": "Create a new traffic policy profile. At least one of `services`, `ip_ranges`, or `domains` must be provided.",
+        "operationId": "CreateTrafficPolicyProfile",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "description": "The type of the traffic policy profile.",
+                    "type": "string",
+                    "enum": [
+                      "whitelist",
+                      "blacklist"
+                    ],
+                    "example": "whitelist"
+                  },
+                  "services": {
+                    "description": "Array of PCEF service IDs to include in the profile.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "service_123",
+                      "service_456"
+                    ]
+                  },
+                  "ip_ranges": {
+                    "description": "Array of IP ranges in CIDR notation.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "10.64.0.0/24",
+                      "10.64.0.0/25"
+                    ]
+                  },
+                  "domains": {
+                    "description": "Array of domain names.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "www.hbomax.com",
+                      "netflix.com"
+                    ]
+                  },
+                  "limit_bw_kbps": {
+                    "description": "Bandwidth limit in kbps. Must be 512 or 1024.",
+                    "type": "integer",
+                    "enum": [
+                      512,
+                      1024
+                    ],
+                    "example": 512
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/CreateTrafficPolicyProfileResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/wireless_UnprocessableEntity"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/traffic_policy_profiles/services": {
+      "get": {
+        "summary": "Get all available traffic policy profile services",
+        "description": "Get all available PCEF services that can be used in traffic policy profiles.",
+        "operationId": "GetTrafficPolicyProfileServices",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/wireless_PageNumber"
+          },
+          {
+            "$ref": "#/components/parameters/wireless_PageSize"
+          },
+          {
+            "name": "filter[group]",
+            "description": "Filter services by group.",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "Social Media"
+          },
+          {
+            "name": "filter[name]",
+            "description": "Filter services by name.",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "Netflix"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GetTrafficPolicyProfileServicesResponse"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/traffic_policy_profiles/{id}": {
+      "delete": {
+        "summary": "Delete a traffic policy profile",
+        "description": "Deletes the traffic policy profile.",
+        "operationId": "DeleteTrafficPolicyProfile",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TrafficPolicyProfileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/DeleteTrafficPolicyProfileResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/wireless_ResourceNotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "summary": "Get a traffic policy profile",
+        "description": "Returns the details regarding a specific traffic policy profile.",
+        "operationId": "GetTrafficPolicyProfile",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TrafficPolicyProfileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GetTrafficPolicyProfileResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/wireless_ResourceNotFound"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "summary": "Update a traffic policy profile",
+        "description": "Updates a traffic policy profile.",
+        "operationId": "UpdateTrafficPolicyProfile",
+        "tags": [
+          "Traffic Policy Profiles"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TrafficPolicyProfileId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "description": "The type of the traffic policy profile.",
+                    "type": "string",
+                    "enum": [
+                      "whitelist",
+                      "blacklist",
+                      "throttling"
+                    ],
+                    "example": "whitelist"
+                  },
+                  "services": {
+                    "description": "Array of PCEF service IDs to include in the profile.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "service_123"
+                    ]
+                  },
+                  "ip_ranges": {
+                    "description": "Array of IP ranges in CIDR notation.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "10.64.0.0/24"
+                    ]
+                  },
+                  "domains": {
+                    "description": "Array of domain names.",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "netflix.com"
+                    ]
+                  },
+                  "limit_bw_kbps": {
+                    "description": "Bandwidth limit in kbps. Must be 512 or 1024, or null to remove.",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "enum": [
+                      512,
+                      1024,
+                      null
+                    ],
+                    "example": 1024
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UpdateTrafficPolicyProfileResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/wireless_ResourceNotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/wireless_UnprocessableEntity"
+          },
+          "default": {
+            "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
       }
     },
     "/usage_reports": {
@@ -44952,6 +45459,337 @@
           },
           "4XX": {
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/v2/x402/credit_account": {
+      "post": {
+        "summary": "Settle a payment",
+        "description": "Settles an x402 payment using the quote ID and a signed payment authorization. The payment signature can be provided via the `PAYMENT-SIGNATURE` header or the `payment_signature` body parameter. Settlement is idempotent \u2014 submitting the same quote ID multiple times returns the existing transaction.",
+        "operationId": "settleX402Payment",
+        "tags": [
+          "x402 Payment Transactions"
+        ],
+        "x-endpoint-cost": "light",
+        "parameters": [
+          {
+            "name": "PAYMENT-SIGNATURE",
+            "in": "header",
+            "description": "Signed payment authorization for the quote. Alternative to providing `payment_signature` in the request body.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/X402SettleRequest"
+              },
+              "example": {
+                "id": "quote_abc123",
+                "payment_signature": "0xabc123..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Payment settled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402TransactionResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "de06811a-2e43-4561-af5a-7d0a26e20aaa",
+                    "record_type": "x402_transaction",
+                    "amount": "50.00",
+                    "currency": "USD",
+                    "status": "settled",
+                    "quote_id": "quote_abc123",
+                    "tx_hash": "0xabc123def456...",
+                    "created_at": "2026-03-13T15:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Payment already settled (idempotent response)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402TransactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request \u2014 invalid signature, expired authorization, invalid nonce, or malformed payment payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402SettlementErrorResponse"
+                },
+                "examples": {
+                  "invalid_signature": {
+                    "summary": "Invalid payment signature",
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "invalid_signature",
+                          "title": "Payment Failed",
+                          "detail": "Payment failed: the payment signature is invalid. Please sign a new payment authorization."
+                        }
+                      ]
+                    }
+                  },
+                  "expired_authorization": {
+                    "summary": "Expired payment authorization",
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "expired_authorization",
+                          "title": "Payment Failed",
+                          "detail": "Payment failed: the payment authorization has expired. Please request a new quote and try again."
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 x402 payments not enabled, account tier ineligible, or account suspended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable entity \u2014 missing required parameters or insufficient funds/allowance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402SettlementErrorResponse"
+                },
+                "examples": {
+                  "validation_error": {
+                    "summary": "Missing required parameter",
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "unknown",
+                          "title": "Invalid request",
+                          "detail": "id is required"
+                        }
+                      ]
+                    }
+                  },
+                  "insufficient_balance": {
+                    "summary": "Insufficient wallet balance",
+                    "value": {
+                      "errors": [
+                        {
+                          "code": "insufficient_balance",
+                          "title": "Payment Failed",
+                          "detail": "Payment failed: your wallet does not have enough USDC to complete this transaction. Please add funds and try again."
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error \u2014 facilitator unavailable, transaction failed on-chain, or unknown error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402SettlementErrorResponse"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "transaction_failed",
+                      "title": "Payment Failed",
+                      "detail": "Payment transaction failed on-chain. Your funds have not been transferred. Please try again or contact support."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad gateway \u2014 upstream settlement service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable \u2014 facilitator or settlement timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402SettlementErrorResponse"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "facilitator_timeout",
+                      "title": "Payment Failed",
+                      "detail": "Payment processing timed out. Your funds have not been transferred. Please try again."
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/v2/x402/credit_account/quote": {
+      "post": {
+        "summary": "Create a payment quote",
+        "description": "Creates a payment quote for the specified USD amount. Returns payment details including the x402 payment requirements, network, and expiration time. The quote must be settled before it expires.",
+        "operationId": "createX402Quote",
+        "tags": [
+          "x402 Payment Transactions"
+        ],
+        "x-endpoint-cost": "light",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/X402QuoteRequest"
+              },
+              "example": {
+                "amount_usd": "50.00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/X402QuoteResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "quote_abc123",
+                    "record_type": "quote",
+                    "amount_usd": "50.00",
+                    "amount_crypto": "50000000",
+                    "network": "eip155:8453",
+                    "expires_at": "2026-03-13T15:05:00Z",
+                    "payment_requirements": {
+                      "x402Version": 2,
+                      "resource": {
+                        "url": "https://api.telnyx.com/v2/x402/credit_account",
+                        "description": "Payment of $50.00 USD",
+                        "mimeType": "application/json"
+                      },
+                      "accepts": [
+                        {
+                          "scheme": "exact",
+                          "network": "eip155:8453",
+                          "amount": "50000000",
+                          "asset": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "payTo": "0x1234567890abcdef1234567890abcdef12345678",
+                          "maxTimeoutSeconds": 900,
+                          "extra": {
+                            "quoteId": "quote_abc123",
+                            "facilitatorUrl": "https://api.cdp.coinbase.com/platform/v2/x402",
+                            "name": "USD Coin",
+                            "version": "2"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden \u2014 x402 payments not enabled, account tier ineligible, or account suspended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable entity \u2014 invalid amount",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "unknown",
+                      "title": "Invalid request",
+                      "detail": "amount_usd must be at least 5.00"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad gateway \u2014 upstream payment service failed to create quote",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/x402-transactions_ErrorResponse"
+                }
+              }
+            }
           }
         },
         "x-latency-category": "responsive"
@@ -49846,6 +50684,17 @@
         },
         "example": "+1312345678"
       },
+      "TrafficPolicyProfileId": {
+        "name": "id",
+        "description": "Identifies the traffic policy profile.",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string",
+          "example": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
+        }
+      },
       "UserBundleId": {
         "required": true,
         "schema": {
@@ -49911,12 +50760,13 @@
         "name": "audio_format",
         "in": "query",
         "required": false,
-        "description": "Audio output format override. Supported for Telnyx `Natural`/`NaturalHD` models only. Accepted values: `pcm`, `wav`.",
+        "description": "Audio output format override. Supported for Telnyx models. `pcm` and `wav` are available for `Natural`/`NaturalHD` models. The `Ultra` model outputs PCM at 24kHz s16le or MP3 at 128kbps 24kHz.",
         "schema": {
           "type": "string",
           "enum": [
             "pcm",
-            "wav"
+            "wav",
+            "mp3"
           ]
         }
       },
@@ -50513,6 +51363,16 @@
           }
         }
       },
+      "endpointing": {
+        "name": "endpointing",
+        "in": "query",
+        "required": false,
+        "description": "Silence duration (in milliseconds) that triggers end-of-speech detection. When set, the engine uses this value to determine when a speaker has stopped talking. Not all engines support this parameter.",
+        "schema": {
+          "type": "integer"
+        },
+        "example": 500
+      },
       "external-voice-integrations_PageConsolidated": {
         "name": "page",
         "in": "query",
@@ -50582,6 +51442,26 @@
           "type": "boolean"
         },
         "example": true
+      },
+      "keyterm": {
+        "name": "keyterm",
+        "in": "query",
+        "required": false,
+        "description": "A key term to boost in the transcription. The engine will be more likely to recognize this term. Can be specified multiple times for multiple terms.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "Telnyx"
+      },
+      "keywords": {
+        "name": "keywords",
+        "in": "query",
+        "required": false,
+        "description": "Comma-separated list of keywords to boost in the transcription. The engine will prioritize recognition of these words.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "Telnyx,SIP,WebRTC"
       },
       "language": {
         "name": "language",
@@ -50692,7 +51572,7 @@
         "name": "model_id",
         "in": "query",
         "required": false,
-        "description": "Model identifier for the chosen provider. Examples: `Natural`, `NaturalHD` (Telnyx); `Polly.Generative` (AWS).",
+        "description": "Model identifier for the chosen provider. Examples: `Natural`, `NaturalHD`, `Ultra` (Telnyx); `Polly.Generative` (AWS).",
         "schema": {
           "type": "string"
         }
@@ -51062,8 +51942,7 @@
             "minimax",
             "murfai",
             "rime",
-            "resemble",
-            "inworld"
+            "resemble"
           ],
           "default": "telnyx"
         }
@@ -51092,6 +51971,16 @@
             }
           }
         }
+      },
+      "redact": {
+        "name": "redact",
+        "in": "query",
+        "required": false,
+        "description": "Enable redaction of sensitive information (e.g., PCI data, SSN) from transcription results. Supported values depend on the transcription engine.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "pci"
       },
       "release_id": {
         "name": "release_id",
@@ -51339,7 +52228,7 @@
         "name": "voice",
         "in": "query",
         "required": false,
-        "description": "Voice identifier in the format `provider.model_id.voice_id` or `provider.voice_id` (e.g. `telnyx.NaturalHD.Telnyx_Alloy` or `azure.en-US-AvaMultilingualNeural`). When provided, the `provider`, `model_id`, and `voice_id` are extracted automatically. Takes precedence over individual `provider`/`model_id`/`voice_id` parameters.",
+        "description": "Voice identifier in the format `provider.model_id.voice_id` or `provider.voice_id` (e.g. `telnyx.NaturalHD.Telnyx_Alloy`, `Telnyx.Ultra.<voice_id>`, or `azure.en-US-AvaMultilingualNeural`). When provided, the `provider`, `model_id`, and `voice_id` are extracted automatically. Takes precedence over individual `provider`/`model_id`/`voice_id` parameters.",
         "schema": {
           "type": "string"
         }
@@ -53324,6 +54213,21 @@
           }
         }
       },
+      "CreateTrafficPolicyProfileResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TrafficPolicyProfile"
+                }
+              }
+            }
+          }
+        }
+      },
       "CreateWdrReportResponse": {
         "description": "Successful response",
         "content": {
@@ -53505,6 +54409,29 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SIMCard"
+                }
+              }
+            }
+          }
+        }
+      },
+      "DeleteTrafficPolicyProfileResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Identifies the resource.",
+                      "example": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
+                    }
+                  }
                 }
               }
             }
@@ -54414,6 +55341,63 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/SIMCard"
+                }
+              }
+            }
+          }
+        }
+      },
+      "GetTrafficPolicyProfileResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TrafficPolicyProfile"
+                }
+              }
+            }
+          }
+        }
+      },
+      "GetTrafficPolicyProfileServicesResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WirelessPcrfService"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/PaginationMeta"
+                }
+              }
+            }
+          }
+        }
+      },
+      "GetTrafficPolicyProfilesResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrafficPolicyProfile"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/PaginationMeta"
                 }
               }
             }
@@ -59037,6 +60021,21 @@
           }
         }
       },
+      "UpdateTrafficPolicyProfileResponse": {
+        "description": "Successful Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/TrafficPolicyProfile"
+                }
+              }
+            }
+          }
+        }
+      },
       "UpdateWirelessBlocklistResponse": {
         "description": "Successful response",
         "content": {
@@ -61070,6 +62069,70 @@
           ]
         }
       },
+      "AIAssistantJoinParticipant": {
+        "type": "object",
+        "required": [
+          "id",
+          "role"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The call_control_id of the participant to add to the conversation.",
+            "example": "v3:abc123def456"
+          },
+          "role": {
+            "type": "string",
+            "description": "The role of the participant in the conversation.",
+            "enum": [
+              "user"
+            ],
+            "example": "user"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name for the participant.",
+            "example": "John Doe"
+          },
+          "on_hangup": {
+            "type": "string",
+            "description": "Determines what happens to the conversation when this participant hangs up.",
+            "enum": [
+              "continue_conversation",
+              "end_conversation"
+            ],
+            "default": "continue_conversation",
+            "example": "continue_conversation"
+          }
+        }
+      },
+      "AIAssistantJoinRequest": {
+        "type": "object",
+        "required": [
+          "conversation_id",
+          "participant"
+        ],
+        "properties": {
+          "conversation_id": {
+            "type": "string",
+            "description": "The ID of the AI assistant conversation to join.",
+            "example": "v3:abc123"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/AIAssistantJoinParticipant"
+          },
+          "client_state": {
+            "type": "string",
+            "description": "Use this field to add state to every subsequent webhook. It must be a valid Base-64 encoded string.",
+            "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+          },
+          "command_id": {
+            "type": "string",
+            "description": "Use this field to avoid duplicate commands. Telnyx will ignore any command with the same `command_id` for the same `call_control_id`.",
+            "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
+          }
+        }
+      },
       "AIAssistantStartRequest": {
         "type": "object",
         "properties": {
@@ -61139,6 +62202,53 @@
           },
           "transcription": {
             "$ref": "#/components/schemas/TranscriptionConfig"
+          },
+          "message_history": {
+            "type": "array",
+            "description": "A list of messages to seed the conversation history before the assistant starts. Follows the same message format as the `ai_assistant_add_messages` command.",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/UserMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/AssistantMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/SystemMessage"
+                },
+                {
+                  "$ref": "#/components/schemas/DeveloperMessage"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "role",
+                "mapping": {
+                  "user": "#/components/schemas/UserMessage",
+                  "assistant": "#/components/schemas/AssistantMessage",
+                  "tool": "#/components/schemas/ToolMessage",
+                  "system": "#/components/schemas/SystemMessage",
+                  "developer": "#/components/schemas/DeveloperMessage"
+                }
+              }
+            },
+            "default": []
+          },
+          "send_message_history_updates": {
+            "type": "boolean",
+            "description": "When `true`, a webhook is sent each time the conversation message history is updated.",
+            "default": false
+          },
+          "participants": {
+            "type": "array",
+            "description": "A list of participants to add to the conversation when it starts.",
+            "items": {
+              "$ref": "#/components/schemas/AIAssistantJoinParticipant"
+            },
+            "default": []
           },
           "client_state": {
             "type": "string",
@@ -66478,6 +67588,220 @@
           "description"
         ],
         "title": "WebhookToolParams"
+      },
+      "CallCost": {
+        "type": "object",
+        "title": "Call Cost",
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "example": "event",
+            "enum": [
+              "event"
+            ],
+            "description": "Identifies the type of the resource."
+          },
+          "event_type": {
+            "type": "string",
+            "example": "call.cost",
+            "enum": [
+              "call.cost"
+            ],
+            "description": "The type of event being delivered."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
+            "description": "Unique identifier of the event."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2018-02-02T22:25:27.521992Z",
+            "description": "ISO 8601 datetime of when the event occurred."
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "call_control_id": {
+                "type": "string",
+                "example": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
+                "description": "Call ID used to issue commands via Call Control API."
+              },
+              "connection_id": {
+                "type": "string",
+                "example": "7267xxxxxxxxxxxxxx",
+                "description": "Call Control App ID (formerly Telnyx connection ID) used in the call."
+              },
+              "call_leg_id": {
+                "type": "string",
+                "example": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
+                "description": "ID that is unique to the call and can be used to correlate webhook events."
+              },
+              "call_session_id": {
+                "type": "string",
+                "example": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
+                "description": "ID that is unique to the call session and can be used to correlate webhook events. Call session is a group of related call legs that logically belong to the same phone call, e.g. an inbound and outbound leg of a transferred call."
+              },
+              "client_state": {
+                "type": "string",
+                "example": "aGF2ZSBhIG5pY2UgZGF5ID1d",
+                "description": "State received from a command. Base64-encoded."
+              },
+              "billing_group_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "f5586561-8ff0-4291-a0ac-84fe544797bd",
+                "description": "Identifies the billing group associated with the call."
+              },
+              "status": {
+                "type": "string",
+                "example": "success",
+                "enum": [
+                  "success",
+                  "error"
+                ],
+                "description": "The status of the cost calculation (`success` or `error`)."
+              },
+              "total_cost": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "0.0106",
+                "description": "The total cost of the call."
+              },
+              "billed_duration_secs": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "example": 120,
+                "description": "The longest billed duration across all cost parts, in seconds."
+              },
+              "cost_parts": {
+                "type": "array",
+                "description": "Breakdown of costs by call part.",
+                "items": {
+                  "$ref": "#/components/schemas/CallCostPart"
+                },
+                "example": [
+                  {
+                    "call_part": "sip-trunking",
+                    "rate": "0.0050",
+                    "cost": "0.0050",
+                    "currency": "USD",
+                    "billed_duration_secs": 60
+                  },
+                  {
+                    "call_part": "call-recording",
+                    "rate": "0.00190",
+                    "cost": "0.0038",
+                    "currency": "USD",
+                    "billed_duration_secs": 120
+                  },
+                  {
+                    "call_part": "call-control",
+                    "rate": "0.00180",
+                    "cost": "0.0018",
+                    "currency": "USD",
+                    "billed_duration_secs": 60
+                  }
+                ]
+              },
+              "occurred_at": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2018-02-02T22:25:27.521992Z",
+                "description": "ISO 8601 datetime of when the event occurred."
+              }
+            }
+          }
+        },
+        "example": {
+          "record_type": "event",
+          "event_type": "call.cost",
+          "id": "0ccc7b54-4df3-4bca-a65a-3da1ecc777f0",
+          "occurred_at": "2018-02-02T22:25:27.521992Z",
+          "payload": {
+            "call_control_id": "v3:MdI91X4lWFEs7IgbBEOT9M4AigoY08M0WWZFISt1Yw2axZ_IiE4pqg",
+            "connection_id": "7267xxxxxxxxxxxxxx",
+            "call_leg_id": "428c31b6-7af4-4bcb-b7f5-5013ef9657c1",
+            "call_session_id": "428c31b6-abf3-3bc1-b7f4-5013ef9657c1",
+            "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
+            "billing_group_id": "f5586561-8ff0-4291-a0ac-84fe544797bd",
+            "status": "success",
+            "total_cost": "0.0106",
+            "billed_duration_secs": 120,
+            "cost_parts": [
+              {
+                "call_part": "sip-trunking",
+                "rate": "0.0050",
+                "cost": "0.0050",
+                "currency": "USD",
+                "billed_duration_secs": 60
+              },
+              {
+                "call_part": "call-recording",
+                "rate": "0.00190",
+                "cost": "0.0038",
+                "currency": "USD",
+                "billed_duration_secs": 120
+              },
+              {
+                "call_part": "call-control",
+                "rate": "0.00180",
+                "cost": "0.0018",
+                "currency": "USD",
+                "billed_duration_secs": 60
+              }
+            ],
+            "occurred_at": "2018-02-02T22:25:27.521992Z"
+          }
+        }
+      },
+      "CallCostEvent": {
+        "type": "object",
+        "title": "Call Cost Event",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CallCost"
+          }
+        }
+      },
+      "CallCostPart": {
+        "type": "object",
+        "title": "Call Cost Part",
+        "properties": {
+          "call_part": {
+            "type": "string",
+            "example": "call-control",
+            "description": "The product component this cost applies to. Values are determined by the billing system (e.g. sip-trunking, call-control, call-recording). Not a fixed set \u2014 new values may appear as products evolve."
+          },
+          "rate": {
+            "type": "string",
+            "example": "0.00180",
+            "description": "The per-minute rate applied."
+          },
+          "cost": {
+            "type": "string",
+            "example": "0.0018",
+            "description": "The cost for this part of the call."
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD",
+            "description": "The currency of the cost."
+          },
+          "billed_duration_secs": {
+            "type": "integer",
+            "example": 180,
+            "description": "The billed duration in seconds for this part of the call."
+          }
+        }
       },
       "CallDtmfReceived": {
         "type": "object",
@@ -85402,7 +86726,7 @@
         "properties": {
           "voice": {
             "type": "string",
-            "description": "Voice identifier in the format `provider.model_id.voice_id` or `provider.voice_id`. Examples: `telnyx.NaturalHD.Alloy`, `azure.en-US-AvaMultilingualNeural`, `aws.Polly.Generative.Lucia`. When provided, `provider`, `model_id`, and `voice_id` are extracted automatically and take precedence over individual parameters."
+            "description": "Voice identifier in the format `provider.model_id.voice_id` or `provider.voice_id`. Examples: `telnyx.NaturalHD.Alloy`, `Telnyx.Ultra.<voice_id>`, `azure.en-US-AvaMultilingualNeural`, `aws.Polly.Generative.Lucia`. When provided, `provider`, `model_id`, and `voice_id` are extracted automatically and take precedence over individual parameters."
           },
           "text": {
             "type": "string",
@@ -85418,8 +86742,7 @@
               "elevenlabs",
               "minimax",
               "rime",
-              "resemble",
-              "inworld"
+              "resemble"
             ]
           },
           "language": {
@@ -85473,9 +86796,6 @@
           },
           "resemble": {
             "$ref": "#/components/schemas/ResembleProviderParams"
-          },
-          "inworld": {
-            "$ref": "#/components/schemas/InworldProviderParams"
           }
         }
       },
@@ -87693,6 +89013,14 @@
             "example": "Briefly greet the transfer recipient and provide any relevant information from the call. Let them know you will bridge the call right after.",
             "description": "Natural language instructions for your agent for how to provide context for the transfer recipient."
           },
+          "warm_message_delay_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 2000,
+            "description": "Optional delay in milliseconds before playing the warm message audio when the transferred call is answered. When set, the audio_url is not included in the dial command; instead, playback starts after the specified delay. When not set, existing behavior (audio_url in dial) is preserved."
+          },
           "custom_headers": {
             "description": "Custom headers to be added to the SIP INVITE for the transfer command.",
             "type": "array",
@@ -88924,10 +90252,6 @@
             "example": "https://us-east-1.telnyxstorage.com/porting-documents/telnyx/..."
           }
         }
-      },
-      "InworldProviderParams": {
-        "type": "object",
-        "description": "Inworld provider-specific parameters."
       },
       "InworldVoiceSettings": {
         "type": "object",
@@ -103514,6 +104838,26 @@
             "description": "The status of the recording. Only `completed` recordings are currently supported.",
             "example": "completed"
           },
+          "from": {
+            "type": "string",
+            "description": "The `from` (caller) number for the call that generated this recording.",
+            "example": "+15551234567"
+          },
+          "to": {
+            "type": "string",
+            "description": "The `to` (callee) number for the call that generated this recording.",
+            "example": "+15557654321"
+          },
+          "connection_id": {
+            "type": "string",
+            "description": "Identifies the Telnyx application (Call Control, TeXML) or SIP connection resource associated with this recording.",
+            "example": "175237942907135762"
+          },
+          "initiated_by": {
+            "type": "string",
+            "description": "Indicates what triggered the recording. Possible values include `DialVerb`, `Conference`, `OutboundAPI`, `Trunking`, `RecordVerb`, `StartCallRecordingAPI`, `StartConferenceRecordingAPI`.",
+            "example": "StartCallRecordingAPI"
+          },
           "updated_at": {
             "type": "string",
             "description": "ISO 8601 formatted date indicating when the resource was updated.",
@@ -111621,12 +112965,15 @@
       },
       "TelnyxProviderParams": {
         "type": "object",
-        "description": "Telnyx provider-specific parameters.",
+        "description": "Telnyx provider-specific parameters. Use `voice_speed` and `temperature` for `Natural` and `NaturalHD` models. For the `Ultra` model, use `voice_speed`, `volume`, and `emotion`.",
         "properties": {
           "voice_speed": {
             "type": "number",
             "format": "float",
-            "description": "Voice speed multiplier."
+            "description": "Voice speed multiplier. Applies to all models. Range: 0.5 to 2.0.",
+            "minimum": 0.5,
+            "maximum": 2.0,
+            "default": 1.0
           },
           "response_format": {
             "type": "string",
@@ -111641,8 +112988,29 @@
           "temperature": {
             "type": "number",
             "format": "float",
-            "description": "Sampling temperature.",
+            "description": "Sampling temperature. Applies to `Natural` and `NaturalHD` models only.",
             "default": 0.5
+          },
+          "volume": {
+            "type": "number",
+            "format": "float",
+            "description": "Volume level for the Ultra model. Range: 0.0 to 2.0.",
+            "minimum": 0.0,
+            "maximum": 2.0,
+            "default": 1.0
+          },
+          "emotion": {
+            "type": "string",
+            "description": "Emotion control for the Ultra model. Adjusts the emotional tone of the synthesized speech.",
+            "enum": [
+              "neutral",
+              "happy",
+              "sad",
+              "angry",
+              "fearful",
+              "disgusted",
+              "surprised"
+            ]
           }
         }
       },
@@ -113158,6 +114526,86 @@
           "ledger_adjustments",
           "grand_total"
         ]
+      },
+      "TrafficPolicyProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identifies the resource.",
+            "readOnly": true,
+            "example": "6a09cdc3-8948-47f0-aa62-74ac943d6c58"
+          },
+          "record_type": {
+            "type": "string",
+            "readOnly": true,
+            "example": "traffic_policy_profile"
+          },
+          "type": {
+            "description": "The type of the traffic policy profile.",
+            "type": "string",
+            "enum": [
+              "whitelist",
+              "blacklist",
+              "throttling"
+            ],
+            "example": "whitelist"
+          },
+          "services": {
+            "description": "Array of PCEF service IDs included in the profile.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "service_123",
+              "service_456"
+            ]
+          },
+          "ip_ranges": {
+            "description": "Array of IP ranges in CIDR notation.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "10.64.0.0/24",
+              "10.64.0.0/25"
+            ]
+          },
+          "domains": {
+            "description": "Array of domain names.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "www.hbomax.com",
+              "netflix.com"
+            ]
+          },
+          "limit_bw_kbps": {
+            "description": "Bandwidth limit in kbps.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "example": 512
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO 8601 formatted date-time indicating when the resource was created.",
+            "readOnly": true,
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO 8601 formatted date-time indicating when the resource was updated.",
+            "readOnly": true,
+            "example": "2018-02-02T22:25:27.521Z"
+          }
+        }
       },
       "TrafficType": {
         "type": "string",
@@ -120655,6 +122103,11 @@
             ],
             "default": null
           },
+          "expressive_mode": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enables emotionally expressive speech using SSML emotion tags. When enabled, the assistant uses audio tags like angry, excited, content, and sad to add emotional nuance. Only supported for Telnyx Ultra voices."
+          },
           "background_audio": {
             "description": "Optional background audio to play on the call. Use a predefined media bed, or supply a looped MP3 URL. If a media URL is chosen in the portal, customers can preview it before saving.",
             "oneOf": [
@@ -122795,6 +124248,31 @@
           }
         }
       },
+      "WirelessPcrfService": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The service identifier.",
+            "example": "service_123"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the service.",
+            "example": "Netflix"
+          },
+          "group": {
+            "type": "string",
+            "description": "The group the service belongs to.",
+            "example": "Streaming"
+          },
+          "resource_type": {
+            "type": "string",
+            "readOnly": true,
+            "example": "wireless_pcrf_service"
+          }
+        }
+      },
       "WirelessRate": {
         "type": "object",
         "properties": {
@@ -122814,6 +124292,247 @@
               "GBP",
               "USD"
             ]
+          }
+        }
+      },
+      "X402PaymentRequirements": {
+        "type": "object",
+        "description": "x402 protocol v2 payment requirements. Contains all information needed to construct and sign a payment authorization.",
+        "properties": {
+          "x402Version": {
+            "type": "integer",
+            "enum": [
+              2
+            ],
+            "description": "x402 protocol version. Currently always 2."
+          },
+          "resource": {
+            "type": "object",
+            "description": "The resource being paid for. Included in the payment signature.",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Canonical URL of the payment resource."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable description of the payment."
+              },
+              "mimeType": {
+                "type": "string",
+                "description": "MIME type of the resource."
+              }
+            }
+          },
+          "accepts": {
+            "type": "array",
+            "description": "Accepted payment schemes. Currently only the `exact` EVM scheme is supported.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scheme": {
+                  "type": "string",
+                  "description": "Payment scheme (e.g. \"exact\")."
+                },
+                "network": {
+                  "type": "string",
+                  "description": "Blockchain network identifier in CAIP-2 format (e.g. \"eip155:8453\" for Base)."
+                },
+                "amount": {
+                  "type": "string",
+                  "description": "Amount in the token's smallest unit."
+                },
+                "asset": {
+                  "type": "string",
+                  "description": "Token contract address (e.g. USDC on Base)."
+                },
+                "payTo": {
+                  "type": "string",
+                  "description": "Recipient wallet address."
+                },
+                "maxTimeoutSeconds": {
+                  "type": "integer",
+                  "description": "Maximum time in seconds before the payment authorization expires."
+                },
+                "extra": {
+                  "type": "object",
+                  "description": "Additional scheme-specific parameters including EIP-712 domain info and the facilitator URL.",
+                  "properties": {
+                    "quoteId": {
+                      "type": "string"
+                    },
+                    "facilitatorUrl": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "EIP-712 domain name (e.g. \"USD Coin\")."
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "EIP-712 domain version."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "X402QuoteRequest": {
+        "type": "object",
+        "required": [
+          "amount_usd"
+        ],
+        "properties": {
+          "amount_usd": {
+            "type": "string",
+            "description": "Amount in USD to fund (minimum 5.00, maximum 10000.00).",
+            "example": "50.00"
+          }
+        }
+      },
+      "X402QuoteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique quote identifier. Use this to settle the payment."
+              },
+              "record_type": {
+                "type": "string",
+                "enum": [
+                  "quote"
+                ]
+              },
+              "amount_usd": {
+                "type": "string",
+                "description": "The quoted amount in USD."
+              },
+              "amount_crypto": {
+                "type": "string",
+                "description": "The equivalent amount in the payment cryptocurrency's smallest unit (e.g. USDC has 6 decimals, so $50.00 = \"50000000\")."
+              },
+              "network": {
+                "type": "string",
+                "description": "The blockchain network for the payment in CAIP-2 format (e.g. eip155:8453 for Base)."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp when the quote expires."
+              },
+              "payment_requirements": {
+                "$ref": "#/components/schemas/X402PaymentRequirements"
+              }
+            }
+          }
+        }
+      },
+      "X402SettleRequest": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The quote ID to settle."
+          },
+          "payment_signature": {
+            "type": "string",
+            "description": "Base64-encoded signed payment authorization (x402 PaymentPayload). Can alternatively be provided via the PAYMENT-SIGNATURE header."
+          }
+        }
+      },
+      "X402SettlementErrorResponse": {
+        "type": "object",
+        "description": "Error response for x402 settlement failures. Uses string error codes from the x402 error handling system.",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Machine-readable error code.",
+                  "enum": [
+                    "invalid_signature",
+                    "expired_authorization",
+                    "invalid_nonce",
+                    "insufficient_balance",
+                    "insufficient_funds",
+                    "insufficient_allowance",
+                    "facilitator_unavailable",
+                    "facilitator_timeout",
+                    "settlement_timeout",
+                    "transaction_failed",
+                    "unknown"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Short error title (e.g. \"Payment Failed\")."
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "Human-readable error description with guidance."
+                }
+              }
+            }
+          }
+        }
+      },
+      "X402TransactionResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique transaction identifier."
+              },
+              "record_type": {
+                "type": "string",
+                "enum": [
+                  "x402_transaction"
+                ]
+              },
+              "amount": {
+                "type": "string",
+                "description": "The transaction amount in the specified currency."
+              },
+              "currency": {
+                "type": "string",
+                "description": "The currency of the transaction amount (e.g. USD)."
+              },
+              "status": {
+                "type": "string",
+                "description": "The settlement status of the transaction.",
+                "enum": [
+                  "settled"
+                ]
+              },
+              "quote_id": {
+                "type": "string",
+                "description": "The original quote ID associated with this transaction."
+              },
+              "tx_hash": {
+                "type": "string",
+                "nullable": true,
+                "description": "The on-chain transaction hash, if available."
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "ISO 8601 timestamp when the transaction was created."
+              }
+            }
           }
         }
       },
@@ -126396,6 +128115,44 @@
         "description": "ISO 8601 formatted date-time indicating when the resource was updated.",
         "readOnly": true,
         "example": "2018-02-02T22:25:27.521Z"
+      },
+      "x402-transactions_ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "meta": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "source": {
+                  "type": "object",
+                  "properties": {
+                    "pointer": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -126781,6 +128538,56 @@
           }
         ],
         "operationId": "CallConversationInsightsGenerated",
+        "tags": [
+          "Callbacks"
+        ]
+      }
+    },
+    "callCost": {
+      "post": {
+        "summary": "Call Cost",
+        "description": "\n\nThis webhook uses Telnyx headers (telnyx-timestamp, telnyx-signature-ed25519) that are compatible with Standard Webhooks specification for SDK generation. Custom validation logic can map these to standard webhook-timestamp and webhook-signature equivalents. See https://github.com/standard-webhooks/standard-webhooks for details.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallCostEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server must return an HTTP 200, otherwise we will reattempt delivery at the failover webhook URL."
+          }
+        },
+        "parameters": [
+          {
+            "name": "telnyx-timestamp",
+            "in": "header",
+            "required": true,
+            "description": "Unix timestamp (seconds since epoch) of when the webhook was sent - compatible with webhook-timestamp",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "description": "Unix timestamp for replay attack prevention"
+            },
+            "x-webhook-equivalent": "webhook-timestamp"
+          },
+          {
+            "name": "telnyx-signature-ed25519",
+            "in": "header",
+            "required": true,
+            "description": "Base64 encoded Ed25519 signature for webhook verification - compatible with webhook-signature",
+            "schema": {
+              "type": "string",
+              "description": "Ed25519 signature of timestamp|payload for verification"
+            },
+            "x-webhook-equivalent": "webhook-signature"
+          }
+        ],
+        "operationId": "CallCost",
         "tags": [
           "Callbacks"
         ]

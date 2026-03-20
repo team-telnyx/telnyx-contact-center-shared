@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash } from "@tabler/icons-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -129,6 +131,19 @@ export default function EditSheet({
   const [userQueueIds, setUserQueueIds] = React.useState([]); // Array of queue IDs
   const [queuesLoading, setQueuesLoading] = React.useState(false);
 
+  // Invite status
+  const [inviteStatus, setInviteStatus] = React.useState("none");
+  const [inviteSentAt, setInviteSentAt] = React.useState(null);
+  const [inviteAcceptedAt, setInviteAcceptedAt] = React.useState(null);
+  const [inviteExpires, setInviteExpires] = React.useState(null);
+  const [sendingInvite, setSendingInvite] = React.useState(false);
+
+  // Voice number picker
+  const [voiceNumberTab, setVoiceNumberTab] = React.useState("telnyx");
+  const [telnyxNumbers, setTelnyxNumbers] = React.useState([]);
+  const [numbersLoading, setNumbersLoading] = React.useState(false);
+  const [allUserVoiceNumbers, setAllUserVoiceNumbers] = React.useState([]);
+
   // Load user data when userId changes
   React.useEffect(() => {
     async function loadUser() {
@@ -162,6 +177,15 @@ export default function EditSheet({
           setMobile(d.mobile || "");
           setSmsNumber(d.sms_number || "");
           setVoiceNumber(d.voice_number || "");
+          // Load invite status
+          setInviteStatus(d.invite_status || "none");
+          setInviteSentAt(d.invite_sent_at || null);
+          setInviteAcceptedAt(d.invite_accepted_at || null);
+          setInviteExpires(d.invite_token_expires || null);
+          // Set voice number tab based on current value
+          if (d.voice_number) {
+            setVoiceNumberTab("telnyx"); // default to telnyx tab
+          }
           // Load user skills - skills is stored as JSONB object { skillId: proficiency }
           const skills = d.skills || {};
           const skillsObj = typeof skills === 'string' ? JSON.parse(skills) : skills;
@@ -251,6 +275,67 @@ export default function EditSheet({
     }
   }, [open]);
 
+  // Load Telnyx numbers for voice number picker
+  React.useEffect(() => {
+    async function loadNumbers() {
+      setNumbersLoading(true);
+      try {
+        const [numbersRes, usersRes] = await Promise.all([
+          fetch("/api/admin/numbers?pageSize=200", { cache: "no-store" }),
+          fetch("/api/admin/users?pageSize=1000", { cache: "no-store" }),
+        ]);
+        if (numbersRes.ok) {
+          const data = await numbersRes.json();
+          setTelnyxNumbers(data.data || []);
+        }
+        if (usersRes.ok) {
+          const data = await usersRes.json();
+          // Collect voice numbers from all users (to show "assigned" indicator)
+          const voiceNums = (data.rows || [])
+            .filter((u) => u.voice_number && u.id !== userId)
+            .map((u) => u.voice_number);
+          setAllUserVoiceNumbers(voiceNums);
+        }
+      } catch (err) {
+        console.error("Failed to load numbers:", err);
+      } finally {
+        setNumbersLoading(false);
+      }
+    }
+
+    if (open) {
+      loadNumbers();
+    }
+  }, [open, userId]);
+
+
+  async function onSendInvite() {
+    if (!userId) return;
+    setSendingInvite(true);
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(userId)}/invite`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to send invite");
+      setInviteStatus("pending");
+      setInviteSentAt(data.sentAt);
+      setInviteExpires(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString());
+      notify({
+        title: inviteStatus === "none" ? "Invite sent!" : "Invite resent!",
+        description: "The user will receive an invite email shortly.",
+        variant: "success",
+      });
+    } catch (err) {
+      notify({
+        title: "Failed to send invite",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    } finally {
+      setSendingInvite(false);
+    }
+  }
 
   async function onSave() {
     if (!userId) {
@@ -536,14 +621,88 @@ export default function EditSheet({
                           />
                         </div>
                       </div>
-                      <div className="grid gap-3 grid-cols-2">
-                        <div className="grid gap-2 min-w-0">
-                          <Label className="text-sm">Voice number</Label>
-                          <Input
-                            value={voiceNumber}
-                            onChange={(e) => setVoiceNumber(e.target.value)}
-                          />
-                        </div>
+                      {/* Voice Number - enhanced picker */}
+                      <div className="grid gap-2">
+                        <Label className="text-sm flex items-center gap-1">
+                          <IconPhone className="size-3.5" />
+                          Voice Number
+                        </Label>
+                        <Tabs value={voiceNumberTab} onValueChange={setVoiceNumberTab}>
+                          <TabsList className="h-8 w-full grid grid-cols-2">
+                            <TabsTrigger value="telnyx" className="text-xs">From Telnyx</TabsTrigger>
+                            <TabsTrigger value="custom" className="text-xs">Custom</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="telnyx" className="mt-2">
+                            {numbersLoading ? (
+                              <Skeleton className="h-9 w-full" />
+                            ) : (
+                              <Select
+                                value={voiceNumber || "__none__"}
+                                onValueChange={(v) => setVoiceNumber(v === "__none__" ? "" : v)}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder="Select a number..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">
+                                    <span className="text-muted-foreground">— None —</span>
+                                  </SelectItem>
+                                  {telnyxNumbers.map((num) => {
+                                    const isAssigned = allUserVoiceNumbers.includes(num.phone_number);
+                                    return (
+                                      <SelectItem key={num.phone_number} value={num.phone_number}>
+                                        <span className="flex items-center gap-2">
+                                          {num.phone_number}
+                                          {num.friendly_name && (
+                                            <span className="text-muted-foreground text-xs">
+                                              ({num.friendly_name})
+                                            </span>
+                                          )}
+                                          {isAssigned && (
+                                            <span className="text-amber-500 text-xs">(assigned)</span>
+                                          )}
+                                        </span>
+                                      </SelectItem>
+                                    );
+                                  })}
+                                  {telnyxNumbers.length === 0 && (
+                                    <SelectItem value="__empty__" disabled>
+                                      No numbers available
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </TabsContent>
+                          <TabsContent value="custom" className="mt-2">
+                            <div className="flex gap-2">
+                              <Input
+                                value={voiceNumber}
+                                onChange={(e) => setVoiceNumber(e.target.value)}
+                                placeholder="+1234567890"
+                                className="flex-1"
+                              />
+                              {voiceNumber && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setVoiceNumber("")}
+                                >
+                                  Clear
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Enter any E.164 number (e.g. +12025551234)
+                            </p>
+                          </TabsContent>
+                        </Tabs>
+                        {voiceNumber && (
+                          <p className="text-xs text-muted-foreground">
+                            Current: <span className="font-mono font-medium">{voiceNumber}</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -563,6 +722,78 @@ export default function EditSheet({
                           onChange={setRoles}
                           options={USER_ROLES}
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Invite Status Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
+                      <IconMail className="size-3.5" />
+                      Invite Status
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          {inviteStatus === "none" && (
+                            <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
+                              Not invited
+                            </Badge>
+                          )}
+                          {inviteStatus === "pending" && (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
+                                Pending
+                              </Badge>
+                              {inviteSentAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Sent: {new Date(inviteSentAt).toLocaleString()}
+                                </p>
+                              )}
+                              {inviteExpires && (
+                                <p className="text-xs text-muted-foreground">
+                                  Expires: {new Date(inviteExpires).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {inviteStatus === "accepted" && (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
+                                Accepted
+                              </Badge>
+                              {inviteAcceptedAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {inviteStatus === "expired" && (
+                            <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
+                              Expired
+                            </Badge>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={onSendInvite}
+                          disabled={sendingInvite || inviteStatus === "accepted"}
+                          className="gap-1"
+                        >
+                          <IconMail className="size-3.5" />
+                          {sendingInvite
+                            ? "Sending..."
+                            : inviteStatus === "none" || inviteStatus === "expired"
+                            ? "Send Invite"
+                            : inviteStatus === "pending"
+                            ? "Resend Invite"
+                            : "Invited"}
+                        </Button>
                       </div>
                     </div>
                   </div>
