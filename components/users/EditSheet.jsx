@@ -23,7 +23,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone } from "@tabler/icons-react";
+import { IconEdit, IconCheck, IconStar, IconStarFilled, IconInfoCircle, IconPlus, IconTrash, IconMail, IconPhone, IconSelector } from "@tabler/icons-react";
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandItem,
+} from "@/components/ui/command";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -109,6 +116,8 @@ export default function EditSheet({
   onOpenChange,
   userId,
   onSaveComplete,
+  onSaved,
+  createMode = false,
 }) {
   const [username, setUsername] = React.useState("");
   const [firstName, setFirstName] = React.useState("");
@@ -143,11 +152,42 @@ export default function EditSheet({
   const [telnyxNumbers, setTelnyxNumbers] = React.useState([]);
   const [numbersLoading, setNumbersLoading] = React.useState(false);
   const [allUserVoiceNumbers, setAllUserVoiceNumbers] = React.useState([]);
+  const [numberSearchOpen, setNumberSearchOpen] = React.useState(false);
+  const [numberSearch, setNumberSearch] = React.useState("");
+
+  // Create mode - send invite checkbox
+  const [sendInvite, setSendInvite] = React.useState(true);
+
+  // Reset state when opening in create mode
+  React.useEffect(() => {
+    if (open && createMode) {
+      setUsername("");
+      setFirstName("");
+      setLastName("");
+      setNick("");
+      setRoles(["agent"]);
+      setVerified(false);
+      setActive(true);
+      setStatus(DEFAULT_USER_STATUS);
+      setMobile("");
+      setSmsNumber("");
+      setVoiceNumber("");
+      setSendInvite(true);
+      setUserSkillsArray([]);
+      setUserQueueIds([]);
+      setInviteStatus("none");
+      setInviteSentAt(null);
+      setInviteAcceptedAt(null);
+      setInviteExpires(null);
+      setNumberSearch("");
+      setNumberSearchOpen(false);
+    }
+  }, [open, createMode]);
 
   // Load user data when userId changes
   React.useEffect(() => {
     async function loadUser() {
-      if (!userId || !open) return;
+      if (!userId || !open || createMode) return;
 
       setLoading(true);
       try {
@@ -221,10 +261,10 @@ export default function EditSheet({
       }
     }
 
-    if (open && userId) {
+    if (open && userId && !createMode) {
       loadUser();
     }
-  }, [userId, open]);
+  }, [userId, open, createMode]);
 
 
   // Load available skills
@@ -338,6 +378,76 @@ export default function EditSheet({
   }
 
   async function onSave() {
+    if (createMode) {
+      // Validate required fields
+      if (!firstName.trim() || !lastName.trim() || !username.trim()) {
+        notify({
+          title: "Required fields missing",
+          description: "First name, last name, and email are required.",
+          variant: "error",
+        });
+        return;
+      }
+
+      // Validate skills
+      const skillIds = userSkillsArray.map((s) => s.skillId).filter(Boolean);
+      const duplicateSkillIds = skillIds.filter((id, index) => skillIds.indexOf(id) !== index);
+      if (duplicateSkillIds.length > 0) {
+        notify({ title: "Duplicate skills detected", description: "Each skill can only be assigned once.", variant: "error" });
+        return;
+      }
+      const incompleteSkills = userSkillsArray.filter((s) => !s.skillId || s.skillId.trim() === "");
+      if (incompleteSkills.length > 0) {
+        notify({ title: "Incomplete skill selections", description: "Please select a skill for all entries or remove incomplete ones.", variant: "error" });
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const skills = userSkillsArray.reduce((acc, skill) => {
+          if (skill.skillId && skill.proficiency >= 1 && skill.proficiency <= 5) {
+            acc[skill.skillId] = skill.proficiency;
+          }
+          return acc;
+        }, {});
+
+        const res = await fetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            username: username.trim(),
+            roles,
+            nick: nick.trim() || null,
+            mobile: mobile.trim() || null,
+            voiceNumber: voiceNumber || null,
+            skills,
+            sendInvite,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to create user");
+        notify({
+          title: "User created",
+          description: sendInvite ? "Invite email sent." : "User created without invite.",
+          variant: "success",
+        });
+        onOpenChange(false);
+        onSaved && onSaved();
+        onSaveComplete && onSaveComplete();
+      } catch (err) {
+        notify({
+          title: "Failed to create user",
+          description: String(err.message || err),
+          variant: "error",
+        });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!userId) {
       notify({
         title: "User ID is required",
@@ -440,7 +550,7 @@ export default function EditSheet({
         <SheetHeader className="px-6 py-4 border-b">
           <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             <IconEdit className="size-5" />
-            Edit User
+            {createMode ? "Add New User" : "Edit User"}
           </SheetTitle>
         </SheetHeader>
 
@@ -545,70 +655,83 @@ export default function EditSheet({
                   <div>
                     <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
                       <IconMail className="size-3.5" />
-                      Invite Status
+                      {createMode ? "Invite" : "Invite Status"}
                     </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          {inviteStatus === "none" && (
-                            <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
-                              Not invited
-                            </Badge>
-                          )}
-                          {inviteStatus === "pending" && (
-                            <div className="space-y-1">
-                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
-                                Pending
-                              </Badge>
-                              {inviteSentAt && (
-                                <p className="text-xs text-muted-foreground">
-                                  Sent: {new Date(inviteSentAt).toLocaleString()}
-                                </p>
-                              )}
-                              {inviteExpires && (
-                                <p className="text-xs text-muted-foreground">
-                                  Expires: {new Date(inviteExpires).toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {inviteStatus === "accepted" && (
-                            <div className="space-y-1">
-                              <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
-                                Accepted
-                              </Badge>
-                              {inviteAcceptedAt && (
-                                <p className="text-xs text-muted-foreground">
-                                  Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {inviteStatus === "expired" && (
-                            <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
-                              Expired
-                            </Badge>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={onSendInvite}
-                          disabled={sendingInvite || inviteStatus === "accepted"}
-                          className="gap-1"
-                        >
-                          <IconMail className="size-3.5" />
-                          {sendingInvite
-                            ? "Sending..."
-                            : inviteStatus === "none" || inviteStatus === "expired"
-                            ? "Send Invite"
-                            : inviteStatus === "pending"
-                            ? "Resend Invite"
-                            : "Invited"}
-                        </Button>
+                    {createMode ? (
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="edit-sheet-send-invite"
+                          checked={sendInvite}
+                          onCheckedChange={(v) => setSendInvite(Boolean(v))}
+                        />
+                        <Label htmlFor="edit-sheet-send-invite" className="cursor-pointer text-sm font-normal">
+                          Send invite email after creation
+                        </Label>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            {inviteStatus === "none" && (
+                              <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
+                                Not invited
+                              </Badge>
+                            )}
+                            {inviteStatus === "pending" && (
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
+                                  Pending
+                                </Badge>
+                                {inviteSentAt && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Sent: {new Date(inviteSentAt).toLocaleString()}
+                                  </p>
+                                )}
+                                {inviteExpires && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Expires: {new Date(inviteExpires).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {inviteStatus === "accepted" && (
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
+                                  Accepted
+                                </Badge>
+                                {inviteAcceptedAt && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {inviteStatus === "expired" && (
+                              <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
+                                Expired
+                              </Badge>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={onSendInvite}
+                            disabled={sendingInvite || inviteStatus === "accepted"}
+                            className="gap-1"
+                          >
+                            <IconMail className="size-3.5" />
+                            {sendingInvite
+                              ? "Sending..."
+                              : inviteStatus === "none" || inviteStatus === "expired"
+                              ? "Send Invite"
+                              : inviteStatus === "pending"
+                              ? "Resend Invite"
+                              : "Invited"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="border-t" />
@@ -640,8 +763,14 @@ export default function EditSheet({
                     </h3>
                     <div className="space-y-3">
                       <div className="grid gap-2">
-                        <Label className="text-sm">Username (email)</Label>
-                        <Input value={username} disabled />
+                        <Label className="text-sm">Username (email){createMode && " *"}</Label>
+                        <Input
+                          value={username}
+                          disabled={!createMode}
+                          onChange={createMode ? (e) => setUsername(e.target.value) : undefined}
+                          placeholder={createMode ? "john.doe@company.com" : undefined}
+                          type={createMode ? "email" : undefined}
+                        />
                       </div>
                       <div className="grid gap-3 grid-cols-2">
                         <div className="grid gap-2 min-w-0">
@@ -707,44 +836,86 @@ export default function EditSheet({
                           <TabsContent value="telnyx" className="mt-2">
                             {numbersLoading ? (
                               <Skeleton className="h-9 w-full" />
-                            ) : (
-                              <Select
-                                value={voiceNumber || "__none__"}
-                                onValueChange={(v) => setVoiceNumber(v === "__none__" ? "" : v)}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder="Select a number..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">
-                                    <span className="text-muted-foreground">— None —</span>
-                                  </SelectItem>
-                                  {telnyxNumbers.map((num) => {
-                                    const isAssigned = allUserVoiceNumbers.includes(num.phone_number);
-                                    return (
-                                      <SelectItem key={num.phone_number} value={num.phone_number}>
-                                        <span className="flex items-center gap-2">
-                                          {num.phone_number}
-                                          {num.friendly_name && (
-                                            <span className="text-muted-foreground text-xs">
-                                              ({num.friendly_name})
-                                            </span>
-                                          )}
-                                          {isAssigned && (
-                                            <span className="text-amber-500 text-xs">(assigned)</span>
-                                          )}
-                                        </span>
-                                      </SelectItem>
-                                    );
-                                  })}
-                                  {telnyxNumbers.length === 0 && (
-                                    <SelectItem value="__empty__" disabled>
-                                      No numbers available
-                                    </SelectItem>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            )}
+                            ) : (() => {
+                              const filteredNumbers = telnyxNumbers.filter((n) =>
+                                n.phone_number.includes(numberSearch) ||
+                                (n.friendly_name || "").toLowerCase().includes(numberSearch.toLowerCase())
+                              );
+                              return (
+                                <Popover open={numberSearchOpen} onOpenChange={setNumberSearchOpen}>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      role="combobox"
+                                      className="w-full justify-between font-normal"
+                                    >
+                                      <span className="truncate">
+                                        {voiceNumber || "Select a number..."}
+                                      </span>
+                                      <IconSelector className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                                    <Command>
+                                      <CommandInput
+                                        placeholder="Search number..."
+                                        value={numberSearch}
+                                        onValueChange={setNumberSearch}
+                                      />
+                                      <CommandList>
+                                        <CommandEmpty>No numbers found.</CommandEmpty>
+                                        <CommandItem
+                                          value="__none__"
+                                          onSelect={() => {
+                                            setVoiceNumber("");
+                                            setNumberSearchOpen(false);
+                                            setNumberSearch("");
+                                          }}
+                                        >
+                                          <span className="text-muted-foreground">— None —</span>
+                                        </CommandItem>
+                                        {filteredNumbers.map((num) => {
+                                          const isAssigned = allUserVoiceNumbers.includes(num.phone_number);
+                                          return (
+                                            <CommandItem
+                                              key={num.phone_number}
+                                              value={num.phone_number}
+                                              onSelect={() => {
+                                                setVoiceNumber(num.phone_number);
+                                                setNumberSearchOpen(false);
+                                                setNumberSearch("");
+                                              }}
+                                            >
+                                              <span className="flex items-center gap-2 flex-1">
+                                                <span>{num.phone_number}</span>
+                                                {num.friendly_name && (
+                                                  <span className="text-muted-foreground text-xs">
+                                                    ({num.friendly_name})
+                                                  </span>
+                                                )}
+                                                {isAssigned && (
+                                                  <span className="text-amber-500 text-xs ml-auto">
+                                                    (assigned)
+                                                  </span>
+                                                )}
+                                              </span>
+                                              {voiceNumber === num.phone_number && (
+                                                <IconCheck className="ml-2 h-4 w-4 shrink-0" />
+                                              )}
+                                            </CommandItem>
+                                          );
+                                        })}
+                                        {telnyxNumbers.length === 0 && (
+                                          <div className="py-6 text-center text-sm text-muted-foreground">
+                                            No numbers available
+                                          </div>
+                                        )}
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            })()}
                           </TabsContent>
                           <TabsContent value="custom" className="mt-2">
                             <div className="flex gap-2">
@@ -1006,8 +1177,10 @@ export default function EditSheet({
           >
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={saving || loading}>
-            {saving ? "Saving..." : "Save Changes"}
+          <Button onClick={onSave} disabled={saving || (!createMode && loading)}>
+            {saving
+              ? createMode ? "Creating..." : "Saving..."
+              : createMode ? "Create User" : "Save Changes"}
           </Button>
         </SheetFooter>
       </SheetContent>
