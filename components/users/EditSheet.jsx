@@ -541,6 +541,78 @@ export default function EditSheet({
                 </>
               ) : (
                 <>
+                  {/* Invite Status Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
+                      <IconMail className="size-3.5" />
+                      Invite Status
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          {inviteStatus === "none" && (
+                            <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
+                              Not invited
+                            </Badge>
+                          )}
+                          {inviteStatus === "pending" && (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
+                                Pending
+                              </Badge>
+                              {inviteSentAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Sent: {new Date(inviteSentAt).toLocaleString()}
+                                </p>
+                              )}
+                              {inviteExpires && (
+                                <p className="text-xs text-muted-foreground">
+                                  Expires: {new Date(inviteExpires).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {inviteStatus === "accepted" && (
+                            <div className="space-y-1">
+                              <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
+                                Accepted
+                              </Badge>
+                              {inviteAcceptedAt && (
+                                <p className="text-xs text-muted-foreground">
+                                  Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {inviteStatus === "expired" && (
+                            <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
+                              Expired
+                            </Badge>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={onSendInvite}
+                          disabled={sendingInvite || inviteStatus === "accepted"}
+                          className="gap-1"
+                        >
+                          <IconMail className="size-3.5" />
+                          {sendingInvite
+                            ? "Sending..."
+                            : inviteStatus === "none" || inviteStatus === "expired"
+                            ? "Send Invite"
+                            : inviteStatus === "pending"
+                            ? "Resend Invite"
+                            : "Invited"}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
                   {/* Verified Switch at the top */}
                   <div className="flex items-center justify-between pb-4 border-b">
                     <Label className="text-sm font-medium">
@@ -722,78 +794,6 @@ export default function EditSheet({
                           onChange={setRoles}
                           options={USER_ROLES}
                         />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t" />
-
-                  {/* Invite Status Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-1">
-                      <IconMail className="size-3.5" />
-                      Invite Status
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          {inviteStatus === "none" && (
-                            <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50 dark:bg-gray-800/40">
-                              Not invited
-                            </Badge>
-                          )}
-                          {inviteStatus === "pending" && (
-                            <div className="space-y-1">
-                              <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-900/20">
-                                Pending
-                              </Badge>
-                              {inviteSentAt && (
-                                <p className="text-xs text-muted-foreground">
-                                  Sent: {new Date(inviteSentAt).toLocaleString()}
-                                </p>
-                              )}
-                              {inviteExpires && (
-                                <p className="text-xs text-muted-foreground">
-                                  Expires: {new Date(inviteExpires).toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {inviteStatus === "accepted" && (
-                            <div className="space-y-1">
-                              <Badge variant="outline" className="text-green-600 border-green-400 bg-green-50 dark:bg-green-900/20">
-                                Accepted
-                              </Badge>
-                              {inviteAcceptedAt && (
-                                <p className="text-xs text-muted-foreground">
-                                  Accepted: {new Date(inviteAcceptedAt).toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          {inviteStatus === "expired" && (
-                            <Badge variant="outline" className="text-red-600 border-red-400 bg-red-50 dark:bg-red-900/20">
-                              Expired
-                            </Badge>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={onSendInvite}
-                          disabled={sendingInvite || inviteStatus === "accepted"}
-                          className="gap-1"
-                        >
-                          <IconMail className="size-3.5" />
-                          {sendingInvite
-                            ? "Sending..."
-                            : inviteStatus === "none" || inviteStatus === "expired"
-                            ? "Send Invite"
-                            : inviteStatus === "pending"
-                            ? "Resend Invite"
-                            : "Invited"}
-                        </Button>
                       </div>
                     </div>
                   </div>
