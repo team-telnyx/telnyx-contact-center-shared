@@ -117,6 +117,24 @@ export async function POST(request) {
       return NextResponse.json({ error: "Server not ready" }, { status: 500 });
     }
 
+    // Validate email domain against allowed domains
+    const emailDomain = username.split("@")[1]?.toLowerCase();
+    if (!emailDomain) {
+      return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+    }
+    const allowedDomains = await pool.query(
+      "SELECT domain FROM domains WHERE active=true ORDER BY domain"
+    );
+    if (allowedDomains.rows.length > 0) {
+      const domainList = allowedDomains.rows.map((r) => r.domain.toLowerCase());
+      if (!domainList.includes(emailDomain)) {
+        return NextResponse.json(
+          { error: `Email domain "@${emailDomain}" is not allowed. Allowed domains: ${domainList.map((d) => "@" + d).join(", ")}` },
+          { status: 422 }
+        );
+      }
+    }
+
     // Check if username already exists
     const existing = await pool.query(
       "SELECT id FROM users WHERE username=$1 LIMIT 1",
