@@ -487,6 +487,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
         <SuggestedResponseCard 
           currentSlot={currentSlotNeedingFill} 
           onSuggestionsChange={handleSuggestionsChange}
+          isAiAssisted={aiHandoff.isAiAssisted}
+          aiDataReceived={aiHandoff.aiDataReceived}
+          aiDataLoading={aiHandoff.aiDataLoading}
         />
       </div>
 
@@ -1388,21 +1391,39 @@ function generateStaticSuggestion(stage, item) {
 /**
  * Suggested Response Card - Accumulating list of suggestions
  */
-function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
+function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted, aiDataReceived, aiDataLoading }) {
   const [suggestions, setSuggestions] = useState([]);
   const [copiedId, setCopiedId] = useState(null);
   const [generatingSuggestion, setGeneratingSuggestion] = useState(false);
   const scrollRef = useRef(null);
   const endRef = useRef(null);
   const lastItemIdRef = useRef(null);
+  const prevAiDataReceivedRef = useRef(false);
   
   // Get session and transcriptions from stores
   const session = useWorkflowStore((state) => state.session);
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
-  // Add new suggestion when currentSlot changes to a new item
+  // Fix 2: When AI handoff data arrives mid-session (race condition), reset suggestions
+  // so agent only sees suggestions relevant to the first UNFILLED slot,
+  // not suggestions generated before AI data arrived for already-filled slots.
+  useEffect(() => {
+    if (isAiAssisted && aiDataReceived && !prevAiDataReceivedRef.current) {
+      prevAiDataReceivedRef.current = true;
+      setSuggestions([]);
+      lastItemIdRef.current = null; // force regeneration for the new currentSlot
+      if (onSuggestionsChange) onSuggestionsChange([]);
+    }
+  }, [isAiAssisted, aiDataReceived, onSuggestionsChange]);
+
+  // Add new suggestion when currentSlot changes to a new item.
+  // Fix 3: On AI-assisted calls, defer suggestion generation until AI data is received
+  // to avoid generating suggestions for slots AI may have already filled.
   useEffect(() => {
     if (!currentSlot) return;
+
+    // Fix 3: Wait for AI context before generating first suggestion on AI-assisted calls
+    if (isAiAssisted && aiDataLoading) return;
     
     const { stage, item } = currentSlot;
     
@@ -1430,7 +1451,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
           setGeneratingSuggestion(false);
         });
     }
-  }, [currentSlot, session, transcriptions, onSuggestionsChange]);
+  }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {
@@ -1474,7 +1495,14 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange }) {
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollRef}>
           <div className="p-4 space-y-3">
-            {suggestions.length === 0 ? (
+            {/* Fix 3: Show waiting state while AI data loads on AI-assisted calls */}
+            {suggestions.length === 0 && isAiAssisted && aiDataLoading ? (
+              <div className="text-center text-muted-foreground py-8">
+                <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin text-purple-500" />
+                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Waiting for AI context...</p>
+                <p className="text-xs mt-1">Suggestions will appear after AI data is received</p>
+              </div>
+            ) : suggestions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <Sparkles className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Waiting for workflow...</p>
