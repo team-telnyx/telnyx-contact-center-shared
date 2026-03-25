@@ -91,15 +91,18 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
   const isAIProvider = provider !== "custom";
   const isLocked = isAIProvider; // Non-custom fields are locked
 
-  // Get the base WebSocket URL for AI providers (port 3001)
+  // Get the base WebSocket URL for streaming providers
+  // Uses NEXT_PUBLIC_STREAMING_PORT if set, otherwise defaults to main port + 1 (3001 for port 3000)
   const getStreamingWSUrl = (providerPath) => {
     if (typeof window === "undefined") {
-      return `wss://yourdomain.com:3001/streaming/${providerPath}`;
+      const port = process.env.NEXT_PUBLIC_STREAMING_PORT || "3001";
+      return `wss://yourdomain.com:${port}/streaming/${providerPath}`;
     }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const hostname = window.location.hostname;
-    const port = 3001; // Streaming WS server runs on main + 1
-    return `${protocol}//${hostname}:${port}/streaming/${providerPath}`;
+    const mainPort = parseInt(window.location.port || (window.location.protocol === "https:" ? "443" : "80"), 10);
+    const wsPort = process.env.NEXT_PUBLIC_STREAMING_PORT || String(mainPort + 1);
+    return `${protocol}//${hostname}:${wsPort}/streaming/${providerPath}`;
   };
 
   // Update configuration when provider changes

@@ -45,7 +45,11 @@ export async function register() {
     }
 
     // Start Streaming WebSocket server on separate port (default: main + 1 = 3001)
+    // Used for Google Gemini Live, OpenAI Realtime, and Azure Speech Transcription
     try {
+      const mainPort = parseInt(process.env.PORT || "3000", 10);
+      const wsPort = parseInt(process.env.STREAMING_WS_PORT || String(mainPort + 1), 10);
+      console.log(`[Streaming WS] Starting WebSocket server on port ${wsPort}...`);
       const { initStreamingWSServer } = await import("./lib/streaming-ws-handler.mjs");
       initStreamingWSServer();
     } catch (err) {
