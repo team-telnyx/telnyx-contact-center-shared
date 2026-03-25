@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -12,9 +13,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   IconLock,
   IconInfoCircle,
   IconAlertTriangle,
+  IconChevronDown,
+  IconChevronRight,
+  IconBrain,
+  IconSettings,
   IconMicrophone,
 } from "@tabler/icons-react";
 import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
@@ -81,33 +91,107 @@ const TARGET_LEGS_OPTIONS = [
   { value: "opposite", label: "Opposite" },
 ];
 
+// OpenAI voice options
+const OPENAI_VOICE_OPTIONS = [
+  { value: "alloy", label: "Alloy" },
+  { value: "ash", label: "Ash" },
+  { value: "ballad", label: "Ballad" },
+  { value: "coral", label: "Coral" },
+  { value: "echo", label: "Echo" },
+  { value: "fable", label: "Fable" },
+  { value: "nova", label: "Nova" },
+  { value: "onyx", label: "Onyx" },
+  { value: "sage", label: "Sage" },
+  { value: "shimmer", label: "Shimmer" },
+  { value: "verse", label: "Verse" },
+];
+
+const OPENAI_TRANSCRIPTION_OPTIONS = [
+  { value: "gpt-4o-transcribe", label: "GPT-4o Transcribe" },
+  { value: "gpt-4o-mini-transcribe", label: "GPT-4o Mini Transcribe" },
+  { value: "whisper-1", label: "Whisper-1" },
+];
+
+const OPENAI_TURN_DETECTION_OPTIONS = [
+  { value: "server_vad", label: "Server VAD" },
+  { value: "semantic_vad", label: "Semantic VAD" },
+  { value: "none", label: "None" },
+];
+
+// Gemini voice options
+const GEMINI_VOICE_OPTIONS = [
+  { value: "Puck", label: "Puck" },
+  { value: "Charon", label: "Charon" },
+  { value: "Kore", label: "Kore" },
+  { value: "Fenrir", label: "Fenrir" },
+  { value: "Aoede", label: "Aoede" },
+];
+
+const GEMINI_MODEL_OPTIONS = [
+  { value: "gemini-2.5-flash-native-audio-latest", label: "Gemini 2.5 Flash Native Audio" },
+  { value: "gemini-2.5-flash-native-audio-preview-12-2025", label: "Gemini 2.5 Flash Native Audio (Dec 2025)" },
+  { value: "gemini-2.5-flash-native-audio-preview-09-2025", label: "Gemini 2.5 Flash Native Audio (Sep 2025)" },
+];
+
 export default function StreamingStartNodeEditor({ config = {}, onChange }) {
   const [provider, setProvider] = useState(
     config.ai_streaming_provider || "custom"
   );
   const [streamUrlError, setStreamUrlError] = useState(null);
+  const [wsBaseUrl, setWsBaseUrl] = useState(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  const isCustom = provider === "custom";
+  const isOpenAI = provider === "openai-realtime";
+  const isGemini = provider === "google-gemini";
   const isAzure = provider === "azure-transcription";
-  const isAIProvider = provider !== "custom";
-  const isLocked = isAIProvider; // Non-custom fields are locked
+  const isAI = isOpenAI || isGemini; // AI providers with session config
+  const isLocked = !isCustom;
 
-  // Get the base WebSocket URL for streaming providers
-  // Uses NEXT_PUBLIC_STREAMING_PORT if set, otherwise defaults to main port + 1 (3001 for port 3000)
-  const getStreamingWSUrl = (providerPath) => {
+  // Fetch WS base URL from streaming capabilities endpoint
+  useEffect(() => {
+    fetch("/api/voice/streaming/capabilities")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.wsUrl) {
+          setWsBaseUrl(data.wsUrl.replace(/\/$/, ""));
+        } else if (data.wsPort) {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          setWsBaseUrl(`${protocol}//${window.location.hostname}:${data.wsPort}`);
+        }
+      })
+      .catch(() => {
+        // Fallback: build from NEXT_PUBLIC_STREAMING_PORT or port+1
+        if (typeof window !== "undefined") {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const mainPort = parseInt(
+            window.location.port || (window.location.protocol === "https:" ? "443" : "80"),
+            10
+          );
+          const wsPort = process.env.NEXT_PUBLIC_STREAMING_PORT || String(mainPort + 1);
+          setWsBaseUrl(`${protocol}//${window.location.hostname}:${wsPort}`);
+        }
+      });
+  }, []);
+
+  const getWebSocketUrl = (providerPath) => {
+    if (wsBaseUrl) return `${wsBaseUrl}/streaming/${providerPath}`;
     if (typeof window === "undefined") {
       const port = process.env.NEXT_PUBLIC_STREAMING_PORT || "3001";
       return `wss://yourdomain.com:${port}/streaming/${providerPath}`;
     }
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const hostname = window.location.hostname;
-    const mainPort = parseInt(window.location.port || (window.location.protocol === "https:" ? "443" : "80"), 10);
+    const mainPort = parseInt(
+      window.location.port || (window.location.protocol === "https:" ? "443" : "80"),
+      10
+    );
     const wsPort = process.env.NEXT_PUBLIC_STREAMING_PORT || String(mainPort + 1);
-    return `${protocol}//${hostname}:${wsPort}/streaming/${providerPath}`;
+    return `${protocol}//${window.location.hostname}:${wsPort}/streaming/${providerPath}`;
   };
 
   // Update configuration when provider changes
   useEffect(() => {
-    if (provider === "custom") {
+    if (isCustom) {
       if (config.stream_url) {
         const validation = validateWebSocketUrl(config.stream_url);
         setStreamUrlError(validation.valid ? null : validation.error);
@@ -118,9 +202,8 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
     const providerConfig = AI_STREAMING_PROVIDERS[provider];
     if (!providerConfig) return;
 
-    if (provider === "azure-transcription") {
-      // Azure: point to our port-3001 streaming server
-      const streamUrl = getStreamingWSUrl("azure");
+    if (isAzure) {
+      const streamUrl = getWebSocketUrl("azure");
       const newConfig = {
         ...config,
         ai_streaming_provider: provider,
@@ -130,9 +213,8 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
       setStreamUrlError(null);
       onChange?.(newConfig);
     } else {
-      // Google / OpenAI: same port-3001 streaming server
-      const wsProvider = provider === "google-gemini" ? "google" : "openai";
-      const streamUrl = getStreamingWSUrl(wsProvider);
+      const wsProvider = isGemini ? "google" : "openai";
+      const streamUrl = getWebSocketUrl(wsProvider);
       const validation = validateWebSocketUrl(streamUrl);
       setStreamUrlError(validation.valid ? null : validation.error);
       const newConfig = {
@@ -143,24 +225,21 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
       };
       onChange?.(newConfig);
     }
-  }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [provider, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Validate stream URL when it changes
+  // Validate stream URL
   useEffect(() => {
-    if (config.stream_url && !isAzure) {
+    if (config.stream_url && isCustom) {
       const validation = validateWebSocketUrl(config.stream_url);
       setStreamUrlError(validation.valid ? null : validation.error);
     } else {
       setStreamUrlError(null);
     }
-  }, [config.stream_url, isAzure]);
+  }, [config.stream_url, isCustom]);
 
-  // Sync provider from config changes
+  // Sync provider from config
   useEffect(() => {
-    if (
-      config.ai_streaming_provider &&
-      config.ai_streaming_provider !== provider
-    ) {
+    if (config.ai_streaming_provider && config.ai_streaming_provider !== provider) {
       setProvider(config.ai_streaming_provider);
     }
   }, [config.ai_streaming_provider]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -174,19 +253,48 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
 
   const handleFieldChange = (field, value) => {
     const newConfig = { ...config, [field]: value };
-    if (field === "stream_url" && !isAzure) {
+    if (field === "stream_url" && isCustom) {
       const validation = validateWebSocketUrl(value);
       setStreamUrlError(validation.valid ? null : validation.error);
     }
     onChange?.(newConfig);
   };
 
+  // Helper for select fields
+  const renderSelect = (field, label, options, defaultValue, opts = {}) => (
+    <div>
+      <Label className="flex items-center gap-2">
+        {label}
+        {opts.locked && <IconLock className="w-3 h-3 text-muted-foreground" />}
+      </Label>
+      <Select
+        value={String(config[field] ?? defaultValue)}
+        onValueChange={(value) => handleFieldChange(field, value)}
+        disabled={opts.disabled}
+      >
+        <SelectTrigger className="w-full mt-1">
+          <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((opt) => (
+            <SelectItem key={opt.value} value={String(opt.value)}>
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {opts.description && (
+        <p className="text-xs text-muted-foreground mt-1">{opts.description}</p>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4">
-      {/* AI Provider Selection */}
+      {/* Provider Selection */}
       <div>
         <Label>
-          AI Provider <span className="text-red-500">*</span>
+          Provider <span className="text-red-500">*</span>
         </Label>
         <Select value={provider} onValueChange={handleProviderChange}>
           <SelectTrigger className="w-full mt-1">
@@ -201,12 +309,12 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground mt-1">
-          Select an AI provider or choose Custom for manual configuration
+          Select a provider or choose Custom for manual configuration
         </p>
       </div>
 
-      {/* Auto-configuration notice for non-Azure providers */}
-      {isAIProvider && !isAzure && (
+      {/* Auto-configuration notice for AI providers */}
+      {isLocked && !isAzure && (
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
           <IconInfoCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-blue-700 dark:text-blue-300">
@@ -215,92 +323,228 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
               {PROVIDER_OPTIONS.find((p) => p.value === provider)?.label}
             </strong>
             <p className="mt-1">
-              Stream settings are automatically configured for optimal
-              performance with this provider. Select &quot;Custom&quot; to modify settings
-              manually.
+              Stream settings are automatically configured. AI session parameters
+              can be customized below.
             </p>
           </div>
         </div>
       )}
 
-      {/* ── Azure Transcription + Translation section ── */}
+      {/* ====== AI Session Configuration (Google / OpenAI) ====== */}
+      {isAI && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <IconBrain className="w-4 h-4 text-purple-500" />
+            <span className="text-sm font-medium">AI Session Configuration</span>
+          </div>
+
+          {/* Common: Instructions */}
+          <div>
+            <Label>AI Instructions</Label>
+            <Textarea
+              value={config.ai_instructions || ""}
+              onChange={(e) => handleFieldChange("ai_instructions", e.target.value)}
+              placeholder="System instructions for the AI assistant..."
+              rows={4}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              System instructions for the AI assistant. Leave empty for default.
+            </p>
+          </div>
+
+          {/* Common: Greeting Prompt */}
+          <div>
+            <Label>Greeting Prompt</Label>
+            <Textarea
+              value={config.ai_greeting_prompt || ""}
+              onChange={(e) => handleFieldChange("ai_greeting_prompt", e.target.value)}
+              placeholder="Please greet the caller and ask how you can help..."
+              rows={2}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              What the AI should say when greeting the caller
+            </p>
+          </div>
+
+          {/* Common: Temperature */}
+          <div>
+            <Label>Temperature</Label>
+            <Input
+              type="number"
+              value={config.ai_temperature ?? 0.8}
+              onChange={(e) =>
+                handleFieldChange("ai_temperature", parseFloat(e.target.value) || 0)
+              }
+              min={0}
+              max={2}
+              step={0.1}
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Controls randomness (0.0–2.0)
+            </p>
+          </div>
+
+          {/* === OpenAI-specific === */}
+          {isOpenAI && (
+            <div className="space-y-4">
+              {renderSelect("ai_voice_openai", "Voice", OPENAI_VOICE_OPTIONS, "alloy", {
+                description: "OpenAI voice for audio output",
+              })}
+
+              {renderSelect(
+                "ai_transcription_model",
+                "Transcription Model",
+                OPENAI_TRANSCRIPTION_OPTIONS,
+                "gpt-4o-transcribe",
+                { description: "Model used for input audio transcription" }
+              )}
+
+              {renderSelect(
+                "ai_turn_detection_type",
+                "Turn Detection",
+                OPENAI_TURN_DETECTION_OPTIONS,
+                "server_vad",
+                { description: "Voice activity detection mode" }
+              )}
+
+              {/* Advanced OpenAI Settings */}
+              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+                <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                  {advancedOpen ? (
+                    <IconChevronDown className="w-4 h-4" />
+                  ) : (
+                    <IconChevronRight className="w-4 h-4" />
+                  )}
+                  <IconSettings className="w-4 h-4" />
+                  Advanced Settings
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 mt-3">
+                  <div>
+                    <Label>VAD Threshold</Label>
+                    <Input
+                      type="number"
+                      value={config.ai_vad_threshold ?? 0.5}
+                      onChange={(e) =>
+                        handleFieldChange("ai_vad_threshold", parseFloat(e.target.value) || 0)
+                      }
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Voice activity detection threshold (0.0–1.0)
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label>Silence Duration (ms)</Label>
+                    <Input
+                      type="number"
+                      value={config.ai_vad_silence_ms ?? 500}
+                      onChange={(e) =>
+                        handleFieldChange("ai_vad_silence_ms", parseInt(e.target.value) || 0)
+                      }
+                      min={0}
+                      step={50}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Silence duration before end of speech
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label>Prefix Padding (ms)</Label>
+                    <Input
+                      type="number"
+                      value={config.ai_vad_prefix_padding_ms ?? 300}
+                      onChange={(e) =>
+                        handleFieldChange(
+                          "ai_vad_prefix_padding_ms",
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      min={0}
+                      step={50}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Audio padding before speech start
+                    </p>
+                  </div>
+
+                  <div>
+                    <Label>Max Output Tokens</Label>
+                    <Input
+                      type="text"
+                      value={config.ai_max_output_tokens ?? "inf"}
+                      onChange={(e) =>
+                        handleFieldChange("ai_max_output_tokens", e.target.value)
+                      }
+                      placeholder="inf"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Maximum output tokens (or &quot;inf&quot; for unlimited)
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
+          {/* === Gemini-specific === */}
+          {isGemini && (
+            <div className="space-y-4">
+              {renderSelect(
+                "ai_gemini_model",
+                "Model",
+                GEMINI_MODEL_OPTIONS,
+                "gemini-2.5-flash-native-audio-latest",
+                { description: "Gemini model to use" }
+              )}
+
+              {renderSelect("ai_voice_gemini", "Voice", GEMINI_VOICE_OPTIONS, "Puck", {
+                description: "Gemini voice for audio output",
+              })}
+
+              <div>
+                <Label>Language Code</Label>
+                <Input
+                  type="text"
+                  value={config.ai_language_code || ""}
+                  onChange={(e) => handleFieldChange("ai_language_code", e.target.value)}
+                  placeholder="e.g. en-US, pl-PL"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  BCP-47 language code (leave empty for auto-detect)
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ====== Azure Transcription + Translation ====== */}
       {isAzure && (
         <div className="space-y-4">
-          {/* Azure info banner */}
           <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
             <IconMicrophone className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-blue-700 dark:text-blue-300">
               <strong>Azure Cognitive Services Speech</strong>
               <p className="mt-1">
-                Real-time transcription and translation for both call legs via Azure Speech SDK.
-                Audio is automatically streamed to the port-3001 streaming server.
+                Real-time transcription and translation for both call legs.
+                Region and API key are taken from{" "}
+                <code className="font-mono">AZURE_SERVICE_REGION</code> and{" "}
+                <code className="font-mono">AZURE_SUBSCRIPTION_KEY</code> environment variables.
                 Transcription starts when the agent answers the call.
               </p>
             </div>
-          </div>
-
-          {/* Stream URL (read-only for Azure) */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Stream URL
-              <IconLock className="w-3 h-3 text-muted-foreground" />
-            </Label>
-            <Input
-              type="text"
-              value={config.stream_url || getStreamingWSUrl("azure")}
-              readOnly
-              className="mt-1 bg-muted text-muted-foreground text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Auto-configured to the Azure streaming endpoint on port 3001
-            </p>
-          </div>
-
-          {/* Stream Track (locked to both_tracks) */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Stream Track
-              <IconLock className="w-3 h-3 text-muted-foreground" />
-            </Label>
-            <Input
-              type="text"
-              value="Both Tracks (inbound + outbound)"
-              readOnly
-              className="mt-1 bg-muted text-muted-foreground text-xs"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Both call legs are streamed — required for full transcription of caller and agent
-            </p>
-          </div>
-
-          {/* Azure Region */}
-          <div>
-            <Label>Azure Region</Label>
-            <Input
-              type="text"
-              value={config.azure_region || ""}
-              onChange={(e) => handleFieldChange("azure_region", e.target.value)}
-              placeholder="eastus"
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Azure Cognitive Services region (e.g. eastus, westeurope, eastasia)
-            </p>
-          </div>
-
-          {/* Azure API Key */}
-          <div>
-            <Label>Azure API Key</Label>
-            <Input
-              type="password"
-              value={config.azure_api_key || ""}
-              onChange={(e) => handleFieldChange("azure_api_key", e.target.value)}
-              placeholder="Your Azure Cognitive Services subscription key"
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Azure Cognitive Services subscription key for Speech services
-            </p>
           </div>
 
           {/* Enable Translation toggle */}
@@ -340,9 +584,14 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
         </div>
       )}
 
-      {/* ── Standard streaming fields (hidden for Azure) ── */}
-      {!isAzure && (
-        <>
+      {/* ====== Custom: Telnyx Streaming Parameters ====== */}
+      {isCustom && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <IconSettings className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Telnyx Streaming Parameters</span>
+          </div>
+
           {/* Stream URL */}
           <div>
             <Label className="flex items-center gap-2">
@@ -350,7 +599,6 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
               {streamUrlError && (
                 <IconAlertTriangle className="h-4 w-4 text-destructive" />
               )}
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
             </Label>
             <Input
               type="text"
@@ -358,7 +606,6 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
               onChange={(e) => handleFieldChange("stream_url", e.target.value)}
               placeholder="wss://www.example.com/websocket"
               className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
-              readOnly={isLocked}
             />
             {streamUrlError && (
               <p className="text-xs text-destructive mt-1">{streamUrlError}</p>
@@ -368,181 +615,68 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
             </p>
           </div>
 
-          {/* Stream Track */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Stream Track
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
-            </Label>
-            <Select
-              value={config.stream_track || "inbound_track"}
-              onValueChange={(value) => handleFieldChange("stream_track", value)}
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select track" />
-              </SelectTrigger>
-              <SelectContent>
-                {STREAM_TRACK_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Specifies which track should be streamed
-            </p>
-          </div>
+          {renderSelect("stream_track", "Stream Track", STREAM_TRACK_OPTIONS, "inbound_track", {
+            description: "Specifies which track should be streamed",
+          })}
 
-          {/* Stream Codec */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Stream Codec
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
-            </Label>
-            <Select
-              value={config.stream_codec || "default"}
-              onValueChange={(value) => handleFieldChange("stream_codec", value)}
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select codec" />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEC_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Codec to be used for the streamed audio
-            </p>
-          </div>
+          {renderSelect("stream_codec", "Stream Codec", CODEC_OPTIONS, "default", {
+            description: "Codec to be used for the streamed audio",
+          })}
 
-          {/* Bidirectional Stream Mode */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Bidirectional Stream Mode
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
-            </Label>
-            <Select
-              value={config.stream_bidirectional_mode || "mp3"}
-              onValueChange={(value) =>
-                handleFieldChange("stream_bidirectional_mode", value)
-              }
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select mode" />
-              </SelectTrigger>
-              <SelectContent>
-                {BIDIRECTIONAL_MODE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Method of bidirectional streaming
-            </p>
-          </div>
+          {renderSelect(
+            "stream_bidirectional_mode",
+            "Bidirectional Stream Mode",
+            BIDIRECTIONAL_MODE_OPTIONS,
+            "mp3",
+            { description: "Method of bidirectional streaming" }
+          )}
 
-          {/* Bidirectional Stream Codec */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Bidirectional Stream Codec
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
-            </Label>
-            <Select
-              value={config.stream_bidirectional_codec || "PCMU"}
-              onValueChange={(value) =>
-                handleFieldChange("stream_bidirectional_codec", value)
-              }
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select codec" />
-              </SelectTrigger>
-              <SelectContent>
-                {CODEC_OPTIONS.filter((opt) => opt.value !== "default").map(
-                  (opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Codec for bidirectional RTP streaming
-            </p>
-          </div>
+          {renderSelect(
+            "stream_bidirectional_codec",
+            "Bidirectional Stream Codec",
+            CODEC_OPTIONS.filter((opt) => opt.value !== "default"),
+            "PCMU",
+            { description: "Codec for bidirectional RTP streaming" }
+          )}
 
-          {/* Bidirectional Stream Target Legs */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Bidirectional Stream Target Legs
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
-            </Label>
-            <Select
-              value={config.stream_bidirectional_target_legs || "opposite"}
-              onValueChange={(value) =>
-                handleFieldChange("stream_bidirectional_target_legs", value)
-              }
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select target" />
-              </SelectTrigger>
-              <SelectContent>
-                {TARGET_LEGS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Call legs to receive the bidirectional stream audio
-            </p>
-          </div>
+          {renderSelect(
+            "stream_bidirectional_target_legs",
+            "Bidirectional Stream Target Legs",
+            TARGET_LEGS_OPTIONS,
+            "opposite",
+            { description: "Call legs to receive the bidirectional stream audio" }
+          )}
 
-          {/* Bidirectional Stream Sampling Rate */}
+          {renderSelect(
+            "stream_bidirectional_sampling_rate",
+            "Bidirectional Stream Sampling Rate",
+            SAMPLING_RATE_OPTIONS.map((o) => ({ ...o, value: String(o.value) })),
+            "8000",
+            { description: "Audio sampling rate in Hz" }
+          )}
+        </div>
+      )}
+
+      {/* Show stream URL (read-only) for AI + Azure providers */}
+      {(isAI || isAzure) && (
+        <div className="space-y-4 pt-2 border-t">
           <div>
             <Label className="flex items-center gap-2">
-              Bidirectional Stream Sampling Rate
-              {isLocked && <IconLock className="w-3 h-3 text-muted-foreground" />}
+              Stream URL
+              <IconLock className="w-3 h-3 text-muted-foreground" />
             </Label>
-            <Select
-              value={String(config.stream_bidirectional_sampling_rate || 8000)}
-              onValueChange={(value) =>
-                handleFieldChange(
-                  "stream_bidirectional_sampling_rate",
-                  Number(value)
-                )
-              }
-              disabled={isLocked}
-            >
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select rate" />
-              </SelectTrigger>
-              <SelectContent>
-                {SAMPLING_RATE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={String(opt.value)}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="text"
+              value={config.stream_url || ""}
+              className="mt-1"
+              readOnly
+            />
             <p className="text-xs text-muted-foreground mt-1">
-              Audio sampling rate in Hz
+              Auto-configured WebSocket URL for{" "}
+              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : "Azure"} streaming
             </p>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

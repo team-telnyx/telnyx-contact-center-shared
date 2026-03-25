@@ -1813,20 +1813,6 @@ export const VOICE_FLOW_NODES = {
         description:
           "Select an AI provider for automatic configuration, or choose Custom for manual settings",
       },
-      azure_region: {
-        type: "string",
-        label: "Azure Region",
-        required: false,
-        placeholder: "eastus",
-        description: "Azure Cognitive Services region (e.g. eastus, westeurope, eastasia)",
-      },
-      azure_api_key: {
-        type: "password",
-        label: "Azure API Key",
-        required: false,
-        placeholder: "Your Azure Cognitive Services subscription key",
-        description: "Azure Cognitive Services subscription key for Speech services",
-      },
       azure_translation_enabled: {
         type: "boolean",
         label: "Enable Translation",
