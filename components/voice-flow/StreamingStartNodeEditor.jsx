@@ -538,7 +538,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
             <div className="text-xs text-blue-700 dark:text-blue-300">
               <strong>Azure Cognitive Services Speech</strong>
               <p className="mt-1">
-                Real-time transcription for both call legs with automatic language detection.
+                Real-time transcription for both call legs (caller + agent).
                 Transcription starts when the agent answers the call.
               </p>
             </div>
@@ -560,12 +560,32 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
             />
           </div>
 
+          {/* Source Language */}
+          <div>
+            <Label>
+              Source Language{" "}
+              <span className="text-muted-foreground font-normal">(required for transcription)</span>
+            </Label>
+            <Input
+              type="text"
+              value={config.azure_source_language || ""}
+              onChange={(e) =>
+                handleFieldChange("azure_source_language", e.target.value)
+              }
+              placeholder="e.g. en-US, pl-PL, de-DE, fr-FR"
+              className="mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Language spoken by the caller. Use BCP-47 format (e.g. en-US, pl-PL). Default: en-US.
+            </p>
+          </div>
+
           {/* Target Language (shown when translation enabled) */}
           {config.azure_translation_enabled === true && (
             <div>
               <Label>
                 Target Language{" "}
-                <span className="text-muted-foreground font-normal">(optional)</span>
+                <span className="text-muted-foreground font-normal">(translation target)</span>
               </Label>
               <Input
                 type="text"
@@ -577,7 +597,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Language to translate into. Source language is detected automatically from the audio.
+                Language to translate into.
               </p>
             </div>
           )}
