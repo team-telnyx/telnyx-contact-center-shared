@@ -538,10 +538,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
             <div className="text-xs text-blue-700 dark:text-blue-300">
               <strong>Azure Cognitive Services Speech</strong>
               <p className="mt-1">
-                Real-time transcription and translation for both call legs.
-                Region and API key are taken from{" "}
-                <code className="font-mono">AZURE_SERVICE_REGION</code> and{" "}
-                <code className="font-mono">AZURE_SUBSCRIPTION_KEY</code> environment variables.
+                Real-time transcription for both call legs with automatic language detection.
                 Transcription starts when the agent answers the call.
               </p>
             </div>
@@ -566,18 +563,21 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
           {/* Target Language (shown when translation enabled) */}
           {config.azure_translation_enabled === true && (
             <div>
-              <Label>Target Language</Label>
+              <Label>
+                Target Language{" "}
+                <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
               <Input
                 type="text"
                 value={config.azure_target_language || ""}
                 onChange={(e) =>
                   handleFieldChange("azure_target_language", e.target.value)
                 }
-                placeholder="en"
+                placeholder="e.g. en, pl, de, fr"
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Target language code for translation (e.g. en, pl, de, fr, es)
+                Language to translate into. Source language is detected automatically from the audio.
               </p>
             </div>
           )}
