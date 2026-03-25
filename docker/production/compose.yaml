@@ -29,6 +29,7 @@ services:
     container_name: telnyx-contact-center-app
     ports:
       - "3000:3000"
+      - "3001:3001"  # Streaming WebSocket server (Google Gemini, OpenAI Realtime, Azure)
     env_file:
       - .env
     volumes:
