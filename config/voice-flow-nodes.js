@@ -1808,9 +1808,38 @@ export const VOICE_FLOW_NODES = {
           { value: "custom", label: "Custom" },
           { value: "google-gemini", label: "Google Gemini Live" },
           { value: "openai-realtime", label: "OpenAI Realtime" },
+          { value: "azure-transcription", label: "Azure Transcription + Translation" },
         ],
         description:
           "Select an AI provider for automatic configuration, or choose Custom for manual settings",
+      },
+      azure_region: {
+        type: "string",
+        label: "Azure Region",
+        required: false,
+        placeholder: "eastus",
+        description: "Azure Cognitive Services region (e.g. eastus, westeurope, eastasia)",
+      },
+      azure_api_key: {
+        type: "password",
+        label: "Azure API Key",
+        required: false,
+        placeholder: "Your Azure Cognitive Services subscription key",
+        description: "Azure Cognitive Services subscription key for Speech services",
+      },
+      azure_translation_enabled: {
+        type: "boolean",
+        label: "Enable Translation",
+        required: false,
+        default: false,
+        description: "Translate transcriptions in real-time using Azure Speech Translation",
+      },
+      azure_target_language: {
+        type: "string",
+        label: "Target Language",
+        required: false,
+        placeholder: "en",
+        description: "Target language code for translation (e.g. en, pl, de, fr, es)",
       },
       stream_url: {
         type: "string",

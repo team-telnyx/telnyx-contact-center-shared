@@ -5842,6 +5842,104 @@
         "x-latency-category": "responsive"
       }
     },
+    "/ai/assistants/{assistant_id}/tools/{tool_id}": {
+      "delete": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Remove Assistant Tool",
+        "operationId": "remove_assistant_tool",
+        "parameters": [
+          {
+            "name": "assistant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Assistant Id"
+            }
+          },
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "put": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Add Assistant Tool",
+        "operationId": "add_assistant_tool",
+        "parameters": [
+          {
+            "name": "assistant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Assistant Id"
+            }
+          },
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/ai/assistants/{assistant_id}/tools/{tool_id}/test": {
       "post": {
         "tags": [
@@ -10908,6 +11006,254 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SummaryResponseData"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/tools": {
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "List Tools",
+        "operationId": "list_tools",
+        "parameters": [
+          {
+            "name": "filter[type]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Filter[Type]",
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[name]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "title": "Filter[Name]",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page[Size]"
+            }
+          },
+          {
+            "name": "page[number]",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page[Number]"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedToolListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Create Tool",
+        "operationId": "create_tool_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSharedToolRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedToolResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/tools/{tool_id}": {
+      "delete": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Delete Tool",
+        "operationId": "delete_tool_tool_id",
+        "parameters": [
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Get Tool",
+        "operationId": "get_tool_tool_id",
+        "parameters": [
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedToolResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Update Tool",
+        "operationId": "update_tool_tool_id",
+        "parameters": [
+          {
+            "name": "tool_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Tool Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharedToolRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedToolResponse"
                 }
               }
             }
@@ -47080,6 +47426,9 @@
             "$ref": "#/components/parameters/FilterName"
           },
           {
+            "$ref": "#/components/parameters/FilterProvider"
+          },
+          {
             "$ref": "#/components/parameters/voice-designs_Sort"
           }
         ],
@@ -49630,6 +49979,21 @@
               }
             }
           }
+        }
+      },
+      "FilterProvider": {
+        "name": "filter[provider]",
+        "in": "query",
+        "required": false,
+        "description": "Filter by voice synthesis provider. Case-insensitive.",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "telnyx",
+            "minimax",
+            "Telnyx",
+            "Minimax"
+          ]
         }
       },
       "FilterReleasesConsolidated": {
@@ -77035,6 +77399,13 @@
           "tools": {
             "$ref": "#/components/schemas/AssistantTools"
           },
+          "tool_ids": {
+            "title": "Ids of shared tools",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "description": {
             "type": "string"
           },
@@ -80341,6 +80712,56 @@
           "type": "SMS",
           "send_at": "2019-01-23T18:30:00Z"
         }
+      },
+      "CreateSharedToolRequest": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "function": {
+            "title": "Function",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "retrieval": {
+            "title": "Retrieval",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "handoff": {
+            "title": "Handoff",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "invite": {
+            "title": "Invite",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "webhook": {
+            "title": "Webhook",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "title": "Timeout Ms",
+            "default": 5000
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "type",
+          "display_name"
+        ],
+        "title": "CreateSharedToolRequest",
+        "description": "Request model for creating a shared (org-level) tool."
       },
       "CreateShortCodeMessageRequest": {
         "type": "object",
@@ -94481,11 +94902,12 @@
       "NoiseSuppressionEngine": {
         "type": "string",
         "title": "Noise Suppression Engine",
-        "description": "The engine to use for noise suppression.\nFor backward compatibility, engines A, B, and C are also supported, but are deprecated:\n A - Denoiser\n B - DeepFilterNet\n C - Krisp",
+        "description": "The engine to use for noise suppression.\nFor backward compatibility, engines A, B, C, and D are also supported, but are deprecated:\n A - Denoiser\n B - DeepFilterNet\n C - Krisp\n D - AiCoustics",
         "enum": [
           "Denoiser",
           "DeepFilterNet",
-          "Krisp"
+          "Krisp",
+          "AiCoustics"
         ],
         "default": "Denoiser",
         "example": "Denoiser"
@@ -94493,7 +94915,7 @@
       "NoiseSuppressionEngineConfig": {
         "type": "object",
         "title": "Noise Suppression Engine Configuration",
-        "description": "Configuration parameters for noise suppression engines.",
+        "description": "Configuration parameters for noise suppression engines. Different engines support different parameters.",
         "properties": {
           "attenuation_limit": {
             "type": "integer",
@@ -94502,6 +94924,69 @@
             "maximum": 100,
             "default": 100,
             "example": 100
+          },
+          "mode": {
+            "type": "string",
+            "description": "Processing mode. Only applicable for DeepFilterNet.",
+            "enum": [
+              "standard",
+              "advanced"
+            ],
+            "example": "standard"
+          },
+          "model": {
+            "type": "string",
+            "description": "The Krisp model to use. Only applicable for Krisp.",
+            "enum": [
+              "krisp-viva-tel-v2.kef",
+              "krisp-viva-tel-lite-v1.kef",
+              "krisp-viva-pro-v1.kef",
+              "krisp-viva-ss-v1.kef"
+            ],
+            "example": "krisp-viva-tel-v2.kef"
+          },
+          "suppression_level": {
+            "type": "number",
+            "description": "Suppression level (0.0-100.0). Only applicable for Krisp.",
+            "minimum": 0.0,
+            "maximum": 100.0,
+            "example": 50.0
+          },
+          "family": {
+            "type": "string",
+            "description": "AiCoustics model family. 'sparrow' optimized for human-to-human calls, 'quail' optimized for Voice AI/STT. Only applicable for AiCoustics.",
+            "enum": [
+              "sparrow",
+              "quail"
+            ],
+            "example": "sparrow"
+          },
+          "size": {
+            "type": "string",
+            "description": "AiCoustics model size. 's' and 'l' work with both families. 'xs' and 'xxs' are sparrow-only. 'vf_l' and 'vf_1_1_l' are quail-only. Only applicable for AiCoustics.",
+            "enum": [
+              "s",
+              "l",
+              "xs",
+              "xxs",
+              "vf_l",
+              "vf_1_1_l"
+            ],
+            "example": "l"
+          },
+          "enhancement_level": {
+            "type": "number",
+            "description": "Enhancement intensity (0.0-1.0). Only applicable for AiCoustics.",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "example": 0.5
+          },
+          "voice_gain": {
+            "type": "number",
+            "description": "Voice gain multiplier (0.1-4.0). Only applicable for AiCoustics.",
+            "minimum": 0.1,
+            "maximum": 4.0,
+            "example": 1.0
           }
         }
       },
@@ -108272,6 +108757,63 @@
           }
         }
       },
+      "SharedToolListResponse": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SharedToolResponse"
+            },
+            "type": "array",
+            "title": "Data"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "title": "SharedToolListResponse"
+      },
+      "SharedToolResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "tool_definition": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Tool Definition"
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "title": "Timeout Ms",
+            "default": 5000
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "tool_definition"
+        ],
+        "title": "SharedToolResponse"
+      },
       "ShortCode": {
         "type": "object",
         "required": [
@@ -116215,6 +116757,13 @@
           "tools": {
             "$ref": "#/components/schemas/AssistantTools"
           },
+          "tool_ids": {
+            "title": "Ids of shared tools",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "description": {
             "type": "string"
           },
@@ -118584,6 +119133,51 @@
           }
         },
         "type": "object"
+      },
+      "UpdateSharedToolRequest": {
+        "properties": {
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "function": {
+            "title": "Function",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "retrieval": {
+            "title": "Retrieval",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "handoff": {
+            "title": "Handoff",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "invite": {
+            "title": "Invite",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "webhook": {
+            "title": "Webhook",
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "timeout_ms": {
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "UpdateSharedToolRequest",
+        "description": "Request model for updating a shared tool."
       },
       "UpdateShortCodeRequest": {
         "type": "object",
@@ -121614,6 +122208,30 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp when the voice clone was last updated."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax"
+            ],
+            "description": "Voice synthesis provider used for this clone."
+          },
+          "provider_supported_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of TTS model identifiers supported by this clone's provider."
+          },
+          "provider_voice_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider-specific voice identifier used for TTS synthesis. For Telnyx clones this equals the clone ID; for Minimax it is the Minimax-assigned voice ID."
           }
         }
       },
@@ -121666,13 +122284,25 @@
               "neutral"
             ],
             "description": "Gender of the voice clone."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax"
+            ],
+            "default": "telnyx",
+            "description": "Voice synthesis provider. Case-insensitive. Defaults to `telnyx`."
           }
         },
         "example": {
           "name": "clone-narrator",
           "voice_design_id": "550e8400-e29b-41d4-a716-446655440000",
           "language": "en",
-          "gender": "male"
+          "gender": "male",
+          "provider": "telnyx"
         }
       },
       "VoiceCloneResponse": {
@@ -121694,7 +122324,12 @@
             "gender": "male",
             "label": "Speak in a warm, friendly tone",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
+            "provider": "Telnyx",
+            "provider_supported_models": [
+              "Qwen3TTS"
+            ],
+            "provider_voice_id": "660f9511-f3ac-52e5-b827-557766551111"
           }
         }
       },
@@ -121741,7 +122376,7 @@
           "audio_file": {
             "type": "string",
             "format": "binary",
-            "description": "Audio file to clone the voice from. Supported formats: WAV, MP3, FLAC, OGG, M4A. For best quality, provide 5\u201310 seconds of clear, uninterrupted speech. Maximum size: 2MB."
+            "description": "Audio file to clone the voice from. Supported formats: WAV, MP3, FLAC, OGG, M4A. For best quality, provide 5\u201310 seconds of clear, uninterrupted speech. Maximum size: 5MB for Telnyx, 20MB for Minimax."
           },
           "name": {
             "type": "string",
@@ -121769,6 +122404,17 @@
           "label": {
             "type": "string",
             "description": "Optional custom label describing the voice style. If omitted, falls back to the source design's prompt text."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax"
+            ],
+            "default": "telnyx",
+            "description": "Voice synthesis provider. Case-insensitive. Defaults to `telnyx`."
           }
         }
       },
@@ -121828,6 +122474,34 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp when the voice design was last updated."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax",
+              null
+            ],
+            "description": "Voice synthesis provider used for this design."
+          },
+          "provider_supported_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of TTS model identifiers supported by this design's provider (e.g. `Qwen3TTS`, `speech-02-turbo`)."
+          },
+          "provider_voice_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider-specific voice identifier. For Telnyx designs this is the design version ID; for Minimax it is the Minimax-assigned voice ID."
           }
         }
       },
@@ -121911,13 +122585,25 @@
             "minimum": 100,
             "maximum": 4096,
             "description": "Maximum number of tokens to generate. Default: 2048."
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax"
+            ],
+            "default": "telnyx",
+            "description": "Voice synthesis provider. `telnyx` uses the Qwen3TTS model; `minimax` uses the Minimax speech models. Case-insensitive. Defaults to `telnyx`."
           }
         },
         "example": {
           "name": "friendly-narrator",
           "text": "Hello, welcome to our service.",
           "prompt": "Speak in a warm, friendly tone",
-          "language": "Auto"
+          "language": "Auto",
+          "provider": "telnyx"
         }
       },
       "VoiceDesignResponse": {
@@ -121939,7 +122625,12 @@
             "voice_sample_size": 48000,
             "version_created_at": "2024-01-01T00:00:00Z",
             "created_at": "2024-01-01T00:00:00Z",
-            "updated_at": "2024-01-01T00:00:00Z"
+            "updated_at": "2024-01-01T00:00:00Z",
+            "provider": "Telnyx",
+            "provider_supported_models": [
+              "Qwen3TTS"
+            ],
+            "provider_voice_id": "550e8400-e29b-41d4-a716-446655440000"
           }
         }
       },
@@ -121972,6 +122663,27 @@
             "type": "string",
             "format": "date-time",
             "description": "Timestamp when the voice design was last updated."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "telnyx",
+              "minimax",
+              "Telnyx",
+              "Minimax",
+              null
+            ],
+            "description": "Voice synthesis provider used for this design."
+          },
+          "provider_supported_models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of TTS model identifiers supported by this design's provider."
           }
         }
       },
@@ -122958,6 +123670,30 @@
             "minimum": 500,
             "maximum": 10000,
             "description": "The maximum number of milliseconds to wait for the webhook to respond. Only applicable when async is false."
+          },
+          "store_fields_as_variables": {
+            "type": "array",
+            "description": "A list of mappings that extract values from the webhook response and store them as dynamic variables. Each mapping specifies a dynamic variable name and a dot-notation path to the value in the response body.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "value_path"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The name of the dynamic variable to store the extracted value in."
+                },
+                "value_path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A dot-notation path to the value in the webhook response body (e.g. 'customer.name' or 'id')."
+                }
+              },
+              "additionalProperties": false
+            }
           }
         },
         "type": "object",
@@ -123101,10 +123837,12 @@
         ],
         "properties": {
           "waba_id": {
-            "type": "string"
+            "type": "string",
+            "description": "The WhatsApp Business Account ID."
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Template name. Lowercase letters, numbers, and underscores only."
           },
           "category": {
             "type": "string",
@@ -123112,15 +123850,35 @@
               "MARKETING",
               "UTILITY",
               "AUTHENTICATION"
-            ]
+            ],
+            "description": "Template category: AUTHENTICATION, UTILITY, or MARKETING."
           },
           "language": {
-            "type": "string"
+            "type": "string",
+            "description": "Template language code (e.g. en_US, es, pt_BR)."
           },
           "components": {
             "type": "array",
+            "description": "Template components defining message structure. Passed through to Meta Graph API. Templates with variables must include example values. Supports HEADER, BODY, FOOTER, BUTTONS, CAROUSEL and any future Meta component types.",
             "items": {
-              "type": "object"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateHeaderComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateBodyComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateFooterComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateButtonsComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateCarouselComponent"
+                }
+              ],
+              "description": "A template component. Additional Meta component types not listed here are also accepted."
             }
           }
         }
@@ -123719,6 +124477,171 @@
           }
         }
       },
+      "WhatsappTemplateBodyComponent": {
+        "type": "object",
+        "description": "The main text content of the message. Supports multiple variable parameters ({{1}}, {{2}}, etc.). Variables cannot be at the start or end. Maximum 1024 characters.",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "BODY"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "Body text content. Use {{1}}, {{2}}, etc. for variable placeholders. Required for MARKETING and UTILITY templates. Optional for AUTHENTICATION templates where Meta provides the built-in OTP body.",
+            "maxLength": 1024
+          },
+          "example": {
+            "type": "object",
+            "description": "Sample values for body variables. Required when body text contains parameters.",
+            "properties": {
+              "body_text": {
+                "type": "array",
+                "description": "Array containing one array of sample values, one per variable in order.",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "WhatsappTemplateButtonsComponent": {
+        "type": "object",
+        "description": "Optional interactive buttons. Maximum 3 buttons per template.",
+        "required": [
+          "type",
+          "buttons"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "BUTTONS"
+            ]
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "URL",
+                    "PHONE_NUMBER",
+                    "QUICK_REPLY",
+                    "OTP",
+                    "COPY_CODE",
+                    "FLOW"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 25,
+                  "description": "Button label text. Maximum 25 characters. Required for URL, PHONE_NUMBER, and QUICK_REPLY buttons. Not required for OTP buttons (Meta supplies the label)."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL for URL-type buttons. Supports one variable ({{1}})."
+                },
+                "phone_number": {
+                  "type": "string",
+                  "description": "Phone number in E.164 format."
+                },
+                "otp_type": {
+                  "type": "string",
+                  "enum": [
+                    "COPY_CODE",
+                    "ONE_TAP"
+                  ]
+                },
+                "example": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Sample values for URL variable."
+                },
+                "package_name": {
+                  "type": "string",
+                  "description": "Android package name. Required for ONE_TAP OTP buttons."
+                },
+                "signature_hash": {
+                  "type": "string",
+                  "description": "Android app signing key hash. Required for ONE_TAP OTP buttons."
+                },
+                "autofill_text": {
+                  "type": "string",
+                  "description": "Custom autofill button text for ONE_TAP OTP buttons."
+                },
+                "zero_tap_terms_accepted": {
+                  "type": "boolean",
+                  "description": "Whether zero-tap terms have been accepted."
+                },
+                "flow_id": {
+                  "type": "string",
+                  "description": "Flow ID for FLOW-type buttons."
+                },
+                "flow_action": {
+                  "type": "string",
+                  "enum": [
+                    "navigate",
+                    "data_exchange"
+                  ],
+                  "description": "Flow action type for FLOW-type buttons."
+                },
+                "navigate_screen": {
+                  "type": "string",
+                  "description": "Target screen name for FLOW buttons with navigate action."
+                }
+              }
+            },
+            "description": "Array of button objects. Meta supports various combinations of button types."
+          }
+        }
+      },
+      "WhatsappTemplateCarouselComponent": {
+        "type": "object",
+        "description": "Carousel component for multi-card templates. Each card can contain its own header, body, and buttons.",
+        "required": [
+          "type",
+          "cards"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "CAROUSEL"
+            ]
+          },
+          "cards": {
+            "type": "array",
+            "description": "Array of card objects, each with its own components.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "components": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "WhatsappTemplateData": {
         "type": "object",
         "properties": {
@@ -123747,7 +124670,8 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Current template status from Meta (e.g. PENDING, APPROVED, REJECTED, PAUSED, DISABLED). Additional statuses may be returned as Meta evolves the template lifecycle."
           },
           "rejection_reason": {
             "type": "string"
@@ -123757,7 +124681,7 @@
             "items": {
               "type": "object"
             },
-            "description": "Whatsapp template components (header, body, footer, buttons)"
+            "description": "Template components (header, body, footer, buttons) as submitted, including example values."
           },
           "whatsapp_business_account": {
             "type": "object",
@@ -123774,6 +124698,81 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "WhatsappTemplateFooterComponent": {
+        "type": "object",
+        "description": "Optional footer displayed at the bottom of the message. Does not support variables.",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "FOOTER"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "Footer text. Maximum 60 characters. For non-authentication templates.",
+            "maxLength": 60
+          },
+          "code_expiration_minutes": {
+            "type": "integer",
+            "description": "OTP code expiration time in minutes. Used in AUTHENTICATION template footers instead of free-form text."
+          }
+        }
+      },
+      "WhatsappTemplateHeaderComponent": {
+        "type": "object",
+        "description": "Optional header displayed at the top of the message.",
+        "required": [
+          "type",
+          "format"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "HEADER"
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "TEXT",
+              "IMAGE",
+              "VIDEO",
+              "DOCUMENT",
+              "LOCATION"
+            ],
+            "description": "Header format type: TEXT (supports one variable), IMAGE, VIDEO, DOCUMENT, or LOCATION."
+          },
+          "text": {
+            "type": "string",
+            "description": "Header text. Required when format is TEXT. Supports one variable ({{1}}). Variables cannot be at the start or end."
+          },
+          "example": {
+            "type": "object",
+            "description": "Sample values for header variables.",
+            "properties": {
+              "header_text": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Sample values for text header variables."
+              },
+              "header_handle": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Media handle for IMAGE, VIDEO, or DOCUMENT headers."
+              }
+            }
           }
         }
       },
@@ -123818,8 +124817,26 @@
           },
           "components": {
             "type": "array",
+            "description": "Updated template components. Same structure as the create request.",
             "items": {
-              "type": "object"
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateHeaderComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateBodyComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateFooterComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateButtonsComponent"
+                },
+                {
+                  "$ref": "#/components/schemas/WhatsappTemplateCarouselComponent"
+                }
+              ],
+              "description": "A template component. Additional Meta component types not listed here are also accepted."
             }
           }
         }

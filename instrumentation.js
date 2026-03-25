@@ -43,5 +43,13 @@ export async function register() {
         error.message
       );
     }
+
+    // Start Streaming WebSocket server on separate port (default: main + 1 = 3001)
+    try {
+      const { initStreamingWSServer } = await import("./lib/streaming-ws-handler.mjs");
+      initStreamingWSServer();
+    } catch (err) {
+      console.warn("[Streaming WS] Could not start:", err.message);
+    }
   }
 }

@@ -97,6 +97,18 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       },
     },
   },
+
+  "azure-transcription": {
+    id: "azure-transcription",
+    label: "Azure Transcription + Translation",
+    description: "Real-time speech transcription and translation via Azure Cognitive Services Speech. Supports automatic language detection and multi-language translation.",
+
+    // Audio configuration for Telnyx streaming (both legs needed for full transcription)
+    telnyx: {
+      stream_track: "both_tracks", // Stream both caller and agent audio
+      stream_codec: "PCMU",        // G.711 μ-law (8kHz) — Azure accepts PCM16 converted from PCMU
+    },
+  },
 };
 
 /**

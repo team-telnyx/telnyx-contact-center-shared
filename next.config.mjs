@@ -29,7 +29,7 @@ const nextConfig = {
   },
   // Server-side externals for Turbopack (Next.js 16+)
   // ws, bufferutil, utf-8-validate are needed for Telnyx WebSocket TTS
-  serverExternalPackages: ["pg", "pgpass", "pg-connection-string", "ws", "bufferutil", "utf-8-validate"],
+  serverExternalPackages: ["pg", "pgpass", "pg-connection-string", "ws", "alawmulaw", "@google/genai", "bufferutil", "utf-8-validate"],
   // Turbopack configuration (used when not passing --webpack)
   turbopack: {
     root: process.cwd(),
