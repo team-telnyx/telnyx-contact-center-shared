@@ -131,11 +131,12 @@ export async function POST(request) {
         [workflowId]
       );
 
-      // Insert pending status for all items
+      // Insert pending status for all items — ON CONFLICT DO NOTHING (idempotent restart)
       for (const item of items) {
         await client.query(
           `INSERT INTO aa_workflow_item_status (session_id, item_id, status)
-           VALUES ($1, $2, 'pending')`,
+           VALUES ($1, $2, 'pending')
+           ON CONFLICT (session_id, item_id) DO NOTHING`,
           [workflowSession.id, item.item_id]
         );
       }
