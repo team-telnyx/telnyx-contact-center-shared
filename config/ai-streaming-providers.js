@@ -7,7 +7,7 @@ export const AI_STREAMING_PROVIDERS = {
   "google-gemini": {
     id: "google-gemini",
     label: "Google Gemini Live",
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-2.5-flash-native-audio-latest",
     voice: "Puck", // Default generative voice
     systemInstructions: `You are a helpful AI assistant for Telnyx, a leading communications platform as a service (CPaaS) provider.
 
@@ -28,8 +28,6 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       stream_codec: "PCMU", // 8kHz PCMU (G.711 μ-law)
       stream_bidirectional_mode: "rtp", // RTP mode with base64-encoded payloads in JSON
       stream_bidirectional_codec: "PCMU", // PCMU for responses
-      stream_bidirectional_sampling_rate: 8000, // 8kHz sampling
-      stream_bidirectional_target_legs: "opposite", // Send AI audio to caller
     },
 
     // Gemini Live API configuration
@@ -55,7 +53,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
   "openai-realtime": {
     id: "openai-realtime",
     label: "OpenAI Realtime",
-    model: "gpt-4o-realtime-preview-2024-10-01",
+    model: "gpt-4o-realtime-preview",
     voice: "alloy", // Options: alloy, echo, shimmer
     systemInstructions: `You are a helpful AI assistant for Telnyx, a leading communications platform as a service (CPaaS) provider.
 
@@ -76,8 +74,6 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       stream_codec: "PCMU", // G.711 μ-law (8kHz)
       stream_bidirectional_mode: "rtp", // RTP mode with base64-encoded payloads in JSON
       stream_bidirectional_codec: "PCMU", // PCMU for responses (g711_ulaw)
-      stream_bidirectional_sampling_rate: 8000, // 8kHz sampling for g711_ulaw
-      stream_bidirectional_target_legs: "opposite", // Send AI audio to caller
     },
 
     // OpenAI Realtime API configuration
