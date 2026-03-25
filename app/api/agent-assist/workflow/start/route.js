@@ -107,11 +107,16 @@ export async function POST(request) {
     try {
       await client.query("BEGIN");
 
-      // Create workflow session
+      // Create workflow session — ON CONFLICT: return existing session if already started
       const { rows: [workflowSession] } = await client.query(
         `INSERT INTO aa_workflow_sessions 
          (interaction_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
          VALUES ($1, $2, $3, 'in_progress', NOW(), '{}'::jsonb, 0)
+         ON CONFLICT (interaction_id) DO UPDATE
+           SET workflow_id = EXCLUDED.workflow_id,
+               current_stage_id = EXCLUDED.current_stage_id,
+               status = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 'in_progress' ELSE aa_workflow_sessions.status END,
+               started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END
          RETURNING *`,
         [interactionId, workflowId, firstStage?.id || null]
       );
