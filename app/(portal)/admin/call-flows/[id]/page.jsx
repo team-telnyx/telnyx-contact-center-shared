@@ -2997,6 +2997,7 @@ export default function FlowBuilderPage() {
                             "StreamingStartNodeEditor" ? (
                             <StreamingStartNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
@@ -3439,6 +3440,7 @@ export default function FlowBuilderPage() {
                             "AgentAssistNodeEditor" ? (
                             <AgentAssistNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {

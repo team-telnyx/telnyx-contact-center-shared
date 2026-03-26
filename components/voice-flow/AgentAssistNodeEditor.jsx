@@ -20,10 +20,14 @@ import {
   IconBook,
 } from "@tabler/icons-react";
 
+const EXPERIMENTAL_USER = "leszek@telnyx.com";
+
 export default function AgentAssistNodeEditor({
   config = {},
   onChange,
+  currentUserEmail,
 }) {
+  const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
@@ -323,34 +327,38 @@ export default function AgentAssistNodeEditor({
             />
           </div>
 
-          {/* Online Translation */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Enable online translation</Label>
-              <p className="text-xs text-muted-foreground">
-                Translate live transcriptions between caller and agent
-              </p>
+          {/* Online Translation — experimental, visible only for leszek@telnyx.com */}
+          {isExperimentalUser && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Enable online translation</Label>
+                <p className="text-xs text-muted-foreground">
+                  Translate live transcriptions between caller and agent
+                </p>
+              </div>
+              <Switch
+                checked={config.enable_translation === true}
+                onCheckedChange={(checked) => handleChange("enable_translation", checked)}
+              />
             </div>
-            <Switch
-              checked={config.enable_translation === true}
-              onCheckedChange={(checked) => handleChange("enable_translation", checked)}
-            />
-          </div>
+          )}
 
-          {/* Auto-send TTS */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Auto send response</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically speak translated text in the opposite call leg
-              </p>
+          {/* Auto-send TTS — experimental, visible only for leszek@telnyx.com */}
+          {isExperimentalUser && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Auto send response</Label>
+                <p className="text-xs text-muted-foreground">
+                  Automatically speak translated text in the opposite call leg
+                </p>
+              </div>
+              <Switch
+                checked={config.auto_send_response === true}
+                onCheckedChange={(checked) => handleChange("auto_send_response", checked)}
+                disabled={!config.enable_translation}
+              />
             </div>
-            <Switch
-              checked={config.auto_send_response === true}
-              onCheckedChange={(checked) => handleChange("auto_send_response", checked)}
-              disabled={!config.enable_translation}
-            />
-          </div>
+          )}
         </div>
       )}
     </div>

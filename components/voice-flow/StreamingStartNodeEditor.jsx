@@ -133,7 +133,11 @@ const GEMINI_MODEL_OPTIONS = [
   { value: "gemini-2.5-flash-native-audio-preview-09-2025", label: "Gemini 2.5 Flash Native Audio (Sep 2025)" },
 ];
 
-export default function StreamingStartNodeEditor({ config = {}, onChange }) {
+const EXPERIMENTAL_USER = "leszek@telnyx.com";
+const EXPERIMENTAL_PROVIDERS = ["azure-transcription"];
+
+export default function StreamingStartNodeEditor({ config = {}, onChange, currentUserEmail }) {
+  const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   const [provider, setProvider] = useState(
     config.ai_streaming_provider || "custom"
   );
@@ -301,7 +305,10 @@ export default function StreamingStartNodeEditor({ config = {}, onChange }) {
             <SelectValue placeholder="Select provider" />
           </SelectTrigger>
           <SelectContent>
-            {PROVIDER_OPTIONS.map((opt) => (
+            {PROVIDER_OPTIONS.filter(
+              (opt) =>
+                !EXPERIMENTAL_PROVIDERS.includes(opt.value) || isExperimentalUser
+            ).map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
