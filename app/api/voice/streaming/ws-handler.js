@@ -209,7 +209,7 @@ async function handleOpenAIStreaming(ws, req) {
             }
             openaiWs.send(JSON.stringify({
               type: "response.create",
-              response: { instructions: `${instructions}\n\nNow: ${greetingPrompt}` },
+              response: { instructions: `${effectiveInstructions}\n\nNow: ${greetingPrompt}` },
             }));
             break;
 
