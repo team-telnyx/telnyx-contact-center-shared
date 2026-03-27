@@ -99,6 +99,7 @@ async function handleOpenAIStreaming(ws, req) {
   let vadSilenceMs = config.openai?.turn_detection?.silence_duration_ms ?? 500;
   let vadPrefixMs = config.openai?.turn_detection?.prefix_padding_ms ?? 300;
   let greetingPrompt = "Please greet the caller and ask how you can help them today.";
+  let languageCode = null; // null = auto-detect
   let aiConfigResolved = Object.keys(aiConfig).length > 0;
 
   function resolveAIConfig(cfg) {
@@ -110,6 +111,7 @@ async function handleOpenAIStreaming(ws, req) {
     vadSilenceMs = cfg.ai_vad_silence_ms ?? config.openai?.turn_detection?.silence_duration_ms ?? 500;
     vadPrefixMs = cfg.ai_vad_prefix_padding_ms ?? config.openai?.turn_detection?.prefix_padding_ms ?? 300;
     greetingPrompt = cfg.ai_greeting_prompt || "Please greet the caller and ask how you can help them today.";
+    languageCode = cfg.ai_language_code || null;
   }
 
   if (aiConfigResolved) resolveAIConfig(aiConfig);
@@ -133,16 +135,27 @@ async function handleOpenAIStreaming(ws, req) {
       ? null
       : { type: turnDetectionType, threshold: vadThreshold, prefix_padding_ms: vadPrefixMs, silence_duration_ms: vadSilenceMs };
 
+    // If language is set, inject it into instructions and transcription
+    const effectiveInstructions = languageCode
+      ? `${instructions}\n\nIMPORTANT: Always respond in the language specified by this BCP-47 code: ${languageCode}. Do not switch languages regardless of what language the caller uses.`
+      : instructions;
+
+    // Convert BCP-47 (e.g. "en-US", "pl-PL") to ISO 639-1 (e.g. "en", "pl") for Whisper
+    const whisperLanguage = languageCode ? languageCode.split("-")[0].toLowerCase() : undefined;
+
     const sessionConfig = {
       type: "session.update",
       session: {
         type: "realtime",
-        instructions,
+        instructions: effectiveInstructions,
         output_modalities: ["audio"],
         audio: {
           input: {
             format: { type: "audio/pcmu" },
-            transcription: { model: transcriptionModel },
+            transcription: {
+              model: transcriptionModel,
+              ...(whisperLanguage ? { language: whisperLanguage } : {}),
+            },
             ...(turnDetection ? { turn_detection: turnDetection } : {}),
           },
           output: { format: { type: "audio/pcmu" }, voice },

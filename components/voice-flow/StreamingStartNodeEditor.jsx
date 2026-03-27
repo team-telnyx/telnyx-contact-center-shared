@@ -417,6 +417,20 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
                 { description: "Voice activity detection mode" }
               )}
 
+              <div>
+                <Label>Language Code</Label>
+                <Input
+                  type="text"
+                  value={config.ai_language_code || ""}
+                  onChange={(e) => handleFieldChange("ai_language_code", e.target.value)}
+                  placeholder="e.g. en-US, pl-PL"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  BCP-47 language code — forces response language and transcription (leave empty for auto-detect)
+                </p>
+              </div>
+
               {/* Advanced OpenAI Settings */}
               <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
                 <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
