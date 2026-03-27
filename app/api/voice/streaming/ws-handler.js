@@ -137,7 +137,7 @@ async function handleOpenAIStreaming(ws, req) {
 
     // If language is set, inject it into instructions and transcription
     const effectiveInstructions = languageCode
-      ? `${instructions}\n\nIMPORTANT: Always respond in the language specified by this BCP-47 code: ${languageCode}. Do not switch languages regardless of what language the caller uses.`
+      ? `${instructions}\n\nIMPORTANT: Start the conversation in the language specified by this BCP-47 code: ${languageCode}. You may switch languages if the caller requests it.`
       : instructions;
 
     // Convert BCP-47 (e.g. "en-US", "pl-PL") to ISO 639-1 (e.g. "en", "pl") for Whisper
