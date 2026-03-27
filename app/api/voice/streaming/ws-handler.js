@@ -116,6 +116,14 @@ async function handleOpenAIStreaming(ws, req) {
 
   if (aiConfigResolved) resolveAIConfig(aiConfig);
 
+  // Hoisted to outer scope so both sendSessionConfig() and session.updated handler can use it
+  const effectiveInstructions = languageCode
+    ? `${instructions}\n\nIMPORTANT: Start the conversation in the language specified by this BCP-47 code: ${languageCode}. You may switch languages if the caller requests it.`
+    : instructions;
+
+  // Convert BCP-47 (e.g. "en-US", "pl-PL") to ISO 639-1 (e.g. "en", "pl") for Whisper
+  const whisperLanguage = languageCode ? languageCode.split("-")[0].toLowerCase() : undefined;
+
   let openaiWs = null;
   let isClosing = false;
   let streamStarted = false;
@@ -134,14 +142,6 @@ async function handleOpenAIStreaming(ws, req) {
     const turnDetection = turnDetectionType === "none"
       ? null
       : { type: turnDetectionType, threshold: vadThreshold, prefix_padding_ms: vadPrefixMs, silence_duration_ms: vadSilenceMs };
-
-    // If language is set, inject it into instructions and transcription
-    const effectiveInstructions = languageCode
-      ? `${instructions}\n\nIMPORTANT: Start the conversation in the language specified by this BCP-47 code: ${languageCode}. You may switch languages if the caller requests it.`
-      : instructions;
-
-    // Convert BCP-47 (e.g. "en-US", "pl-PL") to ISO 639-1 (e.g. "en", "pl") for Whisper
-    const whisperLanguage = languageCode ? languageCode.split("-")[0].toLowerCase() : undefined;
 
     const sessionConfig = {
       type: "session.update",
