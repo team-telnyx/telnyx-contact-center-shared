@@ -251,7 +251,7 @@ export async function POST(request, { params }) {
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        max_tokens: 200,
+        max_tokens: 800, // Kimi-K2.5 uses chain-of-thought reasoning that consumes tokens before content; 200 was too low
         temperature: 0.8, // Some variability for natural responses
       }),
     });
