@@ -237,7 +237,7 @@ export async function POST(request, { params }) {
     });
 
     // Call LLM
-    const llmModel = model || workflow.llm_model || "openai/gpt-4o-mini";
+    const llmModel = model || workflow.llm_model || "moonshotai/Kimi-K2.5";
     
     const response = await fetch(`${TELNYX_API_BASE}/ai/chat/completions`, {
       method: "POST",

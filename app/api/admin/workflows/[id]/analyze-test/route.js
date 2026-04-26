@@ -51,7 +51,7 @@ export async function POST(request, { params }) {
       );
     }
 
-    const llmModel = workflow.llm_model || "openai/gpt-4o";
+    const llmModel = workflow.llm_model || "moonshotai/Kimi-K2.5";
 
     const { rows: stages } = await pool.query(
       `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
