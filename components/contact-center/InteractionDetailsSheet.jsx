@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconActivity, IconX, IconCopy, IconCheck } from "@tabler/icons-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import AiConversationCostsTab from "@/components/contact-center/AiConversationCostsTab";
 import { toast } from "sonner";
 import { Tool, ToolContent } from "@/components/ai-elements/tool";
 import {
@@ -353,16 +355,22 @@ export default function InteractionDetailsSheet({
         </Card>
       </div>
 
-      <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">Call Events</h3>
-          <Badge variant="outline" className="text-xs">
-            {events.length}
-          </Badge>
+      <Tabs defaultValue="events" className="flex-1 min-h-0 flex flex-col">
+        <div className="px-4 pt-4 pb-2">
+          <TabsList>
+            <TabsTrigger value="events" className="flex items-center gap-1.5">
+              Call Events
+              <Badge variant="outline" className="text-xs ml-1">{events.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="costs">Costs</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <TabsContent value="costs" className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <AiConversationCostsTab conversation={interaction} />
+        </TabsContent>
+
+        <TabsContent value="events" className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, idx) => (
@@ -407,7 +415,8 @@ export default function InteractionDetailsSheet({
             ))}
           </div>
         )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
