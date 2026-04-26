@@ -98,7 +98,7 @@ export async function POST(request) {
       `SELECT llm_model FROM aa_workflows WHERE id = $1`,
       [workflowSession.workflow_id]
     );
-    const llmModel = workflow?.llm_model || "openai/gpt-4o";
+    const llmModel = workflow?.llm_model || "moonshotai/Kimi-K2.5";
 
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({

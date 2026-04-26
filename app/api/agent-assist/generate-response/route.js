@@ -76,9 +76,8 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
             content: userPrompt,
           },
         ],
-        model: "openai/gpt-4o",
+        model: "moonshotai/Kimi-K2.5",
         temperature: 0.7,
-        max_tokens: 500,
         stream: true,
       }),
     });
