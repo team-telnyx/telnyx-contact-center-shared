@@ -200,7 +200,7 @@ function CustomTooltip({ active, payload }) {
   );
 }
 
-export default function AiConversationCostsTab({ conversation }) {
+export default function AiConversationCostsTab({ conversation, useDemoApiKey = false }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sessionData, setSessionData] = useState(null);
@@ -233,9 +233,10 @@ export default function AiConversationCostsTab({ conversation }) {
     }
 
     // Always use call-session and max_depth=5 as per API requirements for full tree
+    const demoParam = useDemoApiKey ? "&useDemoApiKey=true" : "";
     const fetchAnalysis = async () => {
       const res = await fetch(
-        `/api/ai/conversations/${encodeURIComponent(eventId)}/session-analysis?record_type=call-session&max_depth=5${dateTimeParams}`,
+        `/api/ai/conversations/${encodeURIComponent(eventId)}/session-analysis?record_type=call-session&max_depth=5${dateTimeParams}${demoParam}`,
         { cache: "no-store" }
       );
       return res.json();

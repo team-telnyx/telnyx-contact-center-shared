@@ -763,7 +763,7 @@ export default function AiConversationSheet({
               value="costs"
               className="flex-1 min-h-0 overflow-auto py-2"
             >
-              <AiConversationCostsTab conversation={interaction} />
+              <AiConversationCostsTab conversation={conversation || interaction} useDemoApiKey={usedDemoApiKey} />
             </TabsContent>
           </Tabs>
 

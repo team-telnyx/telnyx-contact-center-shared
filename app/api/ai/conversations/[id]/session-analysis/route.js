@@ -15,10 +15,14 @@ const TELNYX_BASE = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
  */
 export async function GET(request, context) {
   try {
-    const apiKey = process.env.TELNYX_API_KEY;
+    const { searchParams: sp } = new URL(request.url);
+    const useDemoApiKey = sp.get("useDemoApiKey") === "true";
+    const apiKey = useDemoApiKey
+      ? process.env.TELNYX_DEMO_PORTAL_API_KEY
+      : process.env.TELNYX_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { ok: false, error: "Missing TELNYX_API_KEY" },
+        { ok: false, error: useDemoApiKey ? "Missing TELNYX_DEMO_PORTAL_API_KEY" : "Missing TELNYX_API_KEY" },
         { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }
@@ -37,6 +41,7 @@ export async function GET(request, context) {
     const includeChildren = searchParams.get("include_children") ?? "true";
     const maxDepth = searchParams.get("max_depth") ?? "5";
     const dateTime = searchParams.get("date_time");
+    // useDemoApiKey already consumed above for key selection
 
     // Build the Telnyx session analysis URL
     const url = new URL(
