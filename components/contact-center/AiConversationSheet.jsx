@@ -25,6 +25,7 @@ import AiConversationMessagesTab from "./AiConversationMessagesTab";
 import AiConversationInsightsTab from "./AiConversationInsightsTab";
 import AiConversationMetadataTab from "./AiConversationMetadataTab";
 import AiConversationDynamicVariablesTab from "./AiConversationDynamicVariablesTab";
+import AiConversationCostsTab from "./AiConversationCostsTab";
 
 const AI_HEADER_NAME = "x-ai-call-id";
 
@@ -686,6 +687,7 @@ export default function AiConversationSheet({
               <TabsTrigger value="insights">Insights</TabsTrigger>
               <TabsTrigger value="metadata">Metadata</TabsTrigger>
               <TabsTrigger value="dynamic">Dynamic Variables</TabsTrigger>
+              <TabsTrigger value="costs">Costs</TabsTrigger>
             </TabsList>
 
             <TabsContent
@@ -755,6 +757,13 @@ export default function AiConversationSheet({
                 useDemoApiKey={usedDemoApiKey}
                 hasAiCallControlId={hasAiCallControlId}
               />
+            </TabsContent>
+
+            <TabsContent
+              value="costs"
+              className="flex-1 min-h-0 overflow-auto py-2"
+            >
+              <AiConversationCostsTab conversation={interaction} />
             </TabsContent>
           </Tabs>
 
