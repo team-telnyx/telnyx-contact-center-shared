@@ -20,7 +20,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import useWorkflowStore from "@/lib/stores/workflow-store";
+import useWorkflowStore, { useSlotsFilled } from "@/lib/stores/workflow-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import ReactMarkdown from "react-markdown";
 import {
@@ -383,18 +383,21 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
   // Find the current slot that needs filling (for suggested response)
   // MUST be before any conditional returns to maintain hook order
+  const slotsFilled = useSlotsFilled();
+
   const currentSlotNeedingFill = useMemo(() => {
     if (!stages || stages.length === 0) return null;
     for (const stage of stages) {
       for (const item of stage.items || []) {
         const status = itemStatuses[item.id];
-        if (status?.status !== "completed" && status?.status !== "skipped") {
-          return { stage, item };
-        }
+        if (status?.status === "completed" || status?.status === "skipped") continue;
+        // Skip slot items whose value was already collected (e.g. by AI assistant)
+        if (item.type === "slot" && item.slot_name && slotsFilled[item.slot_name] !== undefined) continue;
+        return { stage, item };
       }
     }
     return null;
-  }, [stages, itemStatuses]);
+  }, [stages, itemStatuses, slotsFilled]);
 
   // Loading state
   if (isLoading && !session) {
@@ -1272,7 +1275,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
 /**
  * Generate a dynamic suggestion using LLM
  */
-async function generateSuggestion(stage, item, session, transcriptions) {
+async function generateSuggestion(stage, item, session, transcriptions, { isAiAssisted = false, slotsFilled = {}, isFirstItem = false } = {}) {
   try {
     // Prepare conversation context (last 5 messages)
     const previousConversation = transcriptions
@@ -1297,6 +1300,9 @@ async function generateSuggestion(stage, item, session, transcriptions) {
         agentName: session?.agent_name || "the agent",
         brandName: session?.brand_name,
         previousConversation,
+        isAiAssisted,
+        isFirstItem,
+        prefilledSlots: slotsFilled,
       }),
     });
 
@@ -1402,6 +1408,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   
   // Get session and transcriptions from stores
   const session = useWorkflowStore((state) => state.session);
+  const slotsFilled = useWorkflowStore((state) => state.slotsFilled);
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
 
   // Fix 2: When AI handoff data arrives mid-session (race condition), reset suggestions
@@ -1433,7 +1440,11 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       
       // Generate suggestion asynchronously
       setGeneratingSuggestion(true);
-      generateSuggestion(stage, item, session, transcriptions)
+      generateSuggestion(stage, item, session, transcriptions, {
+        isAiAssisted,
+        slotsFilled,
+        isFirstItem: suggestions.length === 0,
+      })
         .then((newSuggestion) => {
           setSuggestions((prev) => {
             const updated = [...prev, newSuggestion];
@@ -1451,7 +1462,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
           setGeneratingSuggestion(false);
         });
     }
-  }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading]);
+  }, [currentSlot, session, transcriptions, onSuggestionsChange, isAiAssisted, aiDataLoading, slotsFilled]);
 
   // Auto-scroll to bottom when new suggestions added
   useEffect(() => {

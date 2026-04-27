@@ -38,6 +38,9 @@ export async function POST(request) {
       agentName,
       brandName,
       previousConversation,
+      isAiAssisted,
+      isFirstItem,
+      prefilledSlots,
     } = body;
 
     if (!itemLabel) {
@@ -57,6 +60,48 @@ export async function POST(request) {
       if (workflow?.llm_model) {
         llmModel = workflow.llm_model;
       }
+    }
+
+    // Special case: AI-assisted call, first item — generate handoff greeting
+    if (isAiAssisted && isFirstItem) {
+      const { systemPrompt: hsys, userPrompt: husr } = buildHandoffGreetingPrompt({
+        agentName: agentName || null,
+        brandName: brandName || null,
+        prefilledSlots: prefilledSlots || {},
+      });
+
+      const hResponse = await fetch(`${TELNYX_API_BASE}/ai/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TELNYX_API_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: hsys },
+            { role: "user", content: husr },
+          ],
+          model: llmModel,
+          temperature: 0.7,
+          max_tokens: 200,
+        }),
+      });
+
+      if (hResponse.ok) {
+        const hData = await hResponse.json();
+        let hSuggestion = hData.choices?.[0]?.message?.content || hData.choices?.[0]?.message?.reasoning || "";
+        hSuggestion = hSuggestion.replace(/^```(?:json|text)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+        for (let i = 0; i < 3; i++) {
+          hSuggestion = hSuggestion.replace(/^["'\u2018\u2019\u201c\u201d\u201e\u00ab\u00bb]|["'\u2018\u2019\u201c\u201d\u201e\u00bb\u00ab]$/g, "").trim();
+        }
+        if (agentName && agentName !== "the agent") {
+          hSuggestion = hSuggestion.replace(/\[Your Name\]/gi, agentName).replace(/\[Agent Name\]/gi, agentName);
+        }
+        if (hSuggestion) {
+          return NextResponse.json({ ok: true, suggestion: hSuggestion, model: llmModel, isHandoffGreeting: true });
+        }
+      }
+      // Fall through to regular suggestion if handoff generation fails
     }
 
     // Build prompt for suggestion generation
@@ -202,4 +247,35 @@ function buildSuggestionUserPrompt({
   }
 
   return prompt;
+}
+
+/**
+ * Build prompts for AI-assisted call handoff greeting
+ */
+function buildHandoffGreetingPrompt({ agentName, brandName, prefilledSlots }) {
+  const agent = agentName && agentName !== "the agent" ? agentName : null;
+  const brand = brandName || "the company";
+  const filledSlotNames = Object.keys(prefilledSlots || {}).filter(
+    (k) => prefilledSlots[k] !== null && prefilledSlots[k] !== undefined && prefilledSlots[k] !== ""
+  );
+
+  const slotsContext =
+    filledSlotNames.length > 0
+      ? `The AI assistant has already collected the following customer information: ${filledSlotNames.map((k) => `${k}: ${prefilledSlots[k]}`).join(", ")}.`
+      : "The AI assistant started the conversation but did not collect any specific data yet.";
+
+  const systemPrompt = `You are an expert contact center script writer for ${brand}.
+Generate a natural, warm greeting for a human agent who is taking over a call that was started by an AI assistant.
+The greeting should:
+1. Introduce the agent by name (if known)
+2. Acknowledge that the call was handled by an AI assistant first
+3. Show awareness of information already collected (briefly, naturally)
+4. Ask if the customer wants to continue on the same topic
+Keep it to 2-3 sentences maximum. Sound natural and human, not robotic. Write in first person.`;
+
+  const userPrompt = `Generate a handoff greeting for agent ${agent || "the agent"} at ${brand}.
+${slotsContext}
+The agent is now taking over the call.`;
+
+  return { systemPrompt, userPrompt };
 }
