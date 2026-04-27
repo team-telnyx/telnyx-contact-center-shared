@@ -232,25 +232,88 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
       dateTimeParams = `&date_time=${encodeURIComponent(dateStr)}`;
     }
 
-    // Always use call-session and max_depth=5 as per API requirements for full tree
     const demoParam = useDemoApiKey ? "&useDemoApiKey=true" : "";
-    const fetchAnalysis = async () => {
-      const res = await fetch(
-        `/api/ai/conversations/${encodeURIComponent(eventId)}/session-analysis?record_type=call-session&max_depth=5${dateTimeParams}${demoParam}`,
-        { cache: "no-store" }
-      );
-      return res.json();
-    };
-
+    
     (async () => {
       try {
-        let result = await fetchAnalysis();
-
-        if (!result.ok) {
-          setError(result.error || "Session analysis not available");
-        } else {
-          setSessionData(result.data);
+        // Fetch network costs using call-session
+        let callSessionData = null;
+        if (callSessionId) {
+          const res1 = await fetch(
+            `/api/ai/conversations/${encodeURIComponent(callSessionId)}/session-analysis?record_type=call-session&max_depth=5${dateTimeParams}${demoParam}`,
+            { cache: "no-store" }
+          );
+          const json1 = await res1.json();
+          if (json1.ok) callSessionData = json1.data;
         }
+
+        // Fetch AI costs using ai-voice-assistant
+        let aiSessionData = null;
+        if (conversationId) {
+          const res2 = await fetch(
+            `/api/ai/conversations/${encodeURIComponent(conversationId)}/session-analysis?record_type=ai-voice-assistant&max_depth=5${dateTimeParams}${demoParam}`,
+            { cache: "no-store" }
+          );
+          const json2 = await res2.json();
+          if (json2.ok) aiSessionData = json2.data;
+        }
+
+        if (!callSessionData && !aiSessionData) {
+          setError("Session analysis not available");
+          return;
+        }
+
+        // Merge logic:
+        // We use call-session as base (it holds total_cost of SIP/CallControl).
+        // AI Voice Assistant tree holds STT, TTS, Inference inside it.
+        // We can create a unified data object holding both.
+        const combinedData = {
+          cost: {
+            total: (
+              parseFloat(callSessionData?.cost?.total || "0") +
+              parseFloat(aiSessionData?.cost?.total || "0")
+            ).toFixed(6),
+            currency: callSessionData?.cost?.currency || aiSessionData?.cost?.currency || "USD"
+          },
+          // We will put both roots into an array, flattening logic can handle it
+          roots: []
+        };
+        
+        if (callSessionData?.root) combinedData.roots.push(callSessionData.root);
+        if (aiSessionData?.root) {
+            // Check if the AI Voice Assistant node is already inside callSessionData
+            // If it is, we replace it with the detailed AI tree (which has inference children).
+            const findAndReplaceAiNode = (node) => {
+                if (node.event_name === "ai-voice-assistant" || node.product === "ai-voice-assistant") return true;
+                if (node.children) {
+                    for (let i = 0; i < node.children.length; i++) {
+                        if (findAndReplaceAiNode(node.children[i])) {
+                            // Swap shallow node with deep AI tree
+                            node.children[i] = aiSessionData.root;
+                            return false; // already swapped
+                        }
+                    }
+                }
+                return false;
+            };
+            
+            let swapped = false;
+            if (combinedData.roots.length > 0) {
+               swapped = findAndReplaceAiNode(combinedData.roots[0]);
+            }
+            
+            // If we couldn't swap it (it wasn't in the tree), add it as a top-level root
+            if (!swapped) {
+               combinedData.roots.push(aiSessionData.root);
+            }
+            // But wait, if it was already in the call session tree, its cost was ALREADY counted in callSessionData.cost.total!
+            // We should adjust total cost to not double-count if it was swapped.
+            if (swapped) {
+                combinedData.cost.total = parseFloat(callSessionData.cost.total).toFixed(6);
+            }
+        }
+        
+        setSessionData(combinedData);
       } catch (e) {
         setError(e?.message || "Failed to fetch session analysis");
       } finally {
@@ -290,7 +353,16 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
   // ── Parse session analysis response ───────────────────────────────────────
   const totalCost = parseFloat(sessionData.cost?.total ?? "0");
   const currency = sessionData.cost?.currency ?? "USD";
-  const allEvents = flattenEventTree(sessionData.root);
+  
+  let allEvents = [];
+  if (sessionData.roots) {
+    sessionData.roots.forEach(root => {
+      allEvents = allEvents.concat(flattenEventTree(root));
+    });
+  } else if (sessionData.root) {
+    allEvents = flattenEventTree(sessionData.root);
+  }
+  
   const productGroups = aggregateByProduct(allEvents);
   const meta = sessionData.meta ?? {};
 
