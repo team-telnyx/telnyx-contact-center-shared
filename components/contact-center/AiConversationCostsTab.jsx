@@ -293,6 +293,10 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
   const currency = sessionData.cost?.currency ?? "USD";
   const allEvents = flattenEventTree(sessionData.root);
   const productGroups = aggregateByProduct(allEvents);
+  
+  // Exclude zero-cost items from Pie Chart and Cost Breakdown list
+  const chartGroups = productGroups.filter(g => g.value > 0);
+  
   const meta = sessionData.meta ?? {};
 
   if (productGroups.length === 0) {
@@ -324,7 +328,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={productGroups}
+                data={chartGroups}
                 dataKey="value"
                 nameKey="name"
                 cx="50%"
@@ -335,7 +339,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
                 startAngle={90}
                 endAngle={-270}
               >
-                {productGroups.map((entry, index) => (
+                {chartGroups.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={PRODUCT_COLORS[index % PRODUCT_COLORS.length]}
@@ -351,7 +355,7 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
         {/* Legend + Breakdown */}
         <div className="flex-1 space-y-2 min-w-0">
           <p className="text-sm font-semibold mb-3">Cost Breakdown</p>
-          {productGroups.map((group, index) => {
+          {chartGroups.map((group, index) => {
             const pct = totalCost > 0 ? (group.value / totalCost) * 100 : 0;
             const color = PRODUCT_COLORS[index % PRODUCT_COLORS.length];
             return (
