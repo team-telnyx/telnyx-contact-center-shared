@@ -17,7 +17,7 @@ const TELNYX_BASE = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
 export async function GET(request, context) {
   try {
     // Auth check — required before proxying any Telnyx data
-    const user = await getAuthenticatedUser(request.url);
+    const user = await getAuthenticatedUser();
     if (!user) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
