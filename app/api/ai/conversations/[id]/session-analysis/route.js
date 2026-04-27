@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,15 @@ const TELNYX_BASE = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
  */
 export async function GET(request, context) {
   try {
+    // Auth check — required before proxying any Telnyx data
+    const user = await getAuthenticatedUser(request.url);
+    if (!user) {
+      return NextResponse.json(
+        { ok: false, error: "Unauthorized" },
+        { status: 401, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     const { searchParams: sp } = new URL(request.url);
     const useDemoApiKey = sp.get("useDemoApiKey") === "true";
     const apiKey = useDemoApiKey
