@@ -392,7 +392,12 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
         const status = itemStatuses[item.id];
         if (status?.status === "completed" || status?.status === "skipped") continue;
         // Skip slot items whose value was already collected (e.g. by AI assistant)
-        if (item.type === "slot" && item.slot_name && slotsFilled[item.slot_name] !== undefined) continue;
+        // Skip slot items already collected — but only when value is non-empty
+        // (null/empty values from AI handoff placeholders should not block suggestions)
+        if (item.type === "slot" && item.slot_name) {
+          const v = slotsFilled[item.slot_name];
+          if (v !== undefined && v !== null && v !== "") continue;
+        }
         return { stage, item };
       }
     }
@@ -1405,6 +1410,9 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const endRef = useRef(null);
   const lastItemIdRef = useRef(null);
   const prevAiDataReceivedRef = useRef(false);
+  // Track whether the handoff greeting has already been sent (or is in-flight)
+  // to avoid race condition where suggestions.length===0 still sees 0 mid-flight
+  const handoffGreetingSentRef = useRef(false);
   
   // Get session and transcriptions from stores
   const session = useWorkflowStore((state) => state.session);
@@ -1419,6 +1427,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       prevAiDataReceivedRef.current = true;
       setSuggestions([]);
       lastItemIdRef.current = null; // force regeneration for the new currentSlot
+      handoffGreetingSentRef.current = false; // reset handoff greeting flag on AI data arrival
       if (onSuggestionsChange) onSuggestionsChange([]);
     }
   }, [isAiAssisted, aiDataReceived, onSuggestionsChange]);
@@ -1439,11 +1448,15 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       lastItemIdRef.current = item.id;
       
       // Generate suggestion asynchronously
+      // Mark handoff greeting as sent immediately (before async) to prevent
+      // race condition where concurrent calls see isFirstItem=true multiple times
+      const isFirstItem = isAiAssisted && !handoffGreetingSentRef.current;
+      if (isFirstItem) handoffGreetingSentRef.current = true;
       setGeneratingSuggestion(true);
       generateSuggestion(stage, item, session, transcriptions, {
         isAiAssisted,
         slotsFilled,
-        isFirstItem: suggestions.length === 0,
+        isFirstItem,
       })
         .then((newSuggestion) => {
           setSuggestions((prev) => {
