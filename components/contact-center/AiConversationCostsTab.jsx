@@ -71,7 +71,8 @@ const PRIORITY_PRODUCTS = ["AI Voice Assistant", "LLM Inference"];
 function aggregateByProduct(events) {
   const map = {};
   for (const ev of events) {
-    if (ev.cost <= 0) continue;
+    // Remove cost > 0 filter so that zero-cost components (e.g. LLM Inference) 
+    // still appear in the breakdown list and details cards.
     const key = humanizeProduct(ev.product);
     if (!map[key]) {
       map[key] = { name: key, value: 0, events: [] };
@@ -232,11 +233,11 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
       dateTimeParams = `&date_time=${encodeURIComponent(dateStr)}`;
     }
 
-    // Always use call-session and max_depth=5 as per API requirements for full tree
+    // Use ai-voice-assistant as the record_type and conversation ID as eventId to get LLM and STT costs
     const demoParam = useDemoApiKey ? "&useDemoApiKey=true" : "";
     const fetchAnalysis = async () => {
       const res = await fetch(
-        `/api/ai/conversations/${encodeURIComponent(eventId)}/session-analysis?record_type=call-session&max_depth=5${dateTimeParams}${demoParam}`,
+        `/api/ai/conversations/${encodeURIComponent(conversationId)}/session-analysis?record_type=ai-voice-assistant&max_depth=5${dateTimeParams}${demoParam}`,
         { cache: "no-store" }
       );
       return res.json();
