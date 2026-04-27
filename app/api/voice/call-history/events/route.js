@@ -35,7 +35,8 @@ export async function GET(request) {
     const params = new URLSearchParams(searchParams);
 
     const baseUrl = getTelnyxBaseUrl();
-    const telnyxUrl = `${baseUrl}/v2/call_events?${params.toString()}`;
+    // Use /v2/application_events instead of /v2/call_events for significantly better performance
+    const telnyxUrl = `${baseUrl}/v2/application_events?${params.toString()}`;
 
     const res = await fetch(telnyxUrl, {
       headers: {
@@ -48,7 +49,7 @@ export async function GET(request) {
       const errorText = await res.text();
       console.error("[CallHistoryEvents] Telnyx error:", errorText);
       return NextResponse.json(
-        { ok: false, error: "Failed to fetch call events from Telnyx" },
+        { ok: false, error: "Failed to fetch application events from Telnyx" },
         { status: res.status }
       );
     }
