@@ -108,6 +108,8 @@ export async function POST(request) {
       await client.query("BEGIN");
 
       // Create workflow session — ON CONFLICT: return existing session if already started
+      // If the previous session was 'completed', fully reset progress so the restarted
+      // session doesn't inherit stale slots/completion state.
       const { rows: [workflowSession] } = await client.query(
         `INSERT INTO aa_workflow_sessions 
          (interaction_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
@@ -116,8 +118,10 @@ export async function POST(request) {
            SET workflow_id = EXCLUDED.workflow_id,
                current_stage_id = EXCLUDED.current_stage_id,
                status = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 'in_progress' ELSE aa_workflow_sessions.status END,
-               started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END
-         RETURNING *`,
+               started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END,
+               slots_filled = CASE WHEN aa_workflow_sessions.status = 'completed' THEN '{}'::jsonb ELSE aa_workflow_sessions.slots_filled END,
+               completion_percentage = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 0 ELSE aa_workflow_sessions.completion_percentage END
+         RETURNING *, (xmax <> 0 AND status = 'in_progress' AND slots_filled = '{}'::jsonb) AS was_reset`,
         [interactionId, workflowId, firstStage?.id || null]
       );
 
@@ -131,7 +135,20 @@ export async function POST(request) {
         [workflowId]
       );
 
-      // Insert pending status for all items — ON CONFLICT DO NOTHING (idempotent restart)
+      // If restarting a completed session, reset all item statuses back to pending
+      // (ON CONFLICT DO NOTHING would otherwise preserve old completed states)
+      const sessionWasCompleted = workflowSession.was_reset;
+      if (sessionWasCompleted) {
+        await client.query(
+          `UPDATE aa_workflow_item_status SET status = 'pending', completed_at = NULL,
+           completed_by = NULL, extracted_value = NULL, confidence_score = NULL,
+           source_transcript = NULL, updated_at = NOW()
+           WHERE session_id = $1`,
+          [workflowSession.id]
+        );
+      }
+
+      // Insert pending status for new items — ON CONFLICT DO NOTHING (idempotent for active sessions)
       for (const item of items) {
         await client.query(
           `INSERT INTO aa_workflow_item_status (session_id, item_id, status)
