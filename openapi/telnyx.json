@@ -69507,23 +69507,35 @@
       "CallControlTransferToolParams": {
         "properties": {
           "targets": {
-            "type": "array",
-            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "The name of the target.",
-                  "example": "Support"
-                },
-                "to": {
-                  "type": "string",
-                  "description": "The destination number or SIP URI of the call.",
-                  "example": "+13129457420"
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The name of the target.",
+                      "example": "Support"
+                    },
+                    "to": {
+                      "type": "string",
+                      "description": "The destination number or SIP URI of the call.",
+                      "example": "+13129457420"
+                    }
+                  },
+                  "required": [
+                    "to"
+                  ]
                 }
+              },
+              {
+                "type": "string",
+                "description": "A dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime.",
+                "example": "{{ targets }}"
               }
-            }
+            ],
+            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to. This can also be a dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime."
           },
           "from": {
             "type": "string",
@@ -92527,23 +92539,35 @@
       "InferenceEmbeddingTransferToolParams": {
         "properties": {
           "targets": {
-            "type": "array",
-            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "type": "string",
-                  "description": "The name of the target.",
-                  "example": "Support"
-                },
-                "to": {
-                  "type": "string",
-                  "description": "The destination number or SIP URI of the call.",
-                  "example": "+13129457420"
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The name of the target.",
+                      "example": "Support"
+                    },
+                    "to": {
+                      "type": "string",
+                      "description": "The destination number or SIP URI of the call.",
+                      "example": "+13129457420"
+                    }
+                  },
+                  "required": [
+                    "to"
+                  ]
                 }
+              },
+              {
+                "type": "string",
+                "description": "A dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime.",
+                "example": "{{ targets }}"
               }
-            }
+            ],
+            "description": "The different possible targets of the transfer. The assistant will be able to choose one of the targets to transfer the call to. This can also be a dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime."
           },
           "from": {
             "type": "string",
@@ -94065,15 +94089,15 @@
               "invite"
             ]
           },
-          "invite_config": {
+          "invite": {
             "$ref": "#/components/schemas/InviteToolConfig",
-            "title": "InviteConfig"
+            "title": "InviteToolConfig"
           }
         },
         "type": "object",
         "required": [
           "type",
-          "invite_config"
+          "invite"
         ],
         "title": "InviteTool"
       },
@@ -94083,6 +94107,40 @@
             "type": "string",
             "example": "+35319605860",
             "description": "Number or SIP URI placing the call."
+          },
+          "targets": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The name of the target.",
+                      "example": "Support"
+                    },
+                    "to": {
+                      "type": "string",
+                      "description": "The destination number or SIP URI of the call.",
+                      "example": "+13129457420"
+                    }
+                  },
+                  "required": [
+                    "to"
+                  ]
+                }
+              },
+              {
+                "type": "string",
+                "description": "A dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime.",
+                "example": "{{ targets }}"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The different possible targets of the invite. The assistant will be able to choose one of the targets to invite to the call. This can also be a dynamic variable string like `{{ targets }}` where `targets` is returned by the dynamic variables webhook and resolves to an array of target objects at runtime. If omitted or null, the invite tool can still be configured and targets may be supplied dynamically at runtime."
           },
           "custom_headers": {
             "description": "Custom headers to be added to the SIP INVITE for the invite command.",
@@ -94129,6 +94187,9 @@
           }
         },
         "type": "object",
+        "required": [
+          "from"
+        ],
         "title": "InviteToolConfig"
       },
       "Invoice": {
@@ -120436,7 +120497,7 @@
           "keyterm": {
             "title": "Keyterm",
             "type": "string",
-            "description": "Available only for deepgram/nova-3 and deepgram/flux. A comma-separated list of key terms to boost for recognition during transcription. Helps improve accuracy for domain-specific terminology, proper nouns, or uncommon words."
+            "description": "Available only for deepgram/nova-3 and deepgram/flux. A comma-separated list of key terms to boost for recognition during transcription. Helps improve accuracy for domain-specific terminology, proper nouns, or uncommon words. This field may be templated with [dynamic variables](https://developers.telnyx.com/docs/inference/ai-assistants/dynamic-variables) using mustache syntax (e.g. `Telnyx,{{customer_name}},VoIP`). Variables are resolved at call time before the value is sent to the speech-to-text engine."
           },
           "end_of_turn_confidence_threshold": {
             "title": "End Of Turn Confidence Threshold",
