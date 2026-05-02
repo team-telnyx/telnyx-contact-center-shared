@@ -275,17 +275,20 @@ function LeftPanel(props) {
     return <div className="h-full min-h-0 flex flex-col">
       <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between gap-2">
         <div className="min-w-0"><h2 className="font-semibold text-sm">AI form agent</h2><p className="text-xs text-muted-foreground">Describe changes, then refine visually.</p></div>
-        <Button size="sm" variant="ghost" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
+        <Button size="sm" variant="outline" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
       </div>
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
         {aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}
         {aiLoading ? <div className="mr-6 flex items-center gap-2 rounded-xl bg-muted p-3 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" />Waiting for a response...</div> : null}
         <div ref={aiMessagesEndRef} />
       </div>
-      <div className="shrink-0 border-t p-4 space-y-2">
-        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} disabled={aiLoading} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
-        <Button className="w-full" onClick={sendAi} disabled={aiLoading || !aiPrompt.trim()}>{aiLoading ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" />Waiting...</> : "Send to AI"}</Button>
-      </div>
+      <form className="shrink-0 border-t p-4 space-y-2" onSubmit={(e) => { e.preventDefault(); sendAi(); }}>
+        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} disabled={aiLoading} onChange={(e) => setAiPrompt(e.target.value)} onKeyDownCapture={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <Button type="submit" className="w-full" disabled={aiLoading || !aiPrompt.trim()}>{aiLoading ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" />Waiting...</> : "Send to AI"}</Button>
+          <Button type="button" variant="outline" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
+        </div>
+      </form>
     </div>;
   }
 

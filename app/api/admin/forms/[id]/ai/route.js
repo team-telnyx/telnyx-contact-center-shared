@@ -100,6 +100,8 @@ Supported field types: section, row, columns, grid, label, text, textarea, selec
 For layout blocks, create fields with type section/row/columns/grid and visual props only; keep layout.order compatible with existing flat arrays.
 Use stable snake_case field ids.
 Example for adding an email field: {"reason":"Added required email field","operations":[{"type":"addField","field":{"id":"email","type":"text","label":"Email","required":true,"placeholder":"customer@example.com"}}]}.
+Example for OK and Cancel buttons at the bottom: {"reason":"Added OK and Cancel buttons","operations":[{"type":"addField","field":{"id":"ok_button","type":"button","label":"OK"}},{"type":"addField","field":{"id":"cancel_button","type":"button","label":"Cancel"}}]}.
+When the user asks for a button, the field.type must be "button"; never create a text field for buttons.
 Do not use JSON Patch operations like add/replace/path. Every operation object must have a type from the allowed list.`;
   const res = await fetch(endpoint, {
     method: "POST",
@@ -130,7 +132,16 @@ Do not use JSON Patch operations like add/replace/path. Every operation object m
     throw new Error(`Telnyx Chat Completion returned no assistant content. finish_reason=${data?.choices?.[0]?.finish_reason || "unknown"}; message=${JSON.stringify(message).slice(0, 500)}`);
   }
   const parsed = extractJson(content);
-  return { operations: Array.isArray(parsed.operations) ? parsed.operations : [], reason: parsed.reason || "Applied AI form edits.", model, rawContent: String(content).slice(0, 1000) };
+  const operations = Array.isArray(parsed.operations) ? parsed.operations.map((operation) => {
+    const field = operation?.field || {};
+    const label = String(field.label || operation?.label || "").trim().toLowerCase();
+    const id = String(field.id || operation?.id || "").trim().toLowerCase();
+    if ((operation?.type === "addField" || operation?.op === "addField") && (label === "ok" || label === "cancel" || id.endsWith("_button") || id.includes("button"))) {
+      return { ...operation, field: { ...field, type: "button", required: false } };
+    }
+    return operation;
+  }) : [];
+  return { operations, reason: parsed.reason || "Applied AI form edits.", model, rawContent: String(content).slice(0, 1000) };
 }
 
 export async function POST(request) {
