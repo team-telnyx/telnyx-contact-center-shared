@@ -143,54 +143,125 @@ export function FormEditor({ initialForm, isNew = false }) {
     }
   }
 
-  return <div className="min-h-[calc(100vh-5rem)] bg-slate-100/80 -m-6 flex flex-col">
-    <div className="h-16 border-b bg-background px-5 flex items-center justify-between gap-4">
+  return <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 flex flex-col overflow-hidden bg-muted/40">
+    <div className="h-14 shrink-0 border-b bg-background px-4 flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">Admin / Forms / Builder</div>
-        <div className="flex items-center gap-2 min-w-0"><h1 className="text-lg font-semibold truncate">{form.name || "Untitled form"}</h1><Badge variant="outline">{form.status || "draft"}</Badge>{message ? <span className="text-xs text-muted-foreground">{message}</span> : null}</div>
+        <div className="text-[11px] text-muted-foreground">Admin / Forms / Builder</div>
+        <div className="flex items-center gap-2 min-w-0"><h1 className="text-base font-semibold truncate">{form.name || "Untitled form"}</h1><Badge variant="outline">{form.status || "draft"}</Badge>{message ? <span className="text-xs text-muted-foreground truncate">{message}</span> : null}</div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button>
         <Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         <Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
       </div>
     </div>
 
-    <div className="flex flex-1 min-h-0">
-      <aside className="w-16 border-r bg-background flex flex-col items-center py-3 gap-2">
-        {RAIL.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setActiveTab(id)} className={`w-12 rounded-xl p-2 text-[10px] flex flex-col items-center gap-1 transition ${activeTab === id ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-muted"}`}><Icon className="h-5 w-5" />{label}</button>)}
-      </aside>
+    <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
+      <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="h-full overflow-y-auto p-2 flex flex-col items-center gap-2">
+          {RAIL.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setActiveTab(id)} className={`w-14 rounded-lg px-2 py-3 text-[10px] flex flex-col items-center gap-1 transition ${activeTab === id ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-muted"}`}><Icon className="h-5 w-5" />{label}</button>)}
+        </div>
+      </section>
 
-      <aside className="w-80 border-r bg-background/95 overflow-y-auto">
+      <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} />
-      </aside>
+      </section>
 
-      <main className="flex-1 min-w-0 overflow-auto p-6">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground"><span>Visual canvas</span><span>100% · Desktop</span></div>
-          <div className="rounded-2xl border bg-white shadow-sm min-h-[680px] p-8">
+      <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
+        <div className="h-12 shrink-0 border-b px-4 flex items-center justify-between bg-card">
+          <div><div className="text-sm font-semibold">Visual canvas</div><div className="text-[11px] text-muted-foreground">Form preview and component selection</div></div>
+          <div className="text-xs text-muted-foreground">100% · Desktop</div>
+        </div>
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-200/70 p-6">
+          <div className="mx-auto max-w-4xl rounded-2xl border bg-white shadow-sm min-h-full p-8">
             <div className="mx-auto max-w-2xl space-y-6">
-              <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
+              <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight text-slate-950">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-slate-500">{form.description}</p> : null}</div>
               {orderedFields.map((field) => <CanvasField key={field.id} field={field} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={() => !previewMode && setSelectedId(field.id)} />)}
               {!orderedFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building.</div> : null}
             </div>
           </div>
         </div>
-      </main>
+      </section>
 
-      <aside className="w-96 border-l bg-background overflow-y-auto">
+      <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} />
-      </aside>
+      </section>
     </div>
+  </div>;
+}
+
+function PanelHeader({ title, description }) {
+  return <div className="h-14 shrink-0 border-b px-4 flex flex-col justify-center">
+    <h2 className="font-semibold text-sm">{title}</h2>
+    <p className="text-xs text-muted-foreground">{description}</p>
   </div>;
 }
 
 function LeftPanel(props) {
   const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi } = props;
-  if (activeTab === "ai") return <div className="p-4 h-full flex flex-col gap-3"><div><h2 className="font-semibold">AI form agent</h2><p className="text-xs text-muted-foreground">Describe changes, then refine visually.</p></div><div className="flex-1 space-y-3 overflow-y-auto pr-1">{aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}</div><Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendAi(); }} /><Button onClick={sendAi}>Send to AI</Button></div>;
-  if (activeTab === "blocks") return <div className="p-4 space-y-5"><div><h2 className="font-semibold">Blocks</h2><p className="text-xs text-muted-foreground">Add custom schema components. Drag/drop can come later; this iteration keeps controls explicit.</p></div>{BLOCK_GROUPS.map((group) => <div key={group.title} className="space-y-2"><h3 className="text-xs font-semibold uppercase text-muted-foreground">{group.title}</h3><div className="grid gap-2">{group.items.map((type) => <Button key={type} variant="outline" className="justify-start" onClick={() => addField(type)}><IconPlus className="h-4 w-4 mr-2" />{FORM_COMPONENT_REGISTRY[type]?.label || type}</Button>)}</div></div>)}</div>;
-  if (activeTab === "outline") return <div className="p-4 space-y-3"><div><h2 className="font-semibold">Outline</h2><p className="text-xs text-muted-foreground">Page structure and render order.</p></div><div className="rounded-lg border bg-muted/30 p-2 text-sm font-medium">{form.name}</div><div className="ml-4 border-l pl-3 space-y-2">{orderedFields.map((field, index) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>{index + 1}. {field.label || field.id}<div className="text-xs text-muted-foreground">{field.type}</div></button>)}</div></div>;
-  return <div className="p-4 space-y-3"><div><h2 className="font-semibold">Fields</h2><p className="text-xs text-muted-foreground">Select, duplicate, remove, and reorder fields.</p></div>{orderedFields.map((field) => <div key={field.id} className={`rounded-xl border p-3 ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}><div className="flex items-start justify-between gap-2"><div><div className="text-sm font-medium">{field.label || field.id}</div><div className="text-xs text-muted-foreground">{field.id} · {field.type}</div></div><Badge variant="outline">{field.required ? "required" : "optional"}</Badge></div><div className="mt-3 flex flex-wrap gap-1"><Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button><Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button><Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>Duplicate</Button><Button size="sm" variant="ghost" className="text-destructive" onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button></div></div>)}</div>;
+
+  if (activeTab === "ai") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="AI form agent" description="Describe changes, then refine visually." />
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
+        {aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}
+      </div>
+      <div className="shrink-0 border-t p-4 space-y-2">
+        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendAi(); }} />
+        <Button className="w-full" onClick={sendAi}>Send to AI</Button>
+      </div>
+    </div>;
+  }
+
+  if (activeTab === "blocks") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Blocks" description="Add custom schema components." />
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+        {BLOCK_GROUPS.map((group) => <div key={group.title} className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase text-muted-foreground">{group.title}</h3>
+          <div className="grid gap-2">
+            {group.items.map((type) => <Button key={type} variant="outline" className="justify-start" onClick={() => addField(type)}><IconPlus className="h-4 w-4 mr-2" />{FORM_COMPONENT_REGISTRY[type]?.label || type}</Button>)}
+          </div>
+        </div>)}
+      </div>
+    </div>;
+  }
+
+  if (activeTab === "outline") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Outline" description="Page structure and render order." />
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        <div className="rounded-lg border bg-muted/30 p-2 text-sm font-medium">{form.name}</div>
+        <div className="ml-4 border-l pl-3 space-y-2">
+          {orderedFields.map((field, index) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
+            {index + 1}. {field.label || field.id}
+            <div className="text-xs text-muted-foreground">{field.type}</div>
+          </button>)}
+        </div>
+      </div>
+    </div>;
+  }
+
+  return <div className="h-full min-h-0 flex flex-col">
+    <PanelHeader title="Fields" description="Select, duplicate, remove, and reorder fields." />
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+      {orderedFields.map((field) => <div key={field.id} className={`rounded-xl border p-3 ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-sm font-medium">{field.label || field.id}</div>
+            <div className="text-xs text-muted-foreground">{field.id} · {field.type}</div>
+          </div>
+          <Badge variant="outline">{field.required ? "required" : "optional"}</Badge>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1">
+          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button>
+          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button>
+          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>Duplicate</Button>
+          <Button size="sm" variant="ghost" className="text-destructive" onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button>
+        </div>
+      </div>)}
+    </div>
+  </div>;
 }
 
 function CanvasField({ field, selected, onSelect, readOnly }) {
@@ -204,5 +275,5 @@ function CanvasField({ field, selected, onSelect, readOnly }) {
 }
 
 function PropertiesPanel({ form, patchForm, selectedField, selectedId, setSelectedId, updateField }) {
-  return <div className="p-4 space-y-5"><div className="flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold">Properties</h2><p className="text-xs text-muted-foreground">Form and selected component settings.</p></div></div><Card><CardContent className="p-4 space-y-3"><button className={`w-full rounded-md border p-2 text-left text-sm ${selectedId === "form" ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId("form")}>Form settings</button><div><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div><div><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div><div><Label>Category</Label><Input value={form.category || ""} onChange={(e) => patchForm({ category: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div><div><Label>Queue names</Label><Input value={(form.queue_names || []).join(", ")} onChange={(e) => patchForm({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Auto-open</Label><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div></CardContent></Card>{selectedField ? <Card><CardContent className="p-4 space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div><div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div><div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => updateField(selectedField.id, { id: e.target.value })} /></div><div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div><div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div><div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div><div><Label>Style tokens JSON</Label><Textarea rows={3} className="font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></div><div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div></CardContent></Card> : null}</div>;
+  return <div className="h-full min-h-0 flex flex-col"><div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Form and selected component settings.</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5"><Card><CardContent className="p-4 space-y-3"><button className={`w-full rounded-md border p-2 text-left text-sm ${selectedId === "form" ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId("form")}>Form settings</button><div><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div><div><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div><div><Label>Category</Label><Input value={form.category || ""} onChange={(e) => patchForm({ category: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div><div><Label>Queue names</Label><Input value={(form.queue_names || []).join(", ")} onChange={(e) => patchForm({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Auto-open</Label><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div></CardContent></Card>{selectedField ? <Card><CardContent className="p-4 space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div><div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div><div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => updateField(selectedField.id, { id: e.target.value })} /></div><div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div><div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div><div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div><div><Label>Style tokens JSON</Label><Textarea rows={3} className="font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></div><div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div></CardContent></Card> : null}</div></div>;
 }
