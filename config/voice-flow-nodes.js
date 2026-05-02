@@ -2127,7 +2127,7 @@ export const VOICE_FLOW_NODES = {
     label: "Agent Assist",
     icon: "IconRobot",
     color: NODE_COLORS[NODE_CATEGORIES.AI_INTEGRATION],
-    description: "Configure Agent Assist settings - KB Articles or Workflows",
+    description: "Configure Agent Assist settings - KB Articles, Workflows, or Forms",
     telnyxAction: "agent_assist_config",
     telnyxEndpoint: null, // Internal configuration, not a Telnyx API call
     inputs: 1,
@@ -2152,8 +2152,9 @@ export const VOICE_FLOW_NODES = {
         options: [
           { value: "kb_articles", label: "KB Articles" },
           { value: "workflows", label: "Workflows" },
+          { value: "forms", label: "Forms" },
         ],
-        description: "Choose between Knowledge Base articles or guided Workflows",
+        description: "Choose between Knowledge Base articles, guided Workflows, or custom Forms",
       },
       // KB Articles options
       kb_category: {
@@ -2190,6 +2191,22 @@ export const VOICE_FLOW_NODES = {
         default: "",
         description: "Select the workflow to guide agents through this call",
         showWhen: { assist_type: "workflows" },
+      },
+      form_id: {
+        type: "form_select",
+        label: "Primary Form",
+        required: false,
+        default: "",
+        description: "Select a published form to open in the agent desktop",
+        showWhen: { assist_type: "forms" },
+      },
+      auto_open_forms: {
+        type: "boolean",
+        label: "Auto-open Forms",
+        required: false,
+        default: true,
+        description: "Automatically open selected and queue-assigned forms",
+        showWhen: { assist_type: "forms" },
       },
       auto_start: {
         type: "boolean",

@@ -9,11 +9,13 @@ import {
   IconChecklist,
   IconWorld,
   IconDatabase,
+  IconFileText,
 } from "@tabler/icons-react";
 import { AgentContactsView } from "./AgentContactsView";
 import { AgentTasksView } from "./AgentTasksView";
 import { AgentKbArticlesView } from "./AgentKbArticlesView";
 import { AgentWebPagesView } from "./AgentWebPagesView";
+import { AgentFormsView } from "./AgentFormsView";
 
 const tiles = [
   {
@@ -39,6 +41,12 @@ const tiles = [
     title: "Web Pages",
     icon: IconWorld,
     description: "External portals",
+  },
+  {
+    id: "forms",
+    title: "Forms",
+    icon: IconFileText,
+    description: "Queue forms",
   },
 ];
 
@@ -138,6 +146,12 @@ export function AgentDataSources({
       )}
       {view === "web-pages" && (
         <AgentWebPagesView
+          selectedInteraction={selectedInteraction}
+          onBackToInteraction={onBackToInteraction}
+        />
+      )}
+      {view === "forms" && (
+        <AgentFormsView
           selectedInteraction={selectedInteraction}
           onBackToInteraction={onBackToInteraction}
         />

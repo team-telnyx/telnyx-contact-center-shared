@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
+import { AgentFormsView } from "./AgentFormsView";
 import { Sparkles } from "lucide-react";
 
 /**
@@ -11,6 +12,7 @@ import { Sparkles } from "lucide-react";
  * Displays Agent Assist based on configuration:
  * - KB Articles mode: shows knowledge base article suggestions
  * - Workflows mode: shows full-width guided workflow (no tabs)
+ * - Forms mode: opens selected/queue-assigned forms
  * 
  * Configuration is read from:
  * 1. interaction.metadata.agent_assist_config (set by call flow node)
@@ -63,6 +65,7 @@ export function InteractionDetail({ interaction }) {
 
   const assistType = assistConfig?.assist_type || "kb_articles";
   const workflowId = assistConfig?.workflow_id;
+  const formIds = assistConfig?.form_ids || (assistConfig?.form_id ? [assistConfig.form_id] : []);
 
   // Workflows mode - full width workflow view without tabs
   if (assistType === "workflows" && workflowId) {
@@ -72,6 +75,18 @@ export function InteractionDetail({ interaction }) {
           interactionId={interaction.id} 
           workflowId={workflowId}
           interaction={interaction}
+        />
+      </div>
+    );
+  }
+
+  if ((assistType === "forms" || assistType === "form") && (formIds.length > 0 || assistConfig?.auto_open_forms !== false)) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden p-3">
+        <AgentFormsView
+          selectedInteraction={interaction}
+          formIds={formIds}
+          autoOpenOnly={assistConfig?.auto_open_forms !== false}
         />
       </div>
     );

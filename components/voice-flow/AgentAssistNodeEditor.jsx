@@ -18,6 +18,7 @@ import {
   IconRobot,
   IconGitBranch,
   IconBook,
+  IconFileText,
 } from "@tabler/icons-react";
 
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
@@ -30,8 +31,10 @@ export default function AgentAssistNodeEditor({
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
+  const [forms, setForms] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingForms, setLoadingForms] = useState(true);
 
   const assistType = config.assist_type || "kb_articles";
   const enabled = config.enabled !== false;
@@ -54,6 +57,22 @@ export default function AgentAssistNodeEditor({
       }
     }
     loadWorkflows();
+  }, []);
+
+  // Load forms on mount
+  useEffect(() => {
+    async function loadForms() {
+      try {
+        const res = await fetch("/api/admin/forms?status=published", { cache: "no-store" });
+        const data = await res.json();
+        if (data.ok && data.forms) setForms(data.forms);
+      } catch (err) {
+        console.error("Failed to load forms:", err);
+      } finally {
+        setLoadingForms(false);
+      }
+    }
+    loadForms();
   }, []);
 
   // Load KB categories on mount
@@ -115,7 +134,7 @@ export default function AgentAssistNodeEditor({
         <p className="text-xs text-muted-foreground">
           Choose how Agent Assist should help agents during calls
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => handleChange("assist_type", "kb_articles")}
@@ -148,6 +167,23 @@ export default function AgentAssistNodeEditor({
             </div>
             <p className="text-xs text-muted-foreground">
               Guide agents through structured call workflows with stages and items
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChange("assist_type", "forms")}
+            className={`p-4 rounded-lg border-2 text-left transition-all ${
+              assistType === "forms"
+                ? "border-violet-500 bg-violet-500/10"
+                : "border-border hover:border-muted-foreground/50"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <IconFileText className={`h-5 w-5 ${assistType === "forms" ? "text-violet-500" : "text-muted-foreground"}`} />
+              <span className="font-medium">Forms</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Auto-open custom queue forms in the agent desktop
             </p>
           </button>
         </div>
@@ -218,6 +254,54 @@ export default function AgentAssistNodeEditor({
               value={config.kb_max_suggestions || 3}
               onChange={(e) => handleChange("kb_max_suggestions", parseInt(e.target.value) || 3)}
               className="w-24"
+            />
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Forms Options */}
+      {assistType === "forms" && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <IconFileText className="h-4 w-4 text-violet-500" />
+            Forms Settings
+          </div>
+          <div className="space-y-2">
+            <Label>Primary form</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Select one published form; queue-assigned auto-open forms can also appear.
+            </p>
+            {loadingForms ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select
+                value={config.form_id || "queue"}
+                onValueChange={(value) => handleChange("form_id", value === "queue" ? "" : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Use queue-assigned forms" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="queue">Use queue-assigned forms</SelectItem>
+                  {forms.map((form) => (
+                    <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Auto-open forms</Label>
+              <p className="text-xs text-muted-foreground">
+                Open selected and queue-assigned forms when the interaction appears.
+              </p>
+            </div>
+            <Switch
+              checked={config.auto_open_forms !== false}
+              onCheckedChange={(checked) => handleChange("auto_open_forms", checked)}
             />
           </div>
         </div>
