@@ -20,6 +20,7 @@ import {
   IconDatabase,
   IconWorld,
   IconPhoneCall,
+  IconForms,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -101,6 +102,12 @@ export const menuConfig = {
           title: "Workflows",
           url: "/admin/workflows",
           icon: IconGitBranch,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Forms",
+          url: "/admin/forms",
+          icon: IconForms,
           role_access: ["admin", "owner"],
         },
         {
