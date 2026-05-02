@@ -44,11 +44,21 @@ function deterministicOperations(prompt = "") {
 
 function extractJson(content = "") {
   if (typeof content !== "string") return content;
-  const trimmed = content.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-  try { return JSON.parse(trimmed); } catch {}
-  const match = trimmed.match(/\{[\s\S]*\}/);
-  if (match) return JSON.parse(match[0]);
-  throw new Error("AI returned non-JSON content");
+  const trimmed = content.trim()
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try { return JSON.parse(trimmed); } catch (firstError) {
+    const first = trimmed.indexOf("{");
+    const last = trimmed.lastIndexOf("}");
+    if (first >= 0 && last > first) {
+      const candidate = trimmed.slice(first, last + 1);
+      try { return JSON.parse(candidate); } catch (secondError) {
+        throw new Error(`AI returned invalid JSON: ${secondError.message}`);
+      }
+    }
+    throw new Error(`AI returned non-JSON content: ${firstError.message}`);
+  }
 }
 
 const FORM_RELATED_PATTERNS = [
@@ -96,7 +106,7 @@ Use stable snake_case field ids.`;
       model,
       stream: false,
       temperature: 0.1,
-      max_tokens: 1200,
+      max_tokens: 2400,
       // Telnyx Chat Completions follows the OpenAI-compatible chat shape used elsewhere in this project.
       // Keep JSON enforcement in prompt + server-side validation because not all Telnyx-hosted models support guided_json/response_format.
       messages: [
@@ -133,11 +143,30 @@ export async function POST(request) {
       operations = result.operations;
       ai = { used: true, reason: result.reason, model: result.model, endpoint: process.env.TELNYX_CHAT_COMPLETIONS_URL || "/v2/ai/chat/completions" };
     } catch (err) {
-      operations = deterministicOperations(prompt);
-      ai = { used: false, error: err.message, reason: `Telnyx AI call failed, so I applied a safe local form-builder fallback. Details: ${err.message}` };
+      return NextResponse.json({
+        ok: false,
+        operations: [],
+        form: currentForm,
+        validation: { ok: false, errors: [err.message] },
+        ai: {
+          used: false,
+          error: err.message,
+          reason: `I could not safely apply the AI response because Telnyx returned an invalid or unusable form-operation JSON. Please try again with a more specific form-building request, e.g. “Add a required email field and a two-column consent section.” Details: ${err.message}`,
+        },
+      }, { status: 200 });
     }
   } else {
-    operations = deterministicOperations(prompt);
+    return NextResponse.json({
+      ok: false,
+      operations: [],
+      form: currentForm,
+      validation: { ok: false, errors: ["TELNYX_CHAT_API_KEY/TELNYX_API_KEY not configured"] },
+      ai: {
+        used: false,
+        error: "TELNYX_CHAT_API_KEY/TELNYX_API_KEY not configured",
+        reason: "Telnyx Chat Completion is not configured on the server, so I cannot safely modify the form with AI. Configure TELNYX_API_KEY or TELNYX_CHAT_API_KEY and try a form-building prompt like: ‘Create a sales lead form with contact info, budget, timeline, and notes.’",
+      },
+    }, { status: 200 });
   }
   const opValidation = validateFormOperations(operations); const result = opValidation.ok ? applyFormOperations(currentForm, operations) : { form: currentForm, validation: opValidation };
   return NextResponse.json({ ok: opValidation.ok && result.validation.ok, operations, form: result.form, validation: result.validation, ai });
