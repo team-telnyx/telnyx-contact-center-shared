@@ -1,22 +1,111 @@
 "use client";
+
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { useRouter } from "next/navigation";
+import { IconArchive, IconPencil, IconPlus, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
-import { FormBuilder } from "@/components/forms/FormBuilder";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
 
 export default function AdminFormsPage() {
-  const [forms, setForms] = useState([]); const [selected, setSelected] = useState(null); const [rawJson, setRawJson] = useState(""); const [loading, setLoading] = useState(false); const [error, setError] = useState("");
-  async function load() { const res = await fetch("/api/admin/forms", { cache: "no-store" }); const data = await res.json(); if (data.ok) { setForms(data.forms); if (!selected && data.forms[0]) setSelected(data.forms[0]); } }
+  const router = useRouter();
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function load() {
+    const res = await fetch("/api/admin/forms?status=all", { cache: "no-store" });
+    const data = await res.json();
+    if (data.ok) setForms(data.forms || []);
+    else setMessage(data.error || "Failed to load forms");
+  }
+
   useEffect(() => { load(); }, []);
-  useEffect(() => { setRawJson(selected ? JSON.stringify(selected, null, 2) : ""); }, [selected?.id]);
-  function updateSelected(patch) { setSelected((prev) => ({ ...(prev || createDefaultForm()), ...patch })); }
-  async function save() { setLoading(true); setError(""); try { const payload = selected.id ? selected : { ...selected, slug: selected.slug || slugifyFormName(selected.name) }; const res = await fetch(selected.id ? `/api/admin/forms/${selected.id}` : "/api/admin/forms", { method: selected.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || "Save failed"); setSelected(data.form); await load(); } catch (e) { setError(e.message); } finally { setLoading(false); } }
-  async function publish() { if (!selected?.id) return; setLoading(true); const res = await fetch(`/api/admin/forms/${selected.id}/publish`, { method: "POST" }); const data = await res.json(); if (data.ok) { setSelected(data.form); await load(); } else setError(data.error || "Publish failed"); setLoading(false); }
-  async function aiSuggest() { const prompt = window.prompt("Describe the form change"); if (!prompt) return; const res = await fetch(`/api/admin/forms/${selected.id || "draft"}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, currentForm: selected }) }); const data = await res.json(); if (data.form) setSelected(data.form); if (data.ai?.reason) setError(data.ai.reason); }
-  return <div className="container mx-auto p-6 space-y-6"><div className="flex items-center justify-between"><div><h1 className="text-2xl font-semibold">Agent Forms</h1><p className="text-sm text-muted-foreground">Custom JSON form builder for agent desktop and Agent Assist.</p></div><Button onClick={() => setSelected(createDefaultForm({ name: "New agent form" }))}>New form</Button></div>{error ? <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{error}</div> : null}<div className="grid gap-4 lg:grid-cols-[300px_1fr]"><Card><CardHeader><CardTitle className="text-base">Forms</CardTitle></CardHeader><CardContent className="space-y-2">{forms.map((form) => <button key={form.id} className={`w-full rounded-md border p-3 text-left ${selected?.id === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelected(form)}><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span><Badge variant="outline">{form.status}</Badge></div><div className="text-xs text-muted-foreground">{form.slug}</div></button>)}</CardContent></Card><div className="space-y-4">{selected ? <><Card><CardHeader><CardTitle className="text-base">Definition</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-2"><div><Label>Name</Label><Input value={selected.name || ""} onChange={(e) => updateSelected({ name: e.target.value, slug: selected.slug || slugifyFormName(e.target.value) })} /></div><div><Label>Slug</Label><Input value={selected.slug || ""} onChange={(e) => updateSelected({ slug: e.target.value })} /></div><div><Label>Category</Label><Input value={selected.category || ""} onChange={(e) => updateSelected({ category: e.target.value })} /></div><div><Label>Queue names (comma-separated)</Label><Input value={(selected.queue_names || []).join(", ")} onChange={(e) => updateSelected({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div><div className="md:col-span-2"><Label>Description</Label><Textarea value={selected.description || ""} onChange={(e) => updateSelected({ description: e.target.value })} /></div><div className="md:col-span-2 flex gap-2"><Button onClick={save} disabled={loading}>{loading ? "Saving..." : "Save"}</Button><Button variant="secondary" onClick={publish} disabled={loading || !selected.id}>Publish</Button><Button variant="outline" onClick={aiSuggest}>AI edit</Button><Button variant="outline" onClick={() => { try { setSelected(JSON.parse(rawJson)); } catch (e) { setError("Invalid JSON"); } }}>Apply JSON</Button></div></CardContent></Card><FormBuilder value={selected} onChange={setSelected} /><Card><CardHeader><CardTitle className="text-base">Canonical JSON</CardTitle></CardHeader><CardContent><Textarea rows={14} className="font-mono text-xs" value={rawJson} onChange={(e) => setRawJson(e.target.value)} /></CardContent></Card></> : <Card><CardContent className="p-6 text-sm text-muted-foreground">Create or select a form.</CardContent></Card>}</div></div></div>;
+
+  async function createForm() {
+    setLoading(true); setMessage("");
+    try {
+      const draft = createDefaultForm({ name: "New agent form", slug: `${slugifyFormName("New agent form")}-${Date.now().toString(36)}` });
+      const res = await fetch("/api/admin/forms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create form");
+      router.push(`/admin/forms/${data.form.id}`);
+    } catch (err) {
+      setMessage(err.message || "Failed to create form");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function archiveForm(form) {
+    if (!window.confirm(`Archive “${form.name}”? It will be hidden from published form lists.`)) return;
+    setLoading(true); setMessage("");
+    try {
+      const res = await fetch(`/api/admin/forms/${form.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Archive failed");
+      setMessage("Form archived.");
+      await load();
+    } catch (err) {
+      setMessage(err.message || "Archive failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function publishForm(form) {
+    setLoading(true); setMessage("");
+    try {
+      const res = await fetch(`/api/admin/forms/${form.id}/publish`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Publish failed");
+      setMessage("Form published.");
+      await load();
+    } catch (err) {
+      setMessage(err.message || "Publish failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return <div className="container mx-auto p-6 space-y-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 className="text-2xl font-semibold">Agent Forms</h1>
+        <p className="text-sm text-muted-foreground">Custom queue forms for agent desktop and Agent Assist.</p>
+      </div>
+      <Button onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
+    </div>
+
+    {message ? <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{message}</div> : null}
+
+    {forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">No forms yet</h2><p className="mt-1 text-sm text-muted-foreground">Create the first form, then refine it in the visual builder or with the AI agent.</p><Button className="mt-4" onClick={createForm}>Create form</Button></CardContent></Card> : null}
+
+    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+      {forms.map((form) => <Card key={form.id} className="overflow-hidden flex flex-col">
+        <CardHeader className="space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0"><CardTitle className="text-base truncate">{form.name}</CardTitle><p className="text-xs text-muted-foreground truncate">{form.slug}</p></div>
+            <Badge variant={form.status === "published" ? "default" : "outline"}>{form.status}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-1 text-xs">{form.category ? <Badge variant="secondary">{form.category}</Badge> : null}{(form.queue_names || []).slice(0, 2).map((queue) => <Badge key={queue} variant="outline">{queue}</Badge>)}{(form.queue_names || []).length > 2 ? <Badge variant="outline">+{form.queue_names.length - 2}</Badge> : null}</div>
+        </CardHeader>
+        <CardContent className="flex-1">
+          <div className="h-56 overflow-hidden rounded-xl border bg-slate-50 p-4">
+            <div className="origin-top-left scale-[0.72] w-[135%] pointer-events-none rounded-lg bg-white p-5 shadow-sm">
+              <FormRenderer form={form} readOnly />
+            </div>
+          </div>
+          {form.description ? <p className="mt-3 line-clamp-2 text-sm text-muted-foreground">{form.description}</p> : null}
+        </CardContent>
+        <CardFooter className="flex flex-wrap gap-2 border-t bg-muted/30 p-3">
+          <Button size="sm" onClick={() => router.push(`/admin/forms/${form.id}`)}><IconPencil className="h-4 w-4 mr-1" />Edit</Button>
+          <Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
+          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />Archive</Button>
+        </CardFooter>
+      </Card>)}
+    </div>
+  </div>;
 }

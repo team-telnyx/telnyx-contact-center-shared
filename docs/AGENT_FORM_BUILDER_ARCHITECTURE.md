@@ -62,8 +62,10 @@ The AI endpoint currently includes a deterministic scaffold unless live Telnyx C
 
 ## UI integration
 
-- Admin page: `app/(portal)/admin/forms/page.jsx`
-- Custom builder: `components/forms/FormBuilder.jsx`
+- Admin landing page: `app/(portal)/admin/forms/page.jsx` — card grid with a maximum of three cards per row, compact form thumbnails, status/category/queue badges, and Edit/Publish/Archive actions.
+- Custom editor route: `app/(portal)/admin/forms/[id]/page.jsx`
+- Puck-like custom shell: `components/forms/FormEditor.jsx` — built with project UI components/Tailwind only, not Puck. It has a top action bar, far-left rail (AI / Blocks / Fields / Outline), switching left panel, central selectable canvas, and right properties panel.
+- Legacy/simple builder component: `components/forms/FormBuilder.jsx`
 - Runtime renderer: `components/forms/FormRenderer.jsx`
 - Agent desktop view: `components/contact-center/AgentFormsView.jsx`
 - Data Sources tile: `components/contact-center/AgentDataSources.jsx`
@@ -71,6 +73,8 @@ The AI endpoint currently includes a deterministic scaffold unless live Telnyx C
 - Agent Assist config editor/schema: `components/voice-flow/AgentAssistNodeEditor.jsx`, `config/voice-flow-nodes.js`
 
 Forms can be opened manually from the Forms tile, filtered by active queue. Agent Assist can also select forms (`assist_type=forms`) so forms auto-open in the interaction detail pane.
+
+The admin editing direction is intentionally **PuckEditor-like but custom**: AI-assisted changes and visual editing operate on the same canonical JSON draft, with explicit add/select/move/duplicate/remove controls in this iteration instead of adding a third-party drag-and-drop form-builder dependency.
 
 ## Next steps
 
