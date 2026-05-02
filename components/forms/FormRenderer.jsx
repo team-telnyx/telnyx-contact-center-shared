@@ -8,16 +8,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getContextValue } from "@/lib/forms/form-context";
 
+function orderedFields(form) {
+  const source = form?.schema?.fields || []; const byId = new Map(source.map((f) => [f.id, f])); const order = form?.layout?.order || source.map((f) => f.id); return order.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function LayoutBlock({ field }) {
+  if (field.type === "section") return <div className="rounded-lg border bg-muted/25 p-4"><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "row") return <div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Row · {field.label}</div>;
+  if (field.type === "columns") {
+    const count = Math.max(2, Math.min(Number(field.props?.columns || field.props?.columnCount || 2), 4));
+    return <div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-h-14 rounded-md bg-muted/50" />)}</div></div>;
+  }
+  if (field.type === "grid") return <div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Grid · {field.label}</div>;
+  return null;
+}
+
 export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit, submitting = false, readOnly = false }) {
   const [values, setValues] = useState(initialValues || {});
-  const fields = useMemo(() => {
-    const source = form?.schema?.fields || []; const byId = new Map(source.map((f) => [f.id, f])); const order = form?.layout?.order || source.map((f) => f.id); return order.map((id) => byId.get(id)).filter(Boolean);
-  }, [form]);
+  const fields = useMemo(() => orderedFields(form), [form]);
   function setValue(id, value) { setValues((prev) => ({ ...prev, [id]: value })); }
   async function handleSubmit(e) { e?.preventDefault?.(); await onSubmit?.(values); }
   if (!form) return <div className="text-sm text-muted-foreground">No form selected.</div>;
   return <form onSubmit={handleSubmit} className="space-y-4">
     {fields.map((field) => {
+      if (["section", "row", "columns", "grid"].includes(field.type)) return <LayoutBlock key={field.id} field={field} />;
       if (field.type === "hidden") return null;
       if (field.type === "label") return <div key={field.id} className="text-sm font-medium">{field.label}</div>;
       if (field.type === "context_value") return <div key={field.id} className="rounded-md bg-muted p-3 text-sm"><Label>{field.label}</Label><div className="mt-1 font-mono text-xs">{String(getContextValue(context, field.contextPath) || "—")}</div></div>;

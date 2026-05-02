@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconBlocks, IconEye, IconGitBranch, IconMessageCircle, IconPencil, IconPlus, IconSettings, IconTrash, IconWorldUpload } from "@tabler/icons-react";
+import { IconBlocks, IconEye, IconGitBranch, IconMessageCircle, IconPencil, IconPhoto, IconPlus, IconSettings, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,15 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
+import { FormRenderer } from "@/components/forms/FormRenderer";
 
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
   { id: "blocks", label: "Blocks", icon: IconBlocks },
+  { id: "templates", label: "Templates", icon: IconTemplate },
+  { id: "media", label: "Media", icon: IconPhoto },
   { id: "fields", label: "Fields", icon: IconPencil },
   { id: "outline", label: "Outline", icon: IconGitBranch },
 ];
 
 const BLOCK_GROUPS = [
+  { title: "Layout", items: ["section", "row", "columns", "grid"] },
   { title: "Basic", items: ["text", "textarea", "select", "checkbox", "radio"] },
   { title: "Content", items: ["label", "image", "context_value"] },
   { title: "Actions", items: ["button", "hidden"] },
@@ -38,6 +43,9 @@ function newField(type) {
   if (type === "button") base.label = "Submit";
   if (type === "context_value") base.contextPath = "caller.from_number";
   if (type === "image") base.props = { src: "" };
+  if (type === "section") base.helpText = "Group related fields under this heading.";
+  if (type === "columns") base.props = { columns: 2 };
+  if (type === "grid") base.props = { columns: 2, gap: "md" };
   return base;
 }
 
@@ -51,6 +59,9 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [previewMode, setPreviewMode] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiMessages, setAiMessages] = useState([{ role: "assistant", text: "Tell me what this form should collect, or ask for a change. I’ll apply it to the draft and keep you in the visual builder." }]);
+  const [templates, setTemplates] = useState([]);
+  const [media, setMedia] = useState([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   const orderedFields = useMemo(() => {
     const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
@@ -143,10 +154,54 @@ export function FormEditor({ initialForm, isNew = false }) {
     }
   }
 
+  useEffect(() => {
+    if (activeTab !== "templates" || templates.length) return;
+    fetch("/api/admin/form-templates", { cache: "no-store" }).then((r) => r.json()).then((data) => { if (data.ok) setTemplates(data.templates || []); }).catch(() => {});
+  }, [activeTab, templates.length]);
+
+  async function loadMedia() {
+    const res = await fetch("/api/admin/forms/media", { cache: "no-store" });
+    const data = await res.json();
+    if (data.ok) setMedia(data.media || []);
+  }
+  useEffect(() => { if (activeTab === "media") loadMedia().catch(() => {}); }, [activeTab]);
+
+  async function uploadMediaFile(file) {
+    if (!file) return;
+    setUploadingMedia(true); setMessage("");
+    try {
+      const body = new FormData(); body.append("file", file);
+      const res = await fetch("/api/admin/forms/media", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Upload failed");
+      setMedia(data.mediaList || []); setMessage("Media uploaded.");
+    } catch (err) { setMessage(err.message || "Upload failed"); }
+    finally { setUploadingMedia(false); }
+  }
+
+  async function createFromTemplate(template) {
+    const draft = normalizeFormDefinition({ ...template, id: undefined, status: "draft", slug: `${slugifyFormName(template.name)}-${Date.now().toString(36)}` });
+    const res = await fetch("/api/admin/forms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { setMessage(data.error || "Template create failed"); return; }
+    router.push(`/admin/forms/${data.form.id}`);
+  }
+
+  function addMediaImage(item) {
+    const field = newField("image");
+    field.label = item.name; field.props = { src: item.url };
+    update({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field] }, layout: { ...form.layout, order: [...(form.layout.order || []), field.id] } });
+    setSelectedId(field.id); setActiveTab("fields");
+  }
+
+  function handleDragEnd(event) {
+    const type = event.active?.data?.current?.type;
+    if (event.over?.id === "form-canvas" && type) addField(type);
+  }
+
   return <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 flex flex-col overflow-hidden bg-muted/40">
     <div className="h-14 shrink-0 border-b bg-background px-4 flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <div className="text-[11px] text-muted-foreground">Admin / Forms / Builder</div>
         <div className="flex items-center gap-2 min-w-0"><h1 className="text-base font-semibold truncate">{form.name || "Untitled form"}</h1><Badge variant="outline">{form.status || "draft"}</Badge>{message ? <span className="text-xs text-muted-foreground truncate">{message}</span> : null}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -156,6 +211,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </div>
     </div>
 
+    <DndContext onDragEnd={handleDragEnd}>
     <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="h-full overflow-y-auto p-2 flex flex-col items-center gap-2">
@@ -164,7 +220,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} />
+        <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -172,7 +228,7 @@ export function FormEditor({ initialForm, isNew = false }) {
           <div><div className="text-sm font-semibold">Visual canvas</div><div className="text-[11px] text-muted-foreground">Form preview and component selection</div></div>
           <div className="text-xs text-muted-foreground">100% · Desktop</div>
         </div>
-        <div className="flex-1 min-h-0 overflow-auto bg-slate-200/70 p-6">
+        <CanvasDropZone>
           <div className="mx-auto max-w-4xl rounded-2xl border bg-white shadow-sm min-h-full p-8">
             <div className="mx-auto max-w-2xl space-y-6">
               <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight text-slate-950">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-slate-500">{form.description}</p> : null}</div>
@@ -180,13 +236,14 @@ export function FormEditor({ initialForm, isNew = false }) {
               {!orderedFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building.</div> : null}
             </div>
           </div>
-        </div>
+        </CanvasDropZone>
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} />
       </section>
     </div>
+    </DndContext>
   </div>;
 }
 
@@ -198,7 +255,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi } = props;
+  const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
@@ -220,9 +277,39 @@ function LeftPanel(props) {
         {BLOCK_GROUPS.map((group) => <div key={group.title} className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground">{group.title}</h3>
           <div className="grid gap-2">
-            {group.items.map((type) => <Button key={type} variant="outline" className="justify-start" onClick={() => addField(type)}><IconPlus className="h-4 w-4 mr-2" />{FORM_COMPONENT_REGISTRY[type]?.label || type}</Button>)}
+            {group.items.map((type) => <DraggableBlock key={type} type={type} addField={addField} />)}
           </div>
         </div>)}
+      </div>
+    </div>;
+  }
+
+  if (activeTab === "templates") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Templates" description="Start from one of 9 seeded examples." />
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {templates.map((template) => <button key={template.slug || template.id} type="button" onClick={() => createFromTemplate?.(template)} className="w-full rounded-xl border bg-background p-3 text-left transition hover:border-primary hover:bg-primary/5">
+          <div className="flex items-start justify-between gap-2"><div><div className="text-sm font-semibold">{template.name}</div><div className="text-xs text-muted-foreground">{template.category}</div></div><Badge variant="outline">Use</Badge></div>
+          <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
+          <div className="mt-3 h-28 overflow-hidden rounded-lg border bg-slate-50 p-2"><div className="origin-top-left scale-[0.48] w-[200%] pointer-events-none rounded bg-white p-3"><MiniTemplatePreview form={template} /></div></div>
+        </button>)}
+      </div>
+    </div>;
+  }
+
+  if (activeTab === "media") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Media" description="Upload images to /public/media and add them to forms." />
+      <div className="shrink-0 border-b p-4 space-y-2">
+        <Input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => uploadMediaFile?.(e.target.files?.[0])} />
+        <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically.</p>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-2 gap-3">
+        {media.map((item) => <button key={item.url} type="button" onClick={() => addMediaImage?.(item)} className="rounded-xl border bg-background p-2 text-left hover:border-primary">
+          <div className="aspect-video rounded-md bg-muted overflow-hidden flex items-center justify-center"><img src={item.url} alt={item.name} className="max-h-full max-w-full object-contain" /></div>
+          <div className="mt-2 truncate text-xs font-medium">{item.name}</div>
+        </button>)}
+        {!media.length ? <div className="col-span-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
       </div>
     </div>;
   }
@@ -264,8 +351,27 @@ function LeftPanel(props) {
   </div>;
 }
 
+function CanvasDropZone({ children }) {
+  const { isOver, setNodeRef } = useDroppable({ id: "form-canvas" });
+  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-6 transition ${isOver ? "bg-primary/10" : "bg-slate-200/70"}`}>{children}</div>;
+}
+
+function DraggableBlock({ type, addField }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `block-${type}`, data: { type } });
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+  return <Button ref={setNodeRef} style={style} variant="outline" className={`justify-start touch-none ${isDragging ? "opacity-60 shadow-lg" : ""}`} onClick={() => addField(type)} {...listeners} {...attributes}><IconPlus className="h-4 w-4 mr-2" />{FORM_COMPONENT_REGISTRY[type]?.label || type}</Button>;
+}
+
+function MiniTemplatePreview({ form }) {
+  return <FormRenderer form={form} readOnly />;
+}
+
 function CanvasField({ field, selected, onSelect, readOnly }) {
   const shell = `relative rounded-xl border p-4 transition ${selected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
+  if (field.type === "section") return <div onClick={onSelect} className={shell}><div className="rounded-lg border bg-muted/25 p-4"><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}</div></div>;
+  if (field.type === "row") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Row · {field.label}</div></div>;
+  if (field.type === "columns") { const count = Math.max(2, Math.min(Number(field.props?.columns || 2), 4)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-h-16 rounded-md bg-muted/60" />)}</div></div></div>; }
+  if (field.type === "grid") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Grid · {field.label}</div></div>;
   if (field.type === "hidden") return <div onClick={onSelect} className={shell}><Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
   if (field.type === "label") return <div onClick={onSelect} className={shell}><div className="text-base font-semibold">{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
   if (field.type === "context_value") return <div onClick={onSelect} className={shell}><Label>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
