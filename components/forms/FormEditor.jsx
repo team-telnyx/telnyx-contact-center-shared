@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconBlocks, IconEye, IconGitBranch, IconMessageCircle, IconPencil, IconPhoto, IconPlus, IconSettings, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
+import { IconBlocks, IconEye, IconGitBranch, IconLoader2, IconMessageCircle, IconPencil, IconPhoto, IconPlus, IconSettings, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +58,8 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [message, setMessage] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiMessagesEndRef = useRef(null);
   const [aiMessages, setAiMessages] = useState([{ role: "assistant", text: "Tell me what this form should collect, or ask for a change. I’ll apply it to the draft and keep you in the visual builder." }]);
   const [templates, setTemplates] = useState([]);
   const [media, setMedia] = useState([]);
@@ -140,8 +142,9 @@ export function FormEditor({ initialForm, isNew = false }) {
 
   async function sendAi() {
     const prompt = aiPrompt.trim();
-    if (!prompt) return;
+    if (!prompt || aiLoading) return;
     setAiPrompt("");
+    setAiLoading(true);
     setAiMessages((prev) => [...prev, { role: "user", text: prompt }]);
     try {
       const res = await fetch(`/api/admin/forms/${form.id || "draft"}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, currentForm: form }) });
@@ -151,8 +154,19 @@ export function FormEditor({ initialForm, isNew = false }) {
       setAiMessages((prev) => [...prev, { role: "assistant", text }]);
     } catch (err) {
       setAiMessages((prev) => [...prev, { role: "assistant", text: err.message || "AI edit failed." }]);
+    } finally {
+      setAiLoading(false);
     }
   }
+
+  function clearAiChat() {
+    setAiPrompt("");
+    setAiMessages([{ role: "assistant", text: "Tell me what this form should collect, or ask for a change. I’ll apply it to the draft and keep you in the visual builder." }]);
+  }
+
+  useEffect(() => {
+    aiMessagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [aiMessages, aiLoading, activeTab]);
 
   useEffect(() => {
     if (activeTab !== "templates" || templates.length) return;
@@ -220,7 +234,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
+        <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -255,17 +269,22 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
+  const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="AI form agent" description="Describe changes, then refine visually." />
+      <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between gap-2">
+        <div className="min-w-0"><h2 className="font-semibold text-sm">AI form agent</h2><p className="text-xs text-muted-foreground">Describe changes, then refine visually.</p></div>
+        <Button size="sm" variant="ghost" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
+      </div>
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
         {aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}
+        {aiLoading ? <div className="mr-6 flex items-center gap-2 rounded-xl bg-muted p-3 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" />Waiting for a response...</div> : null}
+        <div ref={aiMessagesEndRef} />
       </div>
       <div className="shrink-0 border-t p-4 space-y-2">
-        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendAi(); }} />
-        <Button className="w-full" onClick={sendAi}>Send to AI</Button>
+        <Textarea rows={4} placeholder="Add a customer verification section..." value={aiPrompt} disabled={aiLoading} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAi(); } }} />
+        <Button className="w-full" onClick={sendAi} disabled={aiLoading || !aiPrompt.trim()}>{aiLoading ? <><IconLoader2 className="mr-2 h-4 w-4 animate-spin" />Waiting...</> : "Send to AI"}</Button>
       </div>
     </div>;
   }
