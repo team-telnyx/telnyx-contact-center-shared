@@ -146,8 +146,8 @@ export function FormEditor({ initialForm, isNew = false }) {
     try {
       const res = await fetch(`/api/admin/forms/${form.id || "draft"}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, currentForm: form }) });
       const data = await res.json();
-      if (data.form) setForm(normalizeFormDefinition(data.form));
-      const text = data.ai?.reason || data.reason || data.todo || data.error || (data.form ? "Updated the draft form." : "I couldn’t apply a change.");
+      if (data.ok !== false && data.form) setForm(normalizeFormDefinition(data.form));
+      const text = data.ai?.reason || data.reason || data.todo || data.error || (data.form && data.ok !== false ? "Updated the draft form." : "I couldn’t apply a change.");
       setAiMessages((prev) => [...prev, { role: "assistant", text }]);
     } catch (err) {
       setAiMessages((prev) => [...prev, { role: "assistant", text: err.message || "AI edit failed." }]);

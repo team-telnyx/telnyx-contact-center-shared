@@ -90,7 +90,7 @@ function outOfScopeResponse() {
 
 async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
   const endpoint = process.env.TELNYX_CHAT_COMPLETIONS_URL || "https://api.telnyx.com/v2/ai/chat/completions";
-  const model = process.env.FORM_BUILDER_AI_MODEL || process.env.TELNYX_CHAT_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
+  const model = process.env.FORM_BUILDER_AI_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
   const system = `You are the AI form-builder agent inside a Telnyx contact-center admin UI.
 Scope: ONLY help create or modify contact-center web forms, their fields, layout blocks, queue assignment, context bindings, validation hints, and data-target proposals.
 If the user asks for anything unrelated to building/modifying forms, return exactly: {"reason":"I only help build and modify contact-center forms. Try asking: ‘Create a customer verification form with name, phone, account ID, consent checkbox, and AI handoff summary from client_state.’","operations":[]}.
@@ -130,7 +130,7 @@ Do not use JSON Patch operations like add/replace/path. Every operation object m
     throw new Error(`Telnyx Chat Completion returned no assistant content. finish_reason=${data?.choices?.[0]?.finish_reason || "unknown"}; message=${JSON.stringify(message).slice(0, 500)}`);
   }
   const parsed = extractJson(content);
-  return { operations: Array.isArray(parsed.operations) ? parsed.operations : [], reason: parsed.reason || "Applied AI form edits.", model };
+  return { operations: Array.isArray(parsed.operations) ? parsed.operations : [], reason: parsed.reason || "Applied AI form edits.", model, rawContent: String(content).slice(0, 1000) };
 }
 
 export async function POST(request) {
