@@ -90,7 +90,7 @@ function outOfScopeResponse() {
 
 async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
   const endpoint = process.env.TELNYX_CHAT_COMPLETIONS_URL || "https://api.telnyx.com/v2/ai/chat/completions";
-  const model = process.env.FORM_BUILDER_AI_MODEL || process.env.TELNYX_CHAT_MODEL || "moonshotai/Kimi-K2.5";
+  const model = process.env.FORM_BUILDER_AI_MODEL || process.env.TELNYX_CHAT_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
   const system = `You are the AI form-builder agent inside a Telnyx contact-center admin UI.
 Scope: ONLY help create or modify contact-center web forms, their fields, layout blocks, queue assignment, context bindings, validation hints, and data-target proposals.
 If the user asks for anything unrelated to building/modifying forms, return exactly: {"reason":"I only help build and modify contact-center forms. Try asking: ‘Create a customer verification form with name, phone, account ID, consent checkbox, and AI handoff summary from client_state.’","operations":[]}.
@@ -98,7 +98,9 @@ Return only valid JSON matching {"reason":"short summary","operations":[...]}. N
 Allowed operations: addField, updateField, removeField, moveField, addToLayout, setBinding, setQueueAssignment, setDataTargetProposal.
 Supported field types: section, row, columns, grid, label, text, textarea, select, radio, checkbox, button, image, context_value, hidden.
 For layout blocks, create fields with type section/row/columns/grid and visual props only; keep layout.order compatible with existing flat arrays.
-Use stable snake_case field ids.`;
+Use stable snake_case field ids.
+Example for adding an email field: {"reason":"Added required email field","operations":[{"type":"addField","field":{"id":"email","type":"text","label":"Email","required":true,"placeholder":"customer@example.com"}}]}.
+Do not use JSON Patch operations like add/replace/path. Every operation object must have a type from the allowed list.`;
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -122,7 +124,11 @@ Use stable snake_case field ids.`;
     const detail = data?.errors?.[0]?.detail || data?.errors?.[0]?.title || data?.error?.message || data?.error || data?.message || raw;
     throw new Error(`Telnyx Chat Completion failed (${res.status}): ${detail}`);
   }
-  const content = data?.choices?.[0]?.message?.content || data?.data?.choices?.[0]?.message?.content || data?.message?.content || data?.content;
+  const message = data?.choices?.[0]?.message || data?.data?.choices?.[0]?.message || data?.message || {};
+  const content = message.content || message.reasoning_content || message.reasoning || data?.content;
+  if (!content) {
+    throw new Error(`Telnyx Chat Completion returned no assistant content. finish_reason=${data?.choices?.[0]?.finish_reason || "unknown"}; message=${JSON.stringify(message).slice(0, 500)}`);
+  }
   const parsed = extractJson(content);
   return { operations: Array.isArray(parsed.operations) ? parsed.operations : [], reason: parsed.reason || "Applied AI form edits.", model };
 }
