@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconBlockquote, IconBlocks, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconWorldUpload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,6 +44,8 @@ const PADDING_OPTIONS = ["none", "xs", "sm", "md", "lg", "xl"];
 const SIZE_OPTIONS = ["sm", "md", "lg", "xl"];
 const ALIGN_OPTIONS = ["left", "center", "right"];
 const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
+const STATUS_BADGE_CLASS = { draft: "border-amber-500 text-amber-700 dark:text-amber-300", published: "border-emerald-500 text-emerald-700 dark:text-emerald-300", archived: "border-slate-400 text-slate-600 dark:text-slate-300" };
+const MESSAGE_BADGE_CLASS = { saved: "border-emerald-500 text-emerald-700 dark:text-emerald-300", error: "border-destructive text-destructive" };
 
 function mergeProps(field, patch) { return { props: { ...(field.props || {}), ...patch } }; }
 function paddingClass(value) { return ({ none: "p-0", xs: "p-2", sm: "p-3", md: "p-4", lg: "p-6", xl: "p-8" }[value || "md"] || "p-4"); }
@@ -63,6 +65,10 @@ const BLOCK_DESCRIPTIONS = {
 const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, label: IconTypography, image: IconPhoto, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
 function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
+function mediaTitle(item = {}) { return item.title || String(item.name || item.url || "Image").replace(/\.[^.]+$/, ""); }
+function mediaFilename(item = {}) { return String(item.name || item.url || "").split("/").pop(); }
+function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : null; }
+function isImageCapable(field) { return Boolean(imagePropKey(field)); }
 function rebuildLayoutFromPages(form) { return { ...form, layout: { ...form.layout, order: flattenPageOrder(form.schema?.pages || [], form.schema?.fields || []) } }; }
 
 function nestedSlotEntries(field = {}) {
@@ -233,18 +239,26 @@ export function FormEditor({ initialForm, isNew = false }) {
     for (const field of form.schema.fields) for (const slot of nestedSlotEntries(field)) { const index = (slot.ids || []).indexOf(id); if (index >= 0) return { ...slot, containerId: field.id, index }; }
     return null;
   }
-  function addField(type, target = null) {
-    const field = newField(type);
-    const pageId = activePage?.id || pages[0]?.id || "page_1";
+  function addField(type, target = null, options = {}) {
+    const field = { ...newField(type), ...(options.fieldPatch || {}) };
+    const pageId = target?.pageId || activePage?.id || pages[0]?.id || "page_1";
     let nextFields = [...form.schema.fields, field];
     let nextPages = pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }];
     if (target?.containerId) {
-      nextFields = nextFields.map((item) => item.id === target.containerId ? { ...item, props: insertIdIntoProps(item, target, field.id) } : item);
+      nextFields = nextFields.map((item) => item.id === target.containerId ? { ...item, props: insertIdIntoProps(item, target, field.id, target.index) } : item);
     } else {
-      nextPages = nextPages.map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
+      nextPages = nextPages.map((page) => {
+        if (page.id !== pageId) return page;
+        const fields = [...(page.fields || [])];
+        const index = Number.isInteger(target?.index) ? Math.max(0, Math.min(target.index, fields.length)) : fields.length;
+        fields.splice(index, 0, field.id);
+        return { ...page, fields };
+      });
     }
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
-    setSelectedId(field.id); setActiveTab("fields");
+    setSelectedId(field.id);
+    if (options.switchToFields) setActiveTab("fields");
+    return field.id;
   }
   function removeField(id) {
     const descendants = new Set([id]);
@@ -316,9 +330,9 @@ export function FormEditor({ initialForm, isNew = false }) {
       setForm(savedForm);
       initialSavedRef.current = JSON.stringify(savedForm);
       setHasUnsavedChanges(false);
-      const savedMessage = status === "published" ? "Published." : "Saved.";
+      const savedMessage = status === "published" ? "Form published successfully" : "Form updated successfully";
       setMessage(savedMessage);
-      notify({ title: savedMessage, description: "Form changes were saved successfully.", variant: "success" });
+      notify({ title: savedMessage, description: "Your form changes are saved.", variant: "success" });
       if (creating && data.form?.id) router.replace(`/admin/forms/${data.form.id}`);
       return data.form;
     } catch (err) {
@@ -334,7 +348,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     if (!saved?.id) return;
     const res = await fetch(`/api/admin/forms/${saved.id}/publish`, { method: "POST" });
     const data = await res.json();
-    if (data.ok) { const publishedForm = normalizeFormDefinition(data.form); setForm(publishedForm); initialSavedRef.current = JSON.stringify(publishedForm); setHasUnsavedChanges(false); setMessage("Published."); notify({ title: "Published", description: "Form is now published.", variant: "success" }); }
+    if (data.ok) { const publishedForm = normalizeFormDefinition(data.form); setForm(publishedForm); initialSavedRef.current = JSON.stringify(publishedForm); setHasUnsavedChanges(false); setMessage("Form published successfully"); notify({ title: "Form published successfully", description: "Form is now published.", variant: "success" }); }
     else setMessage(data.error || "Publish failed");
   }
 
@@ -383,7 +397,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     const data = await res.json();
     if (data.ok) setMedia(data.media || []);
   }
-  useEffect(() => { if (activeTab === "media") loadMedia().catch(() => {}); }, [activeTab]);
+  useEffect(() => { if (activeTab === "media" || isImageCapable(selectedField)) loadMedia().catch(() => {}); }, [activeTab, selectedField?.id, selectedField?.type]);
 
   useEffect(() => {
     if (!formSettingsOpen || queues.length) return;
@@ -414,34 +428,57 @@ export function FormEditor({ initialForm, isNew = false }) {
     router.push(`/admin/forms/${data.form.id}`);
   }
 
-  function addMediaImage(item) {
-    const field = newField("image");
-    field.label = item.name; field.props = { src: item.url };
-    const pageId = activePage?.id || pages[0]?.id || "page_1";
-    const nextPages = (pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }]).map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
-    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field], pages: nextPages } }));
-    setSelectedId(field.id); setActiveTab("fields");
+  function targetFromOverId(overId) {
+    if (!overId || overId === "form-canvas") return null;
+    if (overId.startsWith("container:")) {
+      const [, containerId, kind, a, b] = overId.split(":");
+      return kind === "slot" ? { containerId, kind, index: Number(a) } : kind === "cell" ? { containerId, kind, row: Number(a), column: Number(b), key: `${a}:${b}` } : { containerId, kind: "children" };
+    }
+    if (overId.startsWith("field:")) {
+      const fieldId = overId.slice("field:".length);
+      const location = findFieldLocation(fieldId);
+      if (location?.kind === "root") return { kind: "root", pageId: location.pageId, index: location.index + 1 };
+      if (location?.containerId) return { ...location, index: location.index + 1 };
+    }
+    return null;
   }
 
-  function handleDragStart(event) { setActiveDragType(event.active?.data?.current?.type || null); }
+  function setFieldImage(fieldId, item) {
+    const field = fieldsById.get(fieldId);
+    const key = imagePropKey(field);
+    if (!key) return false;
+    updateField(fieldId, { label: field.type === "image" ? mediaTitle(item) : field.label, props: { ...(field.props || {}), [key]: item.url, imageTitle: mediaTitle(item) } });
+    setSelectedId(fieldId);
+    return true;
+  }
+
+  function addMediaImage(item, target = null) {
+    return addField("image", target, { fieldPatch: { label: mediaTitle(item), props: { src: item.url, imageTitle: mediaTitle(item) } } });
+  }
+
+  function handleDragStart(event) {
+    const data = event.active?.data?.current || {};
+    setActiveDragType(data.dragKind === "media" ? "media" : data.type || null);
+  }
   function handleDragEnd(event) {
-    const type = event.active?.data?.current?.type;
+    const data = event.active?.data?.current || {};
+    const type = data.type;
     const overId = String(event.over?.id || "");
-    if (type) {
-      if (overId === "form-canvas") addField(type);
-      else if (overId.startsWith("container:")) {
-        const [, containerId, kind, a, b] = overId.split(":");
-        const target = kind === "slot" ? { containerId, kind, index: Number(a) } : kind === "cell" ? { containerId, kind, row: Number(a), column: Number(b), key: `${a}:${b}` } : { containerId, kind: "children" };
-        addField(type, target);
-      }
+    if (!overId) { setActiveDragType(null); return; }
+    if (data.dragKind === "media" && data.media) {
+      if (overId.startsWith("field:") && setFieldImage(overId.slice("field:".length), data.media)) { setActiveDragType(null); return; }
+      addMediaImage(data.media, targetFromOverId(overId));
+    } else if (type) {
+      addField(type, targetFromOverId(overId));
     }
     setActiveDragType(null);
   }
 
   return <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 flex flex-col overflow-hidden bg-muted/40">
-    <div className="h-14 shrink-0 border-b bg-background px-4 flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 min-w-0"><h1 className="text-base font-semibold truncate">{form.name || "Untitled form"}</h1><Badge variant="outline">{form.status || "draft"}</Badge>{message ? <span className="text-xs text-muted-foreground truncate">{message}</span> : null}</div>
+    <div className="h-16 shrink-0 border-b bg-background px-4 flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => { if (hasUnsavedChanges) { setPendingNavigation("/admin/forms"); setShowExitDialog(true); } else router.push("/admin/forms"); }}><IconArrowLeft className="mr-1 h-4 w-4" />Forms</Button>
+        <div className="flex min-w-0 items-center gap-2"><h1 className="truncate text-xl font-semibold tracking-tight">{form.name || "Untitled form"}</h1><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}{message ? <Badge variant="outline" className={message.toLowerCase().includes("fail") ? MESSAGE_BADGE_CLASS.error : MESSAGE_BADGE_CLASS.saved}>{message}</Badge> : null}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button>
@@ -483,7 +520,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
+        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -511,10 +548,10 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} />
+        <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} media={media} />
       </section>
     </div>
-      <DragOverlay dropAnimation={null}>{activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
+      <DragOverlay dropAnimation={null}>{activeDragType === "media" ? <MediaDragPreview /> : activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
     </DndContext>
   </div>;
 }
@@ -527,7 +564,8 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
+  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia } = props;
+  const mediaInputRef = useRef(null);
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
@@ -602,17 +640,18 @@ function LeftPanel(props) {
 
   if (activeTab === "media") {
     return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Media" description="Upload images to /public/media and add them to forms." />
-      <div className="shrink-0 border-b p-4 space-y-2">
-        <Input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => uploadMediaFile?.(e.target.files?.[0])} />
+      <PanelHeader title="Media" description="Drag image cards onto the canvas or image blocks." />
+      <div className="shrink-0 border-b p-4 space-y-3">
+        <div className="rounded-xl border border-dashed bg-muted/25 p-3 text-center text-xs text-muted-foreground" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); uploadMediaFile?.(e.dataTransfer.files?.[0]); }}>
+          Drop an image here to upload
+        </div>
+        <input ref={mediaInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => { uploadMediaFile?.(e.target.files?.[0]); e.target.value = ""; }} />
+        <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? "Uploading..." : "Upload image"}</Button>
         <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically.</p>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid grid-cols-2 gap-3">
-        {media.map((item) => <button key={item.url} type="button" onClick={() => addMediaImage?.(item)} className="rounded-xl border bg-background p-2 text-left hover:border-primary">
-          <div className="aspect-video rounded-md bg-muted overflow-hidden flex items-center justify-center"><img src={item.url} alt={item.name} className="max-h-full max-w-full object-contain" /></div>
-          <div className="mt-2 truncate text-xs font-medium">{item.name}</div>
-        </button>)}
-        {!media.length ? <div className="col-span-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid gap-3">
+        {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title } : row))} />)}
+        {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
       </div>
     </div>;
   }
@@ -688,6 +727,24 @@ function DraggableBlock({ type, addField, colorClass, iconClass }) {
   </button>;
 }
 
+function DraggableMediaCard({ item, onAdd, onTitleChange }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `media-${item.url}`, data: { dragKind: "media", media: item } });
+  return <div ref={setNodeRef} className={`touch-none rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} {...attributes}>
+    <div className="flex items-start gap-3">
+      <button type="button" className="mt-1 shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
+      <button type="button" onClick={() => onAdd?.(item)} className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted"><img src={item.url} alt={mediaTitle(item)} className="h-full w-full object-cover" /></button>
+      <div className="min-w-0 flex-1 space-y-1">
+        <Input className="h-8 text-sm font-medium" value={mediaTitle(item)} onChange={(e) => onTitleChange?.(e.target.value)} onClick={(e) => e.stopPropagation()} />
+        <div className="truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</div>
+      </div>
+    </div>
+  </div>;
+}
+
+function MediaDragPreview() {
+  return <div className="w-64 rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconPhoto className="h-5 w-5 text-amber-500" />Media image</div></div>;
+}
+
 function BlockDragPreview({ type }) {
   const group = BLOCK_GROUPS.find((item) => item.items.includes(type)) || BLOCK_GROUPS[0];
   return <div className={`w-72 rounded-xl border border-l-4 ${group.color} bg-background p-3 text-left shadow-2xl ring-1 ring-black/5`}><BlockCardContent type={type} iconClass={group.iconClass} /></div>;
@@ -721,18 +778,19 @@ function ContainerDropZone({ id, children, label, empty = false }) {
 
 function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOnly, addField, removeField, duplicateField, moveField, updateField }) {
   const props = field.props || {};
+  const { isOver, setNodeRef } = useDroppable({ id: `field:${field.id}`, disabled: readOnly });
   const isSelected = selectedId === field.id && !readOnly;
-  const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
+  const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isOver ? "border-primary bg-primary/10" : isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
   const toolbar = isSelected ? <FieldToolbar field={field} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null;
   const renderChild = (id) => { const child = fieldsById.get(id); return child ? <CanvasField key={id} field={child} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === id} readOnly={readOnly} onSelect={() => !readOnly && onSelect?.(id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null; };
-  const baseProps = { "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell };
+  const baseProps = { ref: setNodeRef, "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell };
 
   if (field.type === "section") return <div {...baseProps}>{toolbar}<div className="rounded-lg border bg-muted/25 p-4" style={fieldStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
   if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{(props.children || []).map(renderChild)}</div></ContainerDropZone></div></div>;
   if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{(props.slots?.[i] || []).map(renderChild)}</ContainerDropZone>)}</div></div></div>; }
   if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!props.cells?.[key]?.length}>{(props.cells?.[key] || []).map(renderChild)}</ContainerDropZone>; })}</div></div></div>; }
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
-  if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6`}><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div></div>;
+  if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`grid gap-5 rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6 md:grid-cols-[minmax(0,1fr)_220px]`}><div><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="max-h-44 w-full rounded-lg border object-cover" /> : null}</div></div>;
   if (field.type === "stats") return <div {...baseProps}>{toolbar}<div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
   if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} p-4 text-card-foreground`} style={fieldStyle(field)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
@@ -799,7 +857,7 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
   </div>;
 }
 
-function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
+function PropertiesPanel({ form, patchForm, selectedField, updateField, media = [] }) {
   function setProps(field, patch) { updateField(field.id, mergeProps(field, patch).props ? { props: mergeProps(field, patch).props } : {}); }
   function renameField(field, nextId) {
     const clean = String(nextId || "").trim().replace(/[^A-Za-z0-9_:-]/g, "_");
@@ -817,12 +875,11 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
         <div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div>
         <div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div>
         <div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => renameField(selectedField, e.target.value)} /></div>
-        <div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
         {!["hero", "stats", "card", "richtext", "spacer"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
-        <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} />
+        <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} />
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.options ? <div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div> : null}
         <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Advanced JSON props</summary><Textarea rows={4} className="mt-3 font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></details>
       </CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
@@ -830,7 +887,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
   </div>;
 }
 
-function BlockPropertyControls({ field, setProps, updateField }) {
+function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
   const props = field.props || {};
   const supportsPadding = !["hidden"].includes(field.type);
   const supportsColor = ["hero", "stats", "card", "richtext", "label", "section", "text", "textarea", "select", "radio", "checkbox", "context_value"].includes(field.type);
@@ -840,20 +897,37 @@ function BlockPropertyControls({ field, setProps, updateField }) {
     {supportsColor ? <div className="space-y-2"><ColorPicker label="Text color" value={props.color || ""} onChange={(oklch) => setProps({ color: oklch })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>Use theme default</Button></div> : null}
     {["label", "hero", "text", "richtext"].includes(field.type) ? <div><Label>Align</Label><Select value={props.align || "left"} onValueChange={(value) => setProps({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
     {["label", "text", "richtext"].includes(field.type) ? <div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
-    <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} />
+    <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} media={media} />
   </div>;
 }
 
-function SpecificBlockControls({ field, props, setProps, updateField }) {
+function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
+  return <div className="space-y-2">
+    <Label>{label}</Label>
+    <Select value={media.some((item) => item.url === value) ? value : "__custom__"} onValueChange={(url) => { if (url !== "__custom__") onChange?.(url, media.find((item) => item.url === url)); }}>
+      <SelectTrigger><SelectValue placeholder="Choose from media library" /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__custom__">Custom URL / none</SelectItem>
+        {media.map((item) => <SelectItem key={item.url} value={item.url}>{mediaTitle(item)}</SelectItem>)}
+      </SelectContent>
+    </Select>
+    {media.length ? <div className="grid grid-cols-3 gap-2">
+      {media.slice(0, 9).map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`overflow-hidden rounded-lg border bg-muted ${value === item.url ? "border-primary ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-14 w-full object-cover" /></button>)}
+    </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
+    <Input value={value || ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
+  </div>;
+}
+
+function SpecificBlockControls({ field, props, setProps, updateField, media = [] }) {
   if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Image URL</Label><Input value={props.imageUrl || ""} onChange={(e) => setProps({ imageUrl: e.target.value })} /></div><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
   if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div></div>;
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext || ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
-  if (field.type === "image") return <div><Label>Image URL</Label><Input value={props.src || ""} onChange={(e) => setProps({ src: e.target.value })} /></div>;
+  if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
   if (field.type === "button") return <div><Label>Variant</Label><Select value={props.variant || "primary"} onValueChange={(value) => setProps({ variant: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>;
   return null;
 }
