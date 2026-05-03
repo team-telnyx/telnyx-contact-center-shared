@@ -65,10 +65,18 @@ const BLOCK_DESCRIPTIONS = {
 const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, label: IconTypography, image: IconPhoto, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
 function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
-function mediaTitle(item = {}) { return item.title || String(item.name || item.url || "Image").replace(/\.[^.]+$/, ""); }
-function mediaFilename(item = {}) { return String(item.name || item.url || "").split("/").pop(); }
-function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : null; }
+function mediaTitle(item = {}) { return item.title || item.display_name || item.displayName || String(item.name || item.filename || item.url || "Image").replace(/\.[^.]+$/, ""); }
+function mediaFilename(item = {}) { return String(item.filename || item.name || item.url || "").split("/").pop(); }
+function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : null; }
 function isImageCapable(field) { return Boolean(imagePropKey(field)); }
+function heroContent(field, props = {}) {
+  return <div className="relative z-10 min-w-0"><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div>;
+}
+function heroShell(field, props = {}, toolbar = null) {
+  const mode = props.imageMode === "background" ? "background" : "inline";
+  if (mode === "background" && props.imageUrl) return <div className={`relative overflow-hidden rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6 ${alignClass(props.align)} min-h-[220px]`} style={fieldStyle(field)}>{toolbar}<img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="absolute inset-0 h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-r from-card via-card/85 to-card/10" /><div className="relative z-10 max-w-2xl py-4">{heroContent(field, props)}</div></div>;
+  return <div className={`grid gap-5 rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6 ${alignClass(props.align)} md:grid-cols-[minmax(0,1fr)_220px]`} style={fieldStyle(field)}>{toolbar}{heroContent(field, props)}{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="max-h-44 w-full rounded-lg border object-cover" /> : null}</div>;
+}
 function rebuildLayoutFromPages(form) { return { ...form, layout: { ...form.layout, order: flattenPageOrder(form.schema?.pages || [], form.schema?.fields || []) } }; }
 
 function nestedSlotEntries(field = {}) {
@@ -146,9 +154,9 @@ function newField(type) {
   if (type === "row") base.props = { padding: "md", children: [] };
   if (type === "flex") base.props = { direction: "row", justify: "start", gap: 16, wrap: true, padding: "md", children: [] };
   if (type === "spacer") base.props = { size: "md", direction: "vertical" };
-  if (type === "hero") { base.label = "Hero section"; base.props = { title: "Help customers faster", quote: "Agent form", description: "Collect the right context during every conversation.", align: "left", padding: "xl", imageUrl: "", imageMode: "cover", buttons: [{ label: "Primary action", href: "#", variant: "primary" }] }; }
+  if (type === "hero") { base.label = "Hero section"; base.props = { title: "Help customers faster", quote: "Agent form", description: "Collect the right context during every conversation.", align: "left", padding: "xl", imageUrl: "", imageMode: "inline", buttons: [{ label: "Primary action", href: "#", variant: "primary" }] }; }
   if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage" }, { title: "95%", description: "CSAT" }, { title: "2m", description: "Avg response" }] }; }
-  if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md", children: [] }; }
+  if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md", imageUrl: "", children: [] }; }
   if (type === "richtext") { base.label = "Rich text"; base.props = { richtext: "Use this block for formatted guidance or copy.", padding: "md" }; }
   return base;
 }
@@ -407,6 +415,19 @@ export function FormEditor({ initialForm, isNew = false }) {
       .catch(() => setQueues([]));
   }, [formSettingsOpen, queues.length]);
 
+  async function saveMediaTitle(item, title) {
+    const cleanTitle = String(title || "").trim();
+    setMedia((rows) => rows.map((row) => row.url === item.url ? { ...row, title: cleanTitle, display_name: cleanTitle } : row));
+    try {
+      const res = await fetch("/api/admin/forms/media", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: item.url, title: cleanTitle }) });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Title update failed");
+    } catch (err) {
+      setMessage(err.message || "Title update failed");
+      loadMedia().catch(() => {});
+    }
+  }
+
   async function uploadMediaFile(file) {
     if (!file) return;
     setUploadingMedia(true); setMessage("");
@@ -467,6 +488,10 @@ export function FormEditor({ initialForm, isNew = false }) {
     if (!overId) { setActiveDragType(null); return; }
     if (data.dragKind === "media" && data.media) {
       if (overId.startsWith("field:") && setFieldImage(overId.slice("field:".length), data.media)) { setActiveDragType(null); return; }
+      if (overId.startsWith("container:")) {
+        const containerId = overId.split(":")[1];
+        if (setFieldImage(containerId, data.media)) { setActiveDragType(null); return; }
+      }
       addMediaImage(data.media, targetFromOverId(overId));
     } else if (type) {
       addField(type, targetFromOverId(overId));
@@ -520,7 +545,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} />
+        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -564,7 +589,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia } = props;
+  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
   const mediaInputRef = useRef(null);
 
   if (activeTab === "ai") {
@@ -649,8 +674,8 @@ function LeftPanel(props) {
         <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? "Uploading..." : "Upload image"}</Button>
         <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically.</p>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid gap-3">
-        {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title } : row))} />)}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid auto-rows-max gap-3 content-start">
+        {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title, display_name: title } : row))} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
         {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
       </div>
     </div>;
@@ -727,15 +752,19 @@ function DraggableBlock({ type, addField, colorClass, iconClass }) {
   </button>;
 }
 
-function DraggableMediaCard({ item, onAdd, onTitleChange }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `media-${item.url}`, data: { dragKind: "media", media: item } });
-  return <div ref={setNodeRef} className={`touch-none rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} {...attributes}>
-    <div className="flex items-start gap-3">
+function DraggableMediaCard({ item, onAdd, onTitleChange, onTitleCommit }) {
+  const [draftTitle, setDraftTitle] = useState(mediaTitle(item));
+  useEffect(() => { setDraftTitle(mediaTitle(item)); }, [item.title, item.display_name, item.url]);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `media-${item.url}`, data: { dragKind: "media", media: { ...item, title: draftTitle, display_name: draftTitle } } });
+  function commitTitle() { onTitleCommit?.(draftTitle); }
+  return <div ref={setNodeRef} className={`touch-none rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow h-24 ${isDragging ? "opacity-50" : ""}`} {...attributes}>
+    <div className="flex h-full items-start gap-3">
       <button type="button" className="mt-1 shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
-      <button type="button" onClick={() => onAdd?.(item)} className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted"><img src={item.url} alt={mediaTitle(item)} className="h-full w-full object-cover" /></button>
+      <button type="button" onClick={() => onAdd?.({ ...item, title: draftTitle, display_name: draftTitle })} className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted"><img src={item.url} alt={draftTitle} className="h-full w-full object-cover" /></button>
       <div className="min-w-0 flex-1 space-y-1">
-        <Input className="h-8 text-sm font-medium" value={mediaTitle(item)} onChange={(e) => onTitleChange?.(e.target.value)} onClick={(e) => e.stopPropagation()} />
+        <Input className="h-8 text-sm font-medium" value={draftTitle} onChange={(e) => { setDraftTitle(e.target.value); onTitleChange?.(e.target.value); }} onBlur={commitTitle} onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }} onClick={(e) => e.stopPropagation()} />
         <div className="truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</div>
+        {item.content_type || item.contentType ? <div className="truncate text-[10px] text-muted-foreground">{item.content_type || item.contentType}</div> : null}
       </div>
     </div>
   </div>;
@@ -790,9 +819,9 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{(props.slots?.[i] || []).map(renderChild)}</ContainerDropZone>)}</div></div></div>; }
   if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!props.cells?.[key]?.length}>{(props.cells?.[key] || []).map(renderChild)}</ContainerDropZone>; })}</div></div></div>; }
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
-  if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`grid gap-5 rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6 md:grid-cols-[minmax(0,1fr)_220px]`}><div><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="max-h-44 w-full rounded-lg border object-cover" /> : null}</div></div>;
+  if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{heroShell(field, props, toolbar)}</div>;
   if (field.type === "stats") return <div {...baseProps}>{toolbar}<div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
-  if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} p-4 text-card-foreground`} style={fieldStyle(field)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
+  if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
   if (field.type === "hidden") return <div {...baseProps}>{toolbar}<Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
   if (field.type === "label") return <div {...baseProps} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
@@ -902,17 +931,18 @@ function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
 }
 
 function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
+  const selected = media.find((item) => item.url === value);
   return <div className="space-y-2">
     <Label>{label}</Label>
-    <Select value={media.some((item) => item.url === value) ? value : "__custom__"} onValueChange={(url) => { if (url !== "__custom__") onChange?.(url, media.find((item) => item.url === url)); }}>
-      <SelectTrigger><SelectValue placeholder="Choose from media library" /></SelectTrigger>
+    <Select value={selected ? value : "__custom__"} onValueChange={(url) => { if (url !== "__custom__") onChange?.(url, media.find((item) => item.url === url)); }}>
+      <SelectTrigger><SelectValue placeholder="Choose from media library">{selected ? mediaTitle(selected) : "Custom URL / none"}</SelectValue></SelectTrigger>
       <SelectContent>
         <SelectItem value="__custom__">Custom URL / none</SelectItem>
-        {media.map((item) => <SelectItem key={item.url} value={item.url}>{mediaTitle(item)}</SelectItem>)}
+        {media.map((item) => <SelectItem key={item.url} value={item.url}><span className="flex items-center gap-2"><img src={item.url} alt="" className="h-8 w-10 rounded border object-cover" /><span className="min-w-0"><span className="block truncate text-sm">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></span></SelectItem>)}
       </SelectContent>
     </Select>
-    {media.length ? <div className="grid grid-cols-3 gap-2">
-      {media.slice(0, 9).map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`overflow-hidden rounded-lg border bg-muted ${value === item.url ? "border-primary ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-14 w-full object-cover" /></button>)}
+    {media.length ? <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border bg-background p-2">
+      {media.map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full items-center gap-2 rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
     </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
     <Input value={value || ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
   </div>;
@@ -923,9 +953,9 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Image mode</Label><Select value={props.imageMode === "background" ? "background" : "inline"} onValueChange={(value) => setProps({ imageMode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="inline">Inline</SelectItem><SelectItem value="background">Background</SelectItem></SelectContent></Select></div><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
-  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div></div>;
+  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext || ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
   if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
   if (field.type === "button") return <div><Label>Variant</Label><Select value={props.variant || "primary"} onValueChange={(value) => setProps({ variant: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>;
