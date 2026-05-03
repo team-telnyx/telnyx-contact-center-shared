@@ -14,10 +14,14 @@ const OPERATION_SCHEMA = {
         type: "object",
         additionalProperties: true,
         properties: {
-          type: { type: "string", enum: ["addField", "updateField", "removeField", "moveField", "addToLayout", "setBinding", "setQueueAssignment", "setDataTargetProposal"] },
+          type: { type: "string", enum: ["addField", "updateField", "removeField", "moveField", "addToLayout", "addPage", "updatePage", "removePage", "movePage", "setBinding", "setQueueAssignment", "setDataTargetProposal"] },
           op: { type: "string" },
           id: { type: "string" },
           fieldId: { type: "string" },
+          pageId: { type: "string" },
+          targetPageId: { type: "string" },
+          title: { type: "string" },
+          description: { type: "string" },
           index: { type: "number" },
           field: { type: "object", additionalProperties: true },
           patch: { type: "object", additionalProperties: true },
@@ -36,6 +40,7 @@ const OPERATION_SCHEMA = {
 
 function deterministicOperations(prompt = "") {
   const text = prompt.toLowerCase();
+  if (text.includes("page") || text.includes("stron")) return [{ type: "addPage", title: prompt.match(/(?:page|strona)\s+([A-Za-z0-9 _-]+)/i)?.[1]?.trim() || "New page" }];
   if (text.includes("email")) return [{ type: "addField", field: { id: "email", type: "text", label: "Email", required: text.includes("required") } }];
   if (text.includes("section")) return [{ type: "addField", field: { id: `section_${Date.now()}`, type: "section", label: "New section", helpText: prompt } }];
   if (text.includes("queue")) return [{ type: "setQueueAssignment", queue_names: [prompt.match(/queue\s+([A-Za-z0-9 _-]+)/i)?.[1]?.trim() || "Sales"], auto_open: text.includes("auto") }];
@@ -63,7 +68,7 @@ function extractJson(content = "") {
 
 const FORM_RELATED_PATTERNS = [
   /form/i, /formular/i, /field/i, /pole/i, /input/i, /textarea/i, /select/i, /dropdown/i, /radio/i, /checkbox/i,
-  /button/i, /label/i, /section/i, /row/i, /column/i, /grid/i, /layout/i, /schema/i, /jsonb/i, /queue/i,
+  /button/i, /label/i, /section/i, /row/i, /column/i, /grid/i, /layout/i, /page/i, /stron/i, /schema/i, /jsonb/i, /queue/i,
   /client_state/i, /header/i, /binding/i, /template/i, /validation/i, /required/i, /placeholder/i, /zgod/i,
   /weryfik/i, /lead/i, /support/i, /ticket/i, /appointment/i, /marketing/i, /complaint/i, /customer/i,
 ];
@@ -92,14 +97,15 @@ async function getTelnyxOperations({ prompt, currentForm, apiKey }) {
   const endpoint = process.env.TELNYX_CHAT_COMPLETIONS_URL || "https://api.telnyx.com/v2/ai/chat/completions";
   const model = process.env.FORM_BUILDER_AI_MODEL || "meta-llama/Meta-Llama-3.1-8B-Instruct";
   const system = `You are the AI form-builder agent inside a Telnyx contact-center admin UI.
-Scope: ONLY help create or modify contact-center web forms, their fields, layout blocks, queue assignment, context bindings, validation hints, and data-target proposals.
+Scope: ONLY help create or modify contact-center web forms, their pages, fields, layout blocks, queue assignment, context bindings, validation hints, and data-target proposals.
 If the user asks for anything unrelated to building/modifying forms, return exactly: {"reason":"I only help build and modify contact-center forms. Try asking: ‘Create a customer verification form with name, phone, account ID, consent checkbox, and AI handoff summary from client_state.’","operations":[]}.
 Return only valid JSON matching {"reason":"short summary","operations":[...]}. Never return markdown, HTML, React, SQL, shell commands, migrations, or prose outside JSON.
-Allowed operations: addField, updateField, removeField, moveField, addToLayout, setBinding, setQueueAssignment, setDataTargetProposal.
+Allowed operations: addField, updateField, removeField, moveField, addToLayout, addPage, updatePage, removePage, movePage, setBinding, setQueueAssignment, setDataTargetProposal.
 Supported field types: section, row, columns, grid, label, text, textarea, select, radio, checkbox, button, image, context_value, hidden.
+Forms support multiple pages in schema.pages[] with {id,title,description,fields}. Use addPage/updatePage/removePage/movePage when users ask to create, rename, delete, or reorder pages. When adding a field to a specific page, include pageId on the addField operation; if omitted, the server adds it to the active/default page. Do not persist setActivePage operations.
 For layout blocks, create fields with type section/row/columns/grid and visual props only; keep layout.order compatible with existing flat arrays.
 Use stable snake_case field ids.
-Example for adding an email field: {"reason":"Added required email field","operations":[{"type":"addField","field":{"id":"email","type":"text","label":"Email","required":true,"placeholder":"customer@example.com"}}]}.
+Example for adding a details page with an email field: {"reason":"Added customer details page","operations":[{"type":"addPage","pageId":"customer_details","title":"Customer details"},{"type":"addField","pageId":"customer_details","field":{"id":"email","type":"text","label":"Email","required":true,"placeholder":"customer@example.com"}}]}.
 Example for OK and Cancel buttons at the bottom: {"reason":"Added OK and Cancel buttons","operations":[{"type":"addField","field":{"id":"ok_button","type":"button","label":"OK"}},{"type":"addField","field":{"id":"cancel_button","type":"button","label":"Cancel"}}]}.
 When the user asks for a button, the field.type must be "button"; never create a text field for buttons.
 Do not use JSON Patch operations like add/replace/path. Every operation object must have a type from the allowed list.`;

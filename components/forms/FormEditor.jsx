@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
+import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconBlocks, IconChevronDown, IconEye, IconGitBranch, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconSettings, IconSun, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
+import { IconBlockquote, IconBlocks, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,11 +16,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
+import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, makePageId, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
+  { id: "pages", label: "Pages", icon: IconForms },
   { id: "blocks", label: "Blocks", icon: IconBlocks },
   { id: "templates", label: "Templates", icon: IconTemplate },
   { id: "media", label: "Media", icon: IconPhoto },
@@ -29,11 +30,11 @@ const RAIL = [
 ];
 
 const BLOCK_GROUPS = [
-  { title: "Layout", items: ["section", "row", "columns", "grid", "flex", "spacer"] },
-  { title: "Marketing", items: ["hero", "stats", "card", "richtext"] },
-  { title: "Basic", items: ["text", "textarea", "select", "checkbox", "radio"] },
-  { title: "Content", items: ["label", "image", "context_value"] },
-  { title: "Actions", items: ["button", "hidden"] },
+  { title: "Layout", color: "border-l-sky-500", iconClass: "text-sky-500", items: ["section", "row", "columns", "grid", "flex", "spacer"] },
+  { title: "Marketing", color: "border-l-violet-500", iconClass: "text-violet-500", items: ["hero", "stats", "card", "richtext"] },
+  { title: "Basic", color: "border-l-emerald-500", iconClass: "text-emerald-500", items: ["text", "textarea", "select", "checkbox", "radio"] },
+  { title: "Content", color: "border-l-amber-500", iconClass: "text-amber-500", items: ["label", "image", "context_value"] },
+  { title: "Actions", color: "border-l-rose-500", iconClass: "text-rose-500", items: ["button", "hidden"] },
 ];
 
 const FORM_CATEGORIES = ["General", "Sales", "Support", "Billing", "Customer onboarding", "Lead capture", "Feedback", "Complaint", "Appointment", "Compliance"];
@@ -50,6 +51,16 @@ function alignClass(value) { return ({ left: "text-left", center: "text-center",
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
 function queueLabel(queue) { return queue.display_name || queue.displayName || queue.name; }
 function queueRouting(queue) { return queue.routing_strategy || queue.routingStrategy || "FIFO"; }
+const BLOCK_DESCRIPTIONS = {
+  section: "Group related fields with a title.", row: "Visual horizontal container.", columns: "Split content into columns.", grid: "Create an even grid layout.", flex: "Flexible row or column layout.", spacer: "Add visual breathing room.",
+  hero: "Large header with CTA copy.", stats: "Metric cards for highlights.", card: "Framed content container.", richtext: "Formatted guidance or copy.",
+  text: "Single-line text input.", textarea: "Multi-line notes or comments.", select: "Dropdown choice list.", checkbox: "Boolean consent or flag.", radio: "One choice from visible options.",
+  label: "Static heading or helper label.", image: "Image or media block.", context_value: "Show live client context.", button: "Submit or action button.", hidden: "Stored hidden value.",
+};
+const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, label: IconTypography, image: IconPhoto, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
+function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
+function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
+function rebuildLayoutFromPages(form) { return { ...form, layout: { ...form.layout, order: flattenPageOrder(form.schema?.pages || []) } }; }
 
 function makeId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 7)}`;
@@ -80,7 +91,9 @@ export function FormEditor({ initialForm, isNew = false }) {
   const router = useRouter();
   const [form, setForm] = useState(() => normalizeFormDefinition(initialForm || createDefaultForm({ name: "New agent form" })));
   const [selectedId, setSelectedId] = useState(() => form.schema.fields[0]?.id || "form");
+  const [activePageId, setActivePageId] = useState(() => form.schema.pages?.[0]?.id || "page_1");
   const [activeTab, setActiveTab] = useState("ai");
+  const [activeDragType, setActiveDragType] = useState(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
@@ -95,15 +108,25 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [queues, setQueues] = useState([]);
   const [previewTheme, setPreviewTheme] = useState("system");
 
+  const pages = form.schema?.pages || [];
+  const activePage = pages.find((page) => page.id === activePageId) || pages[0];
   const orderedFields = useMemo(() => {
     const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
     return (form.layout?.order || []).map((id) => byId.get(id)).filter(Boolean);
   }, [form]);
+  const activePageFields = useMemo(() => {
+    const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
+    return (activePage?.fields || []).map((id) => byId.get(id)).filter(Boolean);
+  }, [form, activePage]);
   const selectedField = orderedFields.find((f) => f.id === selectedId) || null;
 
   useEffect(() => {
-    if (!selectedField && orderedFields[0]) setSelectedId(orderedFields[0].id);
-  }, [orderedFields, selectedField]);
+    if (!pages.some((page) => page.id === activePageId) && pages[0]) setActivePageId(pages[0].id);
+  }, [pages, activePageId]);
+  useEffect(() => {
+    if (selectedField && activePage?.fields?.includes(selectedField.id)) return;
+    if (activePageFields[0]) setSelectedId(activePageFields[0].id);
+  }, [activePageFields, activePage, selectedField]);
 
   function update(next) {
     setForm(normalizeFormDefinition(next));
@@ -116,29 +139,59 @@ export function FormEditor({ initialForm, isNew = false }) {
   }
   function addField(type) {
     const field = newField(type);
-    update({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field] }, layout: { ...form.layout, order: [...(form.layout.order || []), field.id] } });
+    const pageId = activePage?.id || pages[0]?.id || "page_1";
+    const nextPages = (pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }]).map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field], pages: nextPages } }));
     setSelectedId(field.id);
     setActiveTab("fields");
   }
   function removeField(id) {
-    const next = orderedFields.filter((field) => field.id !== id);
-    update({ ...form, schema: { ...form.schema, fields: form.schema.fields.filter((field) => field.id !== id) }, layout: { ...form.layout, order: next.map((field) => field.id) } });
-    setSelectedId(next[0]?.id || "form");
+    const nextFields = form.schema.fields.filter((field) => field.id !== id);
+    const nextPages = pages.map((page) => ({ ...page, fields: (page.fields || []).filter((fieldId) => fieldId !== id) }));
+    const nextPageFields = activePageFields.filter((field) => field.id !== id);
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
+    setSelectedId(nextPageFields[0]?.id || "form");
   }
   function duplicateField(field) {
     const copy = { ...field, id: makeId(field.type), label: `${field.label || field.id} copy` };
-    const order = [...(form.layout.order || [])];
-    const index = order.indexOf(field.id);
-    order.splice(index + 1, 0, copy.id);
-    update({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, copy] }, layout: { ...form.layout, order } });
+    const pageId = pages.find((page) => (page.fields || []).includes(field.id))?.id || activePage?.id;
+    const nextPages = pages.map((page) => {
+      if (page.id !== pageId) return page;
+      const fields = [...(page.fields || [])]; const index = fields.indexOf(field.id); fields.splice(index + 1, 0, copy.id);
+      return { ...page, fields };
+    });
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, copy], pages: nextPages } }));
     setSelectedId(copy.id);
   }
   function moveField(id, dir) {
-    const order = [...(form.layout.order || [])];
-    const i = order.indexOf(id); const j = i + dir;
-    if (i < 0 || j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
-    update({ ...form, layout: { ...form.layout, order } });
+    const pageId = pages.find((page) => (page.fields || []).includes(id))?.id || activePage?.id;
+    const nextPages = pages.map((page) => {
+      if (page.id !== pageId) return page;
+      const fields = [...(page.fields || [])]; const i = fields.indexOf(id); const j = i + dir;
+      if (i < 0 || j < 0 || j >= fields.length) return page;
+      [fields[i], fields[j]] = [fields[j], fields[i]];
+      return { ...page, fields };
+    });
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: nextPages } }));
+  }
+  function addPage() {
+    const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", fields: [] };
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: [...pages, page] } }));
+    setActivePageId(page.id); setSelectedId("form"); setActiveTab("pages");
+  }
+  function updatePage(id, patch) { update({ ...form, schema: { ...form.schema, pages: pages.map((page) => page.id === id ? { ...page, ...patch } : page) } }); }
+  function removePage(id) {
+    if (pages.length <= 1) return;
+    const removed = pages.find((page) => page.id === id); const remaining = pages.filter((page) => page.id !== id);
+    if (removed?.fields?.length) remaining[0] = { ...remaining[0], fields: [...(remaining[0].fields || []), ...removed.fields] };
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: remaining } }));
+    setActivePageId(remaining[0]?.id || "page_1"); setSelectedId(remaining[0]?.fields?.[0] || "form");
+  }
+  function movePage(id, dir) {
+    const nextPages = [...pages]; const i = nextPages.findIndex((page) => page.id === id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= nextPages.length) return;
+    [nextPages[i], nextPages[j]] = [nextPages[j], nextPages[i]];
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: nextPages } }));
   }
 
   async function save(status) {
@@ -242,13 +295,17 @@ export function FormEditor({ initialForm, isNew = false }) {
   function addMediaImage(item) {
     const field = newField("image");
     field.label = item.name; field.props = { src: item.url };
-    update({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field] }, layout: { ...form.layout, order: [...(form.layout.order || []), field.id] } });
+    const pageId = activePage?.id || pages[0]?.id || "page_1";
+    const nextPages = (pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }]).map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field], pages: nextPages } }));
     setSelectedId(field.id); setActiveTab("fields");
   }
 
+  function handleDragStart(event) { setActiveDragType(event.active?.data?.current?.type || null); }
   function handleDragEnd(event) {
     const type = event.active?.data?.current?.type;
     if (event.over?.id === "form-canvas" && type) addField(type);
+    setActiveDragType(null);
   }
 
   return <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 flex flex-col overflow-hidden bg-muted/40">
@@ -274,7 +331,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </DialogContent>
     </Dialog>
 
-    <DndContext onDragEnd={handleDragEnd}>
+    <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
     <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm">
         <div className="h-full overflow-y-auto p-2 flex flex-col items-center gap-2">
@@ -283,7 +340,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} orderedFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
+        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -302,8 +359,9 @@ export function FormEditor({ initialForm, isNew = false }) {
           <div className="mx-auto max-w-4xl rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-8">
             <div className="mx-auto max-w-2xl space-y-6">
               <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
-              {orderedFields.map((field) => <CanvasField key={field.id} field={field} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={() => !previewMode && setSelectedId(field.id)} />)}
-              {!orderedFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building.</div> : null}
+              {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} /> : null}
+              {activePageFields.map((field) => <CanvasField key={field.id} field={field} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={() => !previewMode && setSelectedId(field.id)} />)}
+              {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
             </div>
           </div>
         </CanvasDropZone>
@@ -313,6 +371,7 @@ export function FormEditor({ initialForm, isNew = false }) {
         <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} />
       </section>
     </div>
+      <DragOverlay dropAnimation={null}>{activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
     </DndContext>
   </div>;
 }
@@ -325,7 +384,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
+  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
@@ -347,6 +406,30 @@ function LeftPanel(props) {
     </div>;
   }
 
+  if (activeTab === "pages") {
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Pages" description="Add, rename, reorder, and select form pages." />
+      <div className="shrink-0 border-b p-4"><Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button></div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {pages.map((page, index) => <div key={page.id} className={`rounded-xl border p-3 ${activePageId === page.id ? "border-primary bg-primary/5" : "bg-background"}`}>
+          <button type="button" className="mb-3 w-full text-left" onClick={() => setActivePageId(page.id)}>
+            <div className="text-sm font-semibold">{page.title || `Page ${index + 1}`}</div>
+            <div className="text-xs text-muted-foreground">{(page.fields || []).length} blocks · {page.id}</div>
+          </button>
+          <div className="space-y-2">
+            <Input value={page.title || ""} onChange={(e) => updatePage(page.id, { title: e.target.value })} placeholder="Page title" />
+            <Input value={page.description || ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1">
+            <Button type="button" size="sm" variant="ghost" onClick={() => movePage(page.id, -1)}>↑</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => movePage(page.id, 1)}>↓</Button>
+            <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={pages.length <= 1} onClick={() => removePage(page.id)}><IconTrash className="h-4 w-4" /></Button>
+          </div>
+        </div>)}
+      </div>
+    </div>;
+  }
+
   if (activeTab === "blocks") {
     return <div className="h-full min-h-0 flex flex-col">
       <PanelHeader title="Blocks" description="Add custom schema components." />
@@ -354,7 +437,7 @@ function LeftPanel(props) {
         {BLOCK_GROUPS.map((group) => <div key={group.title} className="space-y-2">
           <h3 className="text-xs font-semibold uppercase text-muted-foreground">{group.title}</h3>
           <div className="grid gap-2">
-            {group.items.map((type) => <DraggableBlock key={type} type={type} addField={addField} />)}
+            {group.items.map((type) => <DraggableBlock key={type} type={type} addField={addField} colorClass={group.color} iconClass={group.iconClass} />)}
           </div>
         </div>)}
       </div>
@@ -397,7 +480,7 @@ function LeftPanel(props) {
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         <div className="rounded-lg border bg-muted/30 p-2 text-sm font-medium">{form.name}</div>
         <div className="ml-4 border-l pl-3 space-y-2">
-          {orderedFields.map((field, index) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
+          {allFields.map((field, index) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
             {index + 1}. {field.label || field.id}
             <div className="text-xs text-muted-foreground">{field.type}</div>
           </button>)}
@@ -434,10 +517,37 @@ function CanvasDropZone({ children, previewTheme = "system" }) {
   return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
 }
 
-function DraggableBlock({ type, addField }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `block-${type}`, data: { type } });
-  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
-  return <Button ref={setNodeRef} style={style} variant="outline" className={`justify-start touch-none ${isDragging ? "opacity-60 shadow-lg" : ""}`} onClick={() => addField(type)} {...listeners} {...attributes}><IconPlus className="h-4 w-4 mr-2" />{FORM_COMPONENT_REGISTRY[type]?.label || type}</Button>;
+function PageTabs({ pages = [], activePageId, setActivePageId }) {
+  return <div className="flex items-center gap-1 border-b">
+    {pages.map((page) => <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative px-4 py-2 text-sm font-medium transition ${activePageId === page.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+      {page.title || page.id}
+      <span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${activePageId === page.id ? "bg-primary" : "bg-transparent"}`} />
+    </button>)}
+  </div>;
+}
+
+function BlockCardContent({ type, iconClass = "text-primary" }) {
+  const Icon = blockIcon(type);
+  return <div className="flex items-start gap-3">
+    <IconGripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+    <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${iconClass}`} />
+    <div className="min-w-0 flex-1">
+      <div className="text-sm font-semibold text-foreground">{FORM_COMPONENT_REGISTRY[type]?.label || type}</div>
+      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{blockDescription(type)}</p>
+    </div>
+  </div>;
+}
+
+function DraggableBlock({ type, addField, colorClass, iconClass }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `block-${type}`, data: { type } });
+  return <button ref={setNodeRef} type="button" className={`touch-none rounded-xl border border-l-4 ${colorClass} bg-background p-3 text-left shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} onClick={() => addField(type)} {...listeners} {...attributes}>
+    <BlockCardContent type={type} iconClass={iconClass} />
+  </button>;
+}
+
+function BlockDragPreview({ type }) {
+  const group = BLOCK_GROUPS.find((item) => item.items.includes(type)) || BLOCK_GROUPS[0];
+  return <div className={`w-72 rounded-xl border border-l-4 ${group.color} bg-background p-3 text-left shadow-2xl ring-1 ring-black/5`}><BlockCardContent type={type} iconClass={group.iconClass} /></div>;
 }
 
 function MiniTemplatePreview({ form }) {
@@ -527,7 +637,8 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
     if (!clean) return;
     const nextBindings = { ...(form.bindings || {}) };
     if (field.id !== clean && nextBindings[field.id] !== undefined) { nextBindings[clean] = nextBindings[field.id]; delete nextBindings[field.id]; }
-    patchForm({ schema: { ...form.schema, fields: form.schema.fields.map((item) => item.id === field.id ? { ...item, id: clean } : item) }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
+    const pages = (form.schema.pages || []).map((page) => ({ ...page, fields: (page.fields || []).map((id) => id === field.id ? clean : id) }));
+    patchForm({ schema: { ...form.schema, fields: form.schema.fields.map((item) => item.id === field.id ? { ...item, id: clean } : item), pages }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
   }
   return <div className="h-full min-h-0 flex flex-col">
     <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>

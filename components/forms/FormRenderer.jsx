@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getContextValue } from "@/lib/forms/form-context";
+import { normalizeFormDefinition } from "@/lib/forms/form-schema";
 
 
 function paddingClass(value) { return ({ none: "p-0", xs: "p-2", sm: "p-3", md: "p-4", lg: "p-6", xl: "p-8" }[value || "md"] || "p-4"); }
@@ -15,8 +16,11 @@ function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "t
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
 
-function orderedFields(form) {
-  const source = form?.schema?.fields || []; const byId = new Map(source.map((f) => [f.id, f])); const order = form?.layout?.order || source.map((f) => f.id); return order.map((id) => byId.get(id)).filter(Boolean);
+function pageFields(form, pageId) {
+  const normalized = normalizeFormDefinition(form || {});
+  const source = normalized?.schema?.fields || []; const byId = new Map(source.map((f) => [f.id, f]));
+  const pages = normalized.schema?.pages || []; const active = pages.find((page) => page.id === pageId) || pages[0];
+  const order = active?.fields || normalized.layout?.order || source.map((f) => f.id); return order.map((id) => byId.get(id)).filter(Boolean);
 }
 
 function LayoutBlock({ field }) {
@@ -39,12 +43,21 @@ function LayoutBlock({ field }) {
 }
 
 export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit, submitting = false, readOnly = false }) {
+  const normalized = useMemo(() => form ? normalizeFormDefinition(form) : null, [form]);
+  const pages = normalized?.schema?.pages || [];
+  const [activePageId, setActivePageId] = useState(pages[0]?.id || "page_1");
   const [values, setValues] = useState(initialValues || {});
-  const fields = useMemo(() => orderedFields(form), [form]);
+  const fields = useMemo(() => normalized ? pageFields(normalized, activePageId) : [], [normalized, activePageId]);
   function setValue(id, value) { setValues((prev) => ({ ...prev, [id]: value })); }
   async function handleSubmit(e) { e?.preventDefault?.(); await onSubmit?.(values); }
   if (!form) return <div className="text-sm text-muted-foreground">No form selected.</div>;
   return <form onSubmit={handleSubmit} className="space-y-4">
+    {pages.length > 1 ? <div className="mb-2 flex items-center gap-1 border-b">
+      {pages.map((page) => <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative px-4 py-2 text-sm font-medium transition ${activePageId === page.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+        {page.title || page.id}
+        <span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${activePageId === page.id ? "bg-primary" : "bg-transparent"}`} />
+      </button>)}
+    </div> : null}
     {fields.map((field) => {
       if (["section", "row", "columns", "grid", "flex", "spacer", "hero", "stats", "card", "richtext"].includes(field.type)) return <LayoutBlock key={field.id} field={field} />;
       if (field.type === "hidden") return null;
