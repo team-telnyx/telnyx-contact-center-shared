@@ -26,6 +26,37 @@ const LEGACY_PAGE_ICON_MAP = { forms: "IconForms", user: "IconUser", phone: "Ico
 function PageIcon({ value, className = "h-4 w-4" }) { const Icon = TablerIcons[LEGACY_PAGE_ICON_MAP[value] || value]; return Icon ? <Icon className={className} /> : null; }
 function gapValue(value, fallback = 12) { return typeof value === "number" ? value : Number(value || fallback); }
 function childFields(ids = [], byId) { return ids.map((id) => byId.get(id)).filter(Boolean); }
+function normalizeChildLayout(layout = {}) {
+  return {
+    align: ["left", "center", "right", "stretch"].includes(layout.align) ? layout.align : "stretch",
+    verticalAlign: ["top", "center", "bottom", "stretch"].includes(layout.verticalAlign) ? layout.verticalAlign : "stretch",
+    columnSpan: Math.max(1, Math.min(Number(layout.columnSpan || layout.colSpan || 1), 6)),
+    rowSpan: Math.max(1, Math.min(Number(layout.rowSpan || 1), 12)),
+  };
+}
+function childLayoutFor(parent = {}, childId) { return normalizeChildLayout(parent.props?.layoutByChild?.[childId] || {}); }
+function childLayoutStyle(layout = {}, { isGrid = false } = {}) {
+  const next = normalizeChildLayout(layout);
+  return {
+    justifySelf: ({ left: "start", center: "center", right: "end", stretch: "stretch" }[next.align] || "stretch"),
+    alignSelf: ({ top: "start", center: "center", bottom: "end", stretch: "stretch" }[next.verticalAlign] || "stretch"),
+    ...(isGrid ? { gridColumn: `span ${next.columnSpan}`, gridRow: `span ${next.rowSpan}` } : {}),
+  };
+}
+function renderChildRuns(ids = [], parent, byId, renderField, options = {}) {
+  const runs = []; let buttons = [];
+  ids.forEach((id) => {
+    if (byId.get(id)?.type === "button") buttons.push(id);
+    else { if (buttons.length) { runs.push({ buttons }); buttons = []; } runs.push({ ids: [id] }); }
+  });
+  if (buttons.length) runs.push({ buttons });
+  return runs.map((run, index) => {
+    const runIds = run.buttons || run.ids || [];
+    const style = childLayoutStyle(childLayoutFor(parent, runIds[0]), options);
+    const content = run.buttons ? <div className="flex flex-wrap items-center gap-2">{childFields(run.buttons, byId).map(renderField)}</div> : childFields(run.ids, byId).map(renderField);
+    return <div key={`${runIds.join("-")}-${index}`} className="min-w-0" style={style}>{content}</div>;
+  });
+}
 function heroContent(field, props = {}) {
   return <div className="relative z-10 min-w-0"><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h2 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h2>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2">{props.buttons.map((button, i) => <Button key={i} type="button" variant={button.variant === "secondary" ? "secondary" : "default"}>{button.label || "Action"}</Button>)}</div> : null}</div>;
 }
@@ -44,15 +75,15 @@ function rootFields(form, pageId) {
 
 function LayoutContainer({ field, byId, renderField }) {
   const props = field.props || {}; const style = fieldStyle(field);
-  if (field.type === "section") return <section className={`rounded-lg border bg-muted/25 ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-4">{childFields(props.children, byId).map(renderField)}</div></section>;
-  if (field.type === "row" || field.type === "flex") return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapValue(props.gap, 12), justifyContent: props.justify || "flex-start" }}>{childFields(props.children, byId).map(renderField)}</div></div>;
-  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-w-0 space-y-4">{childFields(props.slots?.[i], byId).map(renderField)}</div>)}</div></div>; }
-  if (field.type === "grid") { const cols = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: rows * cols }).map((_, i) => { const key = `${Math.floor(i / cols)}:${i % cols}`; return <div key={key} className="min-h-10 min-w-0 space-y-4">{childFields(props.cells?.[key], byId).map(renderField)}</div>; })}</div></div>; }
+  if (field.type === "section") return <section className={`rounded-lg border bg-muted/25 ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-4">{renderChildRuns(props.children, field, byId, renderField)}</div></section>;
+  if (field.type === "row" || field.type === "flex") return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapValue(props.gap, 12), justifyContent: props.justify || "flex-start" }}>{renderChildRuns(props.children, field, byId, renderField)}</div></div>;
+  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-w-0 space-y-4">{renderChildRuns(props.slots?.[i], field, byId, renderField)}</div>)}</div></div>; }
+  if (field.type === "grid") { const cols = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: rows * cols }).map((_, i) => { const key = `${Math.floor(i / cols)}:${i % cols}`; const ids = props.cells?.[key] || []; return <div key={key} className="min-h-10 min-w-0 space-y-4" style={ids.length ? childLayoutStyle(childLayoutFor(field, ids[0]), { isGrid: true }) : undefined}>{renderChildRuns(ids, field, byId, renderField)}</div>; })}</div></div>; }
   if (field.type === "spacer") return <div className={props.direction === "horizontal" ? "inline-block h-4 w-24" : "h-12 w-full"} />;
   if (field.type === "divider") return <div className={paddingClass(props.padding)}><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div>;
   if (field.type === "hero") return heroSection(field, props);
   if (field.type === "stats") return <div className={`grid gap-3 md:grid-cols-3 ${paddingClass(props.padding)}`}>{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={style}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div>;
-  if (field.type === "card") return <div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={style}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className={paddingClass(props.padding)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4 space-y-4">{childFields(props.children, byId).map(renderField)}</div></div></div>;
+  if (field.type === "card") return <div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={style}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className={paddingClass(props.padding)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4 space-y-4">{renderChildRuns(props.children, field, byId, renderField)}</div></div></div>;
   if (field.type === "richtext") return <div className={`${paddingClass(props.padding)} ${textSizeClass(props.size)} ${alignClass(props.align)} ${props.bold ? "font-semibold" : ""}`} style={style}>{props.richtext || field.label}</div>;
   if (field.type === "codeblock") return <div className={paddingClass(props.padding)}><CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
   return null;

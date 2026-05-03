@@ -146,23 +146,53 @@ function removeIdFromProps(props = {}, id) {
   if (Array.isArray(next.children)) next.children = next.children.filter((x) => x !== id);
   if (Array.isArray(next.slots)) next.slots = next.slots.map((slot) => Array.isArray(slot) ? slot.filter((x) => x !== id) : []);
   if (next.cells && typeof next.cells === "object") next.cells = Object.fromEntries(Object.entries(next.cells).map(([key, value]) => [key, Array.isArray(value) ? value.filter((x) => x !== id) : []]));
+  if (next.layoutByChild && typeof next.layoutByChild === "object") {
+    next.layoutByChild = { ...next.layoutByChild };
+    delete next.layoutByChild[id];
+  }
   return next;
 }
 function insertIdIntoProps(field, target, id, index) {
-  const props = removeIdFromProps(field.props || {}, id);
+  let props = removeIdFromProps(field.props || {}, id);
   if (target.kind === "children") {
-    const children = [...(props.children || [])]; children.splice(Math.max(0, Math.min(Number(index ?? children.length), children.length)), 0, id); return { ...props, children };
+    const children = [...(props.children || [])]; children.splice(Math.max(0, Math.min(Number(index ?? children.length), children.length)), 0, id); return pruneLayoutByChild({ ...props, children }, children);
   }
   if (target.kind === "slot") {
     const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); const slots = Array.from({ length: count }, (_, i) => Array.isArray(props.slots?.[i]) ? [...props.slots[i]] : []); const slot = slots[target.index] || [];
-    slot.splice(Math.max(0, Math.min(Number(index ?? slot.length), slot.length)), 0, id); slots[target.index] = slot; return { ...props, slots };
+    slot.splice(Math.max(0, Math.min(Number(index ?? slot.length), slot.length)), 0, id); slots[target.index] = slot; return pruneLayoutByChild({ ...props, slots }, slots.flat());
   }
   if (target.kind === "cell") {
     const cells = { ...(props.cells || {}) }; const key = target.key || `${target.row}:${target.column}`; const ids = Array.isArray(cells[key]) ? [...cells[key]] : [];
-    ids.splice(Math.max(0, Math.min(Number(index ?? ids.length), ids.length)), 0, id); cells[key] = ids; return { ...props, cells };
+    ids.splice(Math.max(0, Math.min(Number(index ?? ids.length), ids.length)), 0, id); cells[key] = ids; return pruneLayoutByChild({ ...props, cells }, Object.values(cells).flat());
   }
   return props;
 }
+
+
+const H_ALIGN_OPTIONS = ["left", "center", "right", "stretch"];
+const V_ALIGN_OPTIONS = ["top", "center", "bottom", "stretch"];
+function normalizeChildLayout(layout = {}) {
+  const align = H_ALIGN_OPTIONS.includes(layout.align) ? layout.align : "stretch";
+  const verticalAlign = V_ALIGN_OPTIONS.includes(layout.verticalAlign) ? layout.verticalAlign : "stretch";
+  const columnSpan = Math.max(1, Math.min(Number(layout.columnSpan || layout.colSpan || 1), 6));
+  const rowSpan = Math.max(1, Math.min(Number(layout.rowSpan || 1), 12));
+  return { align, verticalAlign, columnSpan, rowSpan };
+}
+function layoutByChild(props = {}) { return props.layoutByChild && typeof props.layoutByChild === "object" ? props.layoutByChild : {}; }
+function childLayoutFor(parent = {}, childId) { return normalizeChildLayout(layoutByChild(parent.props || {})[childId] || {}); }
+function pruneLayoutByChild(props = {}, validIds = []) {
+  const valid = new Set(validIds);
+  const entries = Object.entries(layoutByChild(props)).filter(([id]) => valid.has(id));
+  if (!entries.length) { const { layoutByChild: _layoutByChild, ...rest } = props; return rest; }
+  return { ...props, layoutByChild: Object.fromEntries(entries.map(([id, layout]) => [id, normalizeChildLayout(layout)])) };
+}
+function childLayoutStyle(layout = {}, { isGrid = false } = {}) {
+  const next = normalizeChildLayout(layout);
+  const justifySelf = ({ left: "start", center: "center", right: "end", stretch: "stretch" }[next.align] || "stretch");
+  const alignSelf = ({ top: "start", center: "center", bottom: "end", stretch: "stretch" }[next.verticalAlign] || "stretch");
+  return { justifySelf, alignSelf, ...(isGrid ? { gridColumn: `span ${next.columnSpan}`, gridRow: `span ${next.rowSpan}` } : {}) };
+}
+function isButtonField(fieldsById, id) { return fieldsById?.get?.(id)?.type === "button"; }
 
 function replaceIdInProps(props = {}, from, to) {
   const repl = (ids) => Array.isArray(ids) ? ids.map((id) => id === from ? to : id) : [];
@@ -170,6 +200,10 @@ function replaceIdInProps(props = {}, from, to) {
   if (Array.isArray(next.children)) next.children = repl(next.children);
   if (Array.isArray(next.slots)) next.slots = next.slots.map(repl);
   if (next.cells && typeof next.cells === "object") next.cells = Object.fromEntries(Object.entries(next.cells).map(([key, value]) => [key, repl(value)]));
+  if (next.layoutByChild && typeof next.layoutByChild === "object" && next.layoutByChild[from]) {
+    next.layoutByChild = { ...next.layoutByChild, [to]: next.layoutByChild[from] };
+    delete next.layoutByChild[from];
+  }
   return next;
 }
 function moveInsideArray(ids, id, dir) { const next = [...ids]; const i = next.indexOf(id); const j = i + dir; if (i < 0 || j < 0 || j >= next.length) return ids; [next[i], next[j]] = [next[j], next[i]]; return next; }
@@ -526,17 +560,51 @@ export function FormEditor({ initialForm, isNew = false }) {
   function addMediaImage(item, target = null) {
     return addField("image", target, { fieldPatch: { label: mediaTitle(item), props: { src: item.url, imageTitle: mediaTitle(item) } } });
   }
+  function isDescendantOf(candidateId, parentId) {
+    const byId = fieldsById;
+    const stack = [...(getFieldChildIds(byId.get(parentId)) || [])];
+    while (stack.length) {
+      const id = stack.pop();
+      if (id === candidateId) return true;
+      stack.push(...(getFieldChildIds(byId.get(id)) || []));
+    }
+    return false;
+  }
+  function moveFieldToTarget(id, target) {
+    if (!id || !target || (target.containerId && (target.containerId === id || isDescendantOf(target.containerId, id)))) return;
+    const current = findFieldLocation(id);
+    if (!current) return;
+    const sameRoot = current.kind === "root" && target.kind === "root" && current.pageId === target.pageId;
+    const sameContainer = current.containerId && current.containerId === target.containerId && current.kind === target.kind && current.index !== undefined;
+    if ((sameRoot || sameContainer) && current.index < Number(target.index ?? 0)) target = { ...target, index: Number(target.index) - 1 };
+    let nextPages = pages.map((page) => ({ ...page, fields: (page.fields || []).filter((fieldId) => fieldId !== id) }));
+    let nextFields = form.schema.fields.map((field) => ({ ...field, props: removeIdFromProps(field.props || {}, id) }));
+    if (target.kind === "root") {
+      nextPages = nextPages.map((page) => {
+        if (page.id !== target.pageId) return page;
+        const fields = [...(page.fields || [])];
+        fields.splice(Math.max(0, Math.min(Number(target.index ?? fields.length), fields.length)), 0, id);
+        return { ...page, fields };
+      });
+    } else if (target.containerId) {
+      nextFields = nextFields.map((field) => field.id === target.containerId ? { ...field, props: insertIdIntoProps(field, target, id, target.index) } : field);
+    }
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
+    setSelectedId(id);
+  }
 
   function handleDragStart(event) {
     const data = event.active?.data?.current || {};
-    setActiveDragType(data.dragKind === "media" ? "media" : data.type || null);
+    setActiveDragType(data.dragKind === "media" ? "media" : data.dragKind === "field" ? fieldsById.get(data.fieldId)?.type || "field" : data.type || null);
   }
   function handleDragEnd(event) {
     const data = event.active?.data?.current || {};
     const type = data.type;
     const overId = String(event.over?.id || "");
     if (!overId) { setActiveDragType(null); return; }
-    if (data.dragKind === "media" && data.media) {
+    if (data.dragKind === "field" && data.fieldId) {
+      moveFieldToTarget(data.fieldId, targetFromOverId(overId) || { kind: "root", pageId: activePage?.id || pages[0]?.id || "page_1" });
+    } else if (data.dragKind === "media" && data.media) {
       if (overId.startsWith("field:") && setFieldImage(overId.slice("field:".length), data.media)) { setActiveDragType(null); return; }
       if (overId.startsWith("container:")) {
         const containerId = overId.split(":")[1];
@@ -1010,9 +1078,9 @@ function FieldToolbar({ field, removeField, duplicateField, moveField, updateFie
   </div>;
 }
 
-function ContainerDropZone({ id, children, label, empty = false }) {
+function ContainerDropZone({ id, children, label, empty = false, style }) {
   const { isOver, setNodeRef } = useDroppable({ id });
-  return <div ref={setNodeRef} className={`min-h-16 rounded-lg border border-dashed p-3 transition ${isOver ? "border-primary bg-primary/10" : empty ? "border-muted-foreground/30 bg-muted/30" : "border-border/60 bg-muted/20"}`}>
+  return <div ref={setNodeRef} style={style} className={`min-h-16 min-w-0 rounded-lg border border-dashed p-3 transition ${isOver ? "border-primary bg-primary/10" : empty ? "border-muted-foreground/30 bg-muted/30" : "border-border/60 bg-muted/20"}`}>
     {children}
     {empty ? <div className="text-center text-xs text-muted-foreground">Drop blocks into {label}</div> : null}
   </div>;
@@ -1020,22 +1088,40 @@ function ContainerDropZone({ id, children, label, empty = false }) {
 
 function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOnly, addField, removeField, duplicateField, moveField, updateField }) {
   const props = field.props || {};
-  const { isOver, setNodeRef } = useDroppable({ id: `field:${field.id}`, disabled: readOnly });
+  const { isOver, setNodeRef: setDroppableRef } = useDroppable({ id: `field:${field.id}`, disabled: readOnly });
+  const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({ id: `canvas-field:${field.id}`, data: { dragKind: "field", fieldId: field.id }, disabled: readOnly });
+  const setNodeRef = (node) => { setDroppableRef(node); setDraggableRef(node); };
   const isSelected = selectedId === field.id && !readOnly;
-  const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isOver ? "border-primary bg-primary/10" : isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
+  const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isDragging ? "opacity-50" : ""} ${isOver ? "border-primary bg-primary/10" : isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
   const toolbar = isSelected ? <FieldToolbar field={field} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null;
   const renderChild = (id) => { const child = fieldsById.get(id); return child ? <CanvasField key={id} field={child} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === id} readOnly={readOnly} onSelect={() => !readOnly && onSelect?.(id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null; };
-  const baseProps = { ref: setNodeRef, "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell };
+  const renderChildren = (ids = [], parent = field, options = {}) => {
+    const runs = [];
+    let current = [];
+    ids.forEach((id) => {
+      if (isButtonField(fieldsById, id)) current.push(id);
+      else { if (current.length) { runs.push({ buttons: current }); current = []; } runs.push({ ids: [id] }); }
+    });
+    if (current.length) runs.push({ buttons: current });
+    return runs.map((run, runIndex) => {
+      const runIds = run.buttons || run.ids || [];
+      const firstLayout = childLayoutFor(parent, runIds[0]);
+      const style = childLayoutStyle(firstLayout, { isGrid: options.isGrid });
+      const content = run.buttons ? <div className="flex flex-wrap items-center gap-2">{run.buttons.map(renderChild)}</div> : run.ids.map(renderChild);
+      return <div key={`${runIds.join("-")}-${runIndex}`} style={style} className="min-w-0">{content}</div>;
+    });
+  };
+  const baseProps = { ref: setNodeRef, "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell, ...attributes, ...listeners };
 
-  if (field.type === "section") return <div {...baseProps}>{toolbar}<div className="rounded-lg border bg-muted/25 p-4" style={containerStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
-  if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{(props.children || []).map(renderChild)}</div></ContainerDropZone></div></div>;
-  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{(props.slots?.[i] || []).map(renderChild)}</ContainerDropZone>)}</div></div></div>; }
-  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!props.cells?.[key]?.length}>{(props.cells?.[key] || []).map(renderChild)}</ContainerDropZone>; })}</div></div></div>; }
+  if (field.type === "section") return <div {...baseProps}>{toolbar}<div className="rounded-lg border bg-muted/25 p-4" style={containerStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div>;
+  if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{renderChildren(props.children || [], field)}</div></ContainerDropZone></div></div>;
+  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{renderChildren(props.slots?.[i] || [], field)}</ContainerDropZone>)}</div></div></div>; }
+  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; const ids = props.cells?.[key] || []; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!ids.length} style={ids.length ? childLayoutStyle(childLayoutFor(field, ids[0]), { isGrid: true }) : undefined}>{renderChildren(ids, field)}</ContainerDropZone>; })}</div></div></div>; }
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
   if (field.type === "divider") return <div {...baseProps}>{toolbar}<div className="py-2"><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div></div>;
   if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{heroShell(field, props, toolbar)}</div>;
   if (field.type === "stats") return <div {...baseProps}>{toolbar}<div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
-  if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div></div>;
+  if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
   if (field.type === "codeblock") return <div {...baseProps}>{toolbar}<CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
   if (field.type === "hidden") return <div {...baseProps}>{toolbar}<Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
@@ -1103,6 +1189,17 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
 
 function PropertiesPanel({ form, patchForm, selectedField, updateField, media = [] }) {
   function setProps(field, patch) { updateField(field.id, mergeProps(field, patch).props ? { props: mergeProps(field, patch).props } : {}); }
+  function findSelectedLocation(id) {
+    for (const field of form.schema.fields || []) for (const slot of nestedSlotEntries(field)) { const index = (slot.ids || []).indexOf(id); if (index >= 0) return { ...slot, container: field, index }; }
+    return null;
+  }
+  const selectedLocation = selectedField ? findSelectedLocation(selectedField.id) : null;
+  function updateChildLayout(patch) {
+    if (!selectedField || !selectedLocation?.container) return;
+    const parent = selectedLocation.container;
+    const current = childLayoutFor(parent, selectedField.id);
+    updateField(parent.id, { props: { ...(parent.props || {}), layoutByChild: { ...layoutByChild(parent.props || {}), [selectedField.id]: normalizeChildLayout({ ...current, ...patch }) } } });
+  }
   function renameField(field, nextId) {
     const clean = String(nextId || "").trim().replace(/[^A-Za-z0-9_:-]/g, "_");
     if (!clean) return;
@@ -1123,11 +1220,31 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
         {!["hero", "stats", "card", "richtext", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
+        {selectedLocation?.container ? <ChildLayoutControls field={selectedField} location={selectedLocation} layout={childLayoutFor(selectedLocation.container, selectedField.id)} updateLayout={updateChildLayout} /> : null}
         <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} />
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.options ? <div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div> : null}
         <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Advanced JSON props</summary><Textarea rows={4} className="mt-3 font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></details>
       </CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
     </div>
+  </div>;
+}
+
+function ChildLayoutControls({ field, location, layout, updateLayout }) {
+  const parent = location?.container;
+  const isGrid = parent?.type === "grid";
+  const maxColumnSpan = isGrid ? Math.max(1, Math.min(Number(parent.props?.columns || 2) - Number(location.column || 0), 6)) : 1;
+  const maxRowSpan = isGrid ? Math.max(1, Math.min(Number(parent.props?.rows || 2) - Number(location.row || 0), 12)) : 1;
+  return <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+    <div className="text-xs font-semibold uppercase text-muted-foreground">Layout in parent</div>
+    <div className="grid grid-cols-2 gap-3">
+      <div><Label>Horizontal</Label><Select value={layout.align || "stretch"} onValueChange={(value) => updateLayout({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{H_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+      <div><Label>Vertical</Label><Select value={layout.verticalAlign || "stretch"} onValueChange={(value) => updateLayout({ verticalAlign: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{V_ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>
+    </div>
+    {isGrid ? <div className="grid grid-cols-2 gap-3">
+      <div><Label>Column span</Label><Input type="number" min="1" max={maxColumnSpan} value={layout.columnSpan || 1} onChange={(e) => updateLayout({ columnSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxColumnSpan)) })} /></div>
+      <div><Label>Row span</Label><Input type="number" min="1" max={maxRowSpan} value={layout.rowSpan || 1} onChange={(e) => updateLayout({ rowSpan: Math.max(1, Math.min(Number(e.target.value || 1), maxRowSpan)) })} /></div>
+    </div> : null}
+    <p className="text-[11px] text-muted-foreground">Applies to {field.label || field.id} inside {parent?.label || parent?.type}. Grid spans can merge adjacent cells from the child’s current cell.</p>
   </div>;
 }
 
