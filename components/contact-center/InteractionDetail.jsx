@@ -97,6 +97,8 @@ export function InteractionDetail({ interaction }) {
           selectedInteraction={interaction}
           formIds={formIds}
           autoOpenOnly={assistConfig?.auto_open_forms !== false}
+          hideHeader
+          showCards={false}
         />
       </div>
     );
