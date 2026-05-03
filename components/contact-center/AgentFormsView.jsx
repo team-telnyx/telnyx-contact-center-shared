@@ -31,6 +31,7 @@ export function AgentFormsView({
 
   const queueName = selectedInteraction?.queue_name || selectedInteraction?.routing_metadata?.queueName || "";
   const queueId = selectedInteraction?.queue_id || selectedInteraction?.routing_metadata?.queueId || "";
+  const hasExplicitFormIds = formIds.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +106,7 @@ export function AgentFormsView({
       </div>
     </div> : null}
     <div className="flex-1 overflow-y-auto p-3 space-y-3">
-      {forms.length === 0 ? <p className="text-sm text-muted-foreground">No published forms assigned to this queue.</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
+      {forms.length === 0 ? <p className="text-sm text-muted-foreground">{hasExplicitFormIds ? "No selected published forms are available for this interaction." : "No published forms assigned to this queue."}</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
       {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} />{message ? <p className="mt-3 text-sm text-muted-foreground">{message}</p> : null}</CardContent></Card> : null}
     </div>
   </div>;
