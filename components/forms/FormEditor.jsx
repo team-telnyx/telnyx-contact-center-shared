@@ -60,7 +60,7 @@ const CODE_LANGUAGE_OPTIONS = [
 const LEGACY_PAGE_ICON_MAP = { forms: "IconForms", user: "IconUser", phone: "IconPhone", mail: "IconMail", message: "IconMessageCircle", headset: "IconHeadset", info: "IconInfoCircle", home: "IconHome", star: "IconStar", check: "IconCheck" };
 const PREFERRED_PAGE_ICONS = ["IconForms", "IconUser", "IconPhone", "IconMail", "IconMessageCircle", "IconHeadset", "IconInfoCircle", "IconHome", "IconStar", "IconCheck", "IconBuilding", "IconMapPin", "IconCalendar", "IconCreditCard", "IconShield", "IconFileText", "IconClipboardList", "IconDeviceMobile", "IconWorld", "IconSettings", "IconBell", "IconTag", "IconBriefcase", "IconHeart", "IconThumbUp"];
 const PAGE_ICON_OPTIONS = Object.entries(TablerIcons)
-  .filter(([name, value]) => /^Icon[A-Z]/.test(name) && typeof value === "function")
+  .filter(([name, value]) => /^Icon[A-Z]/.test(name) && (typeof value === "function" || (value && typeof value === "object")))
   .map(([value]) => ({ value, label: value.replace(/^Icon/, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2") }))
   .sort((a, b) => {
     const ai = PREFERRED_PAGE_ICONS.indexOf(a.value); const bi = PREFERRED_PAGE_ICONS.indexOf(b.value);
