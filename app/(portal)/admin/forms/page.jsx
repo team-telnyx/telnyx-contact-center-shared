@@ -9,6 +9,19 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
 
+function formThemeStyle(theme = {}, base = {}) {
+  const pairs = [["primary", "--primary"], ["primaryColor", "--primary"], ["primaryForeground", "--primary-foreground"], ["primaryForegroundColor", "--primary-foreground"], ["background", "--background"], ["backgroundColor", "--background"], ["foreground", "--foreground"], ["textColor", "--foreground"], ["card", "--card"], ["cardColor", "--card"], ["cardForeground", "--card-foreground"], ["border", "--border"], ["borderColor", "--border"], ["accent", "--accent"], ["accentColor", "--accent"], ["accentForeground", "--accent-foreground"], ["muted", "--muted"], ["mutedColor", "--muted"]];
+  return pairs.reduce((style, [key, variable]) => theme?.[key] ? { ...style, [variable]: theme[key] } : style, base);
+}
+function themeColor(theme = {}, ...keys) { return keys.map((key) => theme?.[key]).find(Boolean); }
+function formPreviewStyle(form = {}) {
+  const theme = form.theme || {};
+  const primary = themeColor(theme, "primary", "primaryColor", "pageTabActiveBorderColor") || "var(--primary)";
+  const background = themeColor(theme, "background", "backgroundColor") || "var(--background)";
+  const border = themeColor(theme, "border", "borderColor", "pageTabActiveBorderColor") || "var(--border)";
+  return { ...formThemeStyle(theme), background: `linear-gradient(135deg, color-mix(in srgb, ${primary} 14%, transparent), ${background} 44%)`, borderColor: border };
+}
+
 export default function AdminFormsPage() {
   const router = useRouter();
   const [forms, setForms] = useState([]);
@@ -93,8 +106,8 @@ export default function AdminFormsPage() {
           <div className="flex flex-wrap gap-1 text-xs">{form.category ? <Badge variant="secondary">{form.category}</Badge> : null}{(form.queue_names || []).slice(0, 2).map((queue) => <Badge key={queue} variant="outline">{queue}</Badge>)}{(form.queue_names || []).length > 2 ? <Badge variant="outline">+{form.queue_names.length - 2}</Badge> : null}</div>
         </CardHeader>
         <CardContent className="flex-1">
-          <div className="h-56 overflow-hidden rounded-xl border bg-slate-50 p-4">
-            <div className="origin-top-left scale-[0.72] w-[135%] pointer-events-none rounded-lg bg-white p-5 shadow-sm">
+          <div className="h-56 overflow-hidden rounded-xl border p-4" style={formPreviewStyle(form)}>
+            <div className="origin-top-left scale-[0.72] w-[135%] pointer-events-none rounded-lg bg-background p-5 text-foreground shadow-sm ring-1 ring-border/70" style={formThemeStyle(form.theme)}>
               <FormRenderer form={form} readOnly />
             </div>
           </div>
