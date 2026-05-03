@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -83,6 +84,13 @@ const ALIGN_OPTIONS = ["left", "center", "right"];
 const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
 const STATUS_BADGE_CLASS = { draft: "border-amber-500 text-amber-700 dark:text-amber-300", published: "border-emerald-500 text-emerald-700 dark:text-emerald-300", archived: "border-slate-400 text-slate-600 dark:text-slate-300" };
 const MESSAGE_BADGE_CLASS = { saved: "border-emerald-500 text-emerald-700 dark:text-emerald-300", error: "border-destructive text-destructive" };
+const BLOCK_GROUP_BADGE_CLASS = {
+  Layout: "border-sky-500 text-sky-700 dark:text-sky-300",
+  Marketing: "border-violet-500 text-violet-700 dark:text-violet-300",
+  Basic: "border-emerald-500 text-emerald-700 dark:text-emerald-300",
+  Content: "border-amber-500 text-amber-700 dark:text-amber-300",
+  Actions: "border-rose-500 text-rose-700 dark:text-rose-300",
+};
 
 function mergeProps(field, patch) { return { props: { ...(field.props || {}), ...patch } }; }
 function paddingClass(value) { return ({ none: "p-0", xs: "p-2", sm: "p-3", md: "p-4", lg: "p-6", xl: "p-8" }[value || "md"] || "p-4"); }
@@ -108,6 +116,9 @@ const BLOCK_DESCRIPTIONS = {
 const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, divider: IconMinus, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, label: IconTypography, image: IconPhoto, codeblock: IconCode, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
 function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
+function blockGroup(type) { return BLOCK_GROUPS.find((group) => group.items.includes(type)); }
+function blockBadgeClass(type) { return BLOCK_GROUP_BADGE_CLASS[blockGroup(type)?.title] || "border-slate-400 text-slate-600 dark:text-slate-300"; }
+function blockLabel(type) { return FORM_COMPONENT_REGISTRY[type]?.label || type; }
 function mediaTitle(item = {}) { return item.title || item.display_name || item.displayName || String(item.name || item.filename || item.url || "Image").replace(/\.[^.]+$/, ""); }
 function mediaFilename(item = {}) { return String(item.filename || item.name || item.url || "").split("/").pop(); }
 function mediaSizeLabel(item = {}) {
@@ -1320,11 +1331,15 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
     const fields = form.schema.fields.map((item) => ({ ...(item.id === field.id ? { ...item, id: clean } : item), props: replaceIdInProps(item.props || {}, field.id, clean) }));
     patchForm({ schema: { ...form.schema, fields, pages }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
   }
+  const SelectedIcon = selectedField ? blockIcon(selectedField.type) : null;
   return <div className="h-full min-h-0 flex flex-col">
-    <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>
+    <div className="h-14 shrink-0 border-b px-4 flex items-center gap-3">
+      <IconSettings className="h-5 w-5 shrink-0" />
+      <div className="min-w-0 flex-1"><h2 className="font-semibold text-sm">Properties</h2><p className="truncate text-xs text-muted-foreground">Selected canvas element settings.</p></div>
+      {selectedField ? <Badge variant="outline" className={`shrink-0 gap-1.5 ${blockBadgeClass(selectedField.type)}`}>{SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5" /> : null}{blockLabel(selectedField.type)}</Badge> : null}
+    </div>
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
       {selectedField ? <div className="space-y-4">
-        <div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div>
         <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
         <div><Label>Field name / id</Label><RevertibleTextInput value={selectedField.id ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => renameField(selectedField, value)} /></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
@@ -1432,6 +1447,15 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
 
 function StatsItemsControl({ items = [], setItems }) {
   const normalizedItems = normalizeStatItems(items);
+  const [activeItem, setActiveItem] = useState(normalizedItems.length ? "item-0" : "");
+  useEffect(() => {
+    if (!normalizedItems.length) {
+      if (activeItem) setActiveItem("");
+      return;
+    }
+    const activeIndex = Number(String(activeItem).replace("item-", ""));
+    if (!activeItem || !Number.isInteger(activeIndex) || activeIndex < 0 || activeIndex >= normalizedItems.length) setActiveItem("item-0");
+  }, [activeItem, normalizedItems.length]);
   function updateCount(nextCount) {
     setItems(resizeStatItems(normalizedItems, nextCount));
   }
@@ -1447,25 +1471,33 @@ function StatsItemsControl({ items = [], setItems }) {
       <Input type="number" min="0" max="12" value={normalizedItems.length} onChange={(e) => updateCount(e.target.value)} />
       <p className="mt-1 text-[11px] text-muted-foreground">Changing the count preserves existing card values and only adds or removes cards at the end.</p>
     </div>
-    <div className="space-y-3">
-      {normalizedItems.map((item, index) => <div key={index} className="space-y-3 rounded-md border bg-background p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs font-semibold uppercase text-muted-foreground">Stat card {index + 1}</div>
-          <div className="flex items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">Preview</span></div>
-        </div>
-        <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
-        <div><Label>Description</Label><Input value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
-        <PageIconPicker label="Icon" value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
-        <div><Label>Icon size px</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
-        <div className="space-y-3 rounded-md border bg-muted/20 p-3">
-          <div className="text-xs font-medium text-muted-foreground">Per-card colors</div>
-          <ColorInput label="Icon color" value={item.iconColor || ""} onChange={(color) => updateItem(index, { iconColor: color })} />
-          <ColorInput label="Title color" value={item.titleColor || ""} onChange={(color) => updateItem(index, { titleColor: color })} />
-          <ColorInput label="Description color" value={item.descriptionColor || ""} onChange={(color) => updateItem(index, { descriptionColor: color })} />
-          <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>Use theme colors</Button>
-        </div>
-      </div>)}
-      {!normalizedItems.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No stat cards. Increase the count to add one.</div> : null}
+    <div>
+      {normalizedItems.length ? <Accordion type="single" value={activeItem} onValueChange={(value) => { if (value) setActiveItem(value); }} className="space-y-2">
+        {normalizedItems.map((item, index) => <AccordionItem key={index} value={`item-${index}`} className="rounded-md border bg-background px-3 last:border-b">
+          <AccordionTrigger className="py-3 hover:no-underline">
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+              <div className="min-w-0 text-left">
+                <div className="text-xs font-semibold uppercase text-muted-foreground">Stat card {index + 1}</div>
+                <div className="truncate text-sm font-medium">{item.title || `Card ${index + 1}`}</div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">Preview</span></div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pb-3">
+            <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
+            <div><Label>Description</Label><Input value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
+            <PageIconPicker label="Icon" value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
+            <div><Label>Icon size px</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
+            <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+              <div className="text-xs font-medium text-muted-foreground">Per-card colors</div>
+              <ColorInput label="Icon color" value={item.iconColor || ""} onChange={(color) => updateItem(index, { iconColor: color })} />
+              <ColorInput label="Title color" value={item.titleColor || ""} onChange={(color) => updateItem(index, { titleColor: color })} />
+              <ColorInput label="Description color" value={item.descriptionColor || ""} onChange={(color) => updateItem(index, { descriptionColor: color })} />
+              <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>Use theme colors</Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>)}
+      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No stat cards. Increase the count to add one.</div>}
     </div>
   </div>;
 }
