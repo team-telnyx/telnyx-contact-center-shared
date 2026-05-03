@@ -8,6 +8,7 @@ import {
 } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { validateFlow } from "@/lib/voice-flow-validator";
 
 export const dynamic = "force-dynamic";
 
@@ -186,6 +187,16 @@ export async function POST(request) {
       variables: body.globalVariables || body.variables || {},
       metadata: body.metadata || {},
     };
+
+    if (flowData.nodes.length > 0) {
+      const validation = validateFlow({ nodes: flowData.nodes, edges: flowData.edges });
+      if (!validation.valid) {
+        return NextResponse.json(
+          { ok: false, error: validation.errors.join("\n"), validation },
+          { status: 400 }
+        );
+      }
+    }
 
     // Generate webhook URL
     const flowId = body.id || require("crypto").randomUUID();

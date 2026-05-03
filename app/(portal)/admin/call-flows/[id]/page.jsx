@@ -1971,6 +1971,17 @@ export default function FlowBuilderPage() {
       return;
     }
 
+    const currentValidation = validateFlow({ nodes, edges }, queues);
+    setValidation(currentValidation);
+    if (!currentValidation.valid) {
+      notify({
+        title: "Validation error",
+        description: currentValidation.errors[0] || "Cannot save flow until validation errors are fixed.",
+        variant: "error",
+      });
+      return;
+    }
+
     // Check for enqueue nodes with skill-based queues that have no skills
     const enqueueNodes = nodes.filter(
       (node) => node.data?.nodeType === "enqueue",
@@ -2659,7 +2670,7 @@ export default function FlowBuilderPage() {
                   })()}
                   <Button
                     onClick={handleSave}
-                    disabled={saving || !validation.valid}
+                    disabled={saving}
                     variant="default"
                     className={
                       hasUnsavedChanges
