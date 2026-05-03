@@ -938,7 +938,7 @@ function LeftPanel(props) {
           <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
         </div>
         <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
-          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
+          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
           {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
         </div>
       </div>
@@ -1084,7 +1084,7 @@ function DraggableBlock({ type, addField, colorClass, iconClass }) {
   </button>;
 }
 
-function DraggableMediaCard({ item, onAdd, onTitleCommit }) {
+function DraggableMediaCard({ item, onTitleCommit }) {
   const title = mediaTitle(item);
   const [draftTitle, setDraftTitle] = useState(title);
   const [editingOpen, setEditingOpen] = useState(false);
@@ -1106,9 +1106,9 @@ function DraggableMediaCard({ item, onAdd, onTitleCommit }) {
   return <div ref={setNodeRef} className={`touch-none w-full max-w-full overflow-hidden rounded-xl border border-l-4 border-l-amber-500 bg-background p-2.5 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} {...attributes}>
     <div className="flex w-full min-w-0 items-center gap-3">
       <button type="button" className="shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
-      <button type="button" onClick={() => onAdd?.({ ...item, title, display_name: title })} className="h-16 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted" title="Add image to canvas">
+      <div className="h-16 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted" title="Drag image to canvas">
         <img src={item.url} alt={title} className="h-full w-full object-cover" onLoad={(e) => setLoadedDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
-      </button>
+      </div>
       <div className="min-w-0 flex-1 overflow-hidden">
         <Popover open={editingOpen} onOpenChange={(open) => { setEditingOpen(open); if (open) setDraftTitle(title); }}>
           <PopoverTrigger asChild>
