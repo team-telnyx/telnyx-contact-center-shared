@@ -18,8 +18,26 @@ function paddingClass(value) { return isNumericPadding(value) ? "" : ({ none: "p
 function verticalPaddingClass(value) { return isNumericPadding(value) ? "" : ({ none: "py-0", xs: "py-2", sm: "py-3", md: "py-4", lg: "py-6", xl: "py-8" }[value || "md"] || "py-4"); }
 function paddingStyle(value, base = {}) { return isNumericPadding(value) ? { ...base, padding: `${paddingNumber(value)}px` } : base; }
 function verticalPaddingStyle(value, base = {}) { return isNumericPadding(value) ? { ...base, paddingTop: `${paddingNumber(value)}px`, paddingBottom: `${paddingNumber(value)}px` } : base; }
-function normalizeOption(option = {}, index = 0) { if (typeof option === "string" || typeof option === "number") return { label: String(option), value: String(option) }; const value = option.value ?? option.id ?? option.label ?? `option_${index + 1}`; return { ...option, label: option.label ?? String(value), value: String(value) }; }
-function normalizeOptions(options = []) { return Array.isArray(options) ? options.map(normalizeOption) : []; }
+function makeOptionId(fieldId = "field", index = 0) { return `${String(fieldId || "field").replace(/[^A-Za-z0-9_:-]/g, "_")}_option_${index + 1}`; }
+function normalizeOption(option = {}, index = 0, fieldId = "field") { if (typeof option === "string" || typeof option === "number") return { _id: makeOptionId(fieldId, index), label: String(option), value: String(option) }; const value = option.value ?? option.id ?? option.label ?? `option_${index + 1}`; return { ...option, _id: option._id || makeOptionId(fieldId, index), label: option.label ?? String(value), value: String(value) }; }
+function normalizeOptions(options = [], fieldId = "field") {
+  if (!Array.isArray(options)) return [];
+  const usedIds = new Set();
+  return options.map((option, index) => {
+    let normalized = normalizeOption(option, index, fieldId);
+    let internalId = String(normalized._id || makeOptionId(fieldId, index));
+    if (usedIds.has(internalId)) {
+      const root = internalId;
+      let suffix = 2;
+      while (usedIds.has(`${root}_${suffix}`)) suffix += 1;
+      internalId = `${root}_${suffix}`;
+      normalized = { ...normalized, _id: internalId };
+    }
+    usedIds.add(internalId);
+    return normalized;
+  });
+}
+function optionKey(option = {}, fieldId = "field", index = 0) { return option._id || option.id || `${fieldId}_option_${index}`; }
 function optionDirection(props = {}) { return props.direction === "horizontal" || props.orientation === "horizontal" ? "horizontal" : "vertical"; }
 function formThemeStyle(theme = {}, base = {}) {
   const pairs = [["primary", "--primary"], ["primaryColor", "--primary"], ["primaryForeground", "--primary-foreground"], ["primaryForegroundColor", "--primary-foreground"], ["background", "--background"], ["backgroundColor", "--background"], ["foreground", "--foreground"], ["textColor", "--foreground"], ["card", "--card"], ["cardColor", "--card"], ["cardForeground", "--card-foreground"], ["border", "--border"], ["borderColor", "--border"], ["accent", "--accent"], ["accentColor", "--accent"], ["accentForeground", "--accent-foreground"], ["muted", "--muted"], ["mutedColor", "--muted"]];
@@ -180,9 +198,9 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
       <Label htmlFor={field.id} style={fieldStyle(field)} className={field.props?.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>
       {field.type === "textarea" && <Textarea id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "text" && <Input id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
-      {field.type === "select" && <Select value={String(value || "")} disabled={readOnly} onValueChange={(v) => setValue(field.id, v)}><SelectTrigger><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select>}
-      {field.type === "radio" && <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} checked={String(value) === String(o.value)} disabled={readOnly} onChange={() => setValue(field.id, o.value)} />{o.label || o.value}</label>)}</div>}
-      {field.type === "checkbox" && (normalizeOptions(field.options || []).length ? <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || []).map((o) => { const selected = Array.isArray(value) ? value.map(String).includes(String(o.value)) : Boolean(value) && String(value) === String(o.value); return <label key={o.value} className="flex items-center gap-2 text-sm"><Checkbox checked={selected} disabled={readOnly} onCheckedChange={(checked) => { const current = Array.isArray(values[field.id]) ? values[field.id].map(String) : []; setValue(field.id, checked ? Array.from(new Set([...current, String(o.value)])) : current.filter((item) => item !== String(o.value))); }} />{o.label || o.value}</label>; })}</div> : <div className="flex items-center gap-2"><Checkbox id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div>)}
+      {field.type === "select" && <Select value={String(value || "")} disabled={readOnly} onValueChange={(v) => setValue(field.id, v)}><SelectTrigger><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select>}
+      {field.type === "radio" && <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} checked={String(value) === String(o.value)} disabled={readOnly} onChange={() => setValue(field.id, o.value)} />{o.label || o.value}</label>)}</div>}
+      {field.type === "checkbox" && (normalizeOptions(field.options || [], field.id).length ? <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => { const selected = Array.isArray(value) ? value.map(String).includes(String(o.value)) : Boolean(value) && String(value) === String(o.value); return <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox checked={selected} disabled={readOnly} onCheckedChange={(checked) => { const current = Array.isArray(values[field.id]) ? values[field.id].map(String) : []; setValue(field.id, checked ? Array.from(new Set([...current, String(o.value)])) : current.filter((item) => item !== String(o.value))); }} />{o.label || o.value}</label>; })}</div> : <div className="flex items-center gap-2"><Checkbox id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div>)}
       {field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}
     </div>;
   };

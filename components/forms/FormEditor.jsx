@@ -100,8 +100,26 @@ function paddingClass(value) { return isNumericPadding(value) ? "" : ({ none: "p
 function verticalPaddingClass(value) { return isNumericPadding(value) ? "" : ({ none: "py-0", xs: "py-2", sm: "py-3", md: "py-4", lg: "py-6", xl: "py-8" }[value || "md"] || "py-4"); }
 function paddingStyle(value, base = {}) { return isNumericPadding(value) ? { ...base, padding: `${paddingNumber(value)}px` } : base; }
 function verticalPaddingStyle(value, base = {}) { return isNumericPadding(value) ? { ...base, paddingTop: `${paddingNumber(value)}px`, paddingBottom: `${paddingNumber(value)}px` } : base; }
-function normalizeOption(option = {}, index = 0) { if (typeof option === "string" || typeof option === "number") return { label: String(option), value: String(option) }; const value = option.value ?? option.id ?? option.label ?? `option_${index + 1}`; return { ...option, label: option.label ?? String(value), value: String(value) }; }
-function normalizeOptions(options = []) { return Array.isArray(options) ? options.map(normalizeOption) : []; }
+function makeOptionId(fieldId = "field", index = 0) { return `${String(fieldId || "field").replace(/[^A-Za-z0-9_:-]/g, "_")}_option_${index + 1}`; }
+function normalizeOption(option = {}, index = 0, fieldId = "field") { if (typeof option === "string" || typeof option === "number") return { _id: makeOptionId(fieldId, index), label: String(option), value: String(option) }; const value = option.value ?? option.id ?? option.label ?? `option_${index + 1}`; return { ...option, _id: option._id || makeOptionId(fieldId, index), label: option.label ?? String(value), value: String(value) }; }
+function normalizeOptions(options = [], fieldId = "field") {
+  if (!Array.isArray(options)) return [];
+  const usedIds = new Set();
+  return options.map((option, index) => {
+    let normalized = normalizeOption(option, index, fieldId);
+    let internalId = String(normalized._id || makeOptionId(fieldId, index));
+    if (usedIds.has(internalId)) {
+      const root = internalId;
+      let suffix = 2;
+      while (usedIds.has(`${root}_${suffix}`)) suffix += 1;
+      internalId = `${root}_${suffix}`;
+      normalized = { ...normalized, _id: internalId };
+    }
+    usedIds.add(internalId);
+    return normalized;
+  });
+}
+function optionKey(option = {}, fieldId = "field", index = 0) { return option._id || option.id || `${fieldId}_option_${index}`; }
 function optionDirection(props = {}) { return props.direction === "horizontal" || props.orientation === "horizontal" ? "horizontal" : "vertical"; }
 function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "text-lg", xl: "text-2xl" }[value || "md"] || "text-base"); }
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
@@ -309,7 +327,7 @@ function makeId(type) {
 function newField(type) {
   const id = makeId(type);
   const base = { id, type, label: FORM_COMPONENT_REGISTRY[type]?.label || type, placeholder: "", required: false, options: [] };
-  if (type === "select" || type === "radio") base.options = [{ label: "Option A", value: "a" }, { label: "Option B", value: "b" }];
+  if (type === "select" || type === "radio") base.options = [{ _id: makeOptionId(id, 0), label: "Option A", value: "a" }, { _id: makeOptionId(id, 1), label: "Option B", value: "b" }];
   if (type === "button") { base.label = "Submit"; base.props = { variant: "primary", dataActionFlowId: "", dataActionId: "", dataActionLabel: "" }; }
   if (type === "context_value") base.contextPath = "caller.from_number";
   if (type === "image") base.props = { src: "", padding: "md" };
@@ -1305,7 +1323,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "context_value") return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
   if (field.type === "image") return <div {...baseProps}>{toolbar}{dragHandle}{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
   if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
-  return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" && normalizeOptions(field.options || []).length ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><Checkbox disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" && normalizeOptions(field.options || [], field.id).length ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
 function FormSettingsFields({ form, patchForm, queues = [] }) {
@@ -1471,11 +1489,11 @@ function PaddingNumberControl({ value, onChange }) {
 }
 
 function ChoiceOptionsControl({ field, updateField, props, setProps, kind = "radio" }) {
-  const options = normalizeOptions(field.options || []);
-  function updateOption(index, patch) { updateField(field.id, { options: options.map((option, i) => i === index ? normalizeOption({ ...option, ...patch }, i) : option) }); }
-  function addOption() { const index = options.length; updateField(field.id, { options: [...options, { label: `Option ${index + 1}`, value: `option_${index + 1}` }] }); }
+  const options = normalizeOptions(field.options || [], field.id);
+  function updateOption(index, patch) { updateField(field.id, { options: options.map((option, i) => i === index ? normalizeOption({ ...option, ...patch }, i, field.id) : option) }); }
+  function addOption() { const index = options.length; updateField(field.id, { options: [...options, { _id: `${makeOptionId(field.id, index)}_${Math.random().toString(36).slice(2, 6)}`, label: `Option ${index + 1}`, value: `option_${index + 1}` }] }); }
   function removeOption(index) { updateField(field.id, { options: options.filter((_, i) => i !== index) }); }
-  return <div className="space-y-4">{kind !== "select" ? <TabsSelector label="Layout" value={optionDirection(props)} options={DIRECTION_OPTIONS} onChange={(direction) => setProps({ direction })} /> : null}<div className="space-y-2"><div className="flex items-center justify-between gap-2"><Label>{kind === "checkbox" ? "Checkbox items" : kind === "select" ? "Select options" : "Radio options"}</Label><Button type="button" size="sm" variant="outline" onClick={addOption}><IconPlus className="mr-1 h-3.5 w-3.5" />Add</Button></div>{options.length ? <div className="space-y-2">{options.map((option, index) => <div key={`${option.value}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border bg-background p-2"><Input value={option.label || ""} placeholder="Label" onChange={(e) => updateOption(index, { label: e.target.value })} /><Input value={option.value || ""} placeholder="Value" onChange={(e) => updateOption(index, { value: e.target.value })} /><Button type="button" size="icon" variant="ghost" className="text-destructive" onClick={() => removeOption(index)} aria-label="Remove option"><IconTrash className="h-4 w-4" /></Button></div>)}</div> : <div className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">No options yet. Add items to create structured choices.</div>}</div></div>;
+  return <div className="space-y-4">{kind !== "select" ? <TabsSelector label="Layout" value={optionDirection(props)} options={DIRECTION_OPTIONS} onChange={(direction) => setProps({ direction })} /> : null}<div className="space-y-2"><div className="flex items-center justify-between gap-2"><Label>{kind === "checkbox" ? "Checkbox items" : kind === "select" ? "Select options" : "Radio options"}</Label><Button type="button" size="sm" variant="outline" onClick={addOption}><IconPlus className="mr-1 h-3.5 w-3.5" />Add</Button></div>{options.length ? <div className="space-y-2">{options.map((option, index) => <div key={optionKey(option, field.id, index)} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-md border bg-background p-2"><Input value={option.label || ""} placeholder="Label" onChange={(e) => updateOption(index, { label: e.target.value })} /><Input value={option.value || ""} placeholder="Value" onChange={(e) => updateOption(index, { value: e.target.value })} /><Button type="button" size="icon" variant="ghost" className="text-destructive" onClick={() => removeOption(index)} aria-label="Remove option"><IconTrash className="h-4 w-4" /></Button></div>)}</div> : <div className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">No options yet. Add items to create structured choices.</div>}</div></div>;
 }
 
 function HeroImageModeTabs({ value = "inline", onChange }) {
