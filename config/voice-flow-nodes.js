@@ -132,7 +132,7 @@ export const VOICE_FLOW_NODES = {
         required: false,
         default: "form_payload",
         placeholder: "form_payload",
-        description: "Variable that receives the full submitted form payload for downstream nodes",
+        description: "Variable that receives the full submitted form payload for downstream nodes. Payload includes values by field id and variables keyed by each form field's Variable name.",
       },
     },
   },

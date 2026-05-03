@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, getFieldChildIds, makePageId, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
+import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, getFieldChildIds, isValidFieldVariableName, makePageId, makeUniqueVariableName, normalizeFormDefinition, slugifyFormName, slugifyVariableName } from "@/lib/forms/form-schema";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { notify } from "@/components/ToastNotify";
@@ -273,6 +273,22 @@ function gridCellStyle(cell) {
 }
 
 
+
+function dataFieldsOf(form = {}) { return (form.schema?.fields || []).filter((field) => FORM_COMPONENT_REGISTRY[field.type]?.data); }
+function defaultVariableNameForField(field, existingFields = []) {
+  const used = new Set(dataFieldsOf({ schema: { fields: existingFields } }).map((item) => item.variableName).filter(Boolean));
+  return makeUniqueVariableName(field.label || field.id || field.type, used);
+}
+function variableNameError(form = {}, field = {}) {
+  if (!FORM_COMPONENT_REGISTRY[field.type]?.data) return "";
+  const value = String(field.variableName || "").trim();
+  if (!value) return "Variable name is required.";
+  if (!isValidFieldVariableName(value)) return "Use letters, numbers, and underscores; start with a letter or underscore.";
+  const duplicate = dataFieldsOf(form).find((item) => item.id !== field.id && item.variableName === value);
+  return duplicate ? `Duplicate variable name; already used by ${duplicate.label || duplicate.id}.` : "";
+}
+function formVariableNameErrors(form = {}) { return dataFieldsOf(form).map((field) => variableNameError(form, field)).filter(Boolean); }
+
 function replaceIdInProps(props = {}, from, to) {
   const repl = (ids) => Array.isArray(ids) ? ids.map((id) => id === from ? to : id) : [];
   const next = { ...props };
@@ -406,7 +422,8 @@ export function FormEditor({ initialForm, isNew = false }) {
     return null;
   }
   function addField(type, target = null, options = {}) {
-    const field = { ...newField(type), ...(options.fieldPatch || {}) };
+    let field = { ...newField(type), ...(options.fieldPatch || {}) };
+    if (FORM_COMPONENT_REGISTRY[field.type]?.data && !field.variableName) field = { ...field, variableName: defaultVariableNameForField(field, form.schema.fields || []) };
     const pageId = target?.pageId || activePage?.id || pages[0]?.id || "page_1";
     let nextFields = [...form.schema.fields, field];
     let nextPages = pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }];
@@ -443,6 +460,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     function clone(fieldId) {
       const source = byId.get(fieldId); if (!source) return null;
       const copy = { ...source, id: makeId(source.type), label: fieldId === field.id ? `${source.label || source.id} copy` : source.label, props: { ...(source.props || {}) } };
+      if (FORM_COMPONENT_REGISTRY[copy.type]?.data) copy.variableName = defaultVariableNameForField(copy, [...form.schema.fields, ...clones]);
       clones.push(copy);
       if (["section", "row", "flex", "card"].includes(source.type)) copy.props.children = (source.props?.children || []).map(clone).filter(Boolean);
       if (source.type === "columns") copy.props.slots = (source.props?.slots || []).map((slot) => (slot || []).map(clone).filter(Boolean));
@@ -487,10 +505,12 @@ export function FormEditor({ initialForm, isNew = false }) {
     setSaving(true); setMessage("");
     try {
       const payload = normalizeFormDefinition({ ...form, status: status || form.status, slug: form.slug || slugifyFormName(form.name) });
+      const variableErrors = formVariableNameErrors(payload);
+      if (variableErrors.length) throw new Error(variableErrors[0]);
       const creating = isNew || !payload.id;
       const res = await fetch(creating ? "/api/admin/forms" : `/api/admin/forms/${payload.id}`, { method: creating ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Save failed");
+      if (!res.ok || !data.ok) throw new Error(data.details?.[0]?.message || data.error || "Save failed");
       const savedForm = normalizeFormDefinition(data.form);
       setForm(savedForm);
       initialSavedRef.current = JSON.stringify(savedForm);
@@ -1376,6 +1396,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
       {selectedField ? <div className="space-y-4">
         <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField); return <div><Label>Variable name</Label><Input value={selectedField.variableName || ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value.trim() })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || "Used in Form Submit payload variables for call flow data actions."}</p></div>; })() : null}
         {!["hero", "stats", "card", "richtext", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}

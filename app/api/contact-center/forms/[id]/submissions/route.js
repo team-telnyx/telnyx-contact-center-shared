@@ -3,7 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildFormContext } from "@/lib/forms/form-context";
 import { createFormSubmission } from "@/lib/forms/form-submissions";
-import { FORM_COMPONENT_REGISTRY, normalizeFormDefinition } from "@/lib/forms/form-schema";
+import { FORM_COMPONENT_REGISTRY, getFieldVariableName, normalizeFormDefinition } from "@/lib/forms/form-schema";
 import { DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE, validateVariableName } from "@/lib/variable-utils";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { determineNextNodes, executeFlowNode } from "@/lib/voice-flow-engine";
@@ -35,20 +35,38 @@ function configuredPayloadVariable(node) {
   return validateVariableName(trimmed).valid ? trimmed : DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE;
 }
 
+function normalizeSubmittedFieldValue(field, value) {
+  if (field.type === "checkbox") {
+    const hasOptions = Array.isArray(field.options) && field.options.length > 0;
+    if (hasOptions) {
+      if (Array.isArray(value)) return value;
+      if (value === undefined || value === null || value === "") return [];
+      return [value];
+    }
+    return Boolean(value);
+  }
+  if (Array.isArray(value) && ["text", "textarea", "select", "radio", "hidden"].includes(field.type)) return value[0] ?? "";
+  return value;
+}
+
 function buildFormSubmitPayload({ form, submission, values, contextObj, interaction, button, flowId }) {
   const normalizedForm = normalizeFormDefinition(form || {});
   const submittedValues = values && typeof values === "object" ? values : {};
   const fields = {};
+  const variables = {};
   const fieldMetadata = [];
+  const dataFields = (normalizedForm.schema?.fields || []).filter((field) => FORM_COMPONENT_REGISTRY[field.type]?.data);
 
-  for (const field of normalizedForm.schema?.fields || []) {
-    const meta = FORM_COMPONENT_REGISTRY[field.type] || {};
-    if (!meta.data) continue;
-
+  for (const field of dataFields) {
     const hasValue = Object.prototype.hasOwnProperty.call(submittedValues, field.id);
-    fields[field.id] = hasValue ? submittedValues[field.id] : field.defaultValue ?? null;
+    const rawValue = hasValue ? submittedValues[field.id] : field.defaultValue ?? null;
+    const value = normalizeSubmittedFieldValue(field, rawValue);
+    const variableName = getFieldVariableName(field, dataFields);
+    fields[field.id] = value;
+    variables[variableName] = value;
     fieldMetadata.push({
       id: field.id,
+      variableName,
       label: field.label || field.id,
       type: field.type,
       required: Boolean(field.required),
@@ -80,6 +98,7 @@ function buildFormSubmitPayload({ form, submission, values, contextObj, interact
       : null,
     action: { flowId: flowId || "" },
     values: fields,
+    variables,
     submittedValues,
     fields: fieldMetadata,
     context: contextObj || {},
@@ -124,6 +143,7 @@ async function executeFormDataAction({ flowId, submission, form, values, context
         data: values,
         payload_variable: payloadVariable,
         form_payload: formSubmitPayload,
+        form_variables: formSubmitPayload.variables,
         context: contextObj,
         interaction_id: interaction?.id || null,
       },
@@ -139,6 +159,7 @@ async function executeFormDataAction({ flowId, submission, form, values, context
       button_id: button?.id || "",
       button_label: button?.label || "",
       form_data: values || {},
+      form_variables: formSubmitPayload.variables,
       form_context: contextObj || {},
       interaction: interaction || {},
       [payloadVariable]: formSubmitPayload,
