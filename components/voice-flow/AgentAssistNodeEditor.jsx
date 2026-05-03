@@ -14,11 +14,13 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   IconRobot,
   IconGitBranch,
   IconBook,
   IconFileText,
+  IconWorld,
 } from "@tabler/icons-react";
 
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
@@ -32,9 +34,11 @@ export default function AgentAssistNodeEditor({
   const [workflows, setWorkflows] = useState([]);
   const [kbCategories, setKbCategories] = useState([]);
   const [forms, setForms] = useState([]);
+  const [webPages, setWebPages] = useState([]);
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingForms, setLoadingForms] = useState(true);
+  const [loadingWebPages, setLoadingWebPages] = useState(true);
 
   const assistType = config.assist_type || "kb_articles";
   const enabled = config.enabled !== false;
@@ -75,6 +79,22 @@ export default function AgentAssistNodeEditor({
     loadForms();
   }, []);
 
+  // Load active web pages on mount
+  useEffect(() => {
+    async function loadWebPages() {
+      try {
+        const res = await fetch("/api/admin/web-pages", { cache: "no-store" });
+        const data = await res.json();
+        if (data.ok && data.pages) setWebPages(data.pages.filter((page) => page.is_active !== false));
+      } catch (err) {
+        console.error("Failed to load web pages:", err);
+      } finally {
+        setLoadingWebPages(false);
+      }
+    }
+    loadWebPages();
+  }, []);
+
   // Load KB categories on mount
   useEffect(() => {
     async function loadCategories() {
@@ -99,6 +119,26 @@ export default function AgentAssistNodeEditor({
     onChange({
       ...config,
       [key]: value,
+    });
+  }
+
+  function getSelectedWebPageIds() {
+    return Array.isArray(config.web_page_ids)
+      ? config.web_page_ids
+      : config.web_page_id
+        ? [config.web_page_id]
+        : [];
+  }
+
+  function handleWebPageToggle(pageId, checked) {
+    const currentIds = getSelectedWebPageIds();
+    const nextIds = checked
+      ? [...new Set([...currentIds, pageId])]
+      : currentIds.filter((id) => id !== pageId);
+    onChange({
+      ...config,
+      web_page_ids: nextIds,
+      web_page_id: nextIds[0] || "",
     });
   }
 
@@ -134,7 +174,7 @@ export default function AgentAssistNodeEditor({
         <p className="text-xs text-muted-foreground">
           Choose how Agent Assist should help agents during calls
         </p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => handleChange("assist_type", "kb_articles")}
@@ -184,6 +224,23 @@ export default function AgentAssistNodeEditor({
             </div>
             <p className="text-xs text-muted-foreground">
               Auto-open custom queue forms in the agent desktop
+            </p>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleChange("assist_type", "web_pages")}
+            className={`p-4 rounded-lg border-2 text-left transition-all ${
+              assistType === "web_pages"
+                ? "border-violet-500 bg-violet-500/10"
+                : "border-border hover:border-muted-foreground/50"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <IconWorld className={`h-5 w-5 ${assistType === "web_pages" ? "text-violet-500" : "text-muted-foreground"}`} />
+              <span className="font-medium">Web Pages</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Open selected admin web pages in the agent desktop
             </p>
           </button>
         </div>
@@ -303,6 +360,61 @@ export default function AgentAssistNodeEditor({
               checked={config.auto_open_forms !== false}
               onCheckedChange={(checked) => handleChange("auto_open_forms", checked)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Web Pages Options */}
+      {assistType === "web_pages" && (
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <IconWorld className="h-4 w-4 text-violet-500" />
+            Web Pages Settings
+          </div>
+          <div className="space-y-2">
+            <Label>Web pages</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Select active web pages to show for this interaction. Leave empty to show all active web pages.
+            </p>
+            {loadingWebPages ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : webPages.length === 0 ? (
+              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                No active web pages configured in Admin → Web Pages.
+              </div>
+            ) : (
+              <div className="space-y-2 rounded-md border p-2">
+                {webPages.map((page) => {
+                  const selectedIds = getSelectedWebPageIds();
+                  const checked = selectedIds.includes(page.id);
+                  return (
+                    <label
+                      key={page.id}
+                      className="flex cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-muted/50"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(value) => handleWebPageToggle(page.id, value === true)}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{page.name}</span>
+                          {page.icon && <Badge variant="outline" className="text-[10px]">{page.icon}</Badge>}
+                        </div>
+                        {page.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{page.description}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground truncate">{page.url}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

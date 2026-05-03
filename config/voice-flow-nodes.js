@@ -2127,7 +2127,7 @@ export const VOICE_FLOW_NODES = {
     label: "Agent Assist",
     icon: "IconRobot",
     color: NODE_COLORS[NODE_CATEGORIES.AI_INTEGRATION],
-    description: "Configure Agent Assist settings - KB Articles, Workflows, or Forms",
+    description: "Configure Agent Assist settings - KB Articles, Workflows, Forms, or Web Pages",
     telnyxAction: "agent_assist_config",
     telnyxEndpoint: null, // Internal configuration, not a Telnyx API call
     inputs: 1,
@@ -2153,8 +2153,9 @@ export const VOICE_FLOW_NODES = {
           { value: "kb_articles", label: "KB Articles" },
           { value: "workflows", label: "Workflows" },
           { value: "forms", label: "Forms" },
+          { value: "web_pages", label: "Web Pages" },
         ],
-        description: "Choose between Knowledge Base articles, guided Workflows, or custom Forms",
+        description: "Choose between Knowledge Base articles, guided Workflows, custom Forms, or Web Pages",
       },
       // KB Articles options
       kb_category: {
@@ -2207,6 +2208,22 @@ export const VOICE_FLOW_NODES = {
         default: true,
         description: "Automatically open selected and queue-assigned forms",
         showWhen: { assist_type: "forms" },
+      },
+      web_page_ids: {
+        type: "web_page_multi_select",
+        label: "Web Pages",
+        required: false,
+        default: [],
+        description: "Select active web pages to show in the agent desktop",
+        showWhen: { assist_type: "web_pages" },
+      },
+      web_page_id: {
+        type: "web_page_select",
+        label: "Primary Web Page",
+        required: false,
+        default: "",
+        description: "Backward-compatible primary web page selection",
+        showWhen: { assist_type: "web_pages" },
       },
       auto_start: {
         type: "boolean",

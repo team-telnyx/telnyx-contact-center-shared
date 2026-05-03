@@ -9,7 +9,7 @@ import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import { SecureIframe } from "./SecureIframe";
 
-export function AgentWebPagesView({ selectedInteraction, onBackToInteraction }) {
+export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, webPageIds = [] }) {
   const [webPages, setWebPages] = useState([]);
   const [selectedPageId, setSelectedPageId] = useState(null);
   const [selectedPage, setSelectedPage] = useState(null);
@@ -17,18 +17,20 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction }) 
   const [isHydrated, setIsHydrated] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Restore selected page ID from localStorage after hydration
+  const selectedWebPageIds = Array.isArray(webPageIds) ? webPageIds.filter(Boolean) : [];
+
+  // Restore selected page ID from localStorage after hydration. Agent Assist configured pages override localStorage.
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("agent-desktop.web-pages.selectedPageId");
-        if (saved) {
+        if (saved && selectedWebPageIds.length === 0) {
           setSelectedPageId(saved);
         }
       } catch (_) {}
       setIsHydrated(true);
     }
-  }, []);
+  }, [selectedWebPageIds.length]);
 
   // Save selected page ID to localStorage
   useEffect(() => {
@@ -55,22 +57,24 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction }) 
         });
         const data = await res.json();
         if (res.ok) {
-          setWebPages(data.pages || []);
-          // Restore selected page from localStorage if it exists, otherwise select first page
-          if (data.pages?.length > 0) {
-            // Wait for hydration to complete before restoring
-            if (isHydrated && selectedPageId) {
-              const savedPage = data.pages.find((p) => p.id === selectedPageId);
-              if (savedPage) {
-                setSelectedPage(savedPage);
-              } else {
-                // Saved page no longer exists, select first page
-                setSelectedPage(data.pages[0]);
-              }
+          const pages = data.pages || [];
+          const visiblePages = selectedWebPageIds.length > 0
+            ? pages.filter((page) => selectedWebPageIds.includes(page.id))
+            : pages;
+          setWebPages(visiblePages);
+          // Agent Assist selected pages take precedence; otherwise restore local tab selection.
+          if (visiblePages.length > 0) {
+            if (selectedWebPageIds.length > 0) {
+              const currentVisiblePage = visiblePages.find((p) => p.id === selectedPage?.id);
+              setSelectedPage(currentVisiblePage || visiblePages[0]);
+            } else if (isHydrated && selectedPageId) {
+              const savedPage = visiblePages.find((p) => p.id === selectedPageId);
+              setSelectedPage(savedPage || visiblePages[0]);
             } else if (!selectedPage) {
-              // No saved selection, select first page
-              setSelectedPage(data.pages[0]);
+              setSelectedPage(visiblePages[0]);
             }
+          } else {
+            setSelectedPage(null);
           }
         } else {
           notify({
@@ -91,7 +95,7 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction }) 
     }
 
     load();
-  }, [isHydrated, selectedPageId]);
+  }, [isHydrated, selectedPageId, selectedWebPageIds.join(",")]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -127,7 +131,7 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction }) 
             </div>
           ) : webPages.length === 0 ? (
             <div className="px-4 py-2 text-xs text-muted-foreground">
-              No web pages configured
+              No web pages configured for this interaction
             </div>
           ) : (
             webPages.map((page, index) => (
