@@ -366,6 +366,7 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [media, setMedia] = useState([]);
   const [dataActions, setDataActions] = useState([]);
   const [dataActionsLoading, setDataActionsLoading] = useState(false);
+  const [previewSubmitMessage, setPreviewSubmitMessage] = useState("");
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [queues, setQueues] = useState([]);
   const [previewTheme, setPreviewTheme] = useState("system");
@@ -617,6 +618,21 @@ export function FormEditor({ initialForm, isNew = false }) {
     return true;
   }
 
+  async function handlePreviewSubmit(values, meta = {}) {
+    const button = meta.button || null;
+    const flowId = meta.dataActionFlowId || button?.props?.dataActionFlowId || button?.props?.dataActionId || "";
+    const action = dataActions.find((item) => String(item.id) === String(flowId));
+    const actionLabel = button?.props?.dataActionLabel || (action ? dataActionTitle(action) : "");
+    if (flowId) {
+      setPreviewSubmitMessage(`Preview only: clicking “${button?.label || "Submit"}” would submit this form and run data action “${actionLabel || flowId}”. Open the form in Agent Desktop with an interaction to execute it with live context.`);
+      setMessage("Preview data action simulated");
+      return;
+    }
+    const fieldCount = Object.keys(values || {}).length;
+    setPreviewSubmitMessage(`Preview only: clicking “${button?.label || "Submit"}” captured ${fieldCount} field${fieldCount === 1 ? "" : "s"}. No submission was saved from Form Builder View.`);
+    setMessage("Preview submit simulated");
+  }
+
   useEffect(() => {
     if (!formSettingsOpen || queues.length) return;
     fetch("/api/admin/queues?enabled=true&pageSize=100", { cache: "no-store" })
@@ -807,13 +823,17 @@ export function FormEditor({ initialForm, isNew = false }) {
             <div className="text-xs text-muted-foreground">100% · Desktop</div>
           </div>
         </div>
-        <CanvasDropZone previewTheme={previewTheme}>
+        <CanvasDropZone previewTheme={previewTheme} disabled={previewMode}>
           <div className="mx-auto w-full rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-5 md:p-8">
-            <div className="w-full space-y-6">
+            {previewMode ? <div className="w-full space-y-4">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">View mode runs the same interactive renderer as Agent Desktop. Inputs, choices, and buttons are clickable here; data actions are simulated unless the form is opened from an Agent Desktop interaction.</div>
+              <FormRenderer key={`preview-${form.id || form.slug || form.name || "draft"}`} form={form} onSubmit={handlePreviewSubmit} />
+              {previewSubmitMessage ? <div className="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">{previewSubmitMessage}</div> : null}
+            </div> : <div className="w-full space-y-6">
               {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} activeBorderColor={form.theme?.pageTabActiveBorderColor} /> : null}
-              {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={(id) => !previewMode && selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
+              {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id} readOnly={false} onSelect={(id) => selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
               {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
-            </div>
+            </div>}
           </div>
         </CanvasDropZone>
       </section>
@@ -1069,10 +1089,10 @@ function LeftPanel(props) {
 
 }
 
-function CanvasDropZone({ children, previewTheme = "system" }) {
-  const { isOver, setNodeRef } = useDroppable({ id: "form-canvas" });
+function CanvasDropZone({ children, previewTheme = "system", disabled = false }) {
+  const { isOver, setNodeRef } = useDroppable({ id: "form-canvas", disabled });
   const themeClass = previewTheme === "dark" ? "dark" : previewTheme === "light" ? "form-preview-light" : "";
-  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-4 md:p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
+  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-4 md:p-6 transition ${themeClass} ${isOver && !disabled ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
 }
 
 function PageTabs({ pages = [], activePageId, setActivePageId, activeBorderColor }) {
