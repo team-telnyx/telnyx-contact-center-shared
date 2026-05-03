@@ -162,6 +162,7 @@ export function AgentDataSources({
           onSelectedFormIdChange={onSelectedFormIdChange}
           onFormsLoaded={onFormsLoaded}
           hideHeader={hideFormsHeader}
+          showCards={!hideFormsHeader}
         />
       )}
     </div>
