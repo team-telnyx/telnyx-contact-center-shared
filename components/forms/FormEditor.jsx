@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { Input } from "@/components/ui/input";
@@ -16,8 +17,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, makePageId, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
+import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, getFieldChildIds, makePageId, normalizeFormDefinition, slugifyFormName } from "@/lib/forms/form-schema";
 import { FormRenderer } from "@/components/forms/FormRenderer";
+import { notify } from "@/components/ToastNotify";
 
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
@@ -49,6 +51,7 @@ function verticalPaddingClass(value) { return ({ none: "py-0", xs: "py-2", sm: "
 function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "text-lg", xl: "text-2xl" }[value || "md"] || "text-base"); }
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
+function gapPx(value, fallback = 12) { const n = Number(value); return Number.isFinite(n) ? n : fallback; }
 function queueLabel(queue) { return queue.display_name || queue.displayName || queue.name; }
 function queueRouting(queue) { return queue.routing_strategy || queue.routingStrategy || "FIFO"; }
 const BLOCK_DESCRIPTIONS = {
@@ -60,7 +63,64 @@ const BLOCK_DESCRIPTIONS = {
 const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, label: IconTypography, image: IconPhoto, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
 function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
-function rebuildLayoutFromPages(form) { return { ...form, layout: { ...form.layout, order: flattenPageOrder(form.schema?.pages || []) } }; }
+function rebuildLayoutFromPages(form) { return { ...form, layout: { ...form.layout, order: flattenPageOrder(form.schema?.pages || [], form.schema?.fields || []) } }; }
+
+function nestedSlotEntries(field = {}) {
+  const props = field.props || {};
+  if (["section", "row", "flex", "card"].includes(field.type)) return [{ kind: "children", label: "Content", ids: props.children || [] }];
+  if (field.type === "columns") {
+    const count = Math.max(1, Math.min(Number(props.columns || 2), 6));
+    return Array.from({ length: count }, (_, index) => ({ kind: "slot", index, label: `Column ${index + 1}`, ids: props.slots?.[index] || [] }));
+  }
+  if (field.type === "grid") {
+    const columns = Math.max(1, Math.min(Number(props.columns || 2), 6));
+    const rows = Math.max(1, Math.min(Number(props.rows || 2), 12));
+    return Array.from({ length: rows * columns }, (_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; return { kind: "cell", row, column, key, label: `Cell ${row + 1}.${column + 1}`, ids: props.cells?.[key] || [] }; });
+  }
+  return [];
+}
+function removeIdFromProps(props = {}, id) {
+  const next = { ...props };
+  if (Array.isArray(next.children)) next.children = next.children.filter((x) => x !== id);
+  if (Array.isArray(next.slots)) next.slots = next.slots.map((slot) => Array.isArray(slot) ? slot.filter((x) => x !== id) : []);
+  if (next.cells && typeof next.cells === "object") next.cells = Object.fromEntries(Object.entries(next.cells).map(([key, value]) => [key, Array.isArray(value) ? value.filter((x) => x !== id) : []]));
+  return next;
+}
+function insertIdIntoProps(field, target, id, index) {
+  const props = removeIdFromProps(field.props || {}, id);
+  if (target.kind === "children") {
+    const children = [...(props.children || [])]; children.splice(Math.max(0, Math.min(Number(index ?? children.length), children.length)), 0, id); return { ...props, children };
+  }
+  if (target.kind === "slot") {
+    const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); const slots = Array.from({ length: count }, (_, i) => Array.isArray(props.slots?.[i]) ? [...props.slots[i]] : []); const slot = slots[target.index] || [];
+    slot.splice(Math.max(0, Math.min(Number(index ?? slot.length), slot.length)), 0, id); slots[target.index] = slot; return { ...props, slots };
+  }
+  if (target.kind === "cell") {
+    const cells = { ...(props.cells || {}) }; const key = target.key || `${target.row}:${target.column}`; const ids = Array.isArray(cells[key]) ? [...cells[key]] : [];
+    ids.splice(Math.max(0, Math.min(Number(index ?? ids.length), ids.length)), 0, id); cells[key] = ids; return { ...props, cells };
+  }
+  return props;
+}
+
+function replaceIdInProps(props = {}, from, to) {
+  const repl = (ids) => Array.isArray(ids) ? ids.map((id) => id === from ? to : id) : [];
+  const next = { ...props };
+  if (Array.isArray(next.children)) next.children = repl(next.children);
+  if (Array.isArray(next.slots)) next.slots = next.slots.map(repl);
+  if (next.cells && typeof next.cells === "object") next.cells = Object.fromEntries(Object.entries(next.cells).map(([key, value]) => [key, repl(value)]));
+  return next;
+}
+function moveInsideArray(ids, id, dir) { const next = [...ids]; const i = next.indexOf(id); const j = i + dir; if (i < 0 || j < 0 || j >= next.length) return ids; [next[i], next[j]] = [next[j], next[i]]; return next; }
+function outlineRows(rootFields, byId, prefix = "") {
+  const rows = [];
+  rootFields.forEach((field, index) => {
+    const number = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
+    rows.push({ field, number, depth: number.split(".").length - 1 });
+    nestedSlotEntries(field).forEach((slot) => rows.push(...outlineRows((slot.ids || []).map((id) => byId.get(id)).filter(Boolean), byId, number)));
+  });
+  return rows;
+}
+
 
 function makeId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 7)}`;
@@ -75,14 +135,14 @@ function newField(type) {
   if (type === "image") base.props = { src: "", padding: "md" };
   if (type === "section") base.helpText = "Group related fields under this heading.";
   if (type === "section") base.props = { padding: "md" };
-  if (type === "columns") base.props = { columns: 2, gap: "md", padding: "md" };
-  if (type === "grid") base.props = { columns: 2, gap: "md", padding: "md" };
-  if (type === "row") base.props = { padding: "md" };
-  if (type === "flex") base.props = { direction: "row", justify: "start", gap: 16, wrap: true, padding: "md" };
+  if (type === "columns") base.props = { columns: 2, gap: 12, padding: "md", slots: [[], []] };
+  if (type === "grid") base.props = { rows: 2, columns: 2, gap: 12, padding: "md", cells: { "0:0": [], "0:1": [], "1:0": [], "1:1": [] } };
+  if (type === "row") base.props = { padding: "md", children: [] };
+  if (type === "flex") base.props = { direction: "row", justify: "start", gap: 16, wrap: true, padding: "md", children: [] };
   if (type === "spacer") base.props = { size: "md", direction: "vertical" };
   if (type === "hero") { base.label = "Hero section"; base.props = { title: "Help customers faster", quote: "Agent form", description: "Collect the right context during every conversation.", align: "left", padding: "xl", imageUrl: "", imageMode: "cover", buttons: [{ label: "Primary action", href: "#", variant: "primary" }] }; }
   if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage" }, { title: "95%", description: "CSAT" }, { title: "2m", description: "Avg response" }] }; }
-  if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md" }; }
+  if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md", children: [] }; }
   if (type === "richtext") { base.label = "Rich text"; base.props = { richtext: "Use this block for formatted guidance or copy.", padding: "md" }; }
   return base;
 }
@@ -107,6 +167,10 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [queues, setQueues] = useState([]);
   const [previewTheme, setPreviewTheme] = useState("system");
+  const initialSavedRef = useRef(JSON.stringify(normalizeFormDefinition(initialForm || createDefaultForm({ name: "New agent form" }))));
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
 
   const pages = form.schema?.pages || [];
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
@@ -118,15 +182,40 @@ export function FormEditor({ initialForm, isNew = false }) {
     const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
     return (activePage?.fields || []).map((id) => byId.get(id)).filter(Boolean);
   }, [form, activePage]);
+  const fieldsById = useMemo(() => new Map((form.schema?.fields || []).map((f) => [f.id, f])), [form]);
   const selectedField = orderedFields.find((f) => f.id === selectedId) || null;
+  const outlineItems = useMemo(() => outlineRows(activePageFields, fieldsById), [activePageFields, fieldsById]);
 
   useEffect(() => {
     if (!pages.some((page) => page.id === activePageId) && pages[0]) setActivePageId(pages[0].id);
   }, [pages, activePageId]);
   useEffect(() => {
-    if (selectedField && activePage?.fields?.includes(selectedField.id)) return;
+    if (selectedField) return;
     if (activePageFields[0]) setSelectedId(activePageFields[0].id);
-  }, [activePageFields, activePage, selectedField]);
+  }, [activePageFields, selectedField]);
+
+  useEffect(() => { setHasUnsavedChanges(JSON.stringify(normalizeFormDefinition(form)) !== initialSavedRef.current); }, [form]);
+  useEffect(() => {
+    const beforeUnload = (e) => { if (!hasUnsavedChanges) return; e.preventDefault(); e.returnValue = ""; return ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [hasUnsavedChanges]);
+  useEffect(() => {
+    const onClick = (e) => {
+      if (!hasUnsavedChanges) return;
+      const anchor = e.target?.closest?.("a[href]");
+      if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:")) return;
+      e.preventDefault(); setPendingNavigation(href); setShowExitDialog(true);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [hasUnsavedChanges]);
+  useEffect(() => {
+    if (!selectedId || selectedId === "form") return;
+    document.querySelector(`[data-form-field-id="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selectedId]);
 
   function update(next) {
     setForm(normalizeFormDefinition(next));
@@ -134,45 +223,66 @@ export function FormEditor({ initialForm, isNew = false }) {
   function patchForm(patch) {
     update({ ...form, ...patch });
   }
+  function selectField(id) { setSelectedId(id); }
   function updateField(id, patch) {
     update({ ...form, schema: { ...form.schema, fields: form.schema.fields.map((field) => field.id === id ? { ...field, ...patch } : field) } });
   }
-  function addField(type) {
+  function withoutFieldRefs(fields, id) { return fields.map((field) => ({ ...field, props: removeIdFromProps(field.props || {}, id) })); }
+  function findFieldLocation(id) {
+    for (const page of pages) { const index = (page.fields || []).indexOf(id); if (index >= 0) return { kind: "root", pageId: page.id, index }; }
+    for (const field of form.schema.fields) for (const slot of nestedSlotEntries(field)) { const index = (slot.ids || []).indexOf(id); if (index >= 0) return { ...slot, containerId: field.id, index }; }
+    return null;
+  }
+  function addField(type, target = null) {
     const field = newField(type);
     const pageId = activePage?.id || pages[0]?.id || "page_1";
-    const nextPages = (pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }]).map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
-    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, field], pages: nextPages } }));
-    setSelectedId(field.id);
-    setActiveTab("fields");
+    let nextFields = [...form.schema.fields, field];
+    let nextPages = pages.length ? pages : [{ id: pageId, title: "Page 1", fields: [] }];
+    if (target?.containerId) {
+      nextFields = nextFields.map((item) => item.id === target.containerId ? { ...item, props: insertIdIntoProps(item, target, field.id) } : item);
+    } else {
+      nextPages = nextPages.map((page) => page.id === pageId ? { ...page, fields: [...(page.fields || []), field.id] } : page);
+    }
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
+    setSelectedId(field.id); setActiveTab("fields");
   }
   function removeField(id) {
-    const nextFields = form.schema.fields.filter((field) => field.id !== id);
-    const nextPages = pages.map((page) => ({ ...page, fields: (page.fields || []).filter((fieldId) => fieldId !== id) }));
-    const nextPageFields = activePageFields.filter((field) => field.id !== id);
+    const descendants = new Set([id]);
+    const byId = new Map(form.schema.fields.map((field) => [field.id, field]));
+    function collect(fieldId) { (getFieldChildIds(byId.get(fieldId)) || []).forEach((child) => { descendants.add(child); collect(child); }); }
+    collect(id);
+    let nextFields = form.schema.fields.filter((field) => !descendants.has(field.id));
+    descendants.forEach((removeId) => { nextFields = withoutFieldRefs(nextFields, removeId); });
+    const nextPages = pages.map((page) => ({ ...page, fields: (page.fields || []).filter((fieldId) => !descendants.has(fieldId)) }));
+    const nextPageFields = activePageFields.filter((field) => !descendants.has(field.id));
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
     setSelectedId(nextPageFields[0]?.id || "form");
   }
   function duplicateField(field) {
-    const copy = { ...field, id: makeId(field.type), label: `${field.label || field.id} copy` };
-    const pageId = pages.find((page) => (page.fields || []).includes(field.id))?.id || activePage?.id;
-    const nextPages = pages.map((page) => {
-      if (page.id !== pageId) return page;
-      const fields = [...(page.fields || [])]; const index = fields.indexOf(field.id); fields.splice(index + 1, 0, copy.id);
-      return { ...page, fields };
-    });
-    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: [...form.schema.fields, copy], pages: nextPages } }));
-    setSelectedId(copy.id);
+    const byId = new Map(form.schema.fields.map((item) => [item.id, item]));
+    const clones = [];
+    function clone(fieldId) {
+      const source = byId.get(fieldId); if (!source) return null;
+      const copy = { ...source, id: makeId(source.type), label: fieldId === field.id ? `${source.label || source.id} copy` : source.label, props: { ...(source.props || {}) } };
+      clones.push(copy);
+      if (["section", "row", "flex", "card"].includes(source.type)) copy.props.children = (source.props?.children || []).map(clone).filter(Boolean);
+      if (source.type === "columns") copy.props.slots = (source.props?.slots || []).map((slot) => (slot || []).map(clone).filter(Boolean));
+      if (source.type === "grid") copy.props.cells = Object.fromEntries(Object.entries(source.props?.cells || {}).map(([key, ids]) => [key, (ids || []).map(clone).filter(Boolean)]));
+      return copy.id;
+    }
+    const copyId = clone(field.id); const location = findFieldLocation(field.id);
+    let nextPages = pages; let nextFields = [...form.schema.fields, ...clones];
+    if (location?.kind === "root") nextPages = pages.map((page) => page.id === location.pageId ? { ...page, fields: [...page.fields.slice(0, location.index + 1), copyId, ...page.fields.slice(location.index + 1)] } : page);
+    else if (location?.containerId) nextFields = nextFields.map((item) => item.id === location.containerId ? { ...item, props: insertIdIntoProps(item, location, copyId, location.index + 1) } : item);
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
+    setSelectedId(copyId);
   }
   function moveField(id, dir) {
-    const pageId = pages.find((page) => (page.fields || []).includes(id))?.id || activePage?.id;
-    const nextPages = pages.map((page) => {
-      if (page.id !== pageId) return page;
-      const fields = [...(page.fields || [])]; const i = fields.indexOf(id); const j = i + dir;
-      if (i < 0 || j < 0 || j >= fields.length) return page;
-      [fields[i], fields[j]] = [fields[j], fields[i]];
-      return { ...page, fields };
-    });
-    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: nextPages } }));
+    const location = findFieldLocation(id); if (!location) return;
+    let nextPages = pages; let nextFields = form.schema.fields;
+    if (location.kind === "root") nextPages = pages.map((page) => page.id === location.pageId ? { ...page, fields: moveInsideArray(page.fields || [], id, dir) } : page);
+    else nextFields = form.schema.fields.map((field) => field.id === location.containerId ? { ...field, props: insertIdIntoProps({ ...field, props: removeIdFromProps(field.props || {}, id) }, location, id, location.index + dir) } : field);
+    update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
   }
   function addPage() {
     const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", fields: [] };
@@ -202,8 +312,13 @@ export function FormEditor({ initialForm, isNew = false }) {
       const res = await fetch(creating ? "/api/admin/forms" : `/api/admin/forms/${payload.id}`, { method: creating ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Save failed");
-      setForm(normalizeFormDefinition(data.form));
-      setMessage(status === "published" ? "Published." : "Saved.");
+      const savedForm = normalizeFormDefinition(data.form);
+      setForm(savedForm);
+      initialSavedRef.current = JSON.stringify(savedForm);
+      setHasUnsavedChanges(false);
+      const savedMessage = status === "published" ? "Published." : "Saved.";
+      setMessage(savedMessage);
+      notify({ title: savedMessage, description: "Form changes were saved successfully.", variant: "success" });
       if (creating && data.form?.id) router.replace(`/admin/forms/${data.form.id}`);
       return data.form;
     } catch (err) {
@@ -219,9 +334,16 @@ export function FormEditor({ initialForm, isNew = false }) {
     if (!saved?.id) return;
     const res = await fetch(`/api/admin/forms/${saved.id}/publish`, { method: "POST" });
     const data = await res.json();
-    if (data.ok) { setForm(normalizeFormDefinition(data.form)); setMessage("Published."); }
+    if (data.ok) { const publishedForm = normalizeFormDefinition(data.form); setForm(publishedForm); initialSavedRef.current = JSON.stringify(publishedForm); setHasUnsavedChanges(false); setMessage("Published."); notify({ title: "Published", description: "Form is now published.", variant: "success" }); }
     else setMessage(data.error || "Publish failed");
   }
+
+  function confirmExit() {
+    setShowExitDialog(false); setHasUnsavedChanges(false);
+    const target = pendingNavigation || "/admin/forms"; setPendingNavigation(null);
+    if (/^https?:\/\//.test(target)) window.location.href = target; else router.push(target);
+  }
+  function cancelExit() { setShowExitDialog(false); setPendingNavigation(null); }
 
   async function sendAi() {
     const prompt = aiPrompt.trim();
@@ -304,7 +426,15 @@ export function FormEditor({ initialForm, isNew = false }) {
   function handleDragStart(event) { setActiveDragType(event.active?.data?.current?.type || null); }
   function handleDragEnd(event) {
     const type = event.active?.data?.current?.type;
-    if (event.over?.id === "form-canvas" && type) addField(type);
+    const overId = String(event.over?.id || "");
+    if (type) {
+      if (overId === "form-canvas") addField(type);
+      else if (overId.startsWith("container:")) {
+        const [, containerId, kind, a, b] = overId.split(":");
+        const target = kind === "slot" ? { containerId, kind, index: Number(a) } : kind === "cell" ? { containerId, kind, row: Number(a), column: Number(b), key: `${a}:${b}` } : { containerId, kind: "children" };
+        addField(type, target);
+      }
+    }
     setActiveDragType(null);
   }
 
@@ -331,6 +461,19 @@ export function FormEditor({ initialForm, isNew = false }) {
       </DialogContent>
     </Dialog>
 
+    <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+          <AlertDialogDescription>You have unsaved changes. Are you sure you want to leave? All unsaved changes will be lost.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={cancelExit}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Leave without saving</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
     <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -340,7 +483,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={setSelectedId} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
+        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -356,11 +499,11 @@ export function FormEditor({ initialForm, isNew = false }) {
           </div>
         </div>
         <CanvasDropZone previewTheme={previewTheme}>
-          <div className="mx-auto max-w-4xl rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-8">
-            <div className="mx-auto max-w-2xl space-y-6">
+          <div className="mx-auto w-full rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-5 md:p-8">
+            <div className="w-full space-y-6">
               <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
               {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} /> : null}
-              {activePageFields.map((field) => <CanvasField key={field.id} field={field} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={() => !previewMode && setSelectedId(field.id)} />)}
+              {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={(id) => !previewMode && selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
               {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
             </div>
           </div>
@@ -384,7 +527,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
+  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage } = props;
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
@@ -480,8 +623,8 @@ function LeftPanel(props) {
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         <div className="rounded-lg border bg-muted/30 p-2 text-sm font-medium">{form.name}</div>
         <div className="ml-4 border-l pl-3 space-y-2">
-          {allFields.map((field, index) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
-            {index + 1}. {field.label || field.id}
+          {outlineItems.map(({ field, number, depth }) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} style={{ marginLeft: depth * 14 }} onClick={() => setSelectedId(field.id)}>
+            {number}. {field.label || field.id}
             <div className="text-xs text-muted-foreground">{field.type}</div>
           </button>)}
         </div>
@@ -492,7 +635,7 @@ function LeftPanel(props) {
   return <div className="h-full min-h-0 flex flex-col">
     <PanelHeader title="Fields" description="Select, duplicate, remove, and reorder fields." />
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-      {orderedFields.map((field) => <div key={field.id} className={`rounded-xl border p-3 ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} onClick={() => setSelectedId(field.id)}>
+      {(outlineItems.length ? outlineItems : orderedFields.map((field, index) => ({ field, number: `${index + 1}`, depth: 0 }))).map(({ field, number, depth }) => <div key={field.id} className={`rounded-xl border p-3 ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} style={{ marginLeft: depth * 12 }} onClick={() => setSelectedId(field.id)}>
         <div className="flex items-start justify-between gap-2">
           <div>
             <div className="text-sm font-medium">{field.label || field.id}</div>
@@ -514,7 +657,7 @@ function LeftPanel(props) {
 function CanvasDropZone({ children, previewTheme = "system" }) {
   const { isOver, setNodeRef } = useDroppable({ id: "form-canvas" });
   const themeClass = previewTheme === "dark" ? "dark" : previewTheme === "light" ? "form-preview-light" : "";
-  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
+  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-4 md:p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
 }
 
 function PageTabs({ pages = [], activePageId, setActivePageId }) {
@@ -554,25 +697,51 @@ function MiniTemplatePreview({ form }) {
   return <FormRenderer form={form} readOnly />;
 }
 
-function CanvasField({ field, selected, onSelect, readOnly }) {
+function FieldToolbar({ field, removeField, duplicateField, moveField, updateField }) {
+  const supportsBold = ["label", "text", "textarea", "richtext", "section"].includes(field.type);
+  const supportsAlign = ["label", "text", "richtext", "hero"].includes(field.type);
   const props = field.props || {};
-  const shell = `relative rounded-xl border transition ${paddingClass(props.padding)} ${selected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
-  if (field.type === "section") return <div onClick={onSelect} className={shell}><div className="rounded-lg border bg-muted/25 p-4" style={fieldStyle(field)}><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}</div></div>;
-  if (field.type === "row") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Row · {field.label}</div></div>;
-  if (field.type === "columns") { const count = Math.max(2, Math.min(Number(props.columns || 2), 4)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-h-16 rounded-md bg-muted/60" />)}</div></div></div>; }
-  if (field.type === "grid") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="h-12 rounded-md bg-muted/60" />)}</div></div></div>; }
-  if (field.type === "flex") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Flex · {props.direction || "row"} · gap {props.gap || 16}px</div></div>;
-  if (field.type === "spacer") return <div onClick={onSelect} className={shell}><div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
-  if (field.type === "hero") return <div onClick={onSelect} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}><div className={`rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6`}><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div></div>;
-  if (field.type === "stats") return <div onClick={onSelect} className={shell}><div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
-  if (field.type === "card") return <div onClick={onSelect} className={shell}><div className={`rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} p-4 text-card-foreground`} style={fieldStyle(field)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}</div></div>;
-  if (field.type === "richtext") return <div onClick={onSelect} className={shell}><div className="prose prose-sm max-w-none dark:prose-invert" style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
-  if (field.type === "hidden") return <div onClick={onSelect} className={shell}><Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
-  if (field.type === "label") return <div onClick={onSelect} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={fieldStyle(field)}><div className="font-semibold">{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
-  if (field.type === "context_value") return <div onClick={onSelect} className={shell}><Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
-  if (field.type === "image") return <div onClick={onSelect} className={shell}>{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
-  if (field.type === "button") return <div onClick={onSelect} className={shell}><Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
-  return <div onClick={onSelect} className={shell}><Label style={fieldStyle(field)}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className="mt-2 space-y-2">{(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  return <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-lg border bg-background/95 p-1 shadow-lg backdrop-blur">
+    {supportsBold ? <Button type="button" size="sm" variant={props.bold ? "secondary" : "ghost"} className="h-7 px-2 font-bold" onClick={(e) => { e.stopPropagation(); updateField(field.id, { props: { ...props, bold: !props.bold } }); }}>B</Button> : null}
+    {supportsAlign ? <Button type="button" size="sm" variant="ghost" className="h-7 px-2" onClick={(e) => { e.stopPropagation(); const order = ["left", "center", "right"]; const next = order[(order.indexOf(props.align || "left") + 1) % order.length]; updateField(field.id, { props: { ...props, align: next } }); }}>{(props.align || "left").slice(0, 1).toUpperCase()}</Button> : null}
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Move up" onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Move down" onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2" title="Duplicate" onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>⧉</Button>
+    <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-destructive" title="Delete" onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button>
+  </div>;
+}
+
+function ContainerDropZone({ id, children, label, empty = false }) {
+  const { isOver, setNodeRef } = useDroppable({ id });
+  return <div ref={setNodeRef} className={`min-h-16 rounded-lg border border-dashed p-3 transition ${isOver ? "border-primary bg-primary/10" : empty ? "border-muted-foreground/30 bg-muted/30" : "border-border/60 bg-muted/20"}`}>
+    {children}
+    {empty ? <div className="text-center text-xs text-muted-foreground">Drop blocks into {label}</div> : null}
+  </div>;
+}
+
+function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOnly, addField, removeField, duplicateField, moveField, updateField }) {
+  const props = field.props || {};
+  const isSelected = selectedId === field.id && !readOnly;
+  const shell = `group relative rounded-xl border transition ${paddingClass(props.padding)} ${isSelected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
+  const toolbar = isSelected ? <FieldToolbar field={field} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null;
+  const renderChild = (id) => { const child = fieldsById.get(id); return child ? <CanvasField key={id} field={child} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === id} readOnly={readOnly} onSelect={() => !readOnly && onSelect?.(id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} /> : null; };
+  const baseProps = { "data-form-field-id": field.id, onClick: (e) => { e.stopPropagation(); onSelect?.(field.id); }, className: shell };
+
+  if (field.type === "section") return <div {...baseProps}>{toolbar}<div className="rounded-lg border bg-muted/25 p-4" style={fieldStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
+  if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{(props.children || []).map(renderChild)}</div></ContainerDropZone></div></div>;
+  if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{(props.slots?.[i] || []).map(renderChild)}</ContainerDropZone>)}</div></div></div>; }
+  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}<div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!props.cells?.[key]?.length}>{(props.cells?.[key] || []).map(renderChild)}</ContainerDropZone>; })}</div></div></div>; }
+  if (field.type === "spacer") return <div {...baseProps}>{toolbar}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
+  if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6`}><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div></div>;
+  if (field.type === "stats") return <div {...baseProps}>{toolbar}<div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
+  if (field.type === "card") return <div {...baseProps}>{toolbar}<div className={`rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} p-4 text-card-foreground`} style={fieldStyle(field)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{(props.children || []).map(renderChild)}</ContainerDropZone></div></div></div>;
+  if (field.type === "richtext") return <div {...baseProps}>{toolbar}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
+  if (field.type === "hidden") return <div {...baseProps}>{toolbar}<Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
+  if (field.type === "label") return <div {...baseProps} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={fieldStyle(field)}>{toolbar}<div className={`font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "context_value") return <div {...baseProps}>{toolbar}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
+  if (field.type === "image") return <div {...baseProps}>{toolbar}{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
+  if (field.type === "button") return <div {...baseProps}>{toolbar}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
+  return <div {...baseProps}>{toolbar}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className="mt-2 space-y-2">{(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
 function FormSettingsFields({ form, patchForm, queues = [] }) {
@@ -638,7 +807,8 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
     const nextBindings = { ...(form.bindings || {}) };
     if (field.id !== clean && nextBindings[field.id] !== undefined) { nextBindings[clean] = nextBindings[field.id]; delete nextBindings[field.id]; }
     const pages = (form.schema.pages || []).map((page) => ({ ...page, fields: (page.fields || []).map((id) => id === field.id ? clean : id) }));
-    patchForm({ schema: { ...form.schema, fields: form.schema.fields.map((item) => item.id === field.id ? { ...item, id: clean } : item), pages }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
+    const fields = form.schema.fields.map((item) => ({ ...(item.id === field.id ? { ...item, id: clean } : item), props: replaceIdInProps(item.props || {}, field.id, clean) }));
+    patchForm({ schema: { ...form.schema, fields, pages }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
   }
   return <div className="h-full min-h-0 flex flex-col">
     <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>
@@ -675,7 +845,8 @@ function BlockPropertyControls({ field, setProps, updateField }) {
 }
 
 function SpecificBlockControls({ field, props, setProps, updateField }) {
-  if (["columns", "grid"].includes(field.type)) return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={props.gap || 12} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
+  if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
+  if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
   if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Image URL</Label><Input value={props.imageUrl || ""} onChange={(e) => setProps({ imageUrl: e.target.value })} /></div><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
