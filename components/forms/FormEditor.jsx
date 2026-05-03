@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeadset, IconHeading, IconHome, IconInfoCircle, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMail, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhone, IconPhoto, IconPlus, IconRectangle, IconSettings, IconStar, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconUser, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
+import * as TablerIcons from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,23 +57,22 @@ const CODE_LANGUAGE_OPTIONS = [
   { value: "markdown", label: "Markdown" },
   { value: "plaintext", label: "Plain text" },
 ];
-const PAGE_ICON_OPTIONS = [
-  { value: "none", label: "No icon", icon: null },
-  { value: "forms", label: "Form", icon: IconForms },
-  { value: "user", label: "User", icon: IconUser },
-  { value: "phone", label: "Phone", icon: IconPhone },
-  { value: "mail", label: "Email", icon: IconMail },
-  { value: "message", label: "Message", icon: IconMessageCircle },
-  { value: "headset", label: "Support", icon: IconHeadset },
-  { value: "info", label: "Info", icon: IconInfoCircle },
-  { value: "home", label: "Home", icon: IconHome },
-  { value: "star", label: "Star", icon: IconStar },
-  { value: "check", label: "Check", icon: IconCheck },
-];
+const LEGACY_PAGE_ICON_MAP = { forms: "IconForms", user: "IconUser", phone: "IconPhone", mail: "IconMail", message: "IconMessageCircle", headset: "IconHeadset", info: "IconInfoCircle", home: "IconHome", star: "IconStar", check: "IconCheck" };
+const PREFERRED_PAGE_ICONS = ["IconForms", "IconUser", "IconPhone", "IconMail", "IconMessageCircle", "IconHeadset", "IconInfoCircle", "IconHome", "IconStar", "IconCheck", "IconBuilding", "IconMapPin", "IconCalendar", "IconCreditCard", "IconShield", "IconFileText", "IconClipboardList", "IconDeviceMobile", "IconWorld", "IconSettings", "IconBell", "IconTag", "IconBriefcase", "IconHeart", "IconThumbUp"];
+const PAGE_ICON_OPTIONS = Object.entries(TablerIcons)
+  .filter(([name, value]) => /^Icon[A-Z]/.test(name) && typeof value === "function")
+  .map(([value]) => ({ value, label: value.replace(/^Icon/, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2") }))
+  .sort((a, b) => {
+    const ai = PREFERRED_PAGE_ICONS.indexOf(a.value); const bi = PREFERRED_PAGE_ICONS.indexOf(b.value);
+    if (ai >= 0 || bi >= 0) return (ai >= 0 ? ai : 9999) - (bi >= 0 ? bi : 9999);
+    return a.label.localeCompare(b.label);
+  });
+function pageIconValue(value) { return LEGACY_PAGE_ICON_MAP[value] || value || ""; }
 function PageIcon({ value, className = "h-4 w-4" }) {
-  const Icon = PAGE_ICON_OPTIONS.find((option) => option.value === value)?.icon;
+  const Icon = TablerIcons[pageIconValue(value)];
   return Icon ? <Icon className={className} /> : null;
 }
+
 const ALIGN_OPTIONS = ["left", "center", "right"];
 const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
 const STATUS_BADGE_CLASS = { draft: "border-amber-500 text-amber-700 dark:text-amber-300", published: "border-emerald-500 text-emerald-700 dark:text-emerald-300", archived: "border-slate-400 text-slate-600 dark:text-slate-300" };
@@ -357,7 +357,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
   }
   function addPage() {
-    const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", icon: "forms", fields: [] };
+    const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", icon: "IconForms", fields: [] };
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: [...pages, page] } }));
     setActivePageId(page.id); setSelectedId("form"); setActiveTab("pages");
   }
@@ -613,7 +613,6 @@ export function FormEditor({ initialForm, isNew = false }) {
         <CanvasDropZone previewTheme={previewTheme}>
           <div className="mx-auto w-full rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-5 md:p-8">
             <div className="w-full space-y-6">
-              <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
               {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} activeBorderColor={form.theme?.pageTabActiveBorderColor} /> : null}
               {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={(id) => !previewMode && selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
               {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
@@ -743,7 +742,7 @@ function LeftPanel(props) {
           </button>
           <div className="space-y-2">
             <RevertibleTextInput value={page.title ?? ""} restoreOnEmpty fallbackValue={`Page ${index + 1}`} onCommit={(value) => updatePage(page.id, { title: value })} placeholder="Page title" />
-            <Select value={page.icon || "none"} onValueChange={(value) => updatePage(page.id, { icon: value === "none" ? "" : value })}><SelectTrigger><SelectValue placeholder="Page icon" /></SelectTrigger><SelectContent>{PAGE_ICON_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
+            <PageIconPicker value={page.icon || ""} onChange={(icon) => updatePage(page.id, { icon })} />
             <Input value={page.description ?? ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
@@ -884,6 +883,39 @@ function PageTabs({ pages = [], activePageId, setActivePageId, activeBorderColor
     })}
   </div>;
 }
+
+function PageIconPicker({ value = "", onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const normalizedValue = pageIconValue(value);
+  const selected = PAGE_ICON_OPTIONS.find((option) => option.value === normalizedValue);
+  const q = query.trim().toLowerCase();
+  const filtered = q ? PAGE_ICON_OPTIONS.filter((option) => option.label.toLowerCase().includes(q) || option.value.toLowerCase().includes(q)) : PAGE_ICON_OPTIONS;
+  return <div className="space-y-2">
+    <Label>Page icon</Label>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
+          <PageIcon value={normalizedValue} />
+          <span className={selected ? "" : "text-muted-foreground"}>{selected?.label || "No icon"}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[300px] p-3">
+        <div className="space-y-3">
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search icons..." autoFocus />
+          <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto pr-1">
+            <button type="button" onClick={() => { onChange?.(""); setOpen(false); }} className={`flex h-16 flex-col items-center justify-center gap-1 rounded-md border text-[10px] transition hover:border-primary ${!normalizedValue ? "border-primary bg-primary/10" : "bg-background"}`}>None</button>
+            {filtered.map((option) => <button key={option.value} type="button" title={option.label} onClick={() => { onChange?.(option.value); setOpen(false); }} className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-md border p-1 text-[10px] transition hover:border-primary ${normalizedValue === option.value ? "border-primary bg-primary/10" : "bg-background"}`}>
+              <PageIcon value={option.value} className="h-5 w-5" />
+              <span className="w-full truncate text-center">{option.label}</span>
+            </button>)}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  </div>;
+}
+
 
 function BlockCardContent({ type, iconClass = "text-primary" }) {
   const Icon = blockIcon(type);

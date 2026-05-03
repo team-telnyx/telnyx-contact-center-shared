@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { IconCheck, IconForms, IconHeadset, IconHome, IconInfoCircle, IconMail, IconMessageCircle, IconPhone, IconStar, IconUser } from "@tabler/icons-react";
+import * as TablerIcons from "@tabler/icons-react";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { getContextValue } from "@/lib/forms/form-context";
 import { getFieldChildIds, normalizeFormDefinition } from "@/lib/forms/form-schema";
@@ -22,8 +22,8 @@ function containerStyle(field, base = {}) {
   if (!Number.isFinite(width)) return { ...base, ...fieldStyle(field) };
   return { ...base, ...fieldStyle(field), borderWidth: `${Math.max(0, width)}px`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" };
 }
-const PAGE_ICONS = { forms: IconForms, user: IconUser, phone: IconPhone, mail: IconMail, message: IconMessageCircle, headset: IconHeadset, info: IconInfoCircle, home: IconHome, star: IconStar, check: IconCheck };
-function PageIcon({ value, className = "h-4 w-4" }) { const Icon = PAGE_ICONS[value]; return Icon ? <Icon className={className} /> : null; }
+const LEGACY_PAGE_ICON_MAP = { forms: "IconForms", user: "IconUser", phone: "IconPhone", mail: "IconMail", message: "IconMessageCircle", headset: "IconHeadset", info: "IconInfoCircle", home: "IconHome", star: "IconStar", check: "IconCheck" };
+function PageIcon({ value, className = "h-4 w-4" }) { const Icon = TablerIcons[LEGACY_PAGE_ICON_MAP[value] || value]; return Icon ? <Icon className={className} /> : null; }
 function gapValue(value, fallback = 12) { return typeof value === "number" ? value : Number(value || fallback); }
 function childFields(ids = [], byId) { return ids.map((id) => byId.get(id)).filter(Boolean); }
 function heroContent(field, props = {}) {
