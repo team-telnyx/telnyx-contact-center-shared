@@ -68,7 +68,14 @@ export function InteractionDetail({ interaction }) {
   const assistType = assistConfig?.assist_type || "kb_articles";
   const workflowId = assistConfig?.workflow_id;
   const formIds = assistConfig?.form_ids || (assistConfig?.form_id ? [assistConfig.form_id] : []);
-  const webPageIds = assistConfig?.web_page_ids || (assistConfig?.web_page_id ? [assistConfig.web_page_id] : []);
+  const legacyWebPageId = Array.isArray(assistConfig?.web_page_ids)
+    ? assistConfig.web_page_ids.find(Boolean)
+    : null;
+  const webPageIds = assistConfig?.web_page_id
+    ? [assistConfig.web_page_id]
+    : legacyWebPageId
+      ? [legacyWebPageId]
+      : [];
 
   // Workflows mode - full width workflow view without tabs
   if (assistType === "workflows" && workflowId) {

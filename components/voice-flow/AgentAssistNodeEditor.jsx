@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   IconRobot,
   IconGitBranch,
@@ -95,6 +94,18 @@ export default function AgentAssistNodeEditor({
     loadWebPages();
   }, []);
 
+  // Normalize legacy Web Pages multi-select config to the canonical single web_page_id.
+  useEffect(() => {
+    if (assistType !== "web_pages" && assistType !== "web_page") return;
+    if (!Array.isArray(config.web_page_ids) || config.web_page_ids.length === 0) return;
+    const firstLegacyWebPageId = config.web_page_id || config.web_page_ids.find(Boolean) || "";
+    const { web_page_ids: _legacyWebPageIds, ...nextConfig } = config;
+    onChange({
+      ...nextConfig,
+      web_page_id: firstLegacyWebPageId,
+    });
+  }, [assistType, config, onChange]);
+
   // Load KB categories on mount
   useEffect(() => {
     async function loadCategories() {
@@ -122,27 +133,28 @@ export default function AgentAssistNodeEditor({
     });
   }
 
-  function getSelectedWebPageIds() {
-    return Array.isArray(config.web_page_ids)
-      ? config.web_page_ids
-      : config.web_page_id
-        ? [config.web_page_id]
-        : [];
+  function getSelectedWebPageId() {
+    if (config.web_page_id) return config.web_page_id;
+    if (Array.isArray(config.web_page_ids)) {
+      return config.web_page_ids.find(Boolean) || "";
+    }
+    return "";
   }
 
-  function handleWebPageToggle(pageId, checked) {
-    const currentIds = getSelectedWebPageIds();
-    const nextIds = checked
-      ? [...new Set([...currentIds, pageId])]
-      : currentIds.filter((id) => id !== pageId);
+  function handleWebPageSelect(pageId) {
+    const { web_page_ids: _legacyWebPageIds, ...nextConfig } = config;
     onChange({
-      ...config,
-      web_page_ids: nextIds,
-      web_page_id: nextIds[0] || "",
+      ...nextConfig,
+      web_page_id: pageId === "all" ? "" : pageId,
     });
   }
 
   const selectedWorkflow = workflows.find((w) => w.id === config.workflow_id);
+  const selectedWebPageId = getSelectedWebPageId();
+  const selectedWebPage = webPages.find((page) => page.id === selectedWebPageId);
+  const selectTriggerClassName = "w-full max-w-full min-w-0 overflow-hidden [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate";
+  const selectContentClassName = "w-[var(--radix-select-trigger-width)] max-w-[min(var(--radix-select-trigger-width),calc(100vw-2rem))] overflow-x-hidden";
+  const selectItemClassName = "max-w-full min-w-0 [&>span:last-child]:min-w-0 [&>span:last-child]:max-w-full [&>span:last-child]:truncate";
 
   return (
     <div className="space-y-6">
@@ -269,13 +281,13 @@ export default function AgentAssistNodeEditor({
                 value={config.kb_category || "all"}
                 onValueChange={(value) => handleChange("kb_category", value === "all" ? "" : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
+                <SelectContent className={selectContentClassName}>
+                  <SelectItem value="all" className={selectItemClassName}>All categories</SelectItem>
                   {kbCategories.map((cat) => (
-                    <SelectItem key={cat.id || cat.name || cat} value={cat.id || cat.name || cat}>
+                    <SelectItem key={cat.id || cat.name || cat} value={cat.id || cat.name || cat} className={selectItemClassName}>
                       {cat.name || cat}
                     </SelectItem>
                   ))}
@@ -337,13 +349,13 @@ export default function AgentAssistNodeEditor({
                 value={config.form_id || "queue"}
                 onValueChange={(value) => handleChange("form_id", value === "queue" ? "" : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="Use queue-assigned forms" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="queue">Use queue-assigned forms</SelectItem>
+                <SelectContent className={selectContentClassName}>
+                  <SelectItem value="queue" className={selectItemClassName}>Use queue-assigned forms</SelectItem>
                   {forms.map((form) => (
-                    <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>
+                    <SelectItem key={form.id} value={form.id} className={selectItemClassName}>{form.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -372,48 +384,52 @@ export default function AgentAssistNodeEditor({
             Web Pages Settings
           </div>
           <div className="space-y-2">
-            <Label>Web pages</Label>
+            <Label>Web page</Label>
             <p className="text-xs text-muted-foreground mb-2">
-              Select active web pages to show for this interaction. Leave empty to show all active web pages.
+              Select one active web page to show for this interaction. Leave empty to show all active web pages.
             </p>
             {loadingWebPages ? (
-              <div className="space-y-2">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </div>
+              <Skeleton className="h-10 w-full" />
             ) : webPages.length === 0 ? (
               <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
                 No active web pages configured in Admin → Web Pages.
               </div>
             ) : (
-              <div className="space-y-2 rounded-md border p-2">
-                {webPages.map((page) => {
-                  const selectedIds = getSelectedWebPageIds();
-                  const checked = selectedIds.includes(page.id);
-                  return (
-                    <label
-                      key={page.id}
-                      className="flex cursor-pointer items-start gap-3 rounded-md p-2 hover:bg-muted/50"
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(value) => handleWebPageToggle(page.id, value === true)}
-                        className="mt-0.5"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm">{page.name}</span>
-                          {page.icon && <Badge variant="outline" className="text-[10px]">{page.icon}</Badge>}
+              <>
+                <Select
+                  value={selectedWebPageId || "all"}
+                  onValueChange={handleWebPageSelect}
+                >
+                  <SelectTrigger className={selectTriggerClassName}>
+                    <SelectValue placeholder="All active web pages" />
+                  </SelectTrigger>
+                  <SelectContent className={selectContentClassName}>
+                    <SelectItem value="all" className={selectItemClassName}>
+                      <span className="text-muted-foreground">All active web pages</span>
+                    </SelectItem>
+                    {webPages.map((page) => (
+                      <SelectItem key={page.id} value={page.id} className={selectItemClassName}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 truncate">{page.name}</span>
+                          {page.icon && <Badge variant="outline" className="shrink-0 text-[10px]">{page.icon}</Badge>}
                         </div>
-                        {page.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2">{page.description}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground truncate">{page.url}</p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedWebPage && (
+                  <div className="mt-2 rounded-md bg-muted p-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 truncate text-sm font-medium">{selectedWebPage.name}</span>
+                      {selectedWebPage.icon && <Badge variant="outline" className="shrink-0 text-[10px]">{selectedWebPage.icon}</Badge>}
+                    </div>
+                    {selectedWebPage.description && (
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{selectedWebPage.description}</p>
+                    )}
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{selectedWebPage.url}</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -440,20 +456,20 @@ export default function AgentAssistNodeEditor({
                 value={config.workflow_id || "none"}
                 onValueChange={(value) => handleChange("workflow_id", value === "none" ? "" : value)}
               >
-                <SelectTrigger>
+                <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="Select a workflow..." />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
+                <SelectContent className={selectContentClassName}>
+                  <SelectItem value="none" className={selectItemClassName}>
                     <span className="text-muted-foreground">No workflow</span>
                   </SelectItem>
                   {workflows.map((workflow) => (
-                    <SelectItem key={workflow.id} value={workflow.id}>
-                      <div className="flex items-center gap-2">
-                        <IconGitBranch className="h-4 w-4" />
-                        <span>{workflow.name}</span>
+                    <SelectItem key={workflow.id} value={workflow.id} className={selectItemClassName}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <IconGitBranch className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 truncate">{workflow.name}</span>
                         {workflow.category && (
-                          <Badge variant="secondary" className="text-xs ml-1">
+                          <Badge variant="secondary" className="ml-1 shrink-0 text-xs">
                             {workflow.category}
                           </Badge>
                         )}
@@ -464,16 +480,16 @@ export default function AgentAssistNodeEditor({
               </Select>
             )}
             {selectedWorkflow && (
-              <div className="mt-2 p-3 bg-muted rounded-md">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{selectedWorkflow.name}</span>
-                  <div className="flex gap-2">
+              <div className="mt-2 rounded-md bg-muted p-3">
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-sm font-medium">{selectedWorkflow.name}</span>
+                  <div className="flex shrink-0 gap-2">
                     <Badge variant="outline">{selectedWorkflow.stages_count || 0} stages</Badge>
                     <Badge variant="outline">{selectedWorkflow.items_count || 0} items</Badge>
                   </div>
                 </div>
                 {selectedWorkflow.description && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                     {selectedWorkflow.description}
                   </p>
                 )}

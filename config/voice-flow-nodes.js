@@ -2209,20 +2209,12 @@ export const VOICE_FLOW_NODES = {
         description: "Automatically open selected and queue-assigned forms",
         showWhen: { assist_type: "forms" },
       },
-      web_page_ids: {
-        type: "web_page_multi_select",
-        label: "Web Pages",
-        required: false,
-        default: [],
-        description: "Select active web pages to show in the agent desktop",
-        showWhen: { assist_type: "web_pages" },
-      },
       web_page_id: {
         type: "web_page_select",
-        label: "Primary Web Page",
+        label: "Web Page",
         required: false,
         default: "",
-        description: "Backward-compatible primary web page selection",
+        description: "Select one active web page to show in the agent desktop",
         showWhen: { assist_type: "web_pages" },
       },
       auto_start: {
