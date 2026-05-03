@@ -67,6 +67,14 @@ const PAGE_ICON_OPTIONS = Object.entries(TablerIcons)
     if (ai >= 0 || bi >= 0) return (ai >= 0 ? ai : 9999) - (bi >= 0 ? bi : 9999);
     return a.label.localeCompare(b.label);
   });
+const PAGE_ICON_INITIAL_LIMIT = 96;
+const PAGE_ICON_SEARCH_LIMIT = 240;
+let pageIconsPreloaded = false;
+function preloadPageIcons() {
+  if (pageIconsPreloaded) return;
+  pageIconsPreloaded = true;
+  PAGE_ICON_OPTIONS.forEach((option) => { void TablerIcons[option.value]; });
+}
 function pageIconValue(value) { return LEGACY_PAGE_ICON_MAP[value] || value || ""; }
 function PageIcon({ value, className = "h-4 w-4" }) {
   const Icon = TablerIcons[pageIconValue(value)];
@@ -283,6 +291,15 @@ export function FormEditor({ initialForm, isNew = false }) {
   const fieldsById = useMemo(() => new Map((form.schema?.fields || []).map((f) => [f.id, f])), [form]);
   const selectedField = orderedFields.find((f) => f.id === selectedId) || null;
   const outlineItems = useMemo(() => outlineRows(activePageFields, fieldsById), [activePageFields, fieldsById]);
+
+  useEffect(() => {
+    const run = () => preloadPageIcons();
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(run, { timeout: 1200 });
+      return () => window.cancelIdleCallback?.(id);
+    }
+    run();
+  }, []);
 
   useEffect(() => {
     if (!pages.some((page) => page.id === activePageId) && pages[0]) setActivePageId(pages[0].id);
@@ -959,6 +976,7 @@ function PageIconPicker({ value = "", onChange }) {
   const selected = PAGE_ICON_OPTIONS.find((option) => option.value === normalizedValue);
   const q = query.trim().toLowerCase();
   const filtered = q ? PAGE_ICON_OPTIONS.filter((option) => option.label.toLowerCase().includes(q) || option.value.toLowerCase().includes(q)) : PAGE_ICON_OPTIONS;
+  const visibleOptions = filtered.slice(0, q ? PAGE_ICON_SEARCH_LIMIT : PAGE_ICON_INITIAL_LIMIT);
   return <div className="space-y-2">
     <Label>Page icon</Label>
     <Popover open={open} onOpenChange={setOpen}>
@@ -973,11 +991,12 @@ function PageIconPicker({ value = "", onChange }) {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search icons..." autoFocus />
           <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto pr-1">
             <button type="button" onClick={() => { onChange?.(""); setOpen(false); }} className={`flex h-16 flex-col items-center justify-center gap-1 rounded-md border text-[10px] transition hover:border-primary ${!normalizedValue ? "border-primary bg-primary/10" : "bg-background"}`}>None</button>
-            {filtered.map((option) => <button key={option.value} type="button" title={option.label} onClick={() => { onChange?.(option.value); setOpen(false); }} className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-md border p-1 text-[10px] transition hover:border-primary ${normalizedValue === option.value ? "border-primary bg-primary/10" : "bg-background"}`}>
+            {visibleOptions.map((option) => <button key={option.value} type="button" title={option.label} onClick={() => { onChange?.(option.value); setOpen(false); }} className={`flex h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-md border p-1 text-[10px] transition hover:border-primary ${normalizedValue === option.value ? "border-primary bg-primary/10" : "bg-background"}`}>
               <PageIcon value={option.value} className="h-5 w-5" />
               <span className="w-full truncate text-center">{option.label}</span>
             </button>)}
           </div>
+          {filtered.length > visibleOptions.length ? <p className="text-[11px] text-muted-foreground">Showing {visibleOptions.length} of {filtered.length} icons. Type to narrow the search.</p> : null}
         </div>
       </PopoverContent>
     </Popover>
