@@ -282,7 +282,7 @@ function newField(type) {
   if (type === "divider") base.props = { padding: "md", borderWidth: 1, borderColor: "var(--border)" };
   if (type === "codeblock") { base.label = "Code block"; base.props = { code: "// Paste code here", language: "javascript", showLineNumbers: false, maxHeight: 360, padding: "md" }; }
   if (type === "hero") { base.label = "Hero section"; base.props = { title: "Help customers faster", quote: "Agent form", description: "Collect the right context during every conversation.", align: "left", padding: "xl", imageUrl: "", imageMode: "inline", buttons: [{ label: "Primary action", href: "#", variant: "primary" }] }; }
-  if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage" }, { title: "95%", description: "CSAT" }, { title: "2m", description: "Avg response" }] }; }
+  if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage", icon: "IconClock" }, { title: "95%", description: "CSAT", icon: "IconThumbUp" }, { title: "2m", description: "Avg response", icon: "IconBolt" }] }; }
   if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md", imageUrl: "", children: [] }; }
   if (type === "richtext") { base.label = "Rich text"; base.props = { richtext: "Use this block for formatted guidance or copy.", padding: "md" }; }
   return base;
@@ -1004,7 +1004,7 @@ function PageTabs({ pages = [], activePageId, setActivePageId, activeBorderColor
   </div>;
 }
 
-function PageIconPicker({ value = "", onChange }) {
+function PageIconPicker({ value = "", onChange, label = "Page icon" }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const normalizedValue = pageIconValue(value);
@@ -1013,7 +1013,7 @@ function PageIconPicker({ value = "", onChange }) {
   const filtered = q ? PAGE_ICON_OPTIONS.filter((option) => option.label.toLowerCase().includes(q) || option.value.toLowerCase().includes(q)) : PAGE_ICON_OPTIONS;
   const visibleOptions = filtered.slice(0, q ? PAGE_ICON_SEARCH_LIMIT : PAGE_ICON_INITIAL_LIMIT);
   return <div className="space-y-2">
-    <Label>Page icon</Label>
+    <Label>{label}</Label>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
@@ -1036,6 +1036,41 @@ function PageIconPicker({ value = "", onChange }) {
       </PopoverContent>
     </Popover>
   </div>;
+}
+
+function normalizeStatItem(item = {}, index = 0) {
+  const source = item && typeof item === "object" ? item : {};
+  return {
+    ...source,
+    title: source.title ?? `Stat ${index + 1}`,
+    description: source.description ?? "Description",
+    icon: pageIconValue(source.icon) || "",
+    iconSize: source.iconSize ?? 28,
+    iconColor: source.iconColor ?? "",
+    titleColor: source.titleColor ?? "",
+    descriptionColor: source.descriptionColor ?? "",
+  };
+}
+
+function normalizeStatItems(items = []) {
+  return Array.isArray(items) ? items.map(normalizeStatItem) : [];
+}
+
+function resizeStatItems(items = [], count = 0) {
+  const safeCount = Math.max(0, Math.min(Number(count) || 0, 12));
+  const normalized = normalizeStatItems(items);
+  if (normalized.length >= safeCount) return normalized.slice(0, safeCount);
+  return [
+    ...normalized,
+    ...Array.from({ length: safeCount - normalized.length }, (_, index) => normalizeStatItem({}, normalized.length + index)),
+  ];
+}
+
+function StatIcon({ item = {}, className = "", style = {} }) {
+  const Icon = TablerIcons[pageIconValue(item.icon)];
+  if (!Icon) return null;
+  const size = Math.max(8, Math.min(Number(item.iconSize || 28), 96));
+  return <Icon className={className} style={{ width: size, height: size, color: item.iconColor || undefined, ...style }} />;
 }
 
 
@@ -1175,7 +1210,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
   if (field.type === "divider") return <div {...baseProps}>{toolbar}{dragHandle}<div className="py-2"><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div></div>;
   if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{dragHandle}{heroShell(field, props, toolbar)}</div>;
-  if (field.type === "stats") return <div {...baseProps}>{toolbar}{dragHandle}<div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
+  if (field.type === "stats") return <div {...baseProps}>{toolbar}{dragHandle}<div className="grid gap-3 md:grid-cols-3">{normalizeStatItems(props.items || []).map((item, index) => <div key={index} className="relative overflow-hidden rounded-xl border bg-card p-4 pr-12 text-card-foreground"><StatIcon item={item} className="absolute right-4 top-4 opacity-80" /><div className="text-2xl font-bold" style={{ ...fieldStyle(field), color: item.titleColor || fieldStyle(field)?.color }}>{item.title}</div><div className="text-xs text-muted-foreground" style={item.descriptionColor ? { color: item.descriptionColor } : undefined}>{item.description}</div></div>)}</div></div>;
   if (field.type === "card") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
   if (field.type === "codeblock") return <div {...baseProps}>{toolbar}{dragHandle}<CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
@@ -1365,13 +1400,54 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
   if (field.type === "divider") return <div className="space-y-3"><div><Label>Line width px</Label><Input type="number" min="0" value={props.borderWidth ?? 1} onChange={(e) => setProps({ borderWidth: Number(e.target.value) })} /></div><ColorPicker label="Line color" value={props.borderColor || ""} onChange={(oklch) => setProps({ borderColor: oklch })} /><p className="text-[11px] text-muted-foreground">Set width to 0 to hide the divider line.</p></div>;
   if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
-  if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
+  if (field.type === "stats") return <StatsItemsControl items={props.items || []} setItems={(items) => setProps({ items })} />;
   if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext ?? ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
   if (field.type === "codeblock") return <div className="space-y-3"><div><Label>Language</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div><Label>Code</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>Max height px</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Show line numbers</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
   if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
   if (field.type === "button") return <div><Label>Variant</Label><Select value={props.variant || "primary"} onValueChange={(value) => setProps({ variant: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>;
   return null;
+}
+
+
+function StatsItemsControl({ items = [], setItems }) {
+  const normalizedItems = normalizeStatItems(items);
+  function updateCount(nextCount) {
+    setItems(resizeStatItems(normalizedItems, nextCount));
+  }
+  function updateItem(index, patch) {
+    setItems(normalizedItems.map((item, itemIndex) => itemIndex === index ? normalizeStatItem({ ...item, ...patch }, itemIndex) : item));
+  }
+  function resetItemColors(index) {
+    updateItem(index, { iconColor: "", titleColor: "", descriptionColor: "" });
+  }
+  return <div className="space-y-4">
+    <div>
+      <Label>Number of stat cards</Label>
+      <Input type="number" min="0" max="12" value={normalizedItems.length} onChange={(e) => updateCount(e.target.value)} />
+      <p className="mt-1 text-[11px] text-muted-foreground">Changing the count preserves existing card values and only adds or removes cards at the end.</p>
+    </div>
+    <div className="space-y-3">
+      {normalizedItems.map((item, index) => <div key={index} className="space-y-3 rounded-md border bg-background p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold uppercase text-muted-foreground">Stat card {index + 1}</div>
+          <div className="flex items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">Preview</span></div>
+        </div>
+        <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
+        <div><Label>Description</Label><Textarea rows={2} value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
+        <PageIconPicker label="Icon" value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
+        <div><Label>Icon size px</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
+        <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+          <div className="text-xs font-medium text-muted-foreground">Per-card colors</div>
+          <ColorPicker label="Icon color" value={item.iconColor || ""} onChange={(oklch) => updateItem(index, { iconColor: oklch })} />
+          <ColorPicker label="Title color" value={item.titleColor || ""} onChange={(oklch) => updateItem(index, { titleColor: oklch })} />
+          <ColorPicker label="Description color" value={item.descriptionColor || ""} onChange={(oklch) => updateItem(index, { descriptionColor: oklch })} />
+          <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>Use theme colors</Button>
+        </div>
+      </div>)}
+      {!normalizedItems.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No stat cards. Increase the count to add one.</div> : null}
+    </div>
+  </div>;
 }
 
 function ArrayJsonControl({ label, value, onChange }) {

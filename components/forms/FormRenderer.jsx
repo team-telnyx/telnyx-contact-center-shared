@@ -24,6 +24,27 @@ function containerStyle(field, base = {}) {
 }
 const LEGACY_PAGE_ICON_MAP = { forms: "IconForms", user: "IconUser", phone: "IconPhone", mail: "IconMail", message: "IconMessageCircle", headset: "IconHeadset", info: "IconInfoCircle", home: "IconHome", star: "IconStar", check: "IconCheck" };
 function PageIcon({ value, className = "h-4 w-4" }) { const Icon = TablerIcons[LEGACY_PAGE_ICON_MAP[value] || value]; return Icon ? <Icon className={className} /> : null; }
+
+function normalizeStatItem(item = {}, index = 0) {
+  const source = item && typeof item === "object" ? item : {};
+  return {
+    ...source,
+    title: source.title ?? `Stat ${index + 1}`,
+    description: source.description ?? "Description",
+    icon: LEGACY_PAGE_ICON_MAP[source.icon] || source.icon || "",
+    iconSize: source.iconSize ?? 28,
+    iconColor: source.iconColor ?? "",
+    titleColor: source.titleColor ?? "",
+    descriptionColor: source.descriptionColor ?? "",
+  };
+}
+function normalizeStatItems(items = []) { return Array.isArray(items) ? items.map(normalizeStatItem) : []; }
+function StatIcon({ item = {}, className = "", style = {} }) {
+  const Icon = TablerIcons[LEGACY_PAGE_ICON_MAP[item.icon] || item.icon];
+  if (!Icon) return null;
+  const size = Math.max(8, Math.min(Number(item.iconSize || 28), 96));
+  return <Icon className={className} style={{ width: size, height: size, color: item.iconColor || undefined, ...style }} />;
+}
 function gapValue(value, fallback = 12) { return typeof value === "number" ? value : Number(value || fallback); }
 function childFields(ids = [], byId) { return ids.map((id) => byId.get(id)).filter(Boolean); }
 function normalizeChildLayout(layout = {}) {
@@ -117,7 +138,7 @@ function LayoutContainer({ field, byId, renderField }) {
   if (field.type === "spacer") return <div className={props.direction === "horizontal" ? "inline-block h-4 w-24" : "h-12 w-full"} />;
   if (field.type === "divider") return <div className={paddingClass(props.padding)}><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div>;
   if (field.type === "hero") return heroSection(field, props);
-  if (field.type === "stats") return <div className={`grid gap-3 md:grid-cols-3 ${paddingClass(props.padding)}`}>{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={style}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div>;
+  if (field.type === "stats") return <div className={`grid gap-3 md:grid-cols-3 ${paddingClass(props.padding)}`}>{normalizeStatItems(props.items || []).map((item, index) => <div key={index} className="relative overflow-hidden rounded-xl border bg-card p-4 pr-12 text-card-foreground"><StatIcon item={item} className="absolute right-4 top-4 opacity-80" /><div className="text-2xl font-bold" style={{ ...style, color: item.titleColor || style?.color }}>{item.title}</div><div className="text-xs text-muted-foreground" style={item.descriptionColor ? { color: item.descriptionColor } : undefined}>{item.description}</div></div>)}</div>;
   if (field.type === "card") return <div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={style}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className={paddingClass(props.padding)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4 space-y-4">{renderChildRuns(props.children, field, byId, renderField)}</div></div></div>;
   if (field.type === "richtext") return <div className={`${paddingClass(props.padding)} ${textSizeClass(props.size)} ${alignClass(props.align)} ${props.bold ? "font-semibold" : ""}`} style={style}>{props.richtext || field.label}</div>;
   if (field.type === "codeblock") return <div className={paddingClass(props.padding)}><CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
