@@ -202,6 +202,41 @@ function childLayoutStyle(layout = {}, { isGrid = false } = {}) {
 }
 function isButtonField(fieldsById, id) { return fieldsById?.get?.(id)?.type === "button"; }
 
+function gridCellLayout(parent = {}, key, rows, columns) {
+  const ids = parent.props?.cells?.[key] || [];
+  const layout = ids.length ? childLayoutFor(parent, ids[0]) : normalizeChildLayout({});
+  const [rowRaw, columnRaw] = String(key).split(":").map(Number);
+  const row = Number.isFinite(rowRaw) ? rowRaw : 0;
+  const column = Number.isFinite(columnRaw) ? columnRaw : 0;
+  const rowSpan = Math.max(1, Math.min(layout.rowSpan, rows - row));
+  const columnSpan = Math.max(1, Math.min(layout.columnSpan, columns - column));
+  return { ids, row, column, layout: { ...layout, rowSpan, columnSpan } };
+}
+function visibleGridCells(parent = {}, rows, columns) {
+  const occupied = new Set();
+  const cells = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const key = `${row}:${column}`;
+      if (occupied.has(key)) continue;
+      const cell = gridCellLayout(parent, key, rows, columns);
+      cells.push({ ...cell, key });
+      if (cell.ids.length) {
+        for (let r = row; r < row + cell.layout.rowSpan; r += 1) {
+          for (let c = column; c < column + cell.layout.columnSpan; c += 1) {
+            if (r !== row || c !== column) occupied.add(`${r}:${c}`);
+          }
+        }
+      }
+    }
+  }
+  return cells;
+}
+function gridCellStyle(cell) {
+  return { gridColumnStart: cell.column + 1, gridRowStart: cell.row + 1, ...(cell.ids.length ? childLayoutStyle(cell.layout, { isGrid: true }) : {}) };
+}
+
+
 function replaceIdInProps(props = {}, from, to) {
   const repl = (ids) => Array.isArray(ids) ? ids.map((id) => id === from ? to : id) : [];
   const next = { ...props };
@@ -1136,7 +1171,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "section") return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border bg-muted/25 p-4" style={containerStyle(field)}><div className={`text-sm font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-3"><ContainerDropZone id={`container:${field.id}:children`} label="section" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div>;
   if (field.type === "row" || field.type === "flex") return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><ContainerDropZone id={`container:${field.id}:children`} label={field.type} empty={!props.children?.length}><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapPx(props.gap), justifyContent: props.justify || "flex-start" }}>{renderChildren(props.children || [], field)}</div></ContainerDropZone></div></div>;
   if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: count }).map((_, i) => <ContainerDropZone key={i} id={`container:${field.id}:slot:${i}`} label={`column ${i + 1}`} empty={!props.slots?.[i]?.length}>{renderChildren(props.slots?.[i] || [], field)}</ContainerDropZone>)}</div></div></div>; }
-  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: gapPx(props.gap) }}>{Array.from({ length: rows * columns }).map((_, index) => { const row = Math.floor(index / columns); const column = index % columns; const key = `${row}:${column}`; const ids = props.cells?.[key] || []; return <ContainerDropZone key={key} id={`container:${field.id}:cell:${row}:${column}`} label={`cell ${row + 1}.${column + 1}`} empty={!ids.length} style={ids.length ? childLayoutStyle(childLayoutFor(field, ids[0]), { isGrid: true }) : undefined}>{renderChildren(ids, field)}</ContainerDropZone>; })}</div></div></div>; }
+  if (field.type === "grid") { const columns = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div {...baseProps}>{toolbar}{dragHandle}<div className="rounded-lg border border-dashed p-3" style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label} · {rows}×{columns}</div><div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, auto))`, gap: gapPx(props.gap) }}>{visibleGridCells(field, rows, columns).map((cell) => <ContainerDropZone key={cell.key} id={`container:${field.id}:cell:${cell.row}:${cell.column}`} label={`cell ${cell.row + 1}.${cell.column + 1}`} empty={!cell.ids.length} style={gridCellStyle(cell)}>{renderChildren(cell.ids, field)}</ContainerDropZone>)}</div></div></div>; }
   if (field.type === "spacer") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
   if (field.type === "divider") return <div {...baseProps}>{toolbar}{dragHandle}<div className="py-2"><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div></div>;
   if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{dragHandle}{heroShell(field, props, toolbar)}</div>;

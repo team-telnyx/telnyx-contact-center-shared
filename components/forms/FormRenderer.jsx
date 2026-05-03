@@ -43,6 +43,41 @@ function childLayoutStyle(layout = {}, { isGrid = false } = {}) {
     ...(isGrid ? { gridColumn: `span ${next.columnSpan}`, gridRow: `span ${next.rowSpan}` } : {}),
   };
 }
+
+function gridCellLayout(parent = {}, key, rows, columns) {
+  const ids = parent.props?.cells?.[key] || [];
+  const layout = ids.length ? childLayoutFor(parent, ids[0]) : normalizeChildLayout({});
+  const [rowRaw, columnRaw] = String(key).split(":").map(Number);
+  const row = Number.isFinite(rowRaw) ? rowRaw : 0;
+  const column = Number.isFinite(columnRaw) ? columnRaw : 0;
+  const rowSpan = Math.max(1, Math.min(layout.rowSpan, rows - row));
+  const columnSpan = Math.max(1, Math.min(layout.columnSpan, columns - column));
+  return { ids, row, column, layout: { ...layout, rowSpan, columnSpan } };
+}
+function visibleGridCells(parent = {}, rows, columns) {
+  const occupied = new Set();
+  const cells = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const key = `${row}:${column}`;
+      if (occupied.has(key)) continue;
+      const cell = gridCellLayout(parent, key, rows, columns);
+      cells.push({ ...cell, key });
+      if (cell.ids.length) {
+        for (let r = row; r < row + cell.layout.rowSpan; r += 1) {
+          for (let c = column; c < column + cell.layout.columnSpan; c += 1) {
+            if (r !== row || c !== column) occupied.add(`${r}:${c}`);
+          }
+        }
+      }
+    }
+  }
+  return cells;
+}
+function gridCellStyle(cell) {
+  return { gridColumnStart: cell.column + 1, gridRowStart: cell.row + 1, ...(cell.ids.length ? childLayoutStyle(cell.layout, { isGrid: true }) : {}) };
+}
+
 function renderChildRuns(ids = [], parent, byId, renderField, options = {}) {
   const runs = []; let buttons = [];
   ids.forEach((id) => {
@@ -78,7 +113,7 @@ function LayoutContainer({ field, byId, renderField }) {
   if (field.type === "section") return <section className={`rounded-lg border bg-muted/25 ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}<div className="mt-4 space-y-4">{renderChildRuns(props.children, field, byId, renderField)}</div></section>;
   if (field.type === "row" || field.type === "flex") return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.type === "row" ? "Row" : "Flex"} · {field.label}</div><div className={`flex ${props.direction === "column" ? "flex-col" : "flex-row"} ${props.wrap === false ? "flex-nowrap" : "flex-wrap"}`} style={{ gap: gapValue(props.gap, 12), justifyContent: props.justify || "flex-start" }}>{renderChildRuns(props.children, field, byId, renderField)}</div></div>;
   if (field.type === "columns") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-w-0 space-y-4">{renderChildRuns(props.slots?.[i], field, byId, renderField)}</div>)}</div></div>; }
-  if (field.type === "grid") { const cols = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: gapValue(props.gap, 12) }}>{Array.from({ length: rows * cols }).map((_, i) => { const key = `${Math.floor(i / cols)}:${i % cols}`; const ids = props.cells?.[key] || []; return <div key={key} className="min-h-10 min-w-0 space-y-4" style={ids.length ? childLayoutStyle(childLayoutFor(field, ids[0]), { isGrid: true }) : undefined}>{renderChildRuns(ids, field, byId, renderField)}</div>; })}</div></div>; }
+  if (field.type === "grid") { const cols = Math.max(1, Math.min(Number(props.columns || 2), 6)); const rows = Math.max(1, Math.min(Number(props.rows || 2), 12)); return <div className={`rounded-lg border border-dashed ${paddingClass(props.padding)}`} style={containerStyle(field)}><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, auto))`, gap: gapValue(props.gap, 12) }}>{visibleGridCells(field, rows, cols).map((cell) => <div key={cell.key} className="min-h-10 min-w-0 space-y-4" style={gridCellStyle(cell)}>{renderChildRuns(cell.ids, field, byId, renderField)}</div>)}</div></div>; }
   if (field.type === "spacer") return <div className={props.direction === "horizontal" ? "inline-block h-4 w-24" : "h-12 w-full"} />;
   if (field.type === "divider") return <div className={paddingClass(props.padding)}><hr className="w-full rounded-full" style={{ borderWidth: `${Math.max(0, Number(props.borderWidth ?? 1))}px 0 0 0`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" }} /></div>;
   if (field.type === "hero") return heroSection(field, props);
