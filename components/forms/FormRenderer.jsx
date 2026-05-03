@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { IconCheck, IconForms, IconHeadset, IconHome, IconInfoCircle, IconMail, IconMessageCircle, IconPhone, IconStar, IconUser } from "@tabler/icons-react";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { getContextValue } from "@/lib/forms/form-context";
 import { getFieldChildIds, normalizeFormDefinition } from "@/lib/forms/form-schema";
@@ -21,6 +22,8 @@ function containerStyle(field, base = {}) {
   if (!Number.isFinite(width)) return { ...base, ...fieldStyle(field) };
   return { ...base, ...fieldStyle(field), borderWidth: `${Math.max(0, width)}px`, borderColor: props.borderColor || "var(--border)", borderStyle: "solid" };
 }
+const PAGE_ICONS = { forms: IconForms, user: IconUser, phone: IconPhone, mail: IconMail, message: IconMessageCircle, headset: IconHeadset, info: IconInfoCircle, home: IconHome, star: IconStar, check: IconCheck };
+function PageIcon({ value, className = "h-4 w-4" }) { const Icon = PAGE_ICONS[value]; return Icon ? <Icon className={className} /> : null; }
 function gapValue(value, fallback = 12) { return typeof value === "number" ? value : Number(value || fallback); }
 function childFields(ids = [], byId) { return ids.map((id) => byId.get(id)).filter(Boolean); }
 function heroContent(field, props = {}) {
@@ -84,7 +87,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
     </div>;
   };
   return <form onSubmit={handleSubmit} className="space-y-4">
-    {pages.length > 1 ? <div className="mb-2 flex items-center gap-1 border-b">{pages.map((page) => <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative px-4 py-2 text-sm font-medium transition ${activePageId === page.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{page.title || page.id}<span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${activePageId === page.id ? "bg-primary" : "bg-transparent"}`} /></button>)}</div> : null}
+    {pages.length > 1 ? <div className="mb-6 flex items-center gap-1 border-b">{pages.map((page) => { const active = activePageId === page.id; const activeBorderColor = normalized?.theme?.pageTabActiveBorderColor; return <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}><PageIcon value={page.icon} />{page.title || page.id}<span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${active && !activeBorderColor ? "bg-primary" : "bg-transparent"}`} style={active && activeBorderColor ? { backgroundColor: activeBorderColor } : undefined} /></button>; })}</div> : null}
     {fields.map(renderField)}
     {!fields.some((f) => f.type === "button") && onSubmit ? <Button type="submit" disabled={submitting || readOnly}>Submit</Button> : null}
   </form>;

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeadset, IconHeading, IconHome, IconInfoCircle, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMail, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhone, IconPhoto, IconPlus, IconRectangle, IconSettings, IconStar, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconUser, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +56,23 @@ const CODE_LANGUAGE_OPTIONS = [
   { value: "markdown", label: "Markdown" },
   { value: "plaintext", label: "Plain text" },
 ];
+const PAGE_ICON_OPTIONS = [
+  { value: "none", label: "No icon", icon: null },
+  { value: "forms", label: "Form", icon: IconForms },
+  { value: "user", label: "User", icon: IconUser },
+  { value: "phone", label: "Phone", icon: IconPhone },
+  { value: "mail", label: "Email", icon: IconMail },
+  { value: "message", label: "Message", icon: IconMessageCircle },
+  { value: "headset", label: "Support", icon: IconHeadset },
+  { value: "info", label: "Info", icon: IconInfoCircle },
+  { value: "home", label: "Home", icon: IconHome },
+  { value: "star", label: "Star", icon: IconStar },
+  { value: "check", label: "Check", icon: IconCheck },
+];
+function PageIcon({ value, className = "h-4 w-4" }) {
+  const Icon = PAGE_ICON_OPTIONS.find((option) => option.value === value)?.icon;
+  return Icon ? <Icon className={className} /> : null;
+}
 const ALIGN_OPTIONS = ["left", "center", "right"];
 const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
 const STATUS_BADGE_CLASS = { draft: "border-amber-500 text-amber-700 dark:text-amber-300", published: "border-emerald-500 text-emerald-700 dark:text-emerald-300", archived: "border-slate-400 text-slate-600 dark:text-slate-300" };
@@ -340,7 +357,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
   }
   function addPage() {
-    const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", fields: [] };
+    const title = `Page ${pages.length + 1}`; const page = { id: makePageId(title), title, description: "", icon: "forms", fields: [] };
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, pages: [...pages, page] } }));
     setActivePageId(page.id); setSelectedId("form"); setActiveTab("pages");
   }
@@ -578,7 +595,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
+        <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -597,7 +614,7 @@ export function FormEditor({ initialForm, isNew = false }) {
           <div className="mx-auto w-full rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-5 md:p-8">
             <div className="w-full space-y-6">
               <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
-              {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} /> : null}
+              {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} activeBorderColor={form.theme?.pageTabActiveBorderColor} /> : null}
               {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={(id) => !previewMode && selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}
               {!activePageFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building this page.</div> : null}
             </div>
@@ -651,7 +668,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
+  const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
   const mediaInputRef = useRef(null);
   const [pexelsOpen, setPexelsOpen] = useState(false);
   const [pexelsQuery, setPexelsQuery] = useState("");
@@ -713,15 +730,20 @@ function LeftPanel(props) {
   if (activeTab === "pages") {
     return <div className="h-full min-h-0 flex flex-col">
       <PanelHeader title="Pages" description="Add, rename, reorder, and select form pages." />
-      <div className="shrink-0 border-b p-4"><Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button></div>
+      <div className="shrink-0 space-y-3 border-b p-4">
+        <ColorPicker label="Active tab underline color" value={form.theme?.pageTabActiveBorderColor || ""} onChange={(oklch) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: oklch } })} />
+        <Button type="button" size="sm" variant="ghost" onClick={() => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: "" } })}>Use theme default</Button>
+        <Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button>
+      </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         {pages.map((page, index) => <div key={page.id} className={`rounded-xl border p-3 ${activePageId === page.id ? "border-primary bg-primary/5" : "bg-background"}`}>
           <button type="button" className="mb-3 w-full text-left" onClick={() => setActivePageId(page.id)}>
-            <div className="text-sm font-semibold">{page.title || `Page ${index + 1}`}</div>
+            <div className="flex items-center gap-2 text-sm font-semibold"><PageIcon value={page.icon} />{page.title || `Page ${index + 1}`}</div>
             <div className="text-xs text-muted-foreground">{(page.fields || []).length} blocks · {page.id}</div>
           </button>
           <div className="space-y-2">
             <RevertibleTextInput value={page.title ?? ""} restoreOnEmpty fallbackValue={`Page ${index + 1}`} onCommit={(value) => updatePage(page.id, { title: value })} placeholder="Page title" />
+            <Select value={page.icon || "none"} onValueChange={(value) => updatePage(page.id, { icon: value === "none" ? "" : value })}><SelectTrigger><SelectValue placeholder="Page icon" /></SelectTrigger><SelectContent>{PAGE_ICON_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
             <Input value={page.description ?? ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
@@ -850,12 +872,16 @@ function CanvasDropZone({ children, previewTheme = "system" }) {
   return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-4 md:p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
 }
 
-function PageTabs({ pages = [], activePageId, setActivePageId }) {
-  return <div className="flex items-center gap-1 border-b">
-    {pages.map((page) => <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative px-4 py-2 text-sm font-medium transition ${activePageId === page.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-      {page.title || page.id}
-      <span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${activePageId === page.id ? "bg-primary" : "bg-transparent"}`} />
-    </button>)}
+function PageTabs({ pages = [], activePageId, setActivePageId, activeBorderColor }) {
+  return <div className="mb-6 flex items-center gap-1 border-b">
+    {pages.map((page) => {
+      const active = activePageId === page.id;
+      return <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+        <PageIcon value={page.icon} />
+        {page.title || page.id}
+        <span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${active && !activeBorderColor ? "bg-primary" : "bg-transparent"}`} style={active && activeBorderColor ? { backgroundColor: activeBorderColor } : undefined} />
+      </button>;
+    })}
   </div>;
 }
 
