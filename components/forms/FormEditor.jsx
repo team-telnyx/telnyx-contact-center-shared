@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -592,6 +592,35 @@ export function FormEditor({ initialForm, isNew = false }) {
   </div>;
 }
 
+
+function RevertibleTextInput({ value = "", onCommit, restoreOnEmpty = false, fallbackValue = "", ...props }) {
+  const externalValue = value ?? "";
+  const [draft, setDraft] = useState(externalValue);
+  const [focused, setFocused] = useState(false);
+  const valueAtFocusRef = useRef(externalValue || fallbackValue);
+  useEffect(() => { if (!focused) setDraft(externalValue); }, [externalValue, focused]);
+  function commit(next) {
+    if (restoreOnEmpty && !String(next || "").trim()) return;
+    onCommit?.(next);
+  }
+  return <Input
+    {...props}
+    value={focused ? draft : externalValue}
+    onFocus={(e) => { valueAtFocusRef.current = externalValue || fallbackValue; setFocused(true); setDraft(externalValue); props.onFocus?.(e); }}
+    onChange={(e) => { const next = e.target.value; setDraft(next); commit(next); props.onChange?.(e); }}
+    onBlur={(e) => {
+      const next = e.target.value;
+      setFocused(false);
+      if (restoreOnEmpty && !next.trim()) {
+        const restored = valueAtFocusRef.current || fallbackValue;
+        setDraft(restored);
+        onCommit?.(restored);
+      } else { commit(next); }
+      props.onBlur?.(e);
+    }}
+  />;
+}
+
 function PanelHeader({ title, description }) {
   return <div className="h-14 shrink-0 border-b px-4 flex flex-col justify-center">
     <h2 className="font-semibold text-sm">{title}</h2>
@@ -670,8 +699,8 @@ function LeftPanel(props) {
             <div className="text-xs text-muted-foreground">{(page.fields || []).length} blocks · {page.id}</div>
           </button>
           <div className="space-y-2">
-            <Input value={page.title || ""} onChange={(e) => updatePage(page.id, { title: e.target.value })} placeholder="Page title" />
-            <Input value={page.description || ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
+            <RevertibleTextInput value={page.title ?? ""} restoreOnEmpty fallbackValue={`Page ${index + 1}`} onCommit={(value) => updatePage(page.id, { title: value })} placeholder="Page title" />
+            <Input value={page.description ?? ""} onChange={(e) => updatePage(page.id, { description: e.target.value })} placeholder="Optional description" />
           </div>
           <div className="mt-3 flex flex-wrap gap-1">
             <Button type="button" size="sm" variant="ghost" onClick={() => movePage(page.id, -1)}>↑</Button>
@@ -729,7 +758,7 @@ function LeftPanel(props) {
         </div>
       </div>
       <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="flex max-h-[88vh] max-w-6xl flex-col">
           <DialogHeader>
             <DialogTitle>Search in Pexels</DialogTitle>
             <DialogDescription>Search royalty-free Pexels photos and download one into this form media library.</DialogDescription>
@@ -739,13 +768,13 @@ function LeftPanel(props) {
             <Button type="submit" disabled={pexelsLoading}>{pexelsLoading ? "Searching..." : "Search"}</Button>
           </form>
           {pexelsError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{pexelsError}</div> : null}
-          <div className="max-h-[55vh] overflow-y-auto pr-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {pexelsResults.map((photo) => <div key={photo.id} className="overflow-hidden rounded-xl border bg-background">
-              <div className="aspect-video bg-muted"><img src={photo.src?.medium || photo.src?.small || photo.src?.tiny} alt={photo.alt || photo.title} className="h-full w-full object-cover" /></div>
-              <div className="space-y-2 p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {pexelsResults.map((photo) => <div key={photo.id} className="relative overflow-hidden rounded-xl border bg-background">
+              <div className="aspect-video bg-muted"><img src={photo.src?.large || photo.src?.medium || photo.src?.small || photo.src?.tiny} alt={photo.alt || photo.title} className="h-full w-full object-cover" /></div>
+              <Button type="button" size="icon" className="absolute right-2 top-2 h-8 w-8 rounded-full bg-background/90 text-foreground shadow backdrop-blur hover:bg-background" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)} title={pexelsDownloadingId === photo.id ? "Downloading..." : "Download to media"} aria-label={pexelsDownloadingId === photo.id ? "Downloading Pexels photo" : "Download Pexels photo to media"}>{pexelsDownloadingId === photo.id ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <IconDownload className="h-4 w-4" />}</Button>
+              <div className="space-y-1 p-3">
                 <div className="line-clamp-1 text-sm font-medium">{photo.title}</div>
                 <div className="line-clamp-1 text-xs text-muted-foreground">Photo by {photo.photographer}</div>
-                <Button type="button" size="sm" className="w-full" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)}>{pexelsDownloadingId === photo.id ? "Downloading..." : "Download to media"}</Button>
               </div>
             </div>)}
           </div>
@@ -944,10 +973,10 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
     patchForm({ queue_names: next });
   }
   return <div className="grid gap-4 py-2">
-    <div className="grid gap-2"><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div>
-    <div className="grid gap-2"><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Name</Label><RevertibleTextInput value={form.name ?? ""} restoreOnEmpty fallbackValue="New agent form" onCommit={(value) => patchForm({ name: value, slug: form.slug || slugifyFormName(value) })} /></div>
+    <div className="grid gap-2"><Label>Slug</Label><RevertibleTextInput value={form.slug ?? ""} restoreOnEmpty fallbackValue={slugifyFormName(form.name)} onCommit={(value) => patchForm({ slug: value })} /></div>
     <div className="grid gap-2"><Label>Category</Label><Select value={form.category || "General"} onValueChange={(value) => patchForm({ category: value })}><SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger><SelectContent>{categoryOptions.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
-    <div className="grid gap-2"><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Description</Label><Textarea rows={3} value={form.description ?? ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
     <div className="grid gap-2">
       <Label>Queue names</Label>
       <Popover>
@@ -1006,12 +1035,12 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
       {selectedField ? <Card><CardContent className="p-4 space-y-4">
         <div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div>
-        <div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div>
-        <div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => renameField(selectedField, e.target.value)} /></div>
+        <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
+        <div><Label>Field name / id</Label><RevertibleTextInput value={selectedField.id ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => renameField(selectedField, value)} /></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
         {!["hero", "stats", "card", "richtext", "spacer"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
-        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
-        {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
+        {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
         <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} />
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.options ? <div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div> : null}
         <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Advanced JSON props</summary><Textarea rows={4} className="mt-3 font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></details>
@@ -1035,20 +1064,12 @@ function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
 }
 
 function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
-  const selected = media.find((item) => item.url === value);
   return <div className="w-full max-w-full min-w-0 space-y-2 overflow-hidden">
     <Label>{label}</Label>
-    <Select value={selected ? value : "__custom__"} onValueChange={(url) => { if (url !== "__custom__") onChange?.(url, media.find((item) => item.url === url)); }}>
-      <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden"><SelectValue placeholder="Choose from media library">{selected ? mediaTitle(selected) : "Custom URL / none"}</SelectValue></SelectTrigger>
-      <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
-        <SelectItem value="__custom__">Custom URL / none</SelectItem>
-        {media.map((item) => <SelectItem key={item.url} value={item.url}><span className="flex w-full min-w-0 items-center gap-2 overflow-hidden"><img src={item.url} alt="" className="h-8 w-10 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-sm">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></span></SelectItem>)}
-      </SelectContent>
-    </Select>
-    {media.length ? <div className="max-h-44 w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-md border bg-background p-2">
+    {media.length ? <div className="max-h-56 w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-md border bg-background p-2">
       {media.map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
     </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
-    <Input className="w-full max-w-full min-w-0" value={value || ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
+    <Input className="w-full max-w-full min-w-0" value={value ?? ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
   </div>;
 }
 
@@ -1074,12 +1095,12 @@ function HeroImageModeTabs({ value = "inline", onChange }) {
 function SpecificBlockControls({ field, props, setProps, updateField, media = [] }) {
   if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
-  if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
+  if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap ?? 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
-  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
-  if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext || ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
+  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
+  if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext ?? ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
   if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
   if (field.type === "button") return <div><Label>Variant</Label><Select value={props.variant || "primary"} onValueChange={(value) => setProps({ variant: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>;
   return null;
