@@ -22,7 +22,7 @@ async function readMetadataByUrl() {
   try {
     const pool = getPostgresPool();
     if (!pool) return new Map();
-    const { rows } = await pool.query("SELECT filename, url, title, display_name, content_type, size_bytes, created_at, updated_at FROM form_media_assets");
+    const { rows } = await pool.query("SELECT filename, url, title, display_name, content_type, size_bytes, metadata, created_at, updated_at FROM form_media_assets");
     return new Map(rows.map((row) => [row.url, row]));
   } catch (err) {
     console.warn("[forms/media] metadata unavailable:", err?.message || err);
@@ -68,6 +68,7 @@ async function listFiles() {
       size_bytes: Number(meta.size_bytes || s.size || 0),
       created_at: meta.created_at || null,
       updated_at: (meta.updated_at || s.mtime).toISOString ? (meta.updated_at || s.mtime).toISOString() : String(meta.updated_at || s.mtime),
+      metadata: meta.metadata || {},
       hasMetadata: Boolean(meta.url),
     });
   }

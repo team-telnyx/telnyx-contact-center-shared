@@ -591,6 +591,42 @@ function PanelHeader({ title, description }) {
 function LeftPanel(props) {
   const { activeTab, form, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
   const mediaInputRef = useRef(null);
+  const [pexelsOpen, setPexelsOpen] = useState(false);
+  const [pexelsQuery, setPexelsQuery] = useState("");
+  const [pexelsResults, setPexelsResults] = useState([]);
+  const [pexelsLoading, setPexelsLoading] = useState(false);
+  const [pexelsError, setPexelsError] = useState("");
+  const [pexelsDownloadingId, setPexelsDownloadingId] = useState(null);
+
+  async function searchPexels(e) {
+    e?.preventDefault?.();
+    const query = pexelsQuery.trim();
+    if (query.length < 2) { setPexelsError("Enter at least 2 characters to search Pexels."); return; }
+    setPexelsLoading(true); setPexelsError("");
+    try {
+      const res = await fetch(`/api/admin/forms/media/pexels?query=${encodeURIComponent(query)}&perPage=12`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Pexels search failed");
+      setPexelsResults(data.photos || []);
+    } catch (err) {
+      setPexelsResults([]);
+      setPexelsError(err?.message || "Pexels search failed");
+    } finally { setPexelsLoading(false); }
+  }
+
+  async function downloadPexelsPhoto(photo) {
+    if (!photo?.id) return;
+    setPexelsDownloadingId(photo.id); setPexelsError("");
+    try {
+      const res = await fetch("/api/admin/forms/media/pexels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoId: photo.id }) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Pexels download failed");
+      setMedia?.((rows) => [data.media, ...(rows || []).filter((row) => row.url !== data.media.url)]);
+      setPexelsOpen(false);
+    } catch (err) {
+      setPexelsError(err?.message || "Pexels download failed");
+    } finally { setPexelsDownloadingId(null); }
+  }
 
   if (activeTab === "ai") {
     return <div className="h-full min-h-0 flex flex-col">
@@ -664,21 +700,49 @@ function LeftPanel(props) {
   }
 
   if (activeTab === "media") {
-    return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Media" description="Drag image cards onto the canvas or image blocks." />
-      <div className="shrink-0 border-b p-4 space-y-3">
-        <div className="rounded-xl border border-dashed bg-muted/25 p-3 text-center text-xs text-muted-foreground" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); uploadMediaFile?.(e.dataTransfer.files?.[0]); }}>
-          Drop an image here to upload
+    return <>
+      <div className="h-full min-h-0 flex flex-col">
+        <PanelHeader title="Media" description="Drag image cards onto the canvas or image blocks." />
+        <div className="shrink-0 border-b p-4 space-y-3">
+          <div className="rounded-xl border border-dashed bg-muted/25 p-3 text-center text-xs text-muted-foreground" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); uploadMediaFile?.(e.dataTransfer.files?.[0]); }}>
+            Drop an image here to upload
+          </div>
+          <input ref={mediaInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => { uploadMediaFile?.(e.target.files?.[0]); e.target.value = ""; }} />
+          <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? "Uploading..." : "Upload image"}</Button>
+          <Button type="button" variant="outline" className="w-full" onClick={() => setPexelsOpen(true)}><IconWorldUpload className="mr-2 h-4 w-4" />Search in Pexels</Button>
+          <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
         </div>
-        <input ref={mediaInputRef} className="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" disabled={uploadingMedia} onChange={(e) => { uploadMediaFile?.(e.target.files?.[0]); e.target.value = ""; }} />
-        <Button type="button" variant="outline" className="w-full" disabled={uploadingMedia} onClick={() => mediaInputRef.current?.click()}><IconUpload className="mr-2 h-4 w-4" />{uploadingMedia ? "Uploading..." : "Upload image"}</Button>
-        <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically.</p>
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 grid auto-rows-max gap-3 content-start">
+          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title, display_name: title } : row))} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
+          {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
+        </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 grid auto-rows-max gap-3 content-start">
-        {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title, display_name: title } : row))} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
-        {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
-      </div>
-    </div>;
+      <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Search in Pexels</DialogTitle>
+            <DialogDescription>Search royalty-free Pexels photos and download one into this form media library.</DialogDescription>
+          </DialogHeader>
+          <form className="grid grid-cols-[1fr_auto] gap-2" onSubmit={searchPexels}>
+            <Input value={pexelsQuery} onChange={(e) => setPexelsQuery(e.target.value)} placeholder="e.g. customer support, city, nature" />
+            <Button type="submit" disabled={pexelsLoading}>{pexelsLoading ? "Searching..." : "Search"}</Button>
+          </form>
+          {pexelsError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{pexelsError}</div> : null}
+          <div className="max-h-[55vh] overflow-y-auto pr-1 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {pexelsResults.map((photo) => <div key={photo.id} className="overflow-hidden rounded-xl border bg-background">
+              <div className="aspect-video bg-muted"><img src={photo.src?.medium || photo.src?.small || photo.src?.tiny} alt={photo.alt || photo.title} className="h-full w-full object-cover" /></div>
+              <div className="space-y-2 p-3">
+                <div className="line-clamp-1 text-sm font-medium">{photo.title}</div>
+                <div className="line-clamp-1 text-xs text-muted-foreground">Photo by {photo.photographer}</div>
+                <Button type="button" size="sm" className="w-full" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)}>{pexelsDownloadingId === photo.id ? "Downloading..." : "Download to media"}</Button>
+              </div>
+            </div>)}
+          </div>
+          {!pexelsResults.length && !pexelsLoading ? <p className="text-sm text-muted-foreground">No Pexels results yet. Try a search term above.</p> : null}
+          <p className="text-xs text-muted-foreground">Pexels license: free to use and attribution is not required; do not imply endorsement, sell unaltered copies, redistribute as stock photos, or use imagery as a trademark/service mark.</p>
+        </DialogContent>
+      </Dialog>
+    </>;
   }
 
   if (activeTab === "outline") {

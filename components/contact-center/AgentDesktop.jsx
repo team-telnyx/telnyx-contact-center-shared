@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Info, PhoneCall } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useCallsStore from "@/lib/stores/calls-store";
@@ -15,6 +16,8 @@ export function AgentDesktop() {
   const [dbInteractions, setDbInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
   const [agentStatus, setAgentStatus] = useState(null); // Track agent's current status
+  const [agentForms, setAgentForms] = useState([]);
+  const [selectedAgentFormId, setSelectedAgentFormId] = useState("");
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
@@ -1235,8 +1238,27 @@ export function AgentDesktop() {
                       ? "Contacts"
                       : activeView === "tasks"
                       ? "Tasks"
+                      : activeView === "forms"
+                      ? "Forms"
                       : "KB Articles"}
                   </h2>
+                  {activeView === "forms" && agentForms.length ? (
+                    <Select
+                      value={selectedAgentFormId || undefined}
+                      onValueChange={setSelectedAgentFormId}
+                    >
+                      <SelectTrigger className="h-8 w-[240px]">
+                        <SelectValue placeholder="Select form" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {agentForms.map((form) => (
+                          <SelectItem key={form.id} value={form.id}>
+                            {form.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1253,6 +1275,10 @@ export function AgentDesktop() {
               <AgentDataSources
                 view={activeView}
                 selectedInteraction={selectedInteraction}
+                selectedFormId={selectedAgentFormId}
+                onSelectedFormIdChange={setSelectedAgentFormId}
+                onFormsLoaded={setAgentForms}
+                hideFormsHeader={activeView === "forms"}
                 onBackToInteraction={() => {
                   setActiveView("interaction-details");
                   // Clear saved selection ref since user manually navigated back

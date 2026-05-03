@@ -3,14 +3,110 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 
-export function AgentFormsView({ selectedInteraction, onBackToInteraction, formIds = [], autoOpenOnly = false }) {
-  const [forms, setForms] = useState([]); const [selectedId, setSelectedId] = useState(""); const [renderData, setRenderData] = useState(null); const [message, setMessage] = useState(""); const [submitting, setSubmitting] = useState(false);
-  const queueName = selectedInteraction?.queue_name || selectedInteraction?.routing_metadata?.queueName || ""; const queueId = selectedInteraction?.queue_id || selectedInteraction?.routing_metadata?.queueId || "";
-  useEffect(() => { async function load() { const params = new URLSearchParams(); if (queueName) params.set("queueName", queueName); if (queueId) params.set("queueId", queueId); if (formIds.length) params.set("formIds", formIds.join(",")); const res = await fetch(`/api/contact-center/forms?${params.toString()}`, { cache: "no-store" }); const data = await res.json(); let list = data.forms || []; if (autoOpenOnly) list = list.filter((f) => f.auto_open || formIds.includes(f.id)); setForms(list); setSelectedId((prev) => prev || list[0]?.id || ""); } load(); }, [queueName, queueId, formIds.join(","), autoOpenOnly]);
-  useEffect(() => { async function render() { if (!selectedId) { setRenderData(null); return; } const params = new URLSearchParams(); if (selectedInteraction?.id) params.set("interactionId", selectedInteraction.id); const res = await fetch(`/api/contact-center/forms/${selectedId}/render?${params.toString()}`, { cache: "no-store" }); const data = await res.json(); setRenderData(data.ok ? data : null); } render(); }, [selectedId, selectedInteraction?.id]);
+export function AgentFormsView({
+  selectedInteraction,
+  onBackToInteraction,
+  formIds = [],
+  autoOpenOnly = false,
+  selectedFormId,
+  onSelectedFormIdChange,
+  onFormsLoaded,
+  hideHeader = false,
+  showCards = true,
+}) {
+  const [forms, setForms] = useState([]);
+  const [internalSelectedId, setInternalSelectedId] = useState("");
+  const [renderData, setRenderData] = useState(null);
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedId = selectedFormId ?? internalSelectedId;
+  const setSelectedId = (value) => {
+    if (selectedFormId === undefined) setInternalSelectedId(value);
+    onSelectedFormIdChange?.(value);
+  };
+
+  const queueName = selectedInteraction?.queue_name || selectedInteraction?.routing_metadata?.queueName || "";
+  const queueId = selectedInteraction?.queue_id || selectedInteraction?.routing_metadata?.queueId || "";
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const params = new URLSearchParams();
+      if (queueName) params.set("queueName", queueName);
+      if (queueId) params.set("queueId", queueId);
+      if (formIds.length) params.set("formIds", formIds.join(","));
+      const res = await fetch(`/api/contact-center/forms?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (cancelled) return;
+      let list = data.forms || [];
+      if (autoOpenOnly) list = list.filter((f) => f.auto_open || formIds.includes(f.id));
+      setForms(list);
+      onFormsLoaded?.(list);
+      const stillValid = selectedId && list.some((form) => form.id === selectedId);
+      if (!stillValid) setSelectedId(list[0]?.id || "");
+    }
+    load().catch(() => {
+      if (!cancelled) {
+        setForms([]);
+        onFormsLoaded?.([]);
+        setSelectedId("");
+      }
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueName, queueId, formIds.join(","), autoOpenOnly]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function render() {
+      if (!selectedId) {
+        setRenderData(null);
+        return;
+      }
+      const params = new URLSearchParams();
+      if (selectedInteraction?.id) params.set("interactionId", selectedInteraction.id);
+      const res = await fetch(`/api/contact-center/forms/${selectedId}/render?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!cancelled) setRenderData(data.ok ? data : null);
+    }
+    render().catch(() => { if (!cancelled) setRenderData(null); });
+    return () => { cancelled = true; };
+  }, [selectedId, selectedInteraction?.id]);
+
   const selectedForm = useMemo(() => forms.find((f) => f.id === selectedId), [forms, selectedId]);
-  async function submit(values) { if (!selectedId) return; setSubmitting(true); setMessage(""); const res = await fetch(`/api/contact-center/forms/${selectedId}/submissions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ interactionId: selectedInteraction?.id, data: values, context: renderData?.context }) }); const data = await res.json(); setMessage(data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed")); setSubmitting(false); }
-  return <div className="flex flex-col h-full overflow-hidden"><div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg flex items-center justify-between"><div><h3 className="text-sm font-semibold">Forms</h3><p className="text-xs text-muted-foreground">{queueName ? `Queue: ${queueName}` : "Published agent forms"}</p></div>{onBackToInteraction ? <Button size="sm" variant="ghost" onClick={onBackToInteraction}>Back</Button> : null}</div><div className="flex-1 overflow-y-auto p-3 space-y-3">{forms.length === 0 ? <p className="text-sm text-muted-foreground">No published forms assigned to this queue.</p> : <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div>}{selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} />{message ? <p className="mt-3 text-sm text-muted-foreground">{message}</p> : null}</CardContent></Card> : null}</div></div>;
+
+  async function submit(values) {
+    if (!selectedId) return;
+    setSubmitting(true);
+    setMessage("");
+    const res = await fetch(`/api/contact-center/forms/${selectedId}/submissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interactionId: selectedInteraction?.id, data: values, context: renderData?.context }),
+    });
+    const data = await res.json();
+    setMessage(data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed"));
+    setSubmitting(false);
+  }
+
+  return <div className="flex flex-col h-full overflow-hidden">
+    {!hideHeader ? <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg flex items-center justify-between gap-3">
+      <div className="min-w-0"><h3 className="text-sm font-semibold">Forms</h3><p className="text-xs text-muted-foreground">{queueName ? `Queue: ${queueName}` : "Published agent forms"}</p></div>
+      <div className="flex items-center gap-2">
+        {forms.length ? <Select value={selectedId || undefined} onValueChange={setSelectedId}>
+          <SelectTrigger className="h-8 w-[220px]"><SelectValue placeholder="Select form" /></SelectTrigger>
+          <SelectContent>{forms.map((form) => <SelectItem key={form.id} value={form.id}>{form.name}</SelectItem>)}</SelectContent>
+        </Select> : null}
+        {onBackToInteraction ? <Button size="sm" variant="ghost" onClick={onBackToInteraction}>Back</Button> : null}
+      </div>
+    </div> : null}
+    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      {forms.length === 0 ? <p className="text-sm text-muted-foreground">No published forms assigned to this queue.</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
+      {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} />{message ? <p className="mt-3 text-sm text-muted-foreground">{message}</p> : null}</CardContent></Card> : null}
+    </div>
+  </div>;
 }

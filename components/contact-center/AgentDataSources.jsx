@@ -60,6 +60,10 @@ export function AgentDataSources({
   activeView,
   onTileClick,
   onBackToInteraction,
+  selectedFormId,
+  onSelectedFormIdChange,
+  onFormsLoaded,
+  hideFormsHeader = false,
 }) {
   // If view is null, show tiles
   if (view === null) {
@@ -154,6 +158,10 @@ export function AgentDataSources({
         <AgentFormsView
           selectedInteraction={selectedInteraction}
           onBackToInteraction={onBackToInteraction}
+          selectedFormId={selectedFormId}
+          onSelectedFormIdChange={onSelectedFormIdChange}
+          onFormsLoaded={onFormsLoaded}
+          hideHeader={hideFormsHeader}
         />
       )}
     </div>
