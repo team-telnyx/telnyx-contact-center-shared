@@ -7,11 +7,9 @@ import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconCol
 import * as TablerIcons from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ColorPicker } from "@/components/ui/color-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -779,6 +777,29 @@ function RevertibleTextInput({ value = "", onCommit, restoreOnEmpty = false, fal
   />;
 }
 
+
+function isHexColor(value) { return /^#[0-9A-Fa-f]{6}$/.test(String(value || "")); }
+function colorPickerValue(value) { return isHexColor(value) ? value : "#000000"; }
+
+function ColorInput({ label, value = "", onChange, placeholder = "#ccbbaa" }) {
+  const [draft, setDraft] = useState(value || "");
+  useEffect(() => { setDraft(value || ""); }, [value]);
+  function commit(nextValue) {
+    setDraft(nextValue);
+    if (nextValue === "" || isHexColor(nextValue)) onChange?.(nextValue);
+  }
+  return <div className="space-y-2">
+    {label ? <Label>{label}</Label> : null}
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+      <Input className="font-mono" value={draft} placeholder={placeholder} onChange={(e) => commit(e.target.value)} onBlur={() => { if (draft && !isHexColor(draft) && value !== draft) setDraft(value || ""); }} />
+      <label className="relative block h-10 w-12 shrink-0 cursor-pointer overflow-hidden rounded-md border border-input shadow-xs" title="Pick color">
+        <span className="block h-full w-full" style={{ backgroundColor: colorPickerValue(value || draft) }} />
+        <input type="color" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={colorPickerValue(value || draft)} onChange={(e) => commit(e.target.value)} />
+      </label>
+    </div>
+  </div>;
+}
+
 function PanelHeader({ title, description }) {
   return <div className="h-14 shrink-0 border-b px-4 flex flex-col justify-center">
     <h2 className="font-semibold text-sm">{title}</h2>
@@ -850,7 +871,7 @@ function LeftPanel(props) {
     return <div className="h-full min-h-0 flex flex-col">
       <PanelHeader title="Pages" description="Add, rename, reorder, and select form pages." />
       <div className="shrink-0 space-y-3 border-b p-4">
-        <ColorPicker label="Active tab underline color" value={form.theme?.pageTabActiveBorderColor || ""} onChange={(oklch) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: oklch } })} />
+        <ColorInput label="Active tab underline color" value={form.theme?.pageTabActiveBorderColor || ""} onChange={(color) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: color } })} />
         <Button type="button" size="sm" variant="ghost" onClick={() => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: "" } })}>Use theme default</Button>
         <Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button>
       </div>
@@ -1302,7 +1323,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
   return <div className="h-full min-h-0 flex flex-col">
     <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
-      {selectedField ? <Card><CardContent className="p-4 space-y-4">
+      {selectedField ? <div className="space-y-4">
         <div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div>
         <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
         <div><Label>Field name / id</Label><RevertibleTextInput value={selectedField.id ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => renameField(selectedField, value)} /></div>
@@ -1313,8 +1334,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
         {selectedLocation?.container ? <ChildLayoutControls field={selectedField} location={selectedLocation} layout={childLayoutFor(selectedLocation.container, selectedField.id)} updateLayout={updateChildLayout} /> : null}
         <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} />
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.options ? <div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div> : null}
-        <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Advanced JSON props</summary><Textarea rows={4} className="mt-3 font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></details>
-      </CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
+      </div> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
     </div>
   </div>;
 }
@@ -1346,7 +1366,7 @@ function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
   return <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
     <div className="text-xs font-semibold uppercase text-muted-foreground">Design</div>
     {supportsPadding ? <div><Label>Padding</Label><Select value={props.padding || "md"} onValueChange={(value) => setProps({ padding: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PADDING_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
-    {supportsColor ? <div className="space-y-2"><ColorPicker label="Text color" value={props.color || ""} onChange={(oklch) => setProps({ color: oklch })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>Use theme default</Button></div> : null}
+    {supportsColor ? <div className="space-y-2"><ColorInput label="Text color" value={props.color || ""} onChange={(color) => setProps({ color })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>Use theme default</Button></div> : null}
     {supportsBorders ? <BorderControls props={props} setProps={setProps} /> : null}
     {["label", "hero", "text", "richtext"].includes(field.type) ? <div><Label>Align</Label><Select value={props.align || "left"} onValueChange={(value) => setProps({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
     {["label", "text", "richtext"].includes(field.type) ? <div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
@@ -1358,7 +1378,7 @@ function BorderControls({ props = {}, setProps }) {
   return <div className="space-y-3 rounded-md border bg-background p-3">
     <div className="text-xs font-medium text-muted-foreground">Border</div>
     <div><Label>Border width px</Label><Input type="number" min="0" value={props.borderWidth ?? ""} placeholder="Theme default" onChange={(e) => setProps({ borderWidth: e.target.value === "" ? undefined : Number(e.target.value) })} /></div>
-    <ColorPicker label="Border color" value={props.borderColor || ""} onChange={(oklch) => setProps({ borderColor: oklch })} />
+    <ColorInput label="Border color" value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} />
     <Button type="button" size="sm" variant="ghost" onClick={() => setProps({ borderWidth: undefined, borderColor: "" })}>Use default border</Button>
     <p className="text-[11px] text-muted-foreground">Set width to 0 to hide the border.</p>
   </div>;
@@ -1398,8 +1418,8 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap ?? 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "divider") return <div className="space-y-3"><div><Label>Line width px</Label><Input type="number" min="0" value={props.borderWidth ?? 1} onChange={(e) => setProps({ borderWidth: Number(e.target.value) })} /></div><ColorPicker label="Line color" value={props.borderColor || ""} onChange={(oklch) => setProps({ borderColor: oklch })} /><p className="text-[11px] text-muted-foreground">Set width to 0 to hide the divider line.</p></div>;
-  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "divider") return <div className="space-y-3"><div><Label>Line width px</Label><Input type="number" min="0" value={props.borderWidth ?? 1} onChange={(e) => setProps({ borderWidth: Number(e.target.value) })} /></div><ColorInput label="Line color" value={props.borderColor || ""} onChange={(color) => setProps({ borderColor: color })} /><p className="text-[11px] text-muted-foreground">Set width to 0 to hide the divider line.</p></div>;
+  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><HeroButtonsControl buttons={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <StatsItemsControl items={props.items || []} setItems={(items) => setProps({ items })} />;
   if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext ?? ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
@@ -1434,14 +1454,14 @@ function StatsItemsControl({ items = [], setItems }) {
           <div className="flex items-center gap-2 text-muted-foreground"><StatIcon item={item} className="shrink-0" /><span className="text-[11px]">Preview</span></div>
         </div>
         <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(index, { title: e.target.value })} /></div>
-        <div><Label>Description</Label><Textarea rows={2} value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
+        <div><Label>Description</Label><Input value={item.description ?? ""} onChange={(e) => updateItem(index, { description: e.target.value })} /></div>
         <PageIconPicker label="Icon" value={item.icon || ""} onChange={(icon) => updateItem(index, { icon })} />
         <div><Label>Icon size px</Label><Input type="number" min="8" max="96" value={item.iconSize ?? 28} onChange={(e) => updateItem(index, { iconSize: Number(e.target.value) || 28 })} /></div>
         <div className="space-y-3 rounded-md border bg-muted/20 p-3">
           <div className="text-xs font-medium text-muted-foreground">Per-card colors</div>
-          <ColorPicker label="Icon color" value={item.iconColor || ""} onChange={(oklch) => updateItem(index, { iconColor: oklch })} />
-          <ColorPicker label="Title color" value={item.titleColor || ""} onChange={(oklch) => updateItem(index, { titleColor: oklch })} />
-          <ColorPicker label="Description color" value={item.descriptionColor || ""} onChange={(oklch) => updateItem(index, { descriptionColor: oklch })} />
+          <ColorInput label="Icon color" value={item.iconColor || ""} onChange={(color) => updateItem(index, { iconColor: color })} />
+          <ColorInput label="Title color" value={item.titleColor || ""} onChange={(color) => updateItem(index, { titleColor: color })} />
+          <ColorInput label="Description color" value={item.descriptionColor || ""} onChange={(color) => updateItem(index, { descriptionColor: color })} />
           <Button type="button" size="sm" variant="ghost" onClick={() => resetItemColors(index)}>Use theme colors</Button>
         </div>
       </div>)}
@@ -1450,6 +1470,39 @@ function StatsItemsControl({ items = [], setItems }) {
   </div>;
 }
 
-function ArrayJsonControl({ label, value, onChange }) {
-  return <div><Label>{label} JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(value || [], null, 2)} onChange={(e) => { try { onChange(JSON.parse(e.target.value)); } catch {} }} /></div>;
+
+function normalizeHeroButton(button = {}, index = 0) {
+  return {
+    label: button.label ?? (index === 0 ? "Action" : `Button ${index + 1}`),
+    href: button.href ?? button.url ?? "",
+    variant: button.variant || (index === 0 ? "primary" : "secondary"),
+  };
+}
+
+function HeroButtonsControl({ buttons = [], onChange }) {
+  const normalizedButtons = (buttons || []).map(normalizeHeroButton);
+  function updateCount(nextCount) {
+    const count = Math.max(0, Math.min(Number(nextCount) || 0, 4));
+    const next = [...normalizedButtons];
+    while (next.length < count) next.push(normalizeHeroButton({}, next.length));
+    onChange?.(next.slice(0, count));
+  }
+  function updateButton(index, patch) {
+    onChange?.(normalizedButtons.map((button, buttonIndex) => buttonIndex === index ? normalizeHeroButton({ ...button, ...patch }, buttonIndex) : button));
+  }
+  return <div className="space-y-3">
+    <div>
+      <Label>Buttons</Label>
+      <Input type="number" min="0" max="4" value={normalizedButtons.length} onChange={(e) => updateCount(e.target.value)} />
+      <p className="mt-1 text-[11px] text-muted-foreground">Add up to four hero buttons. Existing labels, links, and variants are preserved.</p>
+    </div>
+    <div className="space-y-3">
+      {normalizedButtons.map((button, index) => <div key={index} className="space-y-3 rounded-md border bg-background p-3">
+        <div className="text-xs font-semibold uppercase text-muted-foreground">Button {index + 1}</div>
+        <div><Label>Label</Label><Input value={button.label || ""} onChange={(e) => updateButton(index, { label: e.target.value })} /></div>
+        <div><Label>Link</Label><Input value={button.href || ""} placeholder="https://example.com or /path" onChange={(e) => updateButton(index, { href: e.target.value })} /></div>
+        <div><Label>Variant</Label><Select value={button.variant || "secondary"} onValueChange={(variant) => updateButton(index, { variant })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>
+      </div>)}
+    </div>
+  </div>;
 }
