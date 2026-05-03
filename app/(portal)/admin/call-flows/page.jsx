@@ -357,7 +357,8 @@ export default function CallFlowsPage() {
                             ? flow.nodes.find(
                                 (node) =>
                                   node.data?.nodeType === "incoming_call" ||
-                                  node.data?.nodeType === "http_request"
+                                  node.data?.nodeType === "http_request" ||
+                                  node.data?.nodeType === "form_submit"
                               )
                             : null;
 
@@ -386,6 +387,14 @@ export default function CallFlowsPage() {
                             return (
                               <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30">
                                 HTTP Request
+                              </Badge>
+                            );
+                          }
+
+                          if (initiatorType === "form_submit") {
+                            return (
+                              <Badge className="bg-teal-500/10 text-teal-600 border-teal-500/20 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:text-teal-400 dark:border-teal-500/30">
+                                Form Submit
                               </Badge>
                             );
                           }
