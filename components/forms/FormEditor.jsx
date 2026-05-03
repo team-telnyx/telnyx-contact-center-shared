@@ -299,10 +299,11 @@ function defaultVariableNameForField(field, existingFields = []) {
 }
 function variableNameError(form = {}, field = {}) {
   if (!FORM_COMPONENT_REGISTRY[field.type]?.data) return "";
-  const value = String(field.variableName || "").trim();
+  const rawValue = String(field.variableName ?? "");
+  const value = rawValue.trim();
   if (!value) return "Variable name is required.";
-  if (!isValidFieldVariableName(value)) return "Use letters, numbers, and underscores; start with a letter or underscore.";
-  const duplicate = dataFieldsOf(form).find((item) => item.id !== field.id && item.variableName === value);
+  if (!isValidFieldVariableName(rawValue)) return "Use letters, numbers, and underscores; start with a letter or underscore.";
+  const duplicate = dataFieldsOf(form).find((item) => item.id !== field.id && String(item.variableName || "").trim() === value);
   return duplicate ? `Duplicate variable name; already used by ${duplicate.label || duplicate.id}.` : "";
 }
 function formVariableNameErrors(form = {}) { return dataFieldsOf(form).map((field) => variableNameError(form, field)).filter(Boolean); }
@@ -1434,7 +1435,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
       {selectedField ? <div className="space-y-4">
         <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
-        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField); return <div><Label>Variable name</Label><Input value={selectedField.variableName || ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value.trim() })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || "Used in Form Submit payload variables for call flow data actions."}</p></div>; })() : null}
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField); return <div><Label>Variable name</Label><Input value={selectedField.variableName ?? ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || "Used in Form Submit payload variables for call flow data actions."}</p></div>; })() : null}
         {!["hero", "stats", "card", "richtext", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
