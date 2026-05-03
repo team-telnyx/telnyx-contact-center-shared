@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildFormContext } from "@/lib/forms/form-context";
 import { createFormSubmission } from "@/lib/forms/form-submissions";
+import { FORM_COMPONENT_REGISTRY, normalizeFormDefinition } from "@/lib/forms/form-schema";
+import { DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE, validateVariableName } from "@/lib/variable-utils";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { determineNextNodes, executeFlowNode } from "@/lib/voice-flow-engine";
 
@@ -24,6 +26,67 @@ function safeJson(value, fallback) {
   try { return JSON.parse(value); } catch { return fallback; }
 }
 
+function configuredPayloadVariable(node) {
+  const candidate =
+    node?.data?.config?.payloadVariable ||
+    node?.data?.config?.payloadVariableName ||
+    DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE;
+  const trimmed = typeof candidate === "string" ? candidate.trim() : "";
+  return validateVariableName(trimmed).valid ? trimmed : DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE;
+}
+
+function buildFormSubmitPayload({ form, submission, values, contextObj, interaction, button, flowId }) {
+  const normalizedForm = normalizeFormDefinition(form || {});
+  const submittedValues = values && typeof values === "object" ? values : {};
+  const fields = {};
+  const fieldMetadata = [];
+
+  for (const field of normalizedForm.schema?.fields || []) {
+    const meta = FORM_COMPONENT_REGISTRY[field.type] || {};
+    if (!meta.data) continue;
+
+    const hasValue = Object.prototype.hasOwnProperty.call(submittedValues, field.id);
+    fields[field.id] = hasValue ? submittedValues[field.id] : field.defaultValue ?? null;
+    fieldMetadata.push({
+      id: field.id,
+      label: field.label || field.id,
+      type: field.type,
+      required: Boolean(field.required),
+      present: hasValue,
+    });
+  }
+
+  return {
+    form: {
+      id: form?.id || null,
+      name: form?.name || "",
+      slug: form?.slug || "",
+      version: form?.version || null,
+    },
+    submission: {
+      id: submission?.id || null,
+      status: submission?.status || null,
+      created_at: submission?.created_at || null,
+    },
+    button: button
+      ? {
+          id: button.id || null,
+          label: button.label || null,
+          type: button.type || null,
+          dataActionFlowId:
+            button.props?.dataActionFlowId || button.props?.dataActionId || flowId || "",
+          dataActionLabel: button.props?.dataActionLabel || "",
+        }
+      : null,
+    action: { flowId: flowId || "" },
+    values: fields,
+    submittedValues,
+    fields: fieldMetadata,
+    context: contextObj || {},
+    interaction: interaction || {},
+  };
+}
+
 async function executeFormDataAction({ flowId, submission, form, values, contextObj, interaction, button }) {
   if (!flowId) return null;
   const flowRow = await VoiceFlowDb.getFlowById(flowId, null);
@@ -39,6 +102,16 @@ async function executeFormDataAction({ flowId, submission, form, values, context
   if (!startNode) return { ok: false, success: false, status: "error", message: "Selected flow is not a Form Submit data action." };
 
   const callControlId = `form:${submission?.id || Date.now()}`;
+  const payloadVariable = configuredPayloadVariable(startNode);
+  const formSubmitPayload = buildFormSubmitPayload({
+    form,
+    submission,
+    values,
+    contextObj,
+    interaction,
+    button,
+    flowId,
+  });
   const event = {
     data: {
       event_type: "form.submit",
@@ -49,6 +122,8 @@ async function executeFormDataAction({ flowId, submission, form, values, context
         button_id: button?.id || null,
         button_label: button?.label || null,
         data: values,
+        payload_variable: payloadVariable,
+        form_payload: formSubmitPayload,
         context: contextObj,
         interaction_id: interaction?.id || null,
       },
@@ -66,6 +141,7 @@ async function executeFormDataAction({ flowId, submission, form, values, context
       form_data: values || {},
       form_context: contextObj || {},
       interaction: interaction || {},
+      [payloadVariable]: formSubmitPayload,
     },
     globalVariables: flow.variables || {},
     lastOutput: 0,

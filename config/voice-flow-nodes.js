@@ -126,6 +126,14 @@ export const VOICE_FLOW_NODES = {
         placeholder: "Save contact, create task, call external API...",
         description: "Shown in Form Builder when selecting data actions",
       },
+      payloadVariable: {
+        type: "string",
+        label: "Payload Variable Name",
+        required: false,
+        default: "form_payload",
+        placeholder: "form_payload",
+        description: "Variable that receives the full submitted form payload for downstream nodes",
+      },
     },
   },
 
