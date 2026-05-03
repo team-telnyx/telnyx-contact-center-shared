@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { VariableInput } from "./VariableInput";
+import { FORM_COMPONENT_REGISTRY, normalizeFormDefinition } from "@/lib/forms/form-schema";
 import { Separator } from "@/components/ui/separator";
 import {
   IconRobot,
@@ -28,6 +30,7 @@ export default function AgentAssistNodeEditor({
   config = {},
   onChange,
   currentUserEmail,
+  availableVariables = [],
 }) {
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   const [workflows, setWorkflows] = useState([]);
@@ -152,6 +155,32 @@ export default function AgentAssistNodeEditor({
   const selectedWorkflow = workflows.find((w) => w.id === config.workflow_id);
   const selectedWebPageId = getSelectedWebPageId();
   const selectedWebPage = webPages.find((page) => page.id === selectedWebPageId);
+  const selectedForm = forms.find((form) => form.id === config.form_id);
+  const selectedFormFields = useMemo(() => {
+    if (!selectedForm) return [];
+    const normalized = normalizeFormDefinition(selectedForm);
+    return (normalized.schema?.fields || []).filter((field) =>
+      FORM_COMPONENT_REGISTRY[field.type]?.data && field.variableName,
+    );
+  }, [selectedForm]);
+  const formDataConfig = config.form_data && typeof config.form_data === "object" ? config.form_data : {};
+
+  function updateFormDataField(variableName, patch) {
+    const current = formDataConfig[variableName] || { source: "none", value: "" };
+    const nextEntry = { ...current, ...patch };
+    const nextFormData = { ...formDataConfig };
+    if (!nextEntry.source || nextEntry.source === "none") delete nextFormData[variableName];
+    else nextFormData[variableName] = nextEntry;
+    onChange({ ...config, form_data: nextFormData });
+  }
+
+  function handleFormSelect(value) {
+    const formId = value === "queue" ? "" : value;
+    const nextConfig = { ...config, form_id: formId };
+    if (!formId) nextConfig.form_data = {};
+    onChange(nextConfig);
+  }
+
   const selectTriggerClassName = "w-full max-w-full min-w-0 overflow-hidden [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate";
   const selectContentClassName = "w-[var(--radix-select-trigger-width)] max-w-[min(var(--radix-select-trigger-width),calc(100vw-2rem))] overflow-x-hidden";
   const selectItemClassName = "max-w-full min-w-0 [&>span:last-child]:min-w-0 [&>span:last-child]:max-w-full [&>span:last-child]:truncate";
@@ -347,7 +376,7 @@ export default function AgentAssistNodeEditor({
             ) : (
               <Select
                 value={config.form_id || "queue"}
-                onValueChange={(value) => handleChange("form_id", value === "queue" ? "" : value)}
+                onValueChange={handleFormSelect}
               >
                 <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="Use queue-assigned forms" />
@@ -361,6 +390,73 @@ export default function AgentAssistNodeEditor({
               </Select>
             )}
           </div>
+          {selectedForm ? (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div>
+                <Label>Form data prefill</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optional values to pass into the selected Agent Assist form. Values are keyed by each field variable name.
+                </p>
+              </div>
+              {selectedFormFields.length ? (
+                <div className="space-y-3">
+                  {selectedFormFields.map((field) => {
+                    const entry = formDataConfig[field.variableName] || { source: "none", value: "" };
+                    const source = entry.source || "none";
+                    return (
+                      <div key={field.id} className="space-y-2 rounded-md border bg-background p-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium">{field.label || field.id}</span>
+                          <Badge variant="outline" className="font-mono text-[10px]">{field.variableName}</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{field.type}</Badge>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-[160px_minmax(0,1fr)]">
+                          <Select value={source} onValueChange={(value) => updateFormDataField(field.variableName, { source: value, value: value === "none" ? "" : entry.value || "" })}>
+                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              <SelectItem value="static">Static value</SelectItem>
+                              <SelectItem value="variable">Variable</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {source === "variable" ? (
+                            <VariableInput
+                              value={entry.value || ""}
+                              onChange={(value) => updateFormDataField(field.variableName, { source: "variable", value })}
+                              availableVariables={availableVariables}
+                              placeholder="{{customer_name}} or {{client_state.customer.name}}"
+                              className="h-9"
+                            />
+                          ) : source === "static" ? (
+                            field.type === "switch" ? (
+                              <div className="flex h-9 items-center gap-2">
+                                <Switch checked={entry.value === true || entry.value === "true"} onCheckedChange={(checked) => updateFormDataField(field.variableName, { source: "static", value: checked })} />
+                                <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? "true" : "false"}</span>
+                              </div>
+                            ) : (
+                              <Input
+                                type={field.type === "slider" ? "number" : field.type === "datetime" ? "datetime-local" : "text"}
+                                value={entry.value ?? ""}
+                                onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
+                                placeholder="Value to prefill"
+                                className="h-9"
+                              />
+                            )
+                          ) : (
+                            <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  This form has no data fields with variable names.
+                </div>
+              )}
+            </div>
+          ) : null}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>Auto-open forms</Label>

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -186,6 +186,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
   const pages = normalized?.schema?.pages || [];
   const [activePageId, setActivePageId] = useState(pages[0]?.id || "page_1");
   const [values, setValues] = useState(initialValues || {});
+  useEffect(() => { setValues(initialValues || {}); }, [initialValues]);
   const byId = useMemo(() => new Map((normalized?.schema?.fields || []).map((field) => [field.id, field])), [normalized]);
   const fields = useMemo(() => normalized ? rootFields(normalized, activePageId) : [], [normalized, activePageId]);
   function setValue(id, value) { setValues((prev) => ({ ...prev, [id]: value })); }

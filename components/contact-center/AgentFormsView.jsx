@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormRenderer } from "@/components/forms/FormRenderer";
+import { normalizeFormDefinition } from "@/lib/forms/form-schema";
 import { notify } from "@/components/ToastNotify";
 
 export function AgentFormsView({
@@ -78,7 +79,43 @@ export function AgentFormsView({
     return () => { cancelled = true; };
   }, [selectedId, selectedInteraction?.id]);
 
+  function objectOrEmpty(value) {
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  }
+
+  function interactionFormData() {
+    const metadata = objectOrEmpty(selectedInteraction?.metadata);
+    const routingMetadata = objectOrEmpty(selectedInteraction?.routing_metadata || selectedInteraction?.routingMetadata);
+    const metadataClientState = objectOrEmpty(metadata.client_state || metadata.clientState);
+    const routingClientState = objectOrEmpty(routingMetadata.client_state || routingMetadata.clientState);
+    return objectOrEmpty(
+      routingMetadata.form_data ||
+      routingMetadata.formData ||
+      routingClientState.form_data ||
+      routingClientState.formData ||
+      metadataClientState.form_data ||
+      metadataClientState.formData ||
+      metadata.agent_assist_config?.form_data_resolved,
+    );
+  }
+
   const selectedForm = useMemo(() => forms.find((f) => f.id === selectedId), [forms, selectedId]);
+
+  const rendererInitialValues = useMemo(() => {
+    const base = renderData?.initialValues || {};
+    if (!renderData?.form || !selectedId || !formIds.includes(selectedId)) return base;
+    const formData = interactionFormData();
+    if (!Object.keys(formData).length) return base;
+    const normalized = normalizeFormDefinition(renderData.form);
+    const mapped = { ...base };
+    for (const field of normalized.schema?.fields || []) {
+      if (field.variableName && Object.prototype.hasOwnProperty.call(formData, field.variableName)) {
+        mapped[field.id] = formData[field.variableName];
+      }
+    }
+    return mapped;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderData?.form, renderData?.initialValues, selectedId, formIds.join(","), selectedInteraction?.id, selectedInteraction?.routing_metadata, selectedInteraction?.metadata]);
 
   function toastVariantForStatus(data) {
     const actionStatus = data?.dataAction?.status || data?.status;
@@ -135,7 +172,7 @@ export function AgentFormsView({
     </div> : null}
     <div className="flex-1 overflow-y-auto p-3 space-y-3">
       {forms.length === 0 ? <p className="text-sm text-muted-foreground">{hasExplicitFormIds ? "No selected published forms are available for this interaction." : "No published forms assigned to this queue."}</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
-      {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} /></CardContent></Card> : null}
+      {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={rendererInitialValues} context={renderData.context} onSubmit={submit} submitting={submitting} /></CardContent></Card> : null}
     </div>
   </div>;
 }

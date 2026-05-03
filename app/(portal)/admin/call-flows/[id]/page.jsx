@@ -3469,6 +3469,11 @@ export default function FlowBuilderPage() {
                             <AgentAssistNodeEditor
                               config={nodeConfig}
                               currentUserEmail={userEmail}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
