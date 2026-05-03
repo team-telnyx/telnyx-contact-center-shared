@@ -7,6 +7,7 @@ import { IconBlocks, IconEye, IconGitBranch, IconLoader2, IconMessageCircle, Ico
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +58,7 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
+  const [formSettingsOpen, setFormSettingsOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const aiMessagesEndRef = useRef(null);
@@ -220,10 +222,21 @@ export function FormEditor({ initialForm, isNew = false }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button>
+        <Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button>
         <Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         <Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
       </div>
     </div>
+
+    <Dialog open={formSettingsOpen} onOpenChange={setFormSettingsOpen}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Form settings</DialogTitle>
+          <DialogDescription>Edit global settings for this form. Component-level settings stay in the right Properties panel.</DialogDescription>
+        </DialogHeader>
+        <FormSettingsFields form={form} patchForm={patchForm} />
+      </DialogContent>
+    </Dialog>
 
     <DndContext onDragEnd={handleDragEnd}>
     <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
@@ -238,7 +251,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <div className="h-12 shrink-0 border-b px-4 flex items-center justify-between bg-card">
+        <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between bg-card">
           <div><div className="text-sm font-semibold">Visual canvas</div><div className="text-[11px] text-muted-foreground">Form preview and component selection</div></div>
           <div className="text-xs text-muted-foreground">100% · Desktop</div>
         </div>
@@ -275,7 +288,6 @@ function LeftPanel(props) {
     return <div className="h-full min-h-0 flex flex-col">
       <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between gap-2">
         <div className="min-w-0"><h2 className="font-semibold text-sm">AI form agent</h2><p className="text-xs text-muted-foreground">Describe changes, then refine visually.</p></div>
-        <Button size="sm" variant="outline" onClick={clearAiChat} disabled={aiLoading}>Clear</Button>
       </div>
       <div className="flex-1 min-h-0 space-y-3 overflow-y-auto p-4">
         {aiMessages.map((msg, i) => <div key={i} className={`rounded-xl p-3 text-sm ${msg.role === "user" ? "bg-primary text-primary-foreground ml-6" : "bg-muted mr-6"}`}>{msg.text}</div>)}
@@ -402,6 +414,22 @@ function CanvasField({ field, selected, onSelect, readOnly }) {
   return <div onClick={onSelect} className={shell}><Label>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className="mt-2 space-y-2">{(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
-function PropertiesPanel({ form, patchForm, selectedField, selectedId, setSelectedId, updateField }) {
-  return <div className="h-full min-h-0 flex flex-col"><div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Form and selected component settings.</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5"><Card><CardContent className="p-4 space-y-3"><button className={`w-full rounded-md border p-2 text-left text-sm ${selectedId === "form" ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId("form")}>Form settings</button><div><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div><div><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div><div><Label>Category</Label><Input value={form.category || ""} onChange={(e) => patchForm({ category: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div><div><Label>Queue names</Label><Input value={(form.queue_names || []).join(", ")} onChange={(e) => patchForm({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Auto-open</Label><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div></CardContent></Card>{selectedField ? <Card><CardContent className="p-4 space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div><div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div><div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => updateField(selectedField.id, { id: e.target.value })} /></div><div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div><div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div><div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div><div><Label>Style tokens JSON</Label><Textarea rows={3} className="font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></div><div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div></CardContent></Card> : null}</div></div>;
+function FormSettingsFields({ form, patchForm }) {
+  return <div className="grid gap-4 py-2">
+    <div className="grid gap-2"><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div>
+    <div className="grid gap-2"><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Category</Label><Input value={form.category || ""} onChange={(e) => patchForm({ category: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Queue names</Label><Input value={(form.queue_names || []).join(", ")} onChange={(e) => patchForm({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div>
+    <div className="flex items-center justify-between rounded-md border p-3"><div><Label>Auto-open</Label><p className="text-xs text-muted-foreground">Open this form automatically for matching queues.</p></div><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div>
+  </div>;
+}
+
+function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
+  return <div className="h-full min-h-0 flex flex-col">
+    <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>
+    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
+      {selectedField ? <Card><CardContent className="p-4 space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div><div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div><div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => updateField(selectedField.id, { id: e.target.value })} /></div><div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div><div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div><div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div><div><Label>Style tokens JSON</Label><Textarea rows={3} className="font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></div><div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div></CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
+    </div>
+  </div>;
 }
