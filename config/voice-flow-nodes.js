@@ -105,6 +105,30 @@ export const VOICE_FLOW_NODES = {
     },
   },
 
+  form_submit: {
+    id: "form_submit",
+    category: NODE_CATEGORIES.INITIATOR,
+    label: "Form Submit",
+    icon: "IconForms",
+    color: NODE_COLORS[NODE_CATEGORIES.INITIATOR],
+    description: "Trigger flow when an Agent Desktop form button runs a data action",
+    telnyxAction: "form_submit_trigger",
+    telnyxEndpoint: null,
+    inputs: 0,
+    outputs: 1,
+    outputLabels: ["Submitted"],
+    outputEvents: ["form.submit"],
+    config: {
+      description: {
+        type: "string",
+        label: "Description",
+        required: false,
+        placeholder: "Save contact, create task, call external API...",
+        description: "Shown in Form Builder when selecting data actions",
+      },
+    },
+  },
+
   // CALL CONTROL NODES
   dial: {
     id: "dial",
@@ -2356,6 +2380,50 @@ export const VOICE_FLOW_NODES = {
       },
     },
   },
+
+  form_submit_status: {
+    id: "form_submit_status",
+    category: NODE_CATEGORIES.INTEGRATION,
+    label: "Form Submit Status",
+    icon: "IconCircleCheck",
+    color: NODE_COLORS[NODE_CATEGORIES.INTEGRATION],
+    description: "Return success or error status/message to the submitted form",
+    telnyxAction: null,
+    telnyxEndpoint: null,
+    inputs: 1,
+    outputs: 0,
+    outputLabels: [],
+    outputEvents: [],
+    config: {
+      status: {
+        type: "select",
+        label: "Status",
+        required: true,
+        default: "success",
+        options: [
+          { value: "success", label: "Success" },
+          { value: "error", label: "Error" },
+        ],
+        description: "Status returned to Agent Desktop",
+      },
+      message: {
+        type: "textarea",
+        label: "Message",
+        required: false,
+        default: "Data action completed.",
+        placeholder: "Saved successfully.",
+        description: "Toast/status message shown to the agent",
+      },
+      responseVariable: {
+        type: "string",
+        label: "Response Variable Name",
+        required: false,
+        default: "form_submit_status",
+        description: "Variable name used to store this status in execution state",
+      },
+    },
+  },
+
 
   data_action: {
     id: "data_action",

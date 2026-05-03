@@ -80,17 +80,23 @@ export function AgentFormsView({
 
   const selectedForm = useMemo(() => forms.find((f) => f.id === selectedId), [forms, selectedId]);
 
-  async function submit(values) {
+  async function submit(values, meta = {}) {
     if (!selectedId) return;
     setSubmitting(true);
     setMessage("");
     const res = await fetch(`/api/contact-center/forms/${selectedId}/submissions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ interactionId: selectedInteraction?.id, data: values, context: renderData?.context }),
+      body: JSON.stringify({
+        interactionId: selectedInteraction?.id,
+        data: values,
+        context: renderData?.context,
+        button: meta.button,
+        dataActionFlowId: meta.dataActionFlowId || meta.button?.props?.dataActionFlowId || "",
+      }),
     });
     const data = await res.json();
-    setMessage(data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed"));
+    setMessage(data.dataAction?.message || (data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed")));
     setSubmitting(false);
   }
 

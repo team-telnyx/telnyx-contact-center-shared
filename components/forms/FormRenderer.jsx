@@ -166,6 +166,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
   const fields = useMemo(() => normalized ? rootFields(normalized, activePageId) : [], [normalized, activePageId]);
   function setValue(id, value) { setValues((prev) => ({ ...prev, [id]: value })); }
   async function handleSubmit(e) { e?.preventDefault?.(); await onSubmit?.(values); }
+  async function handleButtonClick(field) { await onSubmit?.(values, { button: field, dataActionFlowId: field.props?.dataActionFlowId || field.props?.dataActionId || "" }); }
   if (!form) return <div className="text-sm text-muted-foreground">No form selected.</div>;
   const renderField = (field) => {
     if (["section", "row", "columns", "grid", "flex", "spacer", "divider", "hero", "stats", "card", "richtext", "codeblock"].includes(field.type)) return <LayoutContainer key={field.id} field={field} byId={byId} renderField={renderField} />;
@@ -173,7 +174,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
     if (field.type === "label") return <div key={field.id} className={`font-medium ${textSizeClass(field.props?.size)} ${alignClass(field.props?.align)} ${paddingClass(field.props?.padding)} ${field.props?.bold ? "font-bold" : ""}`} style={paddingStyle(field.props?.padding, fieldStyle(field) || {})}>{field.label}</div>;
     if (field.type === "context_value") return <div key={field.id} className="rounded-md bg-muted p-3 text-sm"><Label>{field.label}</Label><div className="mt-1 font-mono text-xs">{String(getContextValue(context, field.contextPath) || "—")}</div></div>;
     if (field.type === "image") return field.props?.src ? <img key={field.id} src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : null;
-    if (field.type === "button") return <Button key={field.id} type="submit" disabled={submitting || readOnly}>{field.label || "Submit"}</Button>;
+    if (field.type === "button") return <Button key={field.id} type="button" disabled={submitting || readOnly} variant={field.props?.variant === "secondary" ? "secondary" : "default"} onClick={() => handleButtonClick(field)}>{field.label || "Submit"}</Button>;
     const value = values[field.id] ?? field.defaultValue ?? "";
     return <div key={field.id} className="space-y-2 min-w-0">
       <Label htmlFor={field.id} style={fieldStyle(field)} className={field.props?.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>
@@ -188,6 +189,5 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
   return <form onSubmit={handleSubmit} className="space-y-4" style={formThemeStyle(normalized?.theme)}>
     {pages.length > 1 ? <div className="mb-6 flex items-center gap-1 border-b">{pages.map((page) => { const active = activePageId === page.id; const activeBorderColor = normalized?.theme?.pageTabActiveBorderColor; return <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}><PageIcon value={page.icon} />{page.title || page.id}<span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${active && !activeBorderColor ? "bg-primary" : "bg-transparent"}`} style={active && activeBorderColor ? { backgroundColor: activeBorderColor } : undefined} /></button>; })}</div> : null}
     {fields.map(renderField)}
-    {!fields.some((f) => f.type === "button") && onSubmit ? <Button type="submit" disabled={submitting || readOnly}>Submit</Button> : null}
   </form>;
 }

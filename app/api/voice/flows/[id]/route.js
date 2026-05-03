@@ -10,6 +10,7 @@ import {
 import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { validateFlow } from "@/lib/voice-flow-validator";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,19 @@ export async function PUT(request, { params }) {
       updates.variables = body.globalVariables;
     else if (body.variables !== undefined) updates.variables = body.variables;
     if (body.metadata !== undefined) updates.metadata = body.metadata;
+
+    if (updates.nodes !== undefined || updates.edges !== undefined) {
+      const validation = validateFlow({
+        nodes: updates.nodes !== undefined ? updates.nodes : existingFlow.nodes || [],
+        edges: updates.edges !== undefined ? updates.edges : existingFlow.edges || [],
+      });
+      if (!validation.valid) {
+        return NextResponse.json(
+          { ok: false, error: validation.errors.join("\n"), validation },
+          { status: 400 }
+        );
+      }
+    }
 
     // Update voice application if name changed or SIP subdomain needs to be set
     if (existingFlow.telnyx_voice_app_id) {

@@ -1646,7 +1646,8 @@ export default function FlowBuilderPage() {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit",
     );
   }, [nodes]);
 
@@ -1956,14 +1957,15 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit",
     );
 
     if (!hasInitiator) {
       notify({
         title: "Error",
         description:
-          "Cannot save flow: An initiator node (Incoming Call or HTTP Request) is required. Please add an initiator node first.",
+          "Cannot save flow: An initiator node (Incoming Call, HTTP Request, or Form Submit) is required. Please add an initiator node first.",
         variant: "error",
       });
       return;
@@ -2208,7 +2210,8 @@ export default function FlowBuilderPage() {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit",
     );
   }, [nodes]);
 
@@ -2220,7 +2223,8 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit",
     );
 
     // Check if trying to add an initiator node when one already exists
@@ -2242,7 +2246,7 @@ export default function FlowBuilderPage() {
         notify({
           title: "Error",
           description:
-            "Please add an initiator node (Incoming Call or HTTP Request) first before adding other nodes to the flow.",
+            "Please add an initiator node (Incoming Call, HTTP Request, or Form Submit) first before adding other nodes to the flow.",
           variant: "error",
         });
         return;
@@ -2274,6 +2278,8 @@ export default function FlowBuilderPage() {
       }
     } else if (nodeType === "http_request") {
       defaultConfig.endpoint_path = `${baseUrl}/api/voice/flows/trigger/${flowId}`;
+    } else if (nodeType === "form_submit") {
+      defaultConfig.description = defaultConfig.description || "Run from an Agent Desktop form button";
     } else if (nodeType === "dial") {
       // Auto-populate webhook URL for Dial node to continue flow execution
       defaultConfig.webhook_url = `${baseUrl}/api/voice/webhook/flows/${flowId}`;
@@ -2633,7 +2639,8 @@ export default function FlowBuilderPage() {
                     const hasInitiator = nodes.some(
                       (node) =>
                         node.data?.nodeType === "incoming_call" ||
-                        node.data?.nodeType === "http_request",
+                        node.data?.nodeType === "http_request" ||
+                        node.data?.nodeType === "form_submit",
                     );
 
                     if (!hasInitiator) {

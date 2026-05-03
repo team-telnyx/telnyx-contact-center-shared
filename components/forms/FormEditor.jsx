@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconBolt, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { notify } from "@/components/ToastNotify";
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
   { id: "pages", label: "Pages", icon: IconForms },
+  { id: "data-actions", label: "Data Actions", icon: IconBolt },
   { id: "blocks", label: "Blocks", icon: IconBlocks },
   { id: "templates", label: "Templates", icon: IconTemplate },
   { id: "media", label: "Media", icon: IconPhoto },
@@ -138,6 +139,25 @@ function mediaDimensionsLabel(item = {}, fallback = null) {
   const width = Number(item.width || item.metadata?.width || item.metadata?.original_width || fallback?.width || 0);
   const height = Number(item.height || item.metadata?.height || item.metadata?.original_height || fallback?.height || 0);
   return width > 0 && height > 0 ? `${Math.round(width)} × ${Math.round(height)} px` : "Dimensions unknown";
+}
+function flowNodes(flow = {}) {
+  const nodes = flow.nodes || flow.metadata?.nodes || [];
+  if (Array.isArray(nodes)) return nodes;
+  if (typeof nodes === "string") {
+    try { return JSON.parse(nodes); } catch { return []; }
+  }
+  return [];
+}
+function isFormSubmitFlow(flow = {}) {
+  const textFields = [flow.initiator, flow.trigger, flow.trigger_type, flow.triggerType, flow.metadata?.initiator, flow.metadata?.trigger, flow.metadata?.trigger_type, flow.metadata?.triggerType]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase().replace(/[\s-]+/g, "_"));
+  return textFields.includes("form_submit") || flowNodes(flow).some((node) => node?.data?.nodeType === "form_submit" || node?.type === "form_submit");
+}
+function dataActionTitle(flow = {}) { return flow.name || flow.display_name || flow.displayName || "Untitled data action"; }
+function dataActionDescription(flow = {}) {
+  const node = flowNodes(flow).find((item) => item?.data?.nodeType === "form_submit");
+  return node?.data?.config?.description || flow.description || flow.metadata?.description || "Form Submit call flow";
 }
 function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : null; }
 function isImageCapable(field) { return Boolean(imagePropKey(field)); }
@@ -274,7 +294,7 @@ function newField(type) {
   const id = makeId(type);
   const base = { id, type, label: FORM_COMPONENT_REGISTRY[type]?.label || type, placeholder: "", required: false, options: [] };
   if (type === "select" || type === "radio") base.options = [{ label: "Option A", value: "a" }, { label: "Option B", value: "b" }];
-  if (type === "button") base.label = "Submit";
+  if (type === "button") { base.label = "Submit"; base.props = { variant: "primary", dataActionFlowId: "", dataActionId: "", dataActionLabel: "" }; }
   if (type === "context_value") base.contextPath = "caller.from_number";
   if (type === "image") base.props = { src: "", padding: "md" };
   if (type === "section") base.helpText = "Group related fields under this heading.";
@@ -310,6 +330,8 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [aiMessages, setAiMessages] = useState([{ role: "assistant", text: "Tell me what this form should collect, or ask for a change. I’ll apply it to the draft and keep you in the visual builder." }]);
   const [templates, setTemplates] = useState([]);
   const [media, setMedia] = useState([]);
+  const [dataActions, setDataActions] = useState([]);
+  const [dataActionsLoading, setDataActionsLoading] = useState(false);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [queues, setQueues] = useState([]);
   const [previewTheme, setPreviewTheme] = useState("system");
@@ -535,12 +557,27 @@ export function FormEditor({ initialForm, isNew = false }) {
     fetch("/api/admin/form-templates", { cache: "no-store" }).then((r) => r.json()).then((data) => { if (data.ok) setTemplates(data.templates || []); }).catch(() => {});
   }, [activeTab, templates.length]);
 
-  async function loadMedia() {
-    const res = await fetch("/api/admin/forms/media", { cache: "no-store" });
-    const data = await res.json();
-    if (data.ok) setMedia(data.media || []);
+  async function loadDataActions() {
+    setDataActionsLoading(true);
+    try {
+      const res = await fetch("/api/voice/flows?pageSize=100", { cache: "no-store" });
+      const data = await res.json();
+      if (data.ok) setDataActions((data.items || []).filter(isFormSubmitFlow));
+    } catch {
+      setDataActions([]);
+    } finally {
+      setDataActionsLoading(false);
+    }
   }
-  useEffect(() => { if (activeTab === "media" || isImageCapable(selectedField)) loadMedia().catch(() => {}); }, [activeTab, selectedField?.id, selectedField?.type]);
+  useEffect(() => { if ((activeTab === "data-actions" || selectedField?.type === "button") && !dataActions.length) loadDataActions().catch(() => {}); }, [activeTab, selectedField?.id, selectedField?.type, dataActions.length]);
+
+  function assignDataActionToButton(fieldId, flow) {
+    const field = fieldsById.get(fieldId);
+    if (!field || field.type !== "button" || !flow) return false;
+    updateField(fieldId, { props: { ...(field.props || {}), dataActionFlowId: flow.id, dataActionLabel: dataActionTitle(flow) } });
+    setSelectedId(fieldId);
+    return true;
+  }
 
   useEffect(() => {
     if (!formSettingsOpen || queues.length) return;
@@ -646,7 +683,7 @@ export function FormEditor({ initialForm, isNew = false }) {
 
   function handleDragStart(event) {
     const data = event.active?.data?.current || {};
-    setActiveDragType(data.dragKind === "media" ? "media" : data.dragKind === "field" ? fieldsById.get(data.fieldId)?.type || "field" : data.type || null);
+    setActiveDragType(data.dragKind === "dataAction" ? "data action" : data.dragKind === "media" ? "media" : data.dragKind === "field" ? fieldsById.get(data.fieldId)?.type || "field" : data.type || null);
   }
   function handleDragEnd(event) {
     const data = event.active?.data?.current || {};
@@ -655,6 +692,9 @@ export function FormEditor({ initialForm, isNew = false }) {
     if (!overId) { setActiveDragType(null); return; }
     if (data.dragKind === "field" && data.fieldId) {
       moveFieldToTarget(data.fieldId, targetFromOverId(overId) || { kind: "root", pageId: activePage?.id || pages[0]?.id || "page_1" });
+    } else if (data.dragKind === "dataAction" && data.flow) {
+      if (overId.startsWith("field:") && assignDataActionToButton(overId.slice("field:".length), data.flow)) { setActiveDragType(null); return; }
+      if (selectedField?.type === "button") assignDataActionToButton(selectedField.id, data.flow);
     } else if (data.dragKind === "media" && data.media) {
       if (overId.startsWith("field:") && setFieldImage(overId.slice("field:".length), data.media)) { setActiveDragType(null); return; }
       if (overId.startsWith("container:")) {
@@ -714,7 +754,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
+        <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} dataActions={dataActions} dataActionsLoading={dataActionsLoading} selectedField={selectedField} assignDataActionToButton={assignDataActionToButton} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -741,10 +781,10 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} media={media} />
+        <PropertiesPanel form={form} patchForm={patchForm} selectedField={selectedField} selectedId={selectedId} setSelectedId={setSelectedId} updateField={updateField} media={media} dataActions={dataActions} />
       </section>
     </div>
-      <DragOverlay dropAnimation={null}>{activeDragType === "media" ? <MediaDragPreview /> : activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
+      <DragOverlay dropAnimation={null}>{activeDragType === "media" ? <MediaDragPreview /> : activeDragType === "data action" ? <DataActionDragPreview /> : activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
     </DndContext>
   </div>;
 }
@@ -809,7 +849,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, addField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
+  const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, addField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle, dataActions = [], dataActionsLoading = false, selectedField, assignDataActionToButton } = props;
   const mediaInputRef = useRef(null);
   const [pexelsOpen, setPexelsOpen] = useState(false);
   const [pexelsQuery, setPexelsQuery] = useState("");
@@ -893,6 +933,21 @@ function LeftPanel(props) {
             <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={pages.length <= 1} onClick={() => removePage(page.id)}><IconTrash className="h-4 w-4" /></Button>
           </div>
         </div>)}
+      </div>
+    </div>;
+  }
+
+  if (activeTab === "data-actions") {
+    const selectedButton = selectedField?.type === "button" ? selectedField : null;
+    return <div className="h-full min-h-0 flex flex-col">
+      <PanelHeader title="Data Actions" description="Form Submit call flows for button actions." />
+      <div className="shrink-0 border-b p-4 text-xs text-muted-foreground">
+        {selectedButton ? <>Click or drag a card onto the selected button <span className="font-medium text-foreground">{selectedButton.label || selectedButton.id}</span>.</> : "Select a button first, or drag a card onto a button on the canvas."}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+        {dataActionsLoading ? <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Loading data actions...</div> : null}
+        {dataActions.map((flow) => <DraggableDataActionCard key={flow.id} flow={flow} onApply={() => selectedButton ? assignDataActionToButton?.(selectedButton.id, flow) : null} disabled={!selectedButton} />)}
+        {!dataActionsLoading && !dataActions.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No Form Submit call flows found yet. Create one in Call Flows with the Form Submit initiator.</div> : null}
       </div>
     </div>;
   }
@@ -1084,6 +1139,22 @@ function DraggableBlock({ type, addField, colorClass, iconClass }) {
   </button>;
 }
 
+function DraggableDataActionCard({ flow, onApply, disabled = false }) {
+  const title = dataActionTitle(flow);
+  const description = dataActionDescription(flow);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `data-action-${flow.id}`, data: { dragKind: "dataAction", flow } });
+  return <button ref={setNodeRef} type="button" onClick={() => onApply?.()} className={`touch-none rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-left shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""} ${disabled ? "opacity-80" : ""}`} {...listeners} {...attributes}>
+    <div className="flex items-start gap-3">
+      <IconGripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+      <IconBolt className="mt-0.5 h-5 w-5 shrink-0 text-teal-500" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-foreground">{title}</div>
+        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  </button>;
+}
+
 function DraggableMediaCard({ item, onTitleCommit }) {
   const title = mediaTitle(item);
   const [draftTitle, setDraftTitle] = useState(title);
@@ -1133,6 +1204,10 @@ function DraggableMediaCard({ item, onTitleCommit }) {
 
 function MediaDragPreview() {
   return <div className="w-64 rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconPhoto className="h-5 w-5 text-amber-500" />Media image</div></div>;
+}
+
+function DataActionDragPreview() {
+  return <div className="w-72 rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-sm font-medium shadow-2xl ring-1 ring-black/5"><div className="flex items-center gap-2"><IconBolt className="h-5 w-5 text-teal-500" />Data action</div></div>;
 }
 
 function BlockDragPreview({ type }) {
@@ -1209,7 +1284,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "label") return <div {...baseProps} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={paddingStyle(props.padding, fieldStyle(field) || {})}>{toolbar}{dragHandle}<div className={`font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
   if (field.type === "context_value") return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
   if (field.type === "image") return <div {...baseProps}>{toolbar}{dragHandle}{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
-  if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
+  if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<div className="inline-flex flex-col items-start gap-1"><Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button>{props.dataActionFlowId ? <Badge variant="outline" className="border-teal-500 text-teal-700 dark:text-teal-300">{props.dataActionLabel || "Data action"}</Badge> : null}</div></div>;
   return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)} className={props.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" && normalizeOptions(field.options || []).length ? <div className={`mt-2 ${optionDirection(props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-2"}`}>{normalizeOptions(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><Checkbox disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
@@ -1268,7 +1343,7 @@ function FormSettingsFields({ form, patchForm, queues = [] }) {
   </div>;
 }
 
-function PropertiesPanel({ form, patchForm, selectedField, updateField, media = [] }) {
+function PropertiesPanel({ form, patchForm, selectedField, updateField, media = [], dataActions = [] }) {
   function setProps(field, patch) { updateField(field.id, mergeProps(field, patch).props ? { props: mergeProps(field, patch).props } : {}); }
   function findSelectedLocation(id) {
     for (const field of form.schema.fields || []) for (const slot of nestedSlotEntries(field)) { const index = (slot.ids || []).indexOf(id); if (index >= 0) return { ...slot, container: field, index }; }
@@ -1305,7 +1380,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
         {selectedLocation?.container ? <ChildLayoutControls field={selectedField} location={selectedLocation} layout={childLayoutFor(selectedLocation.container, selectedField.id)} updateLayout={updateChildLayout} /> : null}
-        <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} />
+        <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} media={media} dataActions={dataActions} />
       </div> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
     </div>
   </div>;
@@ -1330,7 +1405,7 @@ function ChildLayoutControls({ field, location, layout, updateLayout }) {
   </div>;
 }
 
-function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
+function BlockPropertyControls({ field, setProps, updateField, media = [], dataActions = [] }) {
   const props = field.props || {};
   const supportsPadding = !["hidden"].includes(field.type);
   const supportsColor = ["hero", "stats", "card", "richtext", "label", "section", "text", "textarea", "select", "radio", "checkbox", "context_value"].includes(field.type);
@@ -1342,7 +1417,7 @@ function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
     {supportsBorders ? <BorderControls props={props} setProps={setProps} /> : null}
     {["label", "hero", "text", "richtext"].includes(field.type) ? <TabsSelector label="Align" value={props.align || "left"} options={ALIGN_OPTIONS.map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))} onChange={(align) => setProps({ align })} /> : null}
     {["label", "text", "richtext"].includes(field.type) ? <div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
-    <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} media={media} />
+    <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} media={media} dataActions={dataActions} />
   </div>;
 }
 
@@ -1401,7 +1476,7 @@ function HeroImageModeTabs({ value = "inline", onChange }) {
   </div>;
 }
 
-function SpecificBlockControls({ field, props, setProps, updateField, media = [] }) {
+function SpecificBlockControls({ field, props, setProps, updateField, media = [], dataActions = [] }) {
   if (field.type === "columns") return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap ?? 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
@@ -1416,7 +1491,23 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "select") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="select" />;
   if (field.type === "radio") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="radio" />;
   if (field.type === "checkbox") return <ChoiceOptionsControl field={field} updateField={updateField} props={props} setProps={setProps} kind="checkbox" />;
-  if (field.type === "button") return <TabsSelector label="Variant" value={props.variant || "primary"} options={VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />;
+  if (field.type === "button") return <div className="space-y-3">
+    <TabsSelector label="Variant" value={props.variant || "primary"} options={VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
+    <div className="space-y-2">
+      <Label>Data action</Label>
+      <Select value={props.dataActionFlowId || "none"} onValueChange={(value) => {
+        if (value === "none") setProps({ dataActionFlowId: "", dataActionId: "", dataActionLabel: "" });
+        else { const action = dataActions.find((item) => String(item.id) === String(value)); setProps({ dataActionFlowId: value, dataActionLabel: action ? dataActionTitle(action) : "" }); }
+      }}>
+        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">None</SelectItem>
+          {dataActions.map((action) => <SelectItem key={action.id} value={String(action.id)}>{dataActionTitle(action)}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">Attach a Call Flow that starts with a Form Submit initiator.</p>
+    </div>
+  </div>;
   return null;
 }
 
