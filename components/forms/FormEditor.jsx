@@ -644,7 +644,7 @@ function LeftPanel(props) {
     if (query.length < 2) { setPexelsError("Enter at least 2 characters to search Pexels."); return; }
     setPexelsLoading(true); setPexelsError("");
     try {
-      const res = await fetch(`/api/admin/forms/media/pexels?query=${encodeURIComponent(query)}&perPage=12`, { cache: "no-store" });
+      const res = await fetch(`/api/admin/forms/media/pexels?query=${encodeURIComponent(query)}&perPage=40`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Pexels search failed");
       setPexelsResults(data.photos || []);
@@ -758,7 +758,7 @@ function LeftPanel(props) {
         </div>
       </div>
       <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
-        <DialogContent className="flex max-h-[88vh] max-w-6xl flex-col">
+        <DialogContent className="!flex h-[88vh] w-[92vw] !max-w-[92vw] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Search in Pexels</DialogTitle>
             <DialogDescription>Search royalty-free Pexels photos and download one into this form media library.</DialogDescription>
@@ -768,7 +768,7 @@ function LeftPanel(props) {
             <Button type="submit" disabled={pexelsLoading}>{pexelsLoading ? "Searching..." : "Search"}</Button>
           </form>
           {pexelsError ? <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{pexelsError}</div> : null}
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-h-0 flex-1 auto-rows-max gap-5 overflow-y-auto overflow-x-hidden pr-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {pexelsResults.map((photo) => <div key={photo.id} className="relative overflow-hidden rounded-xl border bg-background">
               <div className="aspect-video bg-muted"><img src={photo.src?.large || photo.src?.medium || photo.src?.small || photo.src?.tiny} alt={photo.alt || photo.title} className="h-full w-full object-cover" /></div>
               <Button type="button" size="icon" className="absolute right-2 top-2 h-8 w-8 rounded-full bg-background/90 text-foreground shadow backdrop-blur hover:bg-background" disabled={pexelsDownloadingId === photo.id} onClick={() => downloadPexelsPhoto(photo)} title={pexelsDownloadingId === photo.id ? "Downloading..." : "Download to media"} aria-label={pexelsDownloadingId === photo.id ? "Downloading Pexels photo" : "Download Pexels photo to media"}>{pexelsDownloadingId === photo.id ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <IconDownload className="h-4 w-4" />}</Button>

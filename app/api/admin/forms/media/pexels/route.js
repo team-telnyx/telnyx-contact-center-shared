@@ -98,7 +98,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const query = String(searchParams.get("query") || "").trim();
   const page = Math.max(1, Number(searchParams.get("page") || 1));
-  const perPage = Math.max(1, Math.min(24, Number(searchParams.get("perPage") || 12)));
+  const perPage = Math.max(1, Math.min(80, Number(searchParams.get("perPage") || 40)));
   if (query.length < 2) return NextResponse.json({ ok: false, error: "Search query must be at least 2 characters" }, { status: 400 });
 
   try {
