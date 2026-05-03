@@ -64,9 +64,14 @@ function normalizeSubmittedFieldValue(field, value) {
     }
     return Boolean(value);
   }
+  if (field.type === "switch") return Boolean(value);
+  if (field.type === "slider") {
+    const number = Number(Array.isArray(value) ? value[0] : value);
+    return Number.isFinite(number) ? number : null;
+  }
   if (
     Array.isArray(value) &&
-    ["text", "textarea", "select", "radio", "hidden"].includes(field.type)
+    ["text", "textarea", "select", "radio", "hidden", "datetime"].includes(field.type)
   )
     return value[0] ?? "";
   return value;

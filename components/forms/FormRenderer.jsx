@@ -1,11 +1,14 @@
 "use client";
 import { useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import * as TablerIcons from "@tabler/icons-react";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { getContextValue } from "@/lib/forms/form-context";
@@ -46,6 +49,9 @@ function formThemeStyle(theme = {}, base = {}) {
 function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "text-lg", xl: "text-2xl" }[value || "md"] || "text-base"); }
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
+function badgeStyle(field) { return field.props?.color ? { color: field.props.color, borderColor: field.props.color } : undefined; }
+function sliderNumber(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+function dateInputType(mode) { return mode === "time" ? "time" : mode === "datetime" || mode === "datetime-local" ? "datetime-local" : "date"; }
 function containerStyle(field, base = {}) {
   const props = field.props || {};
   const width = Number(props.borderWidth);
@@ -190,6 +196,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
     if (["section", "row", "columns", "grid", "flex", "spacer", "divider", "hero", "stats", "card", "richtext", "codeblock"].includes(field.type)) return <LayoutContainer key={field.id} field={field} byId={byId} renderField={renderField} />;
     if (field.type === "hidden") return null;
     if (field.type === "label") return <div key={field.id} className={`font-medium ${textSizeClass(field.props?.size)} ${alignClass(field.props?.align)} ${paddingClass(field.props?.padding)} ${field.props?.bold ? "font-bold" : ""}`} style={paddingStyle(field.props?.padding, fieldStyle(field) || {})}>{field.label}</div>;
+    if (field.type === "badge") return <div key={field.id} className={paddingClass(field.props?.padding)} style={paddingStyle(field.props?.padding)}><Badge variant={field.props?.variant || "secondary"} style={badgeStyle(field)}>{field.props?.text || field.label || "Badge"}</Badge>{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
     if (field.type === "context_value") return <div key={field.id} className="rounded-md bg-muted p-3 text-sm"><Label>{field.label}</Label><div className="mt-1 font-mono text-xs">{String(getContextValue(context, field.contextPath) || "—")}</div></div>;
     if (field.type === "image") return field.props?.src ? <img key={field.id} src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : null;
     if (field.type === "button") return <Button key={field.id} type="button" disabled={submitting || readOnly} variant={field.props?.variant === "secondary" ? "secondary" : "default"} onClick={() => handleButtonClick(field)}>{field.label || "Submit"}</Button>;
@@ -198,6 +205,9 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
       <Label htmlFor={field.id} style={fieldStyle(field)} className={field.props?.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>
       {field.type === "textarea" && <Textarea id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "text" && <Input id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
+      {field.type === "switch" && <div className="flex items-center gap-3"><Switch id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{Boolean(value) ? (field.props?.onText || "On") : (field.props?.offText || "Off")}</span></div>}
+      {field.type === "slider" && (() => { const min = sliderNumber(field.props?.min, 0); const max = sliderNumber(field.props?.max, 100); const step = sliderNumber(field.props?.step, 1); const numericValue = sliderNumber(value, min); return <div className="space-y-2"><Slider value={[numericValue]} min={min} max={max} step={step} disabled={readOnly} onValueChange={(next) => setValue(field.id, next[0] ?? min)} /><div className="flex justify-between text-xs text-muted-foreground"><span>{min}</span><span className="font-medium text-foreground">{numericValue}</span><span>{max}</span></div></div>; })()}
+      {field.type === "datetime" && <Input id={field.id} type={dateInputType(field.props?.mode)} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "select" && <Select value={String(value || "")} disabled={readOnly} onValueChange={(v) => setValue(field.id, v)}><SelectTrigger><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select>}
       {field.type === "radio" && <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} checked={String(value) === String(o.value)} disabled={readOnly} onChange={() => setValue(field.id, o.value)} />{o.label || o.value}</label>)}</div>}
       {field.type === "checkbox" && (normalizeOptions(field.options || [], field.id).length ? <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => { const selected = Array.isArray(value) ? value.map(String).includes(String(o.value)) : Boolean(value) && String(value) === String(o.value); return <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox checked={selected} disabled={readOnly} onCheckedChange={(checked) => { const current = Array.isArray(values[field.id]) ? values[field.id].map(String) : []; setValue(field.id, checked ? Array.from(new Set([...current, String(o.value)])) : current.filter((item) => item !== String(o.value))); }} />{o.label || o.value}</label>; })}</div> : <div className="flex items-center gap-2"><Checkbox id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div>)}
