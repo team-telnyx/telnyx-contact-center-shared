@@ -367,7 +367,6 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [media, setMedia] = useState([]);
   const [dataActions, setDataActions] = useState([]);
   const [dataActionsLoading, setDataActionsLoading] = useState(false);
-  const [previewSubmitMessage, setPreviewSubmitMessage] = useState("");
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [queues, setQueues] = useState([]);
   const [previewTheme, setPreviewTheme] = useState("system");
@@ -625,13 +624,19 @@ export function FormEditor({ initialForm, isNew = false }) {
     const action = dataActions.find((item) => String(item.id) === String(flowId));
     const actionLabel = button?.props?.dataActionLabel || (action ? dataActionTitle(action) : "");
     if (flowId) {
-      setPreviewSubmitMessage(`Preview only: clicking “${button?.label || "Submit"}” would submit this form and run data action “${actionLabel || flowId}”. Open the form in Agent Desktop with an interaction to execute it with live context.`);
-      setMessage("Preview data action simulated");
+      notify({
+        title: "Preview data action simulated",
+        description: `Clicking “${button?.label || "Submit"}” would submit this form and run data action “${actionLabel || flowId}”. Open the form in Agent Desktop with an interaction to execute it with live context.`,
+        variant: "info",
+      });
       return;
     }
     const fieldCount = Object.keys(values || {}).length;
-    setPreviewSubmitMessage(`Preview only: clicking “${button?.label || "Submit"}” captured ${fieldCount} field${fieldCount === 1 ? "" : "s"}. No submission was saved from Form Builder View.`);
-    setMessage("Preview submit simulated");
+    notify({
+      title: "Preview submit simulated",
+      description: `Clicking “${button?.label || "Submit"}” captured ${fieldCount} field${fieldCount === 1 ? "" : "s"}. No submission was saved from Form Builder View.`,
+      variant: "info",
+    });
   }
 
   useEffect(() => {
@@ -829,7 +834,6 @@ export function FormEditor({ initialForm, isNew = false }) {
             {previewMode ? <div className="w-full space-y-4">
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">View mode runs the same interactive renderer as Agent Desktop. Inputs, choices, and buttons are clickable here; data actions are simulated unless the form is opened from an Agent Desktop interaction.</div>
               <FormRenderer key={`preview-${form.id || form.slug || form.name || "draft"}`} form={form} onSubmit={handlePreviewSubmit} />
-              {previewSubmitMessage ? <div className="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">{previewSubmitMessage}</div> : null}
             </div> : <div className="w-full space-y-6">
               {pages.length > 1 ? <PageTabs pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} activeBorderColor={form.theme?.pageTabActiveBorderColor} /> : null}
               {activePageFields.map((field) => <CanvasField key={field.id} field={field} fieldsById={fieldsById} selectedId={selectedId} selected={selectedId === field.id} readOnly={false} onSelect={(id) => selectField(id || field.id)} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} updateField={updateField} />)}

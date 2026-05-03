@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FormRenderer } from "@/components/forms/FormRenderer";
+import { notify } from "@/components/ToastNotify";
 
 export function AgentFormsView({
   selectedInteraction,
@@ -20,7 +21,6 @@ export function AgentFormsView({
   const [forms, setForms] = useState([]);
   const [internalSelectedId, setInternalSelectedId] = useState("");
   const [renderData, setRenderData] = useState(null);
-  const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const selectedId = selectedFormId ?? internalSelectedId;
@@ -80,24 +80,46 @@ export function AgentFormsView({
 
   const selectedForm = useMemo(() => forms.find((f) => f.id === selectedId), [forms, selectedId]);
 
+  function toastVariantForStatus(data) {
+    const actionStatus = data?.dataAction?.status || data?.status;
+    const normalized = String(actionStatus || "").toLowerCase();
+    if (data?.ok === false || data?.dataAction?.success === false || normalized === "error" || normalized === "failed") return "error";
+    if (normalized === "warning") return "warning";
+    if (normalized === "info") return "info";
+    return "success";
+  }
+
+  function showSubmitToast(data = {}) {
+    const variant = toastVariantForStatus(data);
+    const description = data.dataAction?.message || (data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed"));
+    const title = data.dataAction
+      ? variant === "error" ? "Data action failed" : variant === "success" ? "Data action completed" : "Data action status"
+      : variant === "error" ? "Form submission failed" : "Form submitted";
+    notify({ title, description, variant });
+  }
+
   async function submit(values, meta = {}) {
     if (!selectedId) return;
     setSubmitting(true);
-    setMessage("");
-    const res = await fetch(`/api/contact-center/forms/${selectedId}/submissions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        interactionId: selectedInteraction?.id,
-        data: values,
-        context: renderData?.context,
-        button: meta.button,
-        dataActionFlowId: meta.dataActionFlowId || meta.button?.props?.dataActionFlowId || "",
-      }),
-    });
-    const data = await res.json();
-    setMessage(data.dataAction?.message || (data.ok ? "Form submitted." : (data.validation?.errors?.[0]?.message || data.error || "Submission failed")));
-    setSubmitting(false);
+    try {
+      const res = await fetch(`/api/contact-center/forms/${selectedId}/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interactionId: selectedInteraction?.id,
+          data: values,
+          context: renderData?.context,
+          button: meta.button,
+          dataActionFlowId: meta.dataActionFlowId || meta.button?.props?.dataActionFlowId || "",
+        }),
+      });
+      const data = await res.json();
+      showSubmitToast(data);
+    } catch (err) {
+      notify({ title: "Form submission failed", description: err?.message || "Submission failed", variant: "error" });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return <div className="flex flex-col h-full overflow-hidden">
@@ -113,7 +135,7 @@ export function AgentFormsView({
     </div> : null}
     <div className="flex-1 overflow-y-auto p-3 space-y-3">
       {forms.length === 0 ? <p className="text-sm text-muted-foreground">{hasExplicitFormIds ? "No selected published forms are available for this interaction." : "No published forms assigned to this queue."}</p> : showCards ? <div className="grid gap-2">{forms.map((form) => <Card key={form.id} className={`cursor-pointer ${selectedId === form.id ? "border-primary bg-primary/5" : ""}`} onClick={() => setSelectedId(form.id)}><CardContent className="p-3"><div className="flex items-center justify-between"><span className="font-medium text-sm">{form.name}</span>{form.auto_open ? <Badge variant="secondary">auto</Badge> : null}</div><p className="text-xs text-muted-foreground">{form.description || form.category}</p></CardContent></Card>)}</div> : null}
-      {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} />{message ? <p className="mt-3 text-sm text-muted-foreground">{message}</p> : null}</CardContent></Card> : null}
+      {selectedForm && renderData ? <Card><CardContent className="p-4"><FormRenderer form={renderData.form} initialValues={renderData.initialValues} context={renderData.context} onSubmit={submit} submitting={submitting} /></CardContent></Card> : null}
     </div>
   </div>;
 }
