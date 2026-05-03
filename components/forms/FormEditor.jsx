@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconBlocks, IconEye, IconGitBranch, IconLoader2, IconMessageCircle, IconPencil, IconPhoto, IconPlus, IconSettings, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
+import { IconBlocks, IconChevronDown, IconEye, IconGitBranch, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconSettings, IconSun, IconTemplate, IconTrash, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ColorPicker } from "@/components/ui/color-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,11 +29,27 @@ const RAIL = [
 ];
 
 const BLOCK_GROUPS = [
-  { title: "Layout", items: ["section", "row", "columns", "grid"] },
+  { title: "Layout", items: ["section", "row", "columns", "grid", "flex", "spacer"] },
+  { title: "Marketing", items: ["hero", "stats", "card", "richtext"] },
   { title: "Basic", items: ["text", "textarea", "select", "checkbox", "radio"] },
   { title: "Content", items: ["label", "image", "context_value"] },
   { title: "Actions", items: ["button", "hidden"] },
 ];
+
+const FORM_CATEGORIES = ["General", "Sales", "Support", "Billing", "Customer onboarding", "Lead capture", "Feedback", "Complaint", "Appointment", "Compliance"];
+const PADDING_OPTIONS = ["none", "xs", "sm", "md", "lg", "xl"];
+const SIZE_OPTIONS = ["sm", "md", "lg", "xl"];
+const ALIGN_OPTIONS = ["left", "center", "right"];
+const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
+
+function mergeProps(field, patch) { return { props: { ...(field.props || {}), ...patch } }; }
+function paddingClass(value) { return ({ none: "p-0", xs: "p-2", sm: "p-3", md: "p-4", lg: "p-6", xl: "p-8" }[value || "md"] || "p-4"); }
+function verticalPaddingClass(value) { return ({ none: "py-0", xs: "py-2", sm: "py-3", md: "py-4", lg: "py-6", xl: "py-8" }[value || "md"] || "py-4"); }
+function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "text-lg", xl: "text-2xl" }[value || "md"] || "text-base"); }
+function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
+function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
+function queueLabel(queue) { return queue.display_name || queue.displayName || queue.name; }
+function queueRouting(queue) { return queue.routing_strategy || queue.routingStrategy || "FIFO"; }
 
 function makeId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 7)}`;
@@ -43,10 +61,18 @@ function newField(type) {
   if (type === "select" || type === "radio") base.options = [{ label: "Option A", value: "a" }, { label: "Option B", value: "b" }];
   if (type === "button") base.label = "Submit";
   if (type === "context_value") base.contextPath = "caller.from_number";
-  if (type === "image") base.props = { src: "" };
+  if (type === "image") base.props = { src: "", padding: "md" };
   if (type === "section") base.helpText = "Group related fields under this heading.";
-  if (type === "columns") base.props = { columns: 2 };
-  if (type === "grid") base.props = { columns: 2, gap: "md" };
+  if (type === "section") base.props = { padding: "md" };
+  if (type === "columns") base.props = { columns: 2, gap: "md", padding: "md" };
+  if (type === "grid") base.props = { columns: 2, gap: "md", padding: "md" };
+  if (type === "row") base.props = { padding: "md" };
+  if (type === "flex") base.props = { direction: "row", justify: "start", gap: 16, wrap: true, padding: "md" };
+  if (type === "spacer") base.props = { size: "md", direction: "vertical" };
+  if (type === "hero") { base.label = "Hero section"; base.props = { title: "Help customers faster", quote: "Agent form", description: "Collect the right context during every conversation.", align: "left", padding: "xl", imageUrl: "", imageMode: "cover", buttons: [{ label: "Primary action", href: "#", variant: "primary" }] }; }
+  if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage" }, { title: "95%", description: "CSAT" }, { title: "2m", description: "Avg response" }] }; }
+  if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md" }; }
+  if (type === "richtext") { base.label = "Rich text"; base.props = { richtext: "Use this block for formatted guidance or copy.", padding: "md" }; }
   return base;
 }
 
@@ -66,6 +92,8 @@ export function FormEditor({ initialForm, isNew = false }) {
   const [templates, setTemplates] = useState([]);
   const [media, setMedia] = useState([]);
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [queues, setQueues] = useState([]);
+  const [previewTheme, setPreviewTheme] = useState("system");
 
   const orderedFields = useMemo(() => {
     const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
@@ -182,6 +210,14 @@ export function FormEditor({ initialForm, isNew = false }) {
   }
   useEffect(() => { if (activeTab === "media") loadMedia().catch(() => {}); }, [activeTab]);
 
+  useEffect(() => {
+    if (!formSettingsOpen || queues.length) return;
+    fetch("/api/admin/queues?enabled=true&pageSize=100", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => setQueues(data.rows || []))
+      .catch(() => setQueues([]));
+  }, [formSettingsOpen, queues.length]);
+
   async function uploadMediaFile(file) {
     if (!file) return;
     setUploadingMedia(true); setMessage("");
@@ -234,7 +270,7 @@ export function FormEditor({ initialForm, isNew = false }) {
           <DialogTitle>Form settings</DialogTitle>
           <DialogDescription>Edit global settings for this form. Component-level settings stay in the right Properties panel.</DialogDescription>
         </DialogHeader>
-        <FormSettingsFields form={form} patchForm={patchForm} />
+        <FormSettingsFields form={form} patchForm={patchForm} queues={queues} />
       </DialogContent>
     </Dialog>
 
@@ -253,12 +289,19 @@ export function FormEditor({ initialForm, isNew = false }) {
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <div className="h-14 shrink-0 border-b px-4 flex items-center justify-between bg-card">
           <div><div className="text-sm font-semibold">Visual canvas</div><div className="text-[11px] text-muted-foreground">Form preview and component selection</div></div>
-          <div className="text-xs text-muted-foreground">100% · Desktop</div>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-md border bg-background p-0.5" aria-label="Preview theme">
+              <Button type="button" variant={previewTheme === "light" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("light")} title="Preview light theme"><IconSun className="h-4 w-4" /></Button>
+              <Button type="button" variant={previewTheme === "system" ? "secondary" : "ghost"} size="sm" className="h-7 px-2 text-[11px]" onClick={() => setPreviewTheme("system")} title="Follow app theme">Auto</Button>
+              <Button type="button" variant={previewTheme === "dark" ? "secondary" : "ghost"} size="sm" className="h-7 px-2" onClick={() => setPreviewTheme("dark")} title="Preview dark theme"><IconMoon className="h-4 w-4" /></Button>
+            </div>
+            <div className="text-xs text-muted-foreground">100% · Desktop</div>
+          </div>
         </div>
-        <CanvasDropZone>
-          <div className="mx-auto max-w-4xl rounded-2xl border bg-white shadow-sm min-h-full p-8">
+        <CanvasDropZone previewTheme={previewTheme}>
+          <div className="mx-auto max-w-4xl rounded-2xl border bg-background text-foreground shadow-sm min-h-full p-8">
             <div className="mx-auto max-w-2xl space-y-6">
-              <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight text-slate-950">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-slate-500">{form.description}</p> : null}</div>
+              <div className="border-b pb-5"><h2 className="text-2xl font-semibold tracking-tight">{form.name}</h2>{form.description ? <p className="mt-2 text-sm text-muted-foreground">{form.description}</p> : null}</div>
               {orderedFields.map((field) => <CanvasField key={field.id} field={field} selected={selectedId === field.id && !previewMode} readOnly={previewMode} onSelect={() => !previewMode && setSelectedId(field.id)} />)}
               {!orderedFields.length ? <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">Add blocks from the left palette to start building.</div> : null}
             </div>
@@ -385,9 +428,10 @@ function LeftPanel(props) {
   </div>;
 }
 
-function CanvasDropZone({ children }) {
+function CanvasDropZone({ children, previewTheme = "system" }) {
   const { isOver, setNodeRef } = useDroppable({ id: "form-canvas" });
-  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-6 transition ${isOver ? "bg-primary/10" : "bg-slate-200/70"}`}>{children}</div>;
+  const themeClass = previewTheme === "dark" ? "dark" : previewTheme === "light" ? "form-preview-light" : "";
+  return <div ref={setNodeRef} className={`flex-1 min-h-0 overflow-auto p-6 transition ${themeClass} ${isOver ? "bg-primary/10" : "bg-muted/70"}`}>{children}</div>;
 }
 
 function DraggableBlock({ type, addField }) {
@@ -401,35 +445,137 @@ function MiniTemplatePreview({ form }) {
 }
 
 function CanvasField({ field, selected, onSelect, readOnly }) {
-  const shell = `relative rounded-xl border p-4 transition ${selected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
-  if (field.type === "section") return <div onClick={onSelect} className={shell}><div className="rounded-lg border bg-muted/25 p-4"><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}</div></div>;
+  const props = field.props || {};
+  const shell = `relative rounded-xl border transition ${paddingClass(props.padding)} ${selected ? "border-primary ring-2 ring-primary/20 bg-primary/5" : "border-transparent hover:border-muted-foreground/25"}`;
+  if (field.type === "section") return <div onClick={onSelect} className={shell}><div className="rounded-lg border bg-muted/25 p-4" style={fieldStyle(field)}><div className="text-sm font-semibold">{field.label}</div>{field.helpText ? <p className="mt-1 text-xs text-muted-foreground">{field.helpText}</p> : null}</div></div>;
   if (field.type === "row") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Row · {field.label}</div></div>;
-  if (field.type === "columns") { const count = Math.max(2, Math.min(Number(field.props?.columns || 2), 4)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-h-16 rounded-md bg-muted/60" />)}</div></div></div>; }
-  if (field.type === "grid") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Grid · {field.label}</div></div>;
+  if (field.type === "columns") { const count = Math.max(2, Math.min(Number(props.columns || 2), 4)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">{field.label || `${count} columns`}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="min-h-16 rounded-md bg-muted/60" />)}</div></div></div>; }
+  if (field.type === "grid") { const count = Math.max(1, Math.min(Number(props.columns || 2), 6)); return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3"><div className="mb-2 text-xs font-medium text-muted-foreground">Grid · {field.label}</div><div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>{Array.from({ length: count }).map((_, i) => <div key={i} className="h-12 rounded-md bg-muted/60" />)}</div></div></div>; }
+  if (field.type === "flex") return <div onClick={onSelect} className={shell}><div className="rounded-lg border border-dashed p-3 text-xs font-medium text-muted-foreground">Flex · {props.direction || "row"} · gap {props.gap || 16}px</div></div>;
+  if (field.type === "spacer") return <div onClick={onSelect} className={shell}><div className={`${props.direction === "horizontal" ? "h-4 w-24" : "h-12 w-full"} rounded border border-dashed bg-muted/40`} /></div>;
+  if (field.type === "hero") return <div onClick={onSelect} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}><div className={`rounded-xl border bg-card text-card-foreground ${verticalPaddingClass(props.padding)} px-6`}><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div></div>;
+  if (field.type === "stats") return <div onClick={onSelect} className={shell}><div className="grid gap-3 md:grid-cols-3">{(props.items || []).map((item, index) => <div key={index} className="rounded-xl border bg-card p-4 text-card-foreground"><div className="text-2xl font-bold" style={fieldStyle(field)}>{item.title}</div><div className="text-xs text-muted-foreground">{item.description}</div></div>)}</div></div>;
+  if (field.type === "card") return <div onClick={onSelect} className={shell}><div className={`rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} p-4 text-card-foreground`} style={fieldStyle(field)}><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}</div></div>;
+  if (field.type === "richtext") return <div onClick={onSelect} className={shell}><div className="prose prose-sm max-w-none dark:prose-invert" style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
   if (field.type === "hidden") return <div onClick={onSelect} className={shell}><Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
-  if (field.type === "label") return <div onClick={onSelect} className={shell}><div className="text-base font-semibold">{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
-  if (field.type === "context_value") return <div onClick={onSelect} className={shell}><Label>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
+  if (field.type === "label") return <div onClick={onSelect} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={fieldStyle(field)}><div className="font-semibold">{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "context_value") return <div onClick={onSelect} className={shell}><Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
   if (field.type === "image") return <div onClick={onSelect} className={shell}>{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
-  if (field.type === "button") return <div onClick={onSelect} className={shell}><Button disabled={readOnly}>{field.label || "Submit"}</Button></div>;
-  return <div onClick={onSelect} className={shell}><Label>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className="mt-2 space-y-2">{(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "button") return <div onClick={onSelect} className={shell}><Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
+  return <div onClick={onSelect} className={shell}><Label style={fieldStyle(field)}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>{field.type === "textarea" ? <Textarea className="mt-2" placeholder={field.placeholder} disabled={readOnly} /> : field.type === "select" ? <Select disabled={readOnly}><SelectTrigger className="mt-2"><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{(field.options || []).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select> : field.type === "radio" ? <div className="mt-2 space-y-2">{(field.options || []).map((o) => <label key={o.value} className="flex items-center gap-2 text-sm"><input type="radio" disabled={readOnly} />{o.label || o.value}</label>)}</div> : field.type === "checkbox" ? <div className="mt-2 flex items-center gap-2"><Checkbox disabled={readOnly} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div> : <Input className="mt-2" placeholder={field.placeholder} disabled={readOnly} />}{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
 }
 
-function FormSettingsFields({ form, patchForm }) {
+function FormSettingsFields({ form, patchForm, queues = [] }) {
+  const selectedNames = form.queue_names || [];
+  const categoryOptions = FORM_CATEGORIES.includes(form.category) || !form.category ? FORM_CATEGORIES : [form.category, ...FORM_CATEGORIES];
+  const selectedMissingQueues = selectedNames.filter((name) => !queues.some((q) => q.name === name || queueLabel(q) === name));
+  function toggleQueue(name) {
+    const next = selectedNames.includes(name) ? selectedNames.filter((item) => item !== name) : [...selectedNames, name];
+    patchForm({ queue_names: next });
+  }
   return <div className="grid gap-4 py-2">
     <div className="grid gap-2"><Label>Name</Label><Input value={form.name || ""} onChange={(e) => patchForm({ name: e.target.value, slug: form.slug || slugifyFormName(e.target.value) })} /></div>
     <div className="grid gap-2"><Label>Slug</Label><Input value={form.slug || ""} onChange={(e) => patchForm({ slug: e.target.value })} /></div>
-    <div className="grid gap-2"><Label>Category</Label><Input value={form.category || ""} onChange={(e) => patchForm({ category: e.target.value })} /></div>
+    <div className="grid gap-2"><Label>Category</Label><Select value={form.category || "General"} onValueChange={(value) => patchForm({ category: value })}><SelectTrigger><SelectValue placeholder="Choose a category" /></SelectTrigger><SelectContent>{categoryOptions.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}</SelectContent></Select></div>
     <div className="grid gap-2"><Label>Description</Label><Textarea rows={3} value={form.description || ""} onChange={(e) => patchForm({ description: e.target.value })} /></div>
-    <div className="grid gap-2"><Label>Queue names</Label><Input value={(form.queue_names || []).join(", ")} onChange={(e) => patchForm({ queue_names: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></div>
+    <div className="grid gap-2">
+      <Label>Queue names</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" className="min-h-10 h-auto justify-between whitespace-normal text-left font-normal">
+            <span className="flex flex-wrap gap-1">
+              {selectedNames.length ? selectedNames.map((name) => {
+                const queue = queues.find((q) => q.name === name || queueLabel(q) === name);
+                const routing = queue ? queueRouting(queue) : "Existing";
+                return <Badge key={name} variant="secondary" className="gap-1"><span>{name}</span><span className={`rounded px-1 py-0.5 text-[9px] font-semibold text-white ${QUEUE_BADGE_CLASS[routing] || "bg-gray-500"}`}>{routing === "Existing" ? "SAVED" : routing}</span></Badge>;
+              }) : <span className="text-muted-foreground">Select queues...</span>}
+            </span>
+            <IconChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[420px] p-2">
+          <div className="max-h-72 overflow-y-auto space-y-1">
+            {selectedMissingQueues.map((name) => <button key={`saved-${name}`} type="button" onClick={() => toggleQueue(name)} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted">
+              <Checkbox checked />
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{name}</span><span className="block truncate text-xs text-muted-foreground">Saved queue name</span></span>
+              <span className="rounded bg-gray-500 px-2 py-1 text-[10px] font-semibold text-white">SAVED</span>
+            </button>)}
+            {queues.map((queue) => {
+              const name = queue.name;
+              const checked = selectedNames.includes(name);
+              const routing = queueRouting(queue);
+              return <button key={queue.id || name} type="button" onClick={() => toggleQueue(name)} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left hover:bg-muted">
+                <Checkbox checked={checked} onCheckedChange={() => toggleQueue(name)} onClick={(e) => e.stopPropagation()} />
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{queueLabel(queue) || name}</span><span className="block truncate text-xs text-muted-foreground">{name}</span></span>
+                <span className={`rounded px-2 py-1 text-[10px] font-semibold text-white ${QUEUE_BADGE_CLASS[routing] || "bg-gray-500"}`}>{routing}</span>
+              </button>;
+            })}
+            {!queues.length ? <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">No queues loaded. Existing saved queue names are preserved above.</div> : null}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <p className="text-xs text-muted-foreground">Saved queue names are preserved even if a matching queue is not currently returned by the API.</p>
+    </div>
     <div className="flex items-center justify-between rounded-md border p-3"><div><Label>Auto-open</Label><p className="text-xs text-muted-foreground">Open this form automatically for matching queues.</p></div><Switch checked={Boolean(form.auto_open)} onCheckedChange={(checked) => patchForm({ auto_open: checked })} /></div>
   </div>;
 }
 
 function PropertiesPanel({ form, patchForm, selectedField, updateField }) {
+  function setProps(field, patch) { updateField(field.id, mergeProps(field, patch).props ? { props: mergeProps(field, patch).props } : {}); }
+  function renameField(field, nextId) {
+    const clean = String(nextId || "").trim().replace(/[^A-Za-z0-9_:-]/g, "_");
+    if (!clean) return;
+    const nextBindings = { ...(form.bindings || {}) };
+    if (field.id !== clean && nextBindings[field.id] !== undefined) { nextBindings[clean] = nextBindings[field.id]; delete nextBindings[field.id]; }
+    patchForm({ schema: { ...form.schema, fields: form.schema.fields.map((item) => item.id === field.id ? { ...item, id: clean } : item) }, layout: { ...form.layout, order: (form.layout.order || []).map((id) => id === field.id ? clean : id) }, bindings: nextBindings });
+  }
   return <div className="h-full min-h-0 flex flex-col">
     <div className="h-14 shrink-0 border-b px-4 flex items-center gap-2"><IconSettings className="h-5 w-5" /><div><h2 className="font-semibold text-sm">Properties</h2><p className="text-xs text-muted-foreground">Selected canvas element settings.</p></div></div>
     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-5">
-      {selectedField ? <Card><CardContent className="p-4 space-y-3"><div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div><div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div><div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => updateField(selectedField.id, { id: e.target.value })} /></div><div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div><div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div><div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div><div><Label>Style tokens JSON</Label><Textarea rows={3} className="font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></div><div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div></CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
+      {selectedField ? <Card><CardContent className="p-4 space-y-4">
+        <div className="flex items-center justify-between"><h3 className="font-medium">Selected field</h3><Badge variant="outline">{selectedField.type}</Badge></div>
+        <div><Label>Label</Label><Input value={selectedField.label || ""} onChange={(e) => updateField(selectedField.id, { label: e.target.value })} /></div>
+        <div><Label>Field name / id</Label><Input value={selectedField.id || ""} onChange={(e) => renameField(selectedField, e.target.value)} /></div>
+        <div><Label>Type</Label><Select value={selectedField.type} onValueChange={(value) => updateField(selectedField.id, { type: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FORM_COMPONENT_TYPES.map((type) => <SelectItem key={type} value={type}>{FORM_COMPONENT_REGISTRY[type]?.label || type}</SelectItem>)}</SelectContent></Select></div>
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
+        {!["hero", "stats", "card", "richtext", "spacer"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] || ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
+        {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath || ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
+        <BlockPropertyControls field={selectedField} updateField={updateField} setProps={(patch) => setProps(selectedField, patch)} />
+        {FORM_COMPONENT_REGISTRY[selectedField.type]?.options ? <div><Label>Options JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(selectedField.options || [], null, 2)} onChange={(e) => { try { updateField(selectedField.id, { options: JSON.parse(e.target.value) }); } catch {} }} /></div> : null}
+        <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Advanced JSON props</summary><Textarea rows={4} className="mt-3 font-mono text-xs" value={JSON.stringify(selectedField.props || {}, null, 2)} onChange={(e) => { try { updateField(selectedField.id, { props: JSON.parse(e.target.value) }); } catch {} }} /></details>
+      </CardContent></Card> : <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Select an element on the canvas to edit its properties.</div>}
     </div>
   </div>;
+}
+
+function BlockPropertyControls({ field, setProps, updateField }) {
+  const props = field.props || {};
+  const supportsPadding = !["hidden"].includes(field.type);
+  const supportsColor = ["hero", "stats", "card", "richtext", "label", "section", "text", "textarea", "select", "radio", "checkbox", "context_value"].includes(field.type);
+  return <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
+    <div className="text-xs font-semibold uppercase text-muted-foreground">Design</div>
+    {supportsPadding ? <div><Label>Padding</Label><Select value={props.padding || "md"} onValueChange={(value) => setProps({ padding: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PADDING_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
+    {supportsColor ? <div className="space-y-2"><ColorPicker label="Text color" value={props.color || ""} onChange={(oklch) => setProps({ color: oklch })} /><Button type="button" size="sm" variant="ghost" onClick={() => setProps({ color: "" })}>Use theme default</Button></div> : null}
+    {["label", "hero", "text", "richtext"].includes(field.type) ? <div><Label>Align</Label><Select value={props.align || "left"} onValueChange={(value) => setProps({ align: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{ALIGN_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
+    {["label", "text", "richtext"].includes(field.type) ? <div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div> : null}
+    <SpecificBlockControls field={field} props={props} setProps={setProps} updateField={updateField} />
+  </div>;
+}
+
+function SpecificBlockControls({ field, props, setProps, updateField }) {
+  if (["columns", "grid"].includes(field.type)) return <div className="grid grid-cols-2 gap-3"><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={props.gap || 12} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
+  if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
+  if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
+  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Image URL</Label><Input value={props.imageUrl || ""} onChange={(e) => setProps({ imageUrl: e.target.value })} /></div><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
+  if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div></div>;
+  if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext || ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
+  if (field.type === "image") return <div><Label>Image URL</Label><Input value={props.src || ""} onChange={(e) => setProps({ src: e.target.value })} /></div>;
+  if (field.type === "button") return <div><Label>Variant</Label><Select value={props.variant || "primary"} onValueChange={(value) => setProps({ variant: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="primary">Primary</SelectItem><SelectItem value="secondary">Secondary</SelectItem></SelectContent></Select></div>;
+  return null;
+}
+
+function ArrayJsonControl({ label, value, onChange }) {
+  return <div><Label>{label} JSON</Label><Textarea rows={5} className="font-mono text-xs" value={JSON.stringify(value || [], null, 2)} onChange={(e) => { try { onChange(JSON.parse(e.target.value)); } catch {} }} /></div>;
 }
