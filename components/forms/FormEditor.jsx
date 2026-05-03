@@ -758,7 +758,7 @@ function LeftPanel(props) {
         </div>
       </div>
       <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
-        <DialogContent className="!flex h-[88vh] w-[92vw] !max-w-[92vw] flex-col overflow-hidden">
+        <DialogContent className="!flex h-[88vh] w-[50vw] min-w-[720px] !max-w-[50vw] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Search in Pexels</DialogTitle>
             <DialogDescription>Search royalty-free Pexels photos and download one into this form media library.</DialogDescription>
