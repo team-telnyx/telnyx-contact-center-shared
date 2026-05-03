@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
-import { IconArrowLeft, IconBlockquote, IconBlocks, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconWorldUpload } from "@tabler/icons-react";
+import { IconArrowLeft, IconBlockquote, IconBlocks, IconCheck, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -67,6 +67,17 @@ function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this b
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
 function mediaTitle(item = {}) { return item.title || item.display_name || item.displayName || String(item.name || item.filename || item.url || "Image").replace(/\.[^.]+$/, ""); }
 function mediaFilename(item = {}) { return String(item.filename || item.name || item.url || "").split("/").pop(); }
+function mediaSizeLabel(item = {}) {
+  const size = Number(item.size_bytes || item.size || item.metadata?.size_bytes || item.metadata?.size || 0);
+  if (!Number.isFinite(size) || size <= 0) return "Size unknown";
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(size >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+function mediaDimensionsLabel(item = {}, fallback = null) {
+  const width = Number(item.width || item.metadata?.width || item.metadata?.original_width || fallback?.width || 0);
+  const height = Number(item.height || item.metadata?.height || item.metadata?.original_height || fallback?.height || 0);
+  return width > 0 && height > 0 ? `${Math.round(width)} × ${Math.round(height)} px` : "Dimensions unknown";
+}
 function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : null; }
 function isImageCapable(field) { return Boolean(imagePropKey(field)); }
 function heroContent(field, props = {}) {
@@ -712,8 +723,8 @@ function LeftPanel(props) {
           <Button type="button" variant="outline" className="w-full" onClick={() => setPexelsOpen(true)}><IconWorldUpload className="mr-2 h-4 w-4" />Search in Pexels</Button>
           <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 grid auto-rows-max gap-3 content-start">
-          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleChange={(title) => setMedia?.((rows) => rows.map((row) => row.url === item.url ? { ...row, title, display_name: title } : row))} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
+        <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
+          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onAdd={addMediaImage} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
           {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
         </div>
       </div>
@@ -816,19 +827,48 @@ function DraggableBlock({ type, addField, colorClass, iconClass }) {
   </button>;
 }
 
-function DraggableMediaCard({ item, onAdd, onTitleChange, onTitleCommit }) {
-  const [draftTitle, setDraftTitle] = useState(mediaTitle(item));
-  useEffect(() => { setDraftTitle(mediaTitle(item)); }, [item.title, item.display_name, item.url]);
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `media-${item.url}`, data: { dragKind: "media", media: { ...item, title: draftTitle, display_name: draftTitle } } });
-  function commitTitle() { onTitleCommit?.(draftTitle); }
-  return <div ref={setNodeRef} className={`touch-none rounded-xl border border-l-4 border-l-amber-500 bg-background p-3 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow h-24 ${isDragging ? "opacity-50" : ""}`} {...attributes}>
-    <div className="flex h-full items-start gap-3">
-      <button type="button" className="mt-1 shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
-      <button type="button" onClick={() => onAdd?.({ ...item, title: draftTitle, display_name: draftTitle })} className="h-14 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted"><img src={item.url} alt={draftTitle} className="h-full w-full object-cover" /></button>
-      <div className="min-w-0 flex-1 space-y-1">
-        <Input className="h-8 text-sm font-medium" value={draftTitle} onChange={(e) => { setDraftTitle(e.target.value); onTitleChange?.(e.target.value); }} onBlur={commitTitle} onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }} onClick={(e) => e.stopPropagation()} />
-        <div className="truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</div>
-        {item.content_type || item.contentType ? <div className="truncate text-[10px] text-muted-foreground">{item.content_type || item.contentType}</div> : null}
+function DraggableMediaCard({ item, onAdd, onTitleCommit }) {
+  const title = mediaTitle(item);
+  const [draftTitle, setDraftTitle] = useState(title);
+  const [editingOpen, setEditingOpen] = useState(false);
+  const [loadedDimensions, setLoadedDimensions] = useState(null);
+  useEffect(() => { setDraftTitle(title); }, [title, item.url]);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `media-${item.url}`, data: { dragKind: "media", media: { ...item, title, display_name: title } } });
+  function confirmTitle(e) {
+    e?.stopPropagation?.();
+    const cleanTitle = draftTitle.trim() || mediaFilename(item).replace(/\.[^.]+$/, "") || "Image";
+    setDraftTitle(cleanTitle);
+    setEditingOpen(false);
+    onTitleCommit?.(cleanTitle);
+  }
+  function cancelTitle(e) {
+    e?.stopPropagation?.();
+    setDraftTitle(title);
+    setEditingOpen(false);
+  }
+  return <div ref={setNodeRef} className={`touch-none w-full max-w-full overflow-hidden rounded-xl border border-l-4 border-l-amber-500 bg-background p-2.5 shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""}`} {...attributes}>
+    <div className="flex w-full min-w-0 items-center gap-3">
+      <button type="button" className="shrink-0 cursor-grab text-muted-foreground" {...listeners} aria-label="Drag media"><IconGripVertical className="h-4 w-4" /></button>
+      <button type="button" onClick={() => onAdd?.({ ...item, title, display_name: title })} className="h-16 w-20 shrink-0 overflow-hidden rounded-lg border bg-muted" title="Add image to canvas">
+        <img src={item.url} alt={title} className="h-full w-full object-cover" onLoad={(e) => setLoadedDimensions({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })} />
+      </button>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <Popover open={editingOpen} onOpenChange={(open) => { setEditingOpen(open); if (open) setDraftTitle(title); }}>
+          <PopoverTrigger asChild>
+            <button type="button" className="block w-full min-w-0 truncate text-left text-sm font-semibold leading-tight text-foreground hover:text-primary" title={title} onClick={(e) => e.stopPropagation()}>
+              {title}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" side="right" className="w-72 p-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5">
+              <Input autoFocus className="h-8 min-w-0 flex-1 text-sm" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") confirmTitle(e); if (e.key === "Escape") cancelTitle(e); }} />
+              <Button type="button" size="icon" className="h-8 w-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={confirmTitle} title="Save name"><IconCheck className="h-4 w-4" /></Button>
+              <Button type="button" size="icon" variant="outline" className="h-8 w-8 border-red-500 text-red-600 hover:bg-red-500/10 hover:text-red-700" onClick={cancelTitle} title="Cancel"><IconX className="h-4 w-4" /></Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+        <div className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">{mediaDimensionsLabel(item, loadedDimensions)}</div>
+        <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{mediaSizeLabel(item)}</div>
       </div>
     </div>
   </div>;
@@ -996,19 +1036,38 @@ function BlockPropertyControls({ field, setProps, updateField, media = [] }) {
 
 function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
   const selected = media.find((item) => item.url === value);
-  return <div className="space-y-2">
+  return <div className="w-full max-w-full min-w-0 space-y-2 overflow-hidden">
     <Label>{label}</Label>
     <Select value={selected ? value : "__custom__"} onValueChange={(url) => { if (url !== "__custom__") onChange?.(url, media.find((item) => item.url === url)); }}>
-      <SelectTrigger><SelectValue placeholder="Choose from media library">{selected ? mediaTitle(selected) : "Custom URL / none"}</SelectValue></SelectTrigger>
-      <SelectContent>
+      <SelectTrigger className="w-full max-w-full min-w-0 overflow-hidden"><SelectValue placeholder="Choose from media library">{selected ? mediaTitle(selected) : "Custom URL / none"}</SelectValue></SelectTrigger>
+      <SelectContent className="max-w-[var(--radix-select-trigger-width)]">
         <SelectItem value="__custom__">Custom URL / none</SelectItem>
-        {media.map((item) => <SelectItem key={item.url} value={item.url}><span className="flex items-center gap-2"><img src={item.url} alt="" className="h-8 w-10 rounded border object-cover" /><span className="min-w-0"><span className="block truncate text-sm">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></span></SelectItem>)}
+        {media.map((item) => <SelectItem key={item.url} value={item.url}><span className="flex w-full min-w-0 items-center gap-2 overflow-hidden"><img src={item.url} alt="" className="h-8 w-10 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-sm">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></span></SelectItem>)}
       </SelectContent>
     </Select>
-    {media.length ? <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border bg-background p-2">
-      {media.map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full items-center gap-2 rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
+    {media.length ? <div className="max-h-44 w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-md border bg-background p-2">
+      {media.map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
     </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
-    <Input value={value || ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
+    <Input className="w-full max-w-full min-w-0" value={value || ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
+  </div>;
+}
+
+function HeroImageModeTabs({ value = "inline", onChange }) {
+  const options = [
+    { value: "inline", label: "Inline", icon: IconPhoto },
+    { value: "background", label: "Background", icon: IconRectangle },
+  ];
+  return <div className="space-y-2">
+    <Label>Image mode</Label>
+    <div className="grid grid-cols-2 gap-1 rounded-lg border bg-background p-1" role="tablist" aria-label="Hero image mode">
+      {options.map(({ value: optionValue, label, icon: Icon }) => {
+        const active = value === optionValue;
+        return <button key={optionValue} type="button" role="tab" aria-selected={active} onClick={() => onChange?.(optionValue)} className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition ${active ? "border border-primary bg-primary/10 text-foreground shadow-sm" : "border border-transparent text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+          <Icon className="h-4 w-4 shrink-0" />
+          <span className="truncate">{label}</span>
+        </button>;
+      })}
+    </div>
   </div>;
 }
 
@@ -1017,7 +1076,7 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "grid") return <div className="grid grid-cols-3 gap-3"><div><Label>Rows</Label><Input type="number" min="1" max="12" value={props.rows || 2} onChange={(e) => setProps({ rows: Number(e.target.value) })} /></div><div><Label>Columns</Label><Input type="number" min="1" max="6" value={props.columns || 2} onChange={(e) => setProps({ columns: Number(e.target.value) })} /></div><div><Label>Gap</Label><Input type="number" min="0" value={gapPx(props.gap)} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div></div>;
   if (field.type === "flex") return <div className="grid gap-3"><div><Label>Direction</Label><Select value={props.direction || "row"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="row">Row</SelectItem><SelectItem value="column">Column</SelectItem></SelectContent></Select></div><div><Label>Justify</Label><Select value={props.justify || "start"} onValueChange={(value) => setProps({ justify: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="start">Start</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="end">End</SelectItem></SelectContent></Select></div><div><Label>Gap px</Label><Input type="number" min="0" value={props.gap || 16} onChange={(e) => setProps({ gap: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Wrap</Label><Switch checked={props.wrap !== false} onCheckedChange={(checked) => setProps({ wrap: checked })} /></div></div>;
   if (field.type === "spacer") return <div className="grid grid-cols-2 gap-3"><div><Label>Size</Label><Select value={props.size || "md"} onValueChange={(value) => setProps({ size: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{SIZE_OPTIONS.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div><div><Label>Direction</Label><Select value={props.direction || "vertical"} onValueChange={(value) => setProps({ direction: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="vertical">Vertical</SelectItem><SelectItem value="horizontal">Horizontal</SelectItem><SelectItem value="both">Both</SelectItem></SelectContent></Select></div></div>;
-  if (field.type === "hero") return <div className="space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Image mode</Label><Select value={props.imageMode === "background" ? "background" : "inline"} onValueChange={(value) => setProps({ imageMode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="inline">Inline</SelectItem><SelectItem value="background">Background</SelectItem></SelectContent></Select></div><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
+  if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote || ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /><ArrayJsonControl label="Buttons" value={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <ArrayJsonControl label="Items" value={props.items || []} onChange={(items) => setProps({ items })} />;
   if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><Input value={props.title || ""} onChange={(e) => setProps({ title: e.target.value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description || ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} /></div>;
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext || ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
