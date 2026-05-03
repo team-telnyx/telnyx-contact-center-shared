@@ -1855,14 +1855,21 @@ export default function FlowBuilderPage() {
         if (data && data.ok) {
           const webhooks = data.webhooks || [];
 
-          // Find the latest call.initiated event to detect new calls
-          const latestInitiated = webhooks
-            .filter((w) => w.event_type === "call.initiated")
+          // Find the latest run-start event to detect new phone-call or form-submit runs.
+          // Phone calls start with call.initiated; Form Submit data actions use a
+          // synthetic monitor id (form:<submission_id>) and start with form.submit.
+          const latestRunStart = webhooks
+            .filter(
+              (w) =>
+                w.event_type === "call.initiated" ||
+                w.event_type === "form.submit",
+            )
             .pop();
 
           const newCallControlId =
-            latestInitiated?.call_control_id ||
-            latestInitiated?.payload?.data?.payload?.call_control_id ||
+            latestRunStart?.call_control_id ||
+            latestRunStart?.payload?.data?.payload?.call_control_id ||
+            latestRunStart?.payload?.data?.payload?.monitor_run_id ||
             webhooks[webhooks.length - 1]?.call_control_id ||
             null;
 
@@ -1976,7 +1983,9 @@ export default function FlowBuilderPage() {
     if (!currentValidation.valid) {
       notify({
         title: "Validation error",
-        description: currentValidation.errors[0] || "Cannot save flow until validation errors are fixed.",
+        description:
+          currentValidation.errors[0] ||
+          "Cannot save flow until validation errors are fixed.",
         variant: "error",
       });
       return;
@@ -2290,7 +2299,8 @@ export default function FlowBuilderPage() {
     } else if (nodeType === "http_request") {
       defaultConfig.endpoint_path = `${baseUrl}/api/voice/flows/trigger/${flowId}`;
     } else if (nodeType === "form_submit") {
-      defaultConfig.description = defaultConfig.description || "Run from an Agent Desktop form button";
+      defaultConfig.description =
+        defaultConfig.description || "Run from an Agent Desktop form button";
     } else if (nodeType === "dial") {
       // Auto-populate webhook URL for Dial node to continue flow execution
       defaultConfig.webhook_url = `${baseUrl}/api/voice/webhook/flows/${flowId}`;
@@ -4182,7 +4192,9 @@ export default function FlowBuilderPage() {
                     navigator.clipboard.writeText(currentCallControlId);
                     notify({
                       title: "Success",
-                      description: "Call Control ID copied to clipboard",
+                      description: currentCallControlId.startsWith("form:")
+                        ? "Monitor Run ID copied to clipboard"
+                        : "Call Control ID copied to clipboard",
                       variant: "success",
                     });
                   }}
@@ -4204,7 +4216,7 @@ export default function FlowBuilderPage() {
                 <IconActivity className="h-12 w-12 mb-4 opacity-50" />
                 <p className="text-sm">No webhook events yet</p>
                 <p className="text-xs mt-1">
-                  Webhook events will appear here when calls are received
+                  Events will appear here when calls or form submits run
                 </p>
               </div>
             ) : (
@@ -4424,7 +4436,9 @@ export default function FlowBuilderPage() {
                       setCopiedField("call_control_id");
                       notify({
                         title: "Copied",
-                        description: "Call Control ID copied to clipboard",
+                        description: currentCallControlId.startsWith("form:")
+                          ? "Monitor Run ID copied to clipboard"
+                          : "Call Control ID copied to clipboard",
                         variant: "success",
                       });
                       setTimeout(() => setCopiedField(null), 2000);
@@ -4448,7 +4462,7 @@ export default function FlowBuilderPage() {
                 <IconActivity className="h-12 w-12 mb-4 opacity-50" />
                 <p className="text-sm">No webhook events yet</p>
                 <p className="text-xs mt-1">
-                  Webhook events will appear here when calls are received for
+                  Events will appear here when calls or form submits run for
                   this flow
                 </p>
               </div>
