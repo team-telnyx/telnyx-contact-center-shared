@@ -28,8 +28,6 @@ const RAIL = [
   { id: "blocks", label: "Blocks", icon: IconBlocks },
   { id: "templates", label: "Templates", icon: IconTemplate },
   { id: "media", label: "Media", icon: IconPhoto },
-  { id: "fields", label: "Fields", icon: IconPencil },
-  { id: "outline", label: "Outline", icon: IconGitBranch },
 ];
 
 const BLOCK_GROUPS = [
@@ -268,17 +266,6 @@ function replaceIdInProps(props = {}, from, to) {
   return next;
 }
 function moveInsideArray(ids, id, dir) { const next = [...ids]; const i = next.indexOf(id); const j = i + dir; if (i < 0 || j < 0 || j >= next.length) return ids; [next[i], next[j]] = [next[j], next[i]]; return next; }
-function outlineRows(rootFields, byId, prefix = "") {
-  const rows = [];
-  rootFields.forEach((field, index) => {
-    const number = prefix ? `${prefix}.${index + 1}` : `${index + 1}`;
-    rows.push({ field, number, depth: number.split(".").length - 1 });
-    nestedSlotEntries(field).forEach((slot) => rows.push(...outlineRows((slot.ids || []).map((id) => byId.get(id)).filter(Boolean), byId, number)));
-  });
-  return rows;
-}
-
-
 function makeId(type) {
   return `${type}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -333,17 +320,12 @@ export function FormEditor({ initialForm, isNew = false }) {
 
   const pages = form.schema?.pages || [];
   const activePage = pages.find((page) => page.id === activePageId) || pages[0];
-  const orderedFields = useMemo(() => {
-    const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
-    return (form.layout?.order || []).map((id) => byId.get(id)).filter(Boolean);
-  }, [form]);
   const activePageFields = useMemo(() => {
     const byId = new Map((form.schema?.fields || []).map((f) => [f.id, f]));
     return (activePage?.fields || []).map((id) => byId.get(id)).filter(Boolean);
   }, [form, activePage]);
   const fieldsById = useMemo(() => new Map((form.schema?.fields || []).map((f) => [f.id, f])), [form]);
-  const selectedField = orderedFields.find((f) => f.id === selectedId) || null;
-  const outlineItems = useMemo(() => outlineRows(activePageFields, fieldsById), [activePageFields, fieldsById]);
+  const selectedField = form.schema.fields.find((f) => f.id === selectedId) || null;
 
   useEffect(() => {
     const run = () => preloadPageIcons();
@@ -419,7 +401,6 @@ export function FormEditor({ initialForm, isNew = false }) {
     }
     update(rebuildLayoutFromPages({ ...form, schema: { ...form.schema, fields: nextFields, pages: nextPages } }));
     setSelectedId(field.id);
-    if (options.switchToFields) setActiveTab("fields");
     return field.id;
   }
   function removeField(id) {
@@ -733,7 +714,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
-        <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} orderedFields={activePageFields} allFields={orderedFields} selectedId={selectedId} setSelectedId={selectField} outlineItems={outlineItems} addField={addField} removeField={removeField} duplicateField={duplicateField} moveField={moveField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
+        <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} />
       </section>
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
@@ -828,7 +809,7 @@ function PanelHeader({ title, description }) {
 }
 
 function LeftPanel(props) {
-  const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, orderedFields, allFields = orderedFields, selectedId, setSelectedId, outlineItems = [], addField, removeField, duplicateField, moveField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
+  const { activeTab, form, patchForm, pages = [], activePageId, setActivePageId, addPage, updatePage, removePage, movePage, addField, aiMessages, aiPrompt, setAiPrompt, sendAi, clearAiChat, aiLoading, aiMessagesEndRef, templates = [], createFromTemplate, media = [], uploadMediaFile, uploadingMedia, addMediaImage, setMedia, saveMediaTitle } = props;
   const mediaInputRef = useRef(null);
   const [pexelsOpen, setPexelsOpen] = useState(false);
   const [pexelsQuery, setPexelsQuery] = useState("");
@@ -989,41 +970,10 @@ function LeftPanel(props) {
     </>;
   }
 
-  if (activeTab === "outline") {
-    return <div className="h-full min-h-0 flex flex-col">
-      <PanelHeader title="Outline" description="Page structure and render order." />
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-        <div className="rounded-lg border bg-muted/30 p-2 text-sm font-medium">{form.name}</div>
-        <div className="ml-4 border-l pl-3 space-y-2">
-          {outlineItems.map(({ field, number, depth }) => <button key={field.id} className={`block w-full rounded-md border p-2 text-left text-sm ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} style={{ marginLeft: depth * 14 }} onClick={() => setSelectedId(field.id)}>
-            {number}. {field.label || field.id}
-            <div className="text-xs text-muted-foreground">{field.type}</div>
-          </button>)}
-        </div>
-      </div>
-    </div>;
-  }
-
   return <div className="h-full min-h-0 flex flex-col">
-    <PanelHeader title="Fields" description="Select, duplicate, remove, and reorder fields." />
-    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-      {(outlineItems.length ? outlineItems : orderedFields.map((field, index) => ({ field, number: `${index + 1}`, depth: 0 }))).map(({ field, number, depth }) => <div key={field.id} className={`rounded-xl border p-3 ${selectedId === field.id ? "border-primary bg-primary/5" : "bg-background"}`} style={{ marginLeft: depth * 12 }} onClick={() => setSelectedId(field.id)}>
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="text-sm font-medium">{field.label || field.id}</div>
-            <div className="text-xs text-muted-foreground">{field.id} · {field.type}</div>
-          </div>
-          <Badge variant="outline">{field.required ? "required" : "optional"}</Badge>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1">
-          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, -1); }}>↑</Button>
-          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); moveField(field.id, 1); }}>↓</Button>
-          <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); duplicateField(field); }}>Duplicate</Button>
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={(e) => { e.stopPropagation(); removeField(field.id); }}><IconTrash className="h-4 w-4" /></Button>
-        </div>
-      </div>)}
-    </div>
+    <PanelHeader title="Blocks" description="Choose a panel from the rail." />
   </div>;
+
 }
 
 function CanvasDropZone({ children, previewTheme = "system" }) {
