@@ -51,7 +51,22 @@ function alignClass(value) { return ({ left: "text-left", center: "text-center",
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
 function badgeStyle(field) { return field.props?.color ? { color: field.props.color, borderColor: field.props.color } : undefined; }
 function sliderNumber(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
+function clampNumber(value, min, max) { return Math.min(Math.max(value, min), max); }
+function booleanValue(value) { if (typeof value === "boolean") return value; if (typeof value === "number") return value !== 0; if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.toLowerCase()); return Boolean(value); }
 function dateInputType(mode) { return mode === "time" ? "time" : mode === "datetime" || mode === "datetime-local" ? "datetime-local" : "date"; }
+function valuesEqual(a, b) {
+  if (Object.is(a, b)) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((item, index) => Object.is(item, b[index]));
+  return false;
+}
+function initialValuesForForm(form, initialValues = {}) {
+  const next = {};
+  for (const field of form?.schema?.fields || []) if (field.defaultValue !== undefined) next[field.id] = field.defaultValue;
+  return { ...next, ...(initialValues || {}) };
+}
+function stableStringify(value) {
+  try { return JSON.stringify(value ?? null); } catch { return String(value ?? ""); }
+}
 function containerStyle(field, base = {}) {
   const props = field.props || {};
   const width = Number(props.borderWidth);
@@ -181,15 +196,29 @@ function LayoutContainer({ field, byId, renderField }) {
   return null;
 }
 
+function SliderField({ field, value, readOnly, setValue }) {
+  const min = sliderNumber(field.props?.min, 0);
+  const rawMax = sliderNumber(field.props?.max, 100);
+  const max = rawMax >= min ? rawMax : min;
+  const rawStep = sliderNumber(field.props?.step, 1);
+  const step = rawStep > 0 ? rawStep : 1;
+  const numericValue = clampNumber(sliderNumber(value, min), min, max);
+  const sliderValue = useMemo(() => [numericValue], [numericValue]);
+  return <div className="space-y-2"><Slider value={sliderValue} min={min} max={max} step={step} disabled={readOnly} onValueChange={(next) => setValue(field.id, clampNumber(sliderNumber(next?.[0], min), min, max))} /><div className="flex justify-between text-xs text-muted-foreground"><span>{min}</span><span className="font-medium text-foreground">{numericValue}</span><span>{max}</span></div></div>;
+}
+
 export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit, submitting = false, readOnly = false }) {
   const normalized = useMemo(() => form ? normalizeFormDefinition(form) : null, [form]);
   const pages = normalized?.schema?.pages || [];
   const [activePageId, setActivePageId] = useState(pages[0]?.id || "page_1");
-  const [values, setValues] = useState(initialValues || {});
-  useEffect(() => { setValues(initialValues || {}); }, [initialValues]);
+  const formDefaultsKey = useMemo(() => stableStringify((normalized?.schema?.fields || []).map((field) => [field.id, field.type, field.defaultValue])), [normalized]);
+  const incomingValuesKey = useMemo(() => stableStringify(initialValues || {}), [initialValues]);
+  const [values, setValues] = useState(() => initialValuesForForm(normalized, initialValues));
+  useEffect(() => { setValues(initialValuesForForm(normalized, initialValues)); }, [formDefaultsKey, incomingValuesKey]);
+  useEffect(() => { if (pages.length && !pages.some((page) => page.id === activePageId)) setActivePageId(pages[0].id); }, [pages, activePageId]);
   const byId = useMemo(() => new Map((normalized?.schema?.fields || []).map((field) => [field.id, field])), [normalized]);
   const fields = useMemo(() => normalized ? rootFields(normalized, activePageId) : [], [normalized, activePageId]);
-  function setValue(id, value) { setValues((prev) => ({ ...prev, [id]: value })); }
+  function setValue(id, value) { setValues((prev) => valuesEqual(prev[id], value) ? prev : { ...prev, [id]: value }); }
   async function handleSubmit(e) { e?.preventDefault?.(); await onSubmit?.(values); }
   async function handleButtonClick(field) { await onSubmit?.(values, { button: field, dataActionFlowId: field.props?.dataActionFlowId || field.props?.dataActionId || "" }); }
   if (!form) return <div className="text-sm text-muted-foreground">No form selected.</div>;
@@ -201,14 +230,14 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
     if (field.type === "context_value") return <div key={field.id} className="rounded-md bg-muted p-3 text-sm"><Label>{field.label}</Label><div className="mt-1 font-mono text-xs">{String(getContextValue(context, field.contextPath) || "—")}</div></div>;
     if (field.type === "image") return field.props?.src ? <img key={field.id} src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : null;
     if (field.type === "button") return <Button key={field.id} type="button" disabled={submitting || readOnly} variant={field.props?.variant === "secondary" ? "secondary" : "default"} onClick={() => handleButtonClick(field)}>{field.label || "Submit"}</Button>;
-    const value = values[field.id] ?? field.defaultValue ?? "";
+    const value = Object.prototype.hasOwnProperty.call(values, field.id) ? values[field.id] : "";
     return <div key={field.id} className="space-y-2 min-w-0">
       <Label htmlFor={field.id} style={fieldStyle(field)} className={field.props?.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>
       {field.type === "textarea" && <Textarea id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "text" && <Input id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
-      {field.type === "switch" && <div className="flex items-center gap-3"><Switch id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{Boolean(value) ? (field.props?.onText || "On") : (field.props?.offText || "Off")}</span></div>}
-      {field.type === "slider" && (() => { const min = sliderNumber(field.props?.min, 0); const max = sliderNumber(field.props?.max, 100); const step = sliderNumber(field.props?.step, 1); const numericValue = sliderNumber(value, min); return <div className="space-y-2"><Slider value={[numericValue]} min={min} max={max} step={step} disabled={readOnly} onValueChange={(next) => setValue(field.id, next[0] ?? min)} /><div className="flex justify-between text-xs text-muted-foreground"><span>{min}</span><span className="font-medium text-foreground">{numericValue}</span><span>{max}</span></div></div>; })()}
-      {field.type === "datetime" && <Input id={field.id} type={dateInputType(field.props?.mode)} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
+      {field.type === "switch" && (() => { const checked = booleanValue(value); return <div className="flex items-center gap-3"><Switch id={field.id} checked={checked} disabled={readOnly} onCheckedChange={(nextChecked) => setValue(field.id, Boolean(nextChecked))} /><span className="text-sm text-muted-foreground">{checked ? (field.props?.onText || "On") : (field.props?.offText || "Off")}</span></div>; })()}
+      {field.type === "slider" && <SliderField field={field} value={value} readOnly={readOnly} setValue={setValue} />}
+      {field.type === "datetime" && <Input id={field.id} type={dateInputType(field.props?.mode)} value={String(value ?? "")} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "select" && <Select value={String(value || "")} disabled={readOnly} onValueChange={(v) => setValue(field.id, v)}><SelectTrigger><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select>}
       {field.type === "radio" && <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><input type="radio" name={field.id} value={o.value} checked={String(value) === String(o.value)} disabled={readOnly} onChange={() => setValue(field.id, o.value)} />{o.label || o.value}</label>)}</div>}
       {field.type === "checkbox" && (normalizeOptions(field.options || [], field.id).length ? <div className={optionDirection(field.props) === "horizontal" ? "flex flex-wrap gap-4" : "space-y-1"}>{normalizeOptions(field.options || [], field.id).map((o, index) => { const selected = Array.isArray(value) ? value.map(String).includes(String(o.value)) : Boolean(value) && String(value) === String(o.value); return <label key={optionKey(o, field.id, index)} className="flex items-center gap-2 text-sm"><Checkbox checked={selected} disabled={readOnly} onCheckedChange={(checked) => { const current = Array.isArray(values[field.id]) ? values[field.id].map(String) : []; setValue(field.id, checked ? Array.from(new Set([...current, String(o.value)])) : current.filter((item) => item !== String(o.value))); }} />{o.label || o.value}</label>; })}</div> : <div className="flex items-center gap-2"><Checkbox id={field.id} checked={Boolean(value)} disabled={readOnly} onCheckedChange={(checked) => setValue(field.id, Boolean(checked))} /><span className="text-sm text-muted-foreground">{field.placeholder || "Yes"}</span></div>)}
