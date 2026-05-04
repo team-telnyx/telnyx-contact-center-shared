@@ -459,49 +459,51 @@ export default function AgentAssistNodeEditor({
                           <Badge variant="outline" className="font-mono text-[10px]">{field.variableName}</Badge>
                           <Badge variant="secondary" className="text-[10px]">{field.type}</Badge>
                         </div>
-                        <div className="grid gap-2 md:grid-cols-[160px_minmax(0,1fr)]">
+                        <div className="flex min-w-0 flex-col gap-1.5 md:flex-row md:items-start">
                           <Select value={source} onValueChange={(value) => updateFormDataField(field.variableName, { source: value, value: value === "none" ? "" : entry.value || "" })}>
-                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-9 w-full md:w-[108px] md:shrink-0"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">None</SelectItem>
-                              <SelectItem value="static">Static value</SelectItem>
+                              <SelectItem value="static">Static</SelectItem>
                               <SelectItem value="variable">Variable</SelectItem>
                             </SelectContent>
                           </Select>
-                          {source === "variable" ? (
-                            <VariableInput
-                              value={entry.value || ""}
-                              onChange={(value) => updateFormDataField(field.variableName, { source: "variable", value })}
-                              availableVariables={availableVariables}
-                              placeholder="{{customer_name}} or {{client_state.customer.name}}"
-                              className="h-9"
-                            />
-                          ) : source === "static" ? (
-                            field.type === "switch" ? (
-                              <div className="flex h-9 items-center gap-2">
-                                <Switch checked={entry.value === true || entry.value === "true"} onCheckedChange={(checked) => updateFormDataField(field.variableName, { source: "static", value: checked })} />
-                                <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? "true" : "false"}</span>
-                              </div>
-                            ) : (
-                              field.type === "datetime" ? (
-                                <DateTimeStaticValueInput
-                                  field={field}
-                                  value={entry.value}
-                                  onChange={(value) => updateFormDataField(field.variableName, { source: "static", value })}
-                                />
+                          <div className="min-w-0 flex-1">
+                            {source === "variable" ? (
+                              <VariableInput
+                                value={entry.value || ""}
+                                onChange={(value) => updateFormDataField(field.variableName, { source: "variable", value })}
+                                availableVariables={availableVariables}
+                                placeholder="{{customer_name}} or {{client_state.customer.name}}"
+                                className="h-9"
+                              />
+                            ) : source === "static" ? (
+                              field.type === "switch" ? (
+                                <div className="flex h-9 items-center gap-2">
+                                  <Switch checked={entry.value === true || entry.value === "true"} onCheckedChange={(checked) => updateFormDataField(field.variableName, { source: "static", value: checked })} />
+                                  <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? "true" : "false"}</span>
+                                </div>
                               ) : (
-                                <Input
-                                  type={field.type === "slider" ? "number" : "text"}
-                                  value={entry.value ?? ""}
-                                  onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
-                                  placeholder="Value to prefill"
-                                  className="h-9"
-                                />
+                                field.type === "datetime" ? (
+                                  <DateTimeStaticValueInput
+                                    field={field}
+                                    value={entry.value}
+                                    onChange={(value) => updateFormDataField(field.variableName, { source: "static", value })}
+                                  />
+                                ) : (
+                                  <Input
+                                    type={field.type === "slider" ? "number" : "text"}
+                                    value={entry.value ?? ""}
+                                    onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
+                                    placeholder="Value to prefill"
+                                    className="h-9"
+                                  />
+                                )
                               )
-                            )
-                          ) : (
-                            <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
-                          )}
+                            ) : (
+                              <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
