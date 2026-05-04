@@ -71,10 +71,34 @@ function normalizeSubmittedFieldValue(field, value) {
   }
   if (
     Array.isArray(value) &&
-    ["text", "textarea", "select", "radio", "hidden", "datetime"].includes(field.type)
+    ["text", "textarea", "select", "radio", "hidden", "datetime"].includes(
+      field.type,
+    )
   )
     return value[0] ?? "";
   return value;
+}
+
+function isUnresolvedTemplateString(value) {
+  return typeof value === "string" && /^\s*{{[^}]+}}\s*$/.test(value);
+}
+
+function fallbackForUnresolvedTemplate(field, value, { interaction, submission }) {
+  if (!isUnresolvedTemplateString(value)) return value;
+  const token = value.replace(/^\s*{{\s*/, "").replace(/\s*}}\s*$/, "");
+  const variableName = field?.variableName || "";
+  const fieldId = field?.id || "";
+  const looksLikeInteractionId =
+    token === "interaction.id" ||
+    token.endsWith(".interaction.id") ||
+    variableName === "interaction_id" ||
+    fieldId.endsWith("interaction_id");
+
+  if (looksLikeInteractionId) {
+    return interaction?.id || submission?.id || "";
+  }
+
+  return "";
 }
 
 function buildFormSubmitPayload({
@@ -103,7 +127,11 @@ function buildFormSubmitPayload({
     const rawValue = hasValue
       ? submittedValues[field.id]
       : (field.defaultValue ?? null);
-    const value = normalizeSubmittedFieldValue(field, rawValue);
+    const normalizedValue = normalizeSubmittedFieldValue(field, rawValue);
+    const value = fallbackForUnresolvedTemplate(field, normalizedValue, {
+      interaction,
+      submission,
+    });
     const variableName = getFieldVariableName(field, dataFields);
     fields[field.id] = value;
     variables[variableName] = value;
