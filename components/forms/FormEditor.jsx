@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { IconArrowLeft, IconBlockquote, IconBlocks, IconBolt, IconCheck, IconCode, IconColumns, IconCursorText, IconForms, IconGripVertical, IconCheckbox, IconChevronDown, IconCircleDot, IconEye, IconGitBranch, IconGridDots, IconHeading, IconLayoutBottombar, IconLayoutCards, IconLoader2, IconMessageCircle, IconMinus, IconMoon, IconPencil, IconPhoto, IconPlus, IconRectangle, IconSettings, IconSun, IconTemplate, IconTrash, IconTypography, IconUpload, IconX, IconWorldUpload, IconDownload } from "@tabler/icons-react";
 import * as TablerIcons from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -34,7 +35,7 @@ const RAIL = [
 
 const BLOCK_GROUPS = [
   { title: "Layout", color: "border-l-sky-500", iconClass: "text-sky-500", items: ["section", "row", "columns", "grid", "flex", "spacer", "divider"] },
-  { title: "Marketing", color: "border-l-violet-500", iconClass: "text-violet-500", items: ["hero", "stats", "card", "richtext"] },
+  { title: "Marketing", color: "border-l-violet-500", iconClass: "text-violet-500", items: ["hero", "stats", "card", "richtext", "accordion", "avatar"] },
   { title: "Basic", color: "border-l-emerald-500", iconClass: "text-emerald-500", items: ["text", "textarea", "select", "checkbox", "radio", "switch", "slider", "datetime"] },
   { title: "Content", color: "border-l-amber-500", iconClass: "text-amber-500", items: ["label", "badge", "image", "codeblock", "context_value"] },
   { title: "Actions", color: "border-l-rose-500", iconClass: "text-rose-500", items: ["button", "hidden"] },
@@ -44,6 +45,9 @@ const FORM_CATEGORIES = ["General", "Sales", "Support", "Billing", "Customer onb
 const PADDING_VALUE_MAP = { none: 0, xs: 8, sm: 12, md: 16, lg: 24, xl: 32 };
 const VARIANT_OPTIONS = [{ value: "primary", label: "Primary" }, { value: "secondary", label: "Secondary" }];
 const BADGE_VARIANT_OPTIONS = [{ value: "default", label: "Default" }, { value: "secondary", label: "Secondary" }, { value: "outline", label: "Outline" }, { value: "destructive", label: "Destructive" }];
+const BADGE_SIZE_OPTIONS = [{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }];
+const AVATAR_SIZE_OPTIONS = [{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }, { value: "xl", label: "XL" }];
+const AVATAR_SHAPE_OPTIONS = [{ value: "circle", label: "Circle" }, { value: "rounded", label: "Rounded" }, { value: "square", label: "Square" }];
 const DATETIME_MODE_OPTIONS = [{ value: "date", label: "Date" }, { value: "time", label: "Time" }, { value: "datetime", label: "Date + time" }];
 const DIRECTION_OPTIONS = [{ value: "vertical", label: "Vertical" }, { value: "horizontal", label: "Horizontal" }];
 const SIZE_OPTIONS = ["sm", "md", "lg", "xl"];
@@ -128,6 +132,12 @@ function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "t
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
 function badgeStyle(field) { return field.props?.color ? { color: field.props.color, borderColor: field.props.color } : undefined; }
+function badgeSizeClass(value) { return ({ sm: "px-1.5 py-0 text-[10px]", md: "", lg: "px-3 py-1 text-sm" }[value || "md"] || ""); }
+function avatarSizeClass(value) { return ({ sm: "size-8 text-xs", md: "size-12 text-sm", lg: "size-16 text-base", xl: "size-24 text-xl" }[value || "md"] || "size-12 text-sm"); }
+function avatarShapeClass(value) { return ({ circle: "rounded-full", rounded: "rounded-lg", square: "rounded-none" }[value || "circle"] || "rounded-full"); }
+function accordionItemId(fieldId = "accordion", index = 0) { return `${String(fieldId || "accordion").replace(/[^A-Za-z0-9_:-]/g, "_")}_item_${Date.now().toString(36)}_${index + 1}_${Math.random().toString(36).slice(2, 6)}`; }
+function normalizeAccordionItem(item = {}, index = 0, fieldId = "accordion") { const source = item && typeof item === "object" ? item : {}; return { ...source, _id: source._id || source.id || accordionItemId(fieldId, index), title: source.title ?? `Item ${index + 1}`, content: source.content ?? source.body ?? "Content for item.", defaultOpen: Boolean(source.defaultOpen || source.default_open) }; }
+function normalizeAccordionItems(items = [], fieldId = "accordion") { return Array.isArray(items) ? items.map((item, index) => normalizeAccordionItem(item, index, fieldId)) : []; }
 function switchColorProps(field = {}) { const props = field.props || {}; return { checkedTrackColor: props.switchActiveTrackColor || undefined, thumbColor: props.switchThumbColor || undefined }; }
 function sliderColorProps(field = {}) { const props = field.props || {}; return { rangeColor: props.sliderRangeColor || undefined, thumbColor: props.sliderThumbColor || undefined, trackColor: props.sliderTrackColor || undefined }; }
 function sliderNumber(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
@@ -143,11 +153,11 @@ function queueLabel(queue) { return queue.display_name || queue.displayName || q
 function queueRouting(queue) { return queue.routing_strategy || queue.routingStrategy || "FIFO"; }
 const BLOCK_DESCRIPTIONS = {
   section: "Group related fields with a title.", row: "Visual horizontal container.", columns: "Split content into columns.", grid: "Create an even grid layout.", flex: "Flexible row or column layout.", spacer: "Add visual breathing room.", divider: "Horizontal line separator.",
-  hero: "Large header with CTA copy.", stats: "Metric cards for highlights.", card: "Framed content container.", richtext: "Formatted guidance or copy.",
+  hero: "Large header with CTA copy.", stats: "Metric cards for highlights.", card: "Framed content container.", richtext: "Formatted guidance or copy.", accordion: "Expandable content sections.", avatar: "Profile image with fallback initials.",
   text: "Single-line text input.", textarea: "Multi-line notes or comments.", select: "Dropdown choice list.", checkbox: "Boolean consent or flag.", radio: "One choice from visible options.", switch: "Toggle a boolean value.", slider: "Capture a numeric range value.", datetime: "Capture a date, time, or both.",
   label: "Static heading or helper label.", badge: "Compact status or tag display.", image: "Image or media block.", codeblock: "Syntax-highlighted code display.", context_value: "Show live client context.", button: "Submit or action button.", hidden: "Stored hidden value.",
 };
-const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, divider: IconMinus, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, switch: TablerIcons.IconToggleRight || IconCheckbox, slider: TablerIcons.IconAdjustmentsHorizontal || IconRectangle, datetime: TablerIcons.IconCalendarTime || IconForms, label: IconTypography, badge: TablerIcons.IconBadge || IconRectangle, image: IconPhoto, codeblock: IconCode, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
+const BLOCK_ICONS = { section: IconHeading, row: IconLayoutBottombar, columns: IconColumns, grid: IconGridDots, flex: IconRectangle, spacer: IconRectangle, divider: IconMinus, hero: IconBlockquote, stats: IconLayoutCards, card: IconLayoutCards, richtext: IconTypography, accordion: TablerIcons.IconListDetails || IconChevronDown, avatar: TablerIcons.IconUserCircle || IconPhoto, text: IconCursorText, textarea: IconCursorText, select: IconChevronDown, checkbox: IconCheckbox, radio: IconCircleDot, switch: TablerIcons.IconToggleRight || IconCheckbox, slider: TablerIcons.IconAdjustmentsHorizontal || IconRectangle, datetime: TablerIcons.IconCalendarTime || IconForms, label: IconTypography, badge: TablerIcons.IconBadge || IconRectangle, image: IconPhoto, codeblock: IconCode, context_value: IconGitBranch, button: IconRectangle, hidden: IconEye };
 function blockDescription(type) { return BLOCK_DESCRIPTIONS[type] || "Add this block to the form."; }
 function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
 function blockGroup(type) { return BLOCK_GROUPS.find((group) => group.items.includes(type)); }
@@ -340,7 +350,7 @@ function newField(type) {
   if (type === "switch") { base.label = "Switch"; base.defaultValue = false; base.props = { onText: "On", offText: "Off" }; }
   if (type === "slider") { base.label = "Slider"; base.defaultValue = 50; base.props = { min: 0, max: 100, step: 1 }; }
   if (type === "datetime") { base.label = "Date/time"; base.placeholder = "Select date and time"; base.props = { mode: "date" }; }
-  if (type === "badge") { base.label = "Badge"; base.props = { text: "Badge", variant: "secondary", padding: "md" }; }
+  if (type === "badge") { base.label = "Badge"; base.props = { text: "Badge", variant: "secondary", size: "md", padding: "md" }; }
   if (type === "button") { base.label = "Submit"; base.props = { variant: "primary", dataActionFlowId: "", dataActionId: "", dataActionLabel: "" }; }
   if (type === "context_value") base.contextPath = "caller.from_number";
   if (type === "image") base.props = { src: "", padding: "md" };
@@ -357,6 +367,8 @@ function newField(type) {
   if (type === "stats") { base.label = "Stats"; base.props = { padding: "lg", items: [{ title: "24/7", description: "Coverage", icon: "IconClock" }, { title: "95%", description: "CSAT", icon: "IconThumbUp" }, { title: "2m", description: "Avg response", icon: "IconBolt" }] }; }
   if (type === "card") { base.label = "Card"; base.props = { title: "Card title", description: "Short supporting description.", mode: "card", icon: "spark", padding: "md", imageUrl: "", children: [] }; }
   if (type === "richtext") { base.label = "Rich text"; base.props = { richtext: "Use this block for formatted guidance or copy.", padding: "md" }; }
+  if (type === "accordion") { base.label = "Accordion"; base.props = { type: "single", collapsible: true, variant: "default", padding: "md", items: [{ _id: accordionItemId(id, 0), title: "First question", content: "Answer or supporting details go here.", defaultOpen: true }, { _id: accordionItemId(id, 1), title: "Second question", content: "Add more details in this item.", defaultOpen: false }] }; }
+  if (type === "avatar") { base.label = "Avatar"; base.props = { src: "", fallback: "AV", alt: "Avatar", size: "md", shape: "circle", padding: "md" }; }
   return base;
 }
 
@@ -1365,10 +1377,12 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "stats") return <div {...baseProps}>{toolbar}{dragHandle}<div className="grid gap-3 md:grid-cols-3">{normalizeStatItems(props.items || []).map((item, index) => <div key={index} className="relative overflow-hidden rounded-xl border bg-card p-4 pr-12 text-card-foreground"><StatIcon item={item} className="absolute right-4 top-4 opacity-80" /><div className="text-2xl font-bold" style={{ ...fieldStyle(field), color: item.titleColor || fieldStyle(field)?.color }}>{item.title}</div><div className="text-xs text-muted-foreground" style={item.descriptionColor ? { color: item.descriptionColor } : undefined}>{item.description}</div></div>)}</div></div>;
   if (field.type === "card") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-36 w-full object-cover" /> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
   if (field.type === "richtext") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
+  if (field.type === "accordion") { const items = normalizeAccordionItems(props.items || [], field.id); const defaultOpen = items.filter((item) => item.defaultOpen).map((item) => item._id); const valueProps = props.type === "multiple" ? { defaultValue: defaultOpen } : { defaultValue: defaultOpen[0] }; return <div {...baseProps}>{toolbar}{dragHandle}<Accordion type={props.type === "multiple" ? "multiple" : "single"} collapsible={props.type === "multiple" ? undefined : props.collapsible !== false} className={`rounded-lg ${props.variant === "card" ? "space-y-2" : "border"}`} {...valueProps}>{items.map((item, index) => <AccordionItem key={item._id} value={item._id} className={props.variant === "card" ? "rounded-lg border bg-background px-3 last:border-b" : "px-3"}><AccordionTrigger className="py-3 hover:no-underline"><span className="text-left">{item.title || `Item ${index + 1}`}</span></AccordionTrigger><AccordionContent className="whitespace-pre-wrap text-muted-foreground">{item.content || "Item content"}</AccordionContent></AccordionItem>)}</Accordion>{!items.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No accordion items</div> : null}</div>; }
+  if (field.type === "avatar") { const shape = avatarShapeClass(props.shape); return <div {...baseProps}>{toolbar}{dragHandle}<Avatar className={`${avatarSizeClass(props.size)} ${shape}`} style={props.borderColor ? { borderColor: props.borderColor, borderWidth: 1, borderStyle: "solid" } : undefined}>{props.src ? <AvatarImage src={props.src} alt={props.alt || field.label || "Avatar"} className={shape} /> : null}<AvatarFallback className={`${shape} font-semibold`} style={props.fallbackColor ? { color: props.fallbackColor } : undefined}>{props.fallback || field.label?.slice(0, 2)?.toUpperCase() || "AV"}</AvatarFallback></Avatar></div>; }
   if (field.type === "codeblock") return <div {...baseProps}>{toolbar}{dragHandle}<CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
   if (field.type === "hidden") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant="outline">Hidden</Badge> <span className="text-sm text-muted-foreground">{field.id}</span></div>;
   if (field.type === "label") return <div {...baseProps} className={`${shell} ${textSizeClass(props.size)} ${alignClass(props.align)}`} style={paddingStyle(props.padding, fieldStyle(field) || {})}>{toolbar}{dragHandle}<div className={`font-semibold ${props.bold ? "font-bold" : ""}`}>{field.label}</div>{field.helpText ? <p className="text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
-  if (field.type === "badge") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant={props.variant || "secondary"} style={badgeStyle(field)}>{props.text || field.label || "Badge"}</Badge>{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
+  if (field.type === "badge") return <div {...baseProps}>{toolbar}{dragHandle}<Badge variant={props.variant || "secondary"} className={badgeSizeClass(props.size)} style={badgeStyle(field)}>{props.text || field.label || "Badge"}</Badge>{field.helpText ? <p className="mt-2 text-xs text-muted-foreground">{field.helpText}</p> : null}</div>;
   if (field.type === "context_value") return <div {...baseProps}>{toolbar}{dragHandle}<Label style={fieldStyle(field)}>{field.label}</Label><div className="mt-2 rounded-md bg-muted p-3 font-mono text-xs">{field.contextPath || "caller.from_number"}</div></div>;
   if (field.type === "image") return <div {...baseProps}>{toolbar}{dragHandle}{field.props?.src ? <img src={field.props.src} alt={field.label || "Form image"} className="max-h-48 rounded-md border object-contain" /> : <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">Image block</div>}</div>;
   if (field.type === "button") return <div {...baseProps}>{toolbar}{dragHandle}<Button disabled={readOnly} variant={props.variant === "secondary" ? "secondary" : "default"}>{field.label || "Submit"}</Button></div>;
@@ -1464,7 +1478,7 @@ function PropertiesPanel({ form, patchForm, selectedField, updateField, media = 
         <div><Label>Label</Label><RevertibleTextInput value={selectedField.label ?? ""} restoreOnEmpty fallbackValue={selectedField.id} onCommit={(value) => updateField(selectedField.id, { label: value })} /></div>
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Required</Label><Switch checked={Boolean(selectedField.required)} onCheckedChange={(checked) => updateField(selectedField.id, { required: checked })} /></div> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? (() => { const error = variableNameError(form, selectedField); return <div><Label>Variable name</Label><Input value={selectedField.variableName ?? ""} placeholder={slugifyVariableName(selectedField.label || selectedField.id)} className={error ? "border-destructive focus-visible:ring-destructive" : ""} onChange={(e) => updateField(selectedField.id, { variableName: e.target.value })} /><p className={`mt-1 text-xs ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || "Used in Form Submit payload variables for call flow data actions."}</p></div>; })() : null}
-        {!["hero", "stats", "card", "richtext", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
+        {!["hero", "stats", "card", "richtext", "accordion", "avatar", "spacer", "divider", "codeblock"].includes(selectedField.type) ? <><div><Label>Placeholder</Label><Input value={selectedField.placeholder || ""} onChange={(e) => updateField(selectedField.id, { placeholder: e.target.value })} /></div><div><Label>Help text</Label><Input value={selectedField.helpText || ""} onChange={(e) => updateField(selectedField.id, { helpText: e.target.value })} /></div></> : null}
         {FORM_COMPONENT_REGISTRY[selectedField.type]?.data ? <div><Label>Binding path</Label><Input value={form.bindings?.[selectedField.id] ?? ""} placeholder="customer.name" onChange={(e) => patchForm({ bindings: { ...(form.bindings || {}), [selectedField.id]: e.target.value } })} /></div> : null}
         {selectedField.type === "context_value" ? <div><Label>Context path</Label><Input value={selectedField.contextPath ?? ""} placeholder="caller.from_number" onChange={(e) => updateField(selectedField.id, { contextPath: e.target.value })} /></div> : null}
         {selectedLocation?.container ? <ChildLayoutControls field={selectedField} location={selectedLocation} layout={childLayoutFor(selectedLocation.container, selectedField.id)} updateLayout={updateChildLayout} /> : null}
@@ -1496,7 +1510,7 @@ function ChildLayoutControls({ field, location, layout, updateLayout }) {
 function BlockPropertyControls({ field, setProps, updateField, media = [], dataActions = [] }) {
   const props = field.props || {};
   const supportsPadding = !["hidden"].includes(field.type);
-  const supportsColor = ["hero", "stats", "card", "richtext", "label", "badge", "section", "text", "textarea", "select", "radio", "checkbox", "switch", "slider", "datetime", "context_value"].includes(field.type);
+  const supportsColor = ["hero", "stats", "card", "richtext", "accordion", "avatar", "label", "badge", "section", "text", "textarea", "select", "radio", "checkbox", "switch", "slider", "datetime", "context_value"].includes(field.type);
   const supportsBorders = ["section", "row", "columns", "grid", "flex"].includes(field.type);
   return <div className="space-y-4 rounded-lg border bg-muted/20 p-3">
     <div className="text-xs font-semibold uppercase text-muted-foreground">Design</div>
@@ -1576,7 +1590,9 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext ?? ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
   if (field.type === "codeblock") return <div className="space-y-3"><div><Label>Language</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div><Label>Code</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>Max height px</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Show line numbers</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
   if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
-  if (field.type === "badge") return <div className="space-y-3"><div><Label>Badge text</Label><Input value={props.text ?? field.label ?? ""} onChange={(e) => setProps({ text: e.target.value })} /></div><TabsSelector label="Variant" value={props.variant || "secondary"} options={BADGE_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} /></div>;
+  if (field.type === "accordion") return <AccordionItemsControl field={field} items={props.items || []} props={props} setProps={setProps} />;
+  if (field.type === "avatar") return <div className="space-y-3"><ImageSelector label="Avatar image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, alt: item ? mediaTitle(item) : props.alt })} /><div><Label>Fallback text / initials</Label><Input value={props.fallback ?? ""} placeholder="AV" onChange={(e) => setProps({ fallback: e.target.value })} /></div><div><Label>Alt text</Label><Input value={props.alt ?? ""} placeholder={field.label || "Avatar"} onChange={(e) => setProps({ alt: e.target.value })} /></div><TabsSelector label="Size" value={props.size || "md"} options={AVATAR_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /><TabsSelector label="Shape" value={props.shape || "circle"} options={AVATAR_SHAPE_OPTIONS} onChange={(shape) => setProps({ shape })} /><ColorInput label="Fallback text color" value={props.fallbackColor || ""} onChange={(fallbackColor) => setProps({ fallbackColor })} /><ColorInput label="Border color" value={props.borderColor || ""} onChange={(borderColor) => setProps({ borderColor })} /></div>;
+  if (field.type === "badge") return <div className="space-y-3"><div><Label>Badge text</Label><Input value={props.text ?? field.label ?? ""} onChange={(e) => setProps({ text: e.target.value })} /></div><TabsSelector label="Variant" value={props.variant || "secondary"} options={BADGE_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} /><TabsSelector label="Size" value={props.size || "md"} options={BADGE_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /></div>;
   if (field.type === "switch") return <div className="space-y-3"><div className="flex items-center justify-between rounded-md border p-2"><Label>Default checked</Label><Switch checked={Boolean(field.defaultValue)} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /></div><div className="grid grid-cols-2 gap-3"><div><Label>On text</Label><Input value={props.onText ?? ""} placeholder="On" onChange={(e) => setProps({ onText: e.target.value })} /></div><div><Label>Off text</Label><Input value={props.offText ?? ""} placeholder="Off" onChange={(e) => setProps({ offText: e.target.value })} /></div></div><ColorInput label="Active track color" value={props.switchActiveTrackColor || ""} onChange={(color) => setProps({ switchActiveTrackColor: color })} /><ColorInput label="Thumb color" value={props.switchThumbColor || ""} onChange={(color) => setProps({ switchThumbColor: color })} /></div>;
   if (field.type === "slider") return <div className="space-y-3"><div className="grid grid-cols-3 gap-3"><div><Label>Min</Label><Input type="number" value={props.min ?? 0} onChange={(e) => setProps({ min: Number(e.target.value) })} /></div><div><Label>Max</Label><Input type="number" value={props.max ?? 100} onChange={(e) => setProps({ max: Number(e.target.value) })} /></div><div><Label>Step</Label><Input type="number" min="0.0001" value={props.step ?? 1} onChange={(e) => setProps({ step: Number(e.target.value) || 1 })} /></div></div><div><Label>Default value</Label><Input type="number" value={field.defaultValue ?? props.min ?? 0} onChange={(e) => updateField(field.id, { defaultValue: Number(e.target.value) })} /></div><ColorInput label="Active range color" value={props.sliderRangeColor || ""} onChange={(color) => setProps({ sliderRangeColor: color })} /><ColorInput label="Thumb color" value={props.sliderThumbColor || ""} onChange={(color) => setProps({ sliderThumbColor: color })} /><ColorInput label="Track color" value={props.sliderTrackColor || ""} onChange={(color) => setProps({ sliderTrackColor: color })} /></div>;
   if (field.type === "datetime") return <div className="space-y-3"><TabsSelector label="Mode" value={props.mode || "date"} options={DATETIME_MODE_OPTIONS} onChange={(mode) => setProps({ mode })} /><div><Label>Default value</Label><Input type={dateInputType(props.mode)} value={field.defaultValue || ""} onChange={(e) => updateField(field.id, { defaultValue: e.target.value })} /></div></div>;
@@ -1603,6 +1619,69 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   return null;
 }
 
+
+
+function AccordionItemsControl({ field, items = [], props = {}, setProps }) {
+  const normalizedItems = normalizeAccordionItems(items, field.id);
+  const [activeItem, setActiveItem] = useState(normalizedItems[0]?._id || "");
+  useEffect(() => {
+    if (!normalizedItems.length) {
+      if (activeItem) setActiveItem("");
+      return;
+    }
+    if (!normalizedItems.some((item) => item._id === activeItem)) setActiveItem(normalizedItems[0]._id);
+  }, [activeItem, normalizedItems.length]);
+  function commitItems(nextItems) { setProps({ items: nextItems.map((item, index) => normalizeAccordionItem(item, index, field.id)) }); }
+  function addItem() {
+    const item = normalizeAccordionItem({ title: `Item ${normalizedItems.length + 1}`, content: "New accordion content.", defaultOpen: false }, normalizedItems.length, field.id);
+    commitItems([...normalizedItems, item]);
+    setActiveItem(item._id);
+  }
+  function removeItem(id) {
+    const next = normalizedItems.filter((item) => item._id !== id);
+    commitItems(next);
+    if (activeItem === id) setActiveItem(next[0]?._id || "");
+  }
+  function updateItem(id, patch) { commitItems(normalizedItems.map((item, index) => item._id === id ? normalizeAccordionItem({ ...item, ...patch }, index, field.id) : item)); }
+  function moveItem(id, direction) {
+    const index = normalizedItems.findIndex((item) => item._id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= normalizedItems.length) return;
+    const next = [...normalizedItems];
+    [next[index], next[target]] = [next[target], next[index]];
+    commitItems(next);
+  }
+  return <div className="space-y-4">
+    <div className="grid grid-cols-2 gap-3">
+      <div><Label>Behavior</Label><Select value={props.type === "multiple" ? "multiple" : "single"} onValueChange={(type) => setProps({ type, collapsible: type === "multiple" ? true : props.collapsible !== false })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="single">Single open</SelectItem><SelectItem value="multiple">Multiple open</SelectItem></SelectContent></Select></div>
+      <div><Label>Style</Label><Select value={props.variant || "default"} onValueChange={(variant) => setProps({ variant })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default</SelectItem><SelectItem value="card">Cards</SelectItem></SelectContent></Select></div>
+    </div>
+    {props.type !== "multiple" ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Collapsible</Label><Switch checked={props.collapsible !== false} onCheckedChange={(collapsible) => setProps({ collapsible })} /></div> : null}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2"><Label>Items</Label><Button type="button" size="sm" variant="outline" onClick={addItem}><IconPlus className="mr-1 h-3.5 w-3.5" />Add item</Button></div>
+      {normalizedItems.length ? <Accordion type="single" value={activeItem} onValueChange={(value) => { if (value) setActiveItem(value); }} className="space-y-2">
+        {normalizedItems.map((item, index) => <AccordionItem key={item._id} value={item._id} className="rounded-md border bg-background px-3 last:border-b">
+          <AccordionTrigger className="py-3 hover:no-underline">
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+              <div className="min-w-0 text-left"><div className="text-xs font-semibold uppercase text-muted-foreground">Item {index + 1}</div><div className="truncate text-sm font-medium">{item.title || `Item ${index + 1}`}</div></div>
+              {item.defaultOpen ? <Badge variant="outline" className="shrink-0 text-[10px]">Default open</Badge> : null}
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-3 pb-3">
+            <div><Label>Title</Label><Input value={item.title ?? ""} onChange={(e) => updateItem(item._id, { title: e.target.value })} /></div>
+            <div><Label>Content</Label><Textarea rows={4} value={item.content ?? ""} onChange={(e) => updateItem(item._id, { content: e.target.value })} /></div>
+            <div className="flex items-center justify-between rounded-md border p-2"><Label>Default open</Label><Switch checked={Boolean(item.defaultOpen)} onCheckedChange={(defaultOpen) => updateItem(item._id, { defaultOpen })} /></div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" disabled={index === 0} onClick={() => moveItem(item._id, -1)}>Move up</Button>
+              <Button type="button" size="sm" variant="outline" disabled={index === normalizedItems.length - 1} onClick={() => moveItem(item._id, 1)}>Move down</Button>
+              <Button type="button" size="sm" variant="ghost" className="ml-auto text-destructive" onClick={() => removeItem(item._id)}><IconTrash className="mr-1 h-3.5 w-3.5" />Remove</Button>
+            </div>
+          </AccordionContent>
+        </AccordionItem>)}
+      </Accordion> : <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No accordion items yet.</div>}
+    </div>
+  </div>;
+}
 
 function StatsItemsControl({ items = [], setItems }) {
   const normalizedItems = normalizeStatItems(items);
