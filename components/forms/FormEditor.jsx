@@ -93,7 +93,6 @@ function PageIcon({ value, className = "h-4 w-4" }) {
 const ALIGN_OPTIONS = ["left", "center", "right"];
 const QUEUE_BADGE_CLASS = { FIFO: "bg-blue-500", "Skill-based": "bg-purple-500", "Priority-based": "bg-orange-500" };
 const STATUS_BADGE_CLASS = { draft: "border-amber-500 text-amber-700 dark:text-amber-300", published: "border-emerald-500 text-emerald-700 dark:text-emerald-300", archived: "border-slate-400 text-slate-600 dark:text-slate-300" };
-const MESSAGE_BADGE_CLASS = { saved: "border-emerald-500 text-emerald-700 dark:text-emerald-300", error: "border-destructive text-destructive" };
 const BLOCK_GROUP_BADGE_CLASS = {
   Layout: "border-sky-500 text-sky-700 dark:text-sky-300",
   Marketing: "border-violet-500 text-violet-700 dark:text-violet-300",
@@ -798,7 +797,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     <div className="h-16 shrink-0 border-b bg-background px-4 flex items-center justify-between gap-4">
       <div className="flex min-w-0 items-center gap-3">
         <Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => { if (hasUnsavedChanges) { setPendingNavigation("/admin/forms"); setShowExitDialog(true); } else router.push("/admin/forms"); }}><IconArrowLeft className="mr-1 h-4 w-4" />Forms</Button>
-        <div className="flex min-w-0 items-center gap-2"><h1 className="truncate text-xl font-semibold tracking-tight">{form.name || "Untitled form"}</h1><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}{message ? <Badge variant="outline" className={message.toLowerCase().includes("fail") ? MESSAGE_BADGE_CLASS.error : MESSAGE_BADGE_CLASS.saved}>{message}</Badge> : null}</div>
+        <div className="flex min-w-0 items-center gap-2"><h1 className="truncate text-xl font-semibold tracking-tight">{form.name || "Untitled form"}</h1><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button>
