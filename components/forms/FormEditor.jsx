@@ -35,10 +35,10 @@ const RAIL = [
 
 const BLOCK_GROUPS = [
   { title: "Layout", color: "border-l-sky-500", iconClass: "text-sky-500", items: ["section", "row", "columns", "grid", "flex", "spacer", "divider"] },
-  { title: "Marketing", color: "border-l-violet-500", iconClass: "text-violet-500", items: ["hero", "stats", "card", "richtext", "accordion", "avatar"] },
   { title: "Basic", color: "border-l-emerald-500", iconClass: "text-emerald-500", items: ["text", "textarea", "select", "checkbox", "radio", "switch", "slider", "datetime"] },
   { title: "Content", color: "border-l-amber-500", iconClass: "text-amber-500", items: ["label", "badge", "image", "codeblock", "context_value"] },
   { title: "Actions", color: "border-l-rose-500", iconClass: "text-rose-500", items: ["button", "hidden"] },
+  { title: "Marketing", color: "border-l-violet-500", iconClass: "text-violet-500", items: ["hero", "stats", "card", "richtext", "accordion", "avatar"] },
 ];
 
 const FORM_CATEGORIES = ["General", "Sales", "Support", "Billing", "Customer onboarding", "Lead capture", "Feedback", "Complaint", "Appointment", "Compliance"];
