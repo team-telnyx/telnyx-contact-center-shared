@@ -1000,6 +1000,13 @@ function LeftPanel(props) {
     return <div className="h-full min-h-0 flex flex-col">
       <PanelHeader title="Pages" description="Add, rename, reorder, and select form pages." />
       <div className="shrink-0 space-y-3 border-b p-4">
+        <div className="flex items-center justify-between rounded-md border p-3">
+          <div>
+            <Label>Show navigation buttons</Label>
+            <p className="text-xs text-muted-foreground">Show automatic Prev/Next buttons at the bottom of multi-page forms.</p>
+          </div>
+          <Switch checked={form.schema?.showNavigationButtons !== false} onCheckedChange={(checked) => patchForm({ schema: { ...(form.schema || {}), showNavigationButtons: checked } })} />
+        </div>
         <ColorInput label="Active tab underline color" value={form.theme?.pageTabActiveBorderColor || ""} onChange={(color) => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: color } })} />
         <Button type="button" size="sm" variant="ghost" onClick={() => patchForm({ theme: { ...(form.theme || {}), pageTabActiveBorderColor: "" } })}>Use theme default</Button>
         <Button type="button" className="w-full" onClick={addPage}><IconPlus className="mr-2 h-4 w-4" />Add page</Button>
