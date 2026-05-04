@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flattenPageOrder, getFieldChildIds, isValidFieldVariableName, makePageId, makeUniqueVariableName, normalizeFormDefinition, slugifyFormName, slugifyVariableName } from "@/lib/forms/form-schema";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { FormRenderer } from "@/components/forms/FormRenderer";
+import { sanitizeRichTextHtml } from "@/components/forms/rich-text-html";
 import { notify } from "@/components/ToastNotify";
 
 const RAIL = [
@@ -1310,6 +1311,68 @@ function StatIcon({ item = {}, className = "", style = {} }) {
 }
 
 
+
+function RichTextHtmlEditor({ value = "", onChange }) {
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor && editor.innerHTML !== value) editor.innerHTML = value || "";
+  }, [value]);
+
+  function sync() {
+    onChange?.(editorRef.current?.innerHTML || "");
+  }
+
+  function command(name, commandValue = null) {
+    editorRef.current?.focus();
+    document.execCommand(name, false, commandValue);
+    sync();
+  }
+
+  function toolbarButton(label, title, onClick, className = "") {
+    return <button type="button" title={title} className={`h-8 rounded px-2 text-sm font-medium hover:bg-muted ${className}`} onMouseDown={(event) => { event.preventDefault(); onClick(); }}>{label}</button>;
+  }
+
+  return <div className="overflow-hidden rounded-md border bg-background focus-within:ring-2 focus-within:ring-ring">
+    <div className="flex flex-wrap items-center gap-1 border-b bg-muted/30 p-1">
+      <select className="h-8 rounded border bg-background px-2 text-sm" defaultValue="P" onMouseDown={(event) => event.stopPropagation()} onChange={(event) => command("formatBlock", event.target.value)}>
+        <option value="P">Body</option>
+        <option value="H1">H1</option>
+        <option value="H2">H2</option>
+        <option value="H3">H3</option>
+        <option value="BLOCKQUOTE">Quote</option>
+      </select>
+      {toolbarButton("• List", "Bullet list", () => command("insertUnorderedList"))}
+      {toolbarButton("1. List", "Numbered list", () => command("insertOrderedList"))}
+      <span className="mx-1 h-6 w-px bg-border" />
+      {toolbarButton("B", "Bold", () => command("bold"), "text-base font-bold")}
+      {toolbarButton("I", "Italic", () => command("italic"), "text-base italic")}
+      {toolbarButton("U", "Underline", () => command("underline"), "text-base underline")}
+      <span className="mx-1 h-6 w-px bg-border" />
+      {toolbarButton("Left", "Align left", () => command("justifyLeft"))}
+      {toolbarButton("Center", "Align center", () => command("justifyCenter"))}
+      {toolbarButton("Right", "Align right", () => command("justifyRight"))}
+    </div>
+    <div
+      ref={editorRef}
+      contentEditable
+      suppressContentEditableWarning
+      className="prose prose-sm min-h-40 max-w-none p-3 outline-none dark:prose-invert"
+      onInput={sync}
+      onBlur={sync}
+      onPaste={(event) => {
+        event.preventDefault();
+        const html = event.clipboardData.getData("text/html");
+        const text = event.clipboardData.getData("text/plain");
+        document.execCommand("insertHTML", false, sanitizeRichTextHtml(html || text).replace(/\n/g, "<br />"));
+        sync();
+      }}
+    />
+    <Textarea className="min-h-28 rounded-none border-0 border-t font-mono text-xs focus-visible:ring-0" value={value || ""} onChange={(event) => onChange?.(event.target.value)} placeholder="HTML source, e.g. <h2>Heading</h2><ul><li>Item</li></ul>" />
+  </div>;
+}
+
 function BlockCardContent({ type, iconClass = "text-primary" }) {
   const Icon = blockIcon(type);
   return <div className="flex items-start gap-3">
@@ -1480,7 +1543,7 @@ function CanvasField({ field, fieldsById, selectedId, selected, onSelect, readOn
   if (field.type === "hero") return <div {...baseProps} className={`${shell} ${alignClass(props.align)}`} style={fieldStyle(field)}>{dragHandle}{heroShell(field, props, toolbar)}</div>;
   if (field.type === "stats") return <div {...baseProps}>{toolbar}{dragHandle}<div className="grid gap-3 md:grid-cols-3">{normalizeStatItems(props.items || []).map((item, index) => <div key={index} className="relative overflow-hidden rounded-xl border bg-card p-4 pr-12 text-card-foreground"><StatIcon item={item} className="absolute right-4 top-4 opacity-80" /><div className="text-2xl font-bold" style={{ ...fieldStyle(field), color: item.titleColor || fieldStyle(field)?.color }}>{item.title}</div><div className="text-xs text-muted-foreground" style={item.descriptionColor ? { color: item.descriptionColor } : undefined}>{item.description}</div></div>)}</div></div>;
   if (field.type === "card") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`overflow-hidden rounded-xl ${props.mode === "flat" ? "bg-muted/40" : "border bg-card shadow-sm"} text-card-foreground`} style={fieldStyle(field)}>{props.imageUrl ? <div className="h-36 w-full overflow-hidden bg-muted"><img src={props.imageUrl} alt={props.imageTitle || props.title || field.label} className="h-full w-full object-cover" style={imageScaleStyle(props)} /></div> : null}<div className="p-4"><div className="text-sm font-semibold">{props.title || field.label}</div>{props.description ? <p className="mt-2 text-xs text-muted-foreground">{props.description}</p> : null}<div className="mt-4"><ContainerDropZone id={`container:${field.id}:children`} label="card" empty={!props.children?.length}>{renderChildren(props.children || [], field)}</ContainerDropZone></div></div></div></div>;
-  if (field.type === "richtext") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)}>{props.richtext || field.label}</div></div>;
+  if (field.type === "richtext") return <div {...baseProps}>{toolbar}{dragHandle}<div className={`prose prose-sm max-w-none dark:prose-invert ${props.bold ? "font-semibold" : ""} ${alignClass(props.align)}`} style={fieldStyle(field)} dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(props.richtext || field.label) }} /></div>;
   if (field.type === "accordion") { const items = normalizeAccordionItems(props.items || [], field.id); const defaultOpen = items.filter((item) => item.defaultOpen).map((item) => item._id); const valueProps = props.type === "multiple" ? { defaultValue: defaultOpen } : { defaultValue: defaultOpen[0] }; return <div {...baseProps}>{toolbar}{dragHandle}<Accordion type={props.type === "multiple" ? "multiple" : "single"} collapsible={props.type === "multiple" ? undefined : props.collapsible !== false} className={`rounded-lg ${props.variant === "card" ? "space-y-2" : "border"}`} {...valueProps}>{items.map((item, index) => <AccordionItem key={item._id} value={item._id} className={props.variant === "card" ? "rounded-lg border bg-background px-3 last:border-b" : "px-3"}><AccordionTrigger className="py-3 hover:no-underline"><span className="text-left">{item.title || `Item ${index + 1}`}</span></AccordionTrigger><AccordionContent className="whitespace-pre-wrap text-muted-foreground">{item.content || "Item content"}</AccordionContent></AccordionItem>)}</Accordion>{!items.length ? <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">No accordion items</div> : null}</div>; }
   if (field.type === "avatar") { const shape = avatarShapeClass(props.shape); return <div {...baseProps}>{toolbar}{dragHandle}<Avatar className={`${avatarSizeClass(props.size)} ${shape}`} style={props.borderColor ? { borderColor: props.borderColor, borderWidth: 1, borderStyle: "solid" } : undefined}>{props.src ? <AvatarImage src={props.src} alt={props.alt || field.label || "Avatar"} className={`${shape} object-cover`} style={imageScaleStyle(props)} /> : null}<AvatarFallback className={`${shape} font-semibold`} style={props.fallbackColor ? { color: props.fallbackColor } : undefined}>{props.fallback || field.label?.slice(0, 2)?.toUpperCase() || "AV"}</AvatarFallback></Avatar></div>; }
   if (field.type === "codeblock") return <div {...baseProps}>{toolbar}{dragHandle}<CodeBlock code={props.code || ""} language={props.language || "javascript"} showLineNumbers={Boolean(props.showLineNumbers)} maxHeight={props.maxHeight || 360}><CodeBlockCopyButton type="button" /></CodeBlock></div>;
@@ -1700,7 +1763,7 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "hero") return <div className="min-w-0 space-y-3"><div><Label>Quote / eyebrow</Label><Input value={props.quote ?? ""} onChange={(e) => setProps({ quote: e.target.value })} /></div><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><HeroImageModeTabs value={props.imageMode === "background" ? "background" : "inline"} onChange={(imageMode) => setProps({ imageMode })} /><ImageSelector label="Hero image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}<HeroButtonsControl buttons={props.buttons || []} onChange={(buttons) => setProps({ buttons })} /></div>;
   if (field.type === "stats") return <StatsItemsControl items={props.items || []} setItems={(items) => setProps({ items })} />;
   if (field.type === "card") return <div className="space-y-3"><div><Label>Title</Label><RevertibleTextInput value={props.title ?? ""} restoreOnEmpty fallbackValue={field.label} onCommit={(value) => setProps({ title: value })} /></div><div><Label>Description</Label><Textarea rows={3} value={props.description ?? ""} onChange={(e) => setProps({ description: e.target.value })} /></div><div><Label>Mode</Label><Select value={props.mode || "card"} onValueChange={(value) => setProps({ mode: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="card">Card</SelectItem><SelectItem value="flat">Flat</SelectItem></SelectContent></Select></div><ImageSelector label="Card image" value={props.imageUrl || ""} media={media} onChange={(url, item) => setProps({ imageUrl: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.imageUrl ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
-  if (field.type === "richtext") return <div><Label>Rich text</Label><Textarea rows={5} value={props.richtext ?? ""} onChange={(e) => setProps({ richtext: e.target.value })} /></div>;
+  if (field.type === "richtext") return <div className="space-y-2"><Label>Rich text</Label><RichTextHtmlEditor value={props.richtext ?? ""} onChange={(richtext) => setProps({ richtext })} /><p className="text-xs text-muted-foreground">Supports safe HTML tags like &lt;h1&gt;, &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;ul&gt;, &lt;ol&gt;, &lt;li&gt;, &lt;p&gt;, &lt;br&gt;, and links.</p></div>;
   if (field.type === "codeblock") return <div className="space-y-3"><div><Label>Language</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div><Label>Code</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>Max height px</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Show line numbers</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
   if (field.type === "image") return <div className="space-y-3"><ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />{props.src ? <ImageScaleControl value={props.imageScale} onChange={(imageScale) => setProps({ imageScale })} /> : null}</div>;
   if (field.type === "accordion") return <AccordionItemsControl field={field} items={props.items || []} props={props} setProps={setProps} />;
