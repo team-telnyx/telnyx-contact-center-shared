@@ -227,8 +227,15 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
   useEffect(() => { setValues(initialValuesForForm(normalized, initialValues)); }, [formDefaultsKey, incomingValuesKey]);
   useEffect(() => { if (pages.length && !pages.some((page) => page.id === activePageId)) setActivePageId(pages[0].id); }, [pages, activePageId]);
   const byId = useMemo(() => new Map((normalized?.schema?.fields || []).map((field) => [field.id, field])), [normalized]);
+  const activePageIndex = Math.max(0, pages.findIndex((page) => page.id === activePageId));
   const fields = useMemo(() => normalized ? rootFields(normalized, activePageId) : [], [normalized, activePageId]);
+  const hasPreviousPage = pages.length > 1 && activePageIndex > 0;
+  const hasNextPage = pages.length > 1 && activePageIndex < pages.length - 1;
   function setValue(id, value) { setValues((prev) => valuesEqual(prev[id], value) ? prev : { ...prev, [id]: value }); }
+  function goToPage(index) {
+    const nextPage = pages[index];
+    if (nextPage) setActivePageId(nextPage.id);
+  }
   async function handleSubmit(e) { e?.preventDefault?.(); await onSubmit?.(values); }
   async function handleButtonClick(field) { await onSubmit?.(values, { button: field, dataActionFlowId: field.props?.dataActionFlowId || field.props?.dataActionId || "" }); }
   if (!form) return <div className="text-sm text-muted-foreground">No form selected.</div>;
@@ -257,5 +264,9 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
   return <form onSubmit={handleSubmit} className="space-y-4" style={formThemeStyle(normalized?.theme)}>
     {pages.length > 1 ? <div className="mb-6 flex items-center gap-1 border-b">{pages.map((page) => { const active = activePageId === page.id; const activeBorderColor = normalized?.theme?.pageTabActiveBorderColor; return <button key={page.id} type="button" onClick={() => setActivePageId(page.id)} className={`relative inline-flex items-center gap-2 px-4 py-2 text-sm font-medium transition ${active ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}><PageIcon value={page.icon} />{page.title || page.id}<span className={`absolute inset-x-0 -bottom-px h-0.5 rounded-full ${active && !activeBorderColor ? "bg-primary" : "bg-transparent"}`} style={active && activeBorderColor ? { backgroundColor: activeBorderColor } : undefined} /></button>; })}</div> : null}
     {fields.map(renderField)}
+    {pages.length > 1 ? <div className="mt-6 flex justify-end gap-2 border-t pt-4">
+      <Button type="button" variant="outline" disabled={!hasPreviousPage} onClick={() => goToPage(activePageIndex - 1)}><TablerIcons.IconArrowLeft className="mr-2 h-4 w-4" />Prev</Button>
+      <Button type="button" variant="outline" disabled={!hasNextPage} onClick={() => goToPage(activePageIndex + 1)}>Next<TablerIcons.IconArrowRight className="ml-2 h-4 w-4" /></Button>
+    </div> : null}
   </form>;
 }
