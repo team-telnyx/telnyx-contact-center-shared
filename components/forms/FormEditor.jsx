@@ -1009,6 +1009,8 @@ function LeftPanel(props) {
   const [pexelsLoading, setPexelsLoading] = useState(false);
   const [pexelsError, setPexelsError] = useState("");
   const [pexelsDownloadingId, setPexelsDownloadingId] = useState(null);
+  const [deleteMediaTarget, setDeleteMediaTarget] = useState(null);
+  const [deletingMedia, setDeletingMedia] = useState(false);
 
   async function searchPexels(e) {
     e?.preventDefault?.();
@@ -1038,6 +1040,21 @@ function LeftPanel(props) {
     } catch (err) {
       setPexelsError(err?.message || "Pexels download failed");
     } finally { setPexelsDownloadingId(null); }
+  }
+
+  async function deleteMediaItem() {
+    if (!deleteMediaTarget?.url) return;
+    setDeletingMedia(true);
+    try {
+      const res = await fetch("/api/admin/forms/media", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: deleteMediaTarget.url }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || "Media delete failed");
+      setMedia?.(normalizeMediaList(data.mediaList || []));
+      notify({ title: "Media deleted", description: `Removed “${mediaTitle(deleteMediaTarget)}”.`, variant: "success" });
+      setDeleteMediaTarget(null);
+    } catch (err) {
+      notify({ title: "Delete failed", description: err?.message || "Please try again.", variant: "error" });
+    } finally { setDeletingMedia(false); }
   }
 
   if (activeTab === "ai") {
@@ -1152,10 +1169,24 @@ function LeftPanel(props) {
           <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
         </div>
         <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
-          {normalizeMediaList(media).map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
+          {normalizeMediaList(media).map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} onDelete={() => setDeleteMediaTarget(item)} />)}
           {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
         </div>
       </div>
+      <AlertDialog open={Boolean(deleteMediaTarget)} onOpenChange={(open) => { if (!open && !deletingMedia) setDeleteMediaTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete media?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete “{deleteMediaTarget ? mediaTitle(deleteMediaTarget) : "this image"}”? This removes it from the media library and deletes the stored file for local uploads. Existing forms using this image may show a broken preview until you choose another image.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingMedia}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteMediaItem} disabled={deletingMedia} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete media</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={pexelsOpen} onOpenChange={setPexelsOpen}>
         <DialogContent className="!flex h-[88vh] w-[50vw] min-w-[720px] !max-w-[50vw] flex-col overflow-hidden">
           <DialogHeader>
@@ -1314,7 +1345,7 @@ function DraggableDataActionCard({ flow, onApply, disabled = false }) {
   </button>;
 }
 
-function DraggableMediaCard({ item, onTitleCommit }) {
+function DraggableMediaCard({ item, onTitleCommit, onDelete }) {
   const title = mediaTitle(item);
   const [draftTitle, setDraftTitle] = useState(title);
   const [editingOpen, setEditingOpen] = useState(false);
@@ -1357,6 +1388,7 @@ function DraggableMediaCard({ item, onTitleCommit }) {
         <div className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">{mediaDimensionsLabel(item, loadedDimensions)}</div>
         <div className="mt-0.5 truncate text-[11px] leading-tight text-muted-foreground">{mediaSizeLabel(item)}</div>
       </div>
+      <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" title="Delete media" aria-label={`Delete ${title}`} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onDelete?.(); }}><IconTrash className="h-4 w-4" /></Button>
     </div>
   </div>;
 }

@@ -4,7 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
-import { mkdir, readdir, stat, writeFile } from "fs/promises";
+import { mkdir, readdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
@@ -73,6 +73,17 @@ async function readMetadataRows() {
     return [];
   }
 }
+
+async function deleteMetadata(url) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool) return;
+    await pool.query("DELETE FROM form_media_assets WHERE url = $1", [url]);
+  } catch (err) {
+    console.warn("[forms/media] metadata delete failed:", err?.message || err);
+  }
+}
+
 async function upsertMetadata({ filename, url, title, displayName, contentType, size }) {
   const pool = getPostgresPool();
   if (!pool) return null;
@@ -156,4 +167,26 @@ export async function PATCH(request) {
   } catch (err) {
     return NextResponse.json({ error: err?.message || "Metadata update failed" }, { status: 500 });
   }
+}
+
+export async function DELETE(request) {
+  const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const body = await request.json().catch(() => ({}));
+  const url = String(body.url || "").trim();
+  if (!url) return NextResponse.json({ error: "Media URL is required" }, { status: 400 });
+  const isLocal = url.startsWith(`${PUBLIC_PREFIX}/`);
+  const isRemote = /^https?:\/\//i.test(url);
+  if (!isLocal && !isRemote) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
+
+  const filename = filenameFromUrl(url);
+  if (!filename || filename.includes("..")) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
+  if (isLocal) {
+    const fullPath = path.join(MEDIA_DIR, filename);
+    if (!fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
+    await unlink(fullPath).catch((err) => {
+      if (err?.code !== "ENOENT") throw err;
+    });
+  }
+  await deleteMetadata(url);
+  return NextResponse.json({ ok: true, mediaList: await listFiles() });
 }
