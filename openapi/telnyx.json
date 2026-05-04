@@ -100315,6 +100315,23 @@
           "host": {
             "title": "Host",
             "type": "string"
+          },
+          "prompt_name": {
+            "title": "Prompt Name",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "integer",
+            "minimum": 1.0
+          },
+          "prompt_label": {
+            "title": "Prompt Label",
+            "type": "string"
+          },
+          "prompt_sync": {
+            "$ref": "#/components/schemas/PromptSyncStatus",
+            "default": "disabled"
           }
         },
         "type": "object",
@@ -100337,6 +100354,23 @@
           "host": {
             "title": "Host",
             "type": "string"
+          },
+          "prompt_name": {
+            "title": "Prompt Name",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "integer",
+            "minimum": 1.0
+          },
+          "prompt_label": {
+            "title": "Prompt Label",
+            "type": "string"
+          },
+          "prompt_sync": {
+            "$ref": "#/components/schemas/PromptSyncStatus",
+            "default": "disabled"
           }
         },
         "type": "object",
@@ -107695,6 +107729,15 @@
         "type": "object",
         "description": "High-level metrics summary for a messaging profile.",
         "additionalProperties": true
+      },
+      "PromptSyncStatus": {
+        "type": "string",
+        "enum": [
+          "enabled",
+          "disabled"
+        ],
+        "title": "PromptSyncStatus",
+        "description": "Whether to auto-publish the assistant's instructions as a Langfuse prompt.\n\nWhen ENABLED + prompt_name set, every assistant create/update pushes\n`instructions` to Langfuse via create_prompt and stores the returned\nversion in prompt_version."
       },
       "PronunciationDictAliasItem": {
         "type": "object",
