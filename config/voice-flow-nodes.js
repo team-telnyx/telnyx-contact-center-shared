@@ -3,6 +3,8 @@
  * Based on Telnyx Voice API OpenAPI specification
  */
 
+import { CALL_FLOW_NOISE_SUPPRESSION_ENGINES } from "./voice.js";
+
 export const NODE_CATEGORIES = {
   INITIATOR: "initiator",
   CALL_CONTROL: "call_control",
@@ -684,10 +686,7 @@ export const VOICE_FLOW_NODES = {
         label: "Engine",
         required: false,
         default: "Denoiser",
-        options: [
-          { value: "Denoiser", label: "Denoiser" },
-          { value: "DeepFilterNet", label: "DeepFilterNet" },
-        ],
+        options: CALL_FLOW_NOISE_SUPPRESSION_ENGINES,
         description: "The engine to use for noise suppression",
       },
       attenuation_limit: {
@@ -698,7 +697,7 @@ export const VOICE_FLOW_NODES = {
         min: 0,
         max: 100,
         description:
-          "The attenuation limit for noise suppression (0-100). Only applicable for DeepFilterNet engine.",
+          "The attenuation limit for noise suppression (0-100). Applicable for engines that support attenuation/suppression levels (for example DeepFilterNet and Krisp).",
       },
       client_state: {
         type: "string",

@@ -14,9 +14,16 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { IconKey } from "@tabler/icons-react";
 
-// Language code to language name mapping
+import {
+  TRANSCRIPTION_PROVIDERS as VOICE_TRANSCRIPTION_PROVIDERS,
+  AZURE_REGIONS,
+  getDefaultTranscriptionLanguage,
+} from "@/config/voice";
+
+// Language code to language name mapping for common labels. Unknown codes fall back to the raw code.
 const LANGUAGE_NAMES = {
-  // Common languages
+  auto: "Auto Detect",
+  auto_detect: "Auto Detect",
   en: "English",
   "en-US": "English (United States)",
   "en-GB": "English (United Kingdom)",
@@ -51,9 +58,6 @@ const LANGUAGE_NAMES = {
   "sv-SE": "Swedish (Sweden)",
   pl: "Polish",
   tr: "Turkish",
-  el: "Greek",
-  he: "Hebrew",
-  iw: "Hebrew",
   th: "Thai",
   "th-TH": "Thai (Thailand)",
   vi: "Vietnamese",
@@ -77,483 +81,90 @@ const LANGUAGE_NAMES = {
   uk: "Ukrainian",
   ca: "Catalan",
   yue: "Cantonese",
-  // Additional languages
-  af: "Afrikaans",
-  "af-ZA": "Afrikaans (South Africa)",
-  sq: "Albanian",
-  am: "Amharic",
-  "am-ET": "Amharic (Ethiopia)",
-  hy: "Armenian",
-  az: "Azerbaijani",
-  eu: "Basque",
-  bn: "Bengali",
-  bs: "Bosnian",
-  my: "Burmese",
   fil: "Filipino",
-  gl: "Galician",
-  ka: "Georgian",
-  gu: "Gujarati",
-  is: "Icelandic",
-  jv: "Javanese",
-  kn: "Kannada",
-  kk: "Kazakh",
-  km: "Khmer",
-  lo: "Lao",
-  la: "Latin",
-  mk: "Macedonian",
-  ml: "Malayalam",
-  mr: "Marathi",
-  mi: "Maori",
-  mn: "Mongolian",
-  ne: "Nepali",
   fa: "Persian",
-  pa: "Punjabi",
-  si: "Sinhala",
-  ss: "Swati",
-  st: "Southern Sotho",
-  su: "Sundanese",
-  sw: "Swahili",
-  ta: "Tamil",
-  te: "Telugu",
-  tn: "Tswana",
-  ts: "Tsonga",
-  ur: "Urdu",
-  uz: "Uzbek",
-  ve: "Venda",
-  xh: "Xhosa",
-  zu: "Zulu",
-  be: "Belarusian",
-  br: "Breton",
-  cy: "Welsh",
-  fo: "Faroese",
-  ht: "Haitian Creole",
-  lb: "Luxembourgish",
-  mt: "Maltese",
-  nn: "Norwegian Nynorsk",
-  oc: "Occitan",
-  ps: "Pashto",
-  sa: "Sanskrit",
-  sd: "Sindhi",
-  sn: "Shona",
-  so: "Somali",
-  tg: "Tajik",
-  tk: "Turkmen",
-  tl: "Tagalog",
-  tt: "Tatar",
-  yi: "Yiddish",
-  yo: "Yoruba",
-  bo: "Tibetan",
-  as: "Assamese",
-  mg: "Malagasy",
-  ga: "Irish",
-  nb: "Norwegian Bokmål",
-  wuu: "Wu Chinese",
-  auto: "Auto Detect",
-  auto_detect: "Auto Detect",
+  he: "Hebrew",
 };
 
-// Provider configurations
 const TRANSCRIPTION_PROVIDERS = [
-  { value: "Google", label: "Google" },
-  { value: "Telnyx", label: "Telnyx" },
+  { value: "Telnyx", label: "Telnyx / OpenAI / Distil-Whisper" },
   { value: "Deepgram", label: "Deepgram" },
   { value: "Azure", label: "Azure" },
+  { value: "AssemblyAI", label: "AssemblyAI" },
+  { value: "xAI", label: "xAI" },
+  { value: "Google", label: "Google (legacy)" },
 ];
 
-// Models per provider
-const PROVIDER_MODELS = {
-  Google: [
-    { value: "latest_long", label: "Latest Long" },
-    { value: "latest_short", label: "Latest Short" },
-    { value: "command_and_search", label: "Command and Search" },
-    { value: "phone_call", label: "Phone Call" },
-    { value: "video", label: "Video" },
-    { value: "default", label: "Default" },
-    { value: "medical_conversation", label: "Medical Conversation" },
-    { value: "medical_dictation", label: "Medical Dictation" },
-  ],
-  Telnyx: [
-    { value: "openai/whisper-tiny", label: "Whisper Tiny" },
-    { value: "openai/whisper-large-v3-turbo", label: "Whisper Large V3 Turbo" },
-  ],
-  Deepgram: [
-    { value: "deepgram/nova-2", label: "Nova 2" },
-    { value: "deepgram/nova-3", label: "Nova 3" },
-  ],
-};
-
-// Languages per provider/model
-const PROVIDER_LANGUAGES = {
-  Google: [
-    "af",
-    "sq",
-    "am",
-    "ar",
-    "hy",
-    "az",
-    "eu",
-    "bn",
-    "bs",
-    "bg",
-    "my",
-    "ca",
-    "yue",
-    "zh",
-    "hr",
-    "cs",
-    "da",
-    "nl",
-    "en",
-    "et",
-    "fil",
-    "fi",
-    "fr",
-    "gl",
-    "ka",
-    "de",
-    "el",
-    "gu",
-    "iw",
-    "hi",
-    "hu",
-    "is",
-    "id",
-    "it",
-    "ja",
-    "jv",
-    "kn",
-    "kk",
-    "km",
-    "ko",
-    "lo",
-    "lv",
-    "lt",
-    "mk",
-    "ms",
-    "ml",
-    "mr",
-    "mn",
-    "ne",
-    "no",
-    "fa",
-    "pl",
-    "pt",
-    "pa",
-    "ro",
-    "ru",
-    "rw",
-    "sr",
-    "si",
-    "sk",
-    "sl",
-    "ss",
-    "st",
-    "es",
-    "su",
-    "sw",
-    "sv",
-    "ta",
-    "te",
-    "th",
-    "tn",
-    "tr",
-    "ts",
-    "uk",
-    "ur",
-    "uz",
-    "ve",
-    "vi",
-    "xh",
-    "zu",
-  ],
-  Telnyx: [
-    "en",
-    "zh",
-    "de",
-    "es",
-    "ru",
-    "ko",
-    "fr",
-    "ja",
-    "pt",
-    "tr",
-    "pl",
-    "ca",
-    "nl",
-    "ar",
-    "sv",
-    "it",
-    "id",
-    "hi",
-    "fi",
-    "vi",
-    "he",
-    "uk",
-    "el",
-    "ms",
-    "cs",
-    "ro",
-    "da",
-    "hu",
-    "ta",
-    "no",
-    "th",
-    "ur",
-    "hr",
-    "bg",
-    "lt",
-    "la",
-    "mi",
-    "ml",
-    "cy",
-    "sk",
-    "te",
-    "fa",
-    "lv",
-    "bn",
-    "sr",
-    "az",
-    "sl",
-    "kn",
-    "et",
-    "mk",
-    "br",
-    "eu",
-    "is",
-    "hy",
-    "ne",
-    "mn",
-    "bs",
-    "kk",
-    "sq",
-    "sw",
-    "gl",
-    "mr",
-    "pa",
-    "si",
-    "km",
-    "sn",
-    "yo",
-    "so",
-    "af",
-    "oc",
-    "ka",
-    "be",
-    "tg",
-    "sd",
-    "gu",
-    "am",
-    "yi",
-    "lo",
-    "uz",
-    "fo",
-    "ht",
-    "ps",
-    "tk",
-    "nn",
-    "mt",
-    "sa",
-    "lb",
-    "my",
-    "bo",
-    "tl",
-    "mg",
-    "as",
-    "tt",
-  ],
-  "Deepgram-nova-2": [
-    "bg",
-    "ca",
-    "zh",
-    "zh-CN",
-    "zh-Hans",
-    "zh-TW",
-    "zh-Hant",
-    "zh-HK",
-    "cs",
-    "da",
-    "da-DK",
-    "nl",
-    "en",
-    "en-US",
-    "en-AU",
-    "en-GB",
-    "en-NZ",
-    "en-IN",
-    "et",
-    "fi",
-    "nl-BE",
-    "fr",
-    "fr-CA",
-    "de",
-    "de-CH",
-    "el",
-    "hi",
-    "hu",
-    "id",
-    "it",
-    "ja",
-    "ko",
-    "ko-KR",
-    "lv",
-    "lt",
-    "ms",
-    "no",
-    "pl",
-    "pt",
-    "pt-BR",
-    "pt-PT",
-    "ro",
-    "ru",
-    "sk",
-    "es",
-    "es-419",
-    "sv",
-    "sv-SE",
-    "th",
-    "th-TH",
-    "tr",
-    "uk",
-    "vi",
-    "auto_detect",
-  ],
-  "Deepgram-nova-3": [
-    "en",
-    "en-US",
-    "en-AU",
-    "en-GB",
-    "en-IN",
-    "en-NZ",
-    "de",
-    "nl",
-    "sv",
-    "sv-SE",
-    "da",
-    "da-DK",
-    "es",
-    "es-419",
-    "fr",
-    "fr-CA",
-    "pt",
-    "pt-BR",
-    "pt-PT",
-    "auto_detect",
-  ],
-  Azure: [
-    "af",
-    "am",
-    "ar",
-    "bg",
-    "bn",
-    "bs",
-    "ca",
-    "cs",
-    "cy",
-    "da",
-    "de",
-    "el",
-    "en",
-    "es",
-    "et",
-    "eu",
-    "fa",
-    "fi",
-    "fr",
-    "ga",
-    "gl",
-    "gu",
-    "he",
-    "hi",
-    "hr",
-    "hu",
-    "hy",
-    "id",
-    "is",
-    "it",
-    "ja",
-    "ka",
-    "kk",
-    "km",
-    "kn",
-    "ko",
-    "lo",
-    "lt",
-    "lv",
-    "mk",
-    "ml",
-    "mn",
-    "mr",
-    "ms",
-    "mt",
-    "my",
-    "nb",
-    "ne",
-    "nl",
-    "pl",
-    "ps",
-    "pt",
-    "ro",
-    "ru",
-    "si",
-    "sk",
-    "sl",
-    "so",
-    "sq",
-    "sr",
-    "sv",
-    "sw",
-    "ta",
-    "te",
-    "th",
-    "tr",
-    "uk",
-    "ur",
-    "uz",
-    "vi",
-    "wuu",
-    "yue",
-    "zh",
-    "zu",
-    "auto",
-  ],
-};
-
-// Azure regions
-const AZURE_REGIONS = [
-  { value: "australiaeast", label: "Australia East" },
-  { value: "centralindia", label: "Central India" },
-  { value: "eastus", label: "East US" },
-  { value: "northcentralus", label: "North Central US" },
-  { value: "westeurope", label: "West Europe" },
-  { value: "westus2", label: "West US 2" },
+const GOOGLE_MODELS = [
+  { value: "latest_long", label: "Latest Long" },
+  { value: "latest_short", label: "Latest Short" },
+  { value: "command_and_search", label: "Command and Search" },
+  { value: "phone_call", label: "Phone Call" },
+  { value: "video", label: "Video" },
+  { value: "default", label: "Default" },
+  { value: "medical_conversation", label: "Medical Conversation" },
+  { value: "medical_dictation", label: "Medical Dictation" },
 ];
+
+const GOOGLE_LANGUAGES = ["auto", "en", "es", "fr", "de", "it", "pt", "pl"];
+
+function getEngineForModel(modelName) {
+  const provider = VOICE_TRANSCRIPTION_PROVIDERS.find((p) => p.model_name === modelName);
+  switch (provider?.provider) {
+    case "deepgram":
+      return "Deepgram";
+    case "azure":
+      return "Azure";
+    case "assemblyai":
+      return "AssemblyAI";
+    case "xai":
+      return "xAI";
+    case "openai":
+    case "distil-whisper":
+    case "telnyx":
+      return "Telnyx";
+    default:
+      return "Telnyx";
+  }
+}
+
+function getModelsForProvider(provider) {
+  if (provider === "Google") return GOOGLE_MODELS;
+  return VOICE_TRANSCRIPTION_PROVIDERS
+    .filter((p) => getEngineForModel(p.model_name) === provider)
+    .map((p) => ({ value: p.model_name, label: p.label || p.model_name }));
+}
 
 function getLanguagesForProviderModel(provider, model) {
-  if (provider === "Deepgram") {
-    if (model === "deepgram/nova-3") {
-      return PROVIDER_LANGUAGES["Deepgram-nova-3"];
-    }
-    return PROVIDER_LANGUAGES["Deepgram-nova-2"];
-  }
-  return PROVIDER_LANGUAGES[provider] || [];
+  if (provider === "Google") return GOOGLE_LANGUAGES;
+  const found = VOICE_TRANSCRIPTION_PROVIDERS.find((p) => p.model_name === model);
+  return found?.languages || [];
+}
+
+function coerceCurrentModelIntoOptions(provider, model, models) {
+  if (!model || models.some((m) => m.value === model)) return models;
+  return [{ value: model, label: `${model} (saved value)` }, ...models];
 }
 
 export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Read from transcription_engine_config first (new structure), then fall back to flat structure (backward compatibility)
   const engineConfig = config.transcription_engine_config || {};
-  const initialProvider = config.transcription_engine || "Google";
+  const savedModel = engineConfig.transcription_model || config.transcription_model || "";
+  const initialProvider = config.transcription_engine || (savedModel ? getEngineForModel(savedModel) : "Telnyx");
 
   // Determine initial model based on provider
   let initialModel = "";
   if (initialProvider === "Google") {
     initialModel = engineConfig.model || config.model || "";
-  } else if (initialProvider === "Telnyx" || initialProvider === "Deepgram") {
-    initialModel =
-      engineConfig.transcription_model || config.transcription_model || "";
+  } else {
+    initialModel = savedModel;
   }
 
   // Determine initial language
-  const initialLanguage = engineConfig.language || config.language || "en";
+  const initialLanguage =
+    engineConfig.language ||
+    config.language ||
+    getDefaultTranscriptionLanguage(initialModel || "deepgram/nova-2", "en");
 
   const [provider, setProvider] = useState(initialProvider);
   const [model, setModel] = useState(initialModel);
@@ -624,8 +235,12 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
 
   // Get available models for current provider
   const availableModels = useMemo(() => {
-    return PROVIDER_MODELS[provider] || [];
-  }, [provider]);
+    return coerceCurrentModelIntoOptions(
+      provider,
+      model,
+      getModelsForProvider(provider)
+    );
+  }, [provider, model]);
 
   // Get available languages for current provider/model
   const availableLanguages = useMemo(() => {
@@ -650,8 +265,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const currentProvider = config.transcription_engine;
     const isGoogle = currentProvider === "Google";
     const isAzure = currentProvider === "Azure";
-    const isTelnyx = currentProvider === "Telnyx";
-    const isDeepgram = currentProvider === "Deepgram";
 
     if (currentProvider && currentProvider !== provider) {
       setProvider(currentProvider);
@@ -661,7 +274,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     if (isGoogle) {
       const newModel = engineConfig.model || config.model || "";
       setModel(newModel);
-    } else if (isTelnyx || isDeepgram) {
+    } else {
       const newModel =
         engineConfig.transcription_model || config.transcription_model || "";
       setModel(newModel);
@@ -784,21 +397,11 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       delete newConfig.language;
       delete newConfig.region;
       delete newConfig.api_key_ref;
-    } else if (currentProvider === "Telnyx") {
-      // Telnyx: transcription_engine_config with transcription_engine, transcription_model, and language
+    } else {
+      // Telnyx, Deepgram, AssemblyAI and xAI share the transcription_model shape.
       newConfig.transcription_engine_config = {
-        transcription_engine: "Telnyx",
+        transcription_engine: currentProvider,
         ...(currentModel && { transcription_model: currentModel }),
-        ...(currentLanguage && { language: currentLanguage }),
-      };
-      // Remove flat params from top level
-      delete newConfig.transcription_model;
-      delete newConfig.language;
-    } else if (currentProvider === "Deepgram") {
-      // Deepgram: transcription_engine_config with transcription_engine, transcription_model (required), and language
-      newConfig.transcription_engine_config = {
-        transcription_engine: "Deepgram",
-        transcription_model: currentModel || "deepgram/nova-2", // Required field, use default if not set
         ...(currentLanguage && { language: currentLanguage }),
       };
       // Remove flat params from top level
@@ -815,7 +418,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Update config when provider changes
   const handleProviderChangeInternal = (newProvider) => {
     // Set default model for the provider (if provider has models)
-    const models = PROVIDER_MODELS[newProvider] || [];
+    const models = getModelsForProvider(newProvider);
     const newModel = models.length > 0 ? models[0].value : "";
 
     // Reset Azure region to default when switching to Azure
@@ -826,9 +429,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const langs = getLanguagesForProviderModel(newProvider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : langs.includes("en")
-      ? "en"
-      : langs[0] || "en";
+      : getDefaultTranscriptionLanguage(newModel, "en");
 
     // Update state
     setProvider(newProvider);
@@ -855,9 +456,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const langs = getLanguagesForProviderModel(provider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : langs.includes("en")
-      ? "en"
-      : langs[0];
+      : getDefaultTranscriptionLanguage(newModel, "en");
 
     // Update state
     setModel(newModel);

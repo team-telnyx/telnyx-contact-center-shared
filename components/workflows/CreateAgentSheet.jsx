@@ -50,7 +50,13 @@ import {
   IconCircleX,
   IconPhoneCall,
 } from "@tabler/icons-react";
-import { TRANSCRIPTION_PROVIDERS, AZURE_REGIONS } from "@/config/voice";
+import {
+  TRANSCRIPTION_PROVIDERS,
+  AZURE_REGIONS,
+  NOISE_SUPPRESSION_PROVIDERS,
+  getDefaultTranscriptionLanguage,
+  getNoiseSuppressionConfigDefaults,
+} from "@/config/voice";
 
 // Helper functions for language filtering
 function normalizeLocaleCode(code) {
@@ -191,7 +197,7 @@ export default function CreateAgentSheet({
   
   // Noise suppression
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
-  const [noiseSuppressionEngine, setNoiseSuppressionEngine] = useState("krisp");
+  const [noiseSuppressionEngine, setNoiseSuppressionEngine] = useState("aicoustics");
   
   // Agent name (defaults to workflow name)
   const [agentName, setAgentName] = useState("");
@@ -207,11 +213,6 @@ export default function CreateAgentSheet({
   const [loadingCallFlows, setLoadingCallFlows] = useState(false);
   const [selectedCallFlowId, setSelectedCallFlowId] = useState("");
   
-  const NOISE_SUPPRESSION_ENGINES = [
-    { value: "krisp", label: "Krisp (Recommended)" },
-    { value: "deepfilternet", label: "DeepFilterNet" },
-  ];
-
   // Check if ElevenLabs is selected
   const isElevenLabs = ttsProvider?.toLowerCase() === "elevenlabs";
   
@@ -231,8 +232,9 @@ export default function CreateAgentSheet({
       setTtsVoice(DEFAULT_TTS_VOICE);
       setTtsLanguageFilter("");
       setSttModel("deepgram/nova-2");
-      setSttLanguage("auto");
+      setSttLanguage(getDefaultTranscriptionLanguage("deepgram/nova-2"));
       setSttAzureRegion("westeurope");
+      setNoiseSuppressionEngine("aicoustics");
       setSelectedCallFlowId("");
       setCreationSteps([
         { id: "assistant", label: "Create AI Assistant", status: "pending" },
@@ -655,6 +657,10 @@ export default function CreateAgentSheet({
         transcriptionConfig.region = sttAzureRegion;
       }
 
+      const noiseSuppressionConfig = noiseSuppressionEnabled
+        ? getNoiseSuppressionConfigDefaults(noiseSuppressionEngine)
+        : undefined;
+
       // Generate a professional greeting based on workflow name
       const workflowTitle = workflow?.name || "AI Assistant";
       const greeting = `Hello! I'm your AI assistant for ${workflowTitle}. How may I help you today?`;
@@ -671,6 +677,9 @@ export default function CreateAgentSheet({
           supports_unauthenticated_web_calls: true,
           recording_settings: { channels: "dual", format: "mp3" },
           noise_suppression: noiseSuppressionEnabled ? noiseSuppressionEngine : "disabled",
+          ...(noiseSuppressionConfig && {
+            noise_suppression_config: noiseSuppressionConfig,
+          }),
         },
         silence_timeout_ms: 500,
         max_silence_count: 2,
@@ -1181,15 +1190,7 @@ export default function CreateAgentSheet({
                             value={sttModel} 
                             onValueChange={(v) => {
                               setSttModel(v);
-                              // Reset language to auto if available, else first language
-                              const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === v);
-                              if (provider?.languages?.includes("auto") || provider?.languages?.includes("auto_detect")) {
-                                setSttLanguage(provider.languages.includes("auto") ? "auto" : "auto_detect");
-                              } else if (provider?.languages?.length > 0) {
-                                setSttLanguage(provider.languages[0]);
-                              } else {
-                                setSttLanguage("");
-                              }
+                              setSttLanguage(getDefaultTranscriptionLanguage(v, ""));
                             }}
                           >
                             <SelectTrigger>
@@ -1329,7 +1330,7 @@ export default function CreateAgentSheet({
                             <SelectValue placeholder="Select engine" />
                           </SelectTrigger>
                           <SelectContent>
-                            {NOISE_SUPPRESSION_ENGINES.map((engine) => (
+                            {NOISE_SUPPRESSION_PROVIDERS.map((engine) => (
                               <SelectItem key={engine.value} value={engine.value}>
                                 {engine.label}
                               </SelectItem>
