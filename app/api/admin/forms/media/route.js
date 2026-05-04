@@ -75,13 +75,9 @@ async function readMetadataRows() {
 }
 
 async function deleteMetadata(url) {
-  try {
-    const pool = getPostgresPool();
-    if (!pool) return;
-    await pool.query("DELETE FROM form_media_assets WHERE url = $1", [url]);
-  } catch (err) {
-    console.warn("[forms/media] metadata delete failed:", err?.message || err);
-  }
+  const pool = getPostgresPool();
+  if (!pool) return;
+  await pool.query("DELETE FROM form_media_assets WHERE url = $1", [url]);
 }
 
 async function upsertMetadata({ filename, url, title, displayName, contentType, size }) {
