@@ -597,7 +597,38 @@ export function FormEditor({ initialForm, isNew = false }) {
     const res = await fetch(`/api/admin/forms/${saved.id}/publish`, { method: "POST" });
     const data = await res.json();
     if (data.ok) { const publishedForm = normalizeFormDefinition(data.form); setForm(publishedForm); initialSavedRef.current = JSON.stringify(publishedForm); setHasUnsavedChanges(false); setMessage("Form published successfully"); notify({ title: "Form published successfully", description: "Form is now published.", variant: "success" }); }
-    else setMessage(data.error || "Publish failed");
+    else { setMessage(data.error || "Publish failed"); notify({ title: "Publish failed", description: data.error || "Please try again.", variant: "error" }); }
+  }
+
+  async function exportJson() {
+    let target = form;
+    if (hasUnsavedChanges) {
+      const saved = await save();
+      if (!saved?.id) return;
+      target = saved;
+    }
+    if (!target?.id) return;
+    try {
+      const res = await fetch(`/api/admin/forms/${target.id}/export`, { cache: "no-store" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Export failed");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `${target.slug || "form"}.json`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notify({ title: "Form exported", description: `Downloaded ${filename}.`, variant: "success" });
+    } catch (err) {
+      notify({ title: "Export failed", description: err.message || "Please try again.", variant: "error" });
+    }
   }
 
   function confirmExit() {
@@ -834,6 +865,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       <div className="flex shrink-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button>
         <Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button>
+        <Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />Export JSON</Button>
         <Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         <Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
       </div>

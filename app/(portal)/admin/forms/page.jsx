@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconArchive, IconPencil, IconPlus, IconWorldUpload } from "@tabler/icons-react";
+import { IconArchive, IconDownload, IconPencil, IconPlus, IconUpload, IconWorldUpload } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
+import { notify } from "@/components/ToastNotify";
 
 function formThemeStyle(theme = {}, base = {}) {
   const pairs = [["primary", "--primary"], ["primaryColor", "--primary"], ["primaryForeground", "--primary-foreground"], ["primaryForegroundColor", "--primary-foreground"], ["background", "--background"], ["backgroundColor", "--background"], ["foreground", "--foreground"], ["textColor", "--foreground"], ["card", "--card"], ["cardColor", "--card"], ["cardForeground", "--card-foreground"], ["border", "--border"], ["borderColor", "--border"], ["accent", "--accent"], ["accentColor", "--accent"], ["accentForeground", "--accent-foreground"], ["muted", "--muted"], ["mutedColor", "--muted"]];
@@ -26,19 +27,19 @@ export default function AdminFormsPage() {
   const router = useRouter();
   const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const importInputRef = useRef(null);
 
   async function load() {
     const res = await fetch("/api/admin/forms?status=all", { cache: "no-store" });
     const data = await res.json();
     if (data.ok) setForms(data.forms || []);
-    else setMessage(data.error || "Failed to load forms");
+    else notify({ title: "Failed to load forms", description: data.error || "Please try again.", variant: "error" });
   }
 
   useEffect(() => { load(); }, []);
 
   async function createForm() {
-    setLoading(true); setMessage("");
+    setLoading(true);
     try {
       const draft = createDefaultForm({ name: "New agent form", slug: `${slugifyFormName("New agent form")}-${Date.now().toString(36)}` });
       const res = await fetch("/api/admin/forms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft) });
@@ -46,7 +47,7 @@ export default function AdminFormsPage() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Failed to create form");
       router.push(`/admin/forms/${data.form.id}`);
     } catch (err) {
-      setMessage(err.message || "Failed to create form");
+      notify({ title: "Failed to create form", description: err.message || "Please try again.", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -54,30 +55,77 @@ export default function AdminFormsPage() {
 
   async function archiveForm(form) {
     if (!window.confirm(`Archive “${form.name}”? It will be hidden from published form lists.`)) return;
-    setLoading(true); setMessage("");
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/forms/${form.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Archive failed");
-      setMessage("Form archived.");
+      notify({ title: "Form archived", description: `“${form.name}” is now archived.`, variant: "success" });
       await load();
     } catch (err) {
-      setMessage(err.message || "Archive failed");
+      notify({ title: "Archive failed", description: err.message || "Please try again.", variant: "error" });
     } finally {
       setLoading(false);
     }
   }
 
   async function publishForm(form) {
-    setLoading(true); setMessage("");
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/forms/${form.id}/publish`, { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Publish failed");
-      setMessage("Form published.");
+      notify({ title: "Form published", description: `“${form.name}” is now published.`, variant: "success" });
       await load();
     } catch (err) {
-      setMessage(err.message || "Publish failed");
+      notify({ title: "Publish failed", description: err.message || "Please try again.", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function exportForm(form) {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/forms/${form.id}/export`, { cache: "no-store" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Export failed");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || `${form.slug || "form"}.json`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notify({ title: "Form exported", description: `Downloaded ${filename}.`, variant: "success" });
+    } catch (err) {
+      notify({ title: "Export failed", description: err.message || "Please try again.", variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function importFormFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setLoading(true);
+    try {
+      const text = await file.text();
+      const bundle = JSON.parse(text);
+      const res = await fetch("/api/admin/forms/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bundle) });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.details?.[0]?.message || data.error || "Import failed");
+      notify({ title: "Form imported", description: `Created “${data.form?.name || "imported form"}” as a draft${data.importedMediaCount ? ` and registered ${data.importedMediaCount} media reference${data.importedMediaCount === 1 ? "" : "s"}` : ""}.`, variant: "success" });
+      await load();
+    } catch (err) {
+      notify({ title: "Import failed", description: err.message || "Please select a valid form JSON export.", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -89,10 +137,12 @@ export default function AdminFormsPage() {
         <h1 className="text-2xl font-semibold">Agent Forms</h1>
         <p className="text-sm text-muted-foreground">Custom queue forms for agent desktop and Agent Assist.</p>
       </div>
-      <Button onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
+      <div className="flex flex-wrap gap-2">
+        <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
+        <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button>
+        <Button onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
+      </div>
     </div>
-
-    {message ? <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">{message}</div> : null}
 
     {forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">No forms yet</h2><p className="mt-1 text-sm text-muted-foreground">Create the first form, then refine it in the visual builder or with the AI agent.</p><Button className="mt-4" onClick={createForm}>Create form</Button></CardContent></Card> : null}
 
@@ -116,6 +166,7 @@ export default function AdminFormsPage() {
         <CardFooter className="flex flex-wrap gap-2 border-t bg-muted/30 p-3">
           <Button size="sm" onClick={() => router.push(`/admin/forms/${form.id}`)}><IconPencil className="h-4 w-4 mr-1" />Edit</Button>
           <Button size="sm" variant="outline" onClick={() => publishForm(form)} disabled={loading || form.status === "published"}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button>
+          <Button size="sm" variant="outline" onClick={() => exportForm(form)} disabled={loading}><IconDownload className="h-4 w-4 mr-1" />Export</Button>
           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => archiveForm(form)} disabled={loading || form.status === "archived"}><IconArchive className="h-4 w-4 mr-1" />Archive</Button>
         </CardFooter>
       </Card>)}
