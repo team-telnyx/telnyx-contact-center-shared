@@ -34,9 +34,10 @@ services:
       - .env
     volumes:
       - ./.env:/app/.env:ro
-      # Persist form/media-library uploads and downloaded Pexels assets across container rebuilds.
-      # The app serves these files via Next.js from /media/* (public/media inside the container).
-      - ./media:/app/public/media
+      # Persist uploaded media files across container restarts and rebuilds.
+      # NOTE: Create this directory on the host before first run:
+      # mkdir -p /home/ubuntu/apps/media
+      - /home/ubuntu/apps/media:/app/public/media
     depends_on:
       postgres:
         condition: service_healthy
