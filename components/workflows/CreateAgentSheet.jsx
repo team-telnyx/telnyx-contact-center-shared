@@ -197,7 +197,7 @@ export default function CreateAgentSheet({
   
   // Noise suppression
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
-  const [noiseSuppressionEngine, setNoiseSuppressionEngine] = useState("aicoustics");
+  const [noiseSuppressionEngine, setNoiseSuppressionEngine] = useState("krisp");
   
   // Agent name (defaults to workflow name)
   const [agentName, setAgentName] = useState("");
@@ -219,6 +219,9 @@ export default function CreateAgentSheet({
   // Check if selected STT model requires Azure region
   const selectedSttProvider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
   const sttRequiresRegion = selectedSttProvider?.requiresRegion === true;
+  const assistantNoiseSuppressionProviders = NOISE_SUPPRESSION_PROVIDERS.filter((engine) =>
+    ["krisp", "deepfilternet"].includes(engine.value)
+  );
 
   // Reset state when sheet opens
   useEffect(() => {
@@ -234,7 +237,7 @@ export default function CreateAgentSheet({
       setSttModel("deepgram/flux");
       setSttLanguage(getDefaultTranscriptionLanguage("deepgram/flux"));
       setSttAzureRegion("westeurope");
-      setNoiseSuppressionEngine("aicoustics");
+      setNoiseSuppressionEngine("krisp");
       setSelectedCallFlowId("");
       setCreationSteps([
         { id: "assistant", label: "Create AI Assistant", status: "pending" },
@@ -1330,7 +1333,7 @@ export default function CreateAgentSheet({
                             <SelectValue placeholder="Select engine" />
                           </SelectTrigger>
                           <SelectContent>
-                            {NOISE_SUPPRESSION_PROVIDERS.map((engine) => (
+                            {assistantNoiseSuppressionProviders.map((engine) => (
                               <SelectItem key={engine.value} value={engine.value}>
                                 {engine.label}
                               </SelectItem>

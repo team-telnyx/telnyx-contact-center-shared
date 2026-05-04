@@ -156,15 +156,17 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   let initialModel = "";
   if (initialProvider === "Google") {
     initialModel = engineConfig.model || config.model || "";
-  } else {
+  } else if (initialProvider === "Deepgram") {
     initialModel = savedModel || "deepgram/flux";
+  } else {
+    initialModel = savedModel;
   }
 
   // Determine initial language
   const initialLanguage =
     engineConfig.language ||
     config.language ||
-    getDefaultTranscriptionLanguage(initialModel || "deepgram/flux", "en");
+    getDefaultTranscriptionLanguage(initialModel || (initialProvider === "Deepgram" ? "deepgram/flux" : ""), "en");
 
   const [provider, setProvider] = useState(initialProvider);
   const [model, setModel] = useState(initialModel);
