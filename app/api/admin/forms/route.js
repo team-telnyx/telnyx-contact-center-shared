@@ -18,6 +18,7 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url); const status = searchParams.get("status"); const q = searchParams.get("q");
   const where = []; const args = []; let i = 1;
   if (status && status !== "all") { where.push(`status = $${i++}`); args.push(status); }
+  else if (status !== "all") { where.push("status <> 'archived'"); }
   if (q) { where.push(`(name ILIKE $${i} OR slug ILIKE $${i} OR description ILIKE $${i})`); args.push(`%${q}%`); i++; }
   const { rows } = await pool.query(`SELECT * FROM form_definitions ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY updated_at DESC`, args);
   return NextResponse.json({ ok: true, forms: rows.map(mapRow), count: rows.length });

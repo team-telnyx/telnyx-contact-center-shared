@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
 import { notify } from "@/components/ToastNotify";
@@ -73,13 +74,17 @@ export default function AdminFormsPage() {
   const [formsLoading, setFormsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
   const importInputRef = useRef(null);
 
   async function load({ showSkeleton = false, showRefreshing = false, showSuccessToast = false } = {}) {
     if (showSkeleton) setFormsLoading(true);
     if (showRefreshing) setRefreshing(true);
     try {
-      const res = await fetch("/api/admin/forms?status=all", { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (showArchived) params.set("status", "all");
+      const query = params.toString();
+      const res = await fetch(`/api/admin/forms${query ? `?${query}` : ""}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Please try again.");
       setForms(data.forms || []);
@@ -92,7 +97,7 @@ export default function AdminFormsPage() {
     }
   }
 
-  useEffect(() => { load({ showSkeleton: true }); }, []);
+  useEffect(() => { load({ showSkeleton: true }); }, [showArchived]);
 
   async function createForm() {
     setLoading(true);
@@ -214,7 +219,11 @@ export default function AdminFormsPage() {
         <h1 className="text-2xl font-semibold">Agent Forms</h1>
         <p className="text-sm text-muted-foreground">Custom queue forms for agent desktop and Agent Assist.</p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+          <Switch id="show-archived-forms" checked={showArchived} onCheckedChange={setShowArchived} disabled={formsLoading || refreshing} />
+          <label htmlFor="show-archived-forms" className="text-sm font-medium leading-none">Show Archived</label>
+        </div>
         <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
         <Button variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
         <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button>
@@ -226,7 +235,7 @@ export default function AdminFormsPage() {
       {Array.from({ length: 6 }).map((_, index) => <FormCardSkeleton key={index} />)}
     </div> : null}
 
-    {!formsLoading && forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">No forms yet</h2><p className="mt-1 text-sm text-muted-foreground">Create the first form, then refine it in the visual builder or with the AI agent.</p><Button className="mt-4" onClick={createForm}>Create form</Button></CardContent></Card> : null}
+    {!formsLoading && forms.length === 0 ? <Card><CardContent className="p-10 text-center"><h2 className="font-medium">{showArchived ? "No forms yet" : "No active forms"}</h2><p className="mt-1 text-sm text-muted-foreground">{showArchived ? "Create the first form, then refine it in the visual builder or with the AI agent." : "Archived forms are hidden by default. Enable Show Archived to include them."}</p><Button className="mt-4" onClick={createForm}>Create form</Button></CardContent></Card> : null}
 
     {!formsLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {forms.map((form) => <Card key={form.id} className="overflow-hidden flex flex-col">
