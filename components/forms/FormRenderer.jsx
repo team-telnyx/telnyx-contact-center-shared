@@ -50,6 +50,8 @@ function textSizeClass(value) { return ({ sm: "text-sm", md: "text-base", lg: "t
 function alignClass(value) { return ({ left: "text-left", center: "text-center", right: "text-right" }[value || "left"] || "text-left"); }
 function fieldStyle(field) { return field.props?.color ? { color: field.props.color } : undefined; }
 function badgeStyle(field) { return field.props?.color ? { color: field.props.color, borderColor: field.props.color } : undefined; }
+function switchColorProps(field = {}) { const props = field.props || {}; return { checkedTrackColor: props.switchActiveTrackColor || undefined, thumbColor: props.switchThumbColor || undefined }; }
+function sliderColorProps(field = {}) { const props = field.props || {}; return { rangeColor: props.sliderRangeColor || undefined, thumbColor: props.sliderThumbColor || undefined, trackColor: props.sliderTrackColor || undefined }; }
 function sliderNumber(value, fallback = 0) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
 function clampNumber(value, min, max) { return Math.min(Math.max(value, min), max); }
 function booleanValue(value) { if (typeof value === "boolean") return value; if (typeof value === "number") return value !== 0; if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.toLowerCase()); return Boolean(value); }
@@ -204,7 +206,7 @@ function SliderField({ field, value, readOnly, setValue }) {
   const step = rawStep > 0 ? rawStep : 1;
   const numericValue = clampNumber(sliderNumber(value, min), min, max);
   const sliderValue = useMemo(() => [numericValue], [numericValue]);
-  return <div className="space-y-2"><Slider value={sliderValue} min={min} max={max} step={step} disabled={readOnly} onValueChange={(next) => setValue(field.id, clampNumber(sliderNumber(next?.[0], min), min, max))} /><div className="flex justify-between text-xs text-muted-foreground"><span>{min}</span><span className="font-medium text-foreground">{numericValue}</span><span>{max}</span></div></div>;
+  return <div className="space-y-2"><Slider value={sliderValue} min={min} max={max} step={step} disabled={readOnly} {...sliderColorProps(field)} onValueChange={(next) => setValue(field.id, clampNumber(sliderNumber(next?.[0], min), min, max))} /><div className="flex justify-between text-xs text-muted-foreground"><span>{min}</span><span className="font-medium text-foreground">{numericValue}</span><span>{max}</span></div></div>;
 }
 
 export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit, submitting = false, readOnly = false }) {
@@ -235,7 +237,7 @@ export function FormRenderer({ form, initialValues = {}, context = {}, onSubmit,
       <Label htmlFor={field.id} style={fieldStyle(field)} className={field.props?.bold ? "font-bold" : ""}>{field.label}{field.required ? <span className="text-destructive"> *</span> : null}</Label>
       {field.type === "textarea" && <Textarea id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "text" && <Input id={field.id} value={value} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
-      {field.type === "switch" && (() => { const checked = booleanValue(value); return <div className="flex items-center gap-3"><Switch id={field.id} checked={checked} disabled={readOnly} onCheckedChange={(nextChecked) => setValue(field.id, Boolean(nextChecked))} /><span className="text-sm text-muted-foreground">{checked ? (field.props?.onText || "On") : (field.props?.offText || "Off")}</span></div>; })()}
+      {field.type === "switch" && (() => { const checked = booleanValue(value); return <div className="flex items-center gap-3"><Switch id={field.id} checked={checked} disabled={readOnly} {...switchColorProps(field)} onCheckedChange={(nextChecked) => setValue(field.id, Boolean(nextChecked))} /><span className="text-sm text-muted-foreground">{checked ? (field.props?.onText || "On") : (field.props?.offText || "Off")}</span></div>; })()}
       {field.type === "slider" && <SliderField field={field} value={value} readOnly={readOnly} setValue={setValue} />}
       {field.type === "datetime" && <Input id={field.id} type={dateInputType(field.props?.mode)} value={String(value ?? "")} placeholder={field.placeholder} disabled={readOnly} onChange={(e) => setValue(field.id, e.target.value)} />}
       {field.type === "select" && <Select value={String(value || "")} disabled={readOnly} onValueChange={(v) => setValue(field.id, v)}><SelectTrigger><SelectValue placeholder={field.placeholder || "Select..."} /></SelectTrigger><SelectContent>{normalizeOptions(field.options || [], field.id).map((o, index) => <SelectItem key={optionKey(o, field.id, index)} value={String(o.value)}>{o.label || o.value}</SelectItem>)}</SelectContent></Select>}
