@@ -31,6 +31,14 @@ Each model was tested with plain `response_format: { type: "json_object" }` and 
 | `openai/gpt-5.5` | 0/6 | 0/3 | 0/3 | 0 | Blocked: Telnyx returned `model openai/gpt-5.5 could not be found.` |
 | `openai/gpt-5.2` | 3/6 | 3/3 | 0/3 | 48 | `json_object` mode produced the highest-quality complex form (61 fields, 5 pages, 2 data-action buttons). Guided mode failed because upstream OpenAI rejected `guided_json`. |
 
+## GPT-5.5 retest addendum (2026-05-04 11:45 CEST)
+
+Retested `openai/gpt-5.5` through Telnyx Chat Completions only using `scripts/test-form-ai-models.mjs --models=openai/gpt-5.5` against the same simple/medium/complex prompts and both `json_object` and `guided_json` modes.
+
+Result: **still unavailable** for this Telnyx account. All 6 calls returned HTTP 404 with the exact error: `model openai/gpt-5.5 could not be found.` Valid outputs: `0/6`, average score: `0`.
+
+Comparison remains unchanged: there is no measurable GPT-5.5 improvement yet because Telnyx does not expose that model identifier here. `meta-llama/Llama-3.3-70B-Instruct` remains the most reliable (`6/6`, avg. `95`), while `openai/gpt-5.2` remains the best GPT-family option observed through Telnyx (`3/6`, avg. `48`, strong unguided `json_object`, unsupported `guided_json`).
+
 ## Recommendation
 
 - **Best overall for reliable valid JSON across both modes:** `meta-llama/Llama-3.3-70B-Instruct`.
