@@ -150,21 +150,21 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Read from transcription_engine_config first (new structure), then fall back to flat structure (backward compatibility)
   const engineConfig = config.transcription_engine_config || {};
   const savedModel = engineConfig.transcription_model || config.transcription_model || "";
-  const initialProvider = config.transcription_engine || (savedModel ? getEngineForModel(savedModel) : "Telnyx");
+  const initialProvider = config.transcription_engine || (savedModel ? getEngineForModel(savedModel) : "Deepgram");
 
   // Determine initial model based on provider
   let initialModel = "";
   if (initialProvider === "Google") {
     initialModel = engineConfig.model || config.model || "";
   } else {
-    initialModel = savedModel;
+    initialModel = savedModel || "deepgram/flux";
   }
 
   // Determine initial language
   const initialLanguage =
     engineConfig.language ||
     config.language ||
-    getDefaultTranscriptionLanguage(initialModel || "deepgram/nova-2", "en");
+    getDefaultTranscriptionLanguage(initialModel || "deepgram/flux", "en");
 
   const [provider, setProvider] = useState(initialProvider);
   const [model, setModel] = useState(initialModel);

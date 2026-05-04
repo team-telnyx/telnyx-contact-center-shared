@@ -189,7 +189,7 @@ export default function CreateAgentSheet({
   const [elevenLabsApiKeyRef, setElevenLabsApiKeyRef] = useState("");
   
   // STT settings - using TRANSCRIPTION_PROVIDERS from config
-  const [sttModel, setSttModel] = useState("deepgram/nova-2");
+  const [sttModel, setSttModel] = useState("deepgram/flux");
   const [sttLanguage, setSttLanguage] = useState("auto");
   const [sttLanguageSearch, setSttLanguageSearch] = useState("");
   const [sttLanguagePopoverOpen, setSttLanguagePopoverOpen] = useState(false);
@@ -231,8 +231,8 @@ export default function CreateAgentSheet({
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
       setTtsLanguageFilter("");
-      setSttModel("deepgram/nova-2");
-      setSttLanguage(getDefaultTranscriptionLanguage("deepgram/nova-2"));
+      setSttModel("deepgram/flux");
+      setSttLanguage(getDefaultTranscriptionLanguage("deepgram/flux"));
       setSttAzureRegion("westeurope");
       setNoiseSuppressionEngine("aicoustics");
       setSelectedCallFlowId("");

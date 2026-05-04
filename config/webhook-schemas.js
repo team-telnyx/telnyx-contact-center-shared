@@ -1447,7 +1447,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     stt_model: {
       type: "string",
       description: "The speech-to-text model used in the conversation.",
-      example: "distil-whisper/distil-large-v2",
+      example: "deepgram/flux",
     },
     tts_provider: {
       type: "string",
