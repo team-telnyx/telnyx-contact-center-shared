@@ -6,6 +6,7 @@ import { IconArchive, IconDownload, IconPencil, IconPlus, IconRefresh, IconUploa
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { createDefaultForm, slugifyFormName } from "@/lib/forms/form-schema";
@@ -71,6 +72,7 @@ export default function AdminFormsPage() {
   const [loading, setLoading] = useState(false);
   const [formsLoading, setFormsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState(null);
   const importInputRef = useRef(null);
 
   async function load({ showSkeleton = false, showRefreshing = false, showSuccessToast = false } = {}) {
@@ -108,13 +110,19 @@ export default function AdminFormsPage() {
   }
 
   async function archiveForm(form) {
-    if (!window.confirm(`Archive “${form.name}”? It will be hidden from published form lists.`)) return;
+    setArchiveTarget(form);
+  }
+
+  async function confirmArchiveForm() {
+    if (!archiveTarget) return;
+    const form = archiveTarget;
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/forms/${form.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Archive failed");
       notify({ title: "Form archived", description: `“${form.name}” is now archived.`, variant: "success" });
+      setArchiveTarget(null);
       await load();
     } catch (err) {
       notify({ title: "Archive failed", description: err.message || "Please try again.", variant: "error" });
@@ -186,6 +194,21 @@ export default function AdminFormsPage() {
   }
 
   return <div className="container mx-auto p-6 space-y-6">
+    <AlertDialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open && !loading) setArchiveTarget(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Archive form?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Archive “{archiveTarget?.name || "this form"}”? It will be hidden from published form lists, but can still be restored from archived records.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmArchiveForm} disabled={loading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Archive form</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 className="text-2xl font-semibold">Agent Forms</h1>
