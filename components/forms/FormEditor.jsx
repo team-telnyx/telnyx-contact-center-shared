@@ -164,8 +164,25 @@ function blockIcon(type) { return BLOCK_ICONS[type] || IconBlocks; }
 function blockGroup(type) { return BLOCK_GROUPS.find((group) => group.items.includes(type)); }
 function blockBadgeClass(type) { return BLOCK_GROUP_BADGE_CLASS[blockGroup(type)?.title] || "border-slate-400 text-slate-600 dark:text-slate-300"; }
 function blockLabel(type) { return FORM_COMPONENT_REGISTRY[type]?.label || type; }
-function mediaTitle(item = {}) { return item.title || item.display_name || item.displayName || String(item.name || item.filename || item.url || "Image").replace(/\.[^.]+$/, ""); }
-function mediaFilename(item = {}) { return String(item.filename || item.name || item.url || "").split("/").pop(); }
+function mediaUrl(item = {}) { return String(item.url || item.src || item.publicUrl || item.public_url || item.path || item.href || item.metadata?.url || item.metadata?.src || "").trim(); }
+function normalizeMediaItem(item = {}) {
+  const url = mediaUrl(item);
+  if (!url) return null;
+  const filename = String(item.filename || item.name || item.fileName || item.display_name || url).split("?")[0].split("/").pop() || url;
+  const title = item.title || item.display_name || item.displayName || String(filename || url || "Image").replace(/\.[^.]+$/, "");
+  const contentType = item.content_type || item.contentType || item.mime_type || item.mimeType || item.metadata?.content_type || item.metadata?.contentType || "";
+  return { ...item, url, src: url, filename, name: item.name || filename, title, display_name: item.display_name || item.displayName || title, displayName: item.displayName || item.display_name || title, content_type: contentType, contentType, size: item.size || item.size_bytes || item.metadata?.size || item.metadata?.size_bytes || 0, size_bytes: item.size_bytes || item.size || item.metadata?.size_bytes || item.metadata?.size || 0 };
+}
+function normalizeMediaList(rows = []) {
+  const seen = new Set();
+  return (Array.isArray(rows) ? rows : []).map(normalizeMediaItem).filter((item) => {
+    if (!item?.url || seen.has(item.url)) return false;
+    seen.add(item.url);
+    return true;
+  });
+}
+function mediaTitle(item = {}) { const normalized = normalizeMediaItem(item) || item; return normalized.title || normalized.display_name || normalized.displayName || String(normalized.name || normalized.filename || mediaUrl(normalized) || "Image").replace(/\.[^.]+$/, ""); }
+function mediaFilename(item = {}) { const normalized = normalizeMediaItem(item) || item; return String(normalized.filename || normalized.name || mediaUrl(normalized) || "").split("?")[0].split("/").pop(); }
 function mediaSizeLabel(item = {}) {
   const size = Number(item.size_bytes || item.size || item.metadata?.size_bytes || item.metadata?.size || 0);
   if (!Number.isFinite(size) || size <= 0) return "Size unknown";
@@ -621,6 +638,13 @@ export function FormEditor({ initialForm, isNew = false }) {
     fetch("/api/admin/form-templates", { cache: "no-store" }).then((r) => r.json()).then((data) => { if (data.ok) setTemplates(data.templates || []); }).catch(() => {});
   }, [activeTab, templates.length]);
 
+  async function loadMedia() {
+    const res = await fetch("/api/admin/forms/media", { cache: "no-store" });
+    const data = await res.json();
+    if (data.ok) setMedia(normalizeMediaList(data.media || data.mediaList || data.items || data.rows || []));
+  }
+  useEffect(() => { if (activeTab === "media" || isImageCapable(selectedField)) loadMedia().catch(() => {}); }, [activeTab, selectedField?.id, selectedField?.type]);
+
   async function loadDataActions() {
     setDataActionsLoading(true);
     try {
@@ -693,7 +717,7 @@ export function FormEditor({ initialForm, isNew = false }) {
       const res = await fetch("/api/admin/forms/media", { method: "POST", body });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Upload failed");
-      setMedia(data.mediaList || []); setMessage("Media uploaded.");
+      setMedia(normalizeMediaList(data.media ? [data.media, ...(data.mediaList || [])] : (data.mediaList || []))); setMessage("Media uploaded.");
     } catch (err) { setMessage(err.message || "Upload failed"); }
     finally { setUploadingMedia(false); }
   }
@@ -725,13 +749,19 @@ export function FormEditor({ initialForm, isNew = false }) {
     const field = fieldsById.get(fieldId);
     const key = imagePropKey(field);
     if (!key) return false;
-    updateField(fieldId, { label: field.type === "image" ? mediaTitle(item) : field.label, props: { ...(field.props || {}), [key]: item.url, imageTitle: mediaTitle(item), ...(field.type === "avatar" ? { alt: field.props?.alt || mediaTitle(item) } : {}) } });
+    const normalized = normalizeMediaItem(item) || item;
+    const url = mediaUrl(normalized);
+    if (!url) return false;
+    updateField(fieldId, { label: field.type === "image" ? mediaTitle(normalized) : field.label, props: { ...(field.props || {}), [key]: url, imageTitle: mediaTitle(normalized), ...(field.type === "avatar" ? { alt: field.props?.alt || mediaTitle(normalized) } : {}) } });
     setSelectedId(fieldId);
     return true;
   }
 
   function addMediaImage(item, target = null) {
-    return addField("image", target, { fieldPatch: { label: mediaTitle(item), props: { src: item.url, imageTitle: mediaTitle(item) } } });
+    const normalized = normalizeMediaItem(item) || item;
+    const url = mediaUrl(normalized);
+    if (!url) return null;
+    return addField("image", target, { fieldPatch: { label: mediaTitle(normalized), props: { src: url, imageTitle: mediaTitle(normalized) } } });
   }
   function isDescendantOf(candidateId, parentId) {
     const byId = fieldsById;
@@ -969,7 +999,7 @@ function LeftPanel(props) {
       const res = await fetch("/api/admin/forms/media/pexels", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ photoId: photo.id }) });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Pexels download failed");
-      setMedia?.((rows) => [data.media, ...(rows || []).filter((row) => row.url !== data.media.url)]);
+      setMedia?.((rows) => normalizeMediaList([data.media, ...(rows || [])]));
       setPexelsOpen(false);
     } catch (err) {
       setPexelsError(err?.message || "Pexels download failed");
@@ -1088,7 +1118,7 @@ function LeftPanel(props) {
           <p className="text-xs text-muted-foreground">Max 5MB. Safe filenames are generated automatically. Pexels photos are free to use; attribution is appreciated but not required.</p>
         </div>
         <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
-          {media.map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
+          {normalizeMediaList(media).map((item) => <DraggableMediaCard key={item.url} item={item} onTitleCommit={(title) => saveMediaTitle?.(item, title)} />)}
           {!media.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No media uploaded yet.</div> : null}
         </div>
       </div>
@@ -1544,7 +1574,7 @@ function ImageSelector({ label = "Image", value = "", media = [], onChange }) {
   return <div className="w-full max-w-full min-w-0 space-y-2 overflow-hidden">
     <Label>{label}</Label>
     {media.length ? <div className="max-h-56 w-full max-w-full space-y-2 overflow-y-auto overflow-x-hidden rounded-md border bg-background p-2">
-      {media.map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
+      {normalizeMediaList(media).map((item) => <button key={item.url} type="button" onClick={() => onChange?.(item.url, item)} className={`flex w-full min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border p-1.5 text-left transition ${value === item.url ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:border-primary"}`} title={mediaTitle(item)}><img src={item.url} alt={mediaTitle(item)} className="h-10 w-14 shrink-0 rounded border object-cover" /><span className="min-w-0 flex-1 overflow-hidden"><span className="block truncate text-xs font-medium">{mediaTitle(item)}</span><span className="block truncate text-[10px] text-muted-foreground">{mediaFilename(item)}</span></span></button>)}
     </div> : <p className="text-xs text-muted-foreground">Open Media to upload library images, or paste any URL below.</p>}
     <Input className="w-full max-w-full min-w-0" value={value ?? ""} placeholder="https://example.com/image.png or /media/file.png" onChange={(e) => onChange?.(e.target.value, null)} />
   </div>;
