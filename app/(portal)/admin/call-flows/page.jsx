@@ -34,6 +34,8 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconPhone,
+  IconDownload,
+  IconUpload,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -262,6 +264,82 @@ export default function CallFlowsPage() {
     }
   }
 
+  async function handleExport(id, name) {
+    try {
+      const res = await fetch(`/api/voice/flows/${id}/export`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to export flow");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${String(name || "call_flow")
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase()}_flow.json`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      notify({
+        title: "Success",
+        description: "Flow exported successfully",
+        variant: "success",
+      });
+    } catch (error) {
+      console.error("Error exporting flow:", error);
+      notify({
+        title: "Error",
+        description: error.message || "Failed to export flow",
+        variant: "error",
+      });
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+
+    input.onchange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const data = JSON.parse(await file.text());
+        const res = await fetch("/api/voice/flows/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+
+        if (!res.ok || !result.ok) {
+          throw new Error(result.error || "Failed to import flow");
+        }
+
+        notify({
+          title: "Success",
+          description: "Flow imported successfully",
+          variant: "success",
+        });
+        loadFlows();
+      } catch (error) {
+        console.error("Error importing flow:", error);
+        notify({
+          title: "Error",
+          description: error.message || "Failed to import flow",
+          variant: "error",
+        });
+      }
+    };
+
+    input.click();
+  }
+
   const totalPages = Math.ceil(total / pageSize);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
@@ -292,6 +370,10 @@ export default function CallFlowsPage() {
               <IconGitBranch className="size-6 text-telnyx-green" /> Call Flows
             </div>
             <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleImport}>
+                <IconUpload className="h-4 w-4 mr-2" />
+                Import
+              </Button>
               <Button size="sm" onClick={handleCreate}>
                 <IconPlus className="h-4 w-4 mr-2" />
                 Create Flow
@@ -484,6 +566,13 @@ export default function CallFlowsPage() {
                             onClick={() => handleDuplicate(flow.id, flow.name)}
                           >
                             <IconCopy className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleExport(flow.id, flow.name)}
+                          >
+                            <IconDownload className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
