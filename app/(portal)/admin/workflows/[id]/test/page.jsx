@@ -1866,7 +1866,7 @@ export default function TestAgentPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Model</label>
                 <div className="rounded-md border bg-muted/50 px-3 py-2 text-sm">
-                  {workflow?.llm_model || "openai/gpt-4o"}
+                  {workflow?.llm_model || "moonshotai/Kimi-K2.5"}
                 </div>
               </div>
               <div className="space-y-4">
