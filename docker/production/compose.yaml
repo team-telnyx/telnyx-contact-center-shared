@@ -34,6 +34,9 @@ services:
       - .env
     volumes:
       - ./.env:/app/.env:ro
+      # Persist form/media-library uploads and downloaded Pexels assets across container rebuilds.
+      # The app serves these files via Next.js from /media/* (public/media inside the container).
+      - ./media:/app/public/media
     depends_on:
       postgres:
         condition: service_healthy
