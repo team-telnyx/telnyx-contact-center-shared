@@ -18,14 +18,17 @@ const nextConfig = {
       .map((s) => s.trim())
       .filter(Boolean),
   ],
-  // Configure static file serving for media files
+  // Serve runtime-uploaded media from the mounted public/media directory.
+  // A beforeFiles rewrite avoids relying on Next's static-file snapshot/cache for files created after build.
   async rewrites() {
-    return [
-      {
-        source: "/media/:path*",
-        destination: "/media/:path*",
-      },
-    ];
+    return {
+      beforeFiles: [
+        {
+          source: "/media/:path*",
+          destination: "/api/media/:path*",
+        },
+      ],
+    };
   },
   // Server-side externals for Turbopack (Next.js 16+)
   // ws, bufferutil, utf-8-validate are needed for Telnyx WebSocket TTS
