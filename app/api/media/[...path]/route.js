@@ -19,7 +19,8 @@ function resolveMediaPath(parts = []) {
   return fullPath.startsWith(MEDIA_DIR) ? fullPath : null;
 }
 
-async function serveMedia(params) {
+async function serveMedia(paramsPromise) {
+  const params = await paramsPromise;
   const fullPath = resolveMediaPath(params?.path || []);
   if (!fullPath) return new NextResponse("Not Found", { status: 404 });
 
@@ -49,7 +50,8 @@ export async function GET(_request, { params }) {
 }
 
 export async function HEAD(_request, { params }) {
-  const fullPath = resolveMediaPath(params?.path || []);
+  const resolvedParams = await params;
+  const fullPath = resolveMediaPath(resolvedParams?.path || []);
   if (!fullPath) return new NextResponse(null, { status: 404 });
   const ext = path.extname(fullPath).toLowerCase();
   const contentType = CONTENT_TYPES.get(ext);
