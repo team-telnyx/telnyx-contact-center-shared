@@ -111,14 +111,6 @@ export async function POST(request) {
       delete payload.greetings;
     }
 
-    // Validate transcription - deepgram/flux requires 'en' language, not 'auto'
-    if (
-      payload.transcription &&
-      payload.transcription.model === "deepgram/flux"
-    ) {
-      payload.transcription.language = "en";
-    }
-
     const res = await fetch(buildTelnyxV2Url("/ai/assistants"), {
       method: "POST",
       headers: {
