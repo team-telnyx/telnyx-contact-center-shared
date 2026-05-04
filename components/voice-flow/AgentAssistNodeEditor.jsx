@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,11 +20,60 @@ import {
   IconRobot,
   IconGitBranch,
   IconBook,
+  IconCalendar,
+  IconCalendarTime,
+  IconClock,
   IconFileText,
   IconWorld,
 } from "@tabler/icons-react";
 
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
+
+function dateInputType(mode) {
+  return mode === "time" ? "time" : mode === "datetime" || mode === "datetime-local" ? "datetime-local" : "date";
+}
+
+function DateTimeStaticValueInput({ field, value, onChange }) {
+  const inputRef = useRef(null);
+  const inputType = dateInputType(field.props?.mode);
+  const PickerIcon = inputType === "time" ? IconClock : inputType === "date" ? IconCalendar : IconCalendarTime;
+  const label = inputType === "time" ? "Open time picker" : inputType === "date" ? "Open date picker" : "Open date and time picker";
+
+  function openPicker() {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Browser may reject showPicker when it is not triggered by direct user activation.
+      }
+    }
+  }
+
+  return (
+    <div className="relative min-w-0">
+      <Input
+        ref={inputRef}
+        type={inputType}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={field.placeholder || "Value to prefill"}
+        className="h-9 pr-10 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 dark:[&::-webkit-calendar-picker-indicator]:invert"
+      />
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={openPicker}
+        className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <PickerIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function AgentAssistNodeEditor({
   config = {},
@@ -434,13 +483,21 @@ export default function AgentAssistNodeEditor({
                                 <span className="text-xs text-muted-foreground">{entry.value === true || entry.value === "true" ? "true" : "false"}</span>
                               </div>
                             ) : (
-                              <Input
-                                type={field.type === "slider" ? "number" : field.type === "datetime" ? "datetime-local" : "text"}
-                                value={entry.value ?? ""}
-                                onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
-                                placeholder="Value to prefill"
-                                className="h-9"
-                              />
+                              field.type === "datetime" ? (
+                                <DateTimeStaticValueInput
+                                  field={field}
+                                  value={entry.value}
+                                  onChange={(value) => updateFormDataField(field.variableName, { source: "static", value })}
+                                />
+                              ) : (
+                                <Input
+                                  type={field.type === "slider" ? "number" : "text"}
+                                  value={entry.value ?? ""}
+                                  onChange={(e) => updateFormDataField(field.variableName, { source: "static", value: e.target.value })}
+                                  placeholder="Value to prefill"
+                                  className="h-9"
+                                />
+                              )
                             )
                           ) : (
                             <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
