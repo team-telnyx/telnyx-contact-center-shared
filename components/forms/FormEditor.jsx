@@ -48,6 +48,8 @@ const BADGE_VARIANT_OPTIONS = [{ value: "default", label: "Default" }, { value: 
 const BADGE_SIZE_OPTIONS = [{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }];
 const AVATAR_SIZE_OPTIONS = [{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }, { value: "xl", label: "XL" }];
 const AVATAR_SHAPE_OPTIONS = [{ value: "circle", label: "Circle" }, { value: "rounded", label: "Rounded" }, { value: "square", label: "Square" }];
+const ACCORDION_BEHAVIOR_OPTIONS = [{ value: "single", label: "Single" }, { value: "single_collapsible", label: "Single collapsible" }, { value: "multiple", label: "Multiple" }];
+const ACCORDION_VARIANT_OPTIONS = [{ value: "default", label: "Default" }, { value: "card", label: "Cards" }];
 const DATETIME_MODE_OPTIONS = [{ value: "date", label: "Date" }, { value: "time", label: "Time" }, { value: "datetime", label: "Date + time" }];
 const DIRECTION_OPTIONS = [{ value: "vertical", label: "Vertical" }, { value: "horizontal", label: "Horizontal" }];
 const SIZE_OPTIONS = ["sm", "md", "lg", "xl"];
@@ -195,7 +197,7 @@ function dataActionDescription(flow = {}) {
   const node = flowNodes(flow).find((item) => item?.data?.nodeType === "form_submit");
   return node?.data?.config?.description || flow.description || flow.metadata?.description || "Form Submit call flow";
 }
-function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : null; }
+function imagePropKey(field) { return field?.type === "hero" ? "imageUrl" : field?.type === "image" ? "src" : field?.type === "card" ? "imageUrl" : field?.type === "avatar" ? "src" : null; }
 function isImageCapable(field) { return Boolean(imagePropKey(field)); }
 function heroContent(field, props = {}) {
   return <div className="relative z-10 min-w-0"><div className="text-xs font-semibold uppercase tracking-wide text-primary">{props.quote || field.label}</div><h3 className="mt-2 text-3xl font-bold tracking-tight">{props.title || field.label}</h3>{props.description ? <p className="mt-3 text-sm text-muted-foreground">{props.description}</p> : null}{props.buttons?.length ? <div className="mt-4 flex flex-wrap gap-2"><Button size="sm">{props.buttons[0]?.label || "Action"}</Button></div> : null}</div>;
@@ -724,7 +726,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     const field = fieldsById.get(fieldId);
     const key = imagePropKey(field);
     if (!key) return false;
-    updateField(fieldId, { label: field.type === "image" ? mediaTitle(item) : field.label, props: { ...(field.props || {}), [key]: item.url, imageTitle: mediaTitle(item) } });
+    updateField(fieldId, { label: field.type === "image" ? mediaTitle(item) : field.label, props: { ...(field.props || {}), [key]: item.url, imageTitle: mediaTitle(item), ...(field.type === "avatar" ? { alt: field.props?.alt || mediaTitle(item) } : {}) } });
     setSelectedId(fieldId);
     return true;
   }
@@ -1591,7 +1593,7 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
   if (field.type === "codeblock") return <div className="space-y-3"><div><Label>Language</Label><Select value={props.language || "javascript"} onValueChange={(value) => setProps({ language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CODE_LANGUAGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div><Label>Code</Label><Textarea rows={10} className="font-mono text-xs" value={props.code ?? ""} onChange={(e) => setProps({ code: e.target.value })} /></div><div><Label>Max height px</Label><Input type="number" min="120" value={props.maxHeight ?? 360} onChange={(e) => setProps({ maxHeight: Number(e.target.value) })} /></div><div className="flex items-center justify-between rounded-md border p-2"><Label>Show line numbers</Label><Switch checked={Boolean(props.showLineNumbers)} onCheckedChange={(checked) => setProps({ showLineNumbers: checked })} /></div></div>;
   if (field.type === "image") return <ImageSelector label="Image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle })} />;
   if (field.type === "accordion") return <AccordionItemsControl field={field} items={props.items || []} props={props} setProps={setProps} />;
-  if (field.type === "avatar") return <div className="space-y-3"><ImageSelector label="Avatar image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, alt: item ? mediaTitle(item) : props.alt })} /><div><Label>Fallback text / initials</Label><Input value={props.fallback ?? ""} placeholder="AV" onChange={(e) => setProps({ fallback: e.target.value })} /></div><div><Label>Alt text</Label><Input value={props.alt ?? ""} placeholder={field.label || "Avatar"} onChange={(e) => setProps({ alt: e.target.value })} /></div><TabsSelector label="Size" value={props.size || "md"} options={AVATAR_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /><TabsSelector label="Shape" value={props.shape || "circle"} options={AVATAR_SHAPE_OPTIONS} onChange={(shape) => setProps({ shape })} /><ColorInput label="Fallback text color" value={props.fallbackColor || ""} onChange={(fallbackColor) => setProps({ fallbackColor })} /><ColorInput label="Border color" value={props.borderColor || ""} onChange={(borderColor) => setProps({ borderColor })} /></div>;
+  if (field.type === "avatar") return <div className="space-y-3"><ImageSelector label="Avatar image" value={props.src || ""} media={media} onChange={(url, item) => setProps({ src: url, imageTitle: item ? mediaTitle(item) : props.imageTitle, alt: item ? mediaTitle(item) : props.alt })} /><div><Label>Fallback text / initials</Label><Input value={props.fallback ?? ""} placeholder="AV" onChange={(e) => setProps({ fallback: e.target.value })} /></div><div><Label>Alt text</Label><Input value={props.alt ?? ""} placeholder={field.label || "Avatar"} onChange={(e) => setProps({ alt: e.target.value })} /></div><TabsSelector label="Size" value={props.size || "md"} options={AVATAR_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /><TabsSelector label="Shape" value={props.shape || "circle"} options={AVATAR_SHAPE_OPTIONS} onChange={(shape) => setProps({ shape })} /><ColorInput label="Fallback text color" value={props.fallbackColor || ""} onChange={(fallbackColor) => setProps({ fallbackColor })} /><ColorInput label="Border color" value={props.borderColor || ""} onChange={(borderColor) => setProps({ borderColor })} /></div>;
   if (field.type === "badge") return <div className="space-y-3"><div><Label>Badge text</Label><Input value={props.text ?? field.label ?? ""} onChange={(e) => setProps({ text: e.target.value })} /></div><TabsSelector label="Variant" value={props.variant || "secondary"} options={BADGE_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} /><TabsSelector label="Size" value={props.size || "md"} options={BADGE_SIZE_OPTIONS} onChange={(size) => setProps({ size })} /></div>;
   if (field.type === "switch") return <div className="space-y-3"><div className="flex items-center justify-between rounded-md border p-2"><Label>Default checked</Label><Switch checked={Boolean(field.defaultValue)} {...switchColorProps(field)} onCheckedChange={(checked) => updateField(field.id, { defaultValue: Boolean(checked) })} /></div><div className="grid grid-cols-2 gap-3"><div><Label>On text</Label><Input value={props.onText ?? ""} placeholder="On" onChange={(e) => setProps({ onText: e.target.value })} /></div><div><Label>Off text</Label><Input value={props.offText ?? ""} placeholder="Off" onChange={(e) => setProps({ offText: e.target.value })} /></div></div><ColorInput label="Active track color" value={props.switchActiveTrackColor || ""} onChange={(color) => setProps({ switchActiveTrackColor: color })} /><ColorInput label="Thumb color" value={props.switchThumbColor || ""} onChange={(color) => setProps({ switchThumbColor: color })} /></div>;
   if (field.type === "slider") return <div className="space-y-3"><div className="grid grid-cols-3 gap-3"><div><Label>Min</Label><Input type="number" value={props.min ?? 0} onChange={(e) => setProps({ min: Number(e.target.value) })} /></div><div><Label>Max</Label><Input type="number" value={props.max ?? 100} onChange={(e) => setProps({ max: Number(e.target.value) })} /></div><div><Label>Step</Label><Input type="number" min="0.0001" value={props.step ?? 1} onChange={(e) => setProps({ step: Number(e.target.value) || 1 })} /></div></div><div><Label>Default value</Label><Input type="number" value={field.defaultValue ?? props.min ?? 0} onChange={(e) => updateField(field.id, { defaultValue: Number(e.target.value) })} /></div><ColorInput label="Active range color" value={props.sliderRangeColor || ""} onChange={(color) => setProps({ sliderRangeColor: color })} /><ColorInput label="Thumb color" value={props.sliderThumbColor || ""} onChange={(color) => setProps({ sliderThumbColor: color })} /><ColorInput label="Track color" value={props.sliderTrackColor || ""} onChange={(color) => setProps({ sliderTrackColor: color })} /></div>;
@@ -1620,6 +1622,17 @@ function SpecificBlockControls({ field, props, setProps, updateField, media = []
 }
 
 
+
+function accordionBehaviorValue(props = {}) {
+  if (props.type === "multiple") return "multiple";
+  return props.collapsible === false ? "single" : "single_collapsible";
+}
+
+function accordionBehaviorPatch(value) {
+  if (value === "multiple") return { type: "multiple", collapsible: true };
+  if (value === "single") return { type: "single", collapsible: false };
+  return { type: "single", collapsible: true };
+}
 
 function AccordionItemsControl({ field, items = [], props = {}, setProps }) {
   const normalizedItems = normalizeAccordionItems(items, field.id);
@@ -1652,11 +1665,8 @@ function AccordionItemsControl({ field, items = [], props = {}, setProps }) {
     commitItems(next);
   }
   return <div className="space-y-4">
-    <div className="grid grid-cols-2 gap-3">
-      <div><Label>Behavior</Label><Select value={props.type === "multiple" ? "multiple" : "single"} onValueChange={(type) => setProps({ type, collapsible: type === "multiple" ? true : props.collapsible !== false })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="single">Single open</SelectItem><SelectItem value="multiple">Multiple open</SelectItem></SelectContent></Select></div>
-      <div><Label>Style</Label><Select value={props.variant || "default"} onValueChange={(variant) => setProps({ variant })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="default">Default</SelectItem><SelectItem value="card">Cards</SelectItem></SelectContent></Select></div>
-    </div>
-    {props.type !== "multiple" ? <div className="flex items-center justify-between rounded-md border p-2"><Label>Collapsible</Label><Switch checked={props.collapsible !== false} onCheckedChange={(collapsible) => setProps({ collapsible })} /></div> : null}
+    <TabsSelector label="Behaviour" value={accordionBehaviorValue(props)} options={ACCORDION_BEHAVIOR_OPTIONS} onChange={(value) => setProps(accordionBehaviorPatch(value))} />
+    <TabsSelector label="Style" value={props.variant === "card" ? "card" : "default"} options={ACCORDION_VARIANT_OPTIONS} onChange={(variant) => setProps({ variant })} />
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2"><Label>Items</Label><Button type="button" size="sm" variant="outline" onClick={addItem}><IconPlus className="mr-1 h-3.5 w-3.5" />Add item</Button></div>
       {normalizedItems.length ? <Accordion type="single" value={activeItem} onValueChange={(value) => { if (value) setActiveItem(value); }} className="space-y-2">
