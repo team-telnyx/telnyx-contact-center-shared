@@ -26,10 +26,10 @@ import { notify } from "@/components/ToastNotify";
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
   { id: "pages", label: "Pages", icon: IconForms },
-  { id: "data-actions", label: "Data Actions", icon: IconBolt },
   { id: "blocks", label: "Blocks", icon: IconBlocks },
-  { id: "templates", label: "Templates", icon: IconTemplate },
+  { id: "data-actions", label: "Data Actions", icon: IconBolt },
   { id: "media", label: "Media", icon: IconPhoto },
+  { id: "templates", label: "Templates", icon: IconTemplate },
 ];
 
 const BLOCK_GROUPS = [
