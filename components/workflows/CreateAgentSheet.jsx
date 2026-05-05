@@ -109,16 +109,22 @@ const DEFAULT_REGION_MAP = {
   hr: "HR", sr: "RS", sl: "SI", mt: "MT", is: "IS", ga: "IE", cy: "GB",
   eu: "ES", ca: "ES", gl: "ES", af: "ZA", sw: "KE", ha: "NG", yo: "NG",
   ig: "NG", zu: "ZA", xh: "ZA", am: "ET", so: "SO", mg: "MG", ht: "HT",
-  mi: "NZ", yue: "HK", auto: null,
+  mi: "NZ", yue: "HK", auto: null, multi: null,
 };
 
 function getLanguageDisplayInfo(langCode) {
   const normalized = normalizeLocaleCode(langCode);
   if (!normalized) return { value: langCode, label: langCode, flag: "🌐" };
   
-  // Handle auto-detect variants
-  if (normalized === "auto" || normalized === "auto_detect") {
-    return { value: langCode, label: "Auto-detect", flag: "🌐" };
+  // Handle special Flux/Telnyx language modes
+  if (normalized === "auto") {
+    return { value: langCode, label: "Auto (experimental)", flag: "🌐" };
+  }
+  if (normalized === "multi") {
+    return { value: langCode, label: "Multilingual (No audio hint)", flag: "🌐" };
+  }
+  if (normalized === "auto_detect") {
+    return { value: langCode, label: "Auto Detect", flag: "🌐" };
   }
   
   const parts = normalized.split("-");
@@ -455,16 +461,9 @@ export default function CreateAgentSheet({
     const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
     if (!provider?.languages?.length) return [];
     
-    return provider.languages
-      .map(lang => getLanguageDisplayInfo(lang))
-      .sort((a, b) => {
-        // Put "auto" and "auto_detect" first
-        const aIsAuto = a.value === "auto" || a.value === "auto_detect";
-        const bIsAuto = b.value === "auto" || b.value === "auto_detect";
-        if (aIsAuto && !bIsAuto) return -1;
-        if (!aIsAuto && bIsAuto) return 1;
-        return a.label.localeCompare(b.label);
-      });
+    // Preserve the OpenAPI/config order so Flux appears consistently as:
+    // Auto (experimental), Multilingual (No audio hint), English, Spanish, ...
+    return provider.languages.map(lang => getLanguageDisplayInfo(lang));
   }, [sttModel]);
 
   const filteredSttLanguageOptions = useMemo(() => {

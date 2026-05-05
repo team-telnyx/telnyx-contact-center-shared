@@ -24,7 +24,7 @@ import {
 const LANGUAGE_NAMES = {
   auto: "Auto (experimental)",
   auto_detect: "Auto Detect",
-  multi: "Multilingual (no language hint)",
+  multi: "Multilingual (No audio hint)",
   en: "English",
   "en-US": "English (United States)",
   "en-GB": "English (United Kingdom)",

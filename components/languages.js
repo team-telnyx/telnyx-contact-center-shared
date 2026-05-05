@@ -3,8 +3,8 @@
 
 export const languages = [
   // Special
-  { code: "auto", name: "Auto Detect", flag: "🌐" },
-  { code: "multi", name: "Multilingual (no language hint)", flag: "🌐" },
+  { code: "auto", name: "Auto (experimental)", flag: "🌐" },
+  { code: "multi", name: "Multilingual (No audio hint)", flag: "🌐" },
 
   // Languages A-Z
   { code: "sq", name: "Albanian", flag: "🇦🇱" },
