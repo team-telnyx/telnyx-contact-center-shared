@@ -22,8 +22,9 @@ import {
 
 // Language code to language name mapping for common labels. Unknown codes fall back to the raw code.
 const LANGUAGE_NAMES = {
-  auto: "Auto Detect",
+  auto: "Auto (experimental)",
   auto_detect: "Auto Detect",
+  multi: "Multilingual (no language hint)",
   en: "English",
   "en-US": "English (United States)",
   "en-GB": "English (United Kingdom)",

@@ -250,27 +250,22 @@ export const TRANSCRIPTION_PROVIDERS = [
   },
   {
     model_name: "deepgram/flux",
+    // Per Telnyx OpenAPI TranscriptionSettings.language for deepgram/flux:
+    // auto = Telnyx language detection controls the language hint
+    // multi = no language hint / multilingual
     languages: [
       "auto",
-      "en", "en-US", "en-AU", "en-GB", "en-NZ", "en-IN",
-      "es", "es-419",
-      "fr", "fr-CA",
+      "multi",
+      "en",
+      "es",
+      "fr",
       "de",
-      "it",
-      "pt", "pt-BR",
-      "nl",
       "hi",
-      "ja",
-      "zh", "zh-CN", "zh-TW",
-      "ko",
-      "pl",
       "ru",
-      "tr",
-      "uk",
-      "sv",
-      "da",
-      "no",
-      "fi",
+      "pt",
+      "ja",
+      "it",
+      "nl",
     ],
   },
   {
