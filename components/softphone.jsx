@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
+import { toast } from "sonner";
 
 function CircleButton({ children, onClick, disabled, className, title }) {
   return (
@@ -119,9 +120,49 @@ export function Softphone() {
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [interaction, setInteraction] = useState(null);
+  const [sipUri, setSipUri] = useState("");
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
+
+  const copySipUri = async () => {
+    if (!sipUri) {
+      toast.error("WebRTC SIP URI is not configured for this profile");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(sipUri);
+      toast.success("WebRTC URI copied", { description: sipUri });
+    } catch (_) {
+      toast.error("Failed to copy WebRTC URI");
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/user/profile", { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        const user = data?.data || data?.user || data || {};
+        const telephonyUserName = user.telephony_user_name || "";
+
+        if (!cancelled) {
+          setSipUri(
+            telephonyUserName ? `sip:${telephonyUserName}@sip.telnyx.com` : ""
+          );
+        }
+      } catch (_) {
+        if (!cancelled) setSipUri("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const autoStatusRef = useRef({
     lastSent: null,
     forcedBusy: false,
@@ -1120,6 +1161,16 @@ export function Softphone() {
       <div className="relative flex flex-col items-center gap-4 rounded-2xl bg-zinc-900 p-4 text-white shadow-xl">
         {/* Device selectors */}
         <div className="absolute right-3 top-3 flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Copy WebRTC URI"
+            title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
+            className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={copySipUri}
+            disabled={!sipUri}
+          >
+            WebRTC URI
+          </button>
           <div className="relative">
             <button
               className="flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-xs hover:bg-zinc-800"

@@ -71,9 +71,6 @@ export async function GET(request) {
       voice_number: user.voice_number,
       sms_number: user.sms_number,
       voice_app_id: user.voice_app_id,
-      telephony_credentials_id:
-        process.env.TELNYX_TELEPHONY_CREDENTIAL_ID ||
-        user.telephony_credentials_id,
       telephony_user_name: user.telephony_user_name,
       roles: user.roles || ["agent"],
       theme: user.theme,

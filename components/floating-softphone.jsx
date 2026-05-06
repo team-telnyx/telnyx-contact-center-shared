@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Softphone } from "@/components/softphone";
 import { usePhoneUi } from "@/components/phone-ui-provider";
-import { Info as IconInfo, X as IconClose, Phone as IconPhone } from "lucide-react";
+import { X as IconClose, Phone as IconPhone } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import clsx from "clsx";
 import { getStatusDisplay } from "@/lib/call-status-utils";
-import { toast } from "sonner";
 
 export default function FloatingSoftphone() {
   const { visible, toggle } = usePhoneUi();
@@ -29,52 +28,7 @@ export default function FloatingSoftphone() {
   }, [viewport]);
 
   const [pos, setPos] = useState(defaultPos);
-  const [sipUri, setSipUri] = useState("");
   const dragRef = useRef({ dragging: false, dx: 0, dy: 0 });
-
-  const copySipUri = async () => {
-    if (!sipUri) {
-      toast.error("SIP URI is not available for this WebRTC client");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(sipUri);
-      toast.success("SIP URI copied", { description: sipUri });
-    } catch (_) {
-      toast.error("Failed to copy SIP URI");
-    }
-  };
-
-  // Load the current WebRTC credential SIP URI for the expanded softphone toolbar.
-  useEffect(() => {
-    if (!visible) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const res = await fetch("/api/user/profile", { cache: "no-store" });
-        const data = await res.json().catch(() => null);
-        const user = data?.data || data?.user || data || {};
-        const sipUser =
-          user.telephony_credentials_id ||
-          user.telephonyCredentialsId ||
-          user.telephony_user_name ||
-          user.telephonyUserName ||
-          "";
-
-        if (!cancelled) {
-          setSipUri(sipUser ? `sip:${sipUser}@sip.telnyx.com` : "");
-        }
-      } catch (_) {
-        if (!cancelled) setSipUri("");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visible]);
 
   // Track viewport size
   useEffect(() => {
@@ -213,16 +167,6 @@ export default function FloatingSoftphone() {
                 <PhoneStatus />
               </div>
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Copy WebRTC SIP URI"
-                  title={sipUri ? `Copy ${sipUri}` : "SIP URI not available"}
-                  className="rounded p-1 text-background/80 hover:text-foreground transition-colors disabled:opacity-40"
-                  onClick={copySipUri}
-                  disabled={!sipUri}
-                >
-                  <IconInfo className="h-4 w-4" />
-                </button>
                 {/* Close button */}
                 <button
                   type="button"
