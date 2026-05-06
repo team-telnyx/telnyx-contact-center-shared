@@ -67,6 +67,9 @@ export function Softphone() {
   const isRinging = useIsRinging();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
+  const activeCallDirection = useActiveCallStore((state) => state.direction);
+  const activeCallFromNumber = useActiveCallStore((state) => state.fromNumber);
+  const activeCallFromName = useActiveCallStore((state) => state.fromName);
   const activeCallsCount = useCallsStore(
     (state) => state.getActiveCalls().length
   );
@@ -85,6 +88,7 @@ export function Softphone() {
     updateStatus,
     setMuted: storeSetMuted,
     setHeld: storeSetHeld,
+    setCallerInfo,
     clearActiveCall,
     isContactCenterCall,
     getCallDuration,
@@ -121,6 +125,31 @@ export function Softphone() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [interaction, setInteraction] = useState(null);
   const [sipUri, setSipUri] = useState("");
+  const formatCallerIdentity = (name, number) => {
+    const normalizedName = String(name || "").trim();
+    const normalizedNumber = String(number || "").trim();
+    if (normalizedName && normalizedNumber && normalizedName !== normalizedNumber) {
+      return `${normalizedName} (${normalizedNumber})`;
+    }
+    return normalizedNumber || normalizedName;
+  };
+
+  const interactionFromNumber =
+    interaction?.from_number || interaction?.fromNumber || interaction?.caller_number || "";
+  const remoteCallerNumber = activeCall?.options?.remoteCallerNumber || activeCall?.remoteCallerNumber || "";
+  const remoteCallerName = activeCall?.options?.remoteCallerName || activeCall?.remoteCallerName || "";
+  const incomingCallerNumber = remoteCallerNumber || interactionFromNumber || activeCallFromNumber || "";
+  const incomingCallerName = remoteCallerName || activeCallFromName || interaction?.from_name || interaction?.fromName || "";
+  const incomingCallerDisplay = formatCallerIdentity(incomingCallerName, incomingCallerNumber);
+  const isIncomingCall =
+    activeCall &&
+    ((activeCallDirection === "inbound" || activeCallDirection === "incoming") ||
+      Boolean(remoteCallerNumber) ||
+      Boolean(interactionFromNumber));
+  const displayedFromNumber = isIncomingCall
+    ? incomingCallerDisplay || fromNumber
+    : fromNumber;
+
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
@@ -454,6 +483,33 @@ export function Softphone() {
             return;
           }
 
+          const callDirection =
+            call.direction || notification?.call?.direction || "";
+          const isIncoming =
+            callDirection === "inbound" ||
+            callDirection === "incoming" ||
+            callState.toLowerCase() === "ringing";
+          const remoteCallerNumber =
+            call.options?.remoteCallerNumber || call.remoteCallerNumber || "";
+          const remoteCallerName =
+            call.options?.remoteCallerName || call.remoteCallerName || "";
+
+          if (isIncoming && (remoteCallerNumber || remoteCallerName)) {
+            const storeState = useActiveCallStore.getState();
+            const storeCallControlId =
+              storeState.call?.callControlId ||
+              storeState.call?.call_control_id ||
+              storeState.call?.id;
+            const notificationCallControlId =
+              call.callControlId || call.call_control_id || call.id;
+            if (!storeCallControlId || storeCallControlId === notificationCallControlId) {
+              setCallerInfo({
+                fromNumber: remoteCallerNumber || undefined,
+                fromName: remoteCallerName || undefined,
+              });
+            }
+          }
+
           // For active calls, update status and attach audio
           if (activeCall && call && callState) {
             const lowerState = callState.toLowerCase();
@@ -475,7 +531,7 @@ export function Softphone() {
         client.off?.("telnyx.notification", onNotification);
       } catch (_) {}
     };
-  }, [client, activeCall, hydrateRemoteAudio]);
+  }, [client, activeCall, hydrateRemoteAudio, setCallerInfo]);
 
   async function handleCallEnd() {
     try {
@@ -1277,11 +1333,16 @@ export function Softphone() {
         <div className="w-full">
           <label className="mb-1 block text-[11px] text-zinc-300">From</label>
           <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-zinc-500 cursor-not-allowed"
+            className={clsx(
+              "w-full rounded-lg border bg-zinc-900/60 px-2.5 py-1.5 text-[10px] outline-none cursor-not-allowed",
+              isIncomingCall
+                ? "border-orange-500/50 text-orange-500 focus:border-orange-500"
+                : "border-zinc-700 text-white focus:border-zinc-500"
+            )}
             placeholder="Phone number or SIP URI"
-            value={fromNumber}
+            value={displayedFromNumber || ""}
             readOnly
-            title="Voice number from your profile"
+            title={isIncomingCall ? `Incoming caller: ${displayedFromNumber || ""}` : "Voice number from your profile"}
             inputMode="text"
           />
         </div>

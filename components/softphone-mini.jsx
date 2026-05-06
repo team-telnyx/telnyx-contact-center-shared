@@ -52,6 +52,7 @@ export default function SoftphoneMini() {
   const callerInfo = useCallerInfo();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
+  const activeCallDirection = useActiveCallStore((state) => state.direction);
   const activeCallsCount = useCallsStore(
     (state) => state.getActiveCalls().length
   );
@@ -66,6 +67,7 @@ export default function SoftphoneMini() {
     setMuted: storeSetMuted,
     setHeld: storeSetHeld,
     setCallerName,
+    setCallerInfo,
     clearActiveCall,
     isContactCenterCall,
     getCallDuration,
@@ -95,6 +97,30 @@ export default function SoftphoneMini() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [interaction, setInteraction] = useState(null);
+  const formatCallerIdentity = (name, number) => {
+    const normalizedName = String(name || "").trim();
+    const normalizedNumber = String(number || "").trim();
+    if (normalizedName && normalizedNumber && normalizedName !== normalizedNumber) {
+      return `${normalizedName} (${normalizedNumber})`;
+    }
+    return normalizedNumber || normalizedName;
+  };
+
+  const interactionFromNumber =
+    interaction?.from_number || interaction?.fromNumber || interaction?.caller_number || "";
+  const remoteCallerNumber = activeCall?.options?.remoteCallerNumber || activeCall?.remoteCallerNumber || "";
+  const remoteCallerName = activeCall?.options?.remoteCallerName || activeCall?.remoteCallerName || "";
+  const incomingFromNumber = remoteCallerNumber || interactionFromNumber || callerInfo?.fromNumber || "";
+  const incomingFromName = remoteCallerName || callerInfo?.fromName || interaction?.from_name || interaction?.fromName || "";
+  const incomingCallerDisplay = formatCallerIdentity(incomingFromName, incomingFromNumber);
+  const isIncomingCall =
+    activeCall &&
+    ((activeCallDirection === "inbound" || activeCallDirection === "incoming") ||
+      Boolean(remoteCallerNumber) ||
+      Boolean(interactionFromNumber));
+  const miniInputDisplay = isIncomingCall && incomingCallerDisplay ? incomingCallerDisplay : toInput;
+  const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
+
   const fromRef = useRef("");
   const audioRef = useRef(null);
   const autoStatusRef = useRef({
@@ -360,7 +386,14 @@ export default function SoftphoneMini() {
             const callDirection =
               call.direction || notification?.call?.direction || "";
             const fromNumber =
-              call.from || call.callerId || call.caller_id || "";
+              call.options?.remoteCallerNumber ||
+              call.remoteCallerNumber ||
+              call.from ||
+              call.callerId ||
+              call.caller_id ||
+              "";
+            const fromName =
+              call.options?.remoteCallerName || call.remoteCallerName || "";
 
             // Determine if this is an incoming call
             // Priority:
@@ -381,6 +414,25 @@ export default function SoftphoneMini() {
             // Only show answer UI for truly incoming calls
             const isIncomingCall =
               isIncoming && (callState === "new" || callState === "ringing");
+
+            // WebRTC SDK remote caller fields are the source of truth for inbound UI.
+            if (isIncoming && (fromNumber || fromName)) {
+              const storeState = useActiveCallStore.getState();
+              if (storeState.call) {
+                const storeCallControlId =
+                  storeState.call.callControlId ||
+                  storeState.call.call_control_id ||
+                  storeState.call.id;
+                const notificationCallControlId =
+                  call.callControlId || call.call_control_id || call.id;
+                if (!storeCallControlId || storeCallControlId === notificationCallControlId) {
+                  setCallerInfo({
+                    fromNumber: fromNumber || undefined,
+                    fromName: fromName || undefined,
+                  });
+                }
+              }
+            }
 
             // For outbound calls, attach audio when call becomes active
             if (callDirection === "outbound" && activeCall) {
@@ -418,11 +470,12 @@ export default function SoftphoneMini() {
                   // Lookup if this is a contact center call or direct call
                   const metadata = await lookupCallMetadata(callControlId);
                   metadata.direction = "inbound";
-                  metadata.fromNumber = fromNumber;
+                  if (fromNumber) metadata.fromNumber = fromNumber;
+                  if (fromName) metadata.fromName = fromName;
 
                   // Try to get caller name from SSE store first
                   const storedInfo = await getStoredCallerInfo(fromNumber);
-                  if (storedInfo?.fromName) {
+                  if (!metadata.fromName && storedInfo?.fromName) {
                     metadata.fromName = storedInfo.fromName;
                   }
                   if (storedInfo?.originalCallControlId) {
@@ -564,7 +617,7 @@ export default function SoftphoneMini() {
         client.off?.("telnyx.notification", onNotification);
       } catch (_) {}
     };
-  }, [client, activeCall, setActiveCall, setCallerName]);
+  }, [client, activeCall, setActiveCall, setCallerInfo, setCallerName]);
 
   useEffect(() => {
     // Ensure audio element is configured and unlock audio context
@@ -1398,14 +1451,38 @@ export default function SoftphoneMini() {
       >
         <IconContact className="h-4 w-4" />
       </button>
-      <input
-        value={toInput}
-        readOnly
-        placeholder="Phone number or SIP URI"
-        className="w-40 rounded border border-border bg-background px-2 py-1 text-xs outline-none cursor-pointer"
-        onClick={() => setShowNumberModal(true)}
-        title="Click to select number"
-      />
+      <button
+        type="button"
+        disabled={Boolean(isIncomingCall && incomingCallerDisplay)}
+        className={`relative h-[30px] w-40 overflow-hidden rounded border bg-background px-2 py-1 text-left text-xs outline-none ${
+          isIncomingCall && incomingCallerDisplay
+            ? "cursor-not-allowed border-orange-500/50 text-orange-500"
+            : "cursor-pointer border-border text-foreground"
+        }`}
+        onClick={() => {
+          if (!(isIncomingCall && incomingCallerDisplay)) {
+            setShowNumberModal(true);
+          }
+        }}
+        title={isIncomingCall && incomingCallerDisplay ? `From: ${incomingCallerDisplay}` : "Click to select number"}
+      >
+        <span
+          className={shouldMarqueeMiniInput ? "inline-block whitespace-nowrap" : "block truncate"}
+          style={
+            shouldMarqueeMiniInput
+              ? { animation: "miniPhoneCallerMarquee 6s ease-in-out infinite alternate" }
+              : undefined
+          }
+        >
+          {miniInputDisplay || "Phone number or SIP URI"}
+        </span>
+      </button>
+      <style jsx global>{`
+        @keyframes miniPhoneCallerMarquee {
+          0%, 25% { transform: translateX(0); }
+          75%, 100% { transform: translateX(calc(-100% + 9rem)); }
+        }
+      `}</style>
       {/* Show answer/reject buttons for incoming ringing calls */}
       {isRinging ? (
         <>
