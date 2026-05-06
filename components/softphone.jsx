@@ -1160,7 +1160,7 @@ export function Softphone() {
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       <div className="relative flex flex-col items-center gap-4 rounded-2xl bg-zinc-900 p-4 text-white shadow-xl">
         {/* Device selectors */}
-        <div className="absolute right-3 top-3 flex items-center gap-2">
+        <div className="absolute left-3 top-3">
           <button
             type="button"
             aria-label="Copy WebRTC URI"
@@ -1171,6 +1171,8 @@ export function Softphone() {
           >
             WebRTC URI
           </button>
+        </div>
+        <div className="absolute right-3 top-3 flex items-center gap-2">
           <div className="relative">
             <button
               className="flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-xs hover:bg-zinc-800"
