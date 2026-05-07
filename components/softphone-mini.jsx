@@ -30,6 +30,33 @@ import {
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 
+const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
+  const normalize = (value) =>
+    ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+
+  if (typeof window !== "undefined") {
+    try {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue !== null) {
+        return normalize(storedValue);
+      }
+    } catch (_) {}
+  }
+
+  return normalize(envValue);
+};
+
+const getWebrtcExperimentalOptions = () => ({
+  trickleIce: readWebrtcBooleanFlag(
+    "webrtc.trickleIce",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_TRICKLE_ICE
+  ),
+  prefetchIceCandidates: readWebrtcBooleanFlag(
+    "webrtc.prefetchIceCandidates",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+  ),
+});
+
 function isValidE164(number) {
   return /^\+?[1-9]\d{6,14}$/.test(String(number || "").trim());
 }
@@ -1156,13 +1183,18 @@ export default function SoftphoneMini() {
         client.enableMicrophone?.();
       } catch (_) {}
 
+      const experimentalOptions = getWebrtcExperimentalOptions();
+      console.log("[webrtc] Starting outbound call", experimentalOptions);
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
         callerName: callerName || undefined,
         audio: true,
         video: false,
-        trickleIce: true,
+        ...(experimentalOptions.trickleIce && { trickleIce: true }),
+        ...(experimentalOptions.prefetchIceCandidates && {
+          prefetchIceCandidates: true,
+        }),
       });
 
       // Set active call in store (outbound call, no contact center metadata)

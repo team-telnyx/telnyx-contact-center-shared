@@ -33,6 +33,33 @@ const DEFAULT_WEBRTC_REGION = normalizeWebrtcRegion(
   process.env.NEXT_PUBLIC_TELNYX_WEBRTC_REGION || "auto"
 );
 
+const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
+  const normalize = (value) =>
+    ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+
+  if (typeof window !== "undefined") {
+    try {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue !== null) {
+        return normalize(storedValue);
+      }
+    } catch (_) {}
+  }
+
+  return normalize(envValue);
+};
+
+const getWebrtcExperimentalOptions = () => ({
+  trickleIce: readWebrtcBooleanFlag(
+    "webrtc.trickleIce",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_TRICKLE_ICE
+  ),
+  prefetchIceCandidates: readWebrtcBooleanFlag(
+    "webrtc.prefetchIceCandidates",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+  ),
+});
+
 const TelephonyContext = createContext({
   client: null,
   status: "disconnected",
@@ -292,10 +319,19 @@ export function TelephonyProvider({ children }) {
 
       cleanupClient();
       const selectedRegion = normalizeWebrtcRegion(regionRef.current || region);
-      console.log("[webrtc] Connecting with region:", selectedRegion);
+      const experimentalOptions = getWebrtcExperimentalOptions();
+      console.log("[webrtc] Connecting", {
+        region: selectedRegion,
+        trickleIce: experimentalOptions.trickleIce,
+        prefetchIceCandidates: experimentalOptions.prefetchIceCandidates,
+      });
       const client = new TelnyxRTC({
         login_token: token,
         ...(selectedRegion !== "auto" && { region: selectedRegion }),
+        ...(experimentalOptions.trickleIce && { trickleIce: true }),
+        ...(experimentalOptions.prefetchIceCandidates && {
+          prefetchIceCandidates: true,
+        }),
         ringbackFile: "/audio/ringback.mp3",
         ringtoneFile: "/audio/ringtone.mp3",
       });

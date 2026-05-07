@@ -28,6 +28,33 @@ import { NumberSelectionModal } from "@/components/contact-center/NumberSelectio
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { toast } from "sonner";
 
+const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
+  const normalize = (value) =>
+    ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+
+  if (typeof window !== "undefined") {
+    try {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue !== null) {
+        return normalize(storedValue);
+      }
+    } catch (_) {}
+  }
+
+  return normalize(envValue);
+};
+
+const getWebrtcExperimentalOptions = () => ({
+  trickleIce: readWebrtcBooleanFlag(
+    "webrtc.trickleIce",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_TRICKLE_ICE
+  ),
+  prefetchIceCandidates: readWebrtcBooleanFlag(
+    "webrtc.prefetchIceCandidates",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+  ),
+});
+
 function CircleButton({ children, onClick, disabled, className, title }) {
   return (
     <button
@@ -681,13 +708,18 @@ export function Softphone() {
         client.enableMicrophone?.();
       } catch (_) {}
 
+      const experimentalOptions = getWebrtcExperimentalOptions();
+      console.log("[webrtc] Starting outbound call", experimentalOptions);
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
         callerName: callerName || undefined,
         audio: true,
         video: false,
-        trickleIce: true,
+        ...(experimentalOptions.trickleIce && { trickleIce: true }),
+        ...(experimentalOptions.prefetchIceCandidates && {
+          prefetchIceCandidates: true,
+        }),
       });
 
       // Set active call in store (outbound call)
