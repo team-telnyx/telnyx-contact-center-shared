@@ -7,6 +7,7 @@ import { X as IconClose, Phone as IconPhone } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import clsx from "clsx";
 import { getStatusDisplay } from "@/lib/call-status-utils";
+import { toast } from "sonner";
 
 export default function FloatingSoftphone() {
   const { visible, toggle } = usePhoneUi();
@@ -28,7 +29,47 @@ export default function FloatingSoftphone() {
   }, [viewport]);
 
   const [pos, setPos] = useState(defaultPos);
+  const [sipUri, setSipUri] = useState("");
   const dragRef = useRef({ dragging: false, dx: 0, dy: 0 });
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/user/profile", { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        const user = data?.data || data?.user || data || {};
+        const telephonyUserName = user.telephony_user_name || "";
+        if (!cancelled) {
+          setSipUri(
+            telephonyUserName ? `sip:${telephonyUserName}@sip.telnyx.com` : ""
+          );
+        }
+      } catch (_) {
+        if (!cancelled) setSipUri("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const copySipUri = async () => {
+    if (!sipUri) {
+      toast.error("WebRTC SIP URI is not configured for this profile");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(sipUri);
+      toast.success("WebRTC URI copied", { description: sipUri });
+    } catch (_) {
+      toast.error("Failed to copy WebRTC URI");
+    }
+  };
 
   // Track viewport size
   useEffect(() => {
@@ -167,6 +208,16 @@ export default function FloatingSoftphone() {
                 <PhoneStatus />
               </div>
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Copy WebRTC URI"
+                  title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
+                  className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={copySipUri}
+                  disabled={!sipUri}
+                >
+                  WebRTC URI
+                </button>
                 {/* Close button */}
                 <button
                   type="button"

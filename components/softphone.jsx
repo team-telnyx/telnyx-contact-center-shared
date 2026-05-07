@@ -1248,21 +1248,9 @@ export function Softphone() {
       <div className="relative flex flex-col items-center gap-4 rounded-2xl bg-zinc-900 p-4 text-white shadow-xl">
         {/* Device selectors */}
         <div className="absolute left-3 top-3">
-          <button
-            type="button"
-            aria-label="Copy WebRTC URI"
-            title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
-            className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
-            onClick={copySipUri}
-            disabled={!sipUri}
-          >
-            WebRTC URI
-          </button>
-        </div>
-        <div className="absolute right-3 top-3 flex items-center gap-2">
           <div className="relative">
             <button
-              className="flex min-w-[74px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800"
+              className="flex min-w-[112px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800"
               onClick={() => {
                 setShowRegionList((v) => !v);
                 setShowMicList(false);
@@ -1274,7 +1262,7 @@ export function Softphone() {
               <IconChevronDown className="h-3 w-3" />
             </button>
             {showRegionList && (
-              <div className="absolute right-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
+              <div className="absolute left-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
                 <div className="px-2 py-1 text-[11px] text-zinc-400">
                   WebRTC Region
                 </div>
@@ -1301,6 +1289,8 @@ export function Softphone() {
               </div>
             )}
           </div>
+        </div>
+        <div className="absolute right-3 top-3 flex items-center gap-2">
           <div className="relative">
             <button
               className="flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-xs hover:bg-zinc-800"

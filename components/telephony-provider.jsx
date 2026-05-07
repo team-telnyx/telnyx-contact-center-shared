@@ -145,6 +145,7 @@ export function TelephonyProvider({ children }) {
   const [error, setError] = useState("");
   const [client, setClient] = useState(null);
   const [region, setRegionState] = useState(DEFAULT_WEBRTC_REGION);
+  const regionRef = useRef(DEFAULT_WEBRTC_REGION);
 
   useEffect(() => {
     statusRef.current = status;
@@ -288,7 +289,8 @@ export function TelephonyProvider({ children }) {
       }
 
       cleanupClient();
-      const selectedRegion = normalizeWebrtcRegion(region);
+      const selectedRegion = normalizeWebrtcRegion(regionRef.current || region);
+      console.log("[webrtc] Connecting with region:", selectedRegion);
       const client = new TelnyxRTC({
         login_token: token,
         ...(selectedRegion !== "auto" && { region: selectedRegion }),
@@ -386,6 +388,7 @@ export function TelephonyProvider({ children }) {
   const setRegion = useCallback(
     (nextRegion) => {
       const normalized = normalizeWebrtcRegion(nextRegion);
+      regionRef.current = normalized;
       setRegionState((currentRegion) => {
         if (currentRegion === normalized) return currentRegion;
         try {
@@ -407,6 +410,7 @@ export function TelephonyProvider({ children }) {
       const storedRegion = normalizeWebrtcRegion(
         localStorage.getItem("webrtc.region") || DEFAULT_WEBRTC_REGION
       );
+      regionRef.current = storedRegion;
       if (storedRegion !== region) {
         setRegionState(storedRegion);
       }
