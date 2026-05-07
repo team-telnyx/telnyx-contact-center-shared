@@ -64,6 +64,7 @@ export function Softphone() {
 
   // Zustand stores - call state (shared with mini phone)
   const activeCall = useActiveCall();
+  const hasActiveCall = Boolean(activeCall);
   const isRinging = useIsRinging();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
@@ -1250,18 +1251,27 @@ export function Softphone() {
         <div className="absolute left-3 top-3">
           <div className="relative">
             <button
-              className="flex min-w-[112px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800"
+              className={clsx(
+                "flex min-w-[112px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800",
+                hasActiveCall && "cursor-not-allowed opacity-50 hover:bg-zinc-900/60"
+              )}
               onClick={() => {
+                if (hasActiveCall) return;
                 setShowRegionList((v) => !v);
                 setShowMicList(false);
                 setShowSpkList(false);
               }}
-              title="Select WebRTC region"
+              disabled={hasActiveCall}
+              title={
+                hasActiveCall
+                  ? "Cannot change WebRTC region during an active call"
+                  : "Select WebRTC region"
+              }
             >
               <span>{regions.find((r) => r.value === region)?.label || "AUTO"}</span>
               <IconChevronDown className="h-3 w-3" />
             </button>
-            {showRegionList && (
+            {showRegionList && !hasActiveCall && (
               <div className="absolute left-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
                 <div className="px-2 py-1 text-[11px] text-zinc-400">
                   WebRTC Region
