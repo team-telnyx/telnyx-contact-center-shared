@@ -212,7 +212,7 @@ export default function FloatingSoftphone() {
                   type="button"
                   aria-label="Copy WebRTC URI"
                   title={sipUri ? `Copy ${sipUri}` : "WebRTC URI not configured"}
-                  className="rounded-full border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-md border border-emerald-500/60 bg-emerald-500/15 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-emerald-300 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
                   onClick={copySipUri}
                   disabled={!sipUri}
                 >
