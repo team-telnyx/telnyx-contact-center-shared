@@ -1162,6 +1162,7 @@ export default function SoftphoneMini() {
         callerName: callerName || undefined,
         audio: true,
         video: false,
+        trickleIce: true,
       });
 
       // Set active call in store (outbound call, no contact center metadata)

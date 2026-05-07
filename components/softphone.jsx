@@ -679,6 +679,7 @@ export function Softphone() {
         callerName: callerName || undefined,
         audio: true,
         video: false,
+        trickleIce: true,
       });
 
       // Set active call in store (outbound call)
