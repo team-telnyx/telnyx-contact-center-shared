@@ -156,6 +156,12 @@ export function Softphone() {
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
 
+  useEffect(() => {
+    if (hasActiveCall) {
+      setShowRegionList(false);
+    }
+  }, [hasActiveCall]);
+
   const copySipUri = async () => {
     if (!sipUri) {
       toast.error("WebRTC SIP URI is not configured for this profile");
