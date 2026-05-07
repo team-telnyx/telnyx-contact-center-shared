@@ -143,9 +143,8 @@ export function Softphone() {
   const incomingCallerDisplay = formatCallerIdentity(incomingCallerName, incomingCallerNumber);
   const isIncomingCall =
     activeCall &&
-    ((activeCallDirection === "inbound" || activeCallDirection === "incoming") ||
-      Boolean(remoteCallerNumber) ||
-      Boolean(interactionFromNumber));
+    (activeCallDirection === "inbound" || activeCallDirection === "incoming");
+  const isOutboundCall = activeCall && activeCallDirection === "outbound";
   const displayedFromNumber = isIncomingCall
     ? incomingCallerDisplay || fromNumber
     : fromNumber;
@@ -486,9 +485,11 @@ export function Softphone() {
           const callDirection =
             call.direction || notification?.call?.direction || "";
           const isIncoming =
-            callDirection === "inbound" ||
-            callDirection === "incoming" ||
-            callState.toLowerCase() === "ringing";
+            callDirection === "outbound"
+              ? false
+              : callDirection === "inbound" ||
+                callDirection === "incoming" ||
+                (!activeCall && callState.toLowerCase() === "ringing");
           const remoteCallerNumber =
             call.options?.remoteCallerNumber || call.remoteCallerNumber || "";
           const remoteCallerName =
@@ -1337,6 +1338,8 @@ export function Softphone() {
               "w-full rounded-lg border bg-zinc-900/60 px-2.5 py-1.5 text-[10px] outline-none cursor-not-allowed",
               isIncomingCall
                 ? "border-orange-500/50 text-orange-500 focus:border-orange-500"
+                : isOutboundCall
+                ? "border-emerald-500/50 text-white focus:border-emerald-500"
                 : "border-zinc-700 text-white focus:border-zinc-500"
             )}
             placeholder="Phone number or SIP URI"

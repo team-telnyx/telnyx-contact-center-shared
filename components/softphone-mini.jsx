@@ -115,9 +115,8 @@ export default function SoftphoneMini() {
   const incomingCallerDisplay = formatCallerIdentity(incomingFromName, incomingFromNumber);
   const isIncomingCall =
     activeCall &&
-    ((activeCallDirection === "inbound" || activeCallDirection === "incoming") ||
-      Boolean(remoteCallerNumber) ||
-      Boolean(interactionFromNumber));
+    (activeCallDirection === "inbound" || activeCallDirection === "incoming");
+  const isOutboundCall = activeCall && activeCallDirection === "outbound";
   const miniInputDisplay = isIncomingCall && incomingCallerDisplay ? incomingCallerDisplay : toInput;
   const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
 
@@ -1457,6 +1456,8 @@ export default function SoftphoneMini() {
         className={`relative h-[30px] w-40 overflow-hidden rounded border bg-background px-2 py-1 text-left text-xs outline-none ${
           isIncomingCall && incomingCallerDisplay
             ? "cursor-not-allowed border-orange-500/50 text-orange-500"
+            : isOutboundCall
+            ? "cursor-pointer border-emerald-500/50 text-foreground"
             : "cursor-pointer border-border text-foreground"
         }`}
         onClick={() => {
