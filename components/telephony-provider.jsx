@@ -12,7 +12,26 @@ import {
 import { TelnyxRTC } from "@telnyx/webrtc";
 import { notify } from "@/components/ToastNotify";
 
-const WEBRTC_REGION = process.env.NEXT_PUBLIC_TELNYX_WEBRTC_REGION || "auto";
+const WEBRTC_REGIONS = [
+  { value: "auto", label: "AUTO" },
+  { value: "eu", label: "EU" },
+  { value: "us-central", label: "US-CENTRAL" },
+  { value: "us-east", label: "US-EAST" },
+  { value: "us-west", label: "US-WEST" },
+  { value: "ca-central", label: "CA-CENTRAL" },
+  { value: "apac", label: "APAC" },
+];
+
+const normalizeWebrtcRegion = (value) => {
+  const normalized = String(value || "auto").toLowerCase();
+  return WEBRTC_REGIONS.some((region) => region.value === normalized)
+    ? normalized
+    : "auto";
+};
+
+const DEFAULT_WEBRTC_REGION = normalizeWebrtcRegion(
+  process.env.NEXT_PUBLIC_TELNYX_WEBRTC_REGION || "auto"
+);
 
 const TelephonyContext = createContext({
   client: null,
@@ -20,6 +39,9 @@ const TelephonyContext = createContext({
   error: "",
   reconnect: () => {},
   clearCache: () => {},
+  region: "auto",
+  setRegion: () => {},
+  regions: WEBRTC_REGIONS,
 });
 
 export function useTelnyx() {
@@ -122,6 +144,7 @@ export function TelephonyProvider({ children }) {
   const [status, setStatus] = useState("disconnected");
   const [error, setError] = useState("");
   const [client, setClient] = useState(null);
+  const [region, setRegionState] = useState(DEFAULT_WEBRTC_REGION);
 
   useEffect(() => {
     statusRef.current = status;
@@ -265,9 +288,10 @@ export function TelephonyProvider({ children }) {
       }
 
       cleanupClient();
+      const selectedRegion = normalizeWebrtcRegion(region);
       const client = new TelnyxRTC({
         login_token: token,
-        ...(WEBRTC_REGION !== "auto" && { region: WEBRTC_REGION }),
+        ...(selectedRegion !== "auto" && { region: selectedRegion }),
         ringbackFile: "/audio/ringback.mp3",
         ringtoneFile: "/audio/ringtone.mp3",
       });
@@ -356,7 +380,40 @@ export function TelephonyProvider({ children }) {
     } finally {
       connectingRef.current = false;
     }
-  }, [cleanupClient, scheduleReconnect]);
+  }, [cleanupClient, region, scheduleReconnect]);
+
+
+  const setRegion = useCallback(
+    (nextRegion) => {
+      const normalized = normalizeWebrtcRegion(nextRegion);
+      setRegionState((currentRegion) => {
+        if (currentRegion === normalized) return currentRegion;
+        try {
+          localStorage.setItem("webrtc.region", normalized);
+        } catch (_) {}
+        cleanupClient();
+        statusRef.current = "disconnected";
+        setStatus("disconnected");
+        setError("");
+        retryAttemptRef.current = 0;
+        return normalized;
+      });
+    },
+    [cleanupClient]
+  );
+
+  useEffect(() => {
+    try {
+      const storedRegion = normalizeWebrtcRegion(
+        localStorage.getItem("webrtc.region") || DEFAULT_WEBRTC_REGION
+      );
+      if (storedRegion !== region) {
+        setRegionState(storedRegion);
+      }
+    } catch (_) {}
+    // Run once on mount; subsequent changes go through setRegion.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     connect();
@@ -393,8 +450,11 @@ export function TelephonyProvider({ children }) {
         clearTokenCache();
         scheduleReconnect(true);
       },
+      region,
+      setRegion,
+      regions: WEBRTC_REGIONS,
     }),
-    [client, status, error, scheduleReconnect]
+    [client, status, error, region, setRegion, scheduleReconnect]
   );
 
   return (

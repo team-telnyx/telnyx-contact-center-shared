@@ -60,7 +60,7 @@ function isValidDialTo(value) {
 }
 
 export function Softphone() {
-  const { client } = useTelnyx();
+  const { client, region, regions, setRegion } = useTelnyx();
 
   // Zustand stores - call state (shared with mini phone)
   const activeCall = useActiveCall();
@@ -120,6 +120,7 @@ export function Softphone() {
   const [selectedSpeakerId, setSelectedSpeakerId] = useState("");
   const [showMicList, setShowMicList] = useState(false);
   const [showSpkList, setShowSpkList] = useState(false);
+  const [showRegionList, setShowRegionList] = useState(false);
   const [showDtmf, setShowDtmf] = useState(false);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -679,6 +680,7 @@ export function Softphone() {
         callerName: callerName || undefined,
         audio: true,
         video: false,
+        trickleIce: true,
       });
 
       // Set active call in store (outbound call)
@@ -1260,10 +1262,52 @@ export function Softphone() {
         <div className="absolute right-3 top-3 flex items-center gap-2">
           <div className="relative">
             <button
+              className="flex min-w-[74px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800"
+              onClick={() => {
+                setShowRegionList((v) => !v);
+                setShowMicList(false);
+                setShowSpkList(false);
+              }}
+              title="Select WebRTC region"
+            >
+              <span>{regions.find((r) => r.value === region)?.label || "AUTO"}</span>
+              <IconChevronDown className="h-3 w-3" />
+            </button>
+            {showRegionList && (
+              <div className="absolute right-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
+                <div className="px-2 py-1 text-[11px] text-zinc-400">
+                  WebRTC Region
+                </div>
+                <div className="max-h-64 overflow-auto">
+                  {regions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setRegion(option.value);
+                        setShowRegionList(false);
+                      }}
+                      className={clsx(
+                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
+                        region === option.value && "bg-zinc-800"
+                      )}
+                    >
+                      <span className="truncate">{option.label}</span>
+                      {region === option.value && (
+                        <span className="text-emerald-400">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
               className="flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-xs hover:bg-zinc-800"
               onClick={() => {
                 setShowMicList((v) => !v);
                 setShowSpkList(false);
+                setShowRegionList(false);
               }}
               title="Select microphone"
             >
@@ -1303,6 +1347,7 @@ export function Softphone() {
               onClick={() => {
                 setShowSpkList((v) => !v);
                 setShowMicList(false);
+                setShowRegionList(false);
               }}
               title="Select speaker"
             >
