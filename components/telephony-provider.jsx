@@ -50,6 +50,7 @@ export function useTelnyx() {
 
 export function TelephonyProvider({ children }) {
   const clientRef = useRef(null);
+  const suppressNextSocketCloseRef = useRef(false);
   const connectingRef = useRef(false);
   const reconnectTimerRef = useRef(null);
   const retryAttemptRef = useRef(0);
@@ -155,6 +156,7 @@ export function TelephonyProvider({ children }) {
     try {
       const client = clientRef.current;
       if (!client) return;
+      suppressNextSocketCloseRef.current = true;
       client.disconnect?.();
     } catch (_) {}
     clientRef.current = null;
@@ -305,6 +307,10 @@ export function TelephonyProvider({ children }) {
         setClient(client); // Update state so context consumers get the client
       });
       client.on("telnyx.socket.close", () => {
+        if (suppressNextSocketCloseRef.current) {
+          suppressNextSocketCloseRef.current = false;
+          return;
+        }
         setStatus("disconnected");
         setClient(null); // Clear client from state
         scheduleReconnect(false);
@@ -382,27 +388,28 @@ export function TelephonyProvider({ children }) {
     } finally {
       connectingRef.current = false;
     }
-  }, [cleanupClient, region, scheduleReconnect]);
+  }, [cleanupClient, scheduleReconnect]);
 
 
   const setRegion = useCallback(
     (nextRegion) => {
       const normalized = normalizeWebrtcRegion(nextRegion);
+      if (regionRef.current === normalized) return;
+
       regionRef.current = normalized;
-      setRegionState((currentRegion) => {
-        if (currentRegion === normalized) return currentRegion;
-        try {
-          localStorage.setItem("webrtc.region", normalized);
-        } catch (_) {}
-        cleanupClient();
-        statusRef.current = "disconnected";
-        setStatus("disconnected");
-        setError("");
-        retryAttemptRef.current = 0;
-        return normalized;
-      });
+      try {
+        localStorage.setItem("webrtc.region", normalized);
+      } catch (_) {}
+
+      setRegionState(normalized);
+      cleanupClient();
+      statusRef.current = "disconnected";
+      setStatus("disconnected");
+      setError("");
+      retryAttemptRef.current = 0;
+      scheduleReconnect(true);
     },
-    [cleanupClient]
+    [cleanupClient, scheduleReconnect]
   );
 
   useEffect(() => {
