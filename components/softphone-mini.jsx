@@ -47,10 +47,6 @@ const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
 };
 
 const getWebrtcExperimentalOptions = () => ({
-  trickleIce: readWebrtcBooleanFlag(
-    "webrtc.trickleIce",
-    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_TRICKLE_ICE
-  ),
   prefetchIceCandidates: readWebrtcBooleanFlag(
     "webrtc.prefetchIceCandidates",
     process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
@@ -1191,7 +1187,6 @@ export default function SoftphoneMini() {
         callerName: callerName || undefined,
         audio: true,
         video: false,
-        ...(experimentalOptions.trickleIce && { trickleIce: true }),
         ...(experimentalOptions.prefetchIceCandidates && {
           prefetchIceCandidates: true,
         }),

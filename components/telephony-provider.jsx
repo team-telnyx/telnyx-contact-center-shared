@@ -50,10 +50,6 @@ const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
 };
 
 const getWebrtcExperimentalOptions = () => ({
-  trickleIce: readWebrtcBooleanFlag(
-    "webrtc.trickleIce",
-    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_TRICKLE_ICE
-  ),
   prefetchIceCandidates: readWebrtcBooleanFlag(
     "webrtc.prefetchIceCandidates",
     process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
@@ -322,13 +318,11 @@ export function TelephonyProvider({ children }) {
       const experimentalOptions = getWebrtcExperimentalOptions();
       console.log("[webrtc] Connecting", {
         region: selectedRegion,
-        trickleIce: experimentalOptions.trickleIce,
         prefetchIceCandidates: experimentalOptions.prefetchIceCandidates,
       });
       const client = new TelnyxRTC({
         login_token: token,
         ...(selectedRegion !== "auto" && { region: selectedRegion }),
-        ...(experimentalOptions.trickleIce && { trickleIce: true }),
         ...(experimentalOptions.prefetchIceCandidates && {
           prefetchIceCandidates: true,
         }),
