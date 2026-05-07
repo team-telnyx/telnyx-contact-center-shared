@@ -1308,7 +1308,7 @@ export function Softphone() {
           </div>
         </div>
 
-        <div className="w-full mt-5">
+        <div className="w-full mt-8">
           <label className="mb-1 block text-[11px] text-zinc-300">To</label>
           <div className="flex items-center gap-2">
             <button
