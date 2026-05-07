@@ -125,6 +125,7 @@ export function Softphone() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [interaction, setInteraction] = useState(null);
   const [sipUri, setSipUri] = useState("");
+  const [outboundCallerName, setOutboundCallerName] = useState("");
   const formatCallerIdentity = (name, number) => {
     const normalizedName = String(name || "").trim();
     const normalizedNumber = String(number || "").trim();
@@ -176,14 +177,25 @@ export function Softphone() {
         const data = await res.json().catch(() => null);
         const user = data?.data || data?.user || data || {};
         const telephonyUserName = user.telephony_user_name || "";
+        const callerName = [
+          user.first_name || user.firstName,
+          user.last_name || user.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
 
         if (!cancelled) {
+          setOutboundCallerName(callerName);
           setSipUri(
             telephonyUserName ? `sip:${telephonyUserName}@sip.telnyx.com` : ""
           );
         }
       } catch (_) {
-        if (!cancelled) setSipUri("");
+        if (!cancelled) {
+          setOutboundCallerName("");
+          setSipUri("");
+        }
       }
     })();
 
@@ -625,6 +637,21 @@ export function Softphone() {
     let from = (fromNumber || "").trim();
     if (!client || !to || activeCall) return;
 
+    let callerName = outboundCallerName;
+    if (!callerName) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (callerName) {
+          setOutboundCallerName(callerName);
+        }
+      } catch (_) {}
+    }
+
     // If fromNumber is empty, try to get mainFromNumber as fallback
     if (!from) {
       try {
@@ -649,6 +676,7 @@ export function Softphone() {
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
+        callerName: callerName || undefined,
         audio: true,
         video: false,
       });

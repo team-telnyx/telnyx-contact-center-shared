@@ -97,6 +97,7 @@ export default function SoftphoneMini() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [interaction, setInteraction] = useState(null);
+  const [outboundCallerName, setOutboundCallerName] = useState("");
   const formatCallerIdentity = (name, number) => {
     const normalizedName = String(name || "").trim();
     const normalizedNumber = String(number || "").trim();
@@ -675,6 +676,11 @@ export default function SoftphoneMini() {
         const data = await res.json();
         const mobile = data?.user?.mobile || "";
         const voice = data?.user?.voiceNumber || "";
+        const callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        setOutboundCallerName(callerName);
         const mainFromNumber = data?.user?.mainFromNumber || "";
 
         // Only set mobile as toNumber if there's no existing toNumber in the store
@@ -1113,6 +1119,21 @@ export default function SoftphoneMini() {
     let from = fromRef.current || "";
     if (!client || !to || activeCall) return;
 
+    let callerName = outboundCallerName;
+    if (!callerName) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (callerName) {
+          setOutboundCallerName(callerName);
+        }
+      } catch (_) {}
+    }
+
     // If fromNumber is empty, try to get mainFromNumber as fallback
     if (!from) {
       try {
@@ -1138,6 +1159,7 @@ export default function SoftphoneMini() {
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
+        callerName: callerName || undefined,
         audio: true,
         video: false,
       });
