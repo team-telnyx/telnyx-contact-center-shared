@@ -43,7 +43,7 @@
     "@tabler/icons-react": "^3.36.0",
     "@tanstack/react-table": "^8.21.3",
     "@telnyx/ai-agent-lib": "0.1.9",
-    "@telnyx/webrtc": "^2.25.11",
+    "@telnyx/webrtc": "2.26.4",
     "alawmulaw": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "bufferutil": "^4.1.0",

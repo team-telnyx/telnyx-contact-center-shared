@@ -2488,14 +2488,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@telnyx/webrtc@npm:^2.25.11":
-  version: 2.25.17
-  resolution: "@telnyx/webrtc@npm:2.25.17"
+"@telnyx/webrtc@npm:2.26.4":
+  version: 2.26.4
+  resolution: "@telnyx/webrtc@npm:2.26.4"
   dependencies:
     "@peermetrics/webrtc-stats": "npm:^5.7.1"
     loglevel: "npm:^1.6.8"
     uuid: "npm:^7.0.3"
-  checksum: 10c0/b1cd669f8d53ce563d58a709cc25dc69682dbc13f6381a7b174ab542f6e1188f89d98b7ab4fbdfde82482ceee3e58edc7fcc498c38d4cc9e90ea1620c0add563
+  checksum: 10c0/bd71d46aaf29e2be2f6a0c1085e27169398e91e6ad68c32ff707779a0e30b34a72d51030dbf8f2db15ca2c75829befa3d6c374265193eac4d924c6feefcfe7b4
   languageName: node
   linkType: hard
 
@@ -9189,7 +9189,7 @@ __metadata:
     "@tailwindcss/postcss": "npm:^4.1.18"
     "@tanstack/react-table": "npm:^8.21.3"
     "@telnyx/ai-agent-lib": "npm:0.1.9"
-    "@telnyx/webrtc": "npm:^2.25.11"
+    "@telnyx/webrtc": "npm:2.26.4"
     "@types/react": "npm:^18.3.27"
     "@types/react-dom": "npm:^18.3.7"
     "@typescript-eslint/eslint-plugin": "npm:^8.49.0"
