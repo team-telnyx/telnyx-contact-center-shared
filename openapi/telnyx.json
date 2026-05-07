@@ -538,6 +538,10 @@
       "description": "Traffic Policy Profiles operations"
     },
     {
+      "name": "UAC Connections",
+      "description": "UAC connection operations"
+    },
+    {
       "name": "Usage Reports (BETA)",
       "description": "Usage data reporting across Telnyx products"
     },
@@ -45308,6 +45312,243 @@
         "x-latency-category": "responsive"
       }
     },
+    "/uac_connections": {
+      "get": {
+        "description": "Returns a list of your UAC connections. A UAC (User Agent Client) Connection registers Telnyx to your PBX \u2014 the opposite of a standard SIP trunk, where the PBX registers to Telnyx. Use UAC when your PBX doesn\u2019t support outbound SIP registration or you need Telnyx to maintain the registration.",
+        "summary": "List UAC connections",
+        "operationId": "ListUacConnections",
+        "tags": [
+          "UAC Connections"
+        ],
+        "x-group-parameters": "true",
+        "x-endpoint-cost": "medium",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/connections_FilterConsolidated"
+          },
+          {
+            "$ref": "#/components/parameters/connections_PageConsolidated"
+          },
+          {
+            "$ref": "#/components/parameters/connections_SortConnection"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ListUacConnectionsResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/connections_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "post": {
+        "description": "Creates a UAC connection. A UAC (User Agent Client) Connection registers Telnyx to your PBX \u2014 the opposite of a standard SIP trunk, where the PBX registers to Telnyx. Use UAC when your PBX doesn\u2019t support outbound SIP registration or you need Telnyx to maintain the registration.",
+        "summary": "Create a UAC connection",
+        "operationId": "CreateUacConnection",
+        "tags": [
+          "UAC Connections"
+        ],
+        "x-endpoint-cost": "medium",
+        "parameters": [],
+        "requestBody": {
+          "description": "Parameters that can be defined during UAC connection creation",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUacConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/UacConnectionResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/connections_UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/uac_connections/{id}": {
+      "delete": {
+        "description": "Deletes an existing UAC connection.",
+        "summary": "Delete a UAC connection",
+        "operationId": "DeleteUacConnection",
+        "tags": [
+          "UAC Connections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Identifies the resource.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UacConnectionResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/connections_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/connections_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "get": {
+        "description": "Retrieves the details of an existing UAC connection.",
+        "summary": "Retrieve a UAC connection",
+        "operationId": "RetrieveUacConnection",
+        "tags": [
+          "UAC Connections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Identifies the resource.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UacConnectionResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/connections_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/connections_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "description": "Updates settings of an existing UAC connection.",
+        "summary": "Update a UAC connection",
+        "operationId": "UpdateUacConnection",
+        "tags": [
+          "UAC Connections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Identifies the resource.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Parameters that can be updated in a UAC connection",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUacConnectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UacConnectionResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/connections_NotFoundResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/connections_UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/uac_connections/{id}/actions/check_registration_status": {
+      "post": {
+        "description": "Checks the registration status for a UAC connection (`registration_status`) as well as the timestamp for the last SIP registration event (`registration_status_updated_at`).",
+        "summary": "Check a UAC Connection Registration Status",
+        "operationId": "CheckUacConnectionRegistrationStatus",
+        "tags": [
+          "UAC Connections"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Identifies the resource.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RegistrationStatusResponse"
+          },
+          "400": {
+            "$ref": "#/components/responses/connections_BadRequestResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/UnauthenticatedResponse"
+          },
+          "403": {
+            "$ref": "#/components/responses/connections_UnauthorizedResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/connections_NotFoundResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/usage_reports": {
       "get": {
         "tags": [
@@ -59305,6 +59546,28 @@
           }
         }
       },
+      "ListUacConnectionsResponse": {
+        "description": "Successful response with a list of UAC connections.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "List UAC Connections Response",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UacConnection"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/connections_PaginationMeta"
+                }
+              }
+            }
+          }
+        }
+      },
       "ListUploadsResponse": {
         "description": "Successful response",
         "content": {
@@ -61111,6 +61374,22 @@
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/TexmlUpdateSiprecSessionResponseBody"
+            }
+          }
+        }
+      },
+      "UacConnectionResponse": {
+        "description": "Successful response with details about a UAC connection.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "UAC Connection Response",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/UacConnection"
+                }
+              }
             }
           }
         }
@@ -74853,21 +75132,17 @@
       },
       "CanaryDeployRequest": {
         "properties": {
-          "versions": {
+          "rules": {
+            "title": "Rules",
             "items": {
-              "$ref": "#/components/schemas/VersionConfig"
+              "$ref": "#/components/schemas/Rule-Input"
             },
-            "type": "array",
-            "title": "Versions",
-            "description": "List of version configurations"
+            "type": "array"
           }
         },
         "type": "object",
-        "required": [
-          "versions"
-        ],
         "title": "CanaryDeployRequest",
-        "description": "Request model for creating or updating canary deploys."
+        "description": "Create/update request body. Accepts:\n- ``rules`` \u2014 canonical ordered list of routing rules"
       },
       "CanaryDeployResponse": {
         "properties": {
@@ -74875,12 +75150,12 @@
             "type": "string",
             "title": "Assistant Id"
           },
-          "versions": {
+          "rules": {
             "items": {
-              "$ref": "#/components/schemas/VersionConfig"
+              "$ref": "#/components/schemas/Rule-Output"
             },
             "type": "array",
-            "title": "Versions"
+            "title": "Rules"
           },
           "created_at": {
             "type": "string",
@@ -74896,12 +75171,12 @@
         "type": "object",
         "required": [
           "assistant_id",
-          "versions",
+          "rules",
           "created_at",
           "updated_at"
         ],
         "title": "CanaryDeployResponse",
-        "description": "Response model for canary deploy operations."
+        "description": "Response shape.\n\nAlways carries ``rules`` (canonical)."
       },
       "Carrier": {
         "type": "object",
@@ -75896,6 +76171,35 @@
           "street_name": "Congress Street",
           "street_suffix": ""
         }
+      },
+      "Clause": {
+        "properties": {
+          "attribute": {
+            "type": "string",
+            "title": "Attribute",
+            "description": "Attribute name from the routing context"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/Operator",
+            "description": "Match operator"
+          },
+          "values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Values"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attribute",
+          "operator",
+          "values"
+        ],
+        "title": "Clause",
+        "description": "A single attribute/operator/values check.\n\nA clause matches when the routing context's value for ``attribute``\nsatisfies ``operator`` against any of ``values``."
       },
       "ClientStateUpdateRequest": {
         "type": "object",
@@ -83469,6 +83773,224 @@
             "outbound_voice_profile_id": "1293384261075731499"
           }
         }
+      },
+      "CreateUacConnectionRequest": {
+        "type": "object",
+        "title": "Create UAC Connection Request",
+        "required": [
+          "connection_name"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          },
+          "user_name": {
+            "type": "string",
+            "description": "The user name to be used as part of the credentials. Must be 4-32 characters long and alphanumeric values only (no spaces or special characters).",
+            "example": "myusername123"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password to be used as part of the credentials. Must be 8 to 128 characters long.",
+            "example": "my123secure456password789"
+          },
+          "anchorsite_override": {
+            "$ref": "#/components/schemas/AnchorsiteOverride"
+          },
+          "connection_name": {
+            "$ref": "#/components/schemas/ConnectionName"
+          },
+          "sip_uri_calling_preference": {
+            "type": "string",
+            "description": "This feature enables inbound SIP URI calls to your Credential Auth Connection. If enabled for all (unrestricted) then anyone who calls the SIP URI <your-username>@telnyx.com will be connected to your Connection. You can also choose to allow only calls that are originated on any Connections under your account (internal).",
+            "enum": [
+              "disabled",
+              "unrestricted",
+              "internal"
+            ]
+          },
+          "default_on_hold_comfort_noise_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "When enabled, Telnyx will generate comfort noise when you place the call on hold. If disabled, you will need to generate comfort noise or on hold music to avoid RTP timeout."
+          },
+          "dtmf_type": {
+            "$ref": "#/components/schemas/DtmfType"
+          },
+          "encode_contact_header_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Encode the SIP contact header sent by Telnyx to avoid issues for NAT or ALG scenarios."
+          },
+          "encrypted_media": {
+            "$ref": "#/components/schemas/EncryptedMedia"
+          },
+          "onnet_t38_passthrough_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable on-net T38 if you prefer the sender and receiver negotiating T38 directly if both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call depending on each leg's settings."
+          },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
+          "webhook_event_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL where webhooks related to this connection will be sent. Must include a scheme, such as 'https'.",
+            "example": "https://example.com"
+          },
+          "webhook_event_failover_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "The failover URL where webhooks related to this connection will be sent if sending to the primary URL fails. Must include a scheme, such as 'https'.",
+            "example": "https://failover.example.com",
+            "default": ""
+          },
+          "webhook_api_version": {
+            "type": "string",
+            "description": "Determines which webhook format will be used, Telnyx API v1, v2 or texml. Note - texml can only be set when the outbound object parameter call_parking_enabled is included and set to true.",
+            "enum": [
+              "1",
+              "2",
+              "texml"
+            ],
+            "example": "1",
+            "default": "1"
+          },
+          "webhook_timeout_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Specifies how many seconds to wait before timing out a webhook.",
+            "example": 25,
+            "default": null
+          },
+          "call_cost_in_webhooks": {
+            "type": "boolean",
+            "description": "Specifies if call cost webhooks should be sent for this connection.",
+            "default": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags associated with the connection.",
+            "example": [
+              "tag1",
+              "tag2"
+            ]
+          },
+          "rtcp_settings": {
+            "$ref": "#/components/schemas/ConnectionRtcpSettings"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/UacInboundRequest"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/UacOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
+          },
+          "internal_uac_settings": {
+            "$ref": "#/components/schemas/UacInternalSettings"
+          },
+          "external_uac_settings": {
+            "$ref": "#/components/schemas/UacExternalSettings"
+          }
+        },
+        "example": {
+          "active": true,
+          "password": "my123secure456password789",
+          "user_name": "myusername123",
+          "anchorsite_override": "Latency",
+          "connection_name": "my name",
+          "sip_uri_calling_preference": "disabled",
+          "default_on_hold_comfort_noise_enabled": false,
+          "dtmf_type": "RFC 2833",
+          "encode_contact_header_enabled": true,
+          "encrypted_media": "SRTP",
+          "onnet_t38_passthrough_enabled": true,
+          "ios_push_credential_id": "ec0c8e5d-439e-4620-a0c1-9d9c8d02a836",
+          "android_push_credential_id": "06b09dfd-7154-4980-8b75-cebf7a9d4f8e",
+          "webhook_event_url": "https://example.com",
+          "webhook_event_failover_url": "https://failover.example.com",
+          "webhook_api_version": "1",
+          "webhook_timeout_secs": 25,
+          "call_cost_in_webhooks": false,
+          "rtcp_settings": {
+            "port": "rtcp-mux",
+            "capture_enabled": true,
+            "report_frequency_secs": 10
+          },
+          "inbound": {
+            "ani_number_format": "+E.164",
+            "dnis_number_format": "+e164",
+            "codecs": [
+              "G722"
+            ],
+            "channel_limit": 10,
+            "generate_ringback_tone": true,
+            "isup_headers_enabled": true,
+            "prack_enabled": true,
+            "sip_compact_headers_enabled": true,
+            "timeout_1xx_secs": 10,
+            "timeout_2xx_secs": 20,
+            "shaken_stir_enabled": true,
+            "simultaneous_ringing": "disabled"
+          },
+          "outbound": {
+            "call_parking_enabled": true,
+            "ani_override": "always",
+            "channel_limit": 10,
+            "instant_ringback_enabled": true,
+            "generate_ringback_tone": true,
+            "localization": "US",
+            "t38_reinvite_source": "customer",
+            "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
+          },
+          "internal_uac_settings": {
+            "destination_uri": "14155550123@acme.sip.telnyx.com"
+          },
+          "external_uac_settings": {
+            "username": "ext8492",
+            "password": "testtesttest",
+            "proxy": "sip-pbx.acme.example",
+            "auth_username": "auth8492",
+            "from_user": "8492",
+            "outbound_proxy": "outbound.sip-pbx.acme.example:5061",
+            "expiration_sec": 600,
+            "transport": "TLS"
+          }
+        },
+        "description": "A UAC (User Agent Client) Connection registers Telnyx to your PBX \u2014 the opposite of a standard SIP trunk, where the PBX registers to Telnyx. Use UAC when your PBX doesn\u2019t support outbound SIP registration or you need Telnyx to maintain the registration."
       },
       "CreateUserBundlesBulkRequest": {
         "properties": {
@@ -100577,6 +101099,15 @@
         ],
         "title": "OpenAIEmbeddingUsage"
       },
+      "Operator": {
+        "type": "string",
+        "enum": [
+          "in",
+          "not_in",
+          "starts_with"
+        ],
+        "title": "Operator"
+      },
       "OptOutItem": {
         "type": "object",
         "properties": {
@@ -110666,6 +111197,27 @@
           "type"
         ]
       },
+      "RolloutSlot": {
+        "properties": {
+          "version_id": {
+            "type": "string",
+            "title": "Version Id"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight",
+            "minimum": 0.0,
+            "maximum": 100.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "weight"
+        ],
+        "title": "RolloutSlot",
+        "description": "One slot in a percentage rollout."
+      },
       "Room": {
         "type": "object",
         "properties": {
@@ -111162,6 +111714,46 @@
           "participants": [],
           "record_type": "room_session"
         }
+      },
+      "Rule-Input": {
+        "properties": {
+          "match": {
+            "items": {
+              "$ref": "#/components/schemas/Clause"
+            },
+            "type": "array",
+            "title": "Match"
+          },
+          "serve": {
+            "$ref": "#/components/schemas/Serve"
+          }
+        },
+        "type": "object",
+        "required": [
+          "serve"
+        ],
+        "title": "Rule",
+        "description": "A targeting rule: ``match`` clauses (AND) gate ``serve``.\n\nAn empty ``match`` is a catch-all (always fires)."
+      },
+      "Rule-Output": {
+        "properties": {
+          "match": {
+            "items": {
+              "$ref": "#/components/schemas/Clause"
+            },
+            "type": "array",
+            "title": "Match"
+          },
+          "serve": {
+            "$ref": "#/components/schemas/Serve"
+          }
+        },
+        "type": "object",
+        "required": [
+          "serve"
+        ],
+        "title": "Rule",
+        "description": "A targeting rule: ``match`` clauses (AND) gate ``serve``.\n\nAn empty ``match`` is a catch-all (always fires)."
       },
       "RunStatus": {
         "type": "string",
@@ -112873,6 +113465,24 @@
           "client_state": "aGF2ZSBhIG5pY2UgZGF5ID1d",
           "command_id": "891510ac-f3e4-11e8-af5b-de00688a4901"
         }
+      },
+      "Serve": {
+        "properties": {
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          },
+          "rollout": {
+            "title": "Rollout",
+            "items": {
+              "$ref": "#/components/schemas/RolloutSlot"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "title": "Serve",
+        "description": "What a rule serves when matched.\n\nExactly one of:\n- ``version_id`` \u2014 serve a specific version\n- ``rollout`` \u2014 weighted random across versions; weights must sum to\n  less than 100, with the leftover routing to the main version"
       },
       "ServiceDetail": {
         "type": "object",
@@ -118304,7 +118914,7 @@
             "format": "date-time",
             "title": "Created At",
             "description": "Timestamp when the test run was created and queued.",
-            "example": "2024-01-22T10:30:00Z"
+            "example": "2024-01-23T10:30:00Z"
           },
           "updated_at": {
             "type": "string",
@@ -121271,6 +121881,741 @@
         "description": "Uniquely identifies the resource.",
         "example": "542c3bca-d247-42bc-8fe7-e01d16ecd761"
       },
+      "UacConnection": {
+        "type": "object",
+        "title": "UAC Connection",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identifies the type of resource.",
+            "example": "1293384261075731499",
+            "x-format": "int64"
+          },
+          "record_type": {
+            "type": "string",
+            "description": "Identifies the type of the resource.",
+            "example": "uac_connection"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          },
+          "user_name": {
+            "type": "string",
+            "description": "The user name to be used as part of the credentials. Must be 4-32 characters long and alphanumeric values only (no spaces or special characters). At least one of the first 5 characters must be a letter.",
+            "example": "myusername123"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password to be used as part of the credentials. Must be 8 to 128 characters long.",
+            "example": "my123secure456password789"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "ISO-8601 formatted date indicating when the resource was created.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "ISO-8601 formatted date indicating when the resource was updated.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "anchorsite_override": {
+            "$ref": "#/components/schemas/AnchorsiteOverride"
+          },
+          "connection_name": {
+            "type": "string"
+          },
+          "sip_uri_calling_preference": {
+            "type": "string",
+            "example": "disabled",
+            "description": "This feature enables inbound SIP URI calls to your Credential Auth Connection. If enabled for all (unrestricted) then anyone who calls the SIP URI <your-username>@telnyx.com will be connected to your Connection. You can also choose to allow only calls that are originated on any Connections under your account (internal).",
+            "enum": [
+              "disabled",
+              "unrestricted",
+              "internal"
+            ]
+          },
+          "default_on_hold_comfort_noise_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When enabled, Telnyx will generate comfort noise when you place the call on hold. If disabled, you will need to generate comfort noise or on hold music to avoid RTP timeout."
+          },
+          "dtmf_type": {
+            "$ref": "#/components/schemas/DtmfType"
+          },
+          "encode_contact_header_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Encode the SIP contact header sent by Telnyx to avoid issues for NAT or ALG scenarios."
+          },
+          "encrypted_media": {
+            "$ref": "#/components/schemas/EncryptedMedia"
+          },
+          "onnet_t38_passthrough_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable on-net T38 if you prefer the sender and receiver negotiating T38 directly if both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call depending on each leg's settings."
+          },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
+          "webhook_event_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL where webhooks related to this connection will be sent. Must include a scheme, such as 'https'.",
+            "example": "https://example.com"
+          },
+          "webhook_event_failover_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "The failover URL where webhooks related to this connection will be sent if sending to the primary URL fails. Must include a scheme, such as 'https'.",
+            "example": "https://failover.example.com",
+            "default": ""
+          },
+          "webhook_api_version": {
+            "type": "string",
+            "description": "Determines which webhook format will be used, Telnyx API v1 or v2.",
+            "enum": [
+              "1",
+              "2"
+            ],
+            "example": "1",
+            "default": "1"
+          },
+          "webhook_timeout_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Specifies how many seconds to wait before timing out a webhook.",
+            "example": 25,
+            "default": null
+          },
+          "call_cost_in_webhooks": {
+            "type": "boolean",
+            "description": "Specifies if call cost webhooks should be sent for this connection.",
+            "default": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags associated with the connection.",
+            "example": [
+              "tag1",
+              "tag2"
+            ]
+          },
+          "rtcp_settings": {
+            "$ref": "#/components/schemas/ConnectionRtcpSettings"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/UacInbound"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/UacOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
+          },
+          "authentication": {
+            "type": "string",
+            "description": "The authentication strategy used by this connection.",
+            "enum": [
+              "uac-authentication"
+            ],
+            "example": "uac-authentication"
+          },
+          "registration_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The most recently known SIP registration status for this UAC connection.",
+            "example": "Registered"
+          },
+          "registration_status_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 8601 formatted date indicating when the registration status was last updated.",
+            "example": "2018-02-02T22:25:27.521Z"
+          },
+          "fqdn": {
+            "type": "string",
+            "description": "The Telnyx-managed FQDN generated for the UAC connection.",
+            "example": "abc123def456.uac.telnyx.com"
+          },
+          "fqdns": {
+            "type": "array",
+            "description": "FQDN records managed automatically by the UAC connection lifecycle.",
+            "items": {
+              "$ref": "#/components/schemas/Fqdn"
+            }
+          },
+          "fqdn_outbound_authentication": {
+            "type": "string",
+            "description": "The fixed outbound authentication mode used by UAC FQDN records.",
+            "enum": [
+              "credential-authentication"
+            ],
+            "example": "credential-authentication"
+          },
+          "internal_uac_settings": {
+            "$ref": "#/components/schemas/UacInternalSettings"
+          },
+          "external_uac_settings": {
+            "$ref": "#/components/schemas/UacExternalSettings"
+          }
+        },
+        "example": {
+          "id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+          "record_type": "uac_connection",
+          "active": true,
+          "user_name": "myusername123",
+          "password": "my123secure456password789",
+          "created_at": "2018-02-02T22:25:27.521Z",
+          "updated_at": "2018-02-02T22:25:27.521Z",
+          "anchorsite_override": "Latency",
+          "connection_name": "string",
+          "sip_uri_calling_preference": "disabled",
+          "default_on_hold_comfort_noise_enabled": true,
+          "dtmf_type": "RFC 2833",
+          "encode_contact_header_enabled": true,
+          "encrypted_media": "SRTP",
+          "onnet_t38_passthrough_enabled": true,
+          "ios_push_credential_id": "ec0c8e5d-439e-4620-a0c1-9d9c8d02a836",
+          "android_push_credential_id": "06b09dfd-7154-4980-8b75-cebf7a9d4f8e",
+          "webhook_event_url": "https://example.com",
+          "webhook_event_failover_url": "https://failover.example.com",
+          "webhook_api_version": "1",
+          "call_cost_in_webhooks": false,
+          "webhook_timeout_secs": 25,
+          "tags": [
+            "tag1",
+            "tag2"
+          ],
+          "rtcp_settings": {
+            "port": "rtp+1",
+            "capture_enabled": true,
+            "report_frequency_secs": 10
+          },
+          "inbound": {
+            "ani_number_format": "+E.164",
+            "dnis_number_format": "+e164",
+            "codecs": [
+              "G722"
+            ],
+            "channel_limit": 10,
+            "generate_ringback_tone": true,
+            "isup_headers_enabled": true,
+            "prack_enabled": true,
+            "sip_compact_headers_enabled": true,
+            "timeout_1xx_secs": 10,
+            "timeout_2xx_secs": 15,
+            "shaken_stir_enabled": true,
+            "simultaneous_ringing": "enabled"
+          },
+          "outbound": {
+            "call_parking_enabled": true,
+            "ani_override": "string",
+            "ani_override_type": "always",
+            "channel_limit": 10,
+            "instant_ringback_enabled": true,
+            "generate_ringback_tone": true,
+            "localization": "string",
+            "t38_reinvite_source": "customer",
+            "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
+          },
+          "authentication": "uac-authentication",
+          "registration_status": "Registered",
+          "registration_status_updated_at": "2018-02-02T22:25:27.521Z",
+          "fqdn": "abc123def456.uac.telnyx.com",
+          "fqdns": [
+            {
+              "id": "1293384261075731499",
+              "record_type": "fqdn",
+              "connection_id": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+              "fqdn": "abc123def456.uac.telnyx.com",
+              "port": 5060,
+              "dns_record_type": "srv",
+              "created_at": "2018-02-02T22:25:27.521Z",
+              "updated_at": "2018-02-02T22:25:27.521Z"
+            }
+          ],
+          "fqdn_outbound_authentication": "credential-authentication",
+          "internal_uac_settings": {
+            "destination_uri": "14155550123@acme.sip.telnyx.com"
+          },
+          "external_uac_settings": {
+            "username": "ext8492",
+            "password": "testtesttest",
+            "proxy": "sip-pbx.acme.example",
+            "auth_username": "auth8492",
+            "from_user": "8492",
+            "outbound_proxy": "outbound.sip-pbx.acme.example:5061",
+            "expiration_sec": 600,
+            "transport": "TLS"
+          }
+        },
+        "description": "A UAC (User Agent Client) Connection registers Telnyx to your PBX \u2014 the opposite of a standard SIP trunk, where the PBX registers to Telnyx. Use UAC when your PBX doesn\u2019t support outbound SIP registration or you need Telnyx to maintain the registration."
+      },
+      "UacExternalSettings": {
+        "type": "object",
+        "title": "UAC External Settings",
+        "description": "External SIP peer settings used by Telnyx when registering to your PBX and routing outbound calls.",
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 4,
+            "maxLength": 32,
+            "description": "The SIP username used to authenticate with the external SIP peer for registrations and outbound calls. Must start with a letter or number and contain only letters, numbers, hyphens, and underscores.",
+            "example": "ext8492"
+          },
+          "password": {
+            "type": "string",
+            "description": "The SIP password used for digest authentication with the external SIP peer.",
+            "example": "testtesttest"
+          },
+          "proxy": {
+            "type": "string",
+            "description": "The SIP proxy address of the external SIP peer used for registrations and outbound call routing.",
+            "example": "sip-pbx.acme.example"
+          },
+          "auth_username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The authentication username used in SIP digest authentication. If not set, the Username value will be used.",
+            "example": "auth8492"
+          },
+          "from_user": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The user portion of the SIP From header used in outbound requests. This controls the caller identity presented to the external SIP peer.",
+            "example": "8492"
+          },
+          "outbound_proxy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "An optional SIP proxy used to route outbound requests before reaching the external SIP peer.",
+            "example": "outbound.sip-pbx.acme.example:5061"
+          },
+          "expiration_sec": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "The registration interval, in seconds, indicating how often the system refreshes the SIP registration with the external SIP peer.",
+            "example": 600
+          },
+          "transport": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The transport protocol used for SIP signaling when communicating with the external SIP peer. One of UDP, TLS, or TCP.",
+            "enum": [
+              "UDP",
+              "TLS",
+              "TCP",
+              null
+            ],
+            "example": "TLS"
+          }
+        },
+        "example": {
+          "username": "ext8492",
+          "password": "testtesttest",
+          "proxy": "sip-pbx.acme.example",
+          "auth_username": "auth8492",
+          "from_user": "8492",
+          "outbound_proxy": "outbound.sip-pbx.acme.example:5061",
+          "expiration_sec": 600,
+          "transport": "TLS"
+        }
+      },
+      "UacInbound": {
+        "type": "object",
+        "title": "UAC Inbound",
+        "example": {
+          "ani_number_format": "+E.164",
+          "dnis_number_format": "+e164",
+          "codecs": [
+            "G722"
+          ],
+          "default_routing_method": "sequential",
+          "channel_limit": 10,
+          "generate_ringback_tone": true,
+          "isup_headers_enabled": true,
+          "prack_enabled": true,
+          "sip_compact_headers_enabled": true,
+          "timeout_1xx_secs": 10,
+          "timeout_2xx_secs": 20,
+          "shaken_stir_enabled": true,
+          "simultaneous_ringing": "enabled",
+          "sip_subdomain": "abc123def456",
+          "sip_subdomain_receive_settings": "only_my_connections"
+        },
+        "properties": {
+          "ani_number_format": {
+            "type": "string",
+            "enum": [
+              "+E.164",
+              "E.164",
+              "+E.164-national",
+              "E.164-national"
+            ],
+            "default": "E.164-national",
+            "description": "This setting allows you to set the format with which the caller's number (ANI) is sent for inbound phone calls."
+          },
+          "dnis_number_format": {
+            "type": "string",
+            "enum": [
+              "+e164",
+              "e164",
+              "national",
+              "sip_username"
+            ],
+            "default": "e164"
+          },
+          "codecs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Defines the list of codecs that Telnyx will send for inbound calls to a specific number on your portal account, in priority order. This only works when the Connection the number is assigned to uses Media Handling mode: default. OPUS and H.264 codecs are available only when using TCP or TLS transport for SIP.",
+            "default": [
+              "G722",
+              "G711U",
+              "G711A",
+              "G729",
+              "OPUS",
+              "H.264"
+            ]
+          },
+          "default_routing_method": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "round-robin"
+            ],
+            "description": "Default routing method to be used when a number is associated with the connection. Must be one of the routing method types or left blank, other values are not allowed."
+          },
+          "channel_limit": {
+            "type": "integer",
+            "default": null,
+            "description": "When set, this will limit the total number of inbound calls to phone numbers associated with this connection."
+          },
+          "generate_ringback_tone": {
+            "type": "boolean",
+            "default": false,
+            "description": "Generate ringback tone through 183 session progress message with early media."
+          },
+          "isup_headers_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "When set, inbound phone calls will receive ISUP parameters via SIP headers. (Only when available and only when using TCP or TLS transport.)"
+          },
+          "prack_enabled": {
+            "type": "boolean",
+            "description": "Enable PRACK messages as defined in RFC3262.",
+            "default": false
+          },
+          "sip_compact_headers_enabled": {
+            "type": "boolean",
+            "description": "Defaults to true.",
+            "default": true
+          },
+          "timeout_1xx_secs": {
+            "type": "integer",
+            "description": "Time(sec) before aborting if connection is not made.",
+            "minimum": 1,
+            "maximum": 120,
+            "default": 3
+          },
+          "timeout_2xx_secs": {
+            "type": "integer",
+            "description": "Time(sec) before aborting if call is unanswered (min: 1, max: 600).",
+            "minimum": 1,
+            "maximum": 600,
+            "default": 90
+          },
+          "shaken_stir_enabled": {
+            "type": "boolean",
+            "description": "When enabled the SIP Connection will receive the Identity header with Shaken/Stir data in the SIP INVITE message of inbound calls, even when using UDP transport.",
+            "default": false
+          },
+          "simultaneous_ringing": {
+            "type": "string",
+            "description": "When enabled, allows multiple devices to ring simultaneously on incoming calls.",
+            "default": "disabled",
+            "enum": [
+              "disabled",
+              "enabled"
+            ]
+          },
+          "sip_subdomain": {
+            "type": "string",
+            "description": "The Telnyx-generated SIP subdomain for this UAC connection.",
+            "example": "abc123def456"
+          },
+          "sip_subdomain_receive_settings": {
+            "type": "string",
+            "description": "Controls which SIP URI callers may reach this connection.",
+            "enum": [
+              "only_my_connections",
+              "from_anyone"
+            ],
+            "example": "only_my_connections"
+          }
+        }
+      },
+      "UacInboundRequest": {
+        "type": "object",
+        "title": "UAC Inbound Request",
+        "description": "Inbound settings that can be supplied when creating or updating a UAC connection. The SIP subdomain fields returned in UAC connection responses are generated by Telnyx and are not accepted as request parameters.",
+        "example": {
+          "ani_number_format": "+E.164",
+          "dnis_number_format": "+e164",
+          "codecs": [
+            "G722"
+          ],
+          "default_routing_method": "sequential",
+          "channel_limit": 10,
+          "generate_ringback_tone": true,
+          "isup_headers_enabled": true,
+          "prack_enabled": true,
+          "sip_compact_headers_enabled": true,
+          "timeout_1xx_secs": 10,
+          "timeout_2xx_secs": 20,
+          "shaken_stir_enabled": true,
+          "simultaneous_ringing": "enabled"
+        },
+        "properties": {
+          "ani_number_format": {
+            "type": "string",
+            "enum": [
+              "+E.164",
+              "E.164",
+              "+E.164-national",
+              "E.164-national"
+            ],
+            "default": "E.164-national",
+            "description": "This setting allows you to set the format with which the caller's number (ANI) is sent for inbound phone calls."
+          },
+          "dnis_number_format": {
+            "type": "string",
+            "enum": [
+              "+e164",
+              "e164",
+              "national",
+              "sip_username"
+            ],
+            "default": "e164"
+          },
+          "codecs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Defines the list of codecs that Telnyx will send for inbound calls to a specific number on your portal account, in priority order. This only works when the Connection the number is assigned to uses Media Handling mode: default. OPUS and H.264 codecs are available only when using TCP or TLS transport for SIP.",
+            "default": [
+              "G722",
+              "G711U",
+              "G711A",
+              "G729",
+              "OPUS",
+              "H.264"
+            ]
+          },
+          "default_routing_method": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "round-robin"
+            ],
+            "description": "Default routing method to be used when a number is associated with the connection. Must be one of the routing method types or left blank, other values are not allowed."
+          },
+          "channel_limit": {
+            "type": "integer",
+            "default": null,
+            "description": "When set, this will limit the total number of inbound calls to phone numbers associated with this connection."
+          },
+          "generate_ringback_tone": {
+            "type": "boolean",
+            "default": false,
+            "description": "Generate ringback tone through 183 session progress message with early media."
+          },
+          "isup_headers_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "When set, inbound phone calls will receive ISUP parameters via SIP headers. (Only when available and only when using TCP or TLS transport.)"
+          },
+          "prack_enabled": {
+            "type": "boolean",
+            "description": "Enable PRACK messages as defined in RFC3262.",
+            "default": false
+          },
+          "sip_compact_headers_enabled": {
+            "type": "boolean",
+            "description": "Defaults to true.",
+            "default": true
+          },
+          "timeout_1xx_secs": {
+            "type": "integer",
+            "description": "Time(sec) before aborting if connection is not made.",
+            "minimum": 1,
+            "maximum": 120,
+            "default": 3
+          },
+          "timeout_2xx_secs": {
+            "type": "integer",
+            "description": "Time(sec) before aborting if call is unanswered (min: 1, max: 600).",
+            "minimum": 1,
+            "maximum": 600,
+            "default": 90
+          },
+          "shaken_stir_enabled": {
+            "type": "boolean",
+            "description": "When enabled the SIP Connection will receive the Identity header with Shaken/Stir data in the SIP INVITE message of inbound calls, even when using UDP transport.",
+            "default": false
+          },
+          "simultaneous_ringing": {
+            "type": "string",
+            "description": "When enabled, allows multiple devices to ring simultaneously on incoming calls.",
+            "default": "disabled",
+            "enum": [
+              "disabled",
+              "enabled"
+            ]
+          }
+        }
+      },
+      "UacInternalSettings": {
+        "type": "object",
+        "title": "UAC Internal Settings",
+        "description": "Internal Telnyx-side settings for a UAC connection.",
+        "properties": {
+          "destination_uri": {
+            "type": "string",
+            "description": "The SIP URI that Telnyx will call when handling an inbound request from the external peer. Do not include a `sip:` prefix. The value must be in the format `userinfo@[subdomain.]sip.telnyx.com` or `userinfo@[subdomain.]sipdev.telnyx.com`; the userinfo portion may contain only letters, digits, hyphens, and underscores.",
+            "example": "14155550123@acme.sip.telnyx.com"
+          }
+        },
+        "example": {
+          "destination_uri": "14155550123@acme.sip.telnyx.com"
+        }
+      },
+      "UacOutbound": {
+        "type": "object",
+        "title": "UAC Outbound",
+        "example": {
+          "call_parking_enabled": true,
+          "ani_override": "always",
+          "channel_limit": 10,
+          "instant_ringback_enabled": true,
+          "generate_ringback_tone": true,
+          "localization": "US",
+          "t38_reinvite_source": "customer",
+          "outbound_voice_profile_id": "1293384261075731499"
+        },
+        "properties": {
+          "call_parking_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Forces all SIP calls originated on this connection to be \"parked\" instead of \"bridged\" to the destination specified on the URI. Parked calls will return ringback to the caller and will await for a Call Control command to define which action will be taken next."
+          },
+          "ani_override": {
+            "type": "string",
+            "description": "Set a phone number as the ani_override value to override caller id number on outbound calls.",
+            "default": ""
+          },
+          "ani_override_type": {
+            "type": "string",
+            "enum": [
+              "always",
+              "normal",
+              "emergency"
+            ],
+            "description": "Specifies when we apply your ani_override setting. Only applies when ani_override is not blank.",
+            "default": "always"
+          },
+          "channel_limit": {
+            "type": "integer",
+            "default": null,
+            "description": "When set, this will limit the total number of outbound calls to phone numbers associated with this connection."
+          },
+          "instant_ringback_enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "When set, ringback will not wait for indication before sending ringback tone to calling party."
+          },
+          "generate_ringback_tone": {
+            "type": "boolean",
+            "default": false,
+            "description": "Generate ringback tone through 183 session progress message with early media."
+          },
+          "localization": {
+            "type": "string",
+            "default": "US",
+            "description": "A 2-character country code specifying the country whose national dialing rules should be used. For example, if set to `US` then any US number can be dialed without preprending +1 to the number. When left blank, Telnyx will try US and GB dialing rules, in that order, by default.",
+            "example": "US"
+          },
+          "t38_reinvite_source": {
+            "type": "string",
+            "enum": [
+              "telnyx",
+              "customer",
+              "disabled",
+              "passthru",
+              "caller-passthru",
+              "callee-passthru"
+            ],
+            "description": "This setting only affects connections with Fax-type Outbound Voice Profiles. The setting dictates whether or not Telnyx sends a t.38 reinvite.<br/><br/> By default, Telnyx will send the re-invite. If set to `customer`, the caller is expected to send the t.38 reinvite.",
+            "default": "telnyx"
+          },
+          "outbound_voice_profile_id": {
+            "$ref": "#/components/schemas/connections_OutboundVoiceProfileId"
+          }
+        }
+      },
       "UnauthorizedError": {
         "allOf": [
           {
@@ -124127,6 +125472,224 @@
           }
         }
       },
+      "UpdateUacConnectionRequest": {
+        "type": "object",
+        "title": "Update UAC Connection Request",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          },
+          "user_name": {
+            "type": "string",
+            "description": "The user name to be used as part of the credentials. Must be 4-32 characters long and alphanumeric values only (no spaces or special characters).",
+            "example": "myusername123"
+          },
+          "password": {
+            "type": "string",
+            "description": "The password to be used as part of the credentials. Must be 8 to 128 characters long.",
+            "example": "my123secure456password789"
+          },
+          "anchorsite_override": {
+            "$ref": "#/components/schemas/AnchorsiteOverride"
+          },
+          "connection_name": {
+            "$ref": "#/components/schemas/ConnectionName"
+          },
+          "sip_uri_calling_preference": {
+            "type": "string",
+            "description": "This feature enables inbound SIP URI calls to your Credential Auth Connection. If enabled for all (unrestricted) then anyone who calls the SIP URI <your-username>@telnyx.com will be connected to your Connection. You can also choose to allow only calls that are originated on any Connections under your account (internal).",
+            "enum": [
+              "disabled",
+              "unrestricted",
+              "internal"
+            ]
+          },
+          "default_on_hold_comfort_noise_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "When enabled, Telnyx will generate comfort noise when you place the call on hold. If disabled, you will need to generate comfort noise or on hold music to avoid RTP timeout."
+          },
+          "dtmf_type": {
+            "$ref": "#/components/schemas/DtmfType"
+          },
+          "encode_contact_header_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Encode the SIP contact header sent by Telnyx to avoid issues for NAT or ALG scenarios."
+          },
+          "encrypted_media": {
+            "$ref": "#/components/schemas/EncryptedMedia"
+          },
+          "onnet_t38_passthrough_enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Enable on-net T38 if you prefer the sender and receiver negotiating T38 directly if both are on the Telnyx network. If this is disabled, Telnyx will be able to use T38 on just one leg of the call depending on each leg's settings."
+          },
+          "ios_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionIosPushCredentialId"
+          },
+          "android_push_credential_id": {
+            "$ref": "#/components/schemas/ConnectionAndroidPushCredentialId"
+          },
+          "webhook_event_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The URL where webhooks related to this connection will be sent. Must include a scheme, such as 'https'.",
+            "example": "https://example.com"
+          },
+          "webhook_event_failover_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri",
+            "description": "The failover URL where webhooks related to this connection will be sent if sending to the primary URL fails. Must include a scheme, such as 'https'.",
+            "example": "https://failover.example.com",
+            "default": ""
+          },
+          "webhook_api_version": {
+            "type": "string",
+            "description": "Determines which webhook format will be used, Telnyx API v1 or v2.",
+            "enum": [
+              "1",
+              "2"
+            ],
+            "example": "1",
+            "default": "1"
+          },
+          "webhook_timeout_secs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Specifies how many seconds to wait before timing out a webhook.",
+            "example": 25,
+            "default": null
+          },
+          "call_cost_in_webhooks": {
+            "type": "boolean",
+            "description": "Specifies if call cost webhooks should be sent for this connection.",
+            "default": false
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tags associated with the connection.",
+            "example": [
+              "tag1",
+              "tag2"
+            ]
+          },
+          "rtcp_settings": {
+            "$ref": "#/components/schemas/ConnectionRtcpSettings"
+          },
+          "inbound": {
+            "$ref": "#/components/schemas/UacInboundRequest"
+          },
+          "outbound": {
+            "$ref": "#/components/schemas/UacOutbound"
+          },
+          "noise_suppression": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppression"
+          },
+          "noise_suppression_details": {
+            "$ref": "#/components/schemas/ConnectionNoiseSuppressionDetails"
+          },
+          "jitter_buffer": {
+            "$ref": "#/components/schemas/ConnectionJitterBuffer"
+          },
+          "internal_uac_settings": {
+            "$ref": "#/components/schemas/UacInternalSettings"
+          },
+          "external_uac_settings": {
+            "$ref": "#/components/schemas/UacExternalSettings"
+          }
+        },
+        "example": {
+          "active": true,
+          "password": "my123secure456password789",
+          "user_name": "myusername123",
+          "anchorsite_override": "Latency",
+          "connection_name": "my name",
+          "sip_uri_calling_preference": "disabled",
+          "default_on_hold_comfort_noise_enabled": false,
+          "dtmf_type": "RFC 2833",
+          "encode_contact_header_enabled": true,
+          "encrypted_media": "SRTP",
+          "onnet_t38_passthrough_enabled": true,
+          "ios_push_credential_id": "ec0c8e5d-439e-4620-a0c1-9d9c8d02a836",
+          "android_push_credential_id": "06b09dfd-7154-4980-8b75-cebf7a9d4f8e",
+          "webhook_event_url": "https://example.com",
+          "webhook_event_failover_url": "https://failover.example.com",
+          "webhook_api_version": "1",
+          "webhook_timeout_secs": 25,
+          "call_cost_in_webhooks": false,
+          "tags": [
+            "tag1",
+            "tag2"
+          ],
+          "rtcp_settings": {
+            "port": "rtcp-mux",
+            "capture_enabled": true,
+            "report_frequency_secs": 10
+          },
+          "inbound": {
+            "ani_number_format": "+E.164",
+            "dnis_number_format": "+e164",
+            "codecs": [
+              "G722"
+            ],
+            "channel_limit": 10,
+            "generate_ringback_tone": true,
+            "isup_headers_enabled": true,
+            "prack_enabled": true,
+            "sip_compact_headers_enabled": true,
+            "timeout_1xx_secs": 10,
+            "timeout_2xx_secs": 20,
+            "shaken_stir_enabled": true,
+            "simultaneous_ringing": "disabled"
+          },
+          "outbound": {
+            "call_parking_enabled": true,
+            "ani_override": "always",
+            "channel_limit": 10,
+            "instant_ringback_enabled": true,
+            "generate_ringback_tone": true,
+            "localization": "US",
+            "t38_reinvite_source": "customer",
+            "outbound_voice_profile_id": "1293384261075731499"
+          },
+          "noise_suppression": "both",
+          "noise_suppression_details": {
+            "engine": "deep_filter_net",
+            "attenuation_limit": 80
+          },
+          "jitter_buffer": {
+            "enable_jitter_buffer": true,
+            "jitterbuffer_msec_min": 60,
+            "jitterbuffer_msec_max": 200
+          },
+          "internal_uac_settings": {
+            "destination_uri": "14155550123@acme.sip.telnyx.com"
+          },
+          "external_uac_settings": {
+            "username": "ext8492",
+            "password": "testtesttest",
+            "proxy": "sip-pbx.acme.example",
+            "auth_username": "auth8492",
+            "from_user": "8492",
+            "outbound_proxy": "outbound.sip-pbx.acme.example:5061",
+            "expiration_sec": 600,
+            "transport": "TLS"
+          }
+        },
+        "description": "Parameters that can be updated in a UAC connection. A UAC (User Agent Client) Connection registers Telnyx to your PBX \u2014 the opposite of a standard SIP trunk, where the PBX registers to Telnyx. Use UAC when your PBX doesn\u2019t support outbound SIP registration or you need Telnyx to maintain the registration."
+      },
       "UpdateVerifyProfileCallRequest": {
         "title": "UpdateVerifyProfileCallRequest",
         "type": "object",
@@ -126533,29 +128096,6 @@
             }
           }
         }
-      },
-      "VersionConfig": {
-        "properties": {
-          "version_id": {
-            "type": "string",
-            "title": "Version Id",
-            "description": "Version ID string that references assistant_versions.version_id"
-          },
-          "percentage": {
-            "type": "number",
-            "exclusiveMaximum": 100.0,
-            "exclusiveMinimum": 0.0,
-            "title": "Percentage",
-            "description": "Percentage of traffic for this version [1-99]"
-          }
-        },
-        "type": "object",
-        "required": [
-          "version_id",
-          "percentage"
-        ],
-        "title": "VersionConfig",
-        "description": "Configuration for a single version in canary deploy."
       },
       "Vertical": {
         "title": "Vertical",
