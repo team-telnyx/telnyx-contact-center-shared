@@ -1265,7 +1265,7 @@
           "Brands"
         ],
         "summary": "Order Brand External Vetting",
-        "description": "Order new external vetting for a brand",
+        "description": "Order new external vetting for a brand.\n\nDuplicate orders for the same `evpId` and `vettingClass` return `400` with code `10012` if a successful vetting exists within the last 180 days, or one is currently being processed. Failed vettings can be retried immediately.",
         "operationId": "PostOrderExternalVetting",
         "parameters": [
           {
@@ -6338,7 +6338,7 @@
           "Chat"
         ],
         "summary": "Create a chat completion",
-        "description": "Chat with a language model. This endpoint is consistent with the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat) and may be used with the OpenAI JS or Python SDK.",
+        "description": "**Deprecated**: Use `POST /v2/ai/openai/chat/completions` instead. Chat with a language model. This endpoint is consistent with the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat) and may be used with the OpenAI JS or Python SDK.",
         "operationId": "chat_public_chat_completions_post",
         "requestBody": {
           "required": true,
@@ -6385,6 +6385,8 @@
             }
           }
         },
+        "deprecated": true,
+        "x-hidden": true,
         "x-latency-category": "responsive"
       }
     },
@@ -10921,7 +10923,7 @@
           "Chat"
         ],
         "summary": "Get available models",
-        "description": "This endpoint returns a list of Open Source and OpenAI models that are available for use. <br /><br /> **Note**: Model `id`'s will be in the form `{source}/{model_name}`. For example `openai/gpt-4` or `mistralai/Mistral-7B-Instruct-v0.1` consistent with HuggingFace naming conventions.",
+        "description": "**Deprecated**: Use `GET /v2/ai/openai/models` instead. This endpoint returns a list of Open Source and OpenAI models that are available for use. <br /><br /> **Note**: Model `id`'s will be in the form `{source}/{model_name}`. For example `openai/gpt-4` or `mistralai/Mistral-7B-Instruct-v0.1` consistent with HuggingFace naming conventions.",
         "operationId": "get_models_public_models_get",
         "responses": {
           "200": {
@@ -10930,6 +10932,64 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-hidden": true,
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/openai/chat/completions": {
+      "post": {
+        "tags": [
+          "OpenAI Chat"
+        ],
+        "summary": "Create a chat completion (OpenAI-compatible)",
+        "description": "Chat with a language model. This endpoint is consistent with the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat) and may be used with the OpenAI JS or Python SDK by setting the base URL to `https://api.telnyx.com/v2/ai/openai`.",
+        "operationId": "create_openai_chat_completion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatCompletionRequest"
+              },
+              "example": {
+                "messages": [
+                  {
+                    "role": "system",
+                    "content": "You are a friendly chatbot."
+                  },
+                  {
+                    "role": "user",
+                    "content": "Hello, world!"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
                 }
               }
             }
@@ -11010,6 +11070,39 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OpenAIEmbeddingModelsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/openai/models": {
+      "get": {
+        "tags": [
+          "OpenAI Chat"
+        ],
+        "summary": "Get available models (OpenAI-compatible)",
+        "description": "This endpoint returns a list of Open Source and OpenAI models that are available for use. <br /><br /> **Note**: Model `id`'s will be in the form `{source}/{model_name}`. For example `openai/gpt-4` or `mistralai/Mistral-7B-Instruct-v0.1` consistent with HuggingFace naming conventions.",
+        "operationId": "list_openai_models",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsResponse"
                 }
               }
             }
@@ -41930,7 +42023,7 @@
     "/speech-to-text/transcription": {
       "get": {
         "summary": "Speech to text over WebSocket",
-        "description": "Open a WebSocket connection to stream audio and receive transcriptions in real-time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nSupported engines: `Azure`, `Deepgram`, `Google`, `Telnyx`, `xAI`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying engine, input format, and language.\n2. Send binary audio frames (mp3/wav format).\n3. Receive JSON transcript frames with `transcript`, `is_final`, and `confidence` fields.\n4. Close connection when done.",
+        "description": "Open a WebSocket connection to stream audio and receive transcriptions in real-time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nSupported engines: `Azure`, `Deepgram`, `Google`, `Telnyx`, `xAI`, `Speechmatics`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying engine, input format, and language.\n2. Send binary audio frames (mp3/wav format).\n3. Receive JSON transcript frames with `transcript`, `is_final`, and `confidence` fields.\n4. Close connection when done.",
         "operationId": "TranscriptionOverWs",
         "tags": [
           "Speech To Text over WebSockets"
@@ -53216,7 +53309,7 @@
         "name": "endpointing",
         "in": "query",
         "required": false,
-        "description": "Silence duration (in milliseconds) that triggers end-of-speech detection. When set, the engine uses this value to determine when a speaker has stopped talking. Supported by `xAI`, `Deepgram`, and `Google`. Other engines may not support this parameter.",
+        "description": "Silence duration (in milliseconds) that triggers end-of-speech detection. When set, the engine uses this value to determine when a speaker has stopped talking. Supported by `xAI`, `Deepgram`, `Google`, and `Speechmatics`. Other engines may not support this parameter.",
         "schema": {
           "type": "integer"
         },
@@ -53416,6 +53509,9 @@
             },
             {
               "$ref": "#/components/schemas/xai_models"
+            },
+            {
+              "$ref": "#/components/schemas/speechmatics_models"
             }
           ]
         }
@@ -53956,7 +54052,8 @@
             "Deepgram",
             "Google",
             "Telnyx",
-            "xAI"
+            "xAI",
+            "Speechmatics"
           ]
         },
         "example": "Telnyx"
@@ -65671,6 +65768,41 @@
           "content": "Hello, I'm John."
         }
       },
+      "AssistantScheduledCallAttempt": {
+        "properties": {
+          "attempt_number": {
+            "type": "integer",
+            "title": "Attempt Number"
+          },
+          "attempted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Attempted At"
+          },
+          "call_status": {
+            "type": "string",
+            "title": "Call Status",
+            "description": "Values: busy, canceled, no-answer, ringing, completed, failed, in-progress"
+          },
+          "call_duration": {
+            "title": "Call Duration",
+            "type": "integer",
+            "description": "Duration of the call in seconds"
+          },
+          "telnyx_call_control_id": {
+            "title": "Telnyx Call Control Id",
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempt_number",
+          "attempted_at",
+          "call_status"
+        ],
+        "title": "AssistantScheduledCallAttempt",
+        "description": "One row in `call_attempts` \u2014 captures the terminal outcome of a single dispatch."
+      },
       "AssistantSmsChatReq": {
         "properties": {
           "from": {
@@ -75893,6 +76025,25 @@
             "type": "number",
             "description": "An alternative or complement to `temperature`. This adjusts how many of the top possibilities to consider."
           },
+          "stop": {
+            "description": "Up to 4 sequences where the API will stop generating further tokens. The returned text will not contain the stop sequence.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 4
+              }
+            ]
+          },
+          "seed": {
+            "type": "integer",
+            "description": "If specified, the system will make a best effort to sample deterministically, such that repeated requests with the same `seed` and parameters should return the same result."
+          },
           "enable_thinking": {
             "type": "boolean",
             "default": true,
@@ -83293,6 +83444,20 @@
             "type": "object",
             "description": "A map of dynamic variable names to values. These variables can be referenced in the assistant's instructions and messages using {{variable_name}} syntax.",
             "title": "Dynamic Variables"
+          },
+          "max_retries_client_errors": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Max Retries Client Errors",
+            "description": "Configure number of retries on client errors: busy, no-answer, failed, canceled (caller hung up before the callee answered)",
+            "default": 0
+          },
+          "retry_interval_secs": {
+            "title": "Retry Interval Secs",
+            "type": "integer",
+            "maximum": 86400.0,
+            "minimum": 60.0
           }
         },
         "type": "object",
@@ -113047,6 +113212,39 @@
             },
             "type": "array",
             "title": "Errors"
+          },
+          "call_status": {
+            "title": "Call Status",
+            "type": "string",
+            "description": "Values: busy, canceled, no-answer, ringing, completed, failed, in-progress"
+          },
+          "call_duration": {
+            "title": "Call Duration",
+            "type": "integer",
+            "description": "Duration of the call in seconds"
+          },
+          "max_retries_client_errors": {
+            "type": "integer",
+            "title": "Max Retries Client Errors",
+            "description": "Configure number of retries on client errors: busy, no-answer, failed, canceled (caller hung up before the callee answered)",
+            "default": 0
+          },
+          "retry_interval_secs": {
+            "title": "Retry Interval Secs",
+            "type": "integer"
+          },
+          "call_attempts": {
+            "title": "Call Attempts",
+            "items": {
+              "$ref": "#/components/schemas/AssistantScheduledCallAttempt"
+            },
+            "type": "array"
+          },
+          "dispatched_at": {
+            "title": "Dispatched At",
+            "type": "string",
+            "format": "date-time",
+            "description": "Date time at which call was sent"
           }
         },
         "type": "object",
@@ -120443,10 +120641,31 @@
         "description": "The settings associated with speech to text for the voice assistant. This is only relevant if the assistant uses a text-to-text language model. Any assistant using a model with native audio support (e.g. `fixie-ai/ultravox-v0_4`) will ignore this field.",
         "properties": {
           "model": {
-            "description": "The speech to text model to be used by the voice assistant.\n\n- `distil-whisper/distil-large-v2` is lower latency but English-only.\n- `openai/whisper-large-v3-turbo` is multi-lingual with automatic language detection but slightly higher latency.\n- `google` is a multi-lingual option, please describe the language in the `language` field.",
+            "description": "The speech to text model to be used by the voice assistant. Supported models include:\n\n- `deepgram/flux` (or `flux`) for live streaming turn-taking.\n- `deepgram/nova-3` and `deepgram/nova-2` for live streaming transcription.\n- `speechmatics/standard` and `speechmatics/enhanced` for live streaming transcription.\n- `assemblyai/universal-streaming` for live streaming transcription.\n- `xai/grok-stt` for live streaming transcription.\n- `azure/fast` and `azure/realtime`; Azure models require `region`, and unsupported regions require `api_key_ref`.\n- `google/latest_long` for non-streaming multilingual transcription.\n- `distil-whisper/distil-large-v2` for lower-latency English-only non-streaming transcription.\n- `openai/whisper-large-v3-turbo` for multilingual non-streaming transcription with automatic language detection.",
             "type": "string",
+            "enum": [
+              "deepgram/flux",
+              "flux",
+              "deepgram/nova-3",
+              "deepgram/nova-2",
+              "speechmatics/standard",
+              "speechmatics/enhanced",
+              "assemblyai/universal-streaming",
+              "xai/grok-stt",
+              "azure/fast",
+              "azure/realtime",
+              "google/latest_long",
+              "distil-whisper/distil-large-v2",
+              "openai/whisper-large-v3-turbo"
+            ],
             "default": "distil-whisper/distil-large-v2",
             "example": "distil-whisper/distil-large-v2"
+          },
+          "language": {
+            "type": "string",
+            "description": "The language of the audio to be transcribed. If not set, or if set to `auto`, supported models will automatically detect the language. Supported and meaningful values depend on the selected transcription `model`. For `deepgram/flux`, supported values are: `auto` (Telnyx language detection controls the language hint), `multi` (no language hint), and language-specific hints `en`, `es`, `fr`, `de`, `hi`, `ru`, `pt`, `ja`, `it`, and `nl`.",
+            "default": "auto",
+            "example": "auto"
           }
         }
       },
@@ -122532,7 +122751,7 @@
         "properties": {
           "destination_uri": {
             "type": "string",
-            "description": "The SIP URI that Telnyx will call when handling an inbound request from the external peer. Do not include a `sip:` prefix. The value must be in the format `userinfo@[subdomain.]sip.telnyx.com` or `userinfo@[subdomain.]sipdev.telnyx.com`; the userinfo portion may contain only letters, digits, hyphens, and underscores.",
+            "description": "The SIP URI that Telnyx will call when handling an inbound request from the external peer. Do not include a `sip:` prefix. The value must be in the format `userinfo@<subdomain.>sip.telnyx.com` or `userinfo@<subdomain.>sipdev.telnyx.com`; the userinfo portion may contain only letters, digits, hyphens, and underscores.",
             "example": "14155550123@acme.sip.telnyx.com"
           }
         },
@@ -133816,6 +134035,10 @@
             "default": true,
             "description": "Whether users can interrupt the assistant while it is speaking."
           },
+          "disable_greeting_interruption": {
+            "type": "boolean",
+            "description": "When true, disables user interruptions while the assistant greeting is playing."
+          },
           "start_speaking_plan": {
             "$ref": "#/components/schemas/StartSpeakingPlan"
           }
@@ -134859,6 +135082,12 @@
             }
           }
         }
+      },
+      "speechmatics_models": {
+        "type": "string",
+        "enum": [
+          "speechmatics/standard"
+        ]
       },
       "standard_Error": {
         "type": "object",
