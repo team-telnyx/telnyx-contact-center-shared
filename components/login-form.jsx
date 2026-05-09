@@ -20,6 +20,22 @@ export function LoginForm({ className, ...props }) {
   const router = useRouter();
 
   useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const sensitiveParams = ["password", "username"];
+      const hadSensitiveParams = sensitiveParams.some((param) =>
+        url.searchParams.has(param)
+      );
+
+      if (hadSensitiveParams) {
+        sensitiveParams.forEach((param) => url.searchParams.delete(param));
+        const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(null, "", cleanUrl || "/signin");
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
     if (!error) return;
     console.log("[LOGIN] Error:", error);
     notify({
@@ -82,6 +98,7 @@ export function LoginForm({ className, ...props }) {
   return (
     <form
       className={cn("flex flex-col gap-6", className)}
+      method="post"
       onSubmit={onSubmit}
       {...props}
     >
@@ -97,8 +114,9 @@ export function LoginForm({ className, ...props }) {
           <Input
             id="username"
             name="username"
-            type="text"
+            type="email"
             placeholder="your email address"
+            autoComplete="username"
             required
           />
         </div>
@@ -117,6 +135,7 @@ export function LoginForm({ className, ...props }) {
             name="password"
             type="password"
             placeholder="your password"
+            autoComplete="current-password"
             required
           />
         </div>

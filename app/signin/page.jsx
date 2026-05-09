@@ -5,9 +5,25 @@ import { redirect } from "next/navigation";
 import { AuthBrandLogo } from "@/components/auth-brand-logo";
 import { AuthRightImage } from "@/components/auth-right-image";
 
-export default async function SigninPage() {
+export default async function SigninPage({ searchParams }) {
   const session = await getServerSession(authOptions);
   if (session?.user) redirect("/");
+
+  const params = await searchParams;
+  if (params?.username || params?.password) {
+    const cleanParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (key === "username" || key === "password") continue;
+      if (Array.isArray(value)) {
+        value.forEach((item) => cleanParams.append(key, item));
+      } else if (value != null) {
+        cleanParams.set(key, value);
+      }
+    }
+    const query = cleanParams.toString();
+    redirect(query ? `/signin?${query}` : "/signin");
+  }
+
   return (
     <div className="dark grid min-h-svh lg:grid-cols-[1fr_1.8fr] bg-background text-foreground">
       <div className="flex flex-col gap-4 p-6 md:p-10">
