@@ -21,6 +21,7 @@ import {
   IconWorld,
   IconPhoneCall,
   IconForms,
+  IconSpeakerphone,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -59,6 +60,12 @@ export const menuConfig = {
           title: "Scheduled Events",
           url: "/supervisor/scheduled-events",
           icon: IconCalendar,
+          role_access: ["supervisor", "admin", "owner"],
+        },
+        {
+          title: "Outbound Dialer",
+          url: "/supervisor/outbound-dialer",
+          icon: IconSpeakerphone,
           role_access: ["supervisor", "admin", "owner"],
         },
       ],
