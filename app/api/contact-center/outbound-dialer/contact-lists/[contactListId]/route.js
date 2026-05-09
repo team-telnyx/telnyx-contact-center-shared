@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import { getOutboundPool, jsonError, mapContactList, normalizeFieldSchema, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+
+export async function PUT(request, context) {
+  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+  const { contactListId } = await context.params;
+  const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
+  try {
+    const body = await request.json();
+    const schema = normalizeFieldSchema(body.custom_field_schema || []);
+    const { rows } = await pool.query(`UPDATE outbound_contact_lists SET name=$1, description=$2, status=$3, source_type=$4, standard_columns=$5, custom_field_schema=$6, custom_fields=$7, updated_by=$8, updated_at=NOW() WHERE id=$9 AND status <> 'archived' RETURNING *`, [requireString(body.name, "List name"), optionalString(body.description), ["draft", "validating", "validated"].includes(body.status) ? body.status : "draft", ["csv", "api", "crm", "manual"].includes(body.source_type) ? body.source_type : "csv", JSON.stringify(safeJson(body.standard_columns, {})), JSON.stringify(schema), JSON.stringify(safeJson(body.custom_fields, {})), usernameFor(user), contactListId]);
+    if (!rows[0]) return jsonError("Contact list not found", 404);
+    return NextResponse.json({ ok: true, contactList: mapContactList(rows[0]) });
+  } catch (err) { console.error("[Outbound Dialer] update contact list error:", err); return jsonError(err.message || "Failed to update contact list", 400); }
+}
+
+export async function DELETE(request, context) {
+  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+  const { contactListId } = await context.params;
+  const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
+  const { rows } = await pool.query(`UPDATE outbound_contact_lists SET status='archived', updated_by=$1, updated_at=NOW() WHERE id=$2 RETURNING *`, [usernameFor(user), contactListId]);
+  if (!rows[0]) return jsonError("Contact list not found", 404);
+  return NextResponse.json({ ok: true, contactList: mapContactList(rows[0]) });
+}

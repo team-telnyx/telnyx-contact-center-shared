@@ -1,44 +1,20 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  IconAdjustmentsHorizontal,
-  IconArrowRight,
-  IconBellRinging,
-  IconBrain,
-  IconCalendarTime,
-  IconChartBar,
-  IconChecks,
-  IconClockHour4,
-  IconDatabase,
-  IconDots,
-  IconForms,
-  IconListDetails,
-  IconPhoneCall,
-  IconPlayerPlay,
-  IconReportAnalytics,
-  IconRobot,
-  IconSettings,
-  IconShieldCheck,
-  IconSparkles,
-  IconUsers,
-  IconWand,
+  IconAdjustmentsHorizontal, IconArrowRight, IconBellRinging, IconBrain, IconCalendarTime, IconChartBar, IconChecks, IconClockHour4, IconDatabase, IconDots, IconForms, IconListDetails, IconLoader2, IconPhoneCall, IconPlayerPlay, IconRefresh, IconReportAnalytics, IconRobot, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUsers, IconWand,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { notify } from "@/components/ToastNotify";
 
+const API = "/api/contact-center/outbound-dialer";
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconChartBar, description: "Live dialer performance" },
   { id: "campaigns", label: "Campaigns", icon: IconPhoneCall, description: "Build and tune outreach" },
@@ -49,255 +25,52 @@ const NAV_ITEMS = [
   { id: "event-viewer", label: "Event Viewer", icon: IconListDetails, description: "Dialer timeline" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Workspace defaults" },
 ];
+const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300" };
+const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "agentless_ai", "agentless_flow", "power", "predictive"], campaignStatuses: ["draft", "ready", "paused", "running", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "url", "currency"], standardContactColumns: [] };
 
-const campaigns = [
-  {
-    id: "cmp-q2-winback",
-    name: "Q2 Winback — Voice Preview",
-    status: "Ready",
-    channel: "Voice",
-    mode: "Preview",
-    handler: "Queue: Sales Closers",
-    pacing: "1 contact / available agent",
-    concurrency: 18,
-    contactList: "Dormant pipeline accounts",
-    form: "Winback qualification",
-    progress: 68,
-    connected: "31.4%",
-    window: "Mon-Fri 09:00-18:00 Europe/Warsaw",
-  },
-  {
-    id: "cmp-ai-renewal",
-    name: "Renewal Reminder — Agentless AI",
-    status: "Draft",
-    channel: "Voice",
-    mode: "Agentless AI",
-    handler: "AI Assistant: Renewal Concierge",
-    pacing: "Adaptive · max 42 concurrent",
-    concurrency: 42,
-    contactList: "Renewals next 45 days",
-    form: "Not attached",
-    progress: 24,
-    connected: "—",
-    window: "Customer timezone safe hours",
-  },
-  {
-    id: "cmp-service-nps",
-    name: "Service NPS Follow-up",
-    status: "Paused",
-    channel: "Voice",
-    mode: "Progressive",
-    handler: "Queue: Customer Success",
-    pacing: "1.4 contacts / agent",
-    concurrency: 12,
-    contactList: "Post-ticket survey list",
-    form: "NPS callback form",
-    progress: 41,
-    connected: "27.8%",
-    window: "Mon-Sat 10:00-16:00 local",
-  },
-];
-
-const contactLists = [
-  {
-    id: "list-dormant",
-    name: "Dormant pipeline accounts",
-    records: 12840,
-    validPhones: "96.2%",
-    customFields: 12,
-    schema: ["account_tier", "renewal_date", "last_pipeline_stage", "owner_email"],
-    status: "Validated",
-  },
-  {
-    id: "list-renewals",
-    name: "Renewals next 45 days",
-    records: 4210,
-    validPhones: "91.7%",
-    customFields: 9,
-    schema: ["contract_value", "renewal_date", "health_score", "preferred_language"],
-    status: "Mapping needed",
-  },
-];
-
-const fieldTypes = ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "url", "currency"];
-const mappingRows = [
-  { source: "first_name", type: "text", target: "customer.firstName", required: true },
-  { source: "phone_number", type: "phone", target: "customer.phone", required: true },
-  { source: "account_tier", type: "enum", target: "account.tier", required: false },
-  { source: "renewal_date", type: "date", target: "renewal.date", required: false },
-  { source: "contract_value", type: "currency", target: "opportunity.value", required: false },
-];
-
-const metricCards = [
-  { label: "Ready campaigns", value: "7", delta: "+2 this week", icon: IconPlayerPlay, tone: "emerald" },
-  { label: "Callable contacts", value: "48.9k", delta: "94.8% validated", icon: IconUsers, tone: "blue" },
-  { label: "Connect rate", value: "29.6%", delta: "+4.1% vs baseline", icon: IconPhoneCall, tone: "violet" },
-  { label: "Guardrail health", value: "98%", delta: "DNC + windows OK", icon: IconShieldCheck, tone: "amber" },
-];
-
-const toneClasses = {
-  emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300",
-  blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300",
-  violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300",
-  amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300",
-};
-
-function statusClass(status) {
-  if (status === "Ready" || status === "Validated") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  if (status === "Draft" || status === "Mapping needed") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
-  if (status === "Paused") return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
-  return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
-}
+const title = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+const statusClass = (status) => ["ready", "validated", "running", "completed"].includes(status) ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ["draft", "validating"].includes(status) ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : status === "paused" ? "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300" : "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+const defaultCampaign = () => ({ name: "New voice campaign", description: "", status: "draft", channel: "voice", mode: "preview", handler_type: "queue", handler_ref: "", contact_list_id: null, attached_form_id: null, pacing_config: { strategy: "per_available_agent", ratio: 1, supervisorApproval: true }, concurrency_config: { maxConcurrent: 10, perAgentLimit: 1 }, dialing_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00", timezonePolicy: "contact" }], retry_policy: { maxAttempts: 4, minDelayHours: 6, exhaustAfterDays: 7 }, amd_config: { enabled: true, humanConfidenceThreshold: 0.74, voicemailAction: "hangup" }, form_variable_mapping: [], metadata: {} });
+const defaultList = () => ({ name: "New contact list", description: "", status: "draft", source_type: "csv", standard_columns: {}, custom_field_schema: [], custom_fields: {}, record_count: 0, valid_phone_count: 0 });
+const api = async (url, options = {}) => { const res = await fetch(url, { cache: "no-store", ...options, headers: options.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...(options.headers || {}) } }); const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || "Request failed"); return data; };
 
 export default function OutboundDialerPage() {
   const [active, setActive] = useState("dashboard");
-  const [selectedCampaign, setSelectedCampaign] = useState(campaigns[0]);
-  const [selectedList, setSelectedList] = useState(contactLists[0]);
-  const [previewCadence, setPreviewCadence] = useState(true);
+  const [campaigns, setCampaigns] = useState([]); const [contactLists, setContactLists] = useState([]); const [forms, setForms] = useState([]); const [schema, setSchema] = useState(emptySchema);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null); const [selectedListId, setSelectedListId] = useState(null); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(null);
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
+  const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
+  const selectedList = useMemo(() => contactLists.find((l) => l.id === selectedListId) || contactLists[0] || null, [contactLists, selectedListId]);
+  const refresh = useCallback(async (toast = false) => { try { setLoading(true); setError(null); const data = await api(API); setCampaigns(data.campaigns || []); setContactLists(data.contactLists || []); setForms(data.forms || []); setSchema(data.schema || emptySchema); if (!selectedCampaignId && data.campaigns?.[0]) setSelectedCampaignId(data.campaigns[0].id); if (!selectedListId && data.contactLists?.[0]) setSelectedListId(data.contactLists[0].id); if (toast) notify({ title: "Outbound dialer refreshed", variant: "success" }); } catch (err) { setError(err.message); notify({ title: "Failed to load outbound dialer", description: err.message, variant: "error" }); } finally { setLoading(false); } }, [selectedCampaignId, selectedListId]);
+  useEffect(() => { refresh(); }, [refresh]);
+  const saveCampaign = async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/campaigns/${draft.id}` : `${API}/campaigns`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setCampaigns((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.campaign } : i) : [data.campaign, ...items]); setSelectedCampaignId(data.campaign.id); notify({ title: draft.id ? "Campaign saved" : "Campaign created", variant: "success" }); } catch (err) { notify({ title: "Campaign save failed", description: err.message, variant: "error" }); } finally { setSaving(false); } };
+  const saveList = async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/contact-lists/${draft.id}` : `${API}/contact-lists`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setContactLists((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.contactList } : i) : [data.contactList, ...items]); setSelectedListId(data.contactList.id); notify({ title: draft.id ? "Contact list saved" : "Contact list created", variant: "success" }); } catch (err) { notify({ title: "Contact list save failed", description: err.message, variant: "error" }); } finally { setSaving(false); } };
+  const archive = async (kind, item) => { if (!item?.id) return; setSaving(true); try { await api(`${API}/${kind === "campaign" ? "campaigns" : "contact-lists"}/${item.id}`, { method: "DELETE" }); if (kind === "campaign") setCampaigns((xs) => xs.filter((x) => x.id !== item.id)); else setContactLists((xs) => xs.filter((x) => x.id !== item.id)); notify({ title: `${kind === "campaign" ? "Campaign" : "Contact list"} archived`, variant: "success" }); } catch (err) { notify({ title: "Archive failed", description: err.message, variant: "error" }); } finally { setSaving(false); } };
 
-  return (
-    <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(168,85,247,0.14),transparent_26%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)]">
-      <div className="flex h-full min-h-0 flex-col">
-        <header className="shrink-0 border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                <IconSparkles className="h-4 w-4 text-sky-500" /> Supervisor workspace
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight">Outbound Dialer</h1>
-                <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Phase 1 foundation</Badge>
-                <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Voice first · omnichannel ready</Badge>
-              </div>
-              <p className="max-w-3xl text-sm text-muted-foreground">Campaign orchestration, contact list mapping, compliance controls, and Forms handoff scaffolding for future preview, progressive, and agentless dialing engines.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm"><IconBellRinging className="mr-2 h-4 w-4" />Event stream</Button>
-              <Button size="sm" className="bg-gradient-to-r from-sky-600 to-violet-600 text-white hover:from-sky-500 hover:to-violet-500"><IconWand className="mr-2 h-4 w-4" />New campaign</Button>
-            </div>
-          </div>
-        </header>
-
-        <main className="grid flex-1 min-h-0 gap-3 p-3 xl:grid-cols-[250px_minmax(0,1fr)_360px] lg:grid-cols-[220px_minmax(0,1fr)_330px]">
-          <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
-            <PanelHeader title="Dialer palette" description="Choose a workspace" />
-            <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = active === item.id;
-                return (
-                  <button key={item.id} type="button" onClick={() => setActive(item.id)} className={`group w-full rounded-xl border px-3 py-3 text-left transition-all ${isActive ? "border-sky-500/40 bg-gradient-to-br from-sky-500/15 to-violet-500/10 shadow-sm" : "border-transparent hover:border-border hover:bg-muted/70"}`}>
-                    <div className="flex items-start gap-3">
-                      <span className={`rounded-lg p-2 transition ${isActive ? "bg-sky-500 text-white shadow-sm" : "bg-muted text-muted-foreground group-hover:bg-background group-hover:text-foreground"}`}><Icon className="h-4 w-4" /></span>
-                      <span className="min-w-0"><span className="block text-sm font-semibold">{item.label}</span><span className="block text-xs text-muted-foreground">{item.description}</span></span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </aside>
-
-          <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
-            <div className="h-16 shrink-0 border-b px-5 flex items-center justify-between gap-3 bg-gradient-to-r from-background to-muted/50">
-              <div className="min-w-0">
-                <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
-                <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
-              </div>
-              <div className="hidden items-center gap-2 md:flex"><Badge variant="outline">Safe-hours aware</Badge><Badge variant="outline">DNC enforced</Badge><Badge variant="outline">Forms-ready</Badge></div>
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-5">
-              {active === "dashboard" ? <DashboardView setActive={setActive} setSelectedCampaign={setSelectedCampaign} /> : null}
-              {active === "campaigns" ? <CampaignsView selectedCampaign={selectedCampaign} setSelectedCampaign={setSelectedCampaign} /> : null}
-              {active === "contact-lists" ? <ContactListsView selectedList={selectedList} setSelectedList={setSelectedList} /> : null}
-              {! ["dashboard", "campaigns", "contact-lists"].includes(active) ? <ComingSoonView item={activeMeta} /> : null}
-            </div>
-          </section>
-
-          <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
-            <PanelHeader title="Context settings" description={`${activeMeta.label} configuration`} />
-            <SettingsPanel active={active} campaign={selectedCampaign} contactList={selectedList} previewCadence={previewCadence} setPreviewCadence={setPreviewCadence} />
-          </aside>
-        </main>
-      </div>
-    </div>
-  );
+  return <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(168,85,247,0.14),transparent_26%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)]"><div className="flex h-full min-h-0 flex-col">
+    <header className="shrink-0 border-b bg-background/80 px-5 py-4 backdrop-blur-xl"><div className="flex flex-wrap items-center justify-between gap-4"><div className="min-w-0 space-y-1"><div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground"><IconSparkles className="h-4 w-4 text-sky-500" /> Supervisor workspace</div><div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold tracking-tight">Outbound Dialer</h1><Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Phase 2 CRUD</Badge><Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Persisted · Forms-ready</Badge></div><p className="max-w-3xl text-sm text-muted-foreground">Campaign and contact-list orchestration with CSV import, settings persistence, and Forms variable mapping. The execution worker remains intentionally out of scope.</p></div><div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={loading}><IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button><Button size="sm" className="bg-gradient-to-r from-sky-600 to-violet-600 text-white hover:from-sky-500 hover:to-violet-500" onClick={() => { setActive("campaigns"); saveCampaign(defaultCampaign()); }} disabled={saving}><IconWand className="mr-2 h-4 w-4" />New campaign</Button></div></div></header>
+    <main className="grid flex-1 min-h-0 gap-3 p-3 xl:grid-cols-[250px_minmax(0,1fr)_380px] lg:grid-cols-[220px_minmax(0,1fr)_350px]">
+      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title="Dialer palette" description="Choose a workspace" /><div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-1.5">{NAV_ITEMS.map((item) => { const Icon = item.icon; const isActive = active === item.id; return <button key={item.id} type="button" onClick={() => setActive(item.id)} className={`group w-full rounded-xl border px-3 py-3 text-left transition-all ${isActive ? "border-sky-500/40 bg-gradient-to-br from-sky-500/15 to-violet-500/10 shadow-sm" : "border-transparent hover:border-border hover:bg-muted/70"}`}><div className="flex items-start gap-3"><span className={`rounded-lg p-2 transition ${isActive ? "bg-sky-500 text-white shadow-sm" : "bg-muted text-muted-foreground group-hover:bg-background group-hover:text-foreground"}`}><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-sm font-semibold">{item.label}</span><span className="block text-xs text-muted-foreground">{item.description}</span></span></div></button>; })}</div></aside>
+      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b px-5 flex items-center justify-between gap-3 bg-gradient-to-r from-background to-muted/50"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div><div className="hidden items-center gap-2 md:flex"><Badge variant="outline">Safe-hours aware</Badge><Badge variant="outline">DNC scaffolded</Badge><Badge variant="outline">Forms-ready</Badge></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} setActive={setActive} setSelectedCampaignId={setSelectedCampaignId} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} contactLists={contactLists} forms={forms} schema={schema} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} saveCampaign={saveCampaign} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} saveList={saveList} archive={(item) => archive("list", item)} schema={schema} saving={saving} onImported={refresh} /> : <ComingSoonView item={activeMeta} />}</div></section>
+      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title="Context settings" description={`${activeMeta.label} configuration`} /><SettingsPanel active={active} campaign={selectedCampaign} contactList={selectedList} forms={forms} contactLists={contactLists} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saving={saving} /></aside>
+    </main></div></div>;
 }
 
-function PanelHeader({ title, description }) {
-  return <div className="h-16 shrink-0 border-b px-4 flex flex-col justify-center"><h2 className="text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{description}</p></div>;
-}
-
-function DashboardView({ setActive, setSelectedCampaign }) {
-  return <div className="space-y-5">
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      {metricCards.map((metric) => {
-        const Icon = metric.icon;
-        return <div key={metric.label} className="rounded-2xl border bg-background/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${toneClasses[metric.tone]}`}><Icon className="h-5 w-5" /></span><IconDots className="h-4 w-4 text-muted-foreground" /></div><div className="mt-4 text-2xl font-semibold tracking-tight">{metric.value}</div><div className="text-sm text-muted-foreground">{metric.label}</div><div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">{metric.delta}</div></div>;
-      })}
-    </div>
-
-    <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-      <div className="rounded-2xl border bg-background/80 p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Campaign command center</h3><p className="text-sm text-muted-foreground">Voice campaigns staged for supervised rollout.</p></div><Button variant="outline" size="sm" onClick={() => setActive("campaigns")}>Open campaigns <IconArrowRight className="ml-2 h-4 w-4" /></Button></div>
-        <div className="mt-4 space-y-3">
-          {campaigns.map((campaign) => <button key={campaign.id} type="button" onClick={() => { setSelectedCampaign(campaign); setActive("campaigns"); }} className="w-full rounded-xl border bg-card p-4 text-left transition hover:border-sky-500/40 hover:bg-sky-500/5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{campaign.name}</span><Badge variant="outline" className={statusClass(campaign.status)}>{campaign.status}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{campaign.mode} · {campaign.handler} · {campaign.window}</p></div><div className="text-right text-xs text-muted-foreground"><div className="font-semibold text-foreground">{campaign.progress}%</div>prepared</div></div><Progress className="mt-3 h-2" value={campaign.progress} /></button>)}
-        </div>
-      </div>
-      <div className="rounded-2xl border bg-gradient-to-br from-slate-950 to-slate-900 p-5 text-white shadow-sm dark:from-slate-900 dark:to-slate-950">
-        <div className="flex items-center gap-2 text-sky-200"><IconBrain className="h-5 w-5" /><span className="text-sm font-semibold">Dialer readiness assistant</span></div>
-        <h3 className="mt-4 text-2xl font-semibold">3 launch blockers detected</h3>
-        <p className="mt-2 text-sm text-slate-300">Renewal Reminder needs a contact-field to form-variable mapping, AMD confidence defaults, and safe-hours exception policy before it can be activated.</p>
-        <div className="mt-5 space-y-2 text-sm">
-          {['Map phone_number → customer.phone', 'Choose queue fallback for AI handoff', 'Confirm retry cap: 4 attempts / 7 days'].map((item) => <div key={item} className="flex items-center gap-2 rounded-xl bg-white/10 p-3"><IconChecks className="h-4 w-4 text-emerald-300" />{item}</div>)}
-        </div>
-      </div>
-    </div>
-  </div>;
-}
-
-function CampaignsView({ selectedCampaign, setSelectedCampaign }) {
-  return <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-    <div className="space-y-3">
-      {campaigns.map((campaign) => <button key={campaign.id} type="button" onClick={() => setSelectedCampaign(campaign)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selectedCampaign.id === campaign.id ? "border-sky-500/50 bg-sky-500/10" : "bg-background/80 hover:border-border"}`}><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{campaign.name}</h3><Badge variant="outline" className={statusClass(campaign.status)}>{campaign.status}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{campaign.contactList}</p></div><span className="rounded-xl bg-muted p-2"><IconPhoneCall className="h-4 w-4" /></span></div><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><MiniStat label="Mode" value={campaign.mode} /><MiniStat label="Concurrency" value={campaign.concurrency} /><MiniStat label="Connect" value={campaign.connected} /></div></button>)}
-    </div>
-    <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{selectedCampaign.name}</h3><p className="text-sm text-muted-foreground">Campaign configuration foundation — persisted model ready for worker orchestration.</p></div><Badge variant="outline" className={statusClass(selectedCampaign.status)}>{selectedCampaign.status}</Badge></div>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <ConfigSelect label="Channel" value="Voice" options={["Voice", "SMS (future)", "WhatsApp (future)"]} />
-        <ConfigSelect label="Mode" value={selectedCampaign.mode} options={["Preview", "Progressive", "Agentless AI", "Agentless Flow", "Power (future)", "Predictive (future)"]} />
-        <ConfigSelect label="Handler" value={selectedCampaign.handler} options={["Queue: Sales Closers", "Queue: Customer Success", "AI Assistant: Renewal Concierge", "Call Flow: Qualification Bot"]} />
-        <ConfigSelect label="Pacing strategy" value={selectedCampaign.pacing} options={["1 contact / available agent", "1.4 contacts / agent", "Adaptive · max 42 concurrent", "Manual supervisor approval"]} />
-      </div>
-      <div className="mt-5 grid gap-4 md:grid-cols-3"><InputBlock label="Max concurrency" value={String(selectedCampaign.concurrency)} /><InputBlock label="Dialing window" value="09:00-18:00" /><InputBlock label="Timezone policy" value="Contact local time" /></div>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border bg-card p-4"><div className="flex items-center gap-2 font-semibold"><IconClockHour4 className="h-4 w-4 text-sky-500" />Retry policy</div><div className="mt-3 grid gap-3"><InputBlock label="Max attempts" value="4" /><InputBlock label="Min delay" value="6 hours" /><InputBlock label="Exhaust after" value="7 days" /></div></div>
-        <div className="rounded-xl border bg-card p-4"><div className="flex items-center gap-2 font-semibold"><IconRobot className="h-4 w-4 text-violet-500" />AMD basics</div><div className="mt-3 space-y-3"><ToggleRow label="Detect answering machines" checked /><ToggleRow label="Leave flow-controlled voicemail" /><InputBlock label="Human confidence threshold" value="0.74" /></div></div>
-      </div>
-      <div className="mt-5 rounded-xl border bg-gradient-to-br from-sky-500/10 to-violet-500/10 p-4"><div className="flex items-center gap-2 font-semibold"><IconForms className="h-4 w-4 text-sky-600" />Forms integration</div><p className="mt-1 text-sm text-muted-foreground">Attach a Form for Preview/Progressive campaigns and map list fields into form variables before the agent sees the record.</p><div className="mt-4 grid gap-3 md:grid-cols-[0.9fr_1.1fr]"><ConfigSelect label="Attached form" value={selectedCampaign.form} options={["Winback qualification", "NPS callback form", "Renewal objection handler", "Not attached"]} /><ConfigSelect label="Mapping profile" value="Default contact + account mapping" options={["Default contact + account mapping", "Renewal value mapping", "Create new mapping profile"]} /></div><FieldMappingTable /></div>
-    </div>
-  </div>;
-}
-
-function ContactListsView({ selectedList, setSelectedList }) {
-  return <div className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]">
-    <div className="space-y-3">{contactLists.map((list) => <button key={list.id} type="button" onClick={() => setSelectedList(list)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selectedList.id === list.id ? "border-violet-500/50 bg-violet-500/10" : "bg-background/80 hover:border-border"}`}><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{list.name}</h3><Badge variant="outline" className={statusClass(list.status)}>{list.status}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{list.records.toLocaleString()} records · {list.validPhones} valid phones</p></div><IconDatabase className="h-5 w-5 text-violet-500" /></div><div className="mt-3 flex flex-wrap gap-1.5">{list.schema.map((field) => <Badge key={field} variant="secondary" className="font-mono text-[10px]">{field}</Badge>)}</div></button>)}</div>
-    <div className="rounded-2xl border bg-background/85 p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold">{selectedList.name}</h3><p className="text-sm text-muted-foreground">Standard columns plus JSONB custom fields and typed schema metadata.</p></div><Button variant="outline" size="sm">Import CSV</Button></div><div className="mt-5 grid gap-3 md:grid-cols-3"><MiniStat label="Records" value={selectedList.records.toLocaleString()} /><MiniStat label="Valid phones" value={selectedList.validPhones} /><MiniStat label="Custom fields" value={selectedList.customFields} /></div><div className="mt-5 rounded-xl border bg-card p-4"><h4 className="font-semibold">Standard columns</h4><div className="mt-3 grid gap-2 md:grid-cols-2">{["first_name", "last_name", "phone_number", "email", "timezone", "country", "consent_status", "last_attempt_at"].map((field) => <SchemaRow key={field} name={field} type={field.includes("phone") ? "phone" : field.includes("email") ? "email" : field.includes("at") ? "datetime" : "text"} standard />)}</div></div><div className="mt-4 rounded-xl border bg-card p-4"><h4 className="font-semibold">Custom fields schema</h4><p className="mt-1 text-sm text-muted-foreground">Stored as custom_fields JSONB with a schema registry for validation, segmentation, and Forms variable mapping.</p><div className="mt-3 grid gap-2 md:grid-cols-2">{fieldTypes.map((type) => <SchemaRow key={type} name={`custom_${type}`} type={type} />)}</div></div></div>
-  </div>;
-}
-
-function SettingsPanel({ active, campaign, contactList, previewCadence, setPreviewCadence }) {
-  if (active === "campaigns") return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconPhoneCall} title="Selected campaign" subtitle={campaign.name}><div className="space-y-3"><ConfigSelect label="Launch state" value={campaign.status} options={["Draft", "Ready", "Paused"]} /><ToggleRow label="Require supervisor approval" checked /><ToggleRow label="Enable live pacing guardrails" checked={previewCadence} onCheckedChange={setPreviewCadence} /></div></SettingCard><SettingCard icon={IconCalendarTime} title="Compliance window" subtitle="Applied before each attempt"><Textarea defaultValue={campaign.window} rows={3} /></SettingCard><SettingCard icon={IconForms} title="Form variable quality" subtitle="Human campaign readiness"><div className="space-y-2 text-sm"><ReadinessLine label="Required contact fields" ok /><ReadinessLine label="Custom variables mapped" ok={campaign.status !== "Draft"} /><ReadinessLine label="Preview form attached" ok={campaign.form !== "Not attached"} /></div></SettingCard></div>;
-  if (active === "contact-lists") return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconDatabase} title="List hygiene" subtitle={contactList.name}><ToggleRow label="Normalize E.164 phones" checked /><ToggleRow label="Respect DNC at import" checked /><ToggleRow label="Infer custom field types" checked /></SettingCard><SettingCard icon={IconForms} title="Default mapping" subtitle="Contact list → Form variables"><FieldMappingTable compact /></SettingCard></div>;
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSparkles} title="Workspace defaults" subtitle="Phase 1 configuration surface"><ConfigSelect label="Default channel" value="Voice" options={["Voice", "SMS (future)", "WhatsApp (future)"]} /><ConfigSelect label="Default mode" value="Preview" options={["Preview", "Progressive", "Agentless AI", "Agentless Flow"]} /><ToggleRow label="Show launch readiness checks" checked /><ToggleRow label="Emit worker events to Event Viewer" checked /></SettingCard><div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Settings are UI/model scaffolding only. The outbound worker, actual dialing execution, and campaign activation flow intentionally remain future phases.</div></div>;
-}
-
-function ComingSoonView({ item }) { const Icon = item.icon; return <div className="flex min-h-[520px] items-center justify-center"><div className="max-w-md rounded-3xl border bg-background/85 p-8 text-center shadow-sm"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/20 to-violet-500/20 text-sky-600"><Icon className="h-7 w-7" /></div><h3 className="mt-5 text-xl font-semibold">{item.label} is staged for Phase 2</h3><p className="mt-2 text-sm text-muted-foreground">The navigation, settings surface, and visual language are in place. Future work can connect this area to dialer execution, audit events, and reporting data.</p><Button className="mt-5" variant="outline">View roadmap</Button></div></div>; }
+function DashboardView({ campaigns, contactLists, setActive, setSelectedCampaignId }) { const callable = contactLists.reduce((sum, l) => sum + Number(l.valid_phone_count || 0), 0); const metrics = [{ label: "Runnable campaigns", value: String(campaigns.filter((c) => ["ready", "paused", "running"].includes(c.status)).length), delta: "status lifecycle stored", icon: IconPlayerPlay, tone: "emerald" }, { label: "Callable contacts", value: callable.toLocaleString(), delta: `${contactLists.length} persisted lists`, icon: IconUsers, tone: "blue" }, { label: "Forms mapped", value: String(campaigns.filter((c) => c.attached_form_id).length), delta: "variable mapping JSONB", icon: IconForms, tone: "violet" }, { label: "Guardrail health", value: "Ready", delta: "worker not enabled yet", icon: IconShieldCheck, tone: "amber" }]; return <div className="space-y-5"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{metrics.map((m) => { const Icon = m.icon; return <div key={m.label} className="rounded-2xl border bg-background/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${toneClasses[m.tone]}`}><Icon className="h-5 w-5" /></span><IconDots className="h-4 w-4 text-muted-foreground" /></div><div className="mt-4 text-2xl font-semibold tracking-tight">{m.value}</div><div className="text-sm text-muted-foreground">{m.label}</div><div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">{m.delta}</div></div>; })}</div><div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"><div className="rounded-2xl border bg-background/80 p-5 shadow-sm"><div className="flex items-center justify-between gap-3"><div><h3 className="font-semibold">Campaign command center</h3><p className="text-sm text-muted-foreground">Persisted voice campaigns staged for supervised rollout.</p></div><Button variant="outline" size="sm" onClick={() => setActive("campaigns")}>Open campaigns <IconArrowRight className="ml-2 h-4 w-4" /></Button></div><div className="mt-4 space-y-3">{campaigns.length ? campaigns.map((c) => <button key={c.id} type="button" onClick={() => { setSelectedCampaignId(c.id); setActive("campaigns"); }} className="w-full rounded-xl border bg-card p-4 text-left transition hover:border-sky-500/40 hover:bg-sky-500/5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{c.name}</span><Badge variant="outline" className={statusClass(c.status)}>{title(c.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{title(c.mode)} · {title(c.handler_type)} · {c.contact_list_name || "No list"}</p></div><div className="text-right text-xs text-muted-foreground"><div className="font-semibold text-foreground">{c.form_variable_mapping?.length || 0}</div>mapped</div></div><Progress className="mt-3 h-2" value={readiness(c)} /></button>) : <Empty title="No campaigns yet" description="Create the first campaign to start configuring outbound operations." />}</div></div><div className="rounded-2xl border bg-gradient-to-br from-slate-950 to-slate-900 p-5 text-white shadow-sm"><div className="flex items-center gap-2 text-sky-200"><IconBrain className="h-5 w-5" /><span className="text-sm font-semibold">Dialer readiness assistant</span></div><h3 className="mt-4 text-2xl font-semibold">Phase 2 is persistence-first</h3><p className="mt-2 text-sm text-slate-300">Campaigns, contact lists, CSV rows, Forms attachment, and mapping are now stored. Phase 3 can add dialing execution safely on top.</p><div className="mt-5 space-y-2 text-sm">{["Campaign CRUD enabled", "CSV import stores rows", "Worker intentionally disabled"].map((i) => <div key={i} className="flex items-center gap-2 rounded-xl bg-white/10 p-3"><IconChecks className="h-4 w-4 text-emerald-300" />{i}</div>)}</div></div></div></div>; }
+function CampaignsView({ campaigns, contactLists, forms, schema, selectedCampaign, setSelectedCampaignId, saveCampaign, archive, saving }) { const [draft, setDraft] = useState(selectedCampaign || defaultCampaign()); useEffect(() => setDraft(selectedCampaign || defaultCampaign()), [selectedCampaign]); const update = (patch) => setDraft((d) => ({ ...d, ...patch })); const updateJson = (key, patch) => setDraft((d) => ({ ...d, [key]: { ...(d[key] || {}), ...patch } })); return <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]"><div className="space-y-3"><Button className="w-full bg-gradient-to-r from-sky-600 to-violet-600 text-white" onClick={() => setDraft(defaultCampaign())}><IconWand className="mr-2 h-4 w-4" />Draft new campaign</Button>{campaigns.map((c) => <button key={c.id} type="button" onClick={() => setSelectedCampaignId(c.id)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selectedCampaign?.id === c.id ? "border-sky-500/50 bg-sky-500/10" : "bg-background/80 hover:border-border"}`}><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{c.name}</h3><Badge variant="outline" className={statusClass(c.status)}>{title(c.status)}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{c.contact_list_name || "No contact list attached"}</p></div><span className="rounded-xl bg-muted p-2"><IconPhoneCall className="h-4 w-4" /></span></div><div className="mt-4 grid grid-cols-3 gap-2 text-xs"><MiniStat label="Mode" value={title(c.mode)} /><MiniStat label="Concurrency" value={c.concurrency_config?.maxConcurrent || "—"} /><MiniStat label="Ready" value={`${readiness(c)}%`} /></div></button>)}</div><div className="rounded-2xl border bg-background/85 p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">{draft.id ? draft.name : "Create campaign"}</h3><p className="text-sm text-muted-foreground">Edit core settings, Forms handoff, pacing, retry, and AMD defaults.</p></div>{draft.id ? <Button variant="ghost" size="sm" onClick={() => archive(draft)} disabled={saving}><IconTrash className="mr-2 h-4 w-4" />Archive</Button> : null}</div><div className="mt-5 grid gap-4 md:grid-cols-2"><InputBlock label="Campaign name" value={draft.name} onChange={(v) => update({ name: v })} /><ConfigSelect label="Launch state" value={draft.status} options={schema.campaignStatuses} onChange={(v) => update({ status: v })} /><ConfigSelect label="Channel" value={draft.channel} options={schema.channels} onChange={(v) => update({ channel: v })} /><ConfigSelect label="Mode" value={draft.mode} options={schema.campaignModes} onChange={(v) => update({ mode: v })} /><ConfigSelect label="Handler" value={draft.handler_type} options={schema.handlerTypes} onChange={(v) => update({ handler_type: v })} /><InputBlock label="Handler reference" value={draft.handler_ref || ""} onChange={(v) => update({ handler_ref: v })} /><ConfigSelect label="Contact list" value={draft.contact_list_id || "none"} options={[{ value: "none", label: "Not attached" }, ...contactLists.map((l) => ({ value: l.id, label: l.name }))]} onChange={(v) => update({ contact_list_id: v === "none" ? null : v })} /><ConfigSelect label="Attached form" value={draft.attached_form_id || "none"} options={[{ value: "none", label: "Not attached" }, ...forms.map((f) => ({ value: f.id, label: f.name }))]} onChange={(v) => update({ attached_form_id: v === "none" ? null : v })} /></div><div className="mt-5 grid gap-4 md:grid-cols-3"><InputBlock label="Max concurrency" type="number" value={draft.concurrency_config?.maxConcurrent || 10} onChange={(v) => updateJson("concurrency_config", { maxConcurrent: Number(v) || 0 })} /><InputBlock label="Pacing ratio" type="number" value={draft.pacing_config?.ratio || 1} onChange={(v) => updateJson("pacing_config", { ratio: Number(v) || 1 })} /><ToggleRow label="Supervisor approval" checked={draft.pacing_config?.supervisorApproval !== false} onCheckedChange={(v) => updateJson("pacing_config", { supervisorApproval: v })} /></div><div className="mt-5 grid gap-4 md:grid-cols-2"><div className="rounded-xl border bg-card p-4"><div className="flex items-center gap-2 font-semibold"><IconClockHour4 className="h-4 w-4 text-sky-500" />Retry policy</div><div className="mt-3 grid gap-3"><InputBlock label="Max attempts" type="number" value={draft.retry_policy?.maxAttempts || 4} onChange={(v) => updateJson("retry_policy", { maxAttempts: Number(v) || 0 })} /><InputBlock label="Min delay hours" type="number" value={draft.retry_policy?.minDelayHours || 6} onChange={(v) => updateJson("retry_policy", { minDelayHours: Number(v) || 0 })} /></div></div><div className="rounded-xl border bg-card p-4"><div className="flex items-center gap-2 font-semibold"><IconRobot className="h-4 w-4 text-violet-500" />AMD basics</div><div className="mt-3 space-y-3"><ToggleRow label="Detect answering machines" checked={draft.amd_config?.enabled !== false} onCheckedChange={(v) => updateJson("amd_config", { enabled: v })} /><InputBlock label="Human confidence threshold" type="number" value={draft.amd_config?.humanConfidenceThreshold || 0.74} onChange={(v) => updateJson("amd_config", { humanConfidenceThreshold: Number(v) || 0 })} /></div></div></div><MappingEditor campaign={draft} contactLists={contactLists} update={update} /><div className="mt-5 flex justify-end"><Button onClick={() => saveCampaign(draft)} disabled={saving || !draft.name?.trim()} className="bg-gradient-to-r from-sky-600 to-violet-600 text-white">{saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Save campaign</Button></div></div></div>; }
+function ContactListsView({ contactLists, selectedList, setSelectedListId, saveList, archive, schema, saving, onImported }) { const [draft, setDraft] = useState(selectedList || defaultList()); const [csv, setCsv] = useState("first_name,last_name,phone_number,email,account_tier\nAda,Lovelace,+48123123123,ada@example.com,enterprise"); const [importing, setImporting] = useState(false); useEffect(() => setDraft(selectedList || defaultList()), [selectedList]); const update = (patch) => setDraft((d) => ({ ...d, ...patch })); const addField = () => update({ custom_field_schema: [...(draft.custom_field_schema || []), { name: `custom_field_${(draft.custom_field_schema || []).length + 1}`, type: "text", required: false }] }); const importCsv = async () => { if (!draft.id) return notify({ title: "Save the list first", description: "CSV rows need a persisted contact list.", variant: "warning" }); setImporting(true); try { const data = await api(`${API}/contact-lists/${draft.id}/import`, { method: "POST", body: JSON.stringify({ csv }) }); notify({ title: "CSV imported", description: `${data.totalRows} rows, ${data.validPhones} valid phone numbers`, variant: "success" }); await onImported(); } catch (err) { notify({ title: "CSV import failed", description: err.message, variant: "error" }); } finally { setImporting(false); } }; return <div className="grid gap-4 xl:grid-cols-[0.82fr_1.18fr]"><div className="space-y-3"><Button className="w-full bg-gradient-to-r from-violet-600 to-sky-600 text-white" onClick={() => setDraft(defaultList())}><IconDatabase className="mr-2 h-4 w-4" />Draft new list</Button>{contactLists.map((l) => <button key={l.id} type="button" onClick={() => setSelectedListId(l.id)} className={`w-full rounded-2xl border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${selectedList?.id === l.id ? "border-violet-500/50 bg-violet-500/10" : "bg-background/80 hover:border-border"}`}><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{l.name}</h3><Badge variant="outline" className={statusClass(l.status)}>{title(l.status)}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{Number(l.record_count || 0).toLocaleString()} records · {Number(l.valid_phone_count || 0).toLocaleString()} valid phones</p></div><IconDatabase className="h-5 w-5 text-violet-500" /></div><div className="mt-3 flex flex-wrap gap-1.5">{(l.custom_field_schema || []).slice(0, 5).map((f) => <Badge key={f.name} variant="secondary" className="font-mono text-[10px]">{f.name}</Badge>)}</div></button>)}</div><div className="rounded-2xl border bg-background/85 p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-lg font-semibold">{draft.id ? draft.name : "Create contact list"}</h3><p className="text-sm text-muted-foreground">Metadata, typed custom-fields schema, and starter CSV import.</p></div>{draft.id ? <Button variant="ghost" size="sm" onClick={() => archive(draft)} disabled={saving}><IconTrash className="mr-2 h-4 w-4" />Archive</Button> : null}</div><div className="mt-5 grid gap-3 md:grid-cols-3"><MiniStat label="Records" value={Number(draft.record_count || 0).toLocaleString()} /><MiniStat label="Valid phones" value={Number(draft.valid_phone_count || 0).toLocaleString()} /><MiniStat label="Custom fields" value={(draft.custom_field_schema || []).length} /></div><div className="mt-5 grid gap-4 md:grid-cols-2"><InputBlock label="List name" value={draft.name} onChange={(v) => update({ name: v })} /><ConfigSelect label="Status" value={draft.status} options={schema.contactListStatuses} onChange={(v) => update({ status: v })} /></div><div className="mt-4"><Label>Description</Label><Textarea className="mt-2" value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} rows={2} /></div><div className="mt-5 rounded-xl border bg-card p-4"><div className="flex items-center justify-between"><h4 className="font-semibold">Custom fields schema</h4><Button size="sm" variant="outline" onClick={addField}>Add field</Button></div><div className="mt-3 grid gap-2">{(draft.custom_field_schema || []).map((field, idx) => <div key={`${field.name}-${idx}`} className="grid gap-2 rounded-lg border bg-background/70 p-2 md:grid-cols-[1fr_140px_80px] items-center"><Input value={field.name} onChange={(e) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, name: e.target.value } : f) })} /><ConfigSelect bare value={field.type || "text"} options={schema.contactFieldTypes} onChange={(v) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, type: v } : f) })} /><Button variant="ghost" size="sm" onClick={() => update({ custom_field_schema: draft.custom_field_schema.filter((_, i) => i !== idx) })}>Remove</Button></div>)}</div></div><div className="mt-5 rounded-xl border bg-gradient-to-br from-violet-500/10 to-sky-500/10 p-4"><div className="flex items-center justify-between"><div><h4 className="font-semibold">CSV import</h4><p className="text-sm text-muted-foreground">Imports standard fields and stores all other columns as custom_fields JSONB.</p></div><Button size="sm" onClick={importCsv} disabled={importing || !draft.id}>{importing ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Import</Button></div><Textarea className="mt-3 font-mono text-xs" rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} /></div><div className="mt-5 flex justify-end"><Button onClick={() => saveList(draft)} disabled={saving || !draft.name?.trim()} className="bg-gradient-to-r from-violet-600 to-sky-600 text-white">Save contact list</Button></div></div></div>; }
+function SettingsPanel({ active, campaign, contactList, forms, contactLists, schema, saveCampaign, saveList, saving }) { if (active === "campaigns" && campaign) return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconPhoneCall} title="Selected campaign" subtitle={campaign.name}><ConfigSelect label="Launch state" value={campaign.status} options={schema.campaignStatuses} onChange={(v) => saveCampaign({ ...campaign, status: v })} /><div className="mt-3"><ConfigSelect label="Attached list" value={campaign.contact_list_id || "none"} options={[{ value: "none", label: "Not attached" }, ...contactLists.map((l) => ({ value: l.id, label: l.name }))]} onChange={(v) => saveCampaign({ ...campaign, contact_list_id: v === "none" ? null : v })} /></div></SettingCard><SettingCard icon={IconForms} title="Form handoff" subtitle="Persisted mapping"><ConfigSelect label="Attached form" value={campaign.attached_form_id || "none"} options={[{ value: "none", label: "Not attached" }, ...forms.map((f) => ({ value: f.id, label: f.name }))]} onChange={(v) => saveCampaign({ ...campaign, attached_form_id: v === "none" ? null : v })} /><div className="mt-3 space-y-2 text-sm"><ReadinessLine label="Contact list attached" ok={Boolean(campaign.contact_list_id)} /><ReadinessLine label="Custom variables mapped" ok={(campaign.form_variable_mapping || []).length > 0} /><ReadinessLine label="Preview form attached" ok={Boolean(campaign.attached_form_id)} /></div></SettingCard><div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Changing these settings saves immediately. Dialing execution is intentionally not started here.</div></div>; if (active === "contact-lists" && contactList) return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconDatabase} title="List hygiene" subtitle={contactList.name}><ConfigSelect label="Validation state" value={contactList.status} options={schema.contactListStatuses} onChange={(v) => saveList({ ...contactList, status: v })} /><ToggleRow label="Normalize E.164 phones" checked /><ToggleRow label="Respect DNC at import" checked /><ToggleRow label="Infer custom field types" checked /></SettingCard><SettingCard icon={IconForms} title="Field schema" subtitle="Contact list → Form variables"><div className="space-y-2">{(contactList.custom_field_schema || []).slice(0, 8).map((f) => <SchemaRow key={f.name} name={f.name} type={f.type} />)}</div></SettingCard></div>; return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSparkles} title="Workspace defaults" subtitle="Phase 2 foundation"><ConfigSelect label="Default channel" value="voice" options={schema.channels} /><ConfigSelect label="Default mode" value="preview" options={schema.campaignModes} /><ToggleRow label="Show launch readiness checks" checked /><ToggleRow label="Emit future worker events" checked /></SettingCard><div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Settings are persisted for campaigns/lists only. No worker, scheduler, or dialer execution was added.</div></div>; }
+function MappingEditor({ campaign, contactLists, update }) { const list = contactLists.find((l) => l.id === campaign.contact_list_id); const fields = ["first_name", "last_name", "phone_number", "email", "timezone", "country", ...(list?.custom_field_schema || []).map((f) => f.name)]; const mapping = campaign.form_variable_mapping || []; const add = () => update({ form_variable_mapping: [...mapping, { source: fields[0] || "phone_number", target: "customer.phone", required: false }] }); return <div className="mt-5 rounded-xl border bg-gradient-to-br from-sky-500/10 to-violet-500/10 p-4"><div className="flex items-center justify-between"><div><div className="flex items-center gap-2 font-semibold"><IconForms className="h-4 w-4 text-sky-600" />Forms variable mapping</div><p className="mt-1 text-sm text-muted-foreground">Map selected contact-list fields into variables a Form can consume.</p></div><Button size="sm" variant="outline" onClick={add}>Add mapping</Button></div><div className="mt-4 overflow-hidden rounded-xl border text-sm"><div className="grid grid-cols-[1fr_1fr_70px] bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Contact field</span><span>Form variable</span><span>Req.</span></div>{mapping.length ? mapping.map((row, idx) => <div key={idx} className="grid grid-cols-[1fr_1fr_70px] items-center gap-2 border-t px-3 py-2"><Select value={row.source || fields[0]} onValueChange={(v) => update({ form_variable_mapping: mapping.map((m, i) => i === idx ? { ...m, source: v } : m) })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{fields.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent></Select><Input value={row.target || ""} onChange={(e) => update({ form_variable_mapping: mapping.map((m, i) => i === idx ? { ...m, target: e.target.value } : m) })} placeholder="customer.phone" /><Switch checked={Boolean(row.required)} onCheckedChange={(v) => update({ form_variable_mapping: mapping.map((m, i) => i === idx ? { ...m, required: v } : m) })} /></div>) : <div className="px-3 py-4 text-sm text-muted-foreground">No mappings yet. Add one when a contact list and Form are attached.</div>}</div></div>; }
+function PanelHeader({ title, description }) { return <div className="h-16 shrink-0 border-b px-4 flex flex-col justify-center"><h2 className="text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{description}</p></div>; }
 function MiniStat({ label, value }) { return <div className="rounded-lg border bg-muted/40 p-3"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1 truncate text-sm font-semibold">{value}</div></div>; }
-function ConfigSelect({ label, value, options }) { return <div className="space-y-2"><Label>{label}</Label><Select value={value} onValueChange={() => {}}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent></Select></div>; }
-function InputBlock({ label, value }) { return <div className="space-y-2"><Label>{label}</Label><Input defaultValue={value} /></div>; }
-function ToggleRow({ label, checked = false, onCheckedChange }) { return <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 p-3"><Label className="text-sm font-medium">{label}</Label><Switch checked={checked} onCheckedChange={onCheckedChange || (() => {})} /></div>; }
-function FieldMappingTable({ compact = false }) { return <div className={`mt-4 overflow-hidden rounded-xl border ${compact ? "text-xs" : "text-sm"}`}><div className="grid grid-cols-[1fr_0.7fr_1fr_70px] bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Contact field</span><span>Type</span><span>Form variable</span><span>Req.</span></div>{mappingRows.map((row) => <div key={row.source} className="grid grid-cols-[1fr_0.7fr_1fr_70px] items-center border-t px-3 py-2"><span className="font-mono text-xs">{row.source}</span><Badge variant="secondary" className="w-fit font-mono text-[10px]">{row.type}</Badge><span className="font-mono text-xs text-sky-700 dark:text-sky-300">{row.target}</span><span>{row.required ? <IconChecks className="h-4 w-4 text-emerald-500" /> : "—"}</span></div>)}</div>; }
-function SchemaRow({ name, type, standard = false }) { return <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2"><div className="min-w-0"><div className="truncate font-mono text-xs">{name}</div><div className="text-[11px] text-muted-foreground">{standard ? "standard column" : "custom_fields JSONB"}</div></div><Badge variant="outline" className="font-mono text-[10px]">{type}</Badge></div>; }
+function ConfigSelect({ label, value, options = [], onChange = () => {}, bare = false }) { const normalized = options.map((o) => typeof o === "string" ? { value: o, label: title(o) } : o); const select = <Select value={value || normalized[0]?.value} onValueChange={onChange}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{normalized.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>; return bare ? select : <div className="space-y-2"><Label>{label}</Label>{select}</div>; }
+function InputBlock({ label, value, onChange = () => {}, type = "text" }) { return <div className="space-y-2"><Label>{label}</Label><Input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} /></div>; }
+function ToggleRow({ label, checked = false, onCheckedChange = () => {} }) { return <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 p-3"><Label className="text-sm font-medium">{label}</Label><Switch checked={checked} onCheckedChange={onCheckedChange} /></div>; }
+function SchemaRow({ name, type }) { return <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2"><div className="min-w-0"><div className="truncate font-mono text-xs">{name}</div><div className="text-[11px] text-muted-foreground">custom_fields JSONB</div></div><Badge variant="outline" className="font-mono text-[10px]">{type}</Badge></div>; }
 function SettingCard({ icon: Icon, title, subtitle, children }) { return <div className="rounded-2xl border bg-background/85 p-4 shadow-sm"><div className="mb-4 flex items-start gap-3"><span className="rounded-xl bg-gradient-to-br from-sky-500/15 to-violet-500/15 p-2 text-sky-600"><Icon className="h-4 w-4" /></span><div><h3 className="text-sm font-semibold">{title}</h3><p className="text-xs text-muted-foreground">{subtitle}</p></div></div>{children}</div>; }
-function ReadinessLine({ label, ok }) { return <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2"><span>{label}</span><Badge variant="outline" className={ok ? statusClass("Ready") : statusClass("Draft")}>{ok ? "Ready" : "Needs setup"}</Badge></div>; }
+function ReadinessLine({ label, ok }) { return <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2"><span>{label}</span><Badge variant="outline" className={ok ? statusClass("ready") : statusClass("draft")}>{ok ? "Ready" : "Needs setup"}</Badge></div>; }
+function ComingSoonView({ item }) { const Icon = item.icon; return <div className="flex min-h-[520px] items-center justify-center"><div className="max-w-md rounded-3xl border bg-background/85 p-8 text-center shadow-sm"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/20 to-violet-500/20 text-sky-600"><Icon className="h-7 w-7" /></div><h3 className="mt-5 text-xl font-semibold">{item.label} is staged for Phase 3</h3><p className="mt-2 text-sm text-muted-foreground">The persistent model is ready. Future work can connect this area to dialer execution, audit events, DNC ingestion, and reporting data.</p><Button className="mt-5" variant="outline">View roadmap</Button></div></div>; }
+function LoadingState() { return <div className="flex min-h-[520px] items-center justify-center text-muted-foreground"><IconLoader2 className="mr-2 h-5 w-5 animate-spin" />Loading outbound workspace…</div>; }
+function ErrorState({ error, onRetry }) { return <div className="flex min-h-[520px] items-center justify-center"><div className="rounded-2xl border bg-background p-6 text-center shadow-sm"><h3 className="font-semibold">Could not load outbound dialer</h3><p className="mt-2 text-sm text-muted-foreground">{error}</p><Button className="mt-4" onClick={onRetry}>Retry</Button></div></div>; }
+function Empty({ title: t, description }) { return <div className="rounded-xl border border-dashed p-6 text-center"><h4 className="font-semibold">{t}</h4><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>; }
+function readiness(c) { let score = 20; if (c.contact_list_id) score += 25; if (c.attached_form_id) score += 20; if ((c.form_variable_mapping || []).length) score += 20; if (["ready", "running", "completed"].includes(c.status)) score += 15; return Math.min(score, 100); }
