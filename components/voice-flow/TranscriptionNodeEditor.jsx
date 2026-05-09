@@ -82,6 +82,38 @@ const LANGUAGE_NAMES = {
   uk: "Ukrainian",
   ca: "Catalan",
   yue: "Cantonese",
+  cmn: "Mandarin",
+  "ar_en": "Arabic & English",
+  "cmn_en": "Mandarin & English",
+  "cmn_en_ms_ta": "Mandarin, English, Malay & Tamil",
+  "en_ms": "English & Malay",
+  "en_ta": "English & Tamil",
+  af: "Afrikaans",
+  sq: "Albanian",
+  az: "Azerbaijani",
+  ba: "Bashkir",
+  be: "Belarusian",
+  bn: "Bengali",
+  bs: "Bosnian",
+  eo: "Esperanto",
+  gl: "Galician",
+  gu: "Gujarati",
+  ia: "Interlingua",
+  ga: "Irish",
+  kk: "Kazakh",
+  kn: "Kannada",
+  mk: "Macedonian",
+  ml: "Malayalam",
+  mn: "Mongolian",
+  mr: "Marathi",
+  mt: "Maltese",
+  pa: "Punjabi",
+  sw: "Swahili",
+  ta: "Tamil",
+  te: "Telugu",
+  tl: "Tagalog",
+  ug: "Uyghur",
+  cy: "Welsh",
   fil: "Filipino",
   fa: "Persian",
   he: "Hebrew",
@@ -92,6 +124,8 @@ const TRANSCRIPTION_PROVIDERS = [
   { value: "Deepgram", label: "Deepgram" },
   { value: "Azure", label: "Azure" },
   { value: "AssemblyAI", label: "AssemblyAI" },
+  { value: "Speechmatics", label: "Speechmatics" },
+  { value: "Soniox", label: "Soniox" },
   { value: "xAI", label: "xAI" },
   { value: "Google", label: "Google (legacy)" },
 ];
@@ -118,6 +152,10 @@ function getEngineForModel(modelName) {
       return "Azure";
     case "assemblyai":
       return "AssemblyAI";
+    case "speechmatics":
+      return "Speechmatics";
+    case "soniox":
+      return "Soniox";
     case "xai":
       return "xAI";
     case "openai":
@@ -160,7 +198,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   } else if (initialProvider === "Deepgram") {
     initialModel = savedModel || "deepgram/flux";
   } else {
-    initialModel = savedModel;
+    initialModel = savedModel || getModelsForProvider(initialProvider)[0]?.value || "";
   }
 
   // Determine initial language
@@ -401,7 +439,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       delete newConfig.region;
       delete newConfig.api_key_ref;
     } else {
-      // Telnyx, Deepgram, AssemblyAI and xAI share the transcription_model shape.
+      // Telnyx, Deepgram, AssemblyAI, Speechmatics, Soniox and xAI share the transcription_model shape.
       newConfig.transcription_engine_config = {
         transcription_engine: currentProvider,
         ...(currentModel && { transcription_model: currentModel }),

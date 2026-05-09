@@ -1774,6 +1774,8 @@ export const VOICE_FLOW_NODES = {
           { value: "Telnyx", label: "Telnyx" },
           { value: "Deepgram", label: "Deepgram" },
           { value: "Azure", label: "Azure" },
+          { value: "Speechmatics", label: "Speechmatics" },
+          { value: "Soniox", label: "Soniox" },
         ],
         description: "The transcription service provider",
       },
