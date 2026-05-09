@@ -49,6 +49,9 @@ export default function CreateSheet({
   const [fromNumber, setFromNumber] = React.useState("");
   const [toNumber, setToNumber] = React.useState("");
   const [scheduledAt, setScheduledAt] = React.useState("");
+  const [maxRetriesClientErrors, setMaxRetriesClientErrors] =
+    React.useState("0");
+  const [retryIntervalSecs, setRetryIntervalSecs] = React.useState("");
   const [text, setText] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [phoneNumbers, setPhoneNumbers] = React.useState([]);
@@ -114,6 +117,8 @@ export default function CreateSheet({
       setFromNumber("");
       setToNumber("");
       setScheduledAt("");
+      setMaxRetriesClientErrors("0");
+      setRetryIntervalSecs("");
       setText("");
       setPhoneNumbers([]);
     }
@@ -141,6 +146,26 @@ export default function CreateSheet({
       return;
     }
 
+    const maxRetries = Number(maxRetriesClientErrors || 0);
+    const retryInterval = retryIntervalSecs ? Number(retryIntervalSecs) : null;
+    if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) {
+      toast.error("Max client error retries must be between 0 and 10");
+      return;
+    }
+    if (
+      retryInterval !== null &&
+      (!Number.isInteger(retryInterval) ||
+        retryInterval < 60 ||
+        retryInterval > 86400)
+    ) {
+      toast.error("Retry interval must be between 60 and 86400 seconds");
+      return;
+    }
+    if (maxRetries > 0 && retryInterval === null) {
+      toast.error("Retry interval is required when retries are enabled");
+      return;
+    }
+
     setSaving(true);
     try {
       // Convert datetime-local to ISO 8601
@@ -154,6 +179,8 @@ export default function CreateSheet({
         scheduled_at_fixed_datetime: datetime,
       };
 
+      payload.max_retries_client_errors = maxRetries;
+      if (retryInterval !== null) payload.retry_interval_secs = retryInterval;
       if (text) payload.text = text;
 
       const r = await fetch("/api/admin/scheduled-events", {
@@ -288,7 +315,42 @@ export default function CreateSheet({
                 </p>
               </div>
 
-              {/* Row 4: Text (for SMS) */}
+              {/* Row 4: Retry Settings */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2 min-w-0">
+                  <Label className="text-sm">Max Client Error Retries</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={maxRetriesClientErrors}
+                    onChange={(e) => setMaxRetriesClientErrors(e.target.value)}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Retries on busy, no-answer, failed, or canceled calls (0-10)
+                  </p>
+                </div>
+                <div className="grid gap-2 min-w-0">
+                  <Label className="text-sm">Retry Interval (seconds)</Label>
+                  <Input
+                    type="number"
+                    min="60"
+                    max="86400"
+                    step="1"
+                    value={retryIntervalSecs}
+                    onChange={(e) => setRetryIntervalSecs(e.target.value)}
+                    placeholder="300"
+                    disabled={Number(maxRetriesClientErrors || 0) === 0}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Delay between retry attempts, from 60 seconds to 24 hours
+                  </p>
+                </div>
+              </div>
+
+              {/* Row 5: Text (for SMS) */}
               {channel === "sms_chat" && (
                 <div className="grid gap-2">
                   <Label className="text-sm">Message Text *</Label>

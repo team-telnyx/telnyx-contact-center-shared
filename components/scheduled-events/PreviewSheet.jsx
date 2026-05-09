@@ -135,6 +135,16 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
 
+  function formatRetryInterval(seconds) {
+    if (!seconds && seconds !== 0) return "—";
+    const value = Number(seconds);
+    if (!Number.isFinite(value)) return String(seconds);
+    if (value < 60) return `${value} sec`;
+    if (value % 3600 === 0) return `${value / 3600} hr`;
+    if (value % 60 === 0) return `${value / 60} min`;
+    return `${value} sec`;
+  }
+
   function getStatusBadge(status) {
     switch (String(status || "").toLowerCase()) {
       case "completed":
@@ -407,9 +417,38 @@ export default function PreviewSheet({ open, onOpenChange, event, onOpenConversa
               </div>
 
               {/* Retry Information */}
-              {(displayEvent.retry_count !== undefined ||
+              {(displayEvent.max_retries_client_errors !== undefined ||
+                displayEvent.retry_interval_secs !== undefined ||
+                displayEvent.retry_count !== undefined ||
                 displayEvent.retry_attempts !== undefined) && (
                 <div className="grid grid-cols-2 gap-4">
+                  {displayEvent.max_retries_client_errors !== undefined && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
+                        Max Client Error Retries
+                      </Label>
+                      <div className="text-sm">
+                        {displayEvent.max_retries_client_errors}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Configured retries for busy, no-answer, failed, or
+                        canceled calls
+                      </div>
+                    </div>
+                  )}
+                  {displayEvent.retry_interval_secs !== undefined && (
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-muted-foreground uppercase">
+                        Retry Interval
+                      </Label>
+                      <div className="text-sm">
+                        {formatRetryInterval(displayEvent.retry_interval_secs)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Delay between retry attempts
+                      </div>
+                    </div>
+                  )}
                   {displayEvent.retry_count !== undefined && (
                     <div className="space-y-2">
                       <Label className="text-sm font-semibold text-muted-foreground uppercase">

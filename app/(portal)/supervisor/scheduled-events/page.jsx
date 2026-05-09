@@ -347,9 +347,9 @@ export default function SupervisorScheduledEventsPage() {
   }
 
   function downloadTemplate() {
-    const template = `assistant_id,telnyx_conversation_channel,telnyx_end_user_target,telnyx_agent_target,scheduled_at_fixed_datetime,text
-assistant_12345678,phone_call,+15551234567,+15559876543,2025-12-31T12:00:00Z,
-assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello! This is a reminder.`;
+    const template = `assistant_id,telnyx_conversation_channel,telnyx_end_user_target,telnyx_agent_target,scheduled_at_fixed_datetime,max_retries_client_errors,retry_interval_secs,text
+assistant_12345678,phone_call,+15551234567,+15559876543,2025-12-31T12:00:00Z,2,300,
+assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,Hello! This is a reminder.`;
 
     const blob = new Blob([template], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -869,6 +869,14 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
               <li>
                 <strong>scheduled_at_fixed_datetime</strong>: ISO 8601 datetime
                 (required)
+              </li>
+              <li>
+                <strong>max_retries_client_errors</strong>: Retries on busy,
+                no-answer, failed, or canceled calls; 0-10 (optional, default 0)
+              </li>
+              <li>
+                <strong>retry_interval_secs</strong>: Delay between retries in
+                seconds; 60-86400 (required when retries are greater than 0)
               </li>
               <li>
                 <strong>text</strong>: SMS text (optional, required for sms_chat
