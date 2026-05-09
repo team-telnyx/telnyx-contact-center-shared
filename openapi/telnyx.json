@@ -10923,7 +10923,7 @@
           "Chat"
         ],
         "summary": "Get available models",
-        "description": "**Deprecated**: Use `GET /v2/ai/openai/models` instead. This endpoint returns a list of Open Source and OpenAI models that are available for use. <br /><br /> **Note**: Model `id`'s will be in the form `{source}/{model_name}`. For example `openai/gpt-4` or `mistralai/Mistral-7B-Instruct-v0.1` consistent with HuggingFace naming conventions.",
+        "description": "**Deprecated**: Use `GET /v2/ai/openai/models` instead.\n\nReturns the same `ModelsResponse` payload as the OpenAI-compatible endpoint \u2014 open-source LLMs hosted on Telnyx (e.g. `moonshotai/Kimi-K2.6`, `zai-org/GLM-5.1-FP8`, `MiniMaxAI/MiniMax-M2.7`), embedding models, and fine-tuned models \u2014 kept around for backwards compatibility. New integrations should use `/v2/ai/openai/models`.\n\nModel ids follow the `{organization}/{model_name}` convention from Hugging Face.",
         "operationId": "get_models_public_models_get",
         "responses": {
           "200": {
@@ -11094,7 +11094,7 @@
           "OpenAI Chat"
         ],
         "summary": "Get available models (OpenAI-compatible)",
-        "description": "This endpoint returns a list of Open Source and OpenAI models that are available for use. <br /><br /> **Note**: Model `id`'s will be in the form `{source}/{model_name}`. For example `openai/gpt-4` or `mistralai/Mistral-7B-Instruct-v0.1` consistent with HuggingFace naming conventions.",
+        "description": "Lists every model currently available to your account on Telnyx Inference, including SOTA open-source LLMs hosted on Telnyx GPUs (for example `moonshotai/Kimi-K2.6`, `zai-org/GLM-5.1-FP8`, and `MiniMaxAI/MiniMax-M2.7`), embedding models, and any fine-tuned models you have created.\n\nEach entry is a `ModelMetadata` object describing the model id, owner, task, context length, supported languages, billing tier, pricing per 1M tokens, deployment regions, and whether the model supports vision or fine-tuning. Use this endpoint to discover model ids you can pass to `POST /v2/ai/openai/chat/completions`.\n\nModel ids follow the `{organization}/{model_name}` convention from Hugging Face (for example `moonshotai/Kimi-K2.6`). This endpoint is OpenAI-compatible: clients pointed at `https://api.telnyx.com/v2/ai/openai` can call `client.models.list()` to retrieve the same payload.",
         "operationId": "list_openai_models",
         "responses": {
           "200": {
@@ -42023,7 +42023,7 @@
     "/speech-to-text/transcription": {
       "get": {
         "summary": "Speech to text over WebSocket",
-        "description": "Open a WebSocket connection to stream audio and receive transcriptions in real-time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nSupported engines: `Azure`, `Deepgram`, `Google`, `Telnyx`, `xAI`, `Speechmatics`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying engine, input format, and language.\n2. Send binary audio frames (mp3/wav format).\n3. Receive JSON transcript frames with `transcript`, `is_final`, and `confidence` fields.\n4. Close connection when done.",
+        "description": "Open a WebSocket connection to stream audio and receive transcriptions in real-time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nSupported engines: `Azure`, `Deepgram`, `Google`, `Telnyx`, `xAI`, `Speechmatics`, `Soniox`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying engine, input format, and language.\n2. Send binary audio frames (mp3/wav format).\n3. Receive JSON transcript frames with `transcript`, `is_final`, and `confidence` fields.\n4. Close connection when done.",
         "operationId": "TranscriptionOverWs",
         "tags": [
           "Speech To Text over WebSockets"
@@ -53309,7 +53309,7 @@
         "name": "endpointing",
         "in": "query",
         "required": false,
-        "description": "Silence duration (in milliseconds) that triggers end-of-speech detection. When set, the engine uses this value to determine when a speaker has stopped talking. Supported by `xAI`, `Deepgram`, `Google`, and `Speechmatics`. Other engines may not support this parameter.",
+        "description": "Silence duration (in milliseconds) that triggers end-of-speech detection. When set, the engine uses this value to determine when a speaker has stopped talking. Supported by `xAI`, `Deepgram`, `Google`, `Speechmatics`, and `Soniox`. `Soniox` accepts values between 500 and 3000. Other engines may not support this parameter.",
         "schema": {
           "type": "integer"
         },
@@ -53512,6 +53512,9 @@
             },
             {
               "$ref": "#/components/schemas/speechmatics_models"
+            },
+            {
+              "$ref": "#/components/schemas/soniox_models"
             }
           ]
         }
@@ -54053,7 +54056,8 @@
             "Google",
             "Telnyx",
             "xAI",
-            "Speechmatics"
+            "Speechmatics",
+            "Soniox"
           ]
         },
         "example": "Telnyx"
@@ -73030,7 +73034,7 @@
           "from"
         ],
         "example": {
-          "to": "+18005550100 or sip:username@sip.telnyx.com",
+          "to": "+18005550100 or sip:username@sip.telnyx.com;secure=srtp",
           "from": "+18005550101",
           "from_display_name": "Company Name",
           "connection_id": "7267xxxxxxxxxxxxxx",
@@ -73114,11 +73118,11 @@
             "$ref": "#/components/schemas/CallAssistantRequest"
           },
           "to": {
-            "description": "The DID or SIP URI to dial out to. Multiple DID or SIP URIs can be provided using an array of strings",
+            "description": "The DID or SIP URI to dial out to. Multiple DID or SIP URIs can be provided using an array of strings. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter.",
             "oneOf": [
               {
                 "type": "string",
-                "example": "+18005550100 or sip:username@sip.telnyx.com"
+                "example": "+18005550100 or sip:username@sip.telnyx.com;secure=srtp"
               },
               {
                 "type": "array",
@@ -73127,7 +73131,7 @@
                 },
                 "example": [
                   "+18005550100",
-                  "sip:username@sip.telnyx.com"
+                  "sip:username@sip.telnyx.com;secure=srtp"
                 ]
               }
             ]
@@ -73463,7 +73467,7 @@
             "example": "self"
           },
           "media_encryption": {
-            "description": "Defines whether media should be encrypted on the call.",
+            "description": "Defines whether media should be encrypted on the call. For SIP URI destinations, media encryption can also be requested per endpoint with the `secure` URI parameter: `;secure=true` or `;secure=srtp` enables SRTP, and `;secure=dtls` enables DTLS. This parameter, when set to `SRTP` or `DTLS`, takes precedence over the per-endpoint `secure` value.",
             "default": "disabled",
             "type": "string",
             "enum": [
@@ -99018,32 +99022,170 @@
         }
       },
       "ModelMetadata": {
+        "type": "object",
+        "title": "ModelMetadata",
+        "description": "Metadata for a model available on Telnyx Inference. Returned by `GET /v2/ai/openai/models` (and the deprecated `GET /v2/ai/models`). Open-source models live under their Hugging Face organization (e.g. `moonshotai/Kimi-K2.6`, `zai-org/GLM-5.1-FP8`, `MiniMaxAI/MiniMax-M2.7`); fine-tuned models are owned by the Telnyx organization that trained them.",
+        "required": [
+          "id",
+          "created",
+          "owned_by",
+          "organization",
+          "context_length",
+          "languages",
+          "parameters",
+          "tier",
+          "license"
+        ],
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "title": "Id",
+            "description": "Model identifier. For open-source models, follows the `{organization}/{model_name}` convention from Hugging Face (e.g. `moonshotai/Kimi-K2.6`).",
+            "example": "moonshotai/Kimi-K2.6"
           },
           "object": {
             "type": "string",
             "title": "Object",
-            "default": "model"
+            "default": "model",
+            "description": "Object type. Always `model`."
           },
           "created": {
-            "type": "integer",
-            "title": "Created"
+            "type": "string",
+            "format": "date-time",
+            "title": "Created",
+            "description": "Timestamp at which the model was registered on Telnyx Inference (ISO 8601)."
+          },
+          "base_model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Base Model",
+            "description": "Base model the fine-tuned model was trained from. Only set for fine-tuned models."
           },
           "owned_by": {
             "type": "string",
-            "title": "Owned By"
+            "title": "Owned By",
+            "description": "Owner of the model. `Telnyx` for Telnyx-hosted open-source models, the upstream provider name for proxied models, or the Telnyx organization id for fine-tuned models.",
+            "example": "Telnyx"
+          },
+          "organization": {
+            "type": "string",
+            "title": "Organization",
+            "description": "Organization that originally published the model, matching the prefix of `id` for open-source models.",
+            "example": "moonshotai"
+          },
+          "task": {
+            "type": "string",
+            "title": "Task",
+            "default": "text-generation",
+            "description": "Primary task the model is intended for, e.g. `text-generation`, `audio-text-to-text`, `feature-extraction` (embeddings).",
+            "example": "text-generation"
+          },
+          "context_length": {
+            "type": "integer",
+            "title": "Context Length",
+            "description": "Maximum total tokens (prompt + completion) supported by the model in a single request.",
+            "example": 262144
+          },
+          "max_completion_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "title": "Max Completion Tokens",
+            "description": "Maximum number of completion (output) tokens the model will generate per request. `null` if unconstrained beyond `context_length`."
+          },
+          "languages": {
+            "type": "array",
+            "title": "Languages",
+            "items": {
+              "type": "string"
+            },
+            "description": "ISO language codes the model supports (e.g. `en`, `es`)."
+          },
+          "parameters": {
+            "type": "integer",
+            "title": "Parameters",
+            "description": "Total parameter count of the model.",
+            "example": 1000000000000
+          },
+          "parameters_str": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Parameters (human readable)",
+            "description": "Human-readable parameter count, e.g. `1.0T`, `753.9B`, `8B`.",
+            "example": "1.0T"
+          },
+          "tier": {
+            "type": "string",
+            "title": "Tier",
+            "enum": [
+              "small",
+              "medium",
+              "large",
+              "unlisted"
+            ],
+            "description": "Billing tier the model belongs to. Used together with `pricing` to determine cost per 1M tokens."
+          },
+          "license": {
+            "type": "string",
+            "title": "License",
+            "description": "License the model is distributed under, e.g. `Apache 2.0`, `MIT`, `Llama 3 Community License`."
+          },
+          "is_fine_tunable": {
+            "type": "boolean",
+            "title": "Is Fine Tunable",
+            "default": false,
+            "description": "Whether the model can be used as a base for a fine-tuning job via `POST /v2/ai/fine_tuning/jobs`."
+          },
+          "recommended_for_assistants": {
+            "type": "boolean",
+            "title": "Recommended For Assistants",
+            "default": false,
+            "description": "Whether Telnyx currently recommends this model as the LLM powering a Telnyx AI Assistant."
+          },
+          "is_vision_supported": {
+            "type": "boolean",
+            "title": "Is Vision Supported",
+            "default": false,
+            "description": "Whether the model accepts image inputs in chat completions (multimodal vision support)."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "title": "Description",
+            "description": "Short, human-readable summary of what the model is best suited for."
+          },
+          "pricing": {
+            "type": "object",
+            "title": "Pricing",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Mapping of token kind to price in USD per 1M tokens, as a string. Typical keys are `input` and `output`; embedding models expose `embedding`. Empty object when pricing is not yet published for the model.",
+            "example": {
+              "input": "0.60",
+              "output": "2.50"
+            }
+          },
+          "regions": {
+            "type": "array",
+            "title": "Regions",
+            "items": {
+              "type": "string"
+            },
+            "description": "Public region names where the model is currently deployed (e.g. `us-central-1`, `eu-central-1`).",
+            "example": [
+              "us-central-1",
+              "us-east-1"
+            ]
           }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "created",
-          "owned_by"
-        ],
-        "title": "ModelMetadata"
+        }
       },
       "ModelsResponse": {
         "properties": {
@@ -121383,7 +121525,7 @@
             "type": "number",
             "minimum": 0.3,
             "maximum": 0.9,
-            "default": 0.4,
+            "default": 0.8,
             "description": "Available only for deepgram/flux. Confidence threshold for eager end of turn detection. Must be lower than or equal to eot_threshold. Setting this equal to eot_threshold effectively disables eager end of turn."
           },
           "keyterm": {
@@ -121534,7 +121676,7 @@
           "to"
         ],
         "example": {
-          "to": "+18005550100 or sip:username@sip.telnyx.com",
+          "to": "+18005550100 or sip:username@sip.telnyx.com;secure=srtp",
           "from": "+18005550101",
           "from_display_name": "Company Name",
           "audio_url": "http://www.example.com/sounds/greeting.wav",
@@ -121581,9 +121723,9 @@
         },
         "properties": {
           "to": {
-            "description": "The DID or SIP URI to dial out to.",
+            "description": "The DID or SIP URI to dial out to. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter.",
             "type": "string",
-            "example": "+18005550100 or sip:username@sip.telnyx.com"
+            "example": "+18005550100 or sip:username@sip.telnyx.com;secure=srtp"
           },
           "from": {
             "description": "The `from` number to be used as the caller id presented to the destination (`to` number). The number should be in +E164 format. This attribute will default to the `to` number of the original call if omitted.",
@@ -121763,7 +121905,7 @@
             "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
           },
           "media_encryption": {
-            "description": "Defines whether media should be encrypted on the new call leg.",
+            "description": "Defines whether media should be encrypted on the new call leg. For SIP URI destinations, media encryption can also be requested per endpoint with the `secure` URI parameter: `;secure=true` or `;secure=srtp` enables SRTP, and `;secure=dtls` enables DTLS. This parameter, when set to `SRTP` or `DTLS`, takes precedence over the per-endpoint `secure` value.",
             "default": "disabled",
             "type": "string",
             "enum": [
@@ -135037,6 +135179,12 @@
         "type": "boolean",
         "description": "An optional boolean value specifying if verification of the address should be skipped or not. UserAddresses are generally used for shipping addresses, and failure to validate your shipping address will likely result in a failure to deliver SIM cards or other items ordered from Telnyx. Do not use this parameter unless you are sure that the address is correct even though it cannot be validated. If this is set to any value other than true, verification of the address will be attempted, and the user address will not be allowed if verification fails. If verification fails but suggested values are available that might make the address correct, they will be present in the response as well. If this value is set to true, then the verification will not be attempted. Defaults to false (verification will be performed).",
         "default": false
+      },
+      "soniox_models": {
+        "type": "string",
+        "enum": [
+          "soniox/stt-rt-v4"
+        ]
       },
       "speech-to-text_Error": {
         "required": [
