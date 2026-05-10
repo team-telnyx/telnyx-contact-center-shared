@@ -11,21 +11,34 @@ export async function POST(request, context) {
   try {
     let csv = "";
     const contentType = request.headers.get("content-type") || "";
+    let importSettings = {};
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       const file = form.get("file");
       csv = file && typeof file.text === "function" ? await file.text() : String(form.get("csv") || "");
+      importSettings = safeJson(form.get("metadata") || form.get("importSettings"), {});
     } else {
       const body = await request.json();
       csv = body.csv || body.text || "";
+      importSettings = safeJson(body.metadata || body.importSettings || {}, {});
     }
     const { headers, records, truncated } = parseCsv(csv, 5000);
     if (!headers.length) return jsonError("CSV header row is required", 400);
     if (!records.length) return jsonError("CSV contains no records", 400);
-    const customHeaders = headers.filter((h) => h && !standardNames.has(h));
+    const selectedColumns = Array.isArray(importSettings.selected_columns) ? importSettings.selected_columns.filter((column) => headers.includes(column)) : headers;
+    const columnMappings = Object.fromEntries(Object.entries(importSettings.column_mappings || {}).filter(([column, values]) => selectedColumns.includes(column) && Array.isArray(values)).map(([column, values]) => [column, values.filter((value) => typeof value === "string")]));
+    const customHeaders = selectedColumns.filter((h) => h && !standardNames.has(h));
     const inferredSchema = normalizeFieldSchema(customHeaders.map((name) => ({ name, type: name.toLowerCase().includes("email") ? "email" : name.toLowerCase().includes("phone") ? "phone" : "text" })));
-    const standardColumns = Object.fromEntries(headers.filter((h) => standardNames.has(h)).map((h) => [h, h]));
-    const validPhones = records.filter((r) => isLikelyPhone(r.phone_number || r.phone || r.mobile || r.Phone)).length;
+    const standardColumns = Object.fromEntries(selectedColumns.filter((h) => standardNames.has(h)).map((h) => [h, h]));
+    const validPhones = records.filter((r) => isLikelyPhone(selectedColumns.includes("phone_number") ? r.phone_number : selectedColumns.includes("phone") ? r.phone : selectedColumns.includes("mobile") ? r.mobile : selectedColumns.includes("Phone") ? r.Phone : null)).length;
+    const importMetadata = {
+      csv_import_settings: {
+        selected_columns: selectedColumns,
+        column_mappings: columnMappings,
+        source_file_name: importSettings.source_file_name || null,
+        updated_at: importSettings.updated_at || new Date().toISOString(),
+      },
+    };
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
@@ -33,12 +46,14 @@ export async function POST(request, context) {
       for (const record of records) {
         const standard = {}; const custom = {};
         for (const [key, value] of Object.entries(record)) {
+          if (!selectedColumns.includes(key)) continue;
           if (standardNames.has(key)) standard[key] = value;
           else custom[key] = value;
         }
-        await client.query(`INSERT INTO outbound_contact_records (contact_list_id, phone_number, standard_fields, custom_fields, validation_status) VALUES ($1,$2,$3,$4,$5)`, [contactListId, standard.phone_number || record.phone || record.mobile || null, JSON.stringify(standard), JSON.stringify(custom), isLikelyPhone(standard.phone_number || record.phone || record.mobile) ? "valid" : "needs_review"]);
+        const phoneValue = standard.phone_number || custom.phone || custom.mobile || standard.phone || null;
+        await client.query(`INSERT INTO outbound_contact_records (contact_list_id, phone_number, standard_fields, custom_fields, validation_status) VALUES ($1,$2,$3,$4,$5)`, [contactListId, phoneValue, JSON.stringify(standard), JSON.stringify(custom), isLikelyPhone(phoneValue) ? "valid" : "needs_review"]);
       }
-      const { rows } = await client.query(`UPDATE outbound_contact_lists SET status='validated', standard_columns=$1, custom_field_schema=$2, record_count=$3, valid_phone_count=$4, updated_by=$5, updated_at=NOW() WHERE id=$6 RETURNING *`, [JSON.stringify(standardColumns), JSON.stringify(inferredSchema), records.length, validPhones, usernameFor(user), contactListId]);
+      const { rows } = await client.query(`UPDATE outbound_contact_lists SET status='validated', standard_columns=$1, custom_field_schema=$2, record_count=$3, valid_phone_count=$4, metadata=COALESCE(metadata, '{}'::jsonb) || $5::jsonb, updated_by=$6, updated_at=NOW() WHERE id=$7 RETURNING *`, [JSON.stringify(standardColumns), JSON.stringify(inferredSchema), records.length, validPhones, JSON.stringify(importMetadata), usernameFor(user), contactListId]);
       await client.query("COMMIT");
       if (!rows[0]) return jsonError("Contact list not found", 404);
       return NextResponse.json({ ok: true, contactList: rows[0], preview: records.slice(0, 10), headers, inferredSchema, validPhones, totalRows: records.length, truncated });

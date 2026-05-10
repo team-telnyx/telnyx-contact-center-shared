@@ -2,14 +2,17 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  IconAdjustmentsHorizontal, IconCalendar, IconChartBar, IconClockHour4, IconDatabase, IconDots, IconFilter, IconForms, IconListDetails, IconLoader2, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
+  IconAdjustmentsHorizontal, IconCalendar, IconChartBar, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconListDetails, IconLoader2, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { notify } from "@/components/ToastNotify";
@@ -52,11 +55,15 @@ const liveBadgeClasses = {
   failed: "border-rose-500/45 bg-transparent text-rose-700 dark:text-rose-300",
 };
 const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "power", "predictive", "agentless_ai", "agentless_flow"], campaignStatuses: ["draft", "ready", "paused", "running", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], dncListStatuses: ["draft", "active", "paused"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "url", "currency"], standardContactColumns: [] };
-
+const CSV_CONTACT_MAPPING_GROUPS = [
+  { group: "Number", options: ["mobile", "landline", "work", "home", "daytime", "evening"] },
+  { group: "Email", options: ["work", "home"] },
+  { group: "WhatsApp", options: ["work", "home"] },
+];
 const title = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 const statusClass = (status) => ["ready", "validated", "running", "completed"].includes(status) ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ["draft", "validating"].includes(status) ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : status === "paused" ? "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300" : "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
 const defaultCampaign = () => ({ name: "New voice campaign", description: "", status: "draft", channel: "voice", mode: "preview", handler_type: "queue", handler_ref: "", contact_list_id: null, attached_form_id: null, pacing_config: { strategy: "per_available_agent", ratio: 1, supervisorApproval: true }, concurrency_config: { maxConcurrent: 10, maxLines: 10, perAgentLimit: 1 }, dialing_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00", timezonePolicy: "contact" }], retry_policy: { maxAttempts: 4, delayBetweenAttemptsMinutes: 360, minDelayHours: 6, exhaustAfterDays: 7 }, amd_config: { enabled: true, humanConfidenceThreshold: 0.74, voicemailAction: "hangup" }, form_variable_mapping: [], metadata: {} });
-const defaultList = () => ({ name: "New contact list", description: "", status: "draft", source_type: "csv", standard_columns: {}, custom_field_schema: [], custom_fields: {}, record_count: 0, valid_phone_count: 0 });
+const defaultList = () => ({ name: "New contact list", description: "", status: "draft", source_type: "csv", standard_columns: {}, custom_field_schema: [], custom_fields: {}, record_count: 0, valid_phone_count: 0, metadata: {} });
 const defaultDncList = () => ({ name: "New DNC list", description: "", status: "draft", source_type: "csv", match_strategy: "phone", record_count: 0, metadata: {} });
 const defaultFilter = () => ({ name: "New contact filter", description: "", status: "draft", contact_list_id: null, conditions: [{ field: "phone_number", operator: "is present", value: "" }], metadata: {} });
 const defaultTimeSet = () => ({ name: "Business hours", description: "", status: "draft", timezone: "Europe/Warsaw", windows: ["mon", "tue", "wed", "thu", "fri"].map((day) => ({ day, enabled: true, start: "09:00", end: "17:00" })), metadata: { view: "detail" } });
@@ -291,13 +298,31 @@ function CampaignSettingsForm({ campaign, forms, contactLists, dncLists, filters
 
 function ContactListSettingsForm({ contactList, schema, saveList, saving, onImported }) {
   const [draft, setDraft] = useState(contactList || defaultList());
-  const [csv, setCsv] = useState("first_name,last_name,phone_number,email,account_tier\nAda,Lovelace,+48123123123,ada@example.com,enterprise");
+  const [csv, setCsv] = useState("");
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvImportConfig, setCsvImportConfig] = useState({ selectedColumns: [], columnMappings: {} });
   const [importing, setImporting] = useState(false);
-  useEffect(() => setDraft(contactList || defaultList()), [contactList]);
+  useEffect(() => {
+    const next = contactList || defaultList();
+    setDraft(next);
+    setCsv("");
+    setCsvFileName("");
+    setCsvImportConfig(normalizeCsvImportConfig(next.metadata?.csv_import_settings));
+  }, [contactList]);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const csvPreview = useMemo(() => parseCsvPreview(csv, 10), [csv]);
+  useEffect(() => {
+    if (!csvPreview.headers.length) return;
+    setCsvImportConfig((config) => {
+      const retainedColumns = config.selectedColumns?.length ? config.selectedColumns.filter((column) => csvPreview.headers.includes(column)) : csvPreview.headers;
+      return { selectedColumns: retainedColumns.length ? retainedColumns : csvPreview.headers, columnMappings: Object.fromEntries(Object.entries(config.columnMappings || {}).filter(([column]) => csvPreview.headers.includes(column))) };
+    });
+  }, [csvPreview.headersKey]);
   const addField = () => update({ custom_field_schema: [...(draft.custom_field_schema || []), { name: `custom_field_${(draft.custom_field_schema || []).length + 1}`, type: "text", required: false }] });
-  const importCsv = async () => { if (!draft.id) return notify({ title: "Save the list first", description: "CSV rows need a persisted contact list.", variant: "warning" }); setImporting(true); try { const data = await api(`${API}/contact-lists/${draft.id}/import`, { method: "POST", body: JSON.stringify({ csv }) }); notify({ title: "CSV imported", description: `${data.totalRows} rows, ${data.validPhones} valid phone numbers`, variant: "success" }); await onImported(); } catch (err) { notify({ title: "CSV import failed", description: err.message, variant: "error" }); } finally { setImporting(false); } };
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconDatabase} title={draft.id ? draft.name : "Contact list configuration"} subtitle="Persisted list and CSV import"><InputBlock label="List name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3"><ConfigSelect label="Status" value={draft.status} options={schema.contactListStatuses} onChange={(v) => update({ status: v })} /></div><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} rows={2} /></div></SettingCard><SettingCard icon={IconForms} title="Field schema" subtitle="Custom fields stored as JSONB"><Button size="sm" variant="outline" onClick={addField}>Add field</Button><div className="mt-3 grid gap-2">{(draft.custom_field_schema || []).map((field, idx) => <div key={`${field.name}-${idx}`} className="grid gap-2 rounded-lg border bg-background/70 p-2"><Input value={field.name} onChange={(e) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, name: e.target.value } : f) })} /><ConfigSelect bare value={field.type || "text"} options={schema.contactFieldTypes} onChange={(v) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, type: v } : f) })} /><Button variant="ghost" size="sm" onClick={() => update({ custom_field_schema: draft.custom_field_schema.filter((_, i) => i !== idx) })}>Remove</Button></div>)}</div></SettingCard><CsvUploadCard title="CSV upload" description="Upload or drag/drop CSV. Paste area reuses the existing contact-list import API." csv={csv} setCsv={setCsv} onImport={importCsv} importing={importing} disabled={!draft.id} buttonLabel="Upload" /><Button onClick={() => saveList(draft)} disabled={saving || !draft.name?.trim()} className={`w-full ${neutralActionClass}`}>Save contact list</Button></div>;
+  const importMetadata = useMemo(() => buildCsvImportMetadata(csvPreview.headers, csvImportConfig, csvFileName), [csvPreview.headers, csvImportConfig, csvFileName]);
+  const importCsv = async () => { if (!draft.id) return notify({ title: "Save the list first", description: "CSV rows need a persisted contact list.", variant: "warning" }); if (!csv.trim()) return notify({ title: "Choose a CSV first", description: "Select or drop a CSV file before importing.", variant: "warning" }); setImporting(true); try { const data = await api(`${API}/contact-lists/${draft.id}/import`, { method: "POST", body: JSON.stringify({ csv, metadata: importMetadata }) }); notify({ title: "CSV imported", description: `${data.totalRows} rows, ${data.validPhones} valid phone numbers`, variant: "success" }); await onImported(); } catch (err) { notify({ title: "CSV import failed", description: err.message, variant: "error" }); } finally { setImporting(false); } };
+  const save = () => saveList({ ...draft, metadata: { ...(draft.metadata || {}), ...(csvPreview.headers.length ? { csv_import_settings: importMetadata } : {}) } });
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconDatabase} title={draft.id ? draft.name : "Contact list configuration"} subtitle="Persisted list details"><InputBlock label="List name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} rows={2} /></div><div className="mt-3"><ConfigSelect label="Status" value={draft.status} options={schema.contactListStatuses} onChange={(v) => update({ status: v })} /></div></SettingCard><CsvUploadCard title="CSV upload" description="Choose a CSV, preview the first 10 records, and map import columns for Attempt Control." csv={csv} setCsv={setCsv} fileName={csvFileName} setFileName={setCsvFileName} preview={csvPreview} importConfig={csvImportConfig} setImportConfig={setCsvImportConfig} onImport={importCsv} importing={importing} disabled={!draft.id} buttonLabel="Upload" /><SettingCard icon={IconForms} title="Field schema" subtitle="Custom fields stored as JSONB"><Button size="sm" variant="outline" onClick={addField}>Add field</Button><div className="mt-3 grid gap-2">{(draft.custom_field_schema || []).map((field, idx) => <div key={`${field.name}-${idx}`} className="grid gap-2 rounded-lg border bg-background/70 p-2"><Input value={field.name} onChange={(e) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, name: e.target.value } : f) })} /><ConfigSelect bare value={field.type || "text"} options={schema.contactFieldTypes} onChange={(v) => update({ custom_field_schema: draft.custom_field_schema.map((f, i) => i === idx ? { ...f, type: v } : f) })} /><Button variant="ghost" size="sm" onClick={() => update({ custom_field_schema: draft.custom_field_schema.filter((_, i) => i !== idx) })}>Remove</Button></div>)}</div></SettingCard><Button onClick={save} disabled={saving || !draft.name?.trim()} className={`w-full ${neutralActionClass}`}>Save contact list</Button></div>;
 }
 
 function DncSettingsForm({ dncList, schema, saveDncList, saving, onImported }) {
@@ -307,7 +332,7 @@ function DncSettingsForm({ dncList, schema, saveDncList, saving, onImported }) {
   useEffect(() => setDraft(dncList || defaultDncList()), [dncList]);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const importCsv = async () => { if (!draft.id) return notify({ title: "Save the DNC list first", description: "CSV metadata needs a persisted DNC list.", variant: "warning" }); setImporting(true); try { const data = await api(`${API}/dnc-lists/${draft.id}/import`, { method: "POST", body: JSON.stringify({ csv }) }); notify({ title: "DNC CSV metadata saved", description: `${data.totalRows} suppression rows counted`, variant: "success" }); await onImported(); } catch (err) { notify({ title: "DNC import failed", description: err.message, variant: "error" }); } finally { setImporting(false); } };
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconShieldCheck} title={draft.id ? draft.name : "DNC list configuration"} subtitle="Persisted suppression list scaffold"><InputBlock label="DNC list name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3 grid gap-3"><ConfigSelect label="Status" value={draft.status} options={schema.dncListStatuses || ["draft", "active", "paused"]} onChange={(v) => update({ status: v })} /><ConfigSelect label="Source" value={draft.source_type || "csv"} options={["csv", "api", "manual"]} onChange={(v) => update({ source_type: v })} /><ConfigSelect label="Match strategy" value={draft.match_strategy || "phone"} options={["phone", "email", "phone_or_email"]} onChange={(v) => update({ match_strategy: v })} /></div><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} rows={2} /></div></SettingCard><CsvUploadCard title="DNC CSV upload" description="CSV upload/dropzone is ready now; backend stores metadata and row counts for future suppression matching." csv={csv} setCsv={setCsv} onImport={importCsv} importing={importing} disabled={!draft.id} buttonLabel="Upload" /><div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">DNC list CRUD is persisted. Row-level suppression enforcement remains scaffolded; no dialer worker was added.</div><Button onClick={() => saveDncList(draft)} disabled={saving || !draft.name?.trim()} className={`w-full ${neutralActionClass}`}>Save DNC list</Button></div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconShieldCheck} title={draft.id ? draft.name : "DNC list configuration"} subtitle="Persisted suppression list scaffold"><InputBlock label="DNC list name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3 grid gap-3"><ConfigSelect label="Status" value={draft.status} options={schema.dncListStatuses || ["draft", "active", "paused"]} onChange={(v) => update({ status: v })} /><ConfigSelect label="Source" value={draft.source_type || "csv"} options={["csv", "api", "manual"]} onChange={(v) => update({ source_type: v })} /><ConfigSelect label="Match strategy" value={draft.match_strategy || "phone"} options={["phone", "email", "phone_or_email"]} onChange={(v) => update({ match_strategy: v })} /></div><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} rows={2} /></div></SettingCard><CsvUploadCard title="DNC CSV upload" description="CSV upload/dropzone is ready now; backend stores metadata and row counts for future suppression matching." csv={csv} setCsv={setCsv} onImport={importCsv} importing={importing} disabled={!draft.id} buttonLabel="Upload" showTextarea /><div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">DNC list CRUD is persisted. Row-level suppression enforcement remains scaffolded; no dialer worker was added.</div><Button onClick={() => saveDncList(draft)} disabled={saving || !draft.name?.trim()} className={`w-full ${neutralActionClass}`}>Save DNC list</Button></div>;
 }
 
 
@@ -342,10 +367,61 @@ function TimeSetCalendar({ windows }) {
   return <SettingCard icon={IconCalendar} title="Calendar View" subtitle="Derived weekly visualization; edit ranges in Detail View"><div className="overflow-hidden rounded-xl border text-[10px]"><div className="grid grid-cols-[42px_repeat(7,1fr)] bg-muted/50"><span className="p-2">Hour</span>{WEEKDAYS.map((d) => <span key={d.id} className="border-l p-2 text-center font-semibold">{d.label}</span>)}</div>{hours.map((hour) => <div key={hour} className="grid grid-cols-[42px_repeat(7,1fr)] border-t"><span className="p-2 text-muted-foreground">{String(hour).padStart(2, "0")}:00</span>{WEEKDAYS.map((d) => <span key={d.id} className={`min-h-7 border-l ${activeFor(d.id, hour) ? "bg-gradient-to-r from-sky-500/30 to-violet-500/25" : "bg-background/60"}`} />)}</div>)}</div></SettingCard>;
 }
 
-function CsvUploadCard({ title: cardTitle, description, csv, setCsv, onImport, importing, disabled, buttonLabel }) {
-  const handleDrop = async (event) => { event.preventDefault(); const file = event.dataTransfer?.files?.[0]; if (!file) return; setCsv(await file.text()); };
-  const handleFile = async (event) => { const file = event.target.files?.[0]; if (!file) return; setCsv(await file.text()); event.target.value = ""; };
-  return <SettingCard icon={IconUpload} title={cardTitle} subtitle={description}><div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="rounded-xl border border-dashed bg-muted/30 p-4 text-center text-sm text-muted-foreground"><IconUpload className="mx-auto mb-2 h-5 w-5" />Drag and drop a CSV file here, or paste CSV below.</div><div className="mt-3 flex items-center justify-between gap-2"><Label htmlFor={`${cardTitle}-file`} className="cursor-pointer rounded-md border px-3 py-2 text-sm hover:bg-muted">Choose CSV</Label><Input id={`${cardTitle}-file`} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} /><Button size="sm" variant="outline" onClick={onImport} disabled={importing || disabled}>{importing ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconUpload className="mr-2 h-4 w-4" />}{buttonLabel}</Button></div><Textarea className="mt-3 font-mono text-xs" rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} /></SettingCard>;
+function parseCsvPreview(csvText, limit = 10) {
+  const rows = [];
+  let cell = "";
+  let row = [];
+  let quoted = false;
+  const text = String(csvText || "").replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (quoted) {
+      if (char === '"' && next === '"') { cell += '"'; i += 1; }
+      else if (char === '"') quoted = false;
+      else cell += char;
+    } else if (char === '"') quoted = true;
+    else if (char === ",") { row.push(cell); cell = ""; }
+    else if (char === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+    else if (char !== "\r") cell += char;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  const headers = (rows.shift() || []).map((h, idx) => String(h || `Column ${idx + 1}`).trim() || `Column ${idx + 1}`);
+  const records = rows.filter((r) => r.some((c) => String(c || "").trim())).slice(0, limit).map((r) => Object.fromEntries(headers.map((h, idx) => [h, String(r[idx] || "").trim()])));
+  return { headers, records, headersKey: headers.join("\u001f") };
+}
+
+function normalizeCsvImportConfig(settings = {}) {
+  return { selectedColumns: settings.selectedColumns || settings.selected_columns || [], columnMappings: settings.columnMappings || settings.column_mappings || {} };
+}
+
+function buildCsvImportMetadata(headers, config, fileName) {
+  const selectedColumns = (Array.isArray(config.selectedColumns) ? config.selectedColumns : headers).filter((column) => headers.includes(column));
+  const columnMappings = Object.fromEntries(Object.entries(config.columnMappings || {}).map(([column, values]) => [column, (Array.isArray(values) ? values : []).filter(Boolean)]).filter(([column]) => headers.includes(column)));
+  return { selected_columns: selectedColumns, column_mappings: columnMappings, source_file_name: fileName || null, updated_at: new Date().toISOString() };
+}
+
+function CsvUploadCard({ title: cardTitle, description, csv, setCsv, fileName = "", setFileName = () => {}, preview, importConfig, setImportConfig, onImport, importing, disabled, buttonLabel, showTextarea = false }) {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const inputId = `${cardTitle.replace(/\s+/g, "-").toLowerCase()}-file`;
+  const handleCsvText = async (file) => { if (!file) return; setCsv(await file.text()); setFileName(file.name || "selected.csv"); };
+  const handleDrop = async (event) => { event.preventDefault(); await handleCsvText(event.dataTransfer?.files?.[0]); };
+  const handleFile = async (event) => { await handleCsvText(event.target.files?.[0]); event.target.value = ""; };
+  const hasCsv = Boolean(csv?.trim());
+  const canPreview = Boolean(preview && hasCsv);
+  return <SettingCard icon={IconUpload} title={cardTitle} subtitle={description}><div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="rounded-xl border border-dashed bg-gradient-to-br from-sky-500/10 to-violet-500/10 p-4 text-center text-sm text-muted-foreground"><IconUpload className="mx-auto mb-2 h-5 w-5 text-sky-600" />Drag and drop a CSV file here, or choose one below.</div><div className="mt-3 flex items-center justify-between gap-2"><div className="min-w-0 flex-1"><Label htmlFor={inputId} className="flex cursor-pointer items-center justify-between gap-2 rounded-md border bg-background/80 px-3 py-2 text-sm hover:bg-muted"><span className="truncate">{fileName || "Choose CSV"}</span>{canPreview ? <Badge variant="outline" className="shrink-0 font-normal">{preview.records?.length || 0} preview rows</Badge> : null}</Label><Input id={inputId} type="file" accept=".csv,text/csv" className="hidden" onChange={handleFile} /></div>{canPreview ? <Button type="button" size="icon" variant="outline" onClick={() => setPreviewOpen(true)} title="Preview CSV"><IconEye className="h-4 w-4" /></Button> : null}<Button size="sm" variant="outline" onClick={onImport} disabled={importing || disabled || !hasCsv}>{importing ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconUpload className="mr-2 h-4 w-4" />}{buttonLabel}</Button></div>{showTextarea ? <Textarea className="mt-3 font-mono text-xs" rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} /> : null}{preview && importConfig && setImportConfig ? <CsvPreviewSheet open={previewOpen} onOpenChange={setPreviewOpen} preview={preview} importConfig={importConfig} setImportConfig={setImportConfig} /> : null}</SettingCard>;
+}
+
+function CsvPreviewSheet({ open, onOpenChange, preview, importConfig, setImportConfig }) {
+  const selectedColumns = Array.isArray(importConfig.selectedColumns) ? importConfig.selectedColumns : preview.headers;
+  const toggleColumn = (column, checked) => setImportConfig((config) => { const current = Array.isArray(config.selectedColumns) ? config.selectedColumns : preview.headers; return { ...config, selectedColumns: checked ? [...new Set([...current, column])] : current.filter((value) => value !== column) }; });
+  const updateMappings = (column, values) => setImportConfig((config) => ({ ...config, columnMappings: { ...(config.columnMappings || {}), [column]: values } }));
+  return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent side="bottom" className="max-h-[82vh] gap-0 overflow-hidden rounded-t-3xl bg-background p-0"><SheetHeader className="border-b bg-card/95 px-6 py-4"><SheetTitle>CSV preview and channel mapping</SheetTitle><SheetDescription>Previewing up to 10 records. Select import columns and map each one to Attempt Control contact channels.</SheetDescription></SheetHeader><div className="overflow-auto p-6"><div className="min-w-max rounded-2xl border bg-background/90 shadow-sm"><Table><TableHeader><TableRow className="bg-muted/50 hover:bg-muted/50">{preview.headers.map((column) => <TableHead key={column} className="min-w-44 align-top"><div className="flex items-center gap-2"><Checkbox checked={selectedColumns.includes(column)} onCheckedChange={(checked) => toggleColumn(column, checked === true)} /><span className="font-mono text-xs">{column}</span></div></TableHead>)}</TableRow><TableRow className="bg-muted/30 hover:bg-muted/30">{preview.headers.map((column) => <TableHead key={`${column}-mapping`} className="min-w-44 py-2"><ColumnMappingSelect column={column} values={importConfig.columnMappings?.[column] || []} onChange={(values) => updateMappings(column, values)} /></TableHead>)}</TableRow></TableHeader><TableBody>{preview.records.length ? preview.records.map((record, idx) => <TableRow key={idx}>{preview.headers.map((column) => <TableCell key={`${idx}-${column}`} className="max-w-64 truncate text-xs" title={record[column]}>{record[column] || "—"}</TableCell>)}</TableRow>) : <TableRow><TableCell colSpan={Math.max(preview.headers.length, 1)} className="py-8 text-center text-muted-foreground">No records found after the header row.</TableCell></TableRow>}</TableBody></Table></div></div></SheetContent></Sheet>;
+}
+
+function ColumnMappingSelect({ column, values = [], onChange }) {
+  const toggle = (value) => onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  return <Select value="multi" onValueChange={toggle}><SelectTrigger className="h-8 min-w-40 bg-background text-xs"><SelectValue placeholder={values.length ? `${values.length} mapped` : "Map fields"}>{values.length ? `${values.length} mapped` : "Map fields"}</SelectValue></SelectTrigger><SelectContent>{CSV_CONTACT_MAPPING_GROUPS.map((group) => <React.Fragment key={group.group}><div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group.group}</div>{group.options.map((option) => { const value = `${group.group.toLowerCase()}:${option}`; return <SelectItem key={`${column}-${value}`} value={value}><span className="mr-2">{values.includes(value) ? "☑" : "☐"}</span>{title(option)}</SelectItem>; })}</React.Fragment>)}</SelectContent></Select>;
 }
 
 function DashboardMonitorPanel({ campaign, contactLists }) {
