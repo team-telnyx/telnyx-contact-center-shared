@@ -29,8 +29,24 @@ import {
   IconStar,
   IconStarFilled,
   IconArrowDown,
+  IconChartBar,
+  IconSparkles,
+  IconPhoneIncoming,
+  IconPhoneOutgoing,
+  IconGauge,
 } from "@tabler/icons-react";
 import { ChevronDownIcon } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { notify } from "@/components/ToastNotify";
 import {
   Dialog,
@@ -43,6 +59,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -64,9 +81,13 @@ import {
 } from "@/components/ui/hover-card";
 
 const MONITOR_RAIL_ITEMS = [
+  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
   { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
+  { id: "graphs", label: "Graphs", icon: IconChartBar, description: "Trend visualizations" },
 ];
+
+const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
 // Component to display skills with relaxation indicator
 function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
@@ -223,6 +244,239 @@ function AgentSkillsIndicator({ agentUserId }) {
   );
 }
 
+
+function pct(value, total) {
+  if (!total || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((Number(value || 0) / Number(total || 1)) * 100)));
+}
+
+function formatShortNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function OverviewMetricCard({ icon: Icon, label, value, detail, progress = 0, chip = "Live", tone = "slate" }) {
+  const tones = {
+    slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
+    emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
+    sky: "from-sky-500/15 to-blue-500/5 text-sky-700 dark:text-sky-300",
+    violet: "from-violet-500/15 to-fuchsia-500/5 text-violet-700 dark:text-violet-300",
+  };
+
+  return (
+    <Card className="overflow-hidden border bg-background/85 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">
+            {chip}
+          </Badge>
+        </div>
+        <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{detail}</span>
+            <span>{progress}%</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MonitorDashboardView({ overall, agents, queues, timestamp }) {
+  const totalCalls = overall.calls?.total || 0;
+  const answered = overall.calls?.answered || 0;
+  const abandoned = overall.calls?.abandoned || 0;
+  const active = overall.calls?.active || 0;
+  const totalAgents = agents.length || overall.agents?.totalActive || 0;
+  const available = overall.agents?.available || agents.filter((a) => a.status === "Available").length;
+  const busy = overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length;
+  const waiting = overall.queues?.totalWaitingCalls || queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
+  const activeQueues = queues.filter((q) => Number(q.realtime?.activeCalls || 0) > 0 || Number(q.realtime?.waitingCalls || 0) > 0).length;
+  const inbound = totalCalls || active + waiting;
+  const outbound = overall.calls?.outbound || 0;
+
+  const healthRows = [
+    { label: "Answered calls", value: answered, total: Math.max(totalCalls, answered + abandoned), hint: `${abandoned} abandoned` },
+    { label: "Agent availability", value: available, total: Math.max(totalAgents, available + busy), hint: `${busy} busy` },
+    { label: "Queues active now", value: activeQueues, total: Math.max(queues.length, 1), hint: `${queues.length} total queues` },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconUsers} label="Users / agents" value={formatShortNumber(totalAgents)} detail={`${available} available · ${busy} busy`} progress={pct(available, Math.max(totalAgents, available + busy))} chip="Users" tone="emerald" />
+        <OverviewMetricCard icon={IconTrendingUp} label="Queues" value={formatShortNumber(queues.length)} detail={`${waiting} waiting · ${activeQueues} active`} progress={pct(activeQueues, Math.max(queues.length, 1))} chip="Queues" tone="sky" />
+        <OverviewMetricCard icon={IconPhoneIncoming} label="Inbound volume" value={formatShortNumber(inbound)} detail={`${answered} answered · ${abandoned} missed`} progress={pct(answered, Math.max(totalCalls, answered + abandoned))} chip="Today" tone="violet" />
+        <OverviewMetricCard icon={IconPhoneOutgoing} label="Outbound volume" value={formatShortNumber(outbound)} detail="Live outbound aggregate if available" progress={outbound ? 100 : 0} chip={outbound ? "Live" : "No data"} tone="slate" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card className="border bg-background/85 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconGauge className="h-5 w-5 text-sky-600" />
+              Operations health
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {healthRows.map((row) => (
+              <div key={row.label} className="rounded-2xl border bg-card/70 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <div className="font-semibold">{row.label}</div>
+                    <div className="text-xs text-muted-foreground">{row.hint}</div>
+                  </div>
+                  <div className="text-2xl font-semibold">{pct(row.value, row.total)}%</div>
+                </div>
+                <Progress value={pct(row.value, row.total)} className="mt-3 h-2" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border bg-gradient-to-br from-slate-950 to-zinc-900 text-white shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 text-sky-200">
+              <IconSparkles className="h-5 w-5" />
+              <span className="text-sm font-semibold uppercase tracking-[0.18em]">Supervisor signal</span>
+            </div>
+            <h3 className="mt-5 text-2xl font-semibold">Live data, safe defaults</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              This overview uses the current monitor API. Missing aggregates render as zero/no-data instead of simulated operational values.
+            </p>
+            <div className="mt-5 grid gap-2 text-sm">
+              <div className="rounded-xl bg-white/10 p-3">Active calls: <strong>{active}</strong></div>
+              <div className="rounded-xl bg-white/10 p-3">Average wait: <strong>{Math.round(overall.calls?.avgWaitTimeSeconds || 0)}s</strong></div>
+              <div className="rounded-xl bg-white/10 p-3">Last update: <strong>{timestamp ? new Date(timestamp).toLocaleTimeString() : "—"}</strong></div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function buildTrendData(range, overall, agents, queues) {
+  const points = range === "1d" ? 8 : range === "7d" ? 7 : 10;
+  const total = Number(overall.calls?.total || 0);
+  const answered = Number(overall.calls?.answered || 0);
+  const abandoned = Number(overall.calls?.abandoned || 0);
+  const active = Number(overall.calls?.active || 0);
+  const waiting = queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
+  const available = Number(overall.agents?.available || agents.filter((a) => a.status === "Available").length);
+  const busy = Number(overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length);
+  const divisor = Math.max(points, 1);
+
+  return Array.from({ length: points }, (_, idx) => {
+    const weight = (idx + 1) / divisor;
+    return {
+      label: range === "1d" ? `${idx * 3}:00` : range === "7d" ? `D${idx + 1}` : `W${idx + 1}`,
+      inbound: Math.round((total || active + waiting) * weight),
+      outbound: Math.round(Number(overall.calls?.outbound || 0) * weight),
+      answered: Math.round(answered * weight),
+      missed: Math.round(abandoned * weight),
+      wait: Math.round((Number(overall.calls?.avgWaitTimeSeconds || 0) + waiting) * weight),
+      available: Math.round(available * weight),
+      occupied: Math.round(busy * weight),
+    };
+  });
+}
+
+function MonitorGraphsView({ overall, agents, queues }) {
+  const [range, setRange] = useState("7d");
+  const trendData = buildTrendData(range, overall, agents, queues);
+  const rangeLabels = [
+    { id: "1d", label: "1 day" },
+    { id: "7d", label: "7 days" },
+    { id: "30d", label: "30 days" },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/85 p-4 shadow-sm">
+        <div>
+          <h2 className="font-semibold">Trend visualization scaffold</h2>
+          <p className="text-sm text-muted-foreground">Derived from current monitor aggregates until historical time-series data is available.</p>
+        </div>
+        <div className="flex rounded-xl border bg-muted/40 p-1">
+          {rangeLabels.map((item) => (
+            <Button key={item.id} type="button" size="sm" variant={range === item.id ? "default" : "ghost"} className={range === item.id ? neutralActionClass : ""} onClick={() => setRange(item.id)}>
+              {item.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Inbound / outbound volume" description="Current aggregate distributed across selected range.">
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={trendData} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} />
+              <Tooltip />
+              <Area type="monotone" dataKey="inbound" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.16} />
+              <Area type="monotone" dataKey="outbound" stroke="#71717a" fill="#71717a" fillOpacity={0.14} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Answered / missed" description="Answered and abandoned call aggregates.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={trendData} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} />
+              <Tooltip />
+              <Bar dataKey="answered" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="missed" fill="#71717a" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Queue wait pressure" description="Average wait plus current queue depth signal.">
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={trendData} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} />
+              <Tooltip />
+              <Area type="monotone" dataKey="wait" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Agent availability / occupancy" description="Available and busy agent aggregates.">
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={trendData} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} />
+              <Tooltip />
+              <Bar dataKey="available" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="occupied" fill="#27272a" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+      </div>
+    </div>
+  );
+}
+
+function GraphCard({ title, description, children }) {
+  return (
+    <Card className="border bg-background/85 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 export default function MonitorPage() {
   // Helper function to format idle time in seconds to human-readable format
   const formatIdleTime = (seconds) => {
@@ -256,7 +510,7 @@ export default function MonitorPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
-  const [activeTab, setActiveTab] = useState("agents");
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [queueCalls, setQueueCalls] = useState([]);
   const [loadingQueueCalls, setLoadingQueueCalls] = useState(false);
@@ -1124,122 +1378,58 @@ export default function MonitorPage() {
   };
 
   return (
-    <div className="grid h-[calc(100vh-var(--header-height)-2rem)] min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-      <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
-      <div className="min-h-0 space-y-6 overflow-y-auto pr-1">
-      {/* Connection Status */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <IconActivity className="size-6 text-telnyx-green" />
-          Supervisory Console
-        </h1>
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => {
-              setLoading(true);
-              loadDashboard();
-            }}
-            disabled={loading}
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <IconRefresh
-              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-            />
-            {loading ? "Loading..." : "Refresh"}
-          </Button>
-          <Badge
-            variant="outline"
-            className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold ${
-              connected
-                ? "border-green-500 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20"
-                : "border-red-500 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20"
-            }`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                connected ? "bg-green-500 animate-pulse" : "bg-red-500"
-              }`}
-            />
-            {connected ? "Connected" : "Disconnected"}
-          </Badge>
-        </div>
-      </div>
-
-      {/* Overall Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <Card className="border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
-              Total Calls Today
-            </CardTitle>
-            <IconPhone className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-blue-900 dark:text-blue-100">
-              {overall.calls?.total || 0}
+    <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(113,113,122,0.14),transparent_26%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)]">
+      <div className="flex h-full min-h-0 flex-col">
+        <header className="shrink-0 border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                <IconSparkles className="h-4 w-4 text-sky-500" />
+                Supervisor workspace
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight">Supervisory Console</h1>
+                <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Live monitor</Badge>
+                <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Graphs</Badge>
+                <Badge
+                  variant="outline"
+                  className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
+                    connected
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                      : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                  }`}
+                >
+                  <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                  {connected ? "Connected" : "Disconnected"}
+                </Badge>
+              </div>
             </div>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-              {overall.calls?.answered || 0} answered,{" "}
-              {overall.calls?.abandoned || 0} abandoned
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
-              Active Agents
-            </CardTitle>
-            <IconUsers className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-green-900 dark:text-green-100">
-              {overall.agents?.totalActive || 0}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setLoading(true);
+                  loadDashboard();
+                }}
+                disabled={loading}
+              >
+                <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                {loading ? "Loading…" : "Refresh"}
+              </Button>
             </div>
-            <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-              {overall.agents?.available || 0} available,{" "}
-              {overall.agents?.busy || 0} busy
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        </header>
 
-        <Card className="border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
-              Active Calls
-            </CardTitle>
-            <IconActivity className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-purple-900 dark:text-purple-100">
-              {overall.calls?.active || 0}
-            </div>
-            <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-              {overall.queues?.totalWaitingCalls || 0} waiting in queues
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
-              Avg Wait Time
-            </CardTitle>
-            <IconClock className="h-4 w-4 text-orange-600 dark:text-orange-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-orange-900 dark:text-orange-100">
-              {Math.round(overall.calls?.avgWaitTimeSeconds || 0)}s
-            </div>
-            <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-              Avg handle: {Math.round(overall.calls?.avgHandleTimeSeconds || 0)}
-              s
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
+        <main className="grid flex-1 min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
+          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
+          <section className="min-h-0 overflow-y-auto pr-1">
+            {activeTab === "dashboard" ? (
+              <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+            ) : activeTab === "graphs" ? (
+              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
+            ) : (
+              <>
       {/* Statistics Section */}
       <Card className="mb-0 flex flex-col h-[calc(100vh-360px)] min-h-[100px]">
         <CardHeader className="shrink-0">
@@ -2269,6 +2459,10 @@ export default function MonitorPage() {
           )}
         </CardContent>
       </Card>
+              </>
+            )}
+          </section>
+        </main>
 
       {/* Status Change Dialog */}
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
