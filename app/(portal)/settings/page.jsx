@@ -31,6 +31,11 @@ import {
   IconMoon,
 } from "@tabler/icons-react";
 import {
+  AdminPageContent,
+  AdminPageHeader,
+  AdminPageShell,
+} from "@/components/contact-center/WorkspacePageLayout";
+import {
   getDefaultColors,
   getDefaultDarkColors,
   oklchToRgb,
@@ -944,41 +949,41 @@ export default function SettingsPage() {
   const currentColors = activeTheme === "light" ? lightColors : darkColors;
 
   return (
-    <div className="container mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <IconPalette className="size-8 text-brand-primary" />
-            Theme Settings
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Customize the color scheme of your contact center
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleReset} disabled={isSaving}>
-            <IconRefresh className="size-4 mr-2" />
-            Reset to Defaults
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            className="bg-brand-primary hover:bg-brand-primary/90 text-black"
-          >
-            {isSaving ? (
-              "Saving..."
-            ) : (
-              <>
-                <IconCheck className="size-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Branding Section */}
-      <Card>
+    <AdminPageShell>
+      <AdminPageHeader
+        title="Theme Settings"
+        badges={
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-300">
+            Branding & colors
+          </span>
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={handleReset} disabled={isSaving}>
+              <IconRefresh className="size-4 mr-2" />
+              Reset to Defaults
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleSave}
+              disabled={!hasChanges || isSaving}
+              className="border border-border/70 bg-foreground text-background hover:bg-foreground/90"
+            >
+              {isSaving ? (
+                "Saving..."
+              ) : (
+                <>
+                  <IconCheck className="size-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </>
+        }
+      />
+      <AdminPageContent className="space-y-6">
+        {/* Branding Section */}
+        <Card>
         <CardHeader>
           <CardTitle>Branding & Logos</CardTitle>
           <CardDescription>
@@ -1249,6 +1254,7 @@ export default function SettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
