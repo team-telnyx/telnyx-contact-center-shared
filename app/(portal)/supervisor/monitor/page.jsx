@@ -88,7 +88,7 @@ const MONITOR_RAIL_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
   { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
-  { id: "graphs", label: "Graphs", icon: IconChartBar, description: "Trend visualizations" },
+  { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Trend visualizations" },
 ];
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
@@ -1392,7 +1392,7 @@ export default function MonitorPage() {
           badges={(
             <>
               <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Live monitor</Badge>
-              <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Graphs</Badge>
+              <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Statistics</Badge>
               <Badge
                 variant="outline"
                 className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
@@ -1500,12 +1500,12 @@ export default function MonitorPage() {
               ) : activeTab === "agents" ? (
                 <>
                   <IconUsers className="size-5" />
-                  Agent Statistics
+                  Agents
                 </>
               ) : (
                 <>
                   <IconTrendingUp className="size-5" />
-                  Queue Statistics
+                  Queues
                 </>
               )}
             </CardTitle>
