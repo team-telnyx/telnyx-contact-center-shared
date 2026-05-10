@@ -25,7 +25,7 @@ import { FormRenderer } from "@/components/forms/FormRenderer";
 import { sanitizeRichTextHtml } from "@/components/forms/rich-text-html";
 import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { notify } from "@/components/ToastNotify";
-import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
@@ -891,7 +891,7 @@ export function FormEditor({ initialForm, isNew = false }) {
     </AlertDialog>
 
     <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
-    <div className="grid flex-1 min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0,1fr) 360px` }}>
+    <div className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0,1fr) 360px` }}>
       <SectionRail items={RAIL} activeId={activeTab} onSelect={setActiveTab} ariaLabel="Form builder sections" />
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">

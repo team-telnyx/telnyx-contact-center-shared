@@ -57,7 +57,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import {
   SupervisorPageHeader,
   SupervisorPageShell,
@@ -1418,7 +1418,7 @@ export default function MonitorPage() {
           )}
         />
 
-        <main className="grid flex-1 min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
+        <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
           <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
           <section className="min-h-0 overflow-y-auto pr-1">
             {activeTab === "dashboard" ? (

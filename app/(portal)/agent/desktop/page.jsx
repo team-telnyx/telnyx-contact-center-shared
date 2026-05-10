@@ -9,7 +9,7 @@ export default function DesktopPage() {
   return (
     <AgentPageShell>
       <AgentPageHeader title="Agent Desktop" />
-      <AgentPageContent className="overflow-hidden">
+      <AgentPageContent className="overflow-hidden p-0">
         <AgentDesktop />
       </AgentPageContent>
     </AgentPageShell>

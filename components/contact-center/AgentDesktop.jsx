@@ -5,7 +5,7 @@ import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import { SectionRail, SECTION_RAIL_FILL_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Info, PhoneCall } from "lucide-react";
 import {
   IconAddressBook,
@@ -1216,7 +1216,7 @@ export function AgentDesktop() {
 
   return (
     <div
-      className="grid h-full min-h-0 w-full gap-4 overflow-hidden"
+      className={SECTION_RAIL_FILL_GRID_CLASS}
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0, 1fr)` }}
     >
       <SectionRail
