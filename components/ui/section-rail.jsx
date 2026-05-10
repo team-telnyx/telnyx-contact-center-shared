@@ -1,6 +1,6 @@
 "use client";
 
-export const SECTION_RAIL_WIDTH = "128px";
+export const SECTION_RAIL_WIDTH = "100px";
 export const SECTION_RAIL_PAGE_GRID_CLASS = "grid flex-1 min-h-0 gap-3 p-3";
 export const SECTION_RAIL_FILL_GRID_CLASS = "grid h-full min-h-0 w-full gap-3 p-3 overflow-hidden";
 export const SECTION_RAIL_GRID_COLUMN = `${SECTION_RAIL_WIDTH}_minmax(0,1fr)`;
@@ -34,7 +34,7 @@ export function SectionRail({ items = [], activeId, onSelect, ariaLabel = "Secti
                   }`}
                 />
               ) : null}
-              <span className="mt-1.5 text-[10px] font-medium leading-tight tracking-tight">{label}</span>
+              <span className="mt-1.5 max-w-full text-wrap break-words text-[10px] font-medium leading-tight tracking-tight">{label}</span>
             </button>
           );
         })}
