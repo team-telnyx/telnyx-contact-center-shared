@@ -1113,7 +1113,7 @@ function LeftPanel(props) {
       <div className="shrink-0 border-b p-4 text-xs text-muted-foreground">
         {selectedButton ? <>Click or drag a card onto the selected button <span className="font-medium text-foreground">{selectedButton.label || selectedButton.id}</span>.</> : "Select a button first, or drag a card onto a button on the canvas."}
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 min-h-0 w-full overflow-y-auto overflow-x-hidden p-4 space-y-3">
         {dataActionsLoading ? <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">Loading data actions...</div> : null}
         {dataActions.map((flow) => <DraggableDataActionCard key={flow.id} flow={flow} onApply={() => selectedButton ? assignDataActionToButton?.(selectedButton.id, flow) : null} disabled={!selectedButton} />)}
         {!dataActionsLoading && !dataActions.length ? <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No Form Submit call flows found yet. Create one in Call Flows with the Form Submit initiator.</div> : null}
@@ -1388,13 +1388,13 @@ function DraggableDataActionCard({ flow, onApply, disabled = false }) {
   const title = dataActionTitle(flow);
   const description = dataActionDescription(flow);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `data-action-${flow.id}`, data: { dragKind: "dataAction", flow } });
-  return <button ref={setNodeRef} type="button" onClick={() => onApply?.()} className={`touch-none rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-left shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""} ${disabled ? "opacity-80" : ""}`} {...listeners} {...attributes}>
-    <div className="flex items-start gap-3">
+  return <button ref={setNodeRef} type="button" onClick={() => onApply?.()} className={`touch-none w-full max-w-full overflow-hidden rounded-xl border border-l-4 border-l-teal-500 bg-background p-3 text-left shadow-sm transition hover:border-primary hover:bg-primary/5 hover:shadow ${isDragging ? "opacity-50" : ""} ${disabled ? "opacity-80" : ""}`} title={title} {...listeners} {...attributes}>
+    <div className="flex w-full min-w-0 items-start gap-3">
       <IconGripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
       <IconBolt className="mt-0.5 h-5 w-5 shrink-0 text-teal-500" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-foreground">{title}</div>
-        <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{description}</p>
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="block w-full min-w-0 truncate text-sm font-semibold text-foreground">{title}</div>
+        <p className="mt-0.5 line-clamp-2 max-w-full break-words text-xs leading-snug text-muted-foreground">{description}</p>
       </div>
     </div>
   </button>;
