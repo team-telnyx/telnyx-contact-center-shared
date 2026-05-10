@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  IconAdjustmentsHorizontal, IconCalendar, IconChartBar, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconListDetails, IconLoader2, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
+  IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -56,9 +57,9 @@ const liveBadgeClasses = {
 };
 const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "power", "predictive", "agentless_ai", "agentless_flow"], campaignStatuses: ["draft", "ready", "paused", "running", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], dncListStatuses: ["draft", "active", "paused"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "url", "currency"], standardContactColumns: [] };
 const CSV_CONTACT_MAPPING_GROUPS = [
-  { group: "Number", options: ["mobile", "landline", "work", "home", "daytime", "evening"] },
-  { group: "Email", options: ["work", "home"] },
-  { group: "WhatsApp", options: ["work", "home"] },
+  { group: "Number", icon: IconPhoneCall, labelClass: "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300", iconClass: "text-emerald-600 dark:text-emerald-300", options: ["mobile", "landline", "work", "home", "daytime", "evening"] },
+  { group: "Email", icon: IconMail, labelClass: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300", iconClass: "text-sky-600 dark:text-sky-300", options: ["work", "home"] },
+  { group: "WhatsApp", icon: IconBrandWhatsapp, labelClass: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", iconClass: "text-emerald-600 dark:text-emerald-300", options: ["work", "home"] },
 ];
 const title = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 const statusClass = (status) => ["ready", "validated", "running", "completed"].includes(status) ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ["draft", "validating"].includes(status) ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : status === "paused" ? "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300" : "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
@@ -420,8 +421,10 @@ function CsvPreviewSheet({ open, onOpenChange, preview, importConfig, setImportC
 }
 
 function ColumnMappingSelect({ column, values = [], onChange }) {
+  const [open, setOpen] = useState(false);
   const toggle = (value) => onChange(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
-  return <Select value="multi" onValueChange={toggle}><SelectTrigger className="h-8 min-w-40 bg-background text-xs"><SelectValue placeholder={values.length ? `${values.length} mapped` : "Map fields"}>{values.length ? `${values.length} mapped` : "Map fields"}</SelectValue></SelectTrigger><SelectContent>{CSV_CONTACT_MAPPING_GROUPS.map((group) => <React.Fragment key={group.group}><div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{group.group}</div>{group.options.map((option) => { const value = `${group.group.toLowerCase()}:${option}`; return <SelectItem key={`${column}-${value}`} value={value}><span className="mr-2">{values.includes(value) ? "☑" : "☐"}</span>{title(option)}</SelectItem>; })}</React.Fragment>)}</SelectContent></Select>;
+  const selectedSummary = values.length ? `${values.length} mapped` : "Map fields";
+  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" className="h-8 min-w-40 justify-between gap-2 bg-background px-3 text-xs font-normal shadow-sm hover:bg-muted/60"><span className={values.length ? "text-foreground" : "text-muted-foreground"}>{selectedSummary}</span><IconChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} /></Button></PopoverTrigger><PopoverContent align="start" className="w-64 overflow-hidden rounded-xl border bg-popover p-1.5 shadow-xl"><div className="px-2 pb-1 pt-1.5 text-[11px] font-medium text-muted-foreground">Map <span className="font-mono text-foreground">{column}</span> to one or more contact channels.</div><div className="max-h-72 overflow-y-auto pr-1">{CSV_CONTACT_MAPPING_GROUPS.map((group) => { const GroupIcon = group.icon; return <div key={group.group} className="py-1"><div className="mb-1 px-1"><span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide ${group.labelClass}`}><GroupIcon className={`h-3.5 w-3.5 ${group.iconClass}`} />{group.group}</span></div><div className="grid gap-0.5">{group.options.map((option) => { const value = `${group.group.toLowerCase()}:${option}`; const selected = values.includes(value); return <button key={`${column}-${value}`} type="button" onClick={() => toggle(value)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${selected ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/20" : "border-muted-foreground/30 bg-background"}`}>{selected ? <IconCheck className="h-3 w-3 stroke-[3]" /> : null}</span><span className="font-medium text-foreground">{title(option)}</span></button>; })}</div></div>; })}</div></PopoverContent></Popover>;
 }
 
 function DashboardMonitorPanel({ campaign, contactLists }) {
