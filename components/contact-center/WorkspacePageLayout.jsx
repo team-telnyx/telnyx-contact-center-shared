@@ -1,6 +1,6 @@
 "use client";
 
-import { IconShieldCheck, IconSparkles } from "@tabler/icons-react";
+import { IconHeadset, IconShieldCheck, IconSparkles } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 
 export const workspacePageShellClass =
@@ -38,6 +38,15 @@ const variants = {
     style: {
       "--workspace-shell-glow-primary": "rgba(245,158,11,0.14)",
       "--workspace-shell-glow-secondary": "rgba(120,113,108,0.14)",
+    },
+  },
+  agent: {
+    label: "AGENT WORKSPACE",
+    Icon: IconHeadset,
+    iconClassName: "text-emerald-500",
+    style: {
+      "--workspace-shell-glow-primary": "rgba(16,185,129,0.14)",
+      "--workspace-shell-glow-secondary": "rgba(20,184,166,0.12)",
     },
   },
 };
@@ -97,5 +106,17 @@ export function AdminPageHeader(props) {
 }
 
 export function AdminPageContent(props) {
+  return <WorkspacePageContent {...props} />;
+}
+
+export function AgentPageShell(props) {
+  return <WorkspacePageShell {...props} variant="agent" />;
+}
+
+export function AgentPageHeader(props) {
+  return <WorkspacePageHeader {...props} variant="agent" />;
+}
+
+export function AgentPageContent(props) {
   return <WorkspacePageContent {...props} />;
 }

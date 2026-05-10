@@ -5,10 +5,39 @@ import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Info, PhoneCall } from "lucide-react";
+import {
+  IconAddressBook,
+  IconBook,
+  IconChecklist,
+  IconDeviceDesktop,
+  IconFileText,
+  IconGauge,
+  IconWorld,
+} from "@tabler/icons-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useCallsStore from "@/lib/stores/calls-store";
+import { AgentDashboard } from "./AgentDashboard";
 import { AgentDataSources } from "./AgentDataSources";
+
+const AGENT_RAIL_ITEMS = [
+  { id: "desktop", label: "Desktop", icon: IconDeviceDesktop, description: "Live interaction workspace" },
+  { id: "dashboard", label: "Dashboard", icon: IconGauge, description: "Performance overview" },
+  { id: "forms", label: "Forms", icon: IconFileText, description: "Queue forms" },
+  { id: "web-pages", label: "Web Pages", icon: IconWorld, description: "External portals" },
+  { id: "contacts", label: "Contacts", icon: IconAddressBook, description: "Search contacts" },
+  { id: "tasks", label: "Tasks", icon: IconChecklist, description: "Manage tasks" },
+  { id: "kb-articles", label: "KB Articles", icon: IconBook, description: "Knowledge base" },
+];
+
+const DATA_SOURCE_VIEW_LABELS = {
+  contacts: "Contacts",
+  tasks: "Tasks",
+  forms: "Forms",
+  "web-pages": "Web Pages",
+  "kb-articles": "KB Articles",
+};
 
 export function AgentDesktop() {
   const [selectedInteraction, setSelectedInteraction] = useState(null);
@@ -1027,7 +1056,7 @@ export function AgentDesktop() {
     };
   }, [interactions]);
 
-  const [activeView, setActiveView] = useState("interaction-details");
+  const [activeView, setActiveView] = useState("desktop");
   const [isHydrated, setIsHydrated] = useState(false);
   const previousInteractionsRef = useRef([]);
   const hasRestoredStateRef = useRef(false);
@@ -1038,7 +1067,7 @@ export function AgentDesktop() {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("agent-desktop.activeView");
-        if (saved && ["interaction-details", "contacts", "tasks", "kb-articles", "web-pages"].includes(saved)) {
+        if (saved && ["desktop", "dashboard", "forms", "web-pages", "contacts", "tasks", "kb-articles"].includes(saved)) {
           setActiveView(saved);
         }
       } catch (_) {}
@@ -1116,7 +1145,7 @@ export function AgentDesktop() {
     // Only switch to interaction details if it's a new incoming call
     // OR if the user manually selected a different interaction (not the restored one)
     if (isNewIncomingCall || !isRestoredSelection) {
-      setActiveView("interaction-details");
+      setActiveView("desktop");
     }
   }, [selectedInteraction?.id, selectedInteraction?.state]);
 
@@ -1151,7 +1180,7 @@ export function AgentDesktop() {
       const newCall = newIncomingCalls[0];
       
       // Switch to interaction details view
-      setActiveView("interaction-details");
+      setActiveView("desktop");
       
       // Also auto-select the new call if no call is currently selected
       // or if the currently selected call is not an incoming call
@@ -1176,117 +1205,94 @@ export function AgentDesktop() {
     previousInteractionsRef.current = interactions;
   }, [interactions]);
 
+  const detailTitle =
+    activeView === "desktop"
+      ? "Interaction Details"
+      : activeView === "dashboard"
+      ? "Dashboard"
+      : DATA_SOURCE_VIEW_LABELS[activeView] || "Interaction Details";
+
   return (
-    <div className="flex gap-4 h-full w-full overflow-hidden max-w-full">
-      {/* Left Panel - Two stacked cards */}
-      <div className="w-80 shrink-0 flex flex-col gap-4 h-full min-h-0">
-        {/* Interactions Card */}
-        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <InteractionsList
-            interactions={
-              Array.isArray(interactions) ? interactions.filter(Boolean) : []
-            }
-            selectedId={selectedInteraction?.id}
-            onSelect={(interaction) => {
-              setSelectedInteraction(interaction);
-              // When user manually selects an interaction, switch to details view
-              // This overrides any restored state
-              setActiveView("interaction-details");
-              // Clear saved state since user made a manual selection
-              savedSelectedInteractionIdRef.current = null;
-            }}
-            webrtcCallState={useActiveCallStore()}
-            currentUsername={currentUsername}
-          />
-        </Card>
+    <div
+      className="grid h-full min-h-0 w-full gap-4 overflow-hidden"
+      style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(300px, 0.42fr) minmax(0, 1fr)` }}
+    >
+      <SectionRail
+        items={AGENT_RAIL_ITEMS}
+        activeId={activeView}
+        onSelect={setActiveView}
+        ariaLabel="Agent workspace sections"
+      />
 
-        {/* Data Sources Card */}
-        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <AgentDataSources
-            view={null}
-            selectedInteraction={selectedInteraction}
-            activeView={activeView}
-            onTileClick={setActiveView}
-          />
-        </Card>
-      </div>
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+        <InteractionsList
+          interactions={Array.isArray(interactions) ? interactions.filter(Boolean) : []}
+          selectedId={selectedInteraction?.id}
+          onSelect={(interaction) => {
+            setSelectedInteraction(interaction);
+            setActiveView("desktop");
+            savedSelectedInteractionIdRef.current = null;
+          }}
+          webrtcCallState={useActiveCallStore()}
+          currentUsername={currentUsername}
+        />
+      </Card>
 
-      {/* Right Panel - Interaction Details or Data Source View */}
-      <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {activeView === "web-pages" ? (
+      <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <Info className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="truncate text-base font-semibold text-foreground">{detailTitle}</h2>
+              {activeView === "forms" && agentForms.length ? (
+                <Select
+                  value={selectedAgentFormId || undefined}
+                  onValueChange={setSelectedAgentFormId}
+                >
+                  <SelectTrigger className="h-8 w-[240px]">
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agentForms.map((form) => (
+                      <SelectItem key={form.id} value={form.id}>
+                        {form.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {activeView === "dashboard" ? (
+          <div className="flex-1 overflow-y-auto">
+            <AgentDashboard className="p-4 lg:p-5" />
+          </div>
+        ) : activeView === "desktop" ? (
+          selectedInteraction ? (
+            <InteractionDetail interaction={selectedInteraction} />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+              <PhoneCall className="h-10 w-10 text-gray-500" />
+              <p>Waiting for a call...</p>
+            </div>
+          )
+        ) : (
           <AgentDataSources
             view={activeView}
             selectedInteraction={selectedInteraction}
+            selectedFormId={selectedAgentFormId}
+            onSelectedFormIdChange={setSelectedAgentFormId}
+            onFormsLoaded={setAgentForms}
+            hideFormsHeader={activeView === "forms"}
             onBackToInteraction={() => {
-              setActiveView("interaction-details");
-              // Clear saved selection ref since user manually navigated back
+              setActiveView("desktop");
               savedSelectedInteractionIdRef.current = null;
             }}
           />
-        ) : (
-          <>
-            <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-md bg-primary/10">
-                    <Info className="h-4 w-4 text-primary" />
-                  </div>
-                  <h2 className="text-base font-semibold text-foreground">
-                    {activeView === "interaction-details"
-                      ? "Interaction Details"
-                      : activeView === "contacts"
-                      ? "Contacts"
-                      : activeView === "tasks"
-                      ? "Tasks"
-                      : activeView === "forms"
-                      ? "Forms"
-                      : "KB Articles"}
-                  </h2>
-                  {activeView === "forms" && agentForms.length ? (
-                    <Select
-                      value={selectedAgentFormId || undefined}
-                      onValueChange={setSelectedAgentFormId}
-                    >
-                      <SelectTrigger className="h-8 w-[240px]">
-                        <SelectValue placeholder="Select form" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {agentForms.map((form) => (
-                          <SelectItem key={form.id} value={form.id}>
-                            {form.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            {activeView === "interaction-details" ? (
-              selectedInteraction ? (
-                <InteractionDetail interaction={selectedInteraction} />
-              ) : (
-                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-2">
-                  <PhoneCall className="h-10 w-10 text-gray-500" />
-                  <p>Waiting for a call...</p>
-                </div>
-              )
-            ) : (
-              <AgentDataSources
-                view={activeView}
-                selectedInteraction={selectedInteraction}
-                selectedFormId={selectedAgentFormId}
-                onSelectedFormIdChange={setSelectedAgentFormId}
-                onFormsLoaded={setAgentForms}
-                hideFormsHeader={activeView === "forms"}
-                onBackToInteraction={() => {
-                  setActiveView("interaction-details");
-                  // Clear saved selection ref since user manually navigated back
-                  savedSelectedInteractionIdRef.current = null;
-                }}
-              />
-            )}
-          </>
         )}
       </Card>
     </div>
