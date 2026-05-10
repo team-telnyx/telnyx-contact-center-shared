@@ -23,7 +23,7 @@ import { FORM_COMPONENT_TYPES, FORM_COMPONENT_REGISTRY, createDefaultForm, flatt
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { sanitizeRichTextHtml } from "@/components/forms/rich-text-html";
-import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { notify } from "@/components/ToastNotify";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 
@@ -865,7 +865,6 @@ export function FormEditor({ initialForm, isNew = false }) {
       badges={<><Badge variant="outline" className={STATUS_BADGE_CLASS[form.status || "draft"] || STATUS_BADGE_CLASS.draft}>{form.status || "draft"}</Badge>{hasUnsavedChanges ? <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge> : <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>}</>}
       actions={<><Button type="button" variant="ghost" size="sm" className="shrink-0" onClick={() => { if (hasUnsavedChanges) { setPendingNavigation("/admin/forms"); setShowExitDialog(true); } else router.push("/admin/forms"); }}><IconArrowLeft className="mr-1 h-4 w-4" />Forms</Button><Button variant="outline" size="sm" onClick={() => setPreviewMode((v) => !v)}><IconEye className="h-4 w-4 mr-1" />{previewMode ? "Edit" : "View"}</Button><Button variant="outline" size="sm" onClick={() => setFormSettingsOpen(true)}><IconSettings className="h-4 w-4 mr-1" />Form settings</Button><Button variant="outline" size="sm" onClick={exportJson} disabled={saving}><IconDownload className="h-4 w-4 mr-1" />Export JSON</Button><Button variant="outline" size="sm" onClick={() => save()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button><Button size="sm" onClick={publish} disabled={saving}><IconWorldUpload className="h-4 w-4 mr-1" />Publish</Button></>}
     />
-    <AdminPageContent className="flex flex-col overflow-hidden p-0">
 
     <Dialog open={formSettingsOpen} onOpenChange={setFormSettingsOpen}>
       <DialogContent className="sm:max-w-2xl">
@@ -930,7 +929,6 @@ export function FormEditor({ initialForm, isNew = false }) {
     </div>
       <DragOverlay dropAnimation={null}>{activeDragType === "media" ? <MediaDragPreview /> : activeDragType === "data action" ? <DataActionDragPreview /> : activeDragType ? <BlockDragPreview type={activeDragType} /> : null}</DragOverlay>
     </DndContext>
-    </AdminPageContent>
   </AdminPageShell>;
 }
 
