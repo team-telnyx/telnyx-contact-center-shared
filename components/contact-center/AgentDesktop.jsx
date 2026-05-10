@@ -1211,6 +1211,8 @@ export function AgentDesktop() {
       : activeView === "dashboard"
       ? "Dashboard"
       : DATA_SOURCE_VIEW_LABELS[activeView] || "Interaction Details";
+  const DetailIcon =
+    AGENT_RAIL_ITEMS.find((item) => item.id === activeView)?.icon || Info;
 
   return (
     <div
@@ -1243,7 +1245,7 @@ export function AgentDesktop() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
-                <Info className="h-4 w-4 text-primary" />
+                <DetailIcon className="h-4 w-4 text-primary" />
               </div>
               <h2 className="truncate text-base font-semibold text-foreground">{detailTitle}</h2>
               {activeView === "forms" && agentForms.length ? (

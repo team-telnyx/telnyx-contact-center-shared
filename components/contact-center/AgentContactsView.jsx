@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import ContactEditSheet from "@/components/contacts/EditSheet";
+import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentContactsView({ selectedInteraction, onBackToInteraction }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,6 +52,9 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
   }, []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [identifiedContact, setIdentifiedContact] = useState(null);
   const [showContactSheet, setShowContactSheet] = useState(false);
 
@@ -110,52 +114,59 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
     identifyCaller();
   }, [selectedInteraction?.from_number]);
 
-  // Load contacts
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const query = new URLSearchParams();
-        // If there's a connected call, search by phone number specifically
-        if (selectedInteraction?.from_number && searchQuery === selectedInteraction.from_number) {
-          query.set("phone", selectedInteraction.from_number);
-        } else if (searchQuery) {
-          // Otherwise use general search
-          query.set("q", searchQuery);
-        }
-        query.set("pageSize", "50");
+  const loadContacts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams();
+      // If there's a connected call, search by phone number specifically
+      if (selectedInteraction?.from_number && searchQuery === selectedInteraction.from_number) {
+        query.set("phone", selectedInteraction.from_number);
+      } else if (searchQuery) {
+        // Otherwise use general search
+        query.set("q", searchQuery);
+      }
+      query.set("page", String(page));
+      query.set("pageSize", String(pageSize));
 
-        const res = await fetch(`/api/contacts?${query}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setItems(data.rows || []);
-        } else {
-          notify({
-            title: "Load failed",
-            description: data?.error || "Failed to fetch contacts",
-            variant: "error",
-          });
-        }
-      } catch (err) {
+      const res = await fetch(`/api/contacts?${query}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems(data.rows || []);
+        setTotalCount(Number(data.count || 0));
+      } else {
         notify({
           title: "Load failed",
-          description: String(err.message || err),
+          description: data?.error || "Failed to fetch contacts",
           variant: "error",
         });
-      } finally {
-        setLoading(false);
       }
+    } catch (err) {
+      notify({
+        title: "Load failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
     }
+  }, [page, pageSize, searchQuery, selectedInteraction?.from_number]);
 
-    load();
+  // Load contacts
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
+
+  useEffect(() => {
+    setPage(1);
   }, [searchQuery, selectedInteraction?.from_number]);
 
   // Clear search query when call disconnects
   useEffect(() => {
     const handleCallDisconnected = () => {
       setSearchQuery("");
+      setPage(1);
     };
 
     window.addEventListener(
@@ -218,57 +229,32 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
 
   async function handleContactSaved() {
     setShowContactSheet(false);
-    // Reload contacts
-    setLoading(true);
-    try {
-      const query = new URLSearchParams();
-      // If there's a connected call, search by phone number specifically
-      if (selectedInteraction?.from_number && searchQuery === selectedInteraction.from_number) {
-        query.set("phone", selectedInteraction.from_number);
-      } else if (searchQuery) {
-        // Otherwise use general search
-        query.set("q", searchQuery);
-      }
-      query.set("pageSize", "50");
-      const res = await fetch(`/api/contacts?${query}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setItems(data.rows || []);
-      }
-    } catch (err) {
-      notify({
-        title: "Load failed",
-        description: String(err.message || err),
-        variant: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
+    await loadContacts();
   }
 
   return (
     <>
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2 mb-3">
-            <IconAddressBook className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Contacts</h3>
-          </div>
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="shrink-0 p-4 border-b">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search by name, phone, email, company..."
                 className="pl-8 pr-8"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPage(1);
+                  }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
                   aria-label="Clear search"
                 >
@@ -292,7 +278,7 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
         )}
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-4">
           {loading ? (
             <div className="space-y-2">
@@ -512,6 +498,17 @@ export function AgentContactsView({ selectedInteraction, onBackToInteraction }) 
           )}
         </div>
       </ScrollArea>
+      <AgentDataSourcePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        loading={loading}
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+      />
       </div>
 
       {/* Contact Edit Sheet */}

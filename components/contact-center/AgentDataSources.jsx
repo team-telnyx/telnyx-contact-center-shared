@@ -68,7 +68,7 @@ export function AgentDataSources({
   // If view is null, show tiles
   if (view === null) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
           <div className="flex items-center gap-2">
             <IconDatabase className="h-4 w-4 text-muted-foreground" />
@@ -77,7 +77,7 @@ export function AgentDataSources({
             </h3>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
           {tiles.map((tile) => {
             const Icon = tile.icon;
             const isSelected = activeView === tile.id;
@@ -129,7 +129,7 @@ export function AgentDataSources({
 
   // Show specific view
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
       {view === "contacts" && (
         <AgentContactsView
           selectedInteraction={selectedInteraction}

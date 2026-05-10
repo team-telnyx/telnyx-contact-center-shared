@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import TaskEditSheet from "@/components/tasks/EditSheet";
+import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,11 +53,19 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
   }, []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [identifiedContact, setIdentifiedContact] = useState(null);
   const [showTaskSheet, setShowTaskSheet] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [prefillContactId, setPrefillContactId] = useState(null);
   const [contactsMap, setContactsMap] = useState(new Map());
+  const contactsMapRef = useRef(contactsMap);
+
+  useEffect(() => {
+    contactsMapRef.current = contactsMap;
+  }, [contactsMap]);
 
   // Save search query to localStorage
   useEffect(() => {
@@ -118,46 +127,42 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
     identifyCaller();
   }, [selectedInteraction?.from_number]);
 
-  // Load tasks
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const query = new URLSearchParams();
-        // Always prioritize identified contact ID when available (for connected calls)
-        // This ensures tasks are filtered by the caller's contact_id
-        if (prefillContactId) {
-          query.set("contact_id", prefillContactId);
-        } else if (searchQuery) {
-          // Only use search query if no identified contact
-          query.set("q", searchQuery);
-        }
-        query.set("pageSize", "50");
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams();
+      // Always prioritize identified contact ID when available (for connected calls)
+      // This ensures tasks are filtered by the caller's contact_id
+      if (prefillContactId) {
+        query.set("contact_id", prefillContactId);
+      } else if (searchQuery) {
+        // Only use search query if no identified contact
+        query.set("q", searchQuery);
+      }
+      query.set("page", String(page));
+      query.set("pageSize", String(pageSize));
 
-        const res = await fetch(`/api/tasks?${query}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (res.ok) {
-          const tasks = data.rows || [];
-          setItems(tasks);
+      const res = await fetch(`/api/tasks?${query}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const tasks = data.rows || [];
+        setItems(tasks);
+        setTotalCount(Number(data.count || 0));
 
-          // Fetch contacts for tasks that have contact_id (to display as caller info)
-          const contactIdsToFetch = new Set();
-          tasks.forEach((task) => {
-            if (task.contact_id) {
-              contactIdsToFetch.add(task.contact_id);
-            }
-          });
+        const contactIdsToFetch = new Set(
+          tasks.map((task) => task.contact_id).filter(Boolean),
+        );
 
-          // Fetch contacts individually (since we need specific IDs)
-          if (contactIdsToFetch.size > 0) {
-            const contactPromises = Array.from(contactIdsToFetch).map(
-              async (contactId) => {
-                // Skip if we already have this contact
-                if (contactsMap.has(contactId)) {
-                  return null;
-                }
+        if (contactIdsToFetch.size > 0) {
+          const missingContactIds = Array.from(contactIdsToFetch).filter(
+            (contactId) => !contactsMapRef.current.has(contactId),
+          );
+
+          if (missingContactIds.length > 0) {
+            const contactResults = await Promise.all(
+              missingContactIds.map(async (contactId) => {
                 try {
                   const contactRes = await fetch(
                     `/api/contacts/${encodeURIComponent(contactId)}`,
@@ -171,45 +176,53 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
                   console.error(`Failed to fetch contact ${contactId}:`, err);
                 }
                 return null;
-              },
+              }),
             );
 
-            const contactResults = await Promise.all(contactPromises);
-            const newContactsMap = new Map(contactsMap);
-            contactResults.forEach((result) => {
-              if (result && result.contact) {
-                newContactsMap.set(result.contactId, result.contact);
-              }
+            setContactsMap((latestContactsMap) => {
+              const newContactsMap = new Map(latestContactsMap);
+              contactResults.forEach((result) => {
+                if (result && result.contact) {
+                  newContactsMap.set(result.contactId, result.contact);
+                }
+              });
+              contactsMapRef.current = newContactsMap;
+              return newContactsMap;
             });
-            if (newContactsMap.size !== contactsMap.size) {
-              setContactsMap(newContactsMap);
-            }
           }
-        } else {
-          notify({
-            title: "Load failed",
-            description: data?.error || "Failed to fetch tasks",
-            variant: "error",
-          });
         }
-      } catch (err) {
+      } else {
         notify({
           title: "Load failed",
-          description: String(err.message || err),
+          description: data?.error || "Failed to fetch tasks",
           variant: "error",
         });
-      } finally {
-        setLoading(false);
       }
+    } catch (err) {
+      notify({
+        title: "Load failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
     }
+  }, [page, pageSize, prefillContactId, searchQuery]);
 
-    load();
+  // Load tasks
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  useEffect(() => {
+    setPage(1);
   }, [searchQuery, prefillContactId]);
 
   // Clear search query when call disconnects
   useEffect(() => {
     const handleCallDisconnected = () => {
       setSearchQuery("");
+      setPage(1);
     };
 
     window.addEventListener(
@@ -346,74 +359,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
   async function handleTaskSaved() {
     setShowTaskSheet(false);
     setEditingTaskId(null);
-    // Reload tasks - always prioritize identified contact ID
-    setLoading(true);
-    try {
-      const query = new URLSearchParams();
-      // Always prioritize identified contact ID when available
-      if (prefillContactId) {
-        query.set("contact_id", prefillContactId);
-      } else if (searchQuery) {
-        query.set("q", searchQuery);
-      }
-      query.set("pageSize", "50");
-      const res = await fetch(`/api/tasks?${query}`, { cache: "no-store" });
-      const data = await res.json();
-      if (res.ok) {
-        const tasks = data.rows || [];
-        setItems(tasks);
-
-        // Reload contacts if needed
-        const contactIdsToFetch = new Set();
-        tasks.forEach((task) => {
-          if (task.contact_id) {
-            contactIdsToFetch.add(task.contact_id);
-          }
-        });
-
-        if (contactIdsToFetch.size > 0) {
-          const contactPromises = Array.from(contactIdsToFetch).map(
-            async (contactId) => {
-              if (contactsMap.has(contactId)) {
-                return null;
-              }
-              try {
-                const contactRes = await fetch(
-                  `/api/contacts/${encodeURIComponent(contactId)}`,
-                  { cache: "no-store" },
-                );
-                if (contactRes.ok) {
-                  const contact = await contactRes.json();
-                  return { contactId, contact };
-                }
-              } catch (err) {
-                console.error(`Failed to fetch contact ${contactId}:`, err);
-              }
-              return null;
-            },
-          );
-
-          const contactResults = await Promise.all(contactPromises);
-          const newContactsMap = new Map(contactsMap);
-          contactResults.forEach((result) => {
-            if (result && result.contact) {
-              newContactsMap.set(result.contactId, result.contact);
-            }
-          });
-          if (newContactsMap.size !== contactsMap.size) {
-            setContactsMap(newContactsMap);
-          }
-        }
-      }
-    } catch (err) {
-      notify({
-        title: "Load failed",
-        description: String(err.message || err),
-        variant: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
+    await loadTasks();
   }
 
   function handleEditTask(taskId) {
@@ -423,25 +369,27 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
 
   return (
     <>
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="p-4 border-b">
-          <div className="flex items-center gap-2 mb-3">
-            <IconChecklist className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">Tasks</h3>
-          </div>
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="shrink-0 p-4 border-b">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search tasks..."
                 className="pl-8 pr-8"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setPage(1);
+                  }}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
                   aria-label="Clear search"
                 >
@@ -467,7 +415,7 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
           )}
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4">
             {loading ? (
               <div className="space-y-2">
@@ -698,6 +646,17 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
             )}
           </div>
         </ScrollArea>
+        <AgentDataSourcePagination
+          page={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          loading={loading}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize);
+            setPage(1);
+          }}
+        />
       </div>
 
       {/* Task Edit Sheet */}

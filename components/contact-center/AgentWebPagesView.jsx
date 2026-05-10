@@ -98,19 +98,9 @@ export function AgentWebPagesView({ selectedInteraction, onBackToInteraction, we
   }, [isHydrated, selectedPageId, selectedWebPageIds.join(",")]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-md bg-primary/10">
-            <IconWorld className="h-4 w-4 text-primary" />
-          </div>
-          <h2 className="text-base font-semibold text-foreground">Web Pages</h2>
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
       {/* Tabs Row */}
-      <div className="border-b bg-muted/30">
+      <div className="shrink-0 border-b bg-muted/30">
         <div className="flex items-end overflow-x-auto">
           {selectedPage && (
             <Button
