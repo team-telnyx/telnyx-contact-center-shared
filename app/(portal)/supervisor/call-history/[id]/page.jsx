@@ -18,7 +18,6 @@ import {
   IconTimeline,
   IconRobot,
   IconHistory,
-  IconSparkles,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import InteractionTimeline from "@/components/contact-center/InteractionTimeline";
@@ -27,6 +26,11 @@ import RecordingPlayer from "@/components/contact-center/RecordingPlayer";
 import TranscriptionHistory from "@/components/contact-center/TranscriptionHistory";
 import WorkflowHistoryView from "@/components/contact-center/WorkflowHistoryView";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
+import {
+  SupervisorPageContent,
+  SupervisorPageHeader,
+  SupervisorPageShell,
+} from "@/components/contact-center/SupervisorPageLayout";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -134,42 +138,37 @@ export default function SupervisorCallHistoryDetailPage() {
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
 
   return (
-    <div className="p-4">
-      <Card className="shadow-sm">
-        <CardHeader className="border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                <IconSparkles className="h-4 w-4 text-sky-500" />
-                Supervisor workspace
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  Interaction Details
-                </h1>
-                <Badge
-                  variant="outline"
-                  className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                >
-                  Interaction record
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
-                >
-                  Timeline · Recordings
-                </Badge>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/supervisor/call-history">
-                <IconArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Link>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+    <SupervisorPageShell>
+      <SupervisorPageHeader
+        title="Interaction Details"
+        badges={(
+          <>
+            <Badge
+              variant="outline"
+              className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+            >
+              Interaction record
+            </Badge>
+            <Badge
+              variant="outline"
+              className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+            >
+              Timeline · Recordings
+            </Badge>
+          </>
+        )}
+        actions={(
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/supervisor/call-history">
+              <IconArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Link>
+          </Button>
+        )}
+      />
+      <SupervisorPageContent>
+        <Card className="shadow-sm">
+          <CardContent className="space-y-6 py-6">
           {loading ? (
             <div className="py-2">
               <Skeleton className="h-6 w-1/3 mb-3" />
@@ -543,8 +542,9 @@ export default function SupervisorCallHistoryDetailPage() {
               </Tabs>
             </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </SupervisorPageContent>
+    </SupervisorPageShell>
   );
 }

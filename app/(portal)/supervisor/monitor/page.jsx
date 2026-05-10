@@ -58,6 +58,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import {
+  SupervisorPageHeader,
+  SupervisorPageShell,
+} from "@/components/contact-center/SupervisorPageLayout";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -1378,48 +1382,41 @@ export default function MonitorPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-var(--header-height)-2rem)] min-h-0 -my-4 md:-my-6 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(113,113,122,0.14),transparent_26%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--muted))/0.55)]">
-      <div className="flex h-full min-h-0 flex-col">
-        <header className="shrink-0 border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                <IconSparkles className="h-4 w-4 text-sky-500" />
-                Supervisor workspace
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight">Supervisory Console</h1>
-                <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Live monitor</Badge>
-                <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Graphs</Badge>
-                <Badge
-                  variant="outline"
-                  className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
-                    connected
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-                  }`}
-                >
-                  <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                  {connected ? "Connected" : "Disconnected"}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
+    <SupervisorPageShell>
+        <SupervisorPageHeader
+          title="Supervisory Console"
+          badges={(
+            <>
+              <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Live monitor</Badge>
+              <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Graphs</Badge>
+              <Badge
                 variant="outline"
-                size="sm"
-                onClick={() => {
-                  setLoading(true);
-                  loadDashboard();
-                }}
-                disabled={loading}
+                className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
+                  connected
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                }`}
               >
-                <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-            </div>
-          </div>
-        </header>
+                <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+                {connected ? "Connected" : "Disconnected"}
+              </Badge>
+            </>
+          )}
+          actions={(
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoading(true);
+                loadDashboard();
+              }}
+              disabled={loading}
+            >
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+          )}
+        />
 
         <main className="grid flex-1 min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
           <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
@@ -2832,7 +2829,6 @@ export default function MonitorPage() {
         onOpenChange={setSupervisionModalOpen}
         call={selectedCallForSupervision}
       />
-      </div>
-    </div>
+    </SupervisorPageShell>
   );
 }
