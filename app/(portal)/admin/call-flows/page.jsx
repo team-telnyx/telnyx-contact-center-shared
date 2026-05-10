@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -362,7 +363,10 @@ export default function CallFlowsPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Call Flows" badges={<Badge variant="secondary">{total} flows</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -661,6 +665,8 @@ export default function CallFlowsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

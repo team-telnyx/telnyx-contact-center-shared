@@ -1,6 +1,8 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IconPhone, IconSearch } from "@tabler/icons-react";
@@ -11,7 +13,10 @@ export default function NumbersPage() {
   const [activeTab, setActiveTab] = useState("inventory");
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Phone Numbers" badges={<Badge variant="secondary">Number inventory</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -49,7 +54,9 @@ export default function NumbersPage() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -901,19 +902,34 @@ export default function WorkflowEditorPage() {
 
   if (loading) {
     return (
-      <div className="px-4 lg:px-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="h-[600px]" />
-          <Skeleton className="h-[600px]" />
-          <Skeleton className="h-[600px]" />
-        </div>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Workflow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageContent>
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48" />
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-[600px]" />
+              <Skeleton className="h-[600px]" />
+              <Skeleton className="h-[600px]" />
+            </div>
+          </div>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
   return (
-    <div className="px-4 lg:px-6 h-[calc(100vh-120px)] flex flex-col">
+    <AdminPageShell>
+      <AdminPageHeader
+        title={workflow?.name || "Workflow Editor"}
+        badges={workflow?.is_active ? (
+          <Badge className="border-green-500 text-green-600" variant="outline">Active</Badge>
+        ) : (
+          <Badge className="border-gray-400 text-gray-500" variant="outline">Inactive</Badge>
+        )}
+      />
+      <AdminPageContent className="flex flex-col">
+        <div className="flex min-h-[calc(100vh-220px)] flex-1 flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -1705,7 +1721,9 @@ export default function WorkflowEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
 

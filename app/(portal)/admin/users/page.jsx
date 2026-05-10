@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -262,7 +263,10 @@ export default function AdminUsersPage() {
   }, [items]);
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Users" badges={<Badge variant="secondary">{total} users</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -588,6 +592,8 @@ export default function AdminUsersPage() {
         userId={editUserId}
         onSaveComplete={load}
       />
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

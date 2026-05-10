@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -170,7 +171,10 @@ export default function AdminWorkflowsPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Workflows" badges={<Badge variant="secondary">{total} workflows</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -457,6 +461,8 @@ export default function AdminWorkflowsPage() {
           </div>
         </div>
       </Card>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

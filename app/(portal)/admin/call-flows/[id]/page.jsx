@@ -22,6 +22,7 @@ import ReactFlow, {
   getBezierPath,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -2467,27 +2468,35 @@ export default function FlowBuilderPage() {
   // Show loading state while checking authorization
   if (checkingAuth || !isAuthorized) {
     return (
-      <div className="px-4 lg:px-6">
-        <Card className="w-full">
-          <CardContent className="space-y-4 pt-6">
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-96 w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Authorizing</Badge>} />
+        <AdminPageContent>
+          <Card className="w-full">
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-96 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
-          <span>Loading flow...</span>
-        </div>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageContent>
+          <div className="flex h-full items-center justify-center">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
+              <span>Loading flow...</span>
+            </div>
+          </div>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
@@ -2496,8 +2505,17 @@ export default function FlowBuilderPage() {
     : null;
 
   return (
-    <div className="px-0 lg:px-6 py-0">
-      <Card className="w-full" style={{ height: "90vh" }}>
+    <AdminPageShell>
+      <AdminPageHeader
+        title={flowName || "Call Flow Editor"}
+        badges={hasUnsavedChanges ? (
+          <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge>
+        ) : (
+          <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>
+        )}
+      />
+      <AdminPageContent>
+        <Card className="w-full" style={{ height: "calc(100vh - 220px)" }}>
         <CardContent className="p-0 h-full">
           <div className="flex h-full">
             {/* Left Sidebar - Node Palette & Variables */}
@@ -4528,6 +4546,7 @@ export default function FlowBuilderPage() {
           </div>
         </div>
       )}
-    </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { IconArchive, IconDownload, IconPencil, IconPlus, IconRefresh, IconUpload, IconWorldUpload } from "@tabler/icons-react";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,7 +199,10 @@ export default function AdminFormsPage() {
     }
   }
 
-  return <div className="container mx-auto p-6 space-y-6">
+  return <AdminPageShell>
+    <AdminPageHeader title="Agent Forms" badges={<Badge variant="secondary">{forms.length} forms</Badge>} />
+    <AdminPageContent>
+      <div className="space-y-6">
     <AlertDialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open && !loading) setArchiveTarget(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -262,5 +266,7 @@ export default function AdminFormsPage() {
         </CardFooter>
       </Card>)}
     </div> : null}
-  </div>;
+      </div>
+    </AdminPageContent>
+  </AdminPageShell>;
 }

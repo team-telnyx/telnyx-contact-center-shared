@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -316,20 +317,18 @@ export default function CTITestingPage() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">CTI Testing</h1>
-          <p className="text-muted-foreground">
-            Test Computer Telephony Integration with SIP phones (Polycom VVX300)
-          </p>
-        </div>
-        <Badge variant="outline" className={phoneStatus.connected ? "border-green-500 text-green-700" : "border-red-500 text-red-700"}>
-          <IconActivity className="w-4 h-4 mr-2" />
-          {phoneStatus.connected ? "Connected" : "Disconnected"}
-        </Badge>
-      </div>
-
+    <AdminPageShell>
+      <AdminPageHeader
+        title="CTI Testing"
+        badges={
+          <Badge variant="outline" className={phoneStatus.connected ? "border-green-500 text-green-700" : "border-red-500 text-red-700"}>
+            <IconActivity className="w-4 h-4 mr-2" />
+            {phoneStatus.connected ? "Connected" : "Disconnected"}
+          </Badge>
+        }
+      />
+      <AdminPageContent>
+        <div className="space-y-6">
       <Tabs defaultValue="controls" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="controls">Call Controls</TabsTrigger>
@@ -587,6 +586,8 @@ export default function CTITestingPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

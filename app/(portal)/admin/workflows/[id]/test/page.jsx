@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1808,8 +1809,10 @@ export default function TestAgentPage() {
 
   if (loading) {
     return (
-      <div className="p-4">
-        <Card className="shadow-sm">
+      <AdminPageShell>
+        <AdminPageHeader title="Test AI Agent" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageContent>
+          <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <IconRobot className="h-5 w-5 text-telnyx-green" />
@@ -1821,12 +1824,16 @@ export default function TestAgentPage() {
             <Skeleton className="h-[600px] w-full" />
           </CardContent>
         </Card>
-      </div>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
   return (
-    <div className="px-0 lg:px-6 py-0">
+    <AdminPageShell>
+      <AdminPageHeader title="Test AI Agent" badges={<Badge variant="secondary">{workflow?.name || "Workflow"}</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       {/* Hidden audio element for AI voice playback */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: "none" }} />
       
@@ -2307,6 +2314,8 @@ export default function TestAgentPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Fragment, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -113,7 +115,10 @@ export default function AdminSecretsPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Secrets" badges={<Badge variant="secondary">{secrets.length} secrets</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
           <div className="flex items-center justify-between">
@@ -242,6 +247,8 @@ export default function AdminSecretsPage() {
         secretId={editingSecretId}
         onSaveComplete={load}
       />
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
