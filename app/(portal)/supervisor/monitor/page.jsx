@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -62,6 +62,11 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+
+const MONITOR_RAIL_ITEMS = [
+  { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
+  { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
+];
 
 // Component to display skills with relaxation indicator
 function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
@@ -1109,8 +1114,19 @@ export default function MonitorPage() {
     return true;
   });
 
+  const selectMonitorSection = (value) => {
+    setActiveTab(value);
+    // Clear selected queue when switching tabs to ensure proper view rendering
+    if (selectedQueue) {
+      setSelectedQueue(null);
+      setQueueCalls([]);
+    }
+  };
+
   return (
-    <div className="px-4 lg:px-4 py-4 pb-2 space-y-6">
+    <div className="grid h-[calc(100vh-var(--header-height)-2rem)] min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
+      <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
+      <div className="min-h-0 space-y-6 overflow-y-auto pr-1">
       {/* Connection Status */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1118,28 +1134,6 @@ export default function MonitorPage() {
           Supervisory Console
         </h1>
         <div className="flex items-center gap-3">
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => {
-              setActiveTab(value);
-              // Clear selected queue when switching tabs to ensure proper view rendering
-              if (selectedQueue) {
-                setSelectedQueue(null);
-                setQueueCalls([]);
-              }
-            }}
-          >
-            <TabsList>
-              <TabsTrigger value="agents" className="flex items-center gap-2">
-                <IconUsers className="h-4 w-4" />
-                Agents
-              </TabsTrigger>
-              <TabsTrigger value="queues" className="flex items-center gap-2">
-                <IconTrendingUp className="h-4 w-4" />
-                Queues
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
           <Button
             onClick={() => {
               setLoading(true);
@@ -2644,6 +2638,7 @@ export default function MonitorPage() {
         onOpenChange={setSupervisionModalOpen}
         call={selectedCallForSupervision}
       />
+      </div>
     </div>
   );
 }

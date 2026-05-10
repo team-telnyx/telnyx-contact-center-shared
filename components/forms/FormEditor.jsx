@@ -24,6 +24,7 @@ import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-bl
 import { FormRenderer } from "@/components/forms/FormRenderer";
 import { sanitizeRichTextHtml } from "@/components/forms/rich-text-html";
 import { notify } from "@/components/ToastNotify";
+import { SectionRail, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 
 const RAIL = [
   { id: "ai", label: "AI", icon: IconMessageCircle },
@@ -896,12 +897,8 @@ export function FormEditor({ initialForm, isNew = false }) {
     </AlertDialog>
 
     <DndContext onDragStart={handleDragStart} onDragCancel={() => setActiveDragType(null)} onDragEnd={handleDragEnd}>
-    <div className="grid flex-1 min-h-0 gap-3 p-3 grid-cols-[72px_320px_minmax(0,1fr)_360px]">
-      <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm">
-        <div className="h-full overflow-y-auto p-2 flex flex-col items-center gap-2">
-          {RAIL.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setActiveTab(id)} className={`w-14 rounded-lg px-2 py-3 text-[10px] flex flex-col items-center gap-1 transition ${activeTab === id ? "bg-primary text-primary-foreground shadow" : "text-muted-foreground hover:bg-muted"}`}><Icon className="h-5 w-5" />{label}</button>)}
-        </div>
-      </section>
+    <div className="grid flex-1 min-h-0 gap-3 p-3" style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0,1fr) 360px` }}>
+      <SectionRail items={RAIL} activeId={activeTab} onSelect={setActiveTab} ariaLabel="Form builder sections" />
 
       <section className="min-h-0 overflow-hidden rounded-xl border bg-card shadow-sm flex flex-col">
         <LeftPanel activeTab={activeTab} form={form} patchForm={patchForm} pages={pages} activePageId={activePage?.id} setActivePageId={setActivePageId} addPage={addPage} updatePage={updatePage} removePage={removePage} movePage={movePage} selectedId={selectedId} setSelectedId={selectField} addField={addField} aiMessages={aiMessages} aiPrompt={aiPrompt} setAiPrompt={setAiPrompt} sendAi={sendAi} clearAiChat={clearAiChat} aiLoading={aiLoading} aiMessagesEndRef={aiMessagesEndRef} templates={templates} createFromTemplate={createFromTemplate} media={media} uploadMediaFile={uploadMediaFile} uploadingMedia={uploadingMedia} addMediaImage={addMediaImage} setMedia={setMedia} saveMediaTitle={saveMediaTitle} dataActions={dataActions} dataActionsLoading={dataActionsLoading} selectedField={selectedField} assignDataActionToButton={assignDataActionToButton} />
