@@ -19,11 +19,6 @@ export default function NumbersPage() {
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconPhone className="size-6 text-telnyx-green" /> Phone Numbers
-            </div>
-          </div>
 
           <Tabs
             value={activeTab}

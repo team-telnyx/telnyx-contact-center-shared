@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { IconWorld, IconEdit, IconTrash, IconPlus } from "@tabler/icons-react";
+import { IconEdit, IconTrash, IconPlus } from "@tabler/icons-react";
 import {
   Table,
   TableBody,
@@ -81,31 +81,27 @@ export default function AdminWebPagesPage() {
     }
   }
 
+  const headerActions = <>
+    <Button
+      variant="secondary"
+      onClick={() => load()}
+      disabled={loading}
+    >
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button onClick={handleNewPage}>
+      <IconPlus className="size-4 mr-2" />
+      New Web Page
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Web Pages" badges={<Badge variant="secondary">{items.length} pages</Badge>} />
+      <AdminPageHeader title="Web Pages" badges={<Badge variant="secondary">{items.length} pages</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconWorld className="size-6 text-telnyx-green" /> Web Pages
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => load()}
-                disabled={loading}
-              >
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button onClick={handleNewPage}>
-                <IconPlus className="size-4 mr-2" />
-                New Web Page
-              </Button>
-            </div>
-          </div>
 
           {loading ? (
             <div className="border rounded-md overflow-hidden p-4 space-y-2">

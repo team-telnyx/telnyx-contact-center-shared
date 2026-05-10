@@ -18,7 +18,6 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconTag,
   IconEdit,
   IconTrash,
   IconPlus,
@@ -137,39 +136,35 @@ export default function AdminStatusesPage() {
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  const headerActions = <>
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setFilters({
+          type: "all",
+          active: "all",
+          userSelectable: "all",
+          q: "",
+        })
+      }
+    >
+      Clear
+    </Button>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button onClick={handleNewStatus} variant="default">
+      New Status
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="User Statuses" badges={<Badge variant="secondary">{total} statuses</Badge>} />
+      <AdminPageHeader title="User Statuses" badges={<Badge variant="secondary">{total} statuses</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconTag className="size-6 text-telnyx-green" /> User Statuses
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setFilters({
-                    type: "all",
-                    active: "all",
-                    userSelectable: "all",
-                    q: "",
-                  })
-                }
-              >
-                Clear
-              </Button>
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button onClick={handleNewStatus} variant="default">
-                New Status
-              </Button>
-            </div>
-          </div>
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
               <label className="text-xs">Name</label>

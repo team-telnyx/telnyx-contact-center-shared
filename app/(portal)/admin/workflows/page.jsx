@@ -19,7 +19,6 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconGitBranch,
   IconEdit,
   IconTrash,
   IconCopy,
@@ -170,42 +169,38 @@ export default function AdminWorkflowsPage() {
     });
   }
 
+  const headerActions = <>
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setFilters({
+          active: "all",
+          category: "all",
+          q: "",
+        })
+      }
+    >
+      Clear
+    </Button>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button
+      onClick={() => router.push("/admin/workflows/new")}
+      variant="default"
+    >
+      <IconPlus className="size-4 mr-1" />
+      New Workflow
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Workflows" badges={<Badge variant="secondary">{total} workflows</Badge>} />
+      <AdminPageHeader title="Workflows" badges={<Badge variant="secondary">{total} workflows</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconGitBranch className="size-6 text-telnyx-green" /> Workflows
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setFilters({
-                    active: "all",
-                    category: "all",
-                    q: "",
-                  })
-                }
-              >
-                Clear
-              </Button>
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button
-                onClick={() => router.push("/admin/workflows/new")}
-                variant="default"
-              >
-                <IconPlus className="size-4 mr-1" />
-                New Workflow
-              </Button>
-            </div>
-          </div>
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
               <label className="text-xs">Name</label>

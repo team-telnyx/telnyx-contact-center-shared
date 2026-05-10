@@ -18,7 +18,6 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconWorld,
   IconEdit,
   IconTrash,
   IconPlus,
@@ -118,38 +117,34 @@ export default function AdminDomainsPage() {
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  const headerActions = <>
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setFilters({
+          active: "all",
+          q: "",
+        })
+      }
+    >
+      Clear
+    </Button>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button onClick={handleNewDomain} variant="default">
+      <IconPlus className="size-4 mr-2" />
+      New Domain
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Domains" badges={<Badge variant="secondary">{total} domains</Badge>} />
+      <AdminPageHeader title="Domains" badges={<Badge variant="secondary">{total} domains</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconWorld className="size-6 text-telnyx-green" /> Domains
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setFilters({
-                    active: "all",
-                    q: "",
-                  })
-                }
-              >
-                Clear
-              </Button>
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button onClick={handleNewDomain} variant="default">
-                <IconPlus className="size-4 mr-2" />
-                New Domain
-              </Button>
-            </div>
-          </div>
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
               <label className="text-xs">Domain</label>

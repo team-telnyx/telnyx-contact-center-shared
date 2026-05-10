@@ -26,7 +26,6 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
-  IconKey,
   IconEdit,
   IconTrash,
   IconPlus,
@@ -114,27 +113,23 @@ export default function AdminSecretsPage() {
     return new Date(expiresAt) < new Date();
   }
 
+  const headerActions = <>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button onClick={openCreateSheet}>
+      <IconPlus className="size-4 mr-2" />
+      Add Secret
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Secrets" badges={<Badge variant="secondary">{secrets.length} secrets</Badge>} />
+      <AdminPageHeader title="Secrets" badges={<Badge variant="secondary">{secrets.length} secrets</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconKey className="size-6 text-telnyx-green" /> Secrets
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button onClick={openCreateSheet}>
-                <IconPlus className="size-4 mr-2" />
-                Add Secret
-              </Button>
-            </div>
-          </div>
 
           {loading ? (
             <div className="border rounded-md overflow-hidden p-4 space-y-2">

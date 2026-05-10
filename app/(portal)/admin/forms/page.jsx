@@ -199,10 +199,21 @@ export default function AdminFormsPage() {
     }
   }
 
+  const headerActions = <>
+    <div className="flex items-center gap-2 rounded-md border bg-background/70 px-3 py-2">
+      <Switch id="show-archived-forms" checked={showArchived} onCheckedChange={setShowArchived} disabled={formsLoading || refreshing} />
+      <label htmlFor="show-archived-forms" className="text-sm font-medium leading-none">Show Archived</label>
+    </div>
+    <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
+    <Button size="sm" variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
+    <Button size="sm" variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button>
+    <Button size="sm" onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
+  </>;
+
   return <AdminPageShell>
-    <AdminPageHeader title="Agent Forms" badges={<Badge variant="secondary">{forms.length} forms</Badge>} />
+    <AdminPageHeader title="Agent Forms" badges={<Badge variant="secondary">{forms.length} forms</Badge>} actions={headerActions} />
     <AdminPageContent>
-      <div className="space-y-6">
+      <div className="space-y-5">
     <AlertDialog open={Boolean(archiveTarget)} onOpenChange={(open) => { if (!open && !loading) setArchiveTarget(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -218,22 +229,6 @@ export default function AdminFormsPage() {
       </AlertDialogContent>
     </AlertDialog>
 
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold">Agent Forms</h1>
-        <p className="text-sm text-muted-foreground">Custom queue forms for agent desktop and Agent Assist.</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-          <Switch id="show-archived-forms" checked={showArchived} onCheckedChange={setShowArchived} disabled={formsLoading || refreshing} />
-          <label htmlFor="show-archived-forms" className="text-sm font-medium leading-none">Show Archived</label>
-        </div>
-        <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={importFormFile} />
-        <Button variant="outline" onClick={() => load({ showRefreshing: true, showSuccessToast: true })} disabled={loading || formsLoading || refreshing}><IconRefresh className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />Refresh</Button>
-        <Button variant="outline" onClick={() => importInputRef.current?.click()} disabled={loading}><IconUpload className="h-4 w-4 mr-2" />Import JSON</Button>
-        <Button onClick={createForm} disabled={loading}><IconPlus className="h-4 w-4 mr-2" />New form</Button>
-      </div>
-    </div>
 
     {formsLoading ? <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 6 }).map((_, index) => <FormCardSkeleton key={index} />)}

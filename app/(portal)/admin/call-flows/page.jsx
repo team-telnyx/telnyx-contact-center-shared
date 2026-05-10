@@ -362,28 +362,24 @@ export default function CallFlowsPage() {
     );
   }
 
+  const headerActions = <>
+    <Button variant="outline" size="sm" onClick={handleImport}>
+      <IconUpload className="h-4 w-4 mr-2" />
+      Import
+    </Button>
+    <Button size="sm" onClick={handleCreate}>
+      <IconPlus className="h-4 w-4 mr-2" />
+      Create Flow
+    </Button>
+  </>;
+
   return (
     <AdminPageShell>
-      <AdminPageHeader title="Call Flows" badges={<Badge variant="secondary">{total} flows</Badge>} />
+      <AdminPageHeader title="Call Flows" badges={<Badge variant="secondary">{total} flows</Badge>} actions={headerActions} />
       <AdminPageContent>
         <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconGitBranch className="size-6 text-telnyx-green" /> Call Flows
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleImport}>
-                <IconUpload className="h-4 w-4 mr-2" />
-                Import
-              </Button>
-              <Button size="sm" onClick={handleCreate}>
-                <IconPlus className="h-4 w-4 mr-2" />
-                Create Flow
-              </Button>
-            </div>
-          </div>
 
           <div className="mb-4">
             <Input
