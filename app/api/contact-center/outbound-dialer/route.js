@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, mapCampaign, mapContactList, mapForm, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, mapCampaign, mapContactList, mapDncList, mapForm, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 
 export async function GET() {
   const user = await requireOutboundSupervisor();
@@ -9,9 +9,10 @@ export async function GET() {
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
 
   try {
-    const [campaignsResult, listsResult, formsResult] = await Promise.all([
+    const [campaignsResult, listsResult, dncListsResult, formsResult] = await Promise.all([
       pool.query(`SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name FROM outbound_campaigns c LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id LEFT JOIN form_definitions f ON f.id = c.attached_form_id WHERE c.status <> 'archived' ORDER BY c.updated_at DESC LIMIT 100`),
       pool.query(`SELECT * FROM outbound_contact_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
+      pool.query(`SELECT * FROM outbound_dnc_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
       pool.query(`SELECT id, name, status, category, schema FROM form_definitions WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`),
     ]);
 
@@ -20,6 +21,7 @@ export async function GET() {
       schema: outboundSchemaPayload,
       campaigns: campaignsResult.rows.map(mapCampaign),
       contactLists: listsResult.rows.map(mapContactList),
+      dncLists: dncListsResult.rows.map(mapDncList),
       forms: formsResult.rows.map(mapForm),
     });
   } catch (err) {
