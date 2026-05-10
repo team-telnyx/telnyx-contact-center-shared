@@ -1215,7 +1215,7 @@ export function AgentDesktop() {
   return (
     <div
       className="grid h-full min-h-0 w-full gap-4 overflow-hidden"
-      style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(300px, 0.42fr) minmax(0, 1fr)` }}
+      style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0, 1fr)` }}
     >
       <SectionRail
         items={AGENT_RAIL_ITEMS}
