@@ -1381,6 +1381,10 @@ export default function MonitorPage() {
     }
   };
 
+  const activeSection =
+    MONITOR_RAIL_ITEMS.find((item) => item.id === activeTab) ||
+    MONITOR_RAIL_ITEMS[0];
+
   return (
     <SupervisorPageShell>
         <SupervisorPageHeader
@@ -1420,15 +1424,59 @@ export default function MonitorPage() {
 
         <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
           <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
-          <section className="min-h-0 overflow-y-auto pr-1">
+          <section className="h-full min-h-0 overflow-hidden pr-1">
             {activeTab === "dashboard" ? (
-              <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+                <CardHeader className="shrink-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <IconActivity className="size-5" />
+                        {activeSection.label}
+                      </CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {activeSection.description}
+                      </p>
+                    </div>
+                    {data?.timestamp && (
+                      <div className="text-xs text-muted-foreground">
+                        Last updated: {new Date(data.timestamp).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+                </CardContent>
+              </Card>
             ) : activeTab === "graphs" ? (
-              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+                <CardHeader className="shrink-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <IconChartBar className="size-5" />
+                        {activeSection.label}
+                      </CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {activeSection.description}
+                      </p>
+                    </div>
+                    {data?.timestamp && (
+                      <div className="text-xs text-muted-foreground">
+                        Last updated: {new Date(data.timestamp).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+                  <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
+                </CardContent>
+              </Card>
             ) : (
               <>
       {/* Statistics Section */}
-      <Card className="mb-0 flex flex-col h-[calc(100vh-360px)] min-h-[100px]">
+      <Card className="mb-0 flex h-full min-h-0 flex-col overflow-hidden">
         <CardHeader className="shrink-0">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
