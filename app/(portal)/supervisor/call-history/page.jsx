@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +30,9 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconExternalLink,
-  IconHistory,
   IconInfoCircle,
   IconRefresh,
+  IconSparkles,
 } from "@tabler/icons-react";
 import InteractionDetailsSheet from "@/components/contact-center/InteractionDetailsSheet";
 import { notify } from "@/components/ToastNotify";
@@ -149,11 +149,41 @@ export default function SupervisorCallHistoryPage() {
   return (
     <div className="p-4">
       <Card className="shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <IconHistory className="h-5 w-5 text-telnyx-green" />
-            Call History
-          </CardTitle>
+        <CardHeader className="border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                <IconSparkles className="h-4 w-4 text-sky-500" />
+                Supervisor workspace
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Call History
+                </h1>
+                <Badge
+                  variant="outline"
+                  className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                >
+                  Interaction records
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                >
+                  Recordings · Events
+                </Badge>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={load}
+              disabled={loading}
+            >
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-end gap-4">
@@ -236,8 +266,8 @@ export default function SupervisorCallHistoryPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button size="sm" onClick={load}>
-                <IconRefresh className="h-4 w-4 mr-2" />
+              <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+                <IconRefresh className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
             </div>

@@ -18,7 +18,7 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconCalendar,
+  IconSparkles,
   IconEye,
   IconTrash,
   IconPlus,
@@ -53,6 +53,9 @@ import {
 import PreviewSheet from "@/components/scheduled-events/PreviewSheet";
 import CreateSheet from "@/components/scheduled-events/CreateSheet";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
+
+const neutralActionClass =
+  "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
 export default function SupervisorScheduledEventsPage() {
   const [mounted, setMounted] = useState(false);
@@ -484,40 +487,61 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
     <div className="px-4 lg:px-6">
       <Card>
         <CardContent className="py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <IconCalendar className="size-6 text-telnyx-green" />
-              <h1 className="text-2xl font-semibold">Scheduled Events</h1>
+          <header className="-mx-6 -mt-6 mb-6 border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                  <IconSparkles className="h-4 w-4 text-sky-500" />
+                  Supervisor workspace
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-2xl font-semibold tracking-tight">
+                    Scheduled Events
+                  </h1>
+                  <Badge
+                    variant="outline"
+                    className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                  >
+                    Assistant automation
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                  >
+                    Retry-aware
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={downloadTemplate}
+                  className="gap-2"
+                >
+                  <IconDownload className="size-4" />
+                  Template
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowImportDialog(true)}
+                  className="gap-2"
+                >
+                  <IconUpload className="size-4" />
+                  Import CSV
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setShowCreateSheet(true)}
+                  className={`gap-2 ${neutralActionClass}`}
+                >
+                  <IconPlus className="size-4" />
+                  Add Event
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={downloadTemplate}
-                className="gap-2"
-              >
-                <IconDownload className="size-4" />
-                Template
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowImportDialog(true)}
-                className="gap-2"
-              >
-                <IconUpload className="size-4" />
-                Import CSV
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setShowCreateSheet(true)}
-                className="gap-2"
-              >
-                <IconPlus className="size-4" />
-                Add Event
-              </Button>
-            </div>
-          </div>
+          </header>
 
           {/* Filters */}
           <div className="flex items-end gap-4 mb-4">

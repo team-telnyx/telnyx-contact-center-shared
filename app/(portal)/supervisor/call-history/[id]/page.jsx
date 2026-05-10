@@ -18,6 +18,7 @@ import {
   IconTimeline,
   IconRobot,
   IconHistory,
+  IconSparkles,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import InteractionTimeline from "@/components/contact-center/InteractionTimeline";
@@ -135,17 +136,37 @@ export default function SupervisorCallHistoryDetailPage() {
   return (
     <div className="p-4">
       <Card className="shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center gap-3">
+        <CardHeader className="border-b bg-background/80 px-5 py-4 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 space-y-1">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                <IconSparkles className="h-4 w-4 text-sky-500" />
+                Supervisor workspace
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  Interaction Details
+                </h1>
+                <Badge
+                  variant="outline"
+                  className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                >
+                  Interaction record
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
+                >
+                  Timeline · Recordings
+                </Badge>
+              </div>
+            </div>
             <Button variant="outline" size="sm" asChild>
               <Link href="/supervisor/call-history">
                 <IconArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Link>
             </Button>
-            <CardTitle className="text-xl font-semibold">
-              Interaction Details
-            </CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
