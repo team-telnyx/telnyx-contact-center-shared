@@ -11,6 +11,7 @@ export async function POST(request) {
       contactListId,
       conditions: safeJson(body.conditions, []),
       sampleLimit: 10,
+      scanLimit: 10000,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
