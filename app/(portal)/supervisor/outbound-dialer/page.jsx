@@ -72,6 +72,48 @@ const defaultFilter = () => ({ name: "New contact filter", description: "", stat
 const defaultTimeSet = () => ({ name: "Business hours", description: "", status: "draft", timezone: "Europe/Warsaw", windows: ["mon", "tue", "wed", "thu", "fri"].map((day) => ({ day, enabled: true, start: "09:00", end: "17:00" })), metadata: { view: "detail" } });
 const WEEKDAYS = [{ id: "mon", label: "Mon" }, { id: "tue", label: "Tue" }, { id: "wed", label: "Wed" }, { id: "thu", label: "Thu" }, { id: "fri", label: "Fri" }, { id: "sat", label: "Sat" }, { id: "sun", label: "Sun" }];
 const FALLBACK_TIME_ZONES = ["Europe/Warsaw", "UTC", "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam", "Europe/Prague", "Europe/Vienna", "Europe/Dublin", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Toronto", "America/Sao_Paulo", "Asia/Dubai", "Asia/Jerusalem", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney"];
+const formatUtcOffset = (offsetMinutes) => {
+  if (!Number.isFinite(offsetMinutes)) return "UTC offset unavailable";
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(offsetMinutes);
+  return `UTC${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`;
+};
+const parseShortOffset = (value) => {
+  const match = String(value || "").match(/^(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?$/i);
+  if (!match) return /^(?:GMT|UTC)$/i.test(String(value || "")) ? 0 : null;
+  const [, sign, hours, minutes = "0"] = match;
+  const parsed = (Number(hours) * 60) + Number(minutes);
+  return sign === "-" ? -parsed : parsed;
+};
+const zonedPartsOffset = (timeZone, date) => {
+  if (typeof Intl === "undefined" || typeof Intl.DateTimeFormat !== "function") return null;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(date).reduce((acc, part) => ({ ...acc, [part.type]: part.value }), {});
+  const hour = parts.hour === "24" ? 0 : Number(parts.hour);
+  const asUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), hour, Number(parts.minute), Number(parts.second));
+  return Math.round((asUtc - date.getTime()) / 60000);
+};
+const getTimeZoneOffsetMinutes = (timeZone, date = new Date()) => {
+  if (!timeZone) return null;
+  if (timeZone === "UTC") return 0;
+  if (typeof Intl === "undefined" || typeof Intl.DateTimeFormat !== "function") return null;
+  try {
+    const offsetPart = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" }).formatToParts(date).find((part) => part.type === "timeZoneName");
+    const parsed = parseShortOffset(offsetPart?.value);
+    if (parsed !== null) return parsed;
+  } catch {
+    // Some runtimes support Intl.DateTimeFormat but not the shortOffset token.
+  }
+  try {
+    return zonedPartsOffset(timeZone, date);
+  } catch {
+    return null;
+  }
+};
+const timeZoneOptionFor = (zone, date = new Date()) => {
+  const offsetMinutes = getTimeZoneOffsetMinutes(zone, date);
+  const offset = formatUtcOffset(offsetMinutes);
+  return { value: zone, label: Number.isFinite(offsetMinutes) ? `${offset} ${zone}` : zone, offset };
+};
 const calendarStartMinute = 0;
 const calendarEndMinute = 24 * 60;
 const calendarTotalMinutes = calendarEndMinute - calendarStartMinute;
@@ -478,7 +520,8 @@ function TimeSetSettingsForm({ timeSet, saveTimeSet, saving, registerHeaderSaveA
   useEffect(() => { setDraft(timeSet || defaultTimeSet()); setView(timeSet?.metadata?.view || "detail"); }, [timeSet]);
   const timezoneOptions = useMemo(() => {
     const supported = typeof Intl !== "undefined" && typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : FALLBACK_TIME_ZONES;
-    return Array.from(new Set([draft.timezone || "Europe/Warsaw", ...FALLBACK_TIME_ZONES, ...supported].filter(Boolean))).sort().map((zone) => ({ value: zone, label: zone }));
+    const now = new Date();
+    return Array.from(new Set([draft.timezone || "Europe/Warsaw", ...FALLBACK_TIME_ZONES, ...supported].filter(Boolean))).sort().map((zone) => timeZoneOptionFor(zone, now));
   }, [draft.timezone]);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const windows = useMemo(() => (draft.windows || []).map(normalizeWindowTimes), [draft.windows]);
@@ -486,7 +529,7 @@ function TimeSetSettingsForm({ timeSet, saveTimeSet, saving, registerHeaderSaveA
   const updateDay = (day, patch) => { const exists = windows.some((w) => w.day === day); update({ windows: exists ? windows.map((w) => w.day === day ? normalizeWindowTimes({ ...w, ...patch }) : w) : [...windows, normalizeWindowTimes({ day, enabled: true, start: "09:00", end: "17:00", ...patch })] }); };
   const save = useCallback(() => saveTimeSet({ ...draft, windows, metadata: { ...(draft.metadata || {}), view } }), [draft, windows, view, saveTimeSet]);
   useEffect(() => { registerHeaderSaveAction({ section: "time-sets", label: "Save time set", disabled: saving || !draft.name?.trim(), busy: saving, onSave: save }); return () => registerHeaderSaveAction(null); }, [draft, saving, save, registerHeaderSaveAction]);
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconCalendar} title={draft.id ? draft.name : "Time set configuration"} subtitle="Timezone-aware weekly windows"><InputBlock label="Name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" rows={2} value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} /></div><div className="mt-3 grid gap-3"><ConfigSelect label="Time Zone" value={draft.timezone || "Europe/Warsaw"} options={timezoneOptions} onChange={(v) => update({ timezone: v })} /><ConfigSelect label="Status" value={draft.status || "draft"} options={["draft", "active", "paused"]} onChange={(v) => update({ status: v })} /></div></SettingCard><div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-1"><Button type="button" variant={view === "calendar" ? "default" : "ghost"} size="sm" onClick={() => setView("calendar")}>Calendar View</Button><Button type="button" variant={view === "detail" ? "default" : "ghost"} size="sm" onClick={() => setView("detail")}>Detail View</Button></div>{view === "calendar" ? <TimeSetCalendar windows={windows} onUpdateDay={updateDay} /> : <SettingCard icon={IconListDetails} title="Detail View" subtitle="Start is inclusive; stop is exclusive"><div className="space-y-2">{WEEKDAYS.map((day) => { const row = dayWindow(day.id); return <div key={day.id} className="grid grid-cols-[40px_42px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5 rounded-lg border bg-background/70 p-1.5 text-xs sm:gap-2 sm:p-2"><div className="font-medium">{day.label}</div><div className="flex justify-center"><Switch checked={row.enabled !== false} onCheckedChange={(v) => updateDay(day.id, { enabled: v })} /></div><Input className="h-8 min-w-0 px-2 text-xs" type="time" value={row.start || "09:00"} onChange={(e) => updateDay(day.id, { start: e.target.value })} /><Input className="h-8 min-w-0 px-2 text-xs" type="time" value={row.end || "17:00"} onChange={(e) => updateDay(day.id, { end: e.target.value })} /></div>; })}</div></SettingCard>}</div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconCalendar} title={draft.id ? draft.name : "Time set configuration"} subtitle="Timezone-aware weekly windows"><InputBlock label="Name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" rows={2} value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} /></div><div className="mt-3 grid gap-3"><TimeZoneSelect label="Time Zone" value={draft.timezone || "Europe/Warsaw"} options={timezoneOptions} onChange={(v) => update({ timezone: v })} /><ConfigSelect label="Status" value={draft.status || "draft"} options={["draft", "active", "paused"]} onChange={(v) => update({ status: v })} /></div></SettingCard><div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/30 p-1"><Button type="button" variant={view === "calendar" ? "default" : "ghost"} size="sm" onClick={() => setView("calendar")}>Calendar View</Button><Button type="button" variant={view === "detail" ? "default" : "ghost"} size="sm" onClick={() => setView("detail")}>Detail View</Button></div>{view === "calendar" ? <TimeSetCalendar windows={windows} onUpdateDay={updateDay} /> : <SettingCard icon={IconListDetails} title="Detail View" subtitle="Start is inclusive; stop is exclusive"><div className="space-y-2">{WEEKDAYS.map((day) => { const row = dayWindow(day.id); return <div key={day.id} className="grid grid-cols-[40px_42px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5 rounded-lg border bg-background/70 p-1.5 text-xs sm:gap-2 sm:p-2"><div className="font-medium">{day.label}</div><div className="flex justify-center"><Switch checked={row.enabled !== false} onCheckedChange={(v) => updateDay(day.id, { enabled: v })} /></div><Input className="h-8 min-w-0 px-2 text-xs" type="time" value={row.start || "09:00"} onChange={(e) => updateDay(day.id, { start: e.target.value })} /><Input className="h-8 min-w-0 px-2 text-xs" type="time" value={row.end || "17:00"} onChange={(e) => updateDay(day.id, { end: e.target.value })} /></div>; })}</div></SettingCard>}</div>;
 }
 
 function TimeSetCalendar({ windows, onUpdateDay }) {
@@ -722,6 +765,18 @@ function MappingEditor({ campaign, contactLists, update }) { const list = contac
 function PanelHeader({ title, description }) { return <div className="h-16 shrink-0 border-b px-4 flex flex-col justify-center"><h2 className="text-sm font-semibold">{title}</h2><p className="text-xs text-muted-foreground">{description}</p></div>; }
 function MiniStat({ label, value, icon: Icon, tone = "blue" }) { return <div className="rounded-lg border bg-muted/40 p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div><div className="mt-1 truncate text-sm font-semibold">{value}</div></div>{Icon ? <span className={`shrink-0 rounded-lg bg-gradient-to-br p-1.5 ${toneClasses[tone] || toneClasses.blue}`}><Icon className="h-3.5 w-3.5" /></span> : null}</div></div>; }
 function ConfigSelect({ label, value, options = [], onChange = () => {}, bare = false }) { const normalized = options.map((o) => typeof o === "string" ? { value: o, label: title(o) } : o); const select = <Select value={value || normalized[0]?.value} onValueChange={onChange}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{normalized.map((o) => <SelectItem key={o.value} value={o.value} disabled={Boolean(o.disabled)}>{o.label}</SelectItem>)}</SelectContent></Select>; return bare ? select : <div className="space-y-2"><Label>{label}</Label>{select}</div>; }
+
+function TimeZoneSelect({ label, value, options = [], onChange = () => {} }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = options.find((option) => option.value === value) || timeZoneOptionFor(value || "Europe/Warsaw");
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = normalizedQuery
+    ? options.filter((option) => [option.value, option.label, option.offset].filter(Boolean).some((text) => String(text).toLowerCase().includes(normalizedQuery)))
+    : options;
+  const choose = (nextValue) => { onChange(nextValue); setOpen(false); setQuery(""); };
+  return <div className="space-y-2"><Label>{label}</Label><Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setQuery(""); }}><PopoverTrigger asChild><Button type="button" variant="outline" className="h-10 w-full justify-between bg-background px-3 text-left font-normal"><span className="truncate">{selected?.label || value || "Select timezone"}</span><IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" /></Button></PopoverTrigger><PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-2"><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search timezone or UTC offset…" className="h-9" autoFocus /><div className="mt-2 max-h-64 overflow-y-auto pr-1"><div className="space-y-1">{filtered.length ? filtered.map((option) => <button key={option.value} type="button" onClick={() => choose(option.value)} className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-muted ${option.value === value ? "bg-muted" : ""}`}><IconCheck className={`h-4 w-4 shrink-0 ${option.value === value ? "opacity-100" : "opacity-0"}`} /><span className="min-w-0 flex-1 truncate">{option.label}</span></button>) : <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">No timezones match this search.</div>}</div></div></PopoverContent></Popover></div>;
+}
 function InputBlock({ label, value, onChange = () => {}, type = "text" }) { return <div className="space-y-2"><Label>{label}</Label><Input type={type} value={value ?? ""} onChange={(e) => onChange(e.target.value)} /></div>; }
 function MultiSelect({ label, values = [], options = [], onChange = () => {}, emptyLabel = "No options available" }) { const normalized = options.map((o) => typeof o === "string" ? { value: o, label: o } : o); const selected = normalized.filter((o) => values.includes(o.value)); const toggle = (value) => onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]); return <div className="space-y-2"><Label>{label}</Label><Select value="multi" onValueChange={toggle}><SelectTrigger><SelectValue placeholder={selected.length ? `${selected.length} selected` : "Select values"}>{selected.length ? `${selected.length} selected` : "Select values"}</SelectValue></SelectTrigger><SelectContent>{normalized.length ? normalized.map((o) => <SelectItem key={o.value} value={o.value}><span className="mr-2">{values.includes(o.value) ? "☑" : "☐"}</span>{o.label}</SelectItem>) : <SelectItem value="empty" disabled>{emptyLabel}</SelectItem>}</SelectContent></Select>{selected.length ? <div className="flex flex-wrap gap-1">{selected.map((o) => <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>)}</div> : <p className="text-xs text-muted-foreground">{emptyLabel}</p>}</div>; }
 function contactListFieldOptions(list) {
