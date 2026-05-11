@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, isLikelyPhone, jsonError, normalizeFieldSchema, parseCsv, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CONTACT_FIELD_TYPES } from "@/lib/outbound-dialer/schema";
+import { applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 const CONTACT_MAPPING_PREFIXES = ["number:", "email:", "whatsapp:"];
 const CALLABLE_MAPPING_PREFIXES = ["number:", "whatsapp:"];
 
@@ -86,16 +87,23 @@ export async function POST(request, context) {
       .map(([column, values]) => [column, [...new Set(values.filter(isValidContactMapping))]]));
     if (!selectedMappedColumns(selectedColumns, columnMappings).length) return jsonError("Map at least one selected CSV column to Number, Email, or WhatsApp before importing", 400);
 
+    const rules = normalizeCsvImportRules(headers, importSettings);
+    const applied = applyCsvImportRules(records, headers, importSettings);
+    const importRecords = applied.records;
+    if (!importRecords.length) return jsonError("CSV filters and duplicate rules rejected all records", 400);
+
     // Data model note: every selected CSV column is preserved once in row_data JSONB.
     // List-level metadata.csv_import_settings.column_mappings is the source of truth for
     // which row_data keys are contact methods; contact_methods stores the resolved per-row values.
     // Contact methods are stored in JSONB from explicit mappings, not from header-name heuristics.
     const inferredSchema = buildImportSchema(selectedColumns, columnMappings, importSettings);
-    const validPhones = records.filter((record) => Boolean(firstMappedPhone(record, selectedColumns, columnMappings))).length;
+    const validPhones = importRecords.filter((record) => Boolean(firstMappedPhone(record, selectedColumns, columnMappings))).length;
     const importMetadata = {
       csv_import_settings: {
         selected_columns: selectedColumns,
         column_mappings: columnMappings,
+        no_duplicate_columns: rules.no_duplicate_columns,
+        column_filters: rules.column_filters,
         field_schema: inferredSchema,
         source_file_name: importSettings.source_file_name || null,
         updated_at: importSettings.updated_at || new Date().toISOString(),
@@ -105,16 +113,16 @@ export async function POST(request, context) {
     try {
       await client.query("BEGIN");
       await client.query(`DELETE FROM outbound_contact_records WHERE contact_list_id=$1`, [contactListId]);
-      for (const record of records) {
+      for (const record of importRecords) {
         const rowData = Object.fromEntries(selectedColumns.map((key) => [key, record[key] ?? ""]));
         const contactMethods = buildContactMethods(record, selectedColumns, columnMappings);
         const phoneValue = firstMappedPhone(record, selectedColumns, columnMappings);
         await client.query(`INSERT INTO outbound_contact_records (contact_list_id, row_data, contact_methods, validation_status) VALUES ($1,$2,$3,$4)`, [contactListId, JSON.stringify(rowData), JSON.stringify(contactMethods), isLikelyPhone(phoneValue) ? "valid" : "needs_review"]);
       }
-      const { rows } = await client.query(`UPDATE outbound_contact_lists SET status='validated', custom_field_schema=$1, record_count=$2, valid_phone_count=$3, metadata=COALESCE(metadata, '{}'::jsonb) || $4::jsonb, updated_by=$5, updated_at=NOW() WHERE id=$6 RETURNING *`, [JSON.stringify(inferredSchema), records.length, validPhones, JSON.stringify(importMetadata), usernameFor(user), contactListId]);
+      const { rows } = await client.query(`UPDATE outbound_contact_lists SET status='validated', custom_field_schema=$1, record_count=$2, valid_phone_count=$3, metadata=COALESCE(metadata, '{}'::jsonb) || $4::jsonb, updated_by=$5, updated_at=NOW() WHERE id=$6 RETURNING *`, [JSON.stringify(inferredSchema), importRecords.length, validPhones, JSON.stringify(importMetadata), usernameFor(user), contactListId]);
       await client.query("COMMIT");
       if (!rows[0]) return jsonError("Contact list not found", 404);
-      return NextResponse.json({ ok: true, contactList: rows[0], preview: records.slice(0, 10), headers, inferredSchema, validPhones, totalRows: records.length, truncated });
+      return NextResponse.json({ ok: true, contactList: rows[0], preview: importRecords.slice(0, 10), headers, inferredSchema, validPhones, totalRows: importRecords.length, originalRows: records.length, duplicateRowsRejected: applied.duplicateRowsRejected, filteredRows: applied.filteredRows, truncated });
     } catch (err) { await client.query("ROLLBACK"); throw err; }
     finally { client.release(); }
   } catch (err) { console.error("[Outbound Dialer] CSV import error:", err); return jsonError(err.message || "Failed to import CSV", 400); }
