@@ -429,12 +429,13 @@ function FilterConditionsEditor({ conditions, conditionFieldOptions, firstField,
 function normalizePreviewScannedRecords(result = {}, selectedList = {}) {
   const scanLimit = Number(result?.scanLimit || 0);
   const limited = Boolean(result?.limited || result?.capped);
-  const listRecordCount = Number(selectedList?.record_count || 0);
-  const legacyScanLimitAlias = scanLimit && !limited && Number(result?.totalRecords) === scanLimit && listRecordCount > 0 && listRecordCount < scanLimit;
-  if (legacyScanLimitAlias) return listRecordCount;
+  const resultRecordCount = Number(result?.contactList?.record_count || 0);
+  const listRecordCount = Number(selectedList?.record_count || resultRecordCount || 0);
+  if (!limited && listRecordCount > 0) return listRecordCount;
   const candidates = [result?.scannedRecords, result?.totalRecordsConsidered, result?.totalRecords];
   const scanned = candidates.map((value) => Number(value)).find((value) => Number.isFinite(value) && value >= 0);
-  return scanned ?? 0;
+  if (!limited && scanLimit && scanned === scanLimit && listRecordCount > 0 && listRecordCount < scanLimit) return listRecordCount;
+  return scanned ?? listRecordCount ?? 0;
 }
 
 function FilterTestPreviewSheet({ open, onOpenChange, filterName, selectedList, conditions, conditionFieldOptions, firstField, operators, updateCondition, removeCondition, addCondition, result, testing, onTest }) {
