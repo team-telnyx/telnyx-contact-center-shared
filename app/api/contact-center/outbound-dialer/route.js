@@ -44,7 +44,7 @@ export async function GET() {
       safeQuery(pool, `SELECT f.*, l.name AS contact_list_name FROM outbound_contact_filters f LEFT JOIN outbound_contact_lists l ON l.id = f.contact_list_id WHERE f.status <> 'archived' ORDER BY f.updated_at DESC LIMIT 100`),
       safeQuery(pool, `SELECT * FROM outbound_time_sets WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
       safeQuery(pool, `SELECT id, name, display_name, enabled, active FROM cc_queues WHERE enabled = true AND active = true ORDER BY priority DESC, name ASC LIMIT 200`),
-      safeQuery(pool, `SELECT id, name, status FROM voice_flows ORDER BY updated_at DESC LIMIT 200`),
+      safeQuery(pool, `SELECT id, name, description FROM voice_flows ORDER BY updated_at DESC LIMIT 200`),
       loadAiAssistants(),
     ]);
 
