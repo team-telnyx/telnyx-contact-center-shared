@@ -8,6 +8,8 @@ export async function POST(request, context) {
   try {
     const body = await request.json();
     const { headers, records, truncated } = parseCsv(body.csv || "", 10000);
+    if (!headers.length) return jsonError("CSV header row is required", 400);
+    if (!records.length) return jsonError("CSV contains no records", 400);
     const metadata = {
       import_scaffold: true,
       last_import_at: new Date().toISOString(),
