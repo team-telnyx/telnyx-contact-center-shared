@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
 } from "@tabler/icons-react";
@@ -368,6 +368,7 @@ function FilterSettingsForm({ filter, contactLists, schema, saveFilter, saving, 
   const [draft, setDraft] = useState(() => withRequiredContactList(filter || defaultFilter()));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [testing, setTesting] = useState(false);
+  const testingRef = useRef(false);
   const [testResult, setTestResult] = useState(null);
   useEffect(() => { setDraft(withRequiredContactList(filter || defaultFilter())); setTestResult(null); setPreviewOpen(false); }, [filter, withRequiredContactList]);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
@@ -387,10 +388,11 @@ function FilterSettingsForm({ filter, contactLists, schema, saveFilter, saving, 
   const removeCondition = (idx) => update({ conditions: conditions.filter((_, i) => i !== idx) });
   const addCondition = () => { if (firstField) update({ conditions: [...conditions, { field: firstField, operator: "is present", value: "" }] }); };
   const updateContactList = (contactListId) => {
-    const nextList = contactLists.find((l) => l.id === contactListId);
+    const validContactListId = contactLists.some((l) => l.id === contactListId) ? contactListId : null;
+    const nextList = contactLists.find((l) => l.id === validContactListId);
     const nextFields = contactListFieldOptions(nextList, schema);
     const nextFirstField = nextFields[0] || "";
-    update({ contact_list_id: contactListId, conditions: nextFirstField ? normalizeConditionsForFields(conditions).map((row) => ({ ...row, field: nextFields.includes(row.field) ? row.field : nextFirstField })) : [] });
+    update({ contact_list_id: validContactListId, conditions: nextFirstField ? normalizeConditionsForFields(conditions).map((row) => ({ ...row, field: nextFields.includes(row.field) ? row.field : nextFirstField })) : [] });
     setTestResult(null);
   };
   const runFilterTest = useCallback(async () => {
@@ -399,6 +401,8 @@ function FilterSettingsForm({ filter, contactLists, schema, saveFilter, saving, 
       setTestResult(result);
       return result;
     }
+    if (testingRef.current) return testResult;
+    testingRef.current = true;
     setTesting(true);
     try {
       const result = await api(`${API}/filters/test`, { method: "POST", body: JSON.stringify({ contact_list_id: draft.contact_list_id, conditions }) });
@@ -409,8 +413,8 @@ function FilterSettingsForm({ filter, contactLists, schema, saveFilter, saving, 
       setTestResult(result);
       notify({ title: "Filter test failed", description: err.message, variant: "error" });
       return result;
-    } finally { setTesting(false); }
-  }, [draft.contact_list_id, conditions, fieldValues]);
+    } finally { testingRef.current = false; setTesting(false); }
+  }, [draft.contact_list_id, conditions, fieldValues, testResult]);
   const openTestPreview = async () => { setPreviewOpen(true); await runFilterTest(); };
   useEffect(() => { registerHeaderSaveAction({ section: "filters", label: "Save filter", disabled: saving || !draft.name?.trim() || !draft.contact_list_id, busy: saving, onSave: () => saveFilter(draft) }); return () => registerHeaderSaveAction(null); }, [draft, saving, saveFilter, registerHeaderSaveAction]);
   const contactListOptions = contactLists.length ? contactLists.map((l) => ({ value: l.id, label: l.name })) : [{ value: "__no_contact_lists__", label: "Create or import a contact list first", disabled: true }];
