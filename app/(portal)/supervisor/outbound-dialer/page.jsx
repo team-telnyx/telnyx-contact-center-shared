@@ -72,12 +72,15 @@ const defaultFilter = () => ({ name: "New contact filter", description: "", stat
 const defaultTimeSet = () => ({ name: "Business hours", description: "", status: "draft", timezone: "Europe/Warsaw", windows: ["mon", "tue", "wed", "thu", "fri"].map((day) => ({ day, enabled: true, start: "09:00", end: "17:00" })), metadata: { view: "detail" } });
 const WEEKDAYS = [{ id: "mon", label: "Mon" }, { id: "tue", label: "Tue" }, { id: "wed", label: "Wed" }, { id: "thu", label: "Thu" }, { id: "fri", label: "Fri" }, { id: "sat", label: "Sat" }, { id: "sun", label: "Sun" }];
 const FALLBACK_TIME_ZONES = ["Europe/Warsaw", "UTC", "Europe/London", "Europe/Berlin", "Europe/Paris", "Europe/Madrid", "Europe/Rome", "Europe/Amsterdam", "Europe/Prague", "Europe/Vienna", "Europe/Dublin", "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Toronto", "America/Sao_Paulo", "Asia/Dubai", "Asia/Jerusalem", "Asia/Kolkata", "Asia/Singapore", "Asia/Tokyo", "Australia/Sydney"];
-const calendarStartMinute = 7 * 60;
-const calendarEndMinute = 19 * 60;
+const calendarStartMinute = 0;
+const calendarEndMinute = 24 * 60;
 const calendarTotalMinutes = calendarEndMinute - calendarStartMinute;
 const calendarSnapMinutes = 15;
+const calendarHourHeight = 28;
+const calendarViewportHeight = 336;
+const calendarGridHeight = (calendarTotalMinutes / 60) * calendarHourHeight;
 const timeToMinutes = (value, fallback = calendarStartMinute) => { const [hours, minutes] = String(value || "").split(":").map(Number); return Number.isFinite(hours) ? Math.max(0, Math.min(24 * 60, (hours * 60) + (Number.isFinite(minutes) ? minutes : 0))) : fallback; };
-const minutesToTime = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+const minutesToTime = (minutes) => `${String(Math.floor(Math.max(0, Math.min(calendarEndMinute, minutes)) / 60)).padStart(2, "0")}:${String(Math.max(0, Math.min(59, Math.min(calendarEndMinute, minutes) % 60))).padStart(2, "0")}`;
 const api = async (url, options = {}) => { const res = await fetch(url, { cache: "no-store", ...options, headers: options.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...(options.headers || {}) } }); const data = await res.json().catch(() => ({})); if (!res.ok) { const details = data.details ? ` (${typeof data.details === "string" ? data.details : JSON.stringify(data.details)})` : ""; throw new Error(data.error ? `${data.error}${details}` : `Request failed (${res.status})`); } return data; };
 
 const isDashboardCampaign = (campaign) => campaign && !["draft", "design", "archived"].includes(String(campaign.status || "").toLowerCase());
@@ -482,8 +485,21 @@ function TimeSetSettingsForm({ timeSet, saveTimeSet, saving, registerHeaderSaveA
 }
 
 function TimeSetCalendar({ windows, onUpdateDay }) {
-  const hours = Array.from({ length: 12 }, (_, idx) => idx + 7);
+  const hours = Array.from({ length: 24 }, (_, idx) => idx);
+  const scrollRef = useRef(null);
+  const didSetInitialScroll = useRef(false);
   const windowFor = (day) => (windows || []).find((w) => w.day === day) || { day, enabled: false, start: "09:00", end: "17:00" };
+
+  useEffect(() => {
+    if (didSetInitialScroll.current || !scrollRef.current) return;
+    const activeWindows = (windows || []).filter((w) => w.enabled !== false);
+    const firstStart = activeWindows.length ? Math.min(...activeWindows.map((w) => timeToMinutes(w.start || "09:00", 9 * 60))) : 9 * 60;
+    const targetMinute = Math.max(calendarStartMinute, firstStart - 60);
+    const maxScroll = Math.max(0, scrollRef.current.scrollHeight - scrollRef.current.clientHeight);
+    scrollRef.current.scrollTop = Math.min(maxScroll, (targetMinute / calendarTotalMinutes) * calendarGridHeight);
+    didSetInitialScroll.current = true;
+  }, [windows]);
+
   const startDrag = (event, day, edge) => {
     event.preventDefault();
     event.stopPropagation();
@@ -498,7 +514,7 @@ function TimeSetCalendar({ windows, onUpdateDay }) {
       const snapped = Math.round(raw / calendarSnapMinutes) * calendarSnapMinutes;
       const next = Math.max(calendarStartMinute, Math.min(calendarEndMinute, snapped));
       if (edge === "start") onUpdateDay(day, { enabled: true, start: minutesToTime(Math.min(next, end - calendarSnapMinutes)) });
-      else onUpdateDay(day, { enabled: true, end: minutesToTime(Math.max(next, start + calendarSnapMinutes)) });
+      else onUpdateDay(day, { enabled: true, end: minutesToTime(Math.min(calendarEndMinute, Math.max(next, start + calendarSnapMinutes))) });
     };
     const move = (moveEvent) => apply(moveEvent.clientY);
     const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); };
@@ -507,7 +523,8 @@ function TimeSetCalendar({ windows, onUpdateDay }) {
     window.addEventListener("pointercancel", up);
     apply(event.clientY);
   };
-  return <SettingCard icon={IconCalendar} title="Calendar View" subtitle="Drag top or bottom handles to resize each day's range; snaps to 15 minutes"><div className="overflow-hidden rounded-xl border text-[10px]"><div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))] bg-muted/50"><span className="p-2">Hour</span>{WEEKDAYS.map((d) => <span key={d.id} className="border-l p-2 text-center font-semibold">{d.label}</span>)}</div><div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))]"><div>{hours.map((hour) => <div key={hour} className="h-7 border-t p-2 text-muted-foreground">{String(hour).padStart(2, "0")}:00</div>)}</div>{WEEKDAYS.map((d) => { const row = windowFor(d.id); const start = timeToMinutes(row.start || "09:00"); const end = timeToMinutes(row.end || "17:00", start + calendarSnapMinutes); const top = ((Math.max(calendarStartMinute, Math.min(calendarEndMinute, start)) - calendarStartMinute) / calendarTotalMinutes) * 100; const bottom = ((Math.max(calendarStartMinute, Math.min(calendarEndMinute, end)) - calendarStartMinute) / calendarTotalMinutes) * 100; return <div key={d.id} data-calendar-column className="relative h-[336px] border-l bg-background/60 bg-[linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[length:100%_28px]"><div className="absolute inset-x-1 rounded-md border border-dashed border-muted-foreground/20 bg-muted/20 p-1 text-center text-[9px] text-muted-foreground" style={{ top: `${top}%`, height: `${Math.max(4, bottom - top)}%`, display: row.enabled === false ? "none" : undefined }}><button type="button" aria-label={`Adjust ${d.label} start time`} onPointerDown={(event) => startDrag(event, d.id, "start")} className="absolute left-1/2 top-0 h-3 w-8 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-full border border-emerald-600/50 bg-emerald-500 shadow-sm" /><div className="flex h-full min-h-5 items-center justify-center rounded bg-emerald-500/25 px-1 font-semibold text-emerald-800 dark:text-emerald-200">{row.start || "09:00"}–{row.end || "17:00"}</div><button type="button" aria-label={`Adjust ${d.label} end time`} onPointerDown={(event) => startDrag(event, d.id, "end")} className="absolute bottom-0 left-1/2 h-3 w-8 -translate-x-1/2 translate-y-1/2 cursor-ns-resize rounded-full border border-emerald-600/50 bg-emerald-500 shadow-sm" /></div></div>; })}</div></div></SettingCard>;
+
+  return <SettingCard icon={IconCalendar} title="Calendar View" subtitle="Scroll 00:00–24:00 and drag top or bottom handles to resize; snaps to 15 minutes"><div className="overflow-hidden rounded-xl border text-[10px]"><div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))] bg-muted/50"><span className="p-2">Hour</span>{WEEKDAYS.map((d) => <span key={d.id} className="border-l p-2 text-center font-semibold">{d.label}</span>)}</div><div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: `${calendarViewportHeight}px` }}><div className="grid grid-cols-[42px_repeat(7,minmax(0,1fr))]" style={{ height: `${calendarGridHeight}px` }}><div>{hours.map((hour) => <div key={hour} className="h-7 border-t p-2 text-muted-foreground">{String(hour).padStart(2, "0")}:00</div>)}</div>{WEEKDAYS.map((d) => { const row = windowFor(d.id); const start = timeToMinutes(row.start || "09:00"); const end = timeToMinutes(row.end || "17:00", start + calendarSnapMinutes); const top = ((Math.max(calendarStartMinute, Math.min(calendarEndMinute, start)) - calendarStartMinute) / calendarTotalMinutes) * 100; const bottom = ((Math.max(calendarStartMinute, Math.min(calendarEndMinute, end)) - calendarStartMinute) / calendarTotalMinutes) * 100; return <div key={d.id} data-calendar-column className="relative border-l bg-background/60 bg-[linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[length:100%_28px]" style={{ height: `${calendarGridHeight}px` }}><div className="absolute inset-x-1 rounded-md border border-dashed border-muted-foreground/20 bg-muted/20 p-1 text-center text-[9px] text-muted-foreground" style={{ top: `${top}%`, height: `${Math.max(4, bottom - top)}%`, display: row.enabled === false ? "none" : undefined }}><button type="button" aria-label={`Adjust ${d.label} start time`} onPointerDown={(event) => startDrag(event, d.id, "start")} className="absolute left-1/2 top-0 h-3 w-8 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-full border border-emerald-600/50 bg-emerald-500 shadow-sm" /><div className="flex h-full min-h-5 items-center justify-center rounded bg-emerald-500/25 px-1 font-semibold text-emerald-800 dark:text-emerald-200">{row.start || "09:00"}–{row.end || "17:00"}</div><button type="button" aria-label={`Adjust ${d.label} end time`} onPointerDown={(event) => startDrag(event, d.id, "end")} className="absolute bottom-0 left-1/2 h-3 w-8 -translate-x-1/2 translate-y-1/2 cursor-ns-resize rounded-full border border-emerald-600/50 bg-emerald-500 shadow-sm" /></div></div>; })}</div></div></div></SettingCard>;
 }
 
 function parseCsvPreview(csvText) {
