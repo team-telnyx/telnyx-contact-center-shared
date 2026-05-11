@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { annotateCampaignDncScaffold, getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CAMPAIGN_MODES, OUTBOUND_CHANNELS, OUTBOUND_HANDLER_TYPES } from "@/lib/outbound-dialer/schema";
 
 export async function PUT(request, context) {
@@ -13,7 +13,14 @@ export async function PUT(request, context) {
       requireString(body.name, "Campaign name"), optionalString(body.description), ensureEnum(body.status, ["draft", "ready", "paused", "running", "completed"], "draft"), ensureEnum(body.channel, OUTBOUND_CHANNELS, "voice"), ensureEnum(body.mode, OUTBOUND_CAMPAIGN_MODES, "preview"), ensureEnum(body.handler_type, OUTBOUND_HANDLER_TYPES, "queue"), optionalString(body.handler_ref, 200), body.contact_list_id || null, body.attached_form_id || null, JSON.stringify(safeJson(body.pacing_config, {})), JSON.stringify(safeJson(body.concurrency_config, {})), JSON.stringify(safeJson(body.dialing_windows, [])), JSON.stringify(safeJson(body.retry_policy, {})), JSON.stringify(safeJson(body.amd_config, {})), JSON.stringify(safeJson(body.form_variable_mapping, [])), JSON.stringify(safeJson(body.metadata, {})), username, campaignId,
     ]);
     if (!rows[0]) return jsonError("Campaign not found", 404);
-    return NextResponse.json({ ok: true, campaign: mapCampaign(rows[0]) });
+    let campaign = rows[0];
+    const metadata = campaign.metadata || {};
+    const action = metadata.execution_control?.lastAction || metadata.execution_control?.last_action;
+    if (campaign.status === "running" && metadata.dnc_list_id && ["start", "resume", "recycle"].includes(action)) {
+      const checked = await annotateCampaignDncScaffold(pool, campaign, username);
+      campaign = checked.campaign;
+    }
+    return NextResponse.json({ ok: true, campaign: mapCampaign(campaign) });
   } catch (err) { console.error("[Outbound Dialer] update campaign error:", err); return jsonError(err.message || "Failed to update campaign", 400); }
 }
 
