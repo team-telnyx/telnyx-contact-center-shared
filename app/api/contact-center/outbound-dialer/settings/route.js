@@ -8,6 +8,7 @@ function normalizeSettings(body = {}) {
   const callable = settings.callable_window || settings.callableWindow || {};
   return {
     max_calls_per_agent: Math.max(1, Math.min(100, Number.parseInt(settings.max_calls_per_agent ?? settings.maxCallsPerAgent, 10) || 1)),
+    max_lines: Math.max(1, Math.min(10000, Number.parseInt(settings.max_lines ?? settings.maxLines, 10) || 10)),
     max_line_utilization_percent: Math.max(1, Math.min(100, Number.parseInt(settings.max_line_utilization_percent ?? settings.maxLineUtilizationPercent, 10) || 90)),
     compliance_abandon_threshold_seconds: Math.max(0, Math.min(300, Number.parseInt(settings.compliance_abandon_threshold_seconds ?? settings.complianceAbandonThresholdSeconds, 10) || 2)),
     compliance_abandon_rate_subject: SUBJECTS.includes(settings.compliance_abandon_rate_subject || settings.complianceAbandonRateSubject) ? (settings.compliance_abandon_rate_subject || settings.complianceAbandonRateSubject) : "campaign",
