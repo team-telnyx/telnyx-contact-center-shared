@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapContactList, normalizeFieldSchema, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, loadOutboundContactLists, mapContactList, normalizeFieldSchema, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 
 export async function GET() {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
-  const { rows } = await pool.query(`SELECT * FROM outbound_contact_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`);
+  const { rows } = await loadOutboundContactLists(pool, 200);
   return NextResponse.json({ ok: true, contactLists: rows.map(mapContactList) });
 }
 

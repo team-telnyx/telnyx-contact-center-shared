@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, jsonError, mapOutboundFilter, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, jsonError, mapOutboundFilter, optionalString, requireOutboundSupervisor, requireString, requireUuid, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
@@ -17,8 +17,9 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const username = usernameFor(user);
+    const contactListId = requireUuid(body.contact_list_id, "Target contact list");
     const { rows } = await pool.query(`INSERT INTO outbound_contact_filters (name, description, status, contact_list_id, conditions, metadata, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING *`, [
-      requireString(body.name, "Filter name"), optionalString(body.description), normalizeStatus(body.status), body.contact_list_id || null, JSON.stringify(safeJson(body.conditions, [])), JSON.stringify(safeJson(body.metadata, {})), username,
+      requireString(body.name, "Filter name"), optionalString(body.description), normalizeStatus(body.status), contactListId, JSON.stringify(safeJson(body.conditions, [])), JSON.stringify(safeJson(body.metadata, {})), username,
     ]);
     return NextResponse.json({ ok: true, filter: mapOutboundFilter(rows[0]) });
   } catch (err) { console.error("[Outbound Dialer] create filter error:", err); return jsonError(err.message || "Failed to create filter", 400); }

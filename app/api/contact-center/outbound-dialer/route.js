@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOutboundPool, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundFilter, mapOutboundTimeSet, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
+import { getOutboundPool, loadOutboundContactLists, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundFilter, mapOutboundTimeSet, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
 async function safeQuery(pool, sql, params = [], fallback = []) {
@@ -38,7 +38,7 @@ export async function GET() {
   try {
     const [campaignsResult, listsResult, dncListsResult, formsResult, filtersRows, timeSetsRows, queueRows, flowRows, assistants] = await Promise.all([
       pool.query(`SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name FROM outbound_campaigns c LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id LEFT JOIN form_definitions f ON f.id = c.attached_form_id WHERE c.status <> 'archived' ORDER BY c.updated_at DESC LIMIT 100`),
-      pool.query(`SELECT * FROM outbound_contact_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
+      loadOutboundContactLists(pool, 100),
       pool.query(`SELECT * FROM outbound_dnc_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
       pool.query(`SELECT id, name, status, category, schema FROM form_definitions WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 200`),
       safeQuery(pool, `SELECT f.*, l.name AS contact_list_name FROM outbound_contact_filters f LEFT JOIN outbound_contact_lists l ON l.id = f.contact_list_id WHERE f.status <> 'archived' ORDER BY f.updated_at DESC LIMIT 100`),
