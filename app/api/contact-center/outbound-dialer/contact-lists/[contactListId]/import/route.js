@@ -89,8 +89,7 @@ export async function POST(request, context) {
     // Data model note: every selected CSV column is preserved once in row_data JSONB.
     // List-level metadata.csv_import_settings.column_mappings is the source of truth for
     // which row_data keys are contact methods; contact_methods stores the resolved per-row values.
-    // The scalar phone_number is a compatibility/index column sourced only from explicit
-    // Number/WhatsApp mappings, not from header-name heuristics.
+    // Contact methods are stored in JSONB from explicit mappings, not from header-name heuristics.
     const inferredSchema = buildImportSchema(selectedColumns, columnMappings, importSettings);
     const validPhones = records.filter((record) => Boolean(firstMappedPhone(record, selectedColumns, columnMappings))).length;
     const importMetadata = {
@@ -110,7 +109,7 @@ export async function POST(request, context) {
         const rowData = Object.fromEntries(selectedColumns.map((key) => [key, record[key] ?? ""]));
         const contactMethods = buildContactMethods(record, selectedColumns, columnMappings);
         const phoneValue = firstMappedPhone(record, selectedColumns, columnMappings);
-        await client.query(`INSERT INTO outbound_contact_records (contact_list_id, phone_number, row_data, contact_methods, validation_status) VALUES ($1,$2,$3,$4,$5)`, [contactListId, phoneValue, JSON.stringify(rowData), JSON.stringify(contactMethods), isLikelyPhone(phoneValue) ? "valid" : "needs_review"]);
+        await client.query(`INSERT INTO outbound_contact_records (contact_list_id, row_data, contact_methods, validation_status) VALUES ($1,$2,$3,$4)`, [contactListId, JSON.stringify(rowData), JSON.stringify(contactMethods), isLikelyPhone(phoneValue) ? "valid" : "needs_review"]);
       }
       const { rows } = await client.query(`UPDATE outbound_contact_lists SET status='validated', custom_field_schema=$1, record_count=$2, valid_phone_count=$3, metadata=COALESCE(metadata, '{}'::jsonb) || $4::jsonb, updated_by=$5, updated_at=NOW() WHERE id=$6 RETURNING *`, [JSON.stringify(inferredSchema), records.length, validPhones, JSON.stringify(importMetadata), usernameFor(user), contactListId]);
       await client.query("COMMIT");
