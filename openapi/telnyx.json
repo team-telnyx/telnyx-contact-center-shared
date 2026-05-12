@@ -11121,6 +11121,160 @@
         "x-latency-category": "responsive"
       }
     },
+    "/ai/openai/responses": {
+      "post": {
+        "tags": [
+          "OpenAI Chat"
+        ],
+        "summary": "Create an OpenAI-compatible response",
+        "description": "Create a response using Telnyx's OpenAI-compatible Responses API. This endpoint is compatible with the [OpenAI Responses API](https://developers.openai.com/api/reference/responses/overview) and may be used with the OpenAI JS or Python SDK by setting the base URL to `https://api.telnyx.com/v2/ai/openai`.\n\nThe `conversation` parameter refers to a Telnyx Conversation rather than an OpenAI-hosted conversation object. To persist a thread across turns, first [create a conversation](https://developers.telnyx.com/api-reference/conversations/create-a-conversation) with `POST /ai/conversations`, then pass that conversation's `id` in the Responses request as `conversation`. The endpoint appends the new input, assistant output, reasoning, and tool-call messages to that conversation. Reuse the same `conversation` id on subsequent Responses requests, including tool-result followups, so the model receives the prior context.\n\nIf `conversation` is omitted, the request is processed without persisting messages to a Telnyx conversation. Use the Conversations API to manage history: [list conversations](https://developers.telnyx.com/api-reference/conversations/list-conversations) (optionally filtered by metadata), [fetch messages](https://developers.telnyx.com/api-reference/conversations/get-conversation-messages) for a conversation, and optionally [add messages](https://developers.telnyx.com/api-reference/conversations/create-message) outside the Responses flow.\n\nYou can attach arbitrary metadata when creating a conversation (for example to tag the conversation's source, channel, or user) and later filter by it when listing conversations.",
+        "operationId": "chat_public_openai_responses_completions_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Model identifier to use for the response, for example `zai-org/GLM-5.1-FP8` or another model available from the Telnyx OpenAI-compatible models endpoint."
+                  },
+                  "input": {
+                    "description": "The input items for this turn, using the OpenAI Responses API input format."
+                  },
+                  "conversation": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Optional Telnyx Conversation ID from `POST /ai/conversations`. When provided, Telnyx stores this turn on that conversation and uses the conversation's prior messages as context. Reuse the same ID for subsequent turns and tool-result followups. Omit it for a non-persisted, stateless response."
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "description": "Optional system/developer instructions for the model. When used with a persisted `conversation`, send these on the first request that creates the thread; subsequent turns can rely on the stored history."
+                  },
+                  "stream": {
+                    "type": "boolean",
+                    "description": "Set to `true` to stream Server-Sent Events, matching OpenAI's Responses streaming format."
+                  }
+                }
+              },
+              "example": {
+                "model": "zai-org/GLM-5.1-FP8",
+                "conversation": "6a09cdc3-8948-47f0-aa62-74ac943d6c58",
+                "instructions": "You are a friendly chatbot.",
+                "input": [
+                  {
+                    "role": "user",
+                    "content": [
+                      {
+                        "type": "input_text",
+                        "text": "Hello, world!"
+                      }
+                    ]
+                  }
+                ],
+                "stream": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/ai/responses": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "Create a response",
+        "description": "**Deprecated**: Use `POST /v2/ai/openai/responses` instead. This endpoint is compatible with the [OpenAI Responses API](https://developers.openai.com/api/reference/responses/overview) and may be used with the OpenAI JS or Python SDK. Response id parameter is not supported at the moment. Use the `conversation` parameter with a Telnyx Conversation ID to leverage persistent conversations.",
+        "operationId": "chat_public_responses_completions_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "example": {
+                "model": "zai-org/GLM-5.1-FP8",
+                "input": [
+                  {
+                    "role": "system",
+                    "content": [
+                      {
+                        "type": "input_text",
+                        "text": "You are a friendly chatbot."
+                      }
+                    ]
+                  },
+                  {
+                    "role": "user",
+                    "content": [
+                      {
+                        "type": "input_text",
+                        "text": "Hello, world!"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "deprecated": true,
+        "x-hidden": true,
+        "x-latency-category": "responsive"
+      }
+    },
     "/ai/summarize": {
       "post": {
         "tags": [
@@ -80144,7 +80298,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
+            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/openai-chat/get-available-models-openai-compatible) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
           },
           "instructions": {
             "type": "string",
@@ -99167,10 +99321,13 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Mapping of token kind to price in USD per 1M tokens, as a string. Typical keys are `input` and `output`; embedding models expose `embedding`. Empty object when pricing is not yet published for the model.",
+            "description": "Mapping of token kind to price, as strings to preserve precision. Typical keys are `prompt`, `cached_prompt`, and `completion`. When pricing is available the block also includes `currency` (ISO 4217 code matching the account's configured billing currency) and `unit` (the denomination the prices are quoted in, currently always `1M_tokens` for token-priced models).",
             "example": {
-              "input": "0.60",
-              "output": "2.50"
+              "prompt": "0.300000",
+              "completion": "1.200000",
+              "cached_prompt": "0.060000",
+              "currency": "USD",
+              "unit": "1M_tokens"
             }
           },
           "regions": {
@@ -123129,7 +123286,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
+            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/openai-chat/get-available-models-openai-compatible) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
           },
           "instructions": {
             "type": "string",
@@ -134038,7 +134195,7 @@
           },
           "model": {
             "type": "string",
-            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/chat/get-available-models) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
+            "description": "ID of the model to use when `external_llm` is not set. You can use the [Get models API](https://developers.telnyx.com/api-reference/openai-chat/get-available-models-openai-compatible) to see available models. If `external_llm` is provided, the assistant uses `external_llm` instead of this field. If neither `model` nor `external_llm` is provided, Telnyx applies the default model."
           },
           "instructions": {
             "type": "string",
