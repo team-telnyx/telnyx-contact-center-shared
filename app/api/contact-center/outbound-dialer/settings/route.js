@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 
-const SUBJECTS = ["campaign", "site", "queue", "agent"];
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const DEFAULT_CALLABLE_DAYS = ["mon", "tue", "wed", "thu", "fri"];
+
+function normalizeCallableDays(settings = {}) {
+  const days = settings.callable_days || settings.callableDays || DEFAULT_CALLABLE_DAYS;
+  const normalized = (Array.isArray(days) ? days : [])
+    .map((day) => String(day || "").trim().toLowerCase())
+    .filter((day, idx, list) => WEEKDAYS.includes(day) && list.indexOf(day) === idx);
+  return normalized.length ? normalized : DEFAULT_CALLABLE_DAYS;
+}
+
 function normalizeSettings(body = {}) {
   const settings = safeJson(body.settings || body, {});
   const countries = settings.supported_countries || settings.supportedCountries || [];
@@ -10,10 +20,10 @@ function normalizeSettings(body = {}) {
     max_calls_per_agent: Math.max(1, Math.min(100, Number.parseInt(settings.max_calls_per_agent ?? settings.maxCallsPerAgent, 10) || 1)),
     max_lines: Math.max(1, Math.min(10000, Number.parseInt(settings.max_lines ?? settings.maxLines, 10) || 10)),
     max_line_utilization_percent: Math.max(1, Math.min(100, Number.parseInt(settings.max_line_utilization_percent ?? settings.maxLineUtilizationPercent, 10) || 90)),
+    max_cps: Math.max(1, Math.min(1000, Number.parseInt(settings.max_cps ?? settings.maxCps, 10) || 50)),
     compliance_abandon_threshold_seconds: Math.max(0, Math.min(300, Number.parseInt(settings.compliance_abandon_threshold_seconds ?? settings.complianceAbandonThresholdSeconds, 10) || 2)),
-    compliance_abandon_rate_subject: SUBJECTS.includes(settings.compliance_abandon_rate_subject || settings.complianceAbandonRateSubject) ? (settings.compliance_abandon_rate_subject || settings.complianceAbandonRateSubject) : "campaign",
-    reschedule_timezone_skipped_contacts: Boolean(settings.reschedule_timezone_skipped_contacts ?? settings.rescheduleTimezoneSkippedContacts ?? true),
     supported_countries: (Array.isArray(countries) ? countries : []).map((value) => String(value || "").trim()).filter(Boolean).slice(0, 100),
+    callable_days: normalizeCallableDays(settings),
     callable_window: {
       earliest: String(callable.earliest || "09:00").slice(0, 5),
       latest: String(callable.latest || "20:00").slice(0, 5),
