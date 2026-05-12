@@ -14,7 +14,6 @@ function normalizeCallableDays(settings = {}) {
 
 function normalizeSettings(body = {}) {
   const settings = safeJson(body.settings || body, {});
-  const countries = settings.supported_countries || settings.supportedCountries || [];
   const callable = settings.callable_window || settings.callableWindow || {};
   return {
     max_calls_per_agent: Math.max(1, Math.min(100, Number.parseInt(settings.max_calls_per_agent ?? settings.maxCallsPerAgent, 10) || 1)),
@@ -22,7 +21,6 @@ function normalizeSettings(body = {}) {
     max_line_utilization_percent: Math.max(1, Math.min(100, Number.parseInt(settings.max_line_utilization_percent ?? settings.maxLineUtilizationPercent, 10) || 90)),
     max_cps: Math.max(1, Math.min(1000, Number.parseInt(settings.max_cps ?? settings.maxCps, 10) || 50)),
     compliance_abandon_threshold_seconds: Math.max(0, Math.min(300, Number.parseInt(settings.compliance_abandon_threshold_seconds ?? settings.complianceAbandonThresholdSeconds, 10) || 2)),
-    supported_countries: (Array.isArray(countries) ? countries : []).map((value) => String(value || "").trim()).filter(Boolean).slice(0, 100),
     callable_days: normalizeCallableDays(settings),
     callable_window: {
       earliest: String(callable.earliest || "09:00").slice(0, 5),
