@@ -13636,6 +13636,82 @@
         "x-latency-category": "interactive"
       }
     },
+    "/calls/{call_control_id}/actions/conversation_relay_start": {
+      "post": {
+        "summary": "Start Conversation Relay",
+        "description": "Start a Conversation Relay session on an active call. Conversation Relay connects the call audio to your WebSocket so your application can exchange realtime messages with the caller while Telnyx handles speech recognition and text-to-speech. Only one AI Assistant or Conversation Relay session can be active on a call at a time.\n\n**Expected Webhooks:**\n\n- `call.conversation.ended` - Sent when the Conversation Relay session ends. If the customer WebSocket disconnects, the webhook payload `reason` is `customer_disconnect`.\n",
+        "operationId": "CallStartConversationRelay",
+        "tags": [
+          "Call Commands"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallControlId"
+          }
+        ],
+        "requestBody": {
+          "description": "Conversation Relay start request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRelayStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CallControlCommandResponseWithConversationRelayId"
+          },
+          "default": {
+            "$ref": "#/components/responses/call-control_GenericErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
+    "/calls/{call_control_id}/actions/conversation_relay_stop": {
+      "post": {
+        "summary": "Stop Conversation Relay",
+        "description": "Stop the active Conversation Relay session on a call.",
+        "operationId": "CallStopConversationRelay",
+        "tags": [
+          "Call Commands"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CallControlId"
+          }
+        ],
+        "requestBody": {
+          "description": "Conversation Relay stop request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationRelayStopRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/CallControlCommandResponse"
+          },
+          "default": {
+            "$ref": "#/components/responses/call-control_GenericErrorResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "interactive"
+      }
+    },
     "/calls/{call_control_id}/actions/enqueue": {
       "post": {
         "summary": "Enqueue call",
@@ -55614,6 +55690,22 @@
           }
         }
       },
+      "CallControlCommandResponseWithConversationRelayId": {
+        "description": "Successful response upon starting Conversation Relay.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "Call Control Command Response With Conversation Relay ID",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/CallControlCommandResultWithConversationRelayId"
+                }
+              }
+            }
+          }
+        }
+      },
       "CallControlCommandResponseWithRecordingId": {
         "description": "Successful response upon making a call control command that includes recording_id.",
         "content": {
@@ -70034,6 +70126,25 @@
           }
         }
       },
+      "CallControlCommandResultWithConversationRelayId": {
+        "type": "object",
+        "title": "Call Control Command Result With Conversation Relay ID",
+        "example": {
+          "result": "ok",
+          "conversation_relay_id": "d7e9c1d4-8b2a-4b8f-b3a7-9a671c9e9b0a"
+        },
+        "properties": {
+          "result": {
+            "type": "string",
+            "example": "ok"
+          },
+          "conversation_relay_id": {
+            "type": "string",
+            "example": "d7e9c1d4-8b2a-4b8f-b3a7-9a671c9e9b0a",
+            "description": "The ID of the Conversation Relay session created by the command."
+          }
+        }
+      },
       "CallControlCommandResultWithRecordingId": {
         "type": "object",
         "title": "Call Control Command Result With Recording ID",
@@ -79958,6 +80069,264 @@
           "meta"
         ],
         "title": "ConversationMessageListData"
+      },
+      "ConversationRelayAssistant": {
+        "type": "object",
+        "title": "Conversation Relay Custom Parameters",
+        "description": "Custom parameters for the Conversation Relay session. Pass key-value data as `assistant.dynamic_variables` to make it available to the relay session.",
+        "properties": {
+          "dynamic_variables": {
+            "type": "object",
+            "description": "Custom key-value parameters forwarded to the Conversation Relay session.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "example": {
+              "customer_id": "12345",
+              "tier": "premium"
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "ConversationRelayInterruptible": {
+        "type": "string",
+        "description": "Controls when caller input can interrupt assistant speech. `any` allows speech or DTMF interruptions; `none` disables interruptions; `speech` allows speech only; `dtmf` allows DTMF only.",
+        "enum": [
+          "none",
+          "any",
+          "speech",
+          "dtmf"
+        ],
+        "default": "any",
+        "example": "speech"
+      },
+      "ConversationRelayInterruptionSettings": {
+        "type": "object",
+        "title": "Conversation Relay Interruption Settings",
+        "description": "Settings for handling caller interruptions during Conversation Relay speech.",
+        "properties": {
+          "enable": {
+            "type": "boolean",
+            "description": "Legacy boolean form. `true` is equivalent to `interruptible=any`; `false` is equivalent to `interruptible=none`."
+          },
+          "interruptible": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "interruptible_greeting": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "welcome_greeting_interruptible": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          }
+        }
+      },
+      "ConversationRelayLanguage": {
+        "type": "object",
+        "title": "Conversation Relay Language",
+        "description": "Language-specific speech and transcription settings for Conversation Relay.",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "BCP 47 language code.",
+            "example": "en-US"
+          },
+          "tts_provider": {
+            "type": "string",
+            "description": "Text-to-speech provider for this language.",
+            "example": "ElevenLabs"
+          },
+          "voice": {
+            "type": "string",
+            "description": "Voice identifier for this language.",
+            "example": "alice"
+          },
+          "transcription_provider": {
+            "type": "string",
+            "description": "Speech-to-text provider for this language.",
+            "example": "Deepgram"
+          },
+          "speech_model": {
+            "type": "string",
+            "description": "Speech recognition model for this language.",
+            "example": "nova-2"
+          }
+        }
+      },
+      "ConversationRelayStartRequest": {
+        "type": "object",
+        "title": "Conversation Relay Start Request",
+        "properties": {
+          "conversation_relay_url": {
+            "type": "string",
+            "description": "WebSocket URL for your Conversation Relay server. Must start with `ws://` or `wss://`.",
+            "example": "wss://example.com/conversation-relay"
+          },
+          "conversation_relay_dtmf_detection": {
+            "type": "boolean",
+            "description": "Enable DTMF detection for the relay session.",
+            "default": false,
+            "example": true
+          },
+          "voice": {
+            "$ref": "#/components/schemas/VoiceConfig"
+          },
+          "voice_settings": {
+            "description": "The settings associated with the voice selected",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ElevenLabsVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/TelnyxVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AWSVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AzureVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/RimeVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/ResembleVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/XAIVoiceSettings"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "elevenlabs": "#/components/schemas/ElevenLabsVoiceSettings",
+                "telnyx": "#/components/schemas/TelnyxVoiceSettings",
+                "aws": "#/components/schemas/AWSVoiceSettings",
+                "azure": "#/components/schemas/AzureVoiceSettings",
+                "rime": "#/components/schemas/RimeVoiceSettings",
+                "resemble": "#/components/schemas/ResembleVoiceSettings",
+                "xai": "#/components/schemas/XAIVoiceSettings"
+              }
+            }
+          },
+          "greeting": {
+            "type": "string",
+            "description": "Text played when the relay session starts.",
+            "example": "Hi! Ask me anything!"
+          },
+          "language": {
+            "type": "string",
+            "description": "Default language for the relay session. This value is used for both text-to-speech and speech recognition unless `tts_language` or `transcription_language` are provided.",
+            "default": "en",
+            "example": "en-US"
+          },
+          "tts_language": {
+            "type": "string",
+            "description": "Language to use for text-to-speech. Overrides `language` for TTS when provided.",
+            "example": "es"
+          },
+          "transcription_language": {
+            "type": "string",
+            "description": "Language to use for speech recognition. Overrides `language` for transcription when provided.",
+            "example": "en-US"
+          },
+          "languages": {
+            "type": "array",
+            "description": "Language-specific TTS and transcription settings. Use this when the relay session needs per-language provider, voice, or speech model configuration.",
+            "items": {
+              "$ref": "#/components/schemas/ConversationRelayLanguage"
+            }
+          },
+          "interruption_settings": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptionSettings"
+          },
+          "transcription": {
+            "$ref": "#/components/schemas/ConversationRelayTranscriptionSettings"
+          },
+          "participants": {
+            "type": "array",
+            "description": "Participants to add to the conversation.",
+            "items": {
+              "$ref": "#/components/schemas/AIAssistantJoinParticipant"
+            },
+            "default": []
+          },
+          "user_response_timeout_ms": {
+            "type": "integer",
+            "description": "Time in milliseconds to wait for caller input before timing out.",
+            "default": 10000,
+            "example": 10000
+          },
+          "send_message_history_updates": {
+            "type": "boolean",
+            "description": "When true, sends message history update webhooks.",
+            "default": false
+          },
+          "assistant": {
+            "$ref": "#/components/schemas/ConversationRelayAssistant"
+          },
+          "client_state": {
+            "type": "string",
+            "description": "Use this field to add state to subsequent webhooks. It must be a valid Base-64 encoded string.",
+            "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+          },
+          "command_id": {
+            "description": "Use this field to avoid duplicate commands. Telnyx will ignore any command with the same `command_id` for the same `call_control_id`.",
+            "type": "string",
+            "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
+          }
+        },
+        "example": {
+          "conversation_relay_url": "wss://example.com/conversation-relay",
+          "conversation_relay_dtmf_detection": true,
+          "interruption_settings": {
+            "interruptible": "speech"
+          },
+          "greeting": "Hi! Ask me anything!",
+          "voice": "Telnyx.KokoroTTS.af",
+          "language": "en-US"
+        },
+        "required": [
+          "conversation_relay_url"
+        ]
+      },
+      "ConversationRelayStopRequest": {
+        "type": "object",
+        "title": "Conversation Relay Stop Request",
+        "properties": {
+          "client_state": {
+            "type": "string",
+            "description": "Use this field to add state to subsequent webhooks. It must be a valid Base-64 encoded string.",
+            "example": "aGF2ZSBhIG5pY2UgZGF5ID1d"
+          },
+          "command_id": {
+            "description": "Use this field to avoid duplicate commands. Telnyx will ignore any command with the same `command_id` for the same `call_control_id`.",
+            "type": "string",
+            "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
+          }
+        }
+      },
+      "ConversationRelayTranscriptionSettings": {
+        "type": "object",
+        "title": "Conversation Relay Transcription Settings",
+        "description": "Speech-to-text settings for Conversation Relay.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Transcription provider to use.",
+            "example": "deepgram"
+          },
+          "model": {
+            "type": "string",
+            "description": "Transcription model to use.",
+            "example": "nova-2"
+          },
+          "language": {
+            "type": "string",
+            "description": "Transcription language.",
+            "example": "en-US"
+          }
+        }
       },
       "ConversationsListData": {
         "properties": {
@@ -115312,6 +115681,32 @@
           "command_id": "891510ac-f3e4-11e8-af5b-de00688a4901"
         }
       },
+      "SpeechmaticsTranscriptionLanguage": {
+        "title": "Speechmatics transcription engine list of languages",
+        "type": "string",
+        "description": "Language to use for speech recognition",
+        "example": "en",
+        "default": "en",
+        "enum": [
+          "en",
+          "ba",
+          "eu",
+          "gl",
+          "ga",
+          "mt",
+          "mn",
+          "sw",
+          "ug",
+          "cy",
+          "ar_en",
+          "cmn_en",
+          "en_ms",
+          "en_ta",
+          "tl",
+          "es-bilingual-en",
+          "cmn_en_ms_ta"
+        ]
+      },
       "StartConferenceRecordingRequest": {
         "type": "object",
         "title": "Start Conference Recording Request",
@@ -121297,6 +121692,36 @@
           }
         }
       },
+      "TranscriptionEngineSpeechmaticsConfig": {
+        "type": "object",
+        "title": "Transcription engine Speechmatics config",
+        "properties": {
+          "transcription_engine": {
+            "type": "string",
+            "enum": [
+              "Speechmatics"
+            ],
+            "description": "Engine identifier for Speechmatics transcription service"
+          },
+          "language": {
+            "$ref": "#/components/schemas/SpeechmaticsTranscriptionLanguage"
+          },
+          "transcription_model": {
+            "description": "The model to use for transcription.",
+            "type": "string",
+            "enum": [
+              "speechmatics/standard"
+            ],
+            "default": "speechmatics/standard"
+          },
+          "interim_results": {
+            "type": "boolean",
+            "description": "Whether to send also interim results. If set to false, only final results will be sent.",
+            "default": false,
+            "example": true
+          }
+        }
+      },
       "TranscriptionEngineTelnyxConfig": {
         "type": "object",
         "title": "Transcription engine Telnyx config",
@@ -121732,6 +122157,7 @@
               "Azure",
               "xAI",
               "AssemblyAI",
+              "Speechmatics",
               "A",
               "B"
             ],
@@ -121759,6 +122185,9 @@
                 "$ref": "#/components/schemas/TranscriptionEngineAssemblyaiConfig"
               },
               {
+                "$ref": "#/components/schemas/TranscriptionEngineSpeechmaticsConfig"
+              },
+              {
                 "$ref": "#/components/schemas/TranscriptionEngineAConfig"
               },
               {
@@ -121774,6 +122203,7 @@
                 "Azure": "#/components/schemas/TranscriptionEngineAzureConfig",
                 "xAI": "#/components/schemas/TranscriptionEngineXaiConfig",
                 "AssemblyAI": "#/components/schemas/TranscriptionEngineAssemblyaiConfig",
+                "Speechmatics": "#/components/schemas/TranscriptionEngineSpeechmaticsConfig",
                 "A": "#/components/schemas/TranscriptionEngineAConfig",
                 "B": "#/components/schemas/TranscriptionEngineBConfig"
               }
@@ -133252,6 +133682,14 @@
                 "example": 3,
                 "description": "Duration of the conversation in seconds."
               },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "customer_disconnect",
+                "description": "Reason the conversation ended. For Conversation Relay, `customer_disconnect` indicates that the customer WebSocket disconnected."
+              },
               "from": {
                 "type": "string",
                 "example": "+13124287921",
@@ -133312,7 +133750,8 @@
             "stt_model": "distil-whisper/distil-large-v2",
             "tts_model_id": "Natural",
             "tts_provider": "telnyx",
-            "tts_voice_id": "Marissa"
+            "tts_voice_id": "Marissa",
+            "reason": "customer_disconnect"
           }
         }
       },
