@@ -238,6 +238,107 @@ test('ordering: out-of-order call.answered po terminalnym hangup jest ignorowane
   assert.equal(queries.some((q) => q.includes("SET status = 'answered'")), false);
 });
 
+test('reason-code mapping: originator_cancel -> cancelled bez retry', async () => {
+  const captured = { terminalStatus: null, metadata: null };
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('INSERT INTO outbound_webhook_events')) {
+      return { rows: [{ event_id: 'evt-originator-cancel' }] };
+    }
+    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+      return { rows: [{ id: 'l9', campaign_id: 'camp9', status: 'answered' }] };
+    }
+    if (sql.includes('FROM outbound_campaigns')) {
+      return { rows: [{ retry_policy: { minDelayHours: 1 } }] };
+    }
+    if (sql.includes('lease_expires_at = NULL')) {
+      captured.terminalStatus = params[0];
+      captured.metadata = JSON.parse(params[1]);
+      return { rows: [{ id: 'l9', status: params[0] }] };
+    }
+    throw new Error(`Unexpected SQL(originator-cancel): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-8',
+    eventType: 'call.hangup',
+    hangupCause: 'originator_cancel',
+    eventId: 'evt-originator-cancel',
+  });
+
+  assert.equal(result.status, 'cancelled');
+  assert.equal(captured.terminalStatus, 'cancelled');
+  assert.equal(captured.metadata.retry_eligible, false);
+  assert.equal(captured.metadata.reason_code, 'originator_cancel');
+});
+
+test('reason-code mapping: not_found -> failed z retry', async () => {
+  const captured = { terminalStatus: null, metadata: null };
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('INSERT INTO outbound_webhook_events')) {
+      return { rows: [{ event_id: 'evt-not-found' }] };
+    }
+    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+      return { rows: [{ id: 'l10', campaign_id: 'camp10', status: 'answered' }] };
+    }
+    if (sql.includes('FROM outbound_campaigns')) {
+      return { rows: [{ retry_policy: { minDelayHours: 1 } }] };
+    }
+    if (sql.includes('lease_expires_at = NULL')) {
+      captured.terminalStatus = params[0];
+      captured.metadata = JSON.parse(params[1]);
+      return { rows: [{ id: 'l10', status: params[0] }] };
+    }
+    throw new Error(`Unexpected SQL(not-found): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-9',
+    eventType: 'call.hangup',
+    hangupCause: 'not_found',
+    eventId: 'evt-not-found',
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.equal(captured.terminalStatus, 'failed');
+  assert.equal(captured.metadata.retry_eligible, true);
+  assert.equal(captured.metadata.reason_code, 'not_found');
+  assert.ok(typeof captured.metadata.next_retry_at === 'string');
+});
+
+test('reason-code mapping: time_limit -> completed bez retry', async () => {
+  const captured = { terminalStatus: null, metadata: null };
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('INSERT INTO outbound_webhook_events')) {
+      return { rows: [{ event_id: 'evt-time-limit' }] };
+    }
+    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+      return { rows: [{ id: 'l11', campaign_id: 'camp11', status: 'answered' }] };
+    }
+    if (sql.includes('FROM outbound_campaigns')) {
+      return { rows: [{ retry_policy: { minDelayHours: 1 } }] };
+    }
+    if (sql.includes('lease_expires_at = NULL')) {
+      captured.terminalStatus = params[0];
+      captured.metadata = JSON.parse(params[1]);
+      return { rows: [{ id: 'l11', status: params[0] }] };
+    }
+    throw new Error(`Unexpected SQL(time-limit): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-10',
+    eventType: 'call.hangup',
+    hangupCause: 'time_limit',
+    eventId: 'evt-time-limit',
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(captured.terminalStatus, 'completed');
+  assert.equal(captured.metadata.retry_eligible, false);
+  assert.equal(captured.metadata.reason_code, 'time_limit');
+  assert.equal(captured.metadata.next_retry_at, null);
+});
+
 test('event_id dedupe: ten sam eventId nie wykonuje drugiego update', async () => {
   const queries = [];
   const pool = createMockPool(async (sql) => {
