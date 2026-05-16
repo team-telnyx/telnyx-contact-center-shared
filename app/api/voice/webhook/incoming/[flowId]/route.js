@@ -12,6 +12,7 @@ import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
+import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -146,6 +147,25 @@ export async function POST(request, { params }) {
 
     // Extract webhook data into variables (needed for call.enqueued handling)
     const payload = body?.data?.payload || {};
+
+    if (
+      callControlId &&
+      (event === "call.answered" || event === "call.bridged" || event === "call.hangup")
+    ) {
+      try {
+        const pool = getPostgresPool();
+        if (pool) {
+          await finalizeAgentlessAttemptByWebhook(pool, {
+            callControlId,
+            eventType: event,
+            hangupCause: payload?.hangup_cause || null,
+            eventId: body?.data?.id || body?.id || null,
+          });
+        }
+      } catch (err) {
+        console.error("[incoming-flow-webhook] outbound finalize failed:", err);
+      }
+    }
 
     // Get the flow (without username filter to allow any user's flow to be triggered)
     const flow = await VoiceFlowDb.getFlowById(flowId, null);

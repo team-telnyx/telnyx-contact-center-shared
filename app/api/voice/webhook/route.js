@@ -794,6 +794,33 @@ export async function POST(request) {
             hangupCause: payload?.hangup_cause || null,
             eventId: json?.data?.id || json?.id || null,
           });
+
+          const ledgerMeta = finalizedLedger?.metadata || {};
+          if (
+            (eventType === "call.answered" || eventType === "call.bridged") &&
+            ledgerMeta?.outbound_handler_type === "ai_assistant" &&
+            ledgerMeta?.outbound_handler_ref &&
+            callControlId
+          ) {
+            try {
+              const apiKey = process.env.TELNYX_API_KEY;
+              if (apiKey) {
+                await fetch(buildTelnyxV2Url(`/calls/${callControlId}/actions/ai_assistant_start`), {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    assistant_id: ledgerMeta.outbound_handler_ref,
+                  }),
+                });
+              }
+            } catch (assistErr) {
+              console.error("[voice-webhook] Failed to start AI assistant for outbound call:", assistErr);
+            }
+          }
+
           if (finalizedLedger) {
             console.log(
               `[voice-webhook] ✅ Updated outbound attempt ledger ${finalizedLedger.id} from ${eventType}`,

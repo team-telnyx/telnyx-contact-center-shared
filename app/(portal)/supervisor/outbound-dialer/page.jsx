@@ -246,7 +246,48 @@ export default function OutboundDialerPage() {
   }, [active, selectedDashboardCampaign?.id, campaignReasonMetrics, selectedReasonMetricsDay]);
 
   const saveCampaign = useCallback(async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/campaigns/${draft.id}` : `${API}/campaigns`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setCampaigns((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.campaign } : i) : [data.campaign, ...items]); setSelectedCampaignId(data.campaign.id); notify({ title: draft.id ? "Campaign saved" : "Campaign created", variant: "success" }); return data.campaign; } catch (err) { notify({ title: "Campaign save failed", description: err.message, variant: "error" }); return null; } finally { setSaving(false); } }, []);
-  const runCampaignAction = async (campaign, action) => { if (!campaign?.id) return; const nextStatus = action === "start" ? "running" : action === "stop" ? "ready" : action === "pause" ? "paused" : action === "resume" ? "running" : action === "recycle" ? "ready" : campaign.status; const nextMetadata = { ...(campaign.metadata || {}), execution_control: { ...((campaign.metadata || {}).execution_control || {}), lastAction: action, updatedAt: new Date().toISOString(), scaffoldOnly: true }, execution_state: action === "stop" ? "stopped" : action === "recycle" ? "recycled" : nextStatus }; if (action === "recycle") nextMetadata.recycleRequestedAt = new Date().toISOString(); setSaving(true); try { const data = await api(`${API}/campaigns/${campaign.id}`, { method: "PUT", body: JSON.stringify({ ...campaign, status: nextStatus, metadata: nextMetadata }) }); setCampaigns((items) => items.map((i) => i.id === campaign.id ? { ...i, ...data.campaign } : i)); setSelectedCampaignId(campaign.id); notify({ title: `Campaign ${action === "recycle" ? "recycled" : nextStatus}`, description: "Execution control state updated; dialer worker remains scaffolded.", variant: "success" }); } catch (err) { notify({ title: "Campaign control failed", description: err.message, variant: "error" }); } finally { setSaving(false); } };
+  const runCampaignAction = async (campaign, action) => {
+    if (!campaign?.id) return;
+    setSaving(true);
+    try {
+      if (["start", "pause", "resume", "stop"].includes(action)) {
+        const data = await api(`${API}/campaigns/${campaign.id}/execution`, {
+          method: "POST",
+          body: JSON.stringify({ action }),
+        });
+        if (data?.campaign) {
+          setCampaigns((items) => items.map((i) => i.id === campaign.id ? { ...i, ...data.campaign } : i));
+        }
+        setSelectedCampaignId(campaign.id);
+        notify({
+          title: `Campaign ${action}`,
+          description: data?.runner?.running ? "Execution worker running." : "Execution state updated.",
+          variant: "success",
+        });
+      } else if (action === "recycle") {
+        const nextMetadata = {
+          ...(campaign.metadata || {}),
+          execution_control: {
+            ...((campaign.metadata || {}).execution_control || {}),
+            lastAction: action,
+            updatedAt: new Date().toISOString(),
+          },
+          execution_state: "recycled",
+          recycleRequestedAt: new Date().toISOString(),
+        };
+        const data = await api(`${API}/campaigns/${campaign.id}`, {
+          method: "PUT",
+          body: JSON.stringify({ ...campaign, status: "ready", metadata: nextMetadata }),
+        });
+        setCampaigns((items) => items.map((i) => i.id === campaign.id ? { ...i, ...data.campaign } : i));
+        notify({ title: "Campaign recycled", variant: "success" });
+      }
+    } catch (err) {
+      notify({ title: "Campaign control failed", description: err.message, variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
   const saveList = useCallback(async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/contact-lists/${draft.id}` : `${API}/contact-lists`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setContactLists((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.contactList } : i) : [data.contactList, ...items]); setSelectedListId(data.contactList.id); notify({ title: draft.id ? "Contact list saved" : "Contact list created", variant: "success" }); return data.contactList; } catch (err) { notify({ title: "Contact list save failed", description: err.message, variant: "error" }); return null; } finally { setSaving(false); } }, []);
   const saveDncList = useCallback(async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/dnc-lists/${draft.id}` : `${API}/dnc-lists`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setDncLists((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.dncList } : i) : [data.dncList, ...items]); setSelectedDncId(data.dncList.id); notify({ title: draft.id ? "DNC list saved" : "DNC list created", variant: "success" }); return data.dncList; } catch (err) { notify({ title: "DNC save failed", description: err.message, variant: "error" }); return null; } finally { setSaving(false); } }, []);
   const saveFilter = useCallback(async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/filters/${draft.id}` : `${API}/filters`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setFilters((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.filter } : i) : [data.filter, ...items]); setSelectedFilterId(data.filter.id); notify({ title: draft.id ? "Filter saved" : "Filter created", variant: "success" }); return data.filter; } catch (err) { notify({ title: "Filter save failed", description: err.message, variant: "error" }); return null; } finally { setSaving(false); } }, []);

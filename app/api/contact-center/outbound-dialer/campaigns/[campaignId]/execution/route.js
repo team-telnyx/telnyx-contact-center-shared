@@ -12,6 +12,7 @@ import {
   startCampaignRun,
   updateCampaignExecutionControl,
 } from "@/lib/outbound-dialer/execution";
+import { startAgentlessRunner, stopAgentlessRunner, getRunnerState } from "@/lib/outbound-dialer/runner";
 
 function isAgentlessMode(mode) {
   return mode === "agentless_ai" || mode === "agentless_flow";
@@ -52,6 +53,11 @@ export async function POST(request, context) {
       let run = null;
       if ((action === "start" || action === "resume") && isAgentlessMode(updated?.mode)) {
         run = await startCampaignRun(pool, campaignId, username);
+        startAgentlessRunner({ pool, campaignId, username });
+      }
+
+      if ((action === "pause" || action === "stop") && isAgentlessMode(updated?.mode)) {
+        stopAgentlessRunner(campaignId);
       }
 
       return NextResponse.json({
@@ -59,6 +65,7 @@ export async function POST(request, context) {
         action,
         campaign: mapCampaign(updated),
         run,
+        runner: getRunnerState(campaignId),
       });
     }
 
