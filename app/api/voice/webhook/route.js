@@ -5,6 +5,7 @@ import {
   storeWebrtcCallLegMapping,
   getWebrtcCallLegMappingBySessionId,
 } from "@/lib/mobile-call-leg-store";
+import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
 
 async function dialAndBridge({
   to,
@@ -749,6 +750,7 @@ export async function POST(request) {
     ) {
       try {
         const { PgDb } = await import("@/lib/pgdb.js");
+        const { getPostgresPool } = await import("@/lib/postgres.mjs");
         const interaction = await PgDb.findInteractionByCallControlId(
           callControlId
         );
@@ -780,6 +782,20 @@ export async function POST(request) {
             console.log(
               `[voice-webhook] ✅ Updated outbound interaction ${interaction.id}:`,
               updates
+            );
+          }
+        }
+
+        const pool = getPostgresPool();
+        if (pool) {
+          const finalizedLedger = await finalizeAgentlessAttemptByWebhook(pool, {
+            callControlId,
+            eventType,
+            hangupCause: payload?.hangup_cause || null,
+          });
+          if (finalizedLedger) {
+            console.log(
+              `[voice-webhook] ✅ Updated outbound attempt ledger ${finalizedLedger.id} from ${eventType}`,
             );
           }
         }
