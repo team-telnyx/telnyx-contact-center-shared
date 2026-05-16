@@ -187,3 +187,53 @@ test('finalizeAgentlessAttemptByWebhook mapuje cancelled hangup -> cancelled bez
   assert.equal(captured.metadata.next_retry_at, null);
   assert.equal(captured.metadata.reason_code, 'call_rejected');
 });
+
+test('idempotency: duplicate call.hangup na terminalnym ledgerze nie robi update', async () => {
+  const queries = [];
+  const pool = createMockPool(async (sql) => {
+    queries.push(sql);
+    if (sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
+      return { rows: [] };
+    }
+    if (sql.includes("FROM outbound_attempt_ledger") && !sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
+      return { rows: [{ id: 'l6', status: 'completed', metadata: { foo: 'bar' } }] };
+    }
+    throw new Error(`Unexpected SQL(duplicate-hangup): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-4',
+    eventType: 'call.hangup',
+    hangupCause: 'normal_clearing',
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.metadata.foo, 'bar');
+  assert.equal(result.metadata.ignored_reason, 'already_terminal');
+  assert.ok(typeof result.metadata.ignored_at === 'string');
+  assert.equal(queries.some((q) => q.includes('lease_expires_at = NULL')), false);
+});
+
+test('ordering: out-of-order call.answered po terminalnym hangup jest ignorowane', async () => {
+  const queries = [];
+  const pool = createMockPool(async (sql) => {
+    queries.push(sql);
+    if (sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
+      return { rows: [] };
+    }
+    if (sql.includes("FROM outbound_attempt_ledger") && !sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
+      return { rows: [{ id: 'l7', status: 'failed', metadata: { reason_code: 'user_busy' } }] };
+    }
+    throw new Error(`Unexpected SQL(out-of-order): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-5',
+    eventType: 'call.answered',
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.metadata.reason_code, 'user_busy');
+  assert.equal(result.metadata.ignored_webhook_event, 'call.answered');
+  assert.equal(queries.some((q) => q.includes("SET status = 'answered'")), false);
+});
