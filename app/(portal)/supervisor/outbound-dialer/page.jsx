@@ -65,7 +65,16 @@ const CSV_CONTACT_MAPPING_GROUPS = [
 const CSV_CONTACT_MAPPING_PREFIXES = ["number:", "email:", "whatsapp:"];
 const FORM_DATA_FIELD_TYPES = new Set(["text", "textarea", "select", "radio", "checkbox", "switch", "slider", "datetime", "hidden"]);
 const title = (value) => String(value || "").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()).replace(/\bAi\b/g, "AI");
-const statusClass = (status) => ["ready", "validated", "running", "completed"].includes(status) ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ["draft", "validating"].includes(status) ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300" : status === "paused" ? "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300" : "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+const statusClass = (status) => {
+  const value = String(status || "").toLowerCase();
+  if (value === "running" || value === "started") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (value === "paused") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (value === "recycled") return "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+  if (value === "stopped" || value === "completed") return "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  if (["ready", "validated", "active"].includes(value)) return "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (["draft", "validating"].includes(value)) return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+  return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+};
 const defaultCampaign = () => ({ name: "New voice campaign", description: "", status: "draft", channel: "voice", mode: "preview", handler_type: "queue", handler_ref: "", contact_list_id: null, attached_form_id: null, pacing_config: { strategy: "per_available_agent", ratio: 1, supervisorApproval: true }, concurrency_config: { maxConcurrent: 10, maxLines: 10, perAgentLimit: 1 }, dialing_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00", timezonePolicy: "contact" }], retry_policy: { maxAttempts: 4, delayBetweenAttemptsMinutes: 360, minDelayHours: 6, exhaustAfterDays: 7 }, amd_config: { enabled: true, humanConfidenceThreshold: 0.74, voicemailAction: "hangup" }, form_variable_mapping: [], metadata: { rotate_numbers: false, from_numbers: [] } });
 const defaultList = () => ({ name: "New contact list", description: "", status: "draft", source_type: "csv", custom_field_schema: [], record_count: 0, valid_phone_count: 0, metadata: {} });
 const defaultDncList = () => ({ name: "New DNC list", description: "", status: "draft", source_type: "csv", match_strategy: "phone", record_count: 0, metadata: {} });
@@ -157,16 +166,30 @@ const executionStateFor = (campaign) => {
   if (["ready", "scheduled", "published", "active"].includes(status)) return "ready";
   return status || "not started";
 };
-const campaignContactProgress = (campaign, contactLists = []) => {
+const campaignContactProgress = (campaign, contactLists = [], executionDebug = null) => {
   const list = contactLists.find((l) => l.id === campaign?.contact_list_id);
   const metadata = campaign?.metadata || {};
+  const summary = executionDebug?.summary || {};
   const total = Number(metadata.total_records ?? metadata.totalRecords ?? list?.record_count ?? list?.valid_phone_count ?? 0) || 0;
-  const completed = Math.min(total, Number(metadata.completed_records ?? metadata.completedRecords ?? metadata.dialed_records ?? metadata.dialedRecords ?? metadata.attempted_records ?? metadata.attemptedRecords ?? 0) || 0);
+  const processed = Number(summary.processed_records || 0);
+  const completed = Math.min(total, processed || Number(metadata.completed_records ?? metadata.completedRecords ?? 0) || 0);
   const remaining = Math.max(total - completed, 0);
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { total, completed, remaining, progress, source: total > 0 ? (metadata.total_records || metadata.totalRecords ? "campaign metadata" : "contact list records") : "no contact records yet" };
+  return { total, completed, remaining, progress, source: processed ? "execution ledger" : (total > 0 ? (metadata.total_records || metadata.totalRecords ? "campaign metadata" : "contact list records") : "no contact records yet") };
 };
-const campaignLiveMetrics = (campaign) => {
+const campaignLiveMetrics = (campaign, executionDebug = null) => {
+  const summary = executionDebug?.summary || {};
+  if (executionDebug) {
+    return {
+      active: Number(summary.active_now || 0),
+      ringing: Number(summary.dialing_now || 0),
+      answered: Number(summary.answered_total || 0),
+      hangups: Number(summary.hangups_total || 0),
+      failed: Number(summary.failed_total || 0),
+      machine: 0,
+      noAnswer: 0,
+    };
+  }
   const metrics = campaign?.metadata?.live_metrics || campaign?.metadata?.liveMetrics || campaign?.metadata?.metrics || {};
   return {
     active: Number(metrics.active_calls ?? metrics.activeCalls ?? metrics.active ?? 0) || 0,
@@ -305,7 +328,7 @@ export default function OutboundDialerPage() {
     if (!campaign?.id) return;
     setSaving(true);
     try {
-      if (["start", "pause", "resume", "stop"].includes(action)) {
+      if (["start", "pause", "resume", "stop", "recycle"].includes(action)) {
         const data = await api(`${API}/campaigns/${campaign.id}/execution`, {
           method: "POST",
           body: JSON.stringify({ action }),
@@ -315,27 +338,12 @@ export default function OutboundDialerPage() {
         }
         setSelectedCampaignId(campaign.id);
         notify({
-          title: `Campaign ${action}`,
-          description: data?.runner?.running ? "Execution worker running." : "Execution state updated.",
+          title: action === "recycle" ? "Campaign recycled" : `Campaign ${action}`,
+          description: action === "recycle"
+            ? `Requalified records: ${Number(data?.recycled_attempts || 0).toLocaleString()}`
+            : (data?.runner?.running ? "Execution worker running." : "Execution state updated."),
           variant: "success",
         });
-      } else if (action === "recycle") {
-        const nextMetadata = {
-          ...(campaign.metadata || {}),
-          execution_control: {
-            ...((campaign.metadata || {}).execution_control || {}),
-            lastAction: action,
-            updatedAt: new Date().toISOString(),
-          },
-          execution_state: "recycled",
-          recycleRequestedAt: new Date().toISOString(),
-        };
-        const data = await api(`${API}/campaigns/${campaign.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ ...campaign, status: "ready", metadata: nextMetadata }),
-        });
-        setCampaigns((items) => items.map((i) => i.id === campaign.id ? { ...i, ...data.campaign } : i));
-        notify({ title: "Campaign recycled", variant: "success" });
       }
     } catch (err) {
       notify({ title: "Campaign control failed", description: err.message, variant: "error" });
@@ -363,27 +371,27 @@ export default function OutboundDialerPage() {
     />
     <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
       <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Outbound dialer sections" />
-      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
+      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
       <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : "Context settings"} description={active === "dashboard" ? "Execution status details" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${selectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={selectedReasonMetricsDay} onSelectReasonDay={setSelectedReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} /></aside>
     </main></SupervisorPageShell>;
 }
 
-function DashboardView({ campaigns, contactLists, selectedCampaignId, setSelectedCampaignId, runCampaignAction, saving }) {
+function DashboardView({ campaigns, contactLists, executionDebugByCampaign, selectedCampaignId, setSelectedCampaignId, runCampaignAction, saving }) {
   const visibleCampaigns = campaigns.filter(isDashboardCampaign);
   const callable = contactLists.reduce((sum, l) => sum + Number(l.valid_phone_count || 0), 0);
-  const activeLiveCalls = visibleCampaigns.reduce((sum, c) => sum + campaignLiveMetrics(c).active, 0);
+  const activeLiveCalls = visibleCampaigns.reduce((sum, c) => sum + campaignLiveMetrics(c, executionDebugByCampaign?.[c.id]).active, 0);
   const metrics = [
     { label: "Published campaigns", value: String(visibleCampaigns.length), delta: "draft/design excluded", icon: IconPlayerPlay, tone: "emerald" },
     { label: "Callable contacts", value: callable.toLocaleString(), delta: `${contactLists.length} persisted lists`, icon: IconUsers, tone: "blue" },
     { label: "Active calls", value: String(activeLiveCalls), delta: "metadata/event scaffold", icon: IconPhoneCall, tone: "violet" },
     { label: "Guardrail health", value: "Ready", delta: "worker not enabled yet", icon: IconShieldCheck, tone: "amber" },
   ];
-  return <div className="space-y-5"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{metrics.map((m) => { const Icon = m.icon; return <div key={m.label} className="rounded-2xl border bg-background/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${toneClasses[m.tone]}`}><Icon className="h-5 w-5" /></span><IconDots className="h-4 w-4 text-muted-foreground" /></div><div className="mt-4 text-2xl font-semibold tracking-tight">{m.value}</div><div className="text-sm text-muted-foreground">{m.label}</div><div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">{m.delta}</div></div>; })}</div><div className="rounded-2xl border bg-background/80 p-5 shadow-sm"><div><h3 className="font-semibold">Campaign command center</h3><p className="text-sm text-muted-foreground">Published outbound campaigns with execution controls and scaffolded live metrics.</p></div><div className="mt-4 space-y-3">{visibleCampaigns.length ? visibleCampaigns.map((c) => <DashboardCampaignCard key={c.id} campaign={c} contactLists={contactLists} selected={selectedCampaignId === c.id} onSelect={() => setSelectedCampaignId(c.id)} onAction={runCampaignAction} saving={saving} />) : <Empty title="No published campaigns" description="Draft and design campaigns stay in Campaigns. Set a campaign to Ready/Running/Paused/Completed to monitor it here." />}</div></div></div>;
+  return <div className="space-y-5"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{metrics.map((m) => { const Icon = m.icon; return <div key={m.label} className="rounded-2xl border bg-background/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-center justify-between"><span className={`rounded-xl bg-gradient-to-br p-2.5 ${toneClasses[m.tone]}`}><Icon className="h-5 w-5" /></span><IconDots className="h-4 w-4 text-muted-foreground" /></div><div className="mt-4 text-2xl font-semibold tracking-tight">{m.value}</div><div className="text-sm text-muted-foreground">{m.label}</div><div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">{m.delta}</div></div>; })}</div><div className="rounded-2xl border bg-background/80 p-5 shadow-sm"><div><h3 className="font-semibold">Campaign command center</h3><p className="text-sm text-muted-foreground">Published outbound campaigns with execution controls and scaffolded live metrics.</p></div><div className="mt-4 space-y-3">{visibleCampaigns.length ? visibleCampaigns.map((c) => <DashboardCampaignCard key={c.id} campaign={c} contactLists={contactLists} executionDebug={executionDebugByCampaign?.[c.id]} selected={selectedCampaignId === c.id} onSelect={() => setSelectedCampaignId(c.id)} onAction={runCampaignAction} saving={saving} />) : <Empty title="No published campaigns" description="Draft and design campaigns stay in Campaigns. Set a campaign to Ready/Running/Paused/Completed to monitor it here." />}</div></div></div>;
 }
 
-function DashboardCampaignCard({ campaign, contactLists, selected, onSelect, onAction, saving }) {
-  const progress = campaignContactProgress(campaign, contactLists);
-  const live = campaignLiveMetrics(campaign);
+function DashboardCampaignCard({ campaign, contactLists, executionDebug, selected, onSelect, onAction, saving }) {
+  const progress = campaignContactProgress(campaign, contactLists, executionDebug);
+  const live = campaignLiveMetrics(campaign, executionDebug);
   const state = executionStateFor(campaign);
   const isPaused = state === "paused";
   const pauseAction = isPaused ? "resume" : "pause";

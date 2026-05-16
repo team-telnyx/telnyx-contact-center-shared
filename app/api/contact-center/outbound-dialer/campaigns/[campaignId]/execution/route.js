@@ -9,6 +9,7 @@ import {
 import {
   claimOneAgentlessRecord,
   executeAgentlessAttempt,
+  recycleCampaignRecords,
   startCampaignRun,
   updateCampaignExecutionControl,
 } from "@/lib/outbound-dialer/execution";
@@ -29,7 +30,7 @@ export async function POST(request, context) {
   try {
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "").trim().toLowerCase();
-    if (!["start", "pause", "resume", "stop", "tick"].includes(action)) {
+    if (!["start", "pause", "resume", "stop", "tick", "recycle"].includes(action)) {
       return jsonError("Unsupported action", 400);
     }
 
@@ -42,7 +43,21 @@ export async function POST(request, context) {
 
     const username = usernameFor(user);
 
-    if (["start", "resume", "pause", "stop"].includes(action)) {
+    if (["start", "resume", "pause", "stop", "recycle"].includes(action)) {
+      if (action === "recycle") {
+        if (isAgentlessMode(campaign.mode)) {
+          stopAgentlessRunner(campaignId);
+        }
+        const { updatedCampaign, recycledAttempts } = await recycleCampaignRecords(pool, campaignId, username);
+        return NextResponse.json({
+          ok: true,
+          action,
+          campaign: mapCampaign(updatedCampaign || campaign),
+          recycled_attempts: recycledAttempts,
+          runner: getRunnerState(campaignId),
+        });
+      }
+
       const updated = await updateCampaignExecutionControl(
         pool,
         campaignId,
