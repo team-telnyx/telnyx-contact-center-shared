@@ -7,6 +7,7 @@ import {
   usernameFor,
 } from "@/lib/outbound-dialer/api";
 import {
+  closeCampaignRun,
   claimOneAgentlessRecord,
   executeAgentlessAttempt,
   recycleCampaignRecords,
@@ -48,6 +49,7 @@ export async function POST(request, context) {
         if (isAgentlessMode(campaign.mode)) {
           stopAgentlessRunner(campaignId);
         }
+        await closeCampaignRun(pool, campaignId, "stopped", username, "recycle", { action: "recycle" });
         const { updatedCampaign, recycledAttempts } = await recycleCampaignRecords(pool, campaignId, username);
         return NextResponse.json({
           ok: true,
@@ -73,6 +75,13 @@ export async function POST(request, context) {
 
       if ((action === "pause" || action === "stop") && isAgentlessMode(updated?.mode)) {
         stopAgentlessRunner(campaignId);
+      }
+
+      if (action === "pause") {
+        await closeCampaignRun(pool, campaignId, "paused", username, "manual_pause", { action: "pause" });
+      }
+      if (action === "stop") {
+        await closeCampaignRun(pool, campaignId, "stopped", username, "manual_stop", { action: "stop" });
       }
 
       return NextResponse.json({
