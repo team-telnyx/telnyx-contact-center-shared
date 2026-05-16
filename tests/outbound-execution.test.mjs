@@ -85,16 +85,10 @@ test('executeAgentlessAttempt -> failed gdy Telnyx zwraca błąd', async () => {
         rows: [{ id: 'c2', row_data: { phone_number: '+48600123456' }, contact_methods: {} }],
       };
     }
-    if (sql.includes("SET status = $1") && sql.includes('outbound_attempt_ledger')) {
+    if (sql.includes('SET status = $1') && sql.includes('outbound_attempt_ledger')) {
       return { rows: [{ id: 'l2', status: 'dialing' }] };
     }
-    if (sql.includes('SET status = $1,') && sql.includes('lease_expires_at = NULL')) {
-      return { rows: [{ id: 'l2', status: 'failed' }] };
-    }
-    if (sql.includes('SET status = $1') && sql.includes('lease_expires_at = NULL')) {
-      return { rows: [{ id: 'l2', status: 'failed' }] };
-    }
-    if (sql.includes('UPDATE outbound_attempt_ledger')) {
+    if (sql.includes('lease_expires_at = NULL')) {
       return { rows: [{ id: 'l2', status: 'failed' }] };
     }
     throw new Error(`Unexpected SQL: ${sql}`);
@@ -115,10 +109,10 @@ test('executeAgentlessAttempt -> failed gdy Telnyx zwraca błąd', async () => {
   process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
 });
 
-test('finalizeAgentlessAttemptByWebhook mapuje call.answered i call.hangup', async () => {
+test('finalizeAgentlessAttemptByWebhook mapuje call.answered -> answered', async () => {
   const poolAnswered = createMockPool(async (sql) => {
     if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
-      return { rows: [{ id: 'l3', status: 'dialing' }] };
+      return { rows: [{ id: 'l3', campaign_id: 'camp3', status: 'dialing' }] };
     }
     if (sql.includes("SET status = 'answered'")) {
       return { rows: [{ id: 'l3', status: 'answered' }] };
@@ -131,21 +125,65 @@ test('finalizeAgentlessAttemptByWebhook mapuje call.answered i call.hangup', asy
     eventType: 'call.answered',
   });
   assert.equal(answered.status, 'answered');
+});
 
-  const poolHangup = createMockPool(async (sql) => {
+test('finalizeAgentlessAttemptByWebhook mapuje retryable hangup (busy) -> failed + retry metadata', async () => {
+  const captured = { terminalStatus: null, metadata: null };
+  const poolBusy = createMockPool(async (sql, params) => {
     if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
-      return { rows: [{ id: 'l4', status: 'answered' }] };
+      return { rows: [{ id: 'l4', campaign_id: 'camp4', status: 'answered' }] };
     }
-    if (sql.includes('SET status = $1') && sql.includes('lease_expires_at = NULL')) {
-      return { rows: [{ id: 'l4', status: 'completed' }] };
+    if (sql.includes('FROM outbound_campaigns')) {
+      return { rows: [{ retry_policy: { minDelayHours: 2 } }] };
     }
-    throw new Error(`Unexpected SQL(hangup): ${sql}`);
+    if (sql.includes('lease_expires_at = NULL')) {
+      captured.terminalStatus = params[0];
+      captured.metadata = JSON.parse(params[1]);
+      return { rows: [{ id: 'l4', status: params[0] }] };
+    }
+    throw new Error(`Unexpected SQL(busy): ${sql}`);
   });
 
-  const completed = await finalizeAgentlessAttemptByWebhook(poolHangup, {
+  const result = await finalizeAgentlessAttemptByWebhook(poolBusy, {
     callControlId: 'cc-2',
     eventType: 'call.hangup',
-    hangupCause: 'normal_clearing',
+    hangupCause: 'user_busy',
   });
-  assert.equal(completed.status, 'completed');
+
+  assert.equal(result.status, 'failed');
+  assert.equal(captured.terminalStatus, 'failed');
+  assert.equal(captured.metadata.retry_eligible, true);
+  assert.equal(captured.metadata.retry_after_seconds, 7200);
+  assert.equal(captured.metadata.reason_code, 'user_busy');
+  assert.ok(typeof captured.metadata.next_retry_at === 'string');
+});
+
+test('finalizeAgentlessAttemptByWebhook mapuje cancelled hangup -> cancelled bez retry', async () => {
+  const captured = { terminalStatus: null, metadata: null };
+  const poolCancelled = createMockPool(async (sql, params) => {
+    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+      return { rows: [{ id: 'l5', campaign_id: 'camp5', status: 'answered' }] };
+    }
+    if (sql.includes('FROM outbound_campaigns')) {
+      return { rows: [{ retry_policy: { minDelayHours: 1 } }] };
+    }
+    if (sql.includes('lease_expires_at = NULL')) {
+      captured.terminalStatus = params[0];
+      captured.metadata = JSON.parse(params[1]);
+      return { rows: [{ id: 'l5', status: params[0] }] };
+    }
+    throw new Error(`Unexpected SQL(cancelled): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(poolCancelled, {
+    callControlId: 'cc-3',
+    eventType: 'call.hangup',
+    hangupCause: 'call_rejected',
+  });
+
+  assert.equal(result.status, 'cancelled');
+  assert.equal(captured.terminalStatus, 'cancelled');
+  assert.equal(captured.metadata.retry_eligible, false);
+  assert.equal(captured.metadata.next_retry_at, null);
+  assert.equal(captured.metadata.reason_code, 'call_rejected');
 });
