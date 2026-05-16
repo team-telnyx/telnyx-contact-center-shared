@@ -19794,7 +19794,7 @@
       "post": {
         "summary": "Send a fax",
         "operationId": "SendFax",
-        "description": "Send a fax. Files have size limits and page count limit validations. If a file is bigger than 50MB or has more than 350 pages it will fail with `file_size_limit_exceeded` and `page_count_limit_exceeded` respectively. \n\n**Expected Webhooks:**\n\n- `fax.queued`\n- `fax.media.processed`\n- `fax.sending.started`\n- `fax.delivered`\n- `fax.failed`\n",
+        "description": "Send a fax. Files have size limits and page count limit validations. If a file is bigger than 50MB or has more than 350 pages it will fail with `file_size_limit_exceeded` and `page_count_limit_exceeded` respectively.\n\n**Supported file formats:**\n\n- PDF (`application/pdf`)\n- TIFF (`application/tiff`, `image/tiff`)\n- JPEG (`image/jpeg`)\n- PNG (`image/png`)\n- Microsoft Word `.doc` (`application/msword`)\n- Microsoft Word `.docx` (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`)\n- Rich Text Format `.rtf` (`application/rtf`)\n- Plain text `.txt` (`text/plain`)\n\n**Expected Webhooks:**\n\n- `fax.queued`\n- `fax.media.processed`\n- `fax.sending.started`\n- `fax.delivered`\n- `fax.failed`",
         "tags": [
           "Programmable Fax Commands"
         ],
@@ -80153,12 +80153,52 @@
           }
         }
       },
+      "ConversationRelaySettings": {
+        "type": "object",
+        "title": "Conversation Relay Settings",
+        "description": "Conversation Relay connection settings. This object is used by TeXML Call Scripting's `<ConversationRelay>` verb. The `interruptible` and `interruptible_greeting` fields are shorthand for `interruption_settings.interruptible` and `interruption_settings.interruptible_greeting`; use top-level `interruption_settings` for the full interruption settings shape.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "pattern": "^wss?://",
+            "description": "WebSocket URL for your Conversation Relay server. Must start with `ws://` or `wss://`.",
+            "example": "wss://example.com/conversation-relay"
+          },
+          "dtmf_detection": {
+            "type": "boolean",
+            "description": "Whether to enable DTMF detection during the relay session.",
+            "default": false,
+            "example": true
+          },
+          "interruptible": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "interruptible_greeting": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "languages": {
+            "type": "array",
+            "description": "Language-specific TTS and transcription settings.",
+            "items": {
+              "$ref": "#/components/schemas/ConversationRelayLanguage"
+            }
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
       "ConversationRelayStartRequest": {
         "type": "object",
         "title": "Conversation Relay Start Request",
+        "description": "Start a Conversation Relay session. Provide either `conversation_relay_url` or `conversation_relay_settings.url`; when both nested and top-level equivalents are provided, top-level values take precedence as described on `conversation_relay_settings`.",
         "properties": {
+          "conversation_relay_settings": {
+            "$ref": "#/components/schemas/ConversationRelaySettings"
+          },
           "conversation_relay_url": {
             "type": "string",
+            "pattern": "^wss?://",
             "description": "WebSocket URL for your Conversation Relay server. Must start with `ws://` or `wss://`.",
             "example": "wss://example.com/conversation-relay"
           },
@@ -80243,25 +80283,6 @@
           "transcription": {
             "$ref": "#/components/schemas/ConversationRelayTranscriptionSettings"
           },
-          "participants": {
-            "type": "array",
-            "description": "Participants to add to the conversation.",
-            "items": {
-              "$ref": "#/components/schemas/AIAssistantJoinParticipant"
-            },
-            "default": []
-          },
-          "user_response_timeout_ms": {
-            "type": "integer",
-            "description": "Time in milliseconds to wait for caller input before timing out.",
-            "default": 10000,
-            "example": 10000
-          },
-          "send_message_history_updates": {
-            "type": "boolean",
-            "description": "When true, sends message history update webhooks.",
-            "default": false
-          },
           "assistant": {
             "$ref": "#/components/schemas/ConversationRelayAssistant"
           },
@@ -80277,17 +80298,44 @@
           }
         },
         "example": {
-          "conversation_relay_url": "wss://example.com/conversation-relay",
-          "conversation_relay_dtmf_detection": true,
-          "interruption_settings": {
-            "interruptible": "speech"
+          "conversation_relay_settings": {
+            "url": "wss://example.com/conversation-relay",
+            "dtmf_detection": true,
+            "interruptible": "speech",
+            "interruptible_greeting": "any",
+            "languages": [
+              {
+                "code": "en-US",
+                "tts_provider": "ElevenLabs",
+                "voice": "alice",
+                "transcription_provider": "Deepgram",
+                "speech_model": "nova-2"
+              }
+            ]
           },
           "greeting": "Hi! Ask me anything!",
           "voice": "Telnyx.KokoroTTS.af",
-          "language": "en-US"
+          "language": "en-US",
+          "transcription": {
+            "provider": "deepgram"
+          },
+          "assistant": {
+            "dynamic_variables": {
+              "customer_id": "12345"
+            }
+          }
         },
-        "required": [
-          "conversation_relay_url"
+        "anyOf": [
+          {
+            "required": [
+              "conversation_relay_url"
+            ]
+          },
+          {
+            "required": [
+              "conversation_relay_settings"
+            ]
+          }
         ]
       },
       "ConversationRelayStopRequest": {
@@ -94099,13 +94147,14 @@
             ]
           },
           "DetectionMode": {
-            "description": "Allows you to choose between Premium and Standard detections.",
+            "description": "Allows you to choose between Regular, Premium, and PremiumCallScreening detections. See https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection",
             "example": "Premium",
             "default": "Regular",
             "type": "string",
             "enum": [
               "Premium",
-              "Regular"
+              "Regular",
+              "PremiumCallScreening"
             ]
           },
           "AsyncAmd": {
@@ -94135,6 +94184,13 @@
             "default": 30000,
             "maximum": 60000,
             "minimum": 500,
+            "type": "integer"
+          },
+          "MachineDetectionPromptEndTimeout": {
+            "description": "Silence duration threshold after a call screening prompt before ending prompt detection, in milliseconds. Used when `DetectionMode` is `PremiumCallScreening`.",
+            "example": 5000,
+            "minimum": 1000,
+            "maximum": 120000,
             "type": "integer"
           },
           "MachineDetectionSpeechThreshold": {
@@ -94387,13 +94443,14 @@
             ]
           },
           "DetectionMode": {
-            "description": "Allows you to chose between Premium and Standard detections.",
+            "description": "Allows you to choose between Regular, Premium, and PremiumCallScreening detections. See https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection",
             "example": "Premium",
             "default": "Regular",
             "type": "string",
             "enum": [
               "Premium",
-              "Regular"
+              "Regular",
+              "PremiumCallScreening"
             ]
           },
           "AsyncAmd": {
@@ -94423,6 +94480,13 @@
             "default": 30000,
             "maximum": 60000,
             "minimum": 500,
+            "type": "integer"
+          },
+          "MachineDetectionPromptEndTimeout": {
+            "description": "Silence duration threshold after a call screening prompt before ending prompt detection, in milliseconds. Used when `DetectionMode` is `PremiumCallScreening`.",
+            "example": 5000,
+            "minimum": 1000,
+            "maximum": 120000,
             "type": "integer"
           },
           "MachineDetectionSpeechThreshold": {
@@ -97348,7 +97412,7 @@
         }
       },
       "MediaName": {
-        "description": "The media_name used for the fax's media. Must point to a file previously uploaded to api.telnyx.com/v2/media by the same user/organization. media_name and media_url/contents can't be submitted together.",
+        "description": "The media_name used for the fax's media. Must point to a file previously uploaded to api.telnyx.com/v2/media by the same user/organization. Supported formats: PDF, TIFF, JPEG, PNG, DOC, DOCX, RTF, and TXT. media_name and media_url/contents can't be submitted together.",
         "type": "string",
         "example": "my_media_uploaded_to_media_storage_api"
       },
@@ -97474,7 +97538,7 @@
         ]
       },
       "MediaUrl": {
-        "description": "The URL (or list of URLs) to the PDF used for the fax's media. media_url and media_name/contents can't be submitted together.",
+        "description": "The URL (or list of URLs) to the fax document. Supported formats: PDF, TIFF, JPEG, PNG, DOC, DOCX, RTF, and TXT. media_url and media_name/contents can't be submitted together.",
         "type": "string",
         "example": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
       },
@@ -114151,7 +114215,7 @@
             "$ref": "#/components/schemas/ConnectionId"
           },
           "contents": {
-            "description": "The file you want to upload. The maximum allowed size is 20 MB. contents and media_name/media_url can't be submitted together.",
+            "description": "The file you want to upload. The maximum allowed size is 20 MB. Supported formats: PDF, TIFF, JPEG, PNG, DOC, DOCX, RTF, and TXT. contents and media_name/media_url can't be submitted together.",
             "type": "string",
             "format": "binary"
           },
