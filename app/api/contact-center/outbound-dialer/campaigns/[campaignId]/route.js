@@ -45,12 +45,27 @@ export async function GET(request, context) {
       [campaignId],
     );
 
+    const trendResult = await pool.query(
+      `SELECT
+         DATE(updated_at) AS day,
+         COUNT(*)::int AS total_attempts,
+         COUNT(*) FILTER (WHERE COALESCE((metadata->>'retry_eligible')::boolean, false))::int AS retry_eligible_attempts
+       FROM outbound_attempt_ledger
+       WHERE campaign_id = $1
+         AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')
+       GROUP BY 1
+       ORDER BY day DESC
+       LIMIT 14`,
+      [campaignId],
+    );
+
     return NextResponse.json({
       ok: true,
       campaign: mapCampaign(campaign),
       reason_code_metrics: {
         totals: totalsResult.rows[0] || { total_terminal_attempts: 0, retry_eligible_attempts: 0 },
         breakdown: reasonCodeStatsResult.rows || [],
+        trend: (trendResult.rows || []).reverse(),
       },
     });
   } catch (err) {
