@@ -2,6 +2,63 @@ import { NextResponse } from "next/server";
 import { annotateCampaignDncScaffold, getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CAMPAIGN_MODES, OUTBOUND_CHANNELS, OUTBOUND_HANDLER_TYPES } from "@/lib/outbound-dialer/schema";
 
+export async function GET(request, context) {
+  const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
+  const { campaignId } = await context.params;
+  const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
+
+  try {
+    const campaignResult = await pool.query(
+      `SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name
+       FROM outbound_campaigns c
+       LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id
+       LEFT JOIN form_definitions f ON f.id = c.attached_form_id
+       LEFT JOIN outbound_attempt_controls ac ON ac.id = c.attempt_control_id
+       WHERE c.id = $1 AND c.status <> 'archived'
+       LIMIT 1`,
+      [campaignId],
+    );
+
+    const campaign = campaignResult.rows[0] || null;
+    if (!campaign) return jsonError("Campaign not found", 404);
+
+    const reasonCodeStatsResult = await pool.query(
+      `SELECT
+         COALESCE(NULLIF(metadata->>'reason_code', ''), 'unknown') AS reason_code,
+         COUNT(*)::int AS count,
+         COUNT(*) FILTER (WHERE COALESCE((metadata->>'retry_eligible')::boolean, false))::int AS retry_eligible_count
+       FROM outbound_attempt_ledger
+       WHERE campaign_id = $1
+         AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')
+       GROUP BY 1
+       ORDER BY count DESC, reason_code ASC`,
+      [campaignId],
+    );
+
+    const totalsResult = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_terminal_attempts,
+         COUNT(*) FILTER (WHERE COALESCE((metadata->>'retry_eligible')::boolean, false))::int AS retry_eligible_attempts
+       FROM outbound_attempt_ledger
+       WHERE campaign_id = $1
+         AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')`,
+      [campaignId],
+    );
+
+    return NextResponse.json({
+      ok: true,
+      campaign: mapCampaign(campaign),
+      reason_code_metrics: {
+        totals: totalsResult.rows[0] || { total_terminal_attempts: 0, retry_eligible_attempts: 0 },
+        breakdown: reasonCodeStatsResult.rows || [],
+      },
+    });
+  } catch (err) {
+    console.error("[Outbound Dialer] get campaign details error:", err);
+    return jsonError(err.message || "Failed to load campaign", 400);
+  }
+}
+
 export async function PUT(request, context) {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const { campaignId } = await context.params;
