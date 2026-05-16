@@ -237,3 +237,28 @@ test('ordering: out-of-order call.answered po terminalnym hangup jest ignorowane
   assert.equal(result.metadata.ignored_webhook_event, 'call.answered');
   assert.equal(queries.some((q) => q.includes("SET status = 'answered'")), false);
 });
+
+test('event_id dedupe: ten sam eventId nie wykonuje drugiego update', async () => {
+  const queries = [];
+  const pool = createMockPool(async (sql) => {
+    queries.push(sql);
+    if (sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
+      return { rows: [{ id: 'l8', status: 'answered', metadata: { processed_event_ids: ['evt-123'] } }] };
+    }
+    if (sql.includes("SET status = 'answered'")) {
+      return { rows: [{ id: 'l8', status: 'answered' }] };
+    }
+    throw new Error(`Unexpected SQL(event-id-dedupe): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-6',
+    eventType: 'call.answered',
+    eventId: 'evt-123',
+  });
+
+  assert.equal(result.status, 'answered');
+  assert.equal(result.metadata.ignored_reason, 'duplicate_event_id');
+  assert.equal(result.metadata.ignored_event_id, 'evt-123');
+  assert.equal(queries.some((q) => q.includes("SET status = 'answered'")), false);
+});

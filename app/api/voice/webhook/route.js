@@ -792,6 +792,7 @@ export async function POST(request) {
             callControlId,
             eventType,
             hangupCause: payload?.hangup_cause || null,
+            eventId: json?.data?.id || json?.id || null,
           });
           if (finalizedLedger) {
             console.log(
