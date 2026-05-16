@@ -4,6 +4,20 @@ import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervi
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DEFAULT_CALLABLE_DAYS = ["mon", "tue", "wed", "thu", "fri"];
 
+function normalizeAllowedNumbers(settings = {}) {
+  const source = settings.allowed_numbers || settings.allowedNumbers || [];
+  const normalized = [];
+  for (const value of Array.isArray(source) ? source : []) {
+    const raw = String(value || "").trim();
+    if (!raw) continue;
+    const withPlus = raw.startsWith("+") ? raw : `+${raw}`;
+    const compact = `+${withPlus.replace(/\D/g, "")}`;
+    if (!/^\+[1-9]\d{6,15}$/.test(compact)) continue;
+    if (!normalized.includes(compact)) normalized.push(compact);
+  }
+  return normalized.slice(0, 100);
+}
+
 function normalizeCallableDays(settings = {}) {
   const days = settings.callable_days || settings.callableDays || DEFAULT_CALLABLE_DAYS;
   const normalized = (Array.isArray(days) ? days : [])
@@ -27,6 +41,7 @@ function normalizeSettings(body = {}) {
       latest: String(callable.latest || "20:00").slice(0, 5),
       timezone: String(callable.timezone || "Europe/Warsaw").slice(0, 80),
     },
+    allowed_numbers: normalizeAllowedNumbers(settings),
   };
 }
 

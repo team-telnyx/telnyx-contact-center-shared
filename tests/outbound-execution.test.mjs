@@ -85,6 +85,9 @@ test('executeAgentlessAttempt -> failed gdy Telnyx zwraca błąd', async () => {
         rows: [{ id: 'c2', row_data: { phone_number: '+48600123456' }, contact_methods: {} }],
       };
     }
+    if (sql.includes("SELECT settings FROM outbound_settings")) {
+      return { rows: [{ settings: { allowed_numbers: ['+15551230000'] } }] };
+    }
     if (sql.includes('SET status = $1') && sql.includes('outbound_attempt_ledger')) {
       return { rows: [{ id: 'l2', status: 'dialing' }] };
     }
