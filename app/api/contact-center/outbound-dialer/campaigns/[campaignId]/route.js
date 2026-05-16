@@ -6,6 +6,8 @@ export async function GET(request, context) {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const { campaignId } = await context.params;
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
+  const { searchParams } = new URL(request.url);
+  const selectedDay = searchParams.get("day");
 
   try {
     const campaignResult = await pool.query(
@@ -22,6 +24,8 @@ export async function GET(request, context) {
     const campaign = campaignResult.rows[0] || null;
     if (!campaign) return jsonError("Campaign not found", 404);
 
+    const dayFilterSql = selectedDay ? ` AND DATE(updated_at) = $2::date` : "";
+    const reasonBreakdownParams = selectedDay ? [campaignId, selectedDay] : [campaignId];
     const reasonCodeStatsResult = await pool.query(
       `SELECT
          COALESCE(NULLIF(metadata->>'reason_code', ''), 'unknown') AS reason_code,
@@ -30,9 +34,10 @@ export async function GET(request, context) {
        FROM outbound_attempt_ledger
        WHERE campaign_id = $1
          AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')
+         ${dayFilterSql}
        GROUP BY 1
        ORDER BY count DESC, reason_code ASC`,
-      [campaignId],
+      reasonBreakdownParams,
     );
 
     const totalsResult = await pool.query(
@@ -41,8 +46,9 @@ export async function GET(request, context) {
          COUNT(*) FILTER (WHERE COALESCE((metadata->>'retry_eligible')::boolean, false))::int AS retry_eligible_attempts
        FROM outbound_attempt_ledger
        WHERE campaign_id = $1
-         AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')`,
-      [campaignId],
+         AND status IN ('completed', 'failed', 'cancelled', 'suppressed', 'skipped')
+         ${dayFilterSql}`,
+      reasonBreakdownParams,
     );
 
     const trendResult = await pool.query(
@@ -66,6 +72,7 @@ export async function GET(request, context) {
         totals: totalsResult.rows[0] || { total_terminal_attempts: 0, retry_eligible_attempts: 0 },
         breakdown: reasonCodeStatsResult.rows || [],
         trend: (trendResult.rows || []).reverse(),
+        selected_day: selectedDay || null,
       },
     });
   } catch (err) {
