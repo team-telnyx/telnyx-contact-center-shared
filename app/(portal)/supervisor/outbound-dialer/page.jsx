@@ -75,6 +75,16 @@ const statusClass = (status) => {
   if (["draft", "validating"].includes(value)) return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
   return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
 };
+
+const attemptStatusClass = (status) => {
+  const value = String(status || "").toLowerCase();
+  if (value === "completed") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (value === "failed") return "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  if (value === "answered") return "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+  if (["dialing", "claimed", "running"].includes(value)) return "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  return statusClass(status);
+};
+
 const defaultCampaign = () => ({ name: "New voice campaign", description: "", status: "draft", channel: "voice", mode: "preview", handler_type: "queue", handler_ref: "", contact_list_id: null, attached_form_id: null, pacing_config: { strategy: "per_available_agent", ratio: 1, supervisorApproval: true }, concurrency_config: { maxConcurrent: 10, maxLines: 10, perAgentLimit: 1 }, dialing_windows: [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00", timezonePolicy: "contact" }], retry_policy: { maxAttempts: 4, delayBetweenAttemptsMinutes: 360, minDelayHours: 6, exhaustAfterDays: 7 }, amd_config: { enabled: true, humanConfidenceThreshold: 0.74, voicemailAction: "hangup" }, form_variable_mapping: [], metadata: { rotate_numbers: false, from_numbers: [] } });
 const defaultList = () => ({ name: "New contact list", description: "", status: "draft", source_type: "csv", custom_field_schema: [], record_count: 0, valid_phone_count: 0, metadata: {} });
 const defaultDncList = () => ({ name: "New DNC list", description: "", status: "draft", source_type: "csv", match_strategy: "phone", record_count: 0, metadata: {} });
@@ -171,11 +181,11 @@ const campaignContactProgress = (campaign, contactLists = [], executionDebug = n
   const metadata = campaign?.metadata || {};
   const summary = executionDebug?.summary || {};
   const total = Number(metadata.total_records ?? metadata.totalRecords ?? list?.record_count ?? list?.valid_phone_count ?? 0) || 0;
-  const processed = Number(summary.processed_records || 0);
-  const completed = Math.min(total, processed || Number(metadata.completed_records ?? metadata.completedRecords ?? 0) || 0);
+  const completedFromLedger = Number(summary.completed_records || 0);
+  const completed = Math.min(total, completedFromLedger || Number(metadata.completed_records ?? metadata.completedRecords ?? 0) || 0);
   const remaining = Math.max(total - completed, 0);
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { total, completed, remaining, progress, source: processed ? "execution ledger" : (total > 0 ? (metadata.total_records || metadata.totalRecords ? "campaign metadata" : "contact list records") : "no contact records yet") };
+  return { total, completed, remaining, progress, source: completedFromLedger ? "execution ledger" : (total > 0 ? (metadata.total_records || metadata.totalRecords ? "campaign metadata" : "contact list records") : "no contact records yet") };
 };
 const campaignLiveMetrics = (campaign, executionDebug = null) => {
   const summary = executionDebug?.summary || {};
@@ -186,8 +196,8 @@ const campaignLiveMetrics = (campaign, executionDebug = null) => {
       answered: Number(summary.answered_total || 0),
       hangups: Number(summary.hangups_total || 0),
       failed: Number(summary.failed_total || 0),
-      machine: 0,
-      noAnswer: 0,
+      machine: Number(summary.machine_total || 0),
+      noAnswer: Number(summary.no_answer_total || 0),
     };
   }
   const metrics = campaign?.metadata?.live_metrics || campaign?.metadata?.liveMetrics || campaign?.metadata?.metrics || {};
@@ -1026,7 +1036,7 @@ function DashboardMonitorPanel({ campaign, contactLists, executionDebug }) {
     attemptsRef.current.scrollTop = attemptsRef.current.scrollHeight;
   }, [recentAttempts.length, recentAttempts[recentAttempts.length - 1]?.id]);
 
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconActivity} title="Execution debug panel" subtitle={campaign.name}><div className="space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">State</span><Badge variant="outline" className={statusClass(executionStateFor(campaign))}>{title(executionStateFor(campaign))}</Badge></div><div><div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{progress.completed.toLocaleString()} of {progress.total.toLocaleString()} records</span><span>{progress.remaining.toLocaleString()} remaining</span></div><Progress className="h-2" value={progress.progress} /></div><div className="grid grid-cols-2 gap-2 text-xs"><MiniStat label="Runner" value={debugRunner.running ? "Running" : "Stopped"} icon={IconPlayerPlay} tone={debugRunner.running ? "emerald" : "amber"} /><MiniStat label="In-flight" value={Number(debugSummary.active_now || 0).toLocaleString()} icon={IconLoader2} tone={Number(debugSummary.active_now || 0) > 0 ? "violet" : "blue"} /><MiniStat label="Attempts 15m" value={Number(debugSummary.attempts_last_15m || 0).toLocaleString()} icon={IconListDetails} tone="blue" /><MiniStat label="Dialing now" value={Number(debugSummary.dialing_now || 0).toLocaleString()} icon={IconPhoneCall} tone="violet" /></div><div className="text-[11px] text-muted-foreground">Last attempt: {debugSummary.last_attempt_at ? new Date(debugSummary.last_attempt_at).toLocaleString() : "not yet"} · 30m answered/failed/suppressed: {Number(debugSummary.answered_last_30m || 0)}/{Number(debugSummary.failed_last_30m || 0)}/{Number(debugSummary.suppressed_last_30m || 0)}</div><div className="rounded-lg border bg-muted/20 p-2"><div className="mb-2 text-xs font-medium">Latest call attempts (auto-scroll)</div><div ref={attemptsRef} className="max-h-80 overflow-y-auto space-y-2 pr-1">{recentAttempts.length ? recentAttempts.map((attempt) => { const reason = attempt.suppression_reason || attempt.failure_reason || attempt.skip_reason || attempt.reason_code || "—"; return <div key={attempt.id} className="rounded-md border bg-background px-2 py-1.5 text-xs"><div className="flex items-center justify-between gap-2"><Badge variant="outline" className={statusClass(attempt.status)}>{title(attempt.status)}</Badge><span className="text-muted-foreground">{attempt.created_at ? new Date(attempt.created_at).toLocaleTimeString() : ""}</span></div><div className="mt-1 text-muted-foreground">TO: {attempt.to_number || "—"} · FROM: {attempt.from_number || "—"}</div><div className="mt-1 text-muted-foreground">Reason: {reason}</div></div>; }) : <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">No attempts yet.</div>}</div></div></div></SettingCard></div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconActivity} title="Execution debug panel" subtitle={campaign.name}><div className="space-y-3"><div className="flex items-center justify-between"><span className="text-sm text-muted-foreground">State</span><Badge variant="outline" className={statusClass(executionStateFor(campaign))}>{title(executionStateFor(campaign))}</Badge></div><div><div className="mb-2 flex items-center justify-between text-xs text-muted-foreground"><span>{progress.completed.toLocaleString()} of {progress.total.toLocaleString()} records</span><span>{progress.remaining.toLocaleString()} remaining</span></div><Progress className="h-2" value={progress.progress} /></div><div className="grid grid-cols-2 gap-2 text-xs"><MiniStat label="Runner" value={debugRunner.running ? "Running" : "Stopped"} icon={IconPlayerPlay} tone={debugRunner.running ? "emerald" : "amber"} /><MiniStat label="In-flight" value={Number(debugSummary.active_now || 0).toLocaleString()} icon={IconLoader2} tone={Number(debugSummary.active_now || 0) > 0 ? "violet" : "blue"} /><MiniStat label="Attempts 15m" value={Number(debugSummary.attempts_last_15m || 0).toLocaleString()} icon={IconListDetails} tone="blue" /><MiniStat label="Dialing now" value={Number(debugSummary.dialing_now || 0).toLocaleString()} icon={IconPhoneCall} tone="violet" /></div><div className="text-[11px] text-muted-foreground">Last attempt: {debugSummary.last_attempt_at ? new Date(debugSummary.last_attempt_at).toLocaleString() : "not yet"} · 30m answered/failed/suppressed: {Number(debugSummary.answered_last_30m || 0)}/{Number(debugSummary.failed_last_30m || 0)}/{Number(debugSummary.suppressed_last_30m || 0)}</div><div className="rounded-lg border bg-muted/20 p-2"><div className="mb-2 text-xs font-medium">Latest call attempts (auto-scroll)</div><div ref={attemptsRef} className="max-h-80 overflow-y-auto space-y-2 pr-1">{recentAttempts.length ? recentAttempts.map((attempt) => { const reason = attempt.suppression_reason || attempt.failure_reason || attempt.skip_reason || attempt.reason_code || "—"; return <div key={attempt.id} className="rounded-md border bg-background px-2 py-1.5 text-xs"><div className="flex items-center justify-between gap-2"><Badge variant="outline" className={attemptStatusClass(attempt.status)}>{title(attempt.status)}</Badge><span className="text-muted-foreground">{attempt.created_at ? new Date(attempt.created_at).toLocaleTimeString() : ""}</span></div><div className="mt-1 text-muted-foreground">TO: {attempt.to_number || "—"} · FROM: {attempt.from_number || "—"}</div><div className="mt-1 text-muted-foreground">Reason: {reason}</div></div>; }) : <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">No attempts yet.</div>}</div></div></div></SettingCard></div>;
 }
 
 function MappingEditor({ campaign, forms, contactLists, update }) {

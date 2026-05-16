@@ -792,7 +792,8 @@ export async function POST(request) {
             callControlId,
             eventType,
             hangupCause: payload?.hangup_cause || null,
-            eventId: json?.data?.id || json?.id || null,
+            sipHangupCause: payload?.sip_hangup_cause || null,
+            eventId: body?.data?.id || body?.id || null,
           });
 
           const ledgerMeta = finalizedLedger?.metadata || {};

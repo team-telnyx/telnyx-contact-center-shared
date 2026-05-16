@@ -159,6 +159,7 @@ export async function POST(request, { params }) {
             callControlId,
             eventType: event,
             hangupCause: payload?.hangup_cause || null,
+            sipHangupCause: payload?.sip_hangup_cause || null,
             eventId: body?.data?.id || body?.id || null,
           });
         }
