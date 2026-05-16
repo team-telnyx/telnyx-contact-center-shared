@@ -218,6 +218,61 @@ export default function OutboundDialerPage() {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => {
     if (active !== "dashboard") return;
+
+    let eventSource = null;
+    let pollTimer = null;
+    let fallbackEnabled = false;
+
+    const applyPayload = (payload) => {
+      if (!payload || typeof payload !== "object") return;
+      if (Array.isArray(payload.campaigns)) {
+        setCampaigns(payload.campaigns);
+        setSelectedCampaignId(keepSelectedRecord(payload.campaigns));
+      }
+      if (payload.executionDebugByCampaign && typeof payload.executionDebugByCampaign === "object") {
+        setExecutionDebugByCampaign(payload.executionDebugByCampaign);
+      }
+    };
+
+    const enablePollingFallback = () => {
+      if (fallbackEnabled) return;
+      fallbackEnabled = true;
+      pollTimer = setInterval(async () => {
+        try {
+          const data = await api(`${API}`);
+          applyPayload(data);
+        } catch {
+          // ignore intermittent polling errors
+        }
+      }, 5000);
+    };
+
+    try {
+      eventSource = new EventSource(`${API}/stream`);
+      eventSource.addEventListener("outbound_update", (event) => {
+        try {
+          const payload = JSON.parse(event.data || "{}");
+          applyPayload(payload);
+        } catch {
+          // ignore malformed payloads
+        }
+      });
+      eventSource.onerror = () => {
+        try { eventSource?.close(); } catch {}
+        enablePollingFallback();
+      };
+    } catch {
+      enablePollingFallback();
+    }
+
+    return () => {
+      if (pollTimer) clearInterval(pollTimer);
+      try { eventSource?.close(); } catch {}
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (active !== "dashboard") return;
     if (!selectedDashboardCampaign?.id) return;
     const cacheKey = `${selectedDashboardCampaign.id}:${selectedReasonMetricsDay || "all"}`;
     if (Object.prototype.hasOwnProperty.call(campaignReasonMetrics, cacheKey)) return;

@@ -58,7 +58,7 @@ async function loadInventoryNumbers() {
   }
 }
 
-async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
+export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   const ids = Array.isArray(campaignIds) ? campaignIds.filter((id) => typeof id === "string" && id.trim()) : [];
   if (!ids.length) return {};
 
