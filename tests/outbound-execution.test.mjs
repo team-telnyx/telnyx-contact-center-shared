@@ -242,6 +242,9 @@ test('event_id dedupe: ten sam eventId nie wykonuje drugiego update', async () =
   const queries = [];
   const pool = createMockPool(async (sql) => {
     queries.push(sql);
+    if (sql.includes('INSERT INTO outbound_webhook_events')) {
+      return { rows: [{ event_id: 'evt-123' }] };
+    }
     if (sql.includes("status IN ('dialing', 'answered', 'claimed')")) {
       return { rows: [{ id: 'l8', status: 'answered', metadata: { processed_event_ids: ['evt-123'] } }] };
     }
@@ -261,4 +264,30 @@ test('event_id dedupe: ten sam eventId nie wykonuje drugiego update', async () =
   assert.equal(result.metadata.ignored_reason, 'duplicate_event_id');
   assert.equal(result.metadata.ignored_event_id, 'evt-123');
   assert.equal(queries.some((q) => q.includes("SET status = 'answered'")), false);
+});
+
+test('event_id dedupe DB-level: duplicate event_id kończy się ignore bez query do ledgera', async () => {
+  const queries = [];
+  const pool = createMockPool(async (sql) => {
+    queries.push(sql);
+    if (sql.includes('INSERT INTO outbound_webhook_events')) {
+      return { rows: [] };
+    }
+    throw new Error(`Unexpected SQL(db-level-dedupe): ${sql}`);
+  });
+
+  const result = await finalizeAgentlessAttemptByWebhook(pool, {
+    callControlId: 'cc-7',
+    eventType: 'call.hangup',
+    eventId: 'evt-duplicate',
+    hangupCause: 'user_busy',
+  });
+
+  assert.equal(result.status, 'ignored');
+  assert.equal(result.metadata.ignored_reason, 'duplicate_event_id_db');
+  assert.equal(result.metadata.ignored_event_id, 'evt-duplicate');
+  assert.equal(
+    queries.some((q) => q.includes("FROM outbound_attempt_ledger")),
+    false,
+  );
 });
