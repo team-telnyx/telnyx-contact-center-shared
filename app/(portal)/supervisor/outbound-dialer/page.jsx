@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconX,
+  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -755,6 +756,16 @@ function normalizeLocaleCode(code) {
   return match ? `${match[1].toLowerCase()}-${match[2].toUpperCase()}` : null;
 }
 
+function regionToFlag(region) {
+  try {
+    const normalized = String(region || "").toUpperCase();
+    if (!/^[A-Z]{2}$/.test(normalized)) return "";
+    return String.fromCodePoint(...[...normalized].map((char) => 0x1f1e6 + (char.charCodeAt(0) - 65)));
+  } catch (_) {
+    return "";
+  }
+}
+
 function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
   const enabled = amdConfig.enabled === true;
   const action = amdConfig.machine_action || amdConfig.voicemailAction || "disconnect";
@@ -765,12 +776,41 @@ function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
   const [ttsLoading, setTtsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [languageFilter, setLanguageFilter] = useState(voiceConfig.language || "");
+  const [languageSearch, setLanguageSearch] = useState("");
+  const [languagePopoverOpen, setLanguagePopoverOpen] = useState(false);
   const providerValue = voiceConfig.provider || parsedVoice.provider || providers[0]?.id || providers[0]?.provider || "";
   const selectedProvider = providers.find((p) => p.id === providerValue || p.provider === providerValue) || null;
   const models = (selectedProvider?.models || []).map((m) => typeof m === "string" ? { id: m, name: m, voices: [] } : { id: m.id || m.name || "", name: m.name || m.id || "", voices: m.voices || [] }).filter((m) => m.id);
   const modelValue = voiceConfig.model || parsedVoice.model || models[0]?.id || "";
   const allVoices = selectedProvider?.models?.flatMap((m) => typeof m === "object" && (!modelValue || (m.id || m.name) === modelValue) ? (m.voices || []) : []) || [];
-  const languageOptions = Array.from(new Set(allVoices.map((v) => normalizeLocaleCode(v?.language)).filter(Boolean))).sort().map((value) => ({ value, label: value.toUpperCase() }));
+  const languageOptions = useMemo(() => {
+    const map = new Map();
+    let langNames = null;
+    let regionNames = null;
+    try {
+      langNames = new Intl.DisplayNames(undefined, { type: "language" });
+      regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+    } catch (_) {}
+    for (const voice of allVoices) {
+      const normalized = normalizeLocaleCode(voice?.language);
+      if (!normalized || map.has(normalized)) continue;
+      const [lang, region] = normalized.split("-");
+      let label = normalized.toUpperCase();
+      try {
+        const languageLabel = langNames?.of(lang) || lang.toUpperCase();
+        const regionLabel = regionNames?.of(region) || region.toUpperCase();
+        label = `${languageLabel} (${regionLabel})`;
+      } catch (_) {}
+      map.set(normalized, { value: normalized, label, flag: regionToFlag(region) });
+    }
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [allVoices]);
+  const filteredLanguageOptions = useMemo(() => {
+    if (!languageSearch.trim()) return languageOptions;
+    const search = languageSearch.toLowerCase();
+    return languageOptions.filter((option) => option.label.toLowerCase().includes(search) || option.value.toLowerCase().includes(search));
+  }, [languageOptions, languageSearch]);
+  const selectedLanguageInfo = useMemo(() => languageFilter ? languageOptions.find((opt) => opt.value === languageFilter) : null, [languageFilter, languageOptions]);
   const voices = allVoices.filter((v) => v?.id && (!languageFilter || normalizeLocaleCode(v?.language) === languageFilter));
   const voiceValue = voiceConfig.voice || parsedVoice.voiceName || "";
   useEffect(() => {
@@ -791,6 +831,12 @@ function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
     return () => { cancelled = true; };
   }, []);
   const updateTts = (patch) => onChange({ voicemail_tts: { ...(amdConfig.voicemail_tts || {}), ...patch } });
+  const handleLanguageChange = (selectedValue) => {
+    const next = selectedValue === "__any__" ? "" : selectedValue;
+    setLanguageFilter(next);
+    updateTts({ language: next, voice: "" });
+    setLanguagePopoverOpen(false);
+  };
   const testVoice = async () => {
     if (!message.trim() || !voiceValue) return;
     try {
@@ -807,7 +853,63 @@ function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
       notify({ title: "Error", description: error.message || "Failed to test voice", variant: "error" });
     }
   };
-  return <div className="mt-4 space-y-3 rounded-xl border bg-muted/20 p-3"><ToggleRow label="Answering Machine Detection" checked={enabled} onCheckedChange={(checked) => onChange({ enabled: checked === true })} />{enabled ? <div className="space-y-3 rounded-lg border bg-background/70 p-3"><ConfigSelect label="Answering machine action" value={action} options={AMD_ACTION_OPTIONS} onChange={(value) => onChange({ machine_action: value, voicemailAction: value })} />{action === "leave_message" ? <div className="space-y-3"><div><Label>Voicemail message</Label><Textarea className="mt-2" rows={4} maxLength={3000} value={message} onChange={(event) => onChange({ voicemail_message: event.target.value, message: event.target.value })} placeholder="Message to leave on answering machine" /><p className="mt-1 text-xs text-muted-foreground">Text or SSML left after answering machine detection. Supports campaign/contact variables.</p></div><ConfigSelect label="Provider" value={providerValue} options={providers.map((p) => ({ value: p.id || p.provider, label: p.name || p.provider || p.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ provider: value, model: "", voice: "", language: "" }); }} /><ConfigSelect label="Model" value={modelValue} options={models.map((m) => ({ value: m.id, label: m.name || m.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ model: value, voice: "", language: "" }); }} /><ConfigSelect label="Language Filter" value={languageFilter || "__any__"} options={[{ value: "__any__", label: `All languages (${languageOptions.length} available)` }, ...languageOptions]} onChange={(value) => { const next = value === "__any__" ? "" : value; setLanguageFilter(next); updateTts({ language: next, voice: "" }); }} /><ConfigSelect label="Voice" value={voiceValue} options={voices.map((voice) => ({ value: voice.id, label: voice.language ? `${voice.name || voice.id} (${voice.language})` : (voice.name || voice.id) }))} onChange={(value) => updateTts({ provider: providerValue, model: modelValue, language: languageFilter, voice: value })} /><Button type="button" variant="outline" className="w-full" onClick={testVoice} disabled={ttsLoading || !message.trim() || !voiceValue}>{isPlaying ? <IconPlayerStop className="mr-2 h-4 w-4" /> : <IconPlayerPlay className="mr-2 h-4 w-4" />}Test Voice</Button></div> : <p className="rounded-lg border border-dashed bg-muted/25 p-3 text-xs text-muted-foreground">Machine calls will be disconnected immediately after answering machine detection.</p>}</div> : null}</div>;
+
+  return <div className="mt-4 space-y-3 rounded-xl border bg-muted/20 p-3">
+    <ToggleRow label="Answering Machine Detection" checked={enabled} onCheckedChange={(checked) => onChange({ enabled: checked === true })} />
+    {enabled ? <div className="space-y-3 rounded-lg border bg-background/70 p-3">
+      <ConfigSelect label="Answering machine action" value={action} options={AMD_ACTION_OPTIONS} onChange={(value) => onChange({ machine_action: value, voicemailAction: value })} />
+      {action === "leave_message" ? <div className="space-y-3">
+        <div>
+          <Label>Voicemail message</Label>
+          <Textarea className="mt-2" rows={4} maxLength={3000} value={message} onChange={(event) => onChange({ voicemail_message: event.target.value, message: event.target.value })} placeholder="Message to leave on answering machine" />
+          <p className="mt-1 text-xs text-muted-foreground">Text or SSML left after answering machine detection. Supports campaign/contact variables.</p>
+        </div>
+        <ConfigSelect label="Provider" value={providerValue} options={providers.map((p) => ({ value: p.id || p.provider, label: p.name || p.provider || p.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ provider: value, model: "", voice: "", language: "" }); }} />
+        <ConfigSelect label="Model" value={modelValue} options={models.map((m) => ({ value: m.id, label: m.name || m.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ model: value, voice: "", language: "" }); }} />
+        {languageOptions.length > 0 ? <div>
+          <Label>Language Filter</Label>
+          <Popover open={languagePopoverOpen} onOpenChange={setLanguagePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" role="combobox" className="w-full mt-1 justify-between" disabled={ttsLoading}>
+                <div className="flex items-center gap-2">
+                  {selectedLanguageInfo ? <>
+                    <span>{selectedLanguageInfo.flag}</span>
+                    <span>{selectedLanguageInfo.label}</span>
+                  </> : <>
+                    <IconWorld className="h-4 w-4" />
+                    <span>All languages</span>
+                  </>}
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Search languages..." value={languageSearch} onValueChange={setLanguageSearch} className="h-9" />
+                <CommandEmpty>No language found.</CommandEmpty>
+                <CommandGroup className="max-h-[300px] overflow-auto">
+                  <CommandItem value="__any__" onSelect={() => handleLanguageChange("__any__")}>
+                    <IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${!languageFilter ? "opacity-100" : "opacity-0"}`} />
+                    <IconWorld className="size-4 mr-2" />
+                    <span>Any</span>
+                  </CommandItem>
+                  {filteredLanguageOptions.map((opt) => <CommandItem key={opt.value} value={`${opt.label}-${opt.value}`} onSelect={() => handleLanguageChange(opt.value)}>
+                    <IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${languageFilter === opt.value ? "opacity-100" : "opacity-0"}`} />
+                    <span className="mr-2">{opt.flag}</span>
+                    <span>{opt.label}</span>
+                  </CommandItem>)}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          <p className="text-xs text-muted-foreground mt-1">Filter voices by language ({languageOptions.length} language{languageOptions.length !== 1 ? "s" : ""} available)</p>
+        </div> : null}
+        <ConfigSelect label="Voice" value={voiceValue} options={voices.map((voice) => ({ value: voice.id, label: voice.language ? `${voice.name || voice.id} (${voice.language})` : (voice.name || voice.id) }))} onChange={(value) => updateTts({ provider: providerValue, model: modelValue, language: languageFilter, voice: value })} />
+        {languageFilter ? <p className="text-xs text-muted-foreground -mt-2">Showing {voices.length} voice{voices.length !== 1 ? "s" : ""} for {selectedLanguageInfo?.label || languageFilter}</p> : null}
+        <Button type="button" variant="outline" className="w-full" onClick={testVoice} disabled={ttsLoading || !message.trim() || !voiceValue}>{isPlaying ? <IconPlayerStop className="mr-2 h-4 w-4" /> : <IconPlayerPlay className="mr-2 h-4 w-4" />}Test Voice</Button>
+      </div> : <p className="rounded-lg border border-dashed bg-muted/25 p-3 text-xs text-muted-foreground">Machine calls will be disconnected immediately after answering machine detection.</p>}
+    </div> : null}
+  </div>;
+
 }
 
 

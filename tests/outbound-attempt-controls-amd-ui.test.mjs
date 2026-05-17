@@ -42,6 +42,11 @@ test("campaign AMD settings are gated by mode and expose voicemail action/TTS co
   assert.match(amdSettings, /Provider/, "leave-message mode should expose TTS provider");
   assert.match(amdSettings, /Model/, "leave-message mode should expose TTS model");
   assert.match(amdSettings, /Language Filter/, "leave-message mode should expose language filter");
+  assert.match(amdSettings, /CommandInput[\s\S]*placeholder=\"Search languages\.\.\.\"/, "AMD language filter should use the same searchable command popover as Speak Text");
+  assert.match(amdSettings, /IconWorld[\s\S]*All languages/, "AMD language filter trigger should show the same All languages state as Speak Text");
+  assert.match(amdSettings, /CommandItem[\s\S]*value=\"__any__\"[\s\S]*<span>Any<\/span>/, "AMD language filter should expose the same Any option as Speak Text");
+  assert.match(amdSettings, /Filter voices by language \(\{languageOptions\.length\} language/, "AMD language filter should show the same availability helper text as Speak Text");
+  assert.doesNotMatch(amdSettings, /ConfigSelect label=\"Language Filter\"/, "AMD language filter must not use the compact ConfigSelect dropdown");
   assert.match(amdSettings, /Voice/, "leave-message mode should expose voice picker");
   assert.match(amdSettings, /Test Voice/, "leave-message mode should expose a test voice button");
   assert.match(amdSettings, /\/api\/tts\/voices/, "AMD TTS config should load the same voice catalog as Speak Text");
