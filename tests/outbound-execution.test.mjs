@@ -112,6 +112,63 @@ test('executeAgentlessAttempt -> failed gdy Telnyx zwraca błąd', async () => {
   process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
 });
 
+test('executeAgentlessAttempt persists outbound AI assistant handler metadata for answered webhook fallback', async () => {
+  const originalFetch = global.fetch;
+  const originalApiKey = process.env.TELNYX_API_KEY;
+  const originalFrom = process.env.TELNYX_MAIN_FROM_NUMBER;
+  const captured = { metadata: null };
+
+  process.env.TELNYX_API_KEY = 'test_key';
+  process.env.TELNYX_MAIN_FROM_NUMBER = '+15551230000';
+
+  global.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        data: {
+          call_control_id: 'cc-ai-1',
+          call_session_id: 'cs-ai-1',
+          call_status: 'initiated',
+        },
+      };
+    },
+  });
+
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('FROM outbound_contact_records')) {
+      return {
+        rows: [{ id: 'c-ai', row_data: { phone_number: '+48600123456' }, contact_methods: {} }],
+      };
+    }
+    if (sql.includes('SELECT settings FROM outbound_settings')) {
+      return { rows: [{ settings: { allowed_numbers: ['+15551230000'] } }] };
+    }
+    if (sql.includes('SET status = $1') && sql.includes('outbound_attempt_ledger')) {
+      return { rows: [{ id: 'l-ai', status: 'dialing' }] };
+    }
+    if (sql.includes('COALESCE(metadata') && sql.includes('RETURNING *')) {
+      captured.metadata = JSON.parse(params[2]);
+      return { rows: [{ id: 'l-ai', status: 'dialing', metadata: captured.metadata }] };
+    }
+    throw new Error(`Unexpected SQL(ai-handler-metadata): ${sql}`);
+  });
+
+  const result = await executeAgentlessAttempt(
+    pool,
+    { id: 'camp-ai', handler_type: 'ai_assistant', handler_ref: 'assistant-123' },
+    { id: 'l-ai', contact_record_id: 'c-ai', run_id: 'r-ai' },
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(captured.metadata.outbound_handler_type, 'ai_assistant');
+  assert.equal(captured.metadata.outbound_handler_ref, 'assistant-123');
+  assert.equal(captured.metadata.call_control_id, 'cc-ai-1');
+
+  global.fetch = originalFetch;
+  process.env.TELNYX_API_KEY = originalApiKey;
+  process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
+});
+
 test('finalizeAgentlessAttemptByWebhook mapuje call.answered -> answered', async () => {
   const poolAnswered = createMockPool(async (sql) => {
     if (sql.includes('WHERE metadata->>\'call_control_id\'')) {

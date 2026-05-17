@@ -12,6 +12,7 @@ import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
+import { findNextNodes } from "@/lib/voice-flow-routing.js";
 import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
 import {
   addTimelineEvent,
@@ -725,8 +726,11 @@ export async function POST(request, { params }) {
         });
       }
 
-      // Find all next nodes after the selected initiator (supports parallel execution)
-      const nextNodes = findNextNodes(flow, initiatorNode.id);
+      // Find next nodes for the actual initiation event only. This is critical for
+      // outbound campaign flows where the initiator may have a call.answered edge
+      // to an AI assistant start node; executing every outgoing edge on call.initiated
+      // attempts to start the assistant before the PSTN leg is answered.
+      const nextNodes = findNextNodes(flow, initiatorNode.id, event);
 
       // Process edge variable mappings for edges from selected initiator node
       const edges = flow.edges || [];
@@ -908,6 +912,7 @@ export async function POST(request, { params }) {
             payload.call_control_id,
           );
           await VoiceFlowDb.updateFlowExecution(payload.call_control_id, {
+            current_node_id: initiatorNode.id,
             variables,
             execution_history: [],
           });
@@ -1027,6 +1032,7 @@ export async function POST(request, { params }) {
 
     // Try to decode client_state to get current execution info
     let currentNodeId = null;
+    let persistedExecution = null;
     try {
       const clientState = payload.client_state;
       if (clientState) {
@@ -1037,6 +1043,23 @@ export async function POST(request, { params }) {
       }
     } catch (e) {
       // Ignore client_state decode errors
+    }
+
+    // Outbound campaign webhooks are not guaranteed to carry the client_state
+    // created by the flow engine, especially when the flow is intentionally
+    // waiting on the initiator's call.answered edge. Fall back to the persisted
+    // execution cursor so call.answered can start the next node (for example an
+    // AI assistant) instead of returning "No execution context".
+    if (!currentNodeId && payload.call_control_id) {
+      persistedExecution = await VoiceFlowDb.getFlowExecution(payload.call_control_id);
+      if (persistedExecution?.current_node_id) {
+        currentNodeId = persistedExecution.current_node_id;
+      } else if (isOutboundCampaignEvent && outboundCampaignNode) {
+        currentNodeId = outboundCampaignNode.id;
+      }
+      if (persistedExecution?.variables) {
+        Object.assign(variables, persistedExecution.variables);
+      }
     }
 
     // If we have a current node, find the next one(s) and execute them
@@ -1616,54 +1639,3 @@ async function handleRecordStartNode(
   return true; // Handled (no nodes on output 0)
 }
 
-/**
- * Find all next nodes connected to a given node for a specific event (supports parallel execution)
- * @param {Object} flow - The flow object containing nodes and edges
- * @param {string} nodeId - The current node ID
- * @param {string} event - The webhook event type (e.g., "call.speak.ended")
- * @returns {Array<Object>} - Array of next nodes to execute (empty if no matching edges found)
- */
-function findNextNodes(flow, nodeId, event = null) {
-  const edges = flow.edges || [];
-  const nodes = flow.nodes || [];
-
-  if (!event) {
-    const matchingEdges = edges.filter((e) => e.source === nodeId);
-    return matchingEdges
-      .map((edge) => nodes.find((n) => n.id === edge.target))
-      .filter(Boolean);
-  }
-
-  const sourceNode = nodes.find((n) => n.id === nodeId);
-  if (!sourceNode) return [];
-
-  const nodeDef = VOICE_FLOW_NODES[sourceNode.data?.nodeType];
-  // Use dynamic output events if available (for dial/switch nodes with conditional exits), otherwise use nodeDef
-  const outputEvents =
-    sourceNode.data?.dynamicOutputEvents || nodeDef?.outputEvents || [];
-
-  const matchingEdges = edges.filter((e) => {
-    if (e.source !== nodeId) return false;
-
-    if (!e.sourceHandle || e.sourceHandle === "default") return true;
-
-    if (e.sourceHandle === event) return true;
-
-    if (e.sourceHandle && e.sourceHandle.startsWith("output-")) {
-      const outputIndex = parseInt(e.sourceHandle.replace("output-", ""), 10);
-      if (!isNaN(outputIndex) && outputEvents[outputIndex] === event) {
-        return true;
-      }
-    }
-
-    return false;
-  });
-
-  if (matchingEdges.length === 0) {
-    return [];
-  }
-
-  return matchingEdges
-    .map((edge) => nodes.find((n) => n.id === edge.target))
-    .filter(Boolean);
-}
