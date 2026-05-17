@@ -875,7 +875,7 @@ function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
         </div>
         <ConfigSelect label="Provider" value={providerValue} options={providers.map((p) => ({ value: p.id || p.provider, label: p.name || p.provider || p.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ provider: value, model: "", voice: "", language: "" }); }} />
         <ConfigSelect label="Model" value={modelValue} options={models.map((m) => ({ value: m.id, label: m.name || m.id }))} onChange={(value) => { setLanguageFilter(""); updateTts({ model: value, voice: "", language: "" }); }} />
-        {languageOptions.length > 0 ? <div>
+        {languageOptions.length > 0 || languageFilter ? <div>
           <Label>Language Filter</Label>
           <Popover open={languagePopoverOpen} onOpenChange={setLanguagePopoverOpen}>
             <PopoverTrigger asChild>
@@ -886,7 +886,7 @@ function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
                     <span>{selectedLanguageInfo.label}</span>
                   </> : <>
                     <IconWorld className="h-4 w-4" />
-                    <span>All languages</span>
+                    <span>{languageFilter || "All languages"}</span>
                   </>}
                 </div>
               </Button>
