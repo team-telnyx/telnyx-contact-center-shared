@@ -36,17 +36,21 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       SELECT
         l.campaign_id,
         l.id,
+        l.contact_record_id,
+        l.call_control_id,
+        l.call_session_id,
         l.status,
         l.created_at,
         l.updated_at,
         l.metadata,
+        l.failure_reason,
         ROW_NUMBER() OVER (PARTITION BY l.campaign_id ORDER BY l.created_at DESC, l.id DESC) AS rn
       FROM outbound_attempt_ledger l
       WHERE l.campaign_id = ANY($1::uuid[])
     )
-    SELECT campaign_id, id, status, created_at, updated_at, metadata
+    SELECT campaign_id, id, contact_record_id, call_control_id, call_session_id, status, created_at, updated_at, metadata, failure_reason
     FROM ranked
-    WHERE rn <= 8
+    WHERE rn <= 50
     ORDER BY campaign_id, created_at DESC, id DESC`,
     [ids],
     [],
@@ -132,13 +136,16 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
     byCampaign[row.campaign_id].recent_attempts.push({
       id: row.id,
+      contact_record_id: row.contact_record_id || null,
+      call_control_id: row.call_control_id || metadata.call_control_id || null,
+      call_session_id: row.call_session_id || metadata.call_session_id || null,
       status: row.status,
       created_at: row.created_at,
       updated_at: row.updated_at,
       to_number: metadata.to_number || null,
       from_number: metadata.from_number || null,
       suppression_reason: metadata.suppression_reason || null,
-      failure_reason: metadata.failure_reason || null,
+      failure_reason: row.failure_reason || metadata.failure_reason || null,
       skip_reason: metadata.skip_reason || null,
       reason_code: metadata.reason_code || null,
     });

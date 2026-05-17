@@ -215,6 +215,7 @@ test('finalizeAgentlessAttemptByWebhook mapuje retryable hangup (busy) -> failed
   assert.equal(captured.metadata.retry_eligible, true);
   assert.equal(captured.metadata.retry_after_seconds, 7200);
   assert.equal(captured.metadata.reason_code, 'user_busy');
+  assert.equal(captured.metadata.failure_reason, 'user_busy');
   assert.ok(typeof captured.metadata.next_retry_at === 'string');
 });
 

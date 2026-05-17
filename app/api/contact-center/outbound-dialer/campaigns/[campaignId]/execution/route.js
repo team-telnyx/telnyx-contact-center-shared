@@ -14,6 +14,7 @@ import {
   startCampaignRun,
   updateCampaignExecutionControl,
 } from "@/lib/outbound-dialer/execution";
+import { completeCampaignIfExhausted } from "@/lib/outbound-dialer/completion";
 import { startAgentlessRunner, stopAgentlessRunner, getRunnerState } from "@/lib/outbound-dialer/runner";
 
 function isAgentlessMode(mode) {
@@ -115,7 +116,19 @@ export async function POST(request, context) {
 
     const claim = await claimOneAgentlessRecord(pool, campaign, run?.id || null);
     if (!claim) {
-      return NextResponse.json({ ok: true, action, run, claim: null, message: "No claimable records" });
+      const completion = await completeCampaignIfExhausted(pool, campaign, username);
+      if (completion.completed && isAgentlessMode(campaign.mode)) {
+        stopAgentlessRunner(campaignId);
+      }
+      return NextResponse.json({
+        ok: true,
+        action,
+        run,
+        claim: null,
+        completion,
+        campaign: completion.campaign ? mapCampaign(completion.campaign) : undefined,
+        message: completion.completed ? "Campaign completed: no claimable records remain" : "No claimable records",
+      });
     }
 
     const execution = await executeAgentlessAttempt(pool, campaign, claim);
