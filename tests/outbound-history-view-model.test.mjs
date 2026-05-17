@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   campaignControlState,
   campaignStatusEventsFromCampaigns,
+  contactRecordLabel,
   groupAttemptsByContactRecord,
   normalizeCampaignExecutionState,
 } from "../lib/outbound-dialer/history-view-model.js";
@@ -60,7 +61,7 @@ test("history groups attempts by contact-list record with identifying row data a
       {
         contact_record_id: "record-1",
         row_data: { first_name: "Ada", last_name: "Lovelace", company_name: "Analytical Engines" },
-        contact_methods: { work: "+48100100100" },
+        contact_methods: { number: { work: "+48100100100" } },
       },
     ],
     [
@@ -76,4 +77,40 @@ test("history groups attempts by contact-list record with identifying row data a
   assert.equal(groups[0].attempt_count, 2);
   assert.deepEqual(groups[0].status_counts, { failed: 1, completed: 1 });
   assert.deepEqual(groups[0].attempts.map((attempt) => attempt.id), ["attempt-2", "attempt-1"]);
+});
+
+test("contact record label uses contact-list field schema semantic mappings", () => {
+  const label = contactRecordLabel(
+    {
+      row_data: { Imie: "Jan", Nazwisko: "Kowalski", Firma: "Telnyx", Telefon: "+48600111222" },
+      contact_methods: { number: { mobile: "+48600111222" } },
+    },
+    {
+      custom_field_schema: [
+        { name: "Imie", type: "first_name" },
+        { name: "Nazwisko", type: "last_name" },
+        { name: "Firma", type: "company" },
+        { name: "Telefon", type: "phone" },
+      ],
+    },
+  );
+
+  assert.deepEqual(label, { to: "+48600111222", name: "Jan Kowalski", displayName: "", company: "Telnyx" });
+});
+
+test("campaign status events include persisted campaign run lifecycle rows", () => {
+  const events = campaignStatusEventsFromCampaigns(
+    [{ id: "campaign-1", name: "Campaign 1", updated_at: "2026-05-17T10:00:00.000Z", metadata: {} }],
+    {
+      "campaign-1": {
+        campaign_runs: [
+          { id: "run-1", status: "running", started_by: "leszek", started_at: "2026-05-17T09:00:00.000Z" },
+          { id: "run-2", status: "stopped", started_at: "2026-05-17T10:00:00.000Z", stopped_by: "leszek", stopped_at: "2026-05-17T10:05:00.000Z", stop_reason: "manual" },
+        ],
+      },
+    },
+  );
+
+  assert.deepEqual(events.map((event) => event.type), ["stop", "start", "start"]);
+  assert.ok(events.some((event) => event.details.includes("manual")));
 });

@@ -60,7 +60,7 @@ const liveBadgeClasses = {
   hangups: "border-amber-500/45 bg-transparent text-amber-700 dark:text-amber-300",
   failed: "border-rose-500/45 bg-transparent text-rose-700 dark:text-rose-300",
 };
-const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "power", "predictive", "agentless_ai", "agentless_flow"], campaignStatuses: ["draft", "ready", "paused", "running", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], dncListStatuses: ["draft", "active", "paused"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "url", "currency"], standardContactColumns: [] };
+const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "power", "predictive", "agentless_ai", "agentless_flow"], campaignStatuses: ["draft", "ready", "paused", "running", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], dncListStatuses: ["draft", "active", "paused"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "first_name", "last_name", "display_name", "company", "url", "currency"], standardContactColumns: [] };
 const CSV_CONTACT_MAPPING_GROUPS = [
   { group: "Number", icon: IconPhoneCall, labelClass: "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300", iconClass: "text-emerald-600 dark:text-emerald-300", options: ["mobile", "landline", "work", "home", "daytime", "evening"] },
   { group: "Email", icon: IconMail, labelClass: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300", iconClass: "text-sky-600 dark:text-sky-300", options: ["work", "home"] },
@@ -566,11 +566,16 @@ function AttemptControlsView({ attemptControls, selectedAttemptControl, setSelec
 function ReportsView({ campaigns, contactLists, dncLists, executionDebugByCampaign, selectedCampaignId, setSelectedCampaignId }) {
   const [detailsInteraction, setDetailsInteraction] = useState(null);
   const [expandedRecordId, setExpandedRecordId] = useState(null);
+  const [attemptsPage, setAttemptsPage] = useState(1);
+  const [attemptsPageSize, setAttemptsPageSize] = useState(10);
   const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null;
+  const selectedContactList = selectedCampaign ? contactLists.find((list) => list.id === selectedCampaign.contact_list_id) : null;
   const campaignDebug = selectedCampaign ? executionDebugByCampaign?.[selectedCampaign.id] : null;
   const attempts = Array.isArray(campaignDebug?.recent_attempts) ? campaignDebug.recent_attempts : [];
   const records = Array.isArray(campaignDebug?.contact_records) ? campaignDebug.contact_records : [];
-  const recordGroups = useMemo(() => groupAttemptsByContactRecord(records, attempts), [records, attempts]);
+  const recordGroups = useMemo(() => groupAttemptsByContactRecord(records, attempts, selectedContactList), [records, attempts, selectedContactList]);
+  useEffect(() => { setAttemptsPage(1); setExpandedRecordId(null); }, [selectedCampaign?.id, attemptsPageSize]);
+  const paginatedRecordGroups = useMemo(() => paginateItems(recordGroups, attemptsPage, attemptsPageSize), [recordGroups, attemptsPage, attemptsPageSize]);
   const progress = selectedCampaign ? campaignContactProgress(selectedCampaign, contactLists, campaignDebug) : { total: 0, completed: 0, remaining: 0 };
   const summary = campaignDebug?.summary || {};
   const totalAttempts = attempts.length || Number(summary.attempts_last_15m || 0) || 0;
@@ -600,7 +605,7 @@ function ReportsView({ campaigns, contactLists, dncLists, executionDebugByCampai
     {selectedCampaign ? <>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><MiniStat label="Records" value={`${progress.completed}/${progress.total}`} icon={IconUsers} tone="blue" /><MiniStat label="Calls" value={String(totalAttempts)} icon={IconPhoneCall} tone="violet" /><MiniStat label="Success rate" value={`${successRate}%`} icon={IconChartBar} tone="emerald" /><MiniStat label="Remaining" value={String(progress.remaining)} icon={IconClockHour4} tone="amber" /></div>
       <div className="grid gap-4 xl:grid-cols-2"><SettingCard icon={IconChartBar} title="Attempt outcomes" subtitle="Ledger status distribution"><BarList data={statusBuckets} /></SettingCard><SettingCard icon={IconReportAnalytics} title="Failure / retry reasons" subtitle="failure_reason, reason_code, suppression_reason"><BarList data={reasonBuckets} /></SettingCard></div>
-      <SettingCard icon={IconListDetails} title="Call attempts" subtitle="Contact-list records grouped as accordions; expand each record to inspect attempts newest first."><div className="space-y-2">{recordGroups.length ? recordGroups.map((group) => <ContactRecordAttemptAccordion key={group.id} group={group} expanded={expandedRecordId === group.id} onToggle={() => setExpandedRecordId((prev) => prev === group.id ? null : group.id)} onOpenAttemptDetails={openAttemptDetails} />) : <Empty title="No contact records yet" description="Contact-list records and their outbound attempts will appear here." />}</div></SettingCard>
+      <SettingCard icon={IconListDetails} title="Call attempts" subtitle="Contact-list records grouped as accordions; expand each record to inspect attempts newest first."><div className="space-y-3"><PaginatedListControls total={recordGroups.length} page={attemptsPage} pageSize={attemptsPageSize} onPageChange={setAttemptsPage} onPageSizeChange={setAttemptsPageSize} label="contact records" />{recordGroups.length ? <div className="space-y-2">{paginatedRecordGroups.items.map((group) => <ContactRecordAttemptAccordion key={group.id} group={group} expanded={expandedRecordId === group.id} onToggle={() => setExpandedRecordId((prev) => prev === group.id ? null : group.id)} onOpenAttemptDetails={openAttemptDetails} />)}</div> : <Empty title="No contact records yet" description="Contact-list records and their outbound attempts will appear here." />}</div></SettingCard>
     </> : <Empty title="No campaigns" description="Create a campaign to populate outbound history." />}
     <InteractionDetailsSheet open={!!detailsInteraction} onOpenChange={(open) => !open && setDetailsInteraction(null)} interaction={detailsInteraction} />
   </div>;
@@ -623,7 +628,7 @@ function ContactRecordAttemptAccordion({ group, expanded, onToggle, onOpenAttemp
     <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition hover:bg-muted/35">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{label.to}</span>{label.name ? <span className="text-muted-foreground">{label.name}</span> : null}{label.company ? <Badge variant="outline" className="font-normal">{label.company}</Badge> : null}</div>
-        <div className="mt-2 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-card">{Number(group.attempt_count || 0)} attempts</Badge>{statusEntries.length ? statusEntries.map(([status, count]) => <Badge key={status} variant="outline" className={attemptStatusClass(status)}>{title(status)} {count}</Badge>) : <span className="text-xs text-muted-foreground">No dialing attempts yet</span>}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-card"><span className="mr-1 text-muted-foreground">Attempts :</span><span className="rounded-md bg-muted px-1.5 py-0.5 font-semibold text-foreground">{Number(group.attempt_count || 0)}</span></Badge>{statusEntries.length ? statusEntries.map(([status, count]) => <Badge key={status} variant="outline" className={`${attemptStatusClass(status)} gap-1.5`}><span>{title(status)} :</span><span className="rounded-md bg-background/70 px-1.5 py-0.5 font-semibold">{Number(count).toLocaleString()}</span></Badge>) : <span className="text-xs text-muted-foreground">No dialing attempts yet</span>}</div>
       </div>
       <IconChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
     </button>
@@ -641,9 +646,13 @@ function BarList({ data = {} }) {
 }
 
 function EventViewerView({ campaigns, executionDebugByCampaign, campaignId, typeFilter }) {
+  const [eventsPage, setEventsPage] = useState(1);
+  const [eventsPageSize, setEventsPageSize] = useState(10);
   const allEvents = useMemo(() => outboundEventsFromCampaigns(campaigns, executionDebugByCampaign), [campaigns, executionDebugByCampaign]);
   const events = useMemo(() => allEvents.filter((event) => (campaignId === "all" || event.campaign_id === campaignId) && (typeFilter === "all" || event.type === typeFilter)), [allEvents, campaignId, typeFilter]);
-  return <div className="space-y-4"><div className="rounded-2xl border bg-background/85 p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">Event viewer</h3><p className="text-sm text-muted-foreground">Only campaign status changes: start, stop, pause, recycle and exhausted.</p></div><Badge variant="outline" className="bg-card">{events.length} events</Badge></div></div><SettingCard icon={IconListDetails} title="Campaign status timeline" subtitle="Dialing-attempt events are intentionally hidden"><EventList events={events} empty="No matching campaign status events for the selected campaign/type." /></SettingCard></div>;
+  useEffect(() => { setEventsPage(1); }, [campaignId, typeFilter, eventsPageSize]);
+  const paginatedEvents = useMemo(() => paginateItems(events, eventsPage, eventsPageSize), [events, eventsPage, eventsPageSize]);
+  return <div className="space-y-4"><div className="rounded-2xl border bg-background/85 p-5 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">Event viewer</h3><p className="text-sm text-muted-foreground">Only campaign status changes: start, stop, pause, recycle and exhausted.</p></div><Badge variant="outline" className="bg-card">{events.length} events</Badge></div></div><SettingCard icon={IconListDetails} title="Campaign status timeline" subtitle="Dialing-attempt events are intentionally hidden"><div className="space-y-3"><PaginatedListControls total={events.length} page={eventsPage} pageSize={eventsPageSize} onPageChange={setEventsPage} onPageSizeChange={setEventsPageSize} label="events" /><EventList events={paginatedEvents.items} empty="No matching campaign status events for the selected campaign/type." /></div></SettingCard></div>;
 }
 
 function SettingsSummaryView({ settings }) {
@@ -1192,7 +1201,21 @@ function MappingEditor({ campaign, forms, contactLists, update }) {
 }
 
 function outboundEventsFromCampaigns(campaigns = [], executionDebugByCampaign = {}) {
-  return campaignStatusEventsFromCampaigns(campaigns);
+  return campaignStatusEventsFromCampaigns(campaigns, executionDebugByCampaign);
+}
+
+function paginateItems(items = [], page = 1, pageSize = 10) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const safePageSize = [10, 25, 50].includes(Number(pageSize)) ? Number(pageSize) : 10;
+  const totalPages = Math.max(1, Math.ceil(safeItems.length / safePageSize));
+  const safePage = Math.min(Math.max(1, Number(page) || 1), totalPages);
+  const start = (safePage - 1) * safePageSize;
+  return { items: safeItems.slice(start, start + safePageSize), page: safePage, pageSize: safePageSize, totalPages, start: safeItems.length ? start + 1 : 0, end: Math.min(safeItems.length, start + safePageSize) };
+}
+
+function PaginatedListControls({ total = 0, page = 1, pageSize = 10, onPageChange = () => {}, onPageSizeChange = () => {}, label = "records" }) {
+  const pagination = paginateItems(Array.from({ length: Number(total || 0) }), page, pageSize);
+  return <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-muted/25 px-3 py-2 text-xs"><div className="text-muted-foreground">{total ? `${pagination.start}-${pagination.end} of ${Number(total).toLocaleString()} ${label}` : `0 ${label}`}</div><div className="flex flex-wrap items-center gap-2"><div className="flex items-center gap-2"><span className="text-muted-foreground">Rows</span><ConfigSelect bare value={String(pagination.pageSize)} options={[10, 25, 50].map((value) => ({ value: String(value), label: String(value) }))} onChange={(value) => onPageSizeChange(Number(value))} /></div><div className="flex items-center gap-1"><Button type="button" size="sm" variant="outline" disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>Previous</Button><Badge variant="outline" className="bg-card">Page {pagination.page}/{pagination.totalPages}</Badge><Button type="button" size="sm" variant="outline" disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)}>Next</Button></div></div></div>;
 }
 
 function EventList({ events = [], empty }) {

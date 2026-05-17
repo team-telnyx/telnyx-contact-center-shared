@@ -170,6 +170,33 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     [],
   );
 
+  const campaignRuns = await safeQuery(
+    pool,
+    `WITH ranked AS (
+      SELECT
+        r.campaign_id,
+        r.id,
+        r.status,
+        r.started_by,
+        r.stopped_by,
+        r.stop_reason,
+        r.metadata,
+        r.started_at,
+        r.stopped_at,
+        r.created_at,
+        r.updated_at,
+        ROW_NUMBER() OVER (PARTITION BY r.campaign_id ORDER BY COALESCE(r.stopped_at, r.started_at, r.updated_at, r.created_at) DESC, r.id DESC) AS rn
+      FROM outbound_campaign_runs r
+      WHERE r.campaign_id = ANY($1::uuid[])
+    )
+    SELECT campaign_id, id, status, started_by, stopped_by, stop_reason, metadata, started_at, stopped_at, created_at, updated_at
+    FROM ranked
+    WHERE rn <= 100
+    ORDER BY campaign_id, COALESCE(stopped_at, started_at, updated_at, created_at) DESC, id DESC`,
+    [ids],
+    [],
+  );
+
   const byCampaign = Object.fromEntries(ids.map((id) => [id, {
     runner: getRunnerState(id),
     summary: {
@@ -193,6 +220,7 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     },
     recent_attempts: [],
     contact_records: [],
+    campaign_runs: [],
   }]));
 
   for (const row of summaryRows) {
@@ -228,6 +256,23 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       last_attempt_at: row.last_attempt_at || null,
       attempt_count: Number(row.attempt_count || 0),
       status_counts: row.status_counts && typeof row.status_counts === "object" ? row.status_counts : {},
+    });
+  }
+
+  for (const row of campaignRuns) {
+    if (!byCampaign[row.campaign_id]) continue;
+    const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+    byCampaign[row.campaign_id].campaign_runs.push({
+      id: row.id,
+      status: row.status,
+      started_by: row.started_by || null,
+      stopped_by: row.stopped_by || null,
+      stop_reason: row.stop_reason || null,
+      metadata,
+      started_at: row.started_at || null,
+      stopped_at: row.stopped_at || null,
+      created_at: row.created_at || null,
+      updated_at: row.updated_at || null,
     });
   }
 
