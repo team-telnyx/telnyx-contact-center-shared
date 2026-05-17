@@ -88,3 +88,16 @@ test("campaign inventory uses runtime display state instead of raw campaign stat
   assert.match(viewSource, /statusClass\(displayState\)/, "Campaign Inventory status badge should use the derived display state");
   assert.doesNotMatch(viewSource, /statusClass\(c\.status\)/, "Campaign Inventory should not show raw running status for exhausted runtime campaigns");
 });
+
+test("campaign save action is disabled until audience and FROM slots are complete", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const formStart = source.indexOf("function CampaignSettingsForm");
+  const formEnd = source.indexOf("function parseTtsVoiceString", formStart);
+  assert.ok(formStart > -1 && formEnd > formStart, "CampaignSettingsForm should exist");
+
+  const formSource = source.slice(formStart, formEnd);
+  assert.match(source, /campaignSaveRequirements/, "page should import campaign save requirement validation");
+  assert.match(formSource, /campaignSaveRequirements\(draft, \{ maxAttempts: campaignMaxAttempts \}\)/, "form should evaluate campaign save requirements with effective max attempts");
+  assert.match(formSource, /disabled: saving \|\| !saveRequirements\.canSave/, "Save campaign header action should be disabled until requirements pass");
+  assert.match(formSource, /campaignSaveRequirementsMessage\(saveRequirements\)/, "form should show the missing required campaign fields");
+});
