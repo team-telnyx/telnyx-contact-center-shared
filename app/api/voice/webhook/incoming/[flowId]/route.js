@@ -12,7 +12,7 @@ import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
-import { findNextNodes } from "@/lib/voice-flow-routing.js";
+import { findNextEdges, findNextNodes } from "@/lib/voice-flow-routing.js";
 import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
 import {
   addTimelineEvent,
@@ -160,7 +160,7 @@ export async function POST(request, { params }) {
 
     // Verify Telnyx signature (optional but recommended)
     const isValid = await verifyTelnyxSignature(request, rawBody);
-    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "false").toLowerCase() === "true";
+    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!isValid) {
       console.warn("[incoming-flow-webhook] Invalid Telnyx signature", { enforceSignature });
       if (enforceSignature) {
@@ -732,11 +732,8 @@ export async function POST(request, { params }) {
       // attempts to start the assistant before the PSTN leg is answered.
       const nextNodes = findNextNodes(flow, initiatorNode.id, event);
 
-      // Process edge variable mappings for edges from selected initiator node
-      const edges = flow.edges || [];
-      const matchingEdges = edges.filter(
-        (e) => e.source === initiatorNode.id,
-      );
+      // Process edge variable mappings only for the edge(s) selected by this webhook event.
+      const matchingEdges = findNextEdges(flow, initiatorNode.id, event);
 
       // Process edge variable mappings
       matchingEdges.forEach((edge) => {

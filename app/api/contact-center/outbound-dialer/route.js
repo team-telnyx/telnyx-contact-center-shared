@@ -78,7 +78,8 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     )
     SELECT campaign_id, id, status, created_at, updated_at, metadata
     FROM ranked
-    WHERE rn <= 8`,
+    WHERE rn <= 8
+    ORDER BY campaign_id, created_at DESC, id DESC`,
     [ids],
     [],
   );

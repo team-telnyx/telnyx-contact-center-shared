@@ -155,7 +155,7 @@ export async function POST(request) {
   try {
     const raw = await request.text();
     const ok = await verifyTelnyxSignature(request, raw);
-    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "false").toLowerCase() === "true";
+    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!ok) {
       console.warn("[voice-webhook] Invalid Telnyx signature", { enforceSignature });
       if (enforceSignature) {
