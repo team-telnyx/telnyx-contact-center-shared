@@ -39,6 +39,17 @@ test("buildDashboardCampaignExpandedStats returns calls processing cards", () =>
   ]);
 });
 
+test("buildDashboardCampaignExpandedStats never displays used lines above configured capacity", () => {
+  const stats = buildDashboardCampaignExpandedStats({
+    progress: { completed: 0, total: 10, remaining: 10 },
+    summary: { active_now: 6 },
+    maxLines: 2,
+  });
+
+  const lines = stats.contactStats.find((stat) => stat.label === "Lines");
+  assert.equal(lines.value, "2 / 2");
+});
+
 test("buildDashboardCampaignExpandedStats falls back safely when totals are missing", () => {
   const stats = buildDashboardCampaignExpandedStats({
     progress: { completed: 0, total: 0, remaining: 0 },

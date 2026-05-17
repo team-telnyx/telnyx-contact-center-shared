@@ -112,6 +112,58 @@ test('executeAgentlessAttempt -> failed gdy Telnyx zwraca błąd', async () => {
   process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
 });
 
+test('executeAgentlessAttempt honors attempt controls without throwing when max attempts helpers are needed', async () => {
+  const originalFetch = global.fetch;
+  const originalApiKey = process.env.TELNYX_API_KEY;
+  const originalFrom = process.env.TELNYX_MAIN_FROM_NUMBER;
+
+  process.env.TELNYX_API_KEY = 'test_key';
+  process.env.TELNYX_MAIN_FROM_NUMBER = '+15551230000';
+
+  global.fetch = async () => ({
+    ok: true,
+    async json() {
+      return { data: { call_control_id: 'cc-limits-1', call_session_id: 'cs-limits-1' } };
+    },
+  });
+
+  const pool = createMockPool(async (sql) => {
+    if (sql.includes('FROM outbound_contact_records')) {
+      return { rows: [{ id: 'c-limits', row_data: { phone_number: '+48600123456' }, contact_methods: {} }] };
+    }
+    if (sql.includes('SELECT settings FROM outbound_settings')) {
+      return { rows: [{ settings: { allowed_numbers: ['+15551230000'], global_max_attempts: 5 } }] };
+    }
+    if (sql.includes('SELECT max_attempts_per_number FROM outbound_attempt_controls')) {
+      return { rows: [{ max_attempts_per_number: 2 }] };
+    }
+    if (sql.includes('COUNT(*)::int AS attempts')) {
+      return { rows: [{ attempts: 0 }] };
+    }
+    if (sql.includes('SET status = $1') && sql.includes('outbound_attempt_ledger')) {
+      return { rows: [{ id: 'l-limits', status: 'dialing' }] };
+    }
+    if (sql.includes('COALESCE(metadata') && sql.includes('RETURNING *')) {
+      return { rows: [{ id: 'l-limits', status: 'dialing' }] };
+    }
+    throw new Error(`Unexpected SQL(limits): ${sql}`);
+  });
+
+  try {
+    const result = await executeAgentlessAttempt(
+      pool,
+      { id: 'camp-limits', handler_type: 'agentless', attempt_control_id: 'attempt-control-1', retry_policy: { maxAttempts: 4 } },
+      { id: 'l-limits', contact_record_id: 'c-limits', run_id: 'r-limits' },
+    );
+
+    assert.equal(result.ok, true);
+  } finally {
+    global.fetch = originalFetch;
+    process.env.TELNYX_API_KEY = originalApiKey;
+    process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
+  }
+});
+
 test('executeAgentlessAttempt persists outbound AI assistant handler metadata for answered webhook fallback', async () => {
   const originalFetch = global.fetch;
   const originalApiKey = process.env.TELNYX_API_KEY;

@@ -113,7 +113,13 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       l.campaign_id,
       COUNT(*) FILTER (WHERE l.created_at > NOW() - INTERVAL '15 minutes')::int AS attempts_last_15m,
       COUNT(*) FILTER (WHERE l.status = 'dialing')::int AS dialing_now,
-      COUNT(*) FILTER (WHERE l.status IN ('claimed','dialing','answered'))::int AS active_now,
+      COUNT(*) FILTER (
+        WHERE l.status IN ('dialing','answered')
+           OR (
+             l.status = 'claimed'
+             AND COALESCE(l.lease_expires_at, NOW() + INTERVAL '1 second') > NOW() - INTERVAL '5 seconds'
+           )
+      )::int AS active_now,
       COUNT(*) FILTER (WHERE l.status = 'answered')::int AS answered_total,
       COUNT(*) FILTER (WHERE l.status = 'failed')::int AS failed_total,
       COUNT(*) FILTER (WHERE l.status = 'completed')::int AS completed_total,
