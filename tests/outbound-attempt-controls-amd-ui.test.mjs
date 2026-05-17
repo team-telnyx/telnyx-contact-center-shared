@@ -32,7 +32,7 @@ test("campaign AMD settings are gated by mode and expose voicemail action/TTS co
   assert.match(campaignForm, /amdAvailable/, "campaign form should derive AMD availability from mode");
   assert.match(campaignForm, /AMD_ELIGIBLE_CAMPAIGN_MODES\.includes\(mode\)/, "AMD should only be available for allowed modes");
   assert.match(campaignForm, /amdAvailable \? <CampaignAmdSettings/, "AMD config panel should render only when the mode supports AMD");
-  assert.match(campaignForm, /amdAvailable \? \{ \.\.\.\(draft\.amd_config \|\| \{\}\), enabled: draft\.amd_config\?\.enabled === true \} : \{ enabled: false \}/, "saving should disable AMD for unsupported modes");
+  assert.match(campaignForm, /amd_config: \{ \.\.\.\(draft\.amd_config \|\| \{\}\), enabled: amdAvailable && draft\.amd_config\?\.enabled === true \}/, "saving should disable AMD for unsupported modes without dropping existing voicemail settings");
 
   const amdSettings = functionSource(source, "CampaignAmdSettings", "AttemptControlSettingsForm");
   assert.match(amdSettings, /Answering machine action/, "AMD panel should expose action selection");
@@ -46,6 +46,8 @@ test("campaign AMD settings are gated by mode and expose voicemail action/TTS co
   assert.match(amdSettings, /Test Voice/, "leave-message mode should expose a test voice button");
   assert.match(amdSettings, /\/api\/tts\/voices/, "AMD TTS config should load the same voice catalog as Speak Text");
   assert.match(amdSettings, /\/api\/tts\/speech/, "AMD TTS config should test audio through the same endpoint as Speak Text");
+  assert.match(amdSettings, /label="Provider"[\s\S]*?setLanguageFilter\(""\)[\s\S]*?updateTts\(\{ provider: value, model: "", voice: "", language: "" \}\)/, "changing provider should reset the local language filter along with persisted TTS language");
+  assert.match(amdSettings, /label="Model"[\s\S]*?setLanguageFilter\(""\)[\s\S]*?updateTts\(\{ model: value, voice: "", language: "" \}\)/, "changing model should reset the local language filter along with persisted TTS language");
 });
 
 test("voice webhook can start outbound AI assistant from ledger columns when event metadata is sparse", async () => {
