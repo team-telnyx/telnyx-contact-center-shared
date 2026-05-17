@@ -5,6 +5,7 @@ import {
   attemptStatusReasonLabel,
   campaignControlState,
   campaignStatusEventsFromCampaigns,
+  contactRecordHeaderLabel,
   contactRecordLabel,
   groupAttemptsByContactRecord,
   normalizeCampaignExecutionState,
@@ -210,6 +211,15 @@ test("contact record label infers DEV imported row_data headers when contact lis
   });
 
   assert.deepEqual(label, { to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" });
+});
+
+test("contact record header label joins phone name and company with pipe separators", () => {
+  assert.equal(
+    contactRecordHeaderLabel({ to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" }),
+    "+48602410402 | Leszek Winiarski | Telnyx",
+  );
+  assert.equal(contactRecordHeaderLabel({ to: "+48602410402", name: "", company: "Telnyx" }), "+48602410402 | Telnyx");
+  assert.equal(contactRecordHeaderLabel({ to: "+48602410402", name: "", company: "" }), "+48602410402");
 });
 
 test("attempt status reason label combines status and reason unless cancelled", () => {

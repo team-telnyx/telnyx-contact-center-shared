@@ -30,7 +30,7 @@ import { CSV_FILTER_OPERATORS, applyCsvImportRules, normalizeCsvImportRules } fr
 import { canValidateContactList, campaignContactListTargets, contactListValidationMessage } from "@/lib/outbound-dialer/contact-list-validation";
 import { normalizeAttemptControlLimits, normalizeAttemptCount, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { buildDashboardCampaignExpandedStats } from "@/lib/outbound-dialer/dashboard-view-model";
-import { attemptReasonCode, attemptStatusReasonLabel, campaignControlState, campaignStatusEventsFromCampaigns, contactRecordLabel, groupAttemptsByContactRecord, normalizeCampaignExecutionState, singleCampaignSelection } from "@/lib/outbound-dialer/history-view-model";
+import { attemptReasonCode, attemptStatusReasonLabel, campaignControlState, campaignStatusEventsFromCampaigns, contactRecordHeaderLabel, contactRecordLabel, groupAttemptsByContactRecord, normalizeCampaignExecutionState, singleCampaignSelection } from "@/lib/outbound-dialer/history-view-model";
 
 const API = "/api/contact-center/outbound-dialer";
 const NAV_ITEMS = [
@@ -735,11 +735,12 @@ function reasonCodeClass(reason) {
 
 function ContactRecordAttemptAccordion({ group, expanded, onToggle, onOpenAttemptDetails }) {
   const label = group.label || contactRecordLabel(group.record);
+  const headerLabel = contactRecordHeaderLabel(label);
   const statusEntries = Object.entries(group.status_counts || {}).filter(([, value]) => Number(value) > 0).sort((a, b) => b[1] - a[1]);
   return <div className="overflow-hidden rounded-xl border bg-muted/20 text-sm">
     <button type="button" onClick={onToggle} className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition hover:bg-muted/35">
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{label.to}</span>{label.name ? <span className="text-muted-foreground">{label.name}</span> : null}{label.company ? <Badge variant="outline" className="font-normal">{label.company}</Badge> : null}</div>
+        <div className="truncate font-semibold">{headerLabel}</div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-card"><span className="mr-1 text-muted-foreground">Attempts :</span><span className="rounded-md bg-muted px-1.5 py-0.5 font-semibold text-foreground">{Number(group.attempt_count || 0)}</span></Badge>{statusEntries.length ? statusEntries.map(([status, count]) => <Badge key={status} variant="outline" className={`${attemptStatusClass(status)} gap-1.5`}><span>{title(status)} :</span><span className="rounded-md bg-background/70 px-1.5 py-0.5 font-semibold">{Number(count).toLocaleString()}</span></Badge>) : <span className="text-xs text-muted-foreground">No dialing attempts yet</span>}</div>
       </div>
       <IconChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
