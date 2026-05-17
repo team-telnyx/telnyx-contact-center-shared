@@ -113,7 +113,7 @@ test("campaign required fields are marked with red asterisks instead of a missin
   assert.match(formSource, /<InputBlock label="Campaign Name"[^>]*required/, "Campaign Name should be marked required");
   assert.match(formSource, /<ConfigSelect label="Contact List"[^>]*required/, "Contact List should be marked required");
   assert.match(formSource, /<MultiSelect label="Contact List Numbers"[^>]*required/, "Contact List Numbers should be marked required");
-  assert.match(formSource, /<ConfigSelect key=\{`from-slot-\$\{idx\}`\}[^>]*required/, "FROM number slots should be marked required");
+  assert.match(formSource, /<ConfigSelect key=\{`from-slot-\$\{idx\}`\}[^>]*required=\{idx < saveRequirements\.requiredFromSlots\}/, "FROM number slots should only mark enforced slots required");
   assert.doesNotMatch(formSource, /saveRequirementsMessage/, "Campaign form should not render missing-fields descriptions");
   assert.doesNotMatch(formSource, /Required before saving/, "Campaign form should not render Required before saving copy");
 });
