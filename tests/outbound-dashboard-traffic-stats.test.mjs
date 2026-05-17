@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildDashboardCampaignTrafficStats } from "../lib/outbound-dialer/dashboard-view-model.mjs";
+import { buildDashboardCampaignExpandedStats } from "../lib/outbound-dialer/dashboard-view-model.mjs";
 
-test("buildDashboardCampaignTrafficStats returns requested expanded campaign traffic KPIs", () => {
-  const stats = buildDashboardCampaignTrafficStats({
+test("buildDashboardCampaignExpandedStats returns contact statistics with connected contacts over total contacts", () => {
+  const stats = buildDashboardCampaignExpandedStats({
     progress: { completed: 312, total: 500, remaining: 120 },
-    live: { answered: 152 },
-    summary: { attempts_total: 842, active_now: 6 },
+    summary: { attempts_total: 842, connected_records: 90, active_now: 6 },
     maxLines: 10,
   });
 
-  assert.deepEqual(stats.map((stat) => [stat.label, stat.value]), [
+  assert.deepEqual(stats.contactStats.map((stat) => [stat.label, stat.value]), [
     ["Contacts", "312 / 500"],
     ["Attempts", "842"],
     ["Callable", "24%"],
@@ -19,19 +18,47 @@ test("buildDashboardCampaignTrafficStats returns requested expanded campaign tra
   ]);
 });
 
-test("buildDashboardCampaignTrafficStats falls back safely when totals are missing", () => {
-  const stats = buildDashboardCampaignTrafficStats({
+test("buildDashboardCampaignExpandedStats returns calls processing cards", () => {
+  const stats = buildDashboardCampaignExpandedStats({
+    live: { active: 6, ringing: 2 },
+    summary: {
+      active_now: 6,
+      dialing_now: 2,
+      connected_total: 90,
+      calls_failed_total: 71,
+      machine_total: 12,
+    },
+  });
+
+  assert.deepEqual(stats.callProcessingStats.map((stat) => [stat.label, stat.value]), [
+    ["Active", "6"],
+    ["Ringing", "2"],
+    ["Answered", "90"],
+    ["Failed", "71"],
+    ["Machine", "12"],
+  ]);
+});
+
+test("buildDashboardCampaignExpandedStats falls back safely when totals are missing", () => {
+  const stats = buildDashboardCampaignExpandedStats({
     progress: { completed: 0, total: 0, remaining: 0 },
     live: { answered: 0 },
     summary: {},
     maxLines: 0,
   });
 
-  assert.deepEqual(stats.map((stat) => [stat.label, stat.value]), [
+  assert.deepEqual(stats.contactStats.map((stat) => [stat.label, stat.value]), [
     ["Contacts", "0 / 0"],
     ["Attempts", "0"],
     ["Callable", "0%"],
     ["Connected", "0%"],
     ["Lines", "0 / —"],
+  ]);
+  assert.deepEqual(stats.callProcessingStats.map((stat) => [stat.label, stat.value]), [
+    ["Active", "0"],
+    ["Ringing", "0"],
+    ["Answered", "0"],
+    ["Failed", "0"],
+    ["Machine", "0"],
   ]);
 });
