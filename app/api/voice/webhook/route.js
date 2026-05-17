@@ -798,7 +798,7 @@ export async function POST(request) {
             eventType,
             hangupCause: payload?.hangup_cause || null,
             sipHangupCause: payload?.sip_hangup_cause || null,
-            eventId: body?.data?.id || body?.id || null,
+            eventId: json?.data?.id || json?.id || null,
           });
 
           const finalizedMetadata = finalizedLedger?.metadata && typeof finalizedLedger.metadata === "object"

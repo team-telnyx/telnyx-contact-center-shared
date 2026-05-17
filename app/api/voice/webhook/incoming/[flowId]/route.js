@@ -624,10 +624,9 @@ export async function POST(request, { params }) {
       );
     }
 
-    const isOutboundCampaignEvent =
-      event === "call.initiated" &&
-      payload.direction === "outgoing" &&
-      (payload?.metadata?.outbound_campaign_id || payload?.metadata?.outbound_ledger_id);
+    const isOutboundCampaignEvent = Boolean(
+      payload?.metadata?.outbound_campaign_id || payload?.metadata?.outbound_ledger_id,
+    );
 
     const initiatorNode =
       isOutboundCampaignEvent && outboundCampaignNode
