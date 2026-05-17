@@ -14,7 +14,10 @@ function normalizeCampaignMetadata(value = {}) {
   const dialTimeout = metadata.dial_timeout_secs ?? metadata.dialTimeoutSecs;
   if (dialTimeout == null || dialTimeout === "") return metadata;
   const parsed = Number(dialTimeout);
-  if (!Number.isFinite(parsed) || parsed <= 0) return metadata;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    const { dial_timeout_secs, dialTimeoutSecs, ...rest } = metadata;
+    return rest;
+  }
   return { ...metadata, dial_timeout_secs: Math.max(15, Math.min(600, Math.round(parsed))) };
 }
 
