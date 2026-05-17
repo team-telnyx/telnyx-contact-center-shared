@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  attemptStatusReasonLabel,
   campaignControlState,
   campaignStatusEventsFromCampaigns,
   contactRecordLabel,
@@ -209,6 +210,13 @@ test("contact record label infers DEV imported row_data headers when contact lis
   });
 
   assert.deepEqual(label, { to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" });
+});
+
+test("attempt status reason label combines status and reason unless cancelled", () => {
+  assert.equal(attemptStatusReasonLabel({ status: "failed", reason_code: "user_busy" }), "Failed - User Busy");
+  assert.equal(attemptStatusReasonLabel({ status: "completed", reason_code: "normal_clearing" }), "Completed - Normal Clearing");
+  assert.equal(attemptStatusReasonLabel({ status: "cancelled", reason_code: "cancelled" }), "Cancelled");
+  assert.equal(attemptStatusReasonLabel({ status: "cancelled", reason_code: "originator_cancel" }), "Cancelled");
 });
 
 test("campaign status events include persisted campaign run lifecycle rows", () => {

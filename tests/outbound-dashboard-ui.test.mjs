@@ -44,3 +44,17 @@ test("live calls view does not render the redundant hero card", async () => {
   assert.doesNotMatch(viewSource, /Realtime monitor across all outbound campaigns/);
   assert.doesNotMatch(viewSource, /Hangup calls stay visible for 60 seconds/);
 });
+
+test("expanded history call attempt rows render one right-aligned status reason badge before info", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const accordionStart = source.indexOf("function ContactRecordAttemptAccordion");
+  const accordionEnd = source.indexOf("function BarList", accordionStart);
+  assert.ok(accordionStart > -1, "ContactRecordAttemptAccordion should exist");
+  assert.ok(accordionEnd > accordionStart, "ContactRecordAttemptAccordion should end before BarList");
+
+  const accordionSource = source.slice(accordionStart, accordionEnd);
+  assert.match(accordionSource, /attemptStatusReasonLabel\(attempt\)/, "attempt rows should use the combined status/reason label");
+  assert.match(accordionSource, /className="ml-auto flex shrink-0 items-center gap-2"/, "attempt status badge should sit in a right-aligned actions cluster");
+  assert.match(accordionSource, /<Badge variant="outline" className=\{reasonCodeClass\(reason\)\}>\{statusReasonLabel\}<\/Badge>[\s\S]*<Button size="icon"/, "single status/reason badge should render immediately before the info button");
+  assert.doesNotMatch(accordionSource, /<Badge variant="outline" className=\{attemptStatusClass\(attempt\.status\)\}>\{title\(attempt\.status\)\}<\/Badge>/, "attempt row should not render a separate status badge on the left");
+});
