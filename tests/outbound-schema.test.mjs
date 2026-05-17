@@ -29,3 +29,12 @@ test("outbound campaigns schema allows stopped status used by execution completi
   const schema = await readFile(new URL("../lib/postgres-schema.mjs", import.meta.url), "utf8");
   assert.match(schema, /status IN \('draft', 'ready', 'paused', 'running', 'stopped', 'completed', 'archived'\)/);
 });
+
+test("outbound campaign API validators allow stopped status exposed by schema payload", async () => {
+  const createRoute = await readFile(new URL("../app/api/contact-center/outbound-dialer/campaigns/route.js", import.meta.url), "utf8");
+  const updateRoute = await readFile(new URL("../app/api/contact-center/outbound-dialer/campaigns/[campaignId]/route.js", import.meta.url), "utf8");
+  const expectedStatuses = /ensureEnum\(body\.status, \["draft", "ready", "paused", "running", "stopped", "completed"\], "draft"\)/;
+
+  assert.match(createRoute, expectedStatuses);
+  assert.match(updateRoute, expectedStatuses);
+});
