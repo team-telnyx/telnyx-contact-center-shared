@@ -55,6 +55,25 @@ test("event viewer includes only campaign status events and synthesizes exhauste
   assert.ok(events.every((event) => ["start", "stop", "pause", "recycle", "exhausted"].includes(event.type)));
 });
 
+test("event viewer maps resume control actions to a running status event", () => {
+  const events = campaignStatusEventsFromCampaigns([
+    {
+      id: "campaign-1",
+      name: "Campaign 1",
+      updated_at: "2026-05-17T11:00:00.000Z",
+      metadata: {
+        execution_control: {
+          lastAction: "resume",
+          updatedAt: "2026-05-17T11:00:00.000Z",
+        },
+      },
+    },
+  ]);
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "start");
+});
+
 test("history groups attempts by contact-list record with identifying row data and status counts", () => {
   const groups = groupAttemptsByContactRecord(
     [
@@ -113,4 +132,18 @@ test("campaign status events include persisted campaign run lifecycle rows", () 
 
   assert.deepEqual(events.map((event) => event.type), ["stop", "start", "start"]);
   assert.ok(events.some((event) => event.details.includes("manual")));
+});
+
+test("history keeps attempts without contact records in separate fallback groups", () => {
+  const groups = groupAttemptsByContactRecord(
+    [],
+    [
+      { id: "attempt-1", status: "failed", to_number: "+48100100100", created_at: "2026-05-17T09:00:00.000Z" },
+      { id: "attempt-2", status: "completed", to_number: "+48100100101", created_at: "2026-05-17T10:00:00.000Z" },
+    ],
+  );
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => group.id).sort(), ["unmatched:attempt-1", "unmatched:attempt-2"]);
+  assert.ok(groups.every((group) => group.attempt_count === 1));
 });
