@@ -163,6 +163,63 @@ test('executeAgentlessAttempt defaults Telnyx dial timeout to 30 seconds', async
   }
 });
 
+test('executeAgentlessAttempt uses current global dial timeout when campaign has no override', async () => {
+  const originalFetch = global.fetch;
+  const originalApiKey = process.env.TELNYX_API_KEY;
+  const originalFrom = process.env.TELNYX_MAIN_FROM_NUMBER;
+  const originalTimeout = process.env.OUTBOUND_DIAL_TIMEOUT_SECS;
+  let dialPayload = null;
+
+  process.env.TELNYX_API_KEY = 'test_key';
+  process.env.TELNYX_MAIN_FROM_NUMBER = '+15551230000';
+  delete process.env.OUTBOUND_DIAL_TIMEOUT_SECS;
+
+  global.fetch = async (_url, options) => {
+    dialPayload = JSON.parse(options.body);
+    return {
+      ok: true,
+      async json() {
+        return { data: { call_control_id: 'cc-timeout-global', call_session_id: 'cs-timeout-global' } };
+      },
+    };
+  };
+
+  const pool = createMockPool(async (sql, params) => {
+    if (sql.includes('FROM outbound_contact_records')) {
+      return { rows: [{ id: 'c-timeout-global', row_data: { phone_number: '+48600123456' }, contact_methods: {} }] };
+    }
+    if (sql.includes('SELECT settings FROM outbound_settings')) {
+      return { rows: [{ settings: { allowed_numbers: ['+15551230000'], dial_timeout_secs: 45 } }] };
+    }
+    if (sql.includes('SET status = $1') && sql.includes('outbound_attempt_ledger')) {
+      return { rows: [{ id: 'l-timeout-global', status: 'dialing' }] };
+    }
+    if (sql.includes('COALESCE(metadata') && sql.includes('RETURNING *')) {
+      const metadata = JSON.parse(params[2]);
+      assert.equal(metadata.timeout_secs, 45);
+      return { rows: [{ id: 'l-timeout-global', status: 'dialing', metadata }] };
+    }
+    throw new Error(`Unexpected SQL(global-dial-timeout): ${sql}`);
+  });
+
+  try {
+    const result = await executeAgentlessAttempt(
+      pool,
+      { id: 'camp-timeout-global', handler_type: 'call_flow', handler_ref: 'flow-1', metadata: {} },
+      { id: 'l-timeout-global', contact_record_id: 'c-timeout-global', run_id: 'r-timeout-global' },
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(dialPayload.timeout_secs, 45);
+  } finally {
+    global.fetch = originalFetch;
+    process.env.TELNYX_API_KEY = originalApiKey;
+    process.env.TELNYX_MAIN_FROM_NUMBER = originalFrom;
+    if (originalTimeout === undefined) delete process.env.OUTBOUND_DIAL_TIMEOUT_SECS;
+    else process.env.OUTBOUND_DIAL_TIMEOUT_SECS = originalTimeout;
+  }
+});
+
 test('executeAgentlessAttempt -> suppressed gdy brak callable number', async () => {
   const queries = [];
   const pool = createMockPool(async (sql) => {

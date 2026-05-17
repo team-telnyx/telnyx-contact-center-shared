@@ -367,11 +367,20 @@ export default function OutboundDialerPage() {
       loadLiveCalls(true);
       fallbackTimer = setInterval(() => loadLiveCalls(false), 2000);
     };
+    const stopPollingFallback = () => {
+      if (!fallbackTimer) return;
+      clearInterval(fallbackTimer);
+      fallbackTimer = null;
+    };
     if (typeof window !== "undefined" && "EventSource" in window) {
       setLiveCallsLoading(true);
       eventSource = new EventSource(`${API}/live-calls/stream`);
+      eventSource.addEventListener("open", () => {
+        stopPollingFallback();
+      });
       eventSource.addEventListener("live_calls", (event) => {
         try {
+          stopPollingFallback();
           applyPayload(JSON.parse(event.data));
           setLiveCallsLoading(false);
         } catch (err) {

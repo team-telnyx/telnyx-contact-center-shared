@@ -45,6 +45,14 @@ test("running campaign with zero callable records and no active calls is treated
   });
 });
 
+test("running campaign with persisted running metadata and zero callable records is treated as exhausted", () => {
+  const campaign = { id: "campaign-1", status: "running", metadata: { execution_state: "running" } };
+  const runtime = { progress: { total: 10, completed: 10, remaining: 0 }, live: { active: 0, ringing: 0 } };
+
+  assert.equal(normalizeCampaignExecutionState(campaign, runtime), "exhausted");
+  assert.equal(campaignControlState(campaign, false, runtime).state, "exhausted");
+});
+
 test("running campaign with active calls is not treated as exhausted even when callable is zero", () => {
   const campaign = { id: "campaign-1", status: "running", metadata: {} };
   const runtime = { progress: { total: 10, completed: 10, remaining: 0 }, live: { active: 1, ringing: 0 } };
