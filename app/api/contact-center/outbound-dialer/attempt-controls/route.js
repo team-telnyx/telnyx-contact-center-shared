@@ -1,23 +1,30 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { normalizeAttemptControlLimits, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 
 const STATUSES = ["draft", "active", "paused"];
 const RESET_PERIODS = ["daily", "weekly", "monthly", "campaign", "lifetime"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
 const normalizeResetPeriod = (value) => RESET_PERIODS.includes(value) ? value : "daily";
-const normalizeInt = (value, fallback, min = 0, max = 999) => Math.max(min, Math.min(max, Number.parseInt(value, 10) || fallback));
 
-function normalizeAttemptControl(body = {}) {
+async function getGlobalMaxAttempts(pool) {
+  const { rows } = await pool.query(`SELECT settings FROM outbound_settings WHERE id='default' LIMIT 1`);
+  const settings = rows?.[0]?.settings && typeof rows[0].settings === "object" ? rows[0].settings : {};
+  return normalizeGlobalMaxAttempts(settings.global_max_attempts ?? settings.globalMaxAttempts);
+}
+
+function normalizeAttemptControl(body = {}, globalMaxAttempts = 5) {
+  const normalized = normalizeAttemptControlLimits(body, globalMaxAttempts);
   return {
     name: requireString(body.name, "Attempt control name"),
     description: optionalString(body.description),
     status: normalizeStatus(body.status),
     reset_period: normalizeResetPeriod(body.reset_period || body.resetPeriod),
     timezone: optionalString(body.timezone, 80) || "Europe/Warsaw",
-    max_attempts_per_contact: normalizeInt(body.max_attempts_per_contact ?? body.maxAttemptsPerContact, 4, 1, 5),
-    max_attempts_per_number: normalizeInt(body.max_attempts_per_number ?? body.maxAttemptsPerNumber, 2, 1, 5),
-    recall_rules: safeJson(body.recall_rules ?? body.recallRules, []),
-    phone_type_rules: safeJson(body.phone_type_rules ?? body.phoneTypeRules, []),
+    max_attempts_per_contact: normalized.max_attempts_per_contact,
+    max_attempts_per_number: normalized.max_attempts_per_number,
+    recall_rules: normalized.recall_rules,
+    phone_type_rules: normalized.phone_type_rules,
     metadata: safeJson(body.metadata, {}),
   };
 }
@@ -33,7 +40,8 @@ export async function POST(request) {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const pool = getOutboundPool(); if (!pool) return jsonError("Server not ready", 500);
   try {
-    const body = normalizeAttemptControl(await request.json());
+    const globalMaxAttempts = await getGlobalMaxAttempts(pool);
+    const body = normalizeAttemptControl(await request.json(), globalMaxAttempts);
     const username = usernameFor(user);
     const { rows } = await pool.query(`INSERT INTO outbound_attempt_controls (name, description, status, reset_period, timezone, max_attempts_per_contact, max_attempts_per_number, recall_rules, phone_type_rules, metadata, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING *`, [body.name, body.description, body.status, body.reset_period, body.timezone, body.max_attempts_per_contact, body.max_attempts_per_number, JSON.stringify(body.recall_rules), JSON.stringify(body.phone_type_rules), JSON.stringify(body.metadata), username]);
     return NextResponse.json({ ok: true, attemptControl: mapOutboundAttemptControl(rows[0]) });

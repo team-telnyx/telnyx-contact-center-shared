@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DEFAULT_CALLABLE_DAYS = ["mon", "tue", "wed", "thu", "fri"];
@@ -35,6 +36,7 @@ function normalizeSettings(body = {}) {
     max_line_utilization_percent: Math.max(1, Math.min(100, Number.parseInt(settings.max_line_utilization_percent ?? settings.maxLineUtilizationPercent, 10) || 90)),
     max_cps: Math.max(1, Math.min(1000, Number.parseInt(settings.max_cps ?? settings.maxCps, 10) || 50)),
     compliance_abandon_threshold_seconds: Math.max(0, Math.min(300, Number.parseInt(settings.compliance_abandon_threshold_seconds ?? settings.complianceAbandonThresholdSeconds, 10) || 2)),
+    global_max_attempts: normalizeGlobalMaxAttempts(settings.global_max_attempts ?? settings.globalMaxAttempts),
     callable_days: normalizeCallableDays(settings),
     callable_window: {
       earliest: String(callable.earliest || "09:00").slice(0, 5),
