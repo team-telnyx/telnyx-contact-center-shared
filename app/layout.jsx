@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ConditionalSessionProvider } from "@/components/conditional-session-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/components/ToastNotify";
 import "./globals.css";
 
 const geistSans = Geist({

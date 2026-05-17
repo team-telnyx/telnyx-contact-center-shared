@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -156,7 +156,7 @@ export default function NumbersSearchTab() {
       setAreaCodes(data);
     } catch (err) {
       console.error("Failed to load area codes:", err);
-      toast.error("Failed to load area codes");
+      notify({ title: "Failed to load area codes", variant: "error" });
     } finally {
       setLoadingAreaCodes(false);
     }
@@ -290,11 +290,9 @@ export default function NumbersSearchTab() {
       if (!res.ok) throw new Error(data?.error || "Search failed");
       setSearchResults(data.data || []);
       setSelectedNumbers([]);
-      toast.success(`Found ${data.data?.length || 0} available numbers`);
+      notify({ title: `Found ${data.data?.length || 0} available numbers`, variant: "success" });
     } catch (err) {
-      toast.error("Search failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Search failed", description: String(err.message || err), variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -302,7 +300,7 @@ export default function NumbersSearchTab() {
 
   function handleOrderClick() {
     if (selectedNumbers.length === 0) {
-      toast.error("Please select at least one number");
+      notify({ title: "Please select at least one number", variant: "error" });
       return;
     }
     setShowOrderConfirmation(true);
@@ -321,11 +319,9 @@ export default function NumbersSearchTab() {
       if (!res.ok) throw new Error(data?.error || "Order failed");
       setOrderStatus(data.data);
       setShowOrderStatus(true);
-      toast.success("Order placed successfully!");
+      notify({ title: "Order placed successfully!", variant: "success" });
     } catch (err) {
-      toast.error("Order failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Order failed", description: String(err.message || err), variant: "error" });
     } finally {
       setOrdering(false);
     }

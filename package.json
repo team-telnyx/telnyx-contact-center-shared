@@ -72,7 +72,6 @@
     "reactflow": "^11.11.4",
     "recharts": "^3.7.0",
     "remark-gfm": "^4.0.1",
-    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tweetnacl": "^1.0.3",
     "utf-8-validate": "^6.0.6",

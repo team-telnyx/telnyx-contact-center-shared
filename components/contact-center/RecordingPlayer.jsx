@@ -16,7 +16,7 @@ import {
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
 import TranscriptionSheet from "./TranscriptionSheet";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 
 function formatDuration(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return "00:00";
@@ -113,9 +113,9 @@ export default function RecordingPlayer({
         const errorString = errorMessage.toLowerCase();
         
         if (errorString.includes("failed to fetch") || errorString.includes("cors") || errorString.includes("networkerror")) {
-          toast.error("Failed to load recording. The recording may be unavailable, expired, or there was a network error.");
+          notify({ title: "Failed to load recording. The recording may be unavailable, expired, or there was a network error.", variant: "error" });
         } else {
-          toast.error(`Failed to load recording: ${errorMessage || "Unknown error"}`);
+          notify({ title: `Failed to load recording: ${errorMessage || "Unknown error"}`, variant: "error" });
         }
       });
 
@@ -123,7 +123,7 @@ export default function RecordingPlayer({
         wavesurfer.load(loadUrl);
       } catch (error) {
         console.error("[RecordingPlayer] Error loading recording:", error);
-        toast.error("Failed to initialize recording player");
+        notify({ title: "Failed to initialize recording player", variant: "error" });
       }
     }, 100);
 
@@ -159,7 +159,7 @@ export default function RecordingPlayer({
 
   const handleTranscribe = async () => {
     if (!recordingId || !interactionId) {
-      toast.error("Recording ID and Interaction ID are required");
+      notify({ title: "Recording ID and Interaction ID are required", variant: "error" });
       return;
     }
 
@@ -188,13 +188,13 @@ export default function RecordingPlayer({
         setLocalTranscriptionText(data.transcription_text);
         setLocalTranscriptionSegments(data.transcription_segments || null);
         setLocalTranscriptionSummary(data.transcription_summary || null);
-        toast.success("Transcription completed successfully");
+        notify({ title: "Transcription completed successfully", variant: "success" });
       } else {
         throw new Error("No transcription text received");
       }
     } catch (error) {
       console.error("[RecordingPlayer] Transcription error:", error);
-      toast.error(error.message || "Failed to transcribe recording");
+      notify({ title: error.message || "Failed to transcribe recording", variant: "error" });
     } finally {
       setIsTranscribing(false);
     }

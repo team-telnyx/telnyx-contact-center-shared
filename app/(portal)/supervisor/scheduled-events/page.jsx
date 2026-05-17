@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import {
@@ -143,9 +143,7 @@ export default function SupervisorScheduledEventsPage() {
       setItems(filteredItems);
       setTotal(filteredItems.length);
     } catch (err) {
-      toast.error("Load failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Load failed", description: String(err.message || err), variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -224,18 +222,14 @@ export default function SupervisorScheduledEventsPage() {
         },
       );
       if (r.ok) {
-        toast.success("Event deleted successfully");
+        notify({ title: "Event deleted successfully", variant: "success" });
         load();
       } else {
         const d = await r.json().catch(() => ({}));
-        toast.error("Delete failed", {
-          description: d?.error || "",
-        });
+        notify({ title: "Delete failed", description: d?.error || "", variant: "error" });
       }
     } catch (err) {
-      toast.error("Delete failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Delete failed", description: String(err.message || err), variant: "error" });
     }
   }
 
@@ -397,9 +391,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
 
   function handleFileSelect(file) {
     if (!file.name.endsWith(".csv")) {
-      toast.error("Invalid file type", {
-        description: "Please select a CSV file",
-      });
+      notify({ title: "Invalid file type", description: "Please select a CSV file", variant: "error" });
       return;
     }
     setImportFile(file);
@@ -415,7 +407,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
 
   async function handleImport() {
     if (!importFile) {
-      toast.error("Please select a CSV file");
+      notify({ title: "Please select a CSV file", variant: "error" });
       return;
     }
 
@@ -424,7 +416,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
       const text = await importFile.text();
       const lines = text.split("\n").filter((l) => l.trim());
       if (lines.length < 2) {
-        toast.error("CSV file is empty or has no data rows");
+        notify({ title: "CSV file is empty or has no data rows", variant: "error" });
         setImporting(false);
         return;
       }
@@ -456,15 +448,12 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
 
       const { results } = data;
       if (results.success > 0) {
-        toast.success(`Successfully imported ${results.success} events`);
+        notify({ title: `Successfully imported ${results.success} events`, variant: "success" });
       }
       if (results.failed > 0) {
-        toast.error(`Failed to import ${results.failed} events`, {
-          description:
-            results.errors.length > 0
+        notify({ title: `Failed to import ${results.failed} events`, description: results.errors.length > 0
               ? `Row ${results.errors[0].row}: ${results.errors[0].error}`
-              : "",
-        });
+              : "", variant: "error" });
       }
 
       setShowImportDialog(false);
@@ -475,9 +464,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
       }
       load();
     } catch (err) {
-      toast.error("Import failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Import failed", description: String(err.message || err), variant: "error" });
     } finally {
       setImporting(false);
     }

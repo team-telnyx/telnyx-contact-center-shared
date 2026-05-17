@@ -45,7 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import {
@@ -147,9 +147,7 @@ export default function NumbersInventoryTab() {
         loadNumberFeatures(numbers.map((n) => n.phone_number));
       }
     } catch (err) {
-      toast.error("Load failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Load failed", description: String(err.message || err), variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -248,12 +246,10 @@ export default function NumbersInventoryTab() {
         const data = await res.json();
         throw new Error(data?.error || "Failed to update connection");
       }
-      toast.success("Connection updated");
+      notify({ title: "Connection updated", variant: "success" });
       load();
     } catch (err) {
-      toast.error("Update failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Update failed", description: String(err.message || err), variant: "error" });
     } finally {
       setUpdating((prev) => ({ ...prev, [`conn_${phoneNumberId}`]: false }));
     }
@@ -300,12 +296,10 @@ export default function NumbersInventoryTab() {
         const data = await res.json();
         throw new Error(data?.error || "Failed to update messaging profile");
       }
-      toast.success("Messaging profile updated");
+      notify({ title: "Messaging profile updated", variant: "success" });
       load();
     } catch (err) {
-      toast.error("Update failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Update failed", description: String(err.message || err), variant: "error" });
     } finally {
       setUpdating((prev) => ({ ...prev, [`msg_${phoneNumberId}`]: false }));
     }
@@ -330,16 +324,14 @@ export default function NumbersInventoryTab() {
         method: "DELETE",
       });
       if (r.ok) {
-        toast.success("Number deleted");
+        notify({ title: "Number deleted", variant: "success" });
         load();
       } else {
         const d = await r.json().catch(() => ({}));
-        toast.error("Delete failed", {
-          description: d?.error || "",
-        });
+        notify({ title: "Delete failed", description: d?.error || "", variant: "error" });
       }
     } catch (err) {
-      toast.error("Delete failed", { description: String(err.message || err) });
+      notify({ title: "Delete failed", description: String(err.message || err), variant: "error" });
     }
   }
 

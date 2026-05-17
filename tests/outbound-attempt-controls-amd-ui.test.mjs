@@ -96,7 +96,6 @@ test("floating phone WebRTC URI copy uses shared notify toast component", async 
   const source = await readFile(new URL("../components/floating-softphone.jsx", import.meta.url), "utf8");
 
   assert.match(source, /import \{ notify \} from "@\/components\/ToastNotify"/, "Floating phone should use the same ToastNotify component as Outbound Dialer");
-  assert.doesNotMatch(source, /import \{ toast \} from "sonner"/, "Floating phone should not use raw sonner toasts");
-  assert.doesNotMatch(source, /toast\.(success|error)/, "Floating phone WebRTC URI copy should not render raw sonner success/error toast formats");
+  assert.doesNotMatch(source, /toast\.(success|error)/, "Floating phone WebRTC URI copy should not render raw legacy toast formats");
   assert.match(source, /notify\(\{[\s\S]*title: "WebRTC URI copied"[\s\S]*description:/, "Copied URI notification should include a title and description");
 });

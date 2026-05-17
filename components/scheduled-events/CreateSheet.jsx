@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Combobox } from "@/components/ui/combobox";
 import { IconPlus } from "@tabler/icons-react";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
 
@@ -126,30 +126,30 @@ export default function CreateSheet({
 
   async function onSave() {
     if (!assistantId) {
-      toast.error("Please select an AI assistant");
+      notify({ title: "Please select an AI assistant", variant: "error" });
       return;
     }
     if (!fromNumber) {
-      toast.error("From number is required");
+      notify({ title: "From number is required", variant: "error" });
       return;
     }
     if (!toNumber) {
-      toast.error("To number is required");
+      notify({ title: "To number is required", variant: "error" });
       return;
     }
     if (!scheduledAt) {
-      toast.error("Scheduled date/time is required");
+      notify({ title: "Scheduled date/time is required", variant: "error" });
       return;
     }
     if (channel === "sms_chat" && !text) {
-      toast.error("Text is required for SMS events");
+      notify({ title: "Text is required for SMS events", variant: "error" });
       return;
     }
 
     const maxRetries = Number(maxRetriesClientErrors || 0);
     const retryInterval = retryIntervalSecs ? Number(retryIntervalSecs) : null;
     if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) {
-      toast.error("Max client error retries must be between 0 and 10");
+      notify({ title: "Max client error retries must be between 0 and 10", variant: "error" });
       return;
     }
     if (
@@ -158,11 +158,11 @@ export default function CreateSheet({
         retryInterval < 60 ||
         retryInterval > 86400)
     ) {
-      toast.error("Retry interval must be between 60 and 86400 seconds");
+      notify({ title: "Retry interval must be between 60 and 86400 seconds", variant: "error" });
       return;
     }
     if (maxRetries > 0 && retryInterval === null) {
-      toast.error("Retry interval is required when retries are enabled");
+      notify({ title: "Retry interval is required when retries are enabled", variant: "error" });
       return;
     }
 
@@ -190,19 +190,15 @@ export default function CreateSheet({
       });
 
       if (r.ok) {
-        toast.success("Event scheduled successfully");
+        notify({ title: "Event scheduled successfully", variant: "success" });
         onOpenChange(false);
         onSaveComplete && onSaveComplete();
       } else {
         const d = await r.json().catch(() => ({}));
-        toast.error("Failed to schedule event", {
-          description: d?.error || "",
-        });
+        notify({ title: "Failed to schedule event", description: d?.error || "", variant: "error" });
       }
     } catch (err) {
-      toast.error("Failed to schedule event", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Failed to schedule event", description: String(err.message || err), variant: "error" });
     } finally {
       setSaving(false);
     }

@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconActivity, IconX, IconCopy, IconCheck } from "@tabler/icons-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AiConversationCostsTab from "@/components/contact-center/AiConversationCostsTab";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Tool, ToolContent } from "@/components/ai-elements/tool";
 import {
   CodeBlock,
@@ -208,12 +208,12 @@ export default function InteractionDetailsSheet({
 
           setSessionWithCallControlId(updatedSession);
         } else {
-          toast.error(data.error || "Failed to load call events");
+          notify({ title: data.error || "Failed to load call events", variant: "error" });
           setEventsMessage("Failed to load call events.");
         }
       } catch (error) {
         console.error("Error fetching call events:", error);
-        toast.error("Failed to load call events");
+        notify({ title: "Failed to load call events", variant: "error" });
         setEventsMessage("Failed to load call events.");
       } finally {
         setLoading(false);
@@ -227,10 +227,10 @@ export default function InteractionDetailsSheet({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(label);
-      toast.success(`${label} copied to clipboard`);
+      notify({ title: `${label} copied to clipboard`, variant: "success" });
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
-      toast.error("Failed to copy to clipboard");
+      notify({ title: "Failed to copy to clipboard", variant: "error" });
     }
   };
 

@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -187,15 +187,15 @@ export function Softphone() {
 
   const copySipUri = async () => {
     if (!sipUri) {
-      toast.error("WebRTC SIP URI is not configured for this profile");
+      notify({ title: "WebRTC SIP URI is not configured for this profile", variant: "error" });
       return;
     }
 
     try {
       await navigator.clipboard.writeText(sipUri);
-      toast.success("WebRTC URI copied", { description: sipUri });
+      notify({ title: "WebRTC URI copied", description: sipUri, variant: "success" });
     } catch (_) {
-      toast.error("Failed to copy WebRTC URI");
+      notify({ title: "Failed to copy WebRTC URI", variant: "error" });
     }
   };
 
