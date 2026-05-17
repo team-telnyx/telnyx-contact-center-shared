@@ -31,6 +31,7 @@ import { canValidateContactList, campaignContactListTargets, contactListValidati
 import { normalizeAttemptControlLimits, normalizeAttemptCount, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { buildDashboardCampaignExpandedStats } from "@/lib/outbound-dialer/dashboard-view-model";
 import { attemptReasonCode, attemptStatusReasonLabel, campaignControlState, campaignStatusEventsFromCampaigns, contactRecordHeaderLabel, contactRecordLabel, groupAttemptsByContactRecord, normalizeCampaignExecutionState, singleCampaignSelection } from "@/lib/outbound-dialer/history-view-model";
+import { campaignContactProgress, campaignInventoryDisplayState } from "@/lib/outbound-dialer/progress-view-model";
 
 const API = "/api/contact-center/outbound-dialer";
 const NAV_ITEMS = [
@@ -183,18 +184,7 @@ const api = async (url, options = {}) => { const res = await fetch(url, { cache:
 
 const isDashboardCampaign = (campaign) => campaign && !["draft", "design", "archived"].includes(String(campaign.status || "").toLowerCase());
 const executionStateFor = normalizeCampaignExecutionState;
-const campaignContactProgress = (campaign, contactLists = [], executionDebug = null) => {
-  const list = contactLists.find((l) => l.id === campaign?.contact_list_id);
-  const metadata = campaign?.metadata || {};
-  const summary = executionDebug?.summary || {};
-  const total = Number(metadata.total_records ?? metadata.totalRecords ?? list?.record_count ?? list?.valid_phone_count ?? 0) || 0;
-  const processedFromLedger = Number(summary.processed_records || 0);
-  const completedFromLedger = Number(summary.completed_records || 0);
-  const completed = Math.min(total, processedFromLedger || completedFromLedger || Number(metadata.completed_records ?? metadata.completedRecords ?? 0) || 0);
-  const remaining = Math.max(total - completed, 0);
-  const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return { total, completed, remaining, progress, source: completedFromLedger ? "execution ledger" : (total > 0 ? (metadata.total_records || metadata.totalRecords ? "campaign metadata" : "contact list records") : "no contact records yet") };
-};
+
 const campaignLiveMetrics = (campaign, executionDebug = null) => {
   const summary = executionDebug?.summary || {};
   if (executionDebug) {
@@ -494,7 +484,7 @@ export default function OutboundDialerPage() {
     />
     <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
       <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Outbound dialer sections" />
-      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "live-calls" ? <LiveCallsView payload={liveCallsPayload} loading={liveCallsLoading} campaignFilter={liveCampaignFilter} statusFilter={liveStatusFilter} onOpenDetails={setSelectedLiveCallDetails} onOpenSupervision={setSelectedSupervisionCall} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} contactLists={contactLists} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} executionDebugByCampaign={executionDebugByCampaign} campaignId={effectiveEventViewerCampaignId} typeFilter={eventViewerType} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
+      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "live-calls" ? <LiveCallsView payload={liveCallsPayload} loading={liveCallsLoading} campaignFilter={liveCampaignFilter} statusFilter={liveStatusFilter} onOpenDetails={setSelectedLiveCallDetails} onOpenSupervision={setSelectedSupervisionCall} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} executionDebugByCampaign={executionDebugByCampaign} campaignId={effectiveEventViewerCampaignId} typeFilter={eventViewerType} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
       <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : active === "live-calls" ? "Live call filters" : "Context settings"} description={active === "dashboard" ? "Execution status details" : active === "live-calls" ? "Realtime totals and filters" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaigns={campaigns} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={active === "campaigns" ? validatedContactLists : contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${effectiveSelectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={effectiveSelectedReasonMetricsDay} onSelectReasonDay={selectReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} eventViewerCampaignId={effectiveEventViewerCampaignId} setEventViewerCampaignId={setEventViewerCampaignId} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} eventViewerType={eventViewerType} setEventViewerType={setEventViewerType} eventViewerTypes={eventViewerTypes} executionDebugByCampaign={executionDebugByCampaign} liveCallsPayload={liveCallsPayload} liveCampaignFilter={liveCampaignFilter} setLiveCampaignFilter={setLiveCampaignFilter} liveStatusFilter={liveStatusFilter} setLiveStatusFilter={setLiveStatusFilter} /></aside>
     </main><InteractionDetailsSheet open={Boolean(selectedLiveCallDetails)} onOpenChange={(open) => { if (!open) setSelectedLiveCallDetails(null); }} interaction={selectedLiveCallDetails?.sessionDetails || null} /><SupervisionModal open={Boolean(selectedSupervisionCall)} onOpenChange={(open) => { if (!open) setSelectedSupervisionCall(null); }} call={selectedSupervisionCall?.supervisionCall || null} /></SupervisorPageShell>;
 }
@@ -571,20 +561,23 @@ function campaignListName(campaign, contactLists = []) {
   return list?.name || "—";
 }
 
-function CampaignsView({ campaigns, contactLists = [], selectedCampaign, setSelectedCampaignId, archive, saving }) {
+function CampaignsView({ campaigns, contactLists = [], executionDebugByCampaign = {}, selectedCampaign, setSelectedCampaignId, archive, saving }) {
   return <CrudTable
     title="Campaign inventory"
     description="Rows select configuration in the right Settings card; execution controls stay on Dashboard."
     emptyTitle="No campaigns yet"
     emptyDescription="Use New campaign in the workspace header to create the first persisted campaign."
     columns={["Name", "Status", "List", "Mode", "Actions"]}
-    rows={campaigns.map((c) => ({
-      id: c.id,
-      selected: selectedCampaign?.id === c.id,
-      onSelect: () => setSelectedCampaignId(c.id),
-      cells: [<span key="name" className="font-medium">{c.name}</span>, <Badge key="status" variant="outline" className={statusClass(c.status)}>{title(c.status)}</Badge>, campaignListName(c, contactLists), title(c.mode)],
-      actions: <DeleteButton disabled={saving} onClick={() => archive(c)} label="Archive campaign" />,
-    }))}
+    rows={campaigns.map((c) => {
+      const displayState = campaignInventoryDisplayState(c, contactLists, executionDebugByCampaign?.[c.id]);
+      return {
+        id: c.id,
+        selected: selectedCampaign?.id === c.id,
+        onSelect: () => setSelectedCampaignId(c.id),
+        cells: [<span key="name" className="font-medium">{c.name}</span>, <Badge key="status" variant="outline" className={statusClass(displayState)}>{title(displayState)}</Badge>, campaignListName(c, contactLists), title(c.mode)],
+        actions: <DeleteButton disabled={saving} onClick={() => archive(c)} label="Archive campaign" />,
+      };
+    })}
   />;
 }
 

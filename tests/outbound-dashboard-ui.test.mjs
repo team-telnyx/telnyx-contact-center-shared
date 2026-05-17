@@ -75,3 +75,16 @@ test("settings allowed numbers card uses requested title and CLI subtitle", asyn
   assert.doesNotMatch(source, /Selected allowed numbers/);
   assert.doesNotMatch(source, /Numbers currently enabled for campaign FROM selection/);
 });
+
+test("campaign inventory uses runtime display state instead of raw campaign status", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const viewStart = source.indexOf("function CampaignsView");
+  const viewEnd = source.indexOf("function ContactListsView", viewStart);
+  assert.ok(viewStart > -1 && viewEnd > viewStart, "CampaignsView should exist");
+
+  const viewSource = source.slice(viewStart, viewEnd);
+  assert.match(source, /campaignInventoryDisplayState/, "page should import the inventory display view model");
+  assert.match(viewSource, /campaignInventoryDisplayState\(c, contactLists, executionDebugByCampaign\?\.\[c\.id\]\)/, "Campaign Inventory should derive display status from runtime progress/debug");
+  assert.match(viewSource, /statusClass\(displayState\)/, "Campaign Inventory status badge should use the derived display state");
+  assert.doesNotMatch(viewSource, /statusClass\(c\.status\)/, "Campaign Inventory should not show raw running status for exhausted runtime campaigns");
+});
