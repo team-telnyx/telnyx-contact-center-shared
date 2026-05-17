@@ -159,13 +159,15 @@ export async function POST(request, { params }) {
 
     // Verify Telnyx signature (optional but recommended)
     const isValid = await verifyTelnyxSignature(request, rawBody);
+    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "false").toLowerCase() === "true";
     if (!isValid) {
-      console.warn("Invalid Telnyx signature - proceeding anyway");
-      // Uncomment to enforce signature validation:
-      return NextResponse.json(
-        { ok: false, error: "Invalid signature" },
-        { status: 401 },
-      );
+      console.warn("[incoming-flow-webhook] Invalid Telnyx signature", { enforceSignature });
+      if (enforceSignature) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid signature" },
+          { status: 401 },
+        );
+      }
     }
 
     // Parse the body

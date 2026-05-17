@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { annotateCampaignDncScaffold, getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CAMPAIGN_MODES, OUTBOUND_CHANNELS, OUTBOUND_HANDLER_TYPES } from "@/lib/outbound-dialer/schema";
 
+const normalizeRetryPolicy = (value = {}) => {
+  const policy = safeJson(value, {});
+  const parsed = Number.parseInt(policy?.maxAttempts, 10);
+  const maxAttempts = Number.isFinite(parsed) ? Math.max(1, Math.min(5, parsed)) : 4;
+  return { ...policy, maxAttempts };
+};
+
 export async function GET(request, context) {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const { campaignId } = await context.params;
@@ -89,7 +96,7 @@ export async function PUT(request, context) {
     const body = await request.json();
     const username = usernameFor(user);
     const { rows } = await pool.query(`UPDATE outbound_campaigns SET name=$1, description=$2, status=$3, channel=$4, mode=$5, handler_type=$6, handler_ref=$7, contact_list_id=$8, attached_form_id=$9, pacing_config=$10, concurrency_config=$11, dialing_windows=$12, retry_policy=$13, amd_config=$14, form_variable_mapping=$15, metadata=$16, attempt_control_id=$17, updated_by=$18, updated_at=NOW() WHERE id=$19 AND status <> 'archived' RETURNING *`, [
-      requireString(body.name, "Campaign name"), optionalString(body.description), ensureEnum(body.status, ["draft", "ready", "paused", "running", "completed"], "draft"), ensureEnum(body.channel, OUTBOUND_CHANNELS, "voice"), ensureEnum(body.mode, OUTBOUND_CAMPAIGN_MODES, "preview"), ensureEnum(body.handler_type, OUTBOUND_HANDLER_TYPES, "queue"), optionalString(body.handler_ref, 200), body.contact_list_id || null, body.attached_form_id || null, JSON.stringify(safeJson(body.pacing_config, {})), JSON.stringify(safeJson(body.concurrency_config, {})), JSON.stringify(safeJson(body.dialing_windows, [])), JSON.stringify(safeJson(body.retry_policy, {})), JSON.stringify(safeJson(body.amd_config, {})), JSON.stringify(safeJson(body.form_variable_mapping, [])), JSON.stringify(safeJson(body.metadata, {})), body.attempt_control_id || null, username, campaignId,
+      requireString(body.name, "Campaign name"), optionalString(body.description), ensureEnum(body.status, ["draft", "ready", "paused", "running", "completed"], "draft"), ensureEnum(body.channel, OUTBOUND_CHANNELS, "voice"), ensureEnum(body.mode, OUTBOUND_CAMPAIGN_MODES, "preview"), ensureEnum(body.handler_type, OUTBOUND_HANDLER_TYPES, "queue"), optionalString(body.handler_ref, 200), body.contact_list_id || null, body.attached_form_id || null, JSON.stringify(safeJson(body.pacing_config, {})), JSON.stringify(safeJson(body.concurrency_config, {})), JSON.stringify(safeJson(body.dialing_windows, [])), JSON.stringify(normalizeRetryPolicy(body.retry_policy)), JSON.stringify(safeJson(body.amd_config, {})), JSON.stringify(safeJson(body.form_variable_mapping, [])), JSON.stringify(safeJson(body.metadata, {})), body.attempt_control_id || null, username, campaignId,
     ]);
     if (!rows[0]) return jsonError("Campaign not found", 404);
     let campaign = rows[0];
