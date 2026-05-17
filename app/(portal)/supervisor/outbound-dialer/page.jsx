@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
+  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconHeadphones, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPhoneOff, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
   supervisorPurplePageShellClass,
 } from "@/components/contact-center/SupervisorPageLayout";
 import InteractionDetailsSheet from "@/components/contact-center/InteractionDetailsSheet";
+import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
 import { CSV_FILTER_OPERATORS, applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 import { canValidateContactList, campaignContactListTargets, contactListValidationMessage } from "@/lib/outbound-dialer/contact-list-validation";
 import { normalizeAttemptControlLimits, normalizeAttemptCount, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
@@ -34,6 +35,7 @@ import { attemptReasonCode, campaignControlState, campaignStatusEventsFromCampai
 const API = "/api/contact-center/outbound-dialer";
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconChartBar, description: "Live dialer performance" },
+  { id: "live-calls", label: "Live Calls", icon: IconActivity, description: "Monitor active campaign calls" },
   { id: "campaigns", label: "Campaigns", icon: IconPhoneCall, description: "Build and tune outreach" },
   { id: "contact-lists", label: "Contact Lists", icon: IconDatabase, description: "Import audiences and fields" },
   { id: "dnc", label: "DNC", icon: IconShieldCheck, description: "Suppression governance" },
@@ -226,6 +228,8 @@ const campaignTimeline = (campaign) => {
 };
 const normalizeReasonCodeLabel = (value) => title(String(value || "unknown").replace(/\./g, "_"));
 const formatPercent = (value) => `${Math.round(Number(value || 0))}%`;
+const formatDuration = (seconds = 0) => { const safe = Math.max(0, Math.floor(Number(seconds) || 0)); const h = Math.floor(safe / 3600); const m = Math.floor((safe % 3600) / 60); const s = safe % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`; };
+const liveCallStatusClass = (status) => ({ ringing: "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300", connected: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", hangup: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300", failed: "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300" }[String(status || "").toLowerCase()] || statusClass(status));
 const classifyReasonCode = (reasonCode, retryEligibleCount) => {
   if (Number(retryEligibleCount || 0) > 0) return "retryable";
   const value = String(reasonCode || "").toLowerCase();
@@ -253,6 +257,12 @@ export default function OutboundDialerPage() {
   const [selectedReasonMetricsCampaignId, setSelectedReasonMetricsCampaignId] = useState(null);
   const [eventViewerCampaignId, setEventViewerCampaignId] = useState(null);
   const [eventViewerType, setEventViewerType] = useState("all");
+  const [liveCallsPayload, setLiveCallsPayload] = useState({ calls: [], totals: { total: 0, active: 0, byStatus: {} }, filters: { campaigns: [], statuses: [] } });
+  const [liveCallsLoading, setLiveCallsLoading] = useState(false);
+  const [liveCampaignFilter, setLiveCampaignFilter] = useState("all");
+  const [liveStatusFilter, setLiveStatusFilter] = useState("all");
+  const [selectedLiveCallDetails, setSelectedLiveCallDetails] = useState(null);
+  const [selectedSupervisionCall, setSelectedSupervisionCall] = useState(null);
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
   const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
   const dashboardCampaigns = useMemo(() => campaigns.filter(isDashboardCampaign), [campaigns]);
@@ -330,6 +340,49 @@ export default function OutboundDialerPage() {
     return () => {
       if (pollTimer) clearInterval(pollTimer);
       try { eventSource?.close(); } catch {}
+    };
+  }, [active]);
+
+  useEffect(() => {
+    if (active !== "live-calls") return;
+    let cancelled = false;
+    let eventSource = null;
+    let fallbackTimer = null;
+    const applyPayload = (data) => {
+      if (!cancelled && data?.calls) setLiveCallsPayload(data);
+    };
+    const loadLiveCalls = async (showSpinner = false) => {
+      try {
+        if (showSpinner) setLiveCallsLoading(true);
+        applyPayload(await api(`${API}/live-calls`));
+      } catch (err) {
+        if (!cancelled) notify({ title: "Live calls refresh failed", description: err.message, variant: "error" });
+      } finally {
+        if (!cancelled) setLiveCallsLoading(false);
+      }
+    };
+    if (typeof window !== "undefined" && "EventSource" in window) {
+      setLiveCallsLoading(true);
+      eventSource = new EventSource(`${API}/live-calls/stream`);
+      eventSource.addEventListener("live_calls", (event) => {
+        try {
+          applyPayload(JSON.parse(event.data));
+          setLiveCallsLoading(false);
+        } catch (err) {
+          notify({ title: "Live calls stream parse failed", description: err.message, variant: "error" });
+        }
+      });
+      eventSource.addEventListener("error", () => {
+        if (!cancelled) setLiveCallsLoading(false);
+      });
+    } else {
+      loadLiveCalls(true);
+      fallbackTimer = setInterval(() => loadLiveCalls(false), 2000);
+    }
+    return () => {
+      cancelled = true;
+      if (eventSource) eventSource.close();
+      if (fallbackTimer) clearInterval(fallbackTimer);
     };
   }, [active]);
 
@@ -414,7 +467,7 @@ export default function OutboundDialerPage() {
   }, [eventViewerCampaignId, effectiveEventViewerCampaignId]);
   const eventViewerTypes = useMemo(() => ["all", ...new Set(outboundEventsFromCampaigns(campaigns, executionDebugByCampaign).filter((event) => !effectiveEventViewerCampaignId || event.campaign_id === effectiveEventViewerCampaignId).map((event) => event.type).filter(Boolean))], [campaigns, executionDebugByCampaign, effectiveEventViewerCampaignId]);
   const validatedContactLists = useMemo(() => campaignContactListTargets(contactLists), [contactLists]);
-  const headerAction = { campaigns: { label: "New campaign", create: () => { setActive("campaigns"); saveCampaign(defaultCampaign()); } }, "contact-lists": { label: "New contact list", create: () => { setActive("contact-lists"); saveList(defaultList()); } }, dnc: { label: "New DNC list", create: () => { setActive("dnc"); saveDncList(defaultDncList()); } }, filters: { label: "New filter", create: () => { setActive("filters"); saveFilter(defaultFilter()); } }, "time-sets": { label: "New time set", create: () => { setActive("time-sets"); saveTimeSet(defaultTimeSetFromSettings(outboundSettings)); } }, "attempt-controls": { label: "New attempt control", create: () => { setActive("attempt-controls"); saveAttemptControl(defaultAttemptControl()); } }, settings: { label: null, create: null } }[active];
+  const headerAction = { campaigns: { label: "New campaign", create: () => { setActive("campaigns"); saveCampaign(defaultCampaign()); } }, "contact-lists": { label: "New contact list", create: () => { setActive("contact-lists"); saveList(defaultList()); } }, dnc: { label: "New DNC list", create: () => { setActive("dnc"); saveDncList(defaultDncList()); } }, filters: { label: "New filter", create: () => { setActive("filters"); saveFilter(defaultFilter()); } }, "time-sets": { label: "New time set", create: () => { setActive("time-sets"); saveTimeSet(defaultTimeSetFromSettings(outboundSettings)); } }, "attempt-controls": { label: "New attempt control", create: () => { setActive("attempt-controls"); saveAttemptControl(defaultAttemptControl()); } }, "live-calls": { label: null, create: null }, settings: { label: null, create: null } }[active];
   const registerHeaderSaveAction = useCallback((action) => setHeaderSaveAction(action), []);
   const activeSaveAction = headerSaveAction?.section === active ? headerSaveAction : null;
 
@@ -426,9 +479,29 @@ export default function OutboundDialerPage() {
     />
     <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
       <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Outbound dialer sections" />
-      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} contactLists={contactLists} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} executionDebugByCampaign={executionDebugByCampaign} campaignId={effectiveEventViewerCampaignId} typeFilter={eventViewerType} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
-      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : "Context settings"} description={active === "dashboard" ? "Execution status details" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaigns={campaigns} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={active === "campaigns" ? validatedContactLists : contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${effectiveSelectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={effectiveSelectedReasonMetricsDay} onSelectReasonDay={selectReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} eventViewerCampaignId={effectiveEventViewerCampaignId} setEventViewerCampaignId={setEventViewerCampaignId} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} eventViewerType={eventViewerType} setEventViewerType={setEventViewerType} eventViewerTypes={eventViewerTypes} executionDebugByCampaign={executionDebugByCampaign} /></aside>
-    </main></SupervisorPageShell>;
+      <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "live-calls" ? <LiveCallsView payload={liveCallsPayload} loading={liveCallsLoading} campaignFilter={liveCampaignFilter} statusFilter={liveStatusFilter} onOpenDetails={setSelectedLiveCallDetails} onOpenSupervision={setSelectedSupervisionCall} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} contactLists={contactLists} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} executionDebugByCampaign={executionDebugByCampaign} campaignId={effectiveEventViewerCampaignId} typeFilter={eventViewerType} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
+      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : active === "live-calls" ? "Live call filters" : "Context settings"} description={active === "dashboard" ? "Execution status details" : active === "live-calls" ? "Realtime totals and filters" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaigns={campaigns} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={active === "campaigns" ? validatedContactLists : contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${effectiveSelectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={effectiveSelectedReasonMetricsDay} onSelectReasonDay={selectReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} eventViewerCampaignId={effectiveEventViewerCampaignId} setEventViewerCampaignId={setEventViewerCampaignId} selectedCampaignId={selectedCampaignId} setSelectedCampaignId={setSelectedCampaignId} eventViewerType={eventViewerType} setEventViewerType={setEventViewerType} eventViewerTypes={eventViewerTypes} executionDebugByCampaign={executionDebugByCampaign} liveCallsPayload={liveCallsPayload} liveCampaignFilter={liveCampaignFilter} setLiveCampaignFilter={setLiveCampaignFilter} liveStatusFilter={liveStatusFilter} setLiveStatusFilter={setLiveStatusFilter} /></aside>
+    </main><InteractionDetailsSheet open={Boolean(selectedLiveCallDetails)} onOpenChange={(open) => { if (!open) setSelectedLiveCallDetails(null); }} interaction={selectedLiveCallDetails?.sessionDetails || null} /><SupervisionModal open={Boolean(selectedSupervisionCall)} onOpenChange={(open) => { if (!open) setSelectedSupervisionCall(null); }} call={selectedSupervisionCall?.supervisionCall || null} /></SupervisorPageShell>;
+}
+
+
+function LiveCallsView({ payload, loading, campaignFilter, statusFilter, onOpenDetails, onOpenSupervision }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const calls = useMemo(() => (payload?.calls || []).filter((call) => (campaignFilter === "all" || call.campaign_id === campaignFilter) && (statusFilter === "all" || call.status === statusFilter)), [payload, campaignFilter, statusFilter]);
+  return <div className="space-y-4"><div className="rounded-2xl border bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-5 text-white shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">Live campaign calls</h3><p className="text-sm text-white/65">Realtime monitor across all outbound campaigns. Hangup calls stay visible for 60 seconds.</p></div><Badge variant="outline" className="border-white/25 bg-white/10 text-white">{loading ? "Refreshing…" : `${calls.length} visible`}</Badge></div></div><div className="space-y-3">{calls.length ? calls.map((call) => <LiveCallCard key={call.id} call={call} now={now} onOpenDetails={() => onOpenDetails(call)} onOpenSupervision={() => onOpenSupervision(call)} />) : <Empty title="No live calls" description="Active campaign calls will appear here when they start ringing, connect, or hang up within the last 60 seconds." />}</div></div>;
+}
+
+function LiveCallCard({ call, now, onOpenDetails, onOpenSupervision }) {
+  const elapsed = call.status === "hangup" || call.status === "failed" ? call.duration_seconds : Math.max(call.duration_seconds || 0, Math.floor((now - Date.parse(call.started_at || new Date())) / 1000));
+  return <div className="group overflow-hidden rounded-2xl border bg-background/90 p-4 shadow-sm transition hover:border-foreground/25 hover:shadow-md"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-sky-500/15 text-emerald-600 dark:text-emerald-300"><IconPhoneCall className="h-5 w-5" /></span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="truncate font-semibold">{call.campaign_name}</span><Badge variant="outline" className={liveCallStatusClass(call.status)}>{title(call.status)}</Badge><Badge variant="outline" className="font-mono text-xs">{formatDuration(elapsed)}</Badge></div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="font-mono">{call.from_number}</span><span>→</span><span className="font-mono text-foreground">{call.to_number}</span>{call.call_session_id ? <span>· session {String(call.call_session_id).slice(0, 8)}…</span> : null}</div></div></div></div><div className="flex items-center gap-2"><Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-full bg-background/80" title="Session details" onClick={onOpenDetails}><IconInfoCircle className="h-4 w-4" /></Button><Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-full bg-background/80 text-violet-600 hover:bg-violet-500/10 dark:text-violet-300" title="Supervisory monitor" disabled={!call.can_supervise} onClick={onOpenSupervision}><IconHeadphones className="h-4 w-4" /></Button></div></div><div className="mt-3 grid gap-2 text-xs md:grid-cols-3"><div className="rounded-xl bg-muted/35 p-3"><div className="text-muted-foreground">Call control</div><div className="mt-1 truncate font-mono">{call.call_control_id || "—"}</div></div><div className="rounded-xl bg-muted/35 p-3"><div className="text-muted-foreground">Contact record</div><div className="mt-1 truncate font-mono">{call.contact_record_id || "—"}</div></div><div className="rounded-xl bg-muted/35 p-3"><div className="text-muted-foreground">Updated</div><div className="mt-1 truncate">{call.updated_at ? new Date(call.updated_at).toLocaleTimeString() : "—"}</div></div></div></div>;
+}
+
+function LiveCallsSettings({ payload, campaignFilter, setCampaignFilter, statusFilter, setStatusFilter }) {
+  const totals = payload?.totals || { total: 0, active: 0, byStatus: {} };
+  const campaigns = payload?.filters?.campaigns || [];
+  const statuses = payload?.filters?.statuses || Object.keys(totals.byStatus || {});
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><div className="grid grid-cols-2 gap-2"><MiniStat label="Active now" value={Number(totals.active || 0).toLocaleString()} icon={IconActivity} tone="emerald" /><MiniStat label="Visible calls" value={Number(totals.total || 0).toLocaleString()} icon={IconPhoneCall} tone="violet" />{Object.entries(totals.byStatus || {}).map(([status, count]) => <MiniStat key={status} label={title(status)} value={Number(count || 0).toLocaleString()} icon={status === "hangup" ? IconPhoneOff : IconPhoneCall} tone={status === "connected" ? "emerald" : status === "ringing" ? "blue" : status === "hangup" ? "amber" : "rose"} />)}</div><SettingCard icon={IconFilter} title="Live call filters" subtitle="Filter monitoring list by campaign and current status"><div className="space-y-3"><ConfigSelect label="Campaign" value={campaignFilter || "all"} options={[{ value: "all", label: "All campaigns" }, ...campaigns.map((campaign) => ({ value: campaign.id, label: campaign.name }))]} onChange={setCampaignFilter} /><ConfigSelect label="Status" value={statusFilter || "all"} options={[{ value: "all", label: "All statuses" }, ...statuses.map((status) => ({ value: status, label: title(status) }))]} onChange={setStatusFilter} /></div></SettingCard></div>;
 }
 
 function DashboardView({ campaigns, contactLists, executionDebugByCampaign, selectedCampaignId, setSelectedCampaignId, runCampaignAction, saving }) {
@@ -694,8 +767,9 @@ function DeleteButton({ onClick, disabled, label }) {
   return <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600" disabled={disabled} onClick={onClick} title={label}><IconTrash className="h-4 w-4" /></Button>;
 }
 
-function SettingsPanel({ active, campaigns = [], campaign, selectedCampaignId, setSelectedCampaignId, contactList, dncList, filter, timeSet, attemptControl, outboundSettings, inventoryNumbers, forms, contactLists, dncLists, filters, timeSets, attemptControls, handlerReferences, schema, saveCampaign, saveList, saveDncList, saveFilter, saveTimeSet, saveAttemptControl, saveOutboundSettings, saving, onImported, registerHeaderSaveAction, reasonMetrics, reasonMetricsLoading, selectedReasonDay, onSelectReasonDay, executionDebug, eventViewerCampaignId, setEventViewerCampaignId, eventViewerType, setEventViewerType, eventViewerTypes }) {
+function SettingsPanel({ active, campaigns = [], campaign, selectedCampaignId, setSelectedCampaignId, contactList, dncList, filter, timeSet, attemptControl, outboundSettings, inventoryNumbers, forms, contactLists, dncLists, filters, timeSets, attemptControls, handlerReferences, schema, saveCampaign, saveList, saveDncList, saveFilter, saveTimeSet, saveAttemptControl, saveOutboundSettings, saving, onImported, registerHeaderSaveAction, reasonMetrics, reasonMetricsLoading, selectedReasonDay, onSelectReasonDay, executionDebug, eventViewerCampaignId, setEventViewerCampaignId, eventViewerType, setEventViewerType, eventViewerTypes, liveCallsPayload, liveCampaignFilter, setLiveCampaignFilter, liveStatusFilter, setLiveStatusFilter }) {
   if (active === "dashboard") return <DashboardMonitorPanel campaign={campaign} contactLists={contactLists} reasonMetrics={reasonMetrics} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={selectedReasonDay} onSelectReasonDay={onSelectReasonDay} executionDebug={executionDebug} />;
+  if (active === "live-calls") return <LiveCallsSettings payload={liveCallsPayload} campaignFilter={liveCampaignFilter} setCampaignFilter={setLiveCampaignFilter} statusFilter={liveStatusFilter} setStatusFilter={setLiveStatusFilter} />;
   if (active === "campaigns") return <CampaignSettingsForm campaign={campaign} outboundSettings={outboundSettings} forms={forms} contactLists={contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saving={saving} registerHeaderSaveAction={registerHeaderSaveAction} />;
   if (active === "contact-lists") return <ContactListSettingsForm contactList={contactList} schema={schema} saveList={saveList} saving={saving} onImported={onImported} registerHeaderSaveAction={registerHeaderSaveAction} />;
   if (active === "dnc") return <DncSettingsForm dncList={dncList} schema={schema} saveDncList={saveDncList} saving={saving} onImported={onImported} registerHeaderSaveAction={registerHeaderSaveAction} />;
