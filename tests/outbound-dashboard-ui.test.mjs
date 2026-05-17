@@ -117,3 +117,11 @@ test("campaign required fields are marked with red asterisks instead of a missin
   assert.doesNotMatch(formSource, /saveRequirementsMessage/, "Campaign form should not render missing-fields descriptions");
   assert.doesNotMatch(formSource, /Required before saving/, "Campaign form should not render Required before saving copy");
 });
+
+test("call session details sheet is portaled to body so outbound history cannot embed it inside the center card", async () => {
+  const source = await readFile(new URL("../components/contact-center/InteractionDetailsSheet.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /import \{ createPortal \} from "react-dom"/);
+  assert.match(source, /createPortal\(/);
+  assert.match(source, /document\.body/);
+});

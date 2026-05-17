@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -234,11 +235,11 @@ export default function InteractionDetailsSheet({
     }
   };
 
-  if (!open || !session) return null;
+  if (!open || !session || typeof document === "undefined") return null;
 
   const sessionData = sessionWithCallControlId || session;
 
-  return (
+  return createPortal(
     <div className="fixed inset-y-0 right-0 w-2xl bg-background dark:bg-zinc-900 border-l shadow-2xl z-50 flex flex-col animate-in slide-in-from-right">
       <div className="p-4">
         <div className="flex items-center justify-between">
@@ -417,6 +418,7 @@ export default function InteractionDetailsSheet({
         )}
         </TabsContent>
       </Tabs>
-    </div>
+    </div>,
+    document.body
   );
 }

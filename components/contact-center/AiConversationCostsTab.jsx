@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { IconCurrencyDollar, IconAlertCircle } from "@tabler/icons-react";
+import { buildSessionAnalysisRequestUrl } from "@/lib/contact-center/session-analysis-url";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Telnyx-style color palette for cost breakdown (matches portal screenshot)
@@ -206,40 +207,17 @@ export default function AiConversationCostsTab({ conversation, useDemoApiKey = f
   const [error, setError] = useState(null);
   const [sessionData, setSessionData] = useState(null);
 
-  const conversationId = conversation?.id;
+  const sessionAnalysisUrl = buildSessionAnalysisRequestUrl({ conversation, useDemoApiKey });
 
   useEffect(() => {
-    if (!conversationId) return;
+    if (!sessionAnalysisUrl) return;
 
     setLoading(true);
     setError(null);
     setSessionData(null);
 
-    // Get call_session_id from conversation — CC stores it at top level
-    const callSessionId =
-      conversation?.call_session_id ||
-      conversation?.metadata?.call_session_id ||
-      conversation?.metadata?.telnyx_call_session_id;
-
-    // We only support session analysis for conversations that have a call_session_id 
-    // or we can fallback to trying the conversation ID if it's missing (though it might fail).
-    const eventId = callSessionId || conversationId;
-    
-    // Extract date for faster lookups (date_time parameter)
-    let dateTimeParams = "";
-    if (conversation?.created_at) {
-      // Just send the date portion, e.g. 2026-04-22
-      const dateStr = conversation.created_at.split('T')[0];
-      dateTimeParams = `&date_time=${encodeURIComponent(dateStr)}`;
-    }
-
-    // Use ai-voice-assistant as the record_type and conversation ID as eventId to get LLM and STT costs
-    const demoParam = useDemoApiKey ? "&useDemoApiKey=true" : "";
     const fetchAnalysis = async () => {
-      const res = await fetch(
-        `/api/ai/conversations/${encodeURIComponent(conversationId)}/session-analysis?record_type=ai-voice-assistant&max_depth=5${dateTimeParams}${demoParam}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(sessionAnalysisUrl, { cache: "no-store" });
       return res.json();
     };
 
