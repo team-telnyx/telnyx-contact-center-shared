@@ -7,6 +7,7 @@ import {
   contactRecordLabel,
   groupAttemptsByContactRecord,
   normalizeCampaignExecutionState,
+  singleCampaignSelection,
 } from "../lib/outbound-dialer/history-view-model.js";
 
 test("exhausted campaigns use explicit exhausted state and disable all dashboard controls", () => {
@@ -26,6 +27,14 @@ test("exhausted campaigns use explicit exhausted state and disable all dashboard
     canRecycle: false,
     controlsDisabled: true,
   });
+});
+
+test("event viewer campaign selector requires one concrete campaign", () => {
+  const campaigns = [{ id: "campaign-1" }, { id: "campaign-2" }];
+  assert.deepEqual(singleCampaignSelection(campaigns, "all"), { id: "campaign-1", hasCampaigns: true });
+  assert.deepEqual(singleCampaignSelection(campaigns, "campaign-2"), { id: "campaign-2", hasCampaigns: true });
+  assert.deepEqual(singleCampaignSelection(campaigns, "missing"), { id: "campaign-1", hasCampaigns: true });
+  assert.deepEqual(singleCampaignSelection([], "all"), { id: null, hasCampaigns: false });
 });
 
 test("event viewer includes only campaign status events and synthesizes exhausted events", () => {
