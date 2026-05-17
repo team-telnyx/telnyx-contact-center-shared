@@ -29,6 +29,30 @@ test("exhausted campaigns use explicit exhausted state and disable all dashboard
   });
 });
 
+test("running campaign with zero callable records and no active calls is treated as exhausted", () => {
+  const campaign = { id: "campaign-1", status: "running", metadata: {} };
+  const runtime = { progress: { total: 10, completed: 10, remaining: 0 }, live: { active: 0, ringing: 0 } };
+
+  assert.equal(normalizeCampaignExecutionState(campaign, runtime), "exhausted");
+  assert.deepEqual(campaignControlState(campaign, false, runtime), {
+    state: "exhausted",
+    pauseAction: "pause",
+    canStart: false,
+    canStop: false,
+    canPause: false,
+    canRecycle: false,
+    controlsDisabled: true,
+  });
+});
+
+test("running campaign with active calls is not treated as exhausted even when callable is zero", () => {
+  const campaign = { id: "campaign-1", status: "running", metadata: {} };
+  const runtime = { progress: { total: 10, completed: 10, remaining: 0 }, live: { active: 1, ringing: 0 } };
+
+  assert.equal(normalizeCampaignExecutionState(campaign, runtime), "running");
+  assert.equal(campaignControlState(campaign, false, runtime).state, "running");
+});
+
 test("event viewer campaign selector requires one concrete campaign", () => {
   const campaigns = [{ id: "campaign-1" }, { id: "campaign-2" }];
   assert.deepEqual(singleCampaignSelection(campaigns, "all"), { id: "campaign-1", hasCampaigns: true });

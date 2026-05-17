@@ -31,3 +31,16 @@ test("expanded dashboard campaign card renders contact statistics and calls proc
   assert.doesNotMatch(cardSource, /MiniStat label="Readiness"/, "expanded card should not render the old readiness stat");
   assert.doesNotMatch(cardSource, /<Badge variant="outline" className=\{liveBadgeClasses\./, "expanded card should not render call-processing badges");
 });
+
+test("live calls view does not render the redundant hero card", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const viewStart = source.indexOf("function LiveCallsView");
+  const viewEnd = source.indexOf("function LiveCallCard", viewStart);
+  assert.ok(viewStart > -1, "LiveCallsView should exist");
+  assert.ok(viewEnd > viewStart, "LiveCallsView should end before LiveCallCard");
+
+  const viewSource = source.slice(viewStart, viewEnd);
+  assert.doesNotMatch(viewSource, /Live campaign calls/);
+  assert.doesNotMatch(viewSource, /Realtime monitor across all outbound campaigns/);
+  assert.doesNotMatch(viewSource, /Hangup calls stay visible for 60 seconds/);
+});

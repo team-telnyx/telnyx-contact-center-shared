@@ -495,7 +495,7 @@ function LiveCallsView({ payload, loading, campaignFilter, statusFilter, onOpenD
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const calls = useMemo(() => (payload?.calls || []).filter((call) => (campaignFilter === "all" || call.campaign_id === campaignFilter) && (statusFilter === "all" || call.status === statusFilter)), [payload, campaignFilter, statusFilter]);
-  return <div className="space-y-4"><div className="rounded-2xl border bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-5 text-white shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-lg font-semibold">Live campaign calls</h3><p className="text-sm text-white/65">Realtime monitor across all outbound campaigns. Hangup calls stay visible for 60 seconds.</p></div><Badge variant="outline" className="border-white/25 bg-white/10 text-white">{loading ? "Refreshing…" : `${calls.length} visible`}</Badge></div></div><div className="space-y-3">{calls.length ? calls.map((call) => <LiveCallCard key={call.id} call={call} now={now} onOpenDetails={() => onOpenDetails(call)} onOpenSupervision={() => onOpenSupervision(call)} />) : <Empty title="No live calls" description="Active campaign calls will appear here when they start ringing, connect, or hang up within the last 60 seconds." />}</div></div>;
+  return <div className="space-y-3">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing live calls…</div> : null}{calls.length ? calls.map((call) => <LiveCallCard key={call.id} call={call} now={now} onOpenDetails={() => onOpenDetails(call)} onOpenSupervision={() => onOpenSupervision(call)} />) : <Empty title="No live calls" description="Active campaign calls will appear here when they start ringing, connect, or hang up within the last 60 seconds." />}</div>;
 }
 
 function LiveCallCard({ call, now, onOpenDetails, onOpenSupervision }) {
@@ -540,7 +540,7 @@ function DashboardView({ campaigns, contactLists, executionDebugByCampaign, sele
 function DashboardCampaignCard({ campaign, contactLists, executionDebug, selected, expanded, onToggleExpand, onSelect, onAction, saving }) {
   const progress = campaignContactProgress(campaign, contactLists, executionDebug);
   const live = campaignLiveMetrics(campaign, executionDebug);
-  const controls = campaignControlState(campaign, saving);
+  const controls = campaignControlState(campaign, saving, { progress, live });
   const state = controls.state;
   const isPaused = state === "paused";
   const isRunning = state === "running";
