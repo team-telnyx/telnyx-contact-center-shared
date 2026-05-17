@@ -243,10 +243,12 @@ export default function OutboundDialerPage() {
   const [campaignReasonMetrics, setCampaignReasonMetrics] = useState({});
   const [reasonMetricsLoading, setReasonMetricsLoading] = useState(false);
   const [selectedReasonMetricsDay, setSelectedReasonMetricsDay] = useState(null);
+  const [selectedReasonMetricsCampaignId, setSelectedReasonMetricsCampaignId] = useState(null);
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
   const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
   const dashboardCampaigns = useMemo(() => campaigns.filter(isDashboardCampaign), [campaigns]);
   const selectedDashboardCampaign = useMemo(() => dashboardCampaigns.find((c) => c.id === selectedCampaignId) || dashboardCampaigns[0] || null, [dashboardCampaigns, selectedCampaignId]);
+  const effectiveSelectedReasonMetricsDay = selectedReasonMetricsCampaignId === selectedDashboardCampaign?.id ? selectedReasonMetricsDay : null;
   const selectedList = useMemo(() => contactLists.find((l) => l.id === selectedListId) || contactLists[0] || null, [contactLists, selectedListId]);
   const selectedDncList = useMemo(() => dncLists.find((l) => l.id === selectedDncId) || dncLists[0] || null, [dncLists, selectedDncId]);
   const selectedFilter = useMemo(() => filters.find((f) => f.id === selectedFilterId) || filters[0] || null, [filters, selectedFilterId]);
@@ -323,13 +325,21 @@ export default function OutboundDialerPage() {
   }, [active]);
 
   useEffect(() => {
+    setSelectedReasonMetricsDay(null);
+    setSelectedReasonMetricsCampaignId(selectedDashboardCampaign?.id || null);
+  }, [selectedDashboardCampaign?.id]);
+
+  useEffect(() => {
     if (active !== "dashboard") return;
     if (!selectedDashboardCampaign?.id) return;
-    const cacheKey = `${selectedDashboardCampaign.id}:${selectedReasonMetricsDay || "all"}`;
-    if (Object.prototype.hasOwnProperty.call(campaignReasonMetrics, cacheKey)) return;
+    const cacheKey = `${selectedDashboardCampaign.id}:${effectiveSelectedReasonMetricsDay || "all"}`;
+    if (Object.prototype.hasOwnProperty.call(campaignReasonMetrics, cacheKey)) {
+      setReasonMetricsLoading(false);
+      return;
+    }
     let cancelled = false;
     setReasonMetricsLoading(true);
-    api(`${API}/campaigns/${selectedDashboardCampaign.id}${selectedReasonMetricsDay ? `?day=${encodeURIComponent(selectedReasonMetricsDay)}` : ""}`)
+    api(`${API}/campaigns/${selectedDashboardCampaign.id}${effectiveSelectedReasonMetricsDay ? `?day=${encodeURIComponent(effectiveSelectedReasonMetricsDay)}` : ""}`)
       .then((data) => {
         if (cancelled) return;
         setCampaignReasonMetrics((current) => ({
@@ -338,18 +348,19 @@ export default function OutboundDialerPage() {
         }));
       })
       .catch(() => {
-        if (cancelled) return;
-        setCampaignReasonMetrics((current) => ({
-          ...current,
-          [cacheKey]: null,
-        }));
+        // Do not cache transient failures; allow a later render/selection to retry.
       })
       .finally(() => {
         if (cancelled) return;
         setReasonMetricsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [active, selectedDashboardCampaign?.id, campaignReasonMetrics, selectedReasonMetricsDay]);
+  }, [active, selectedDashboardCampaign?.id, campaignReasonMetrics, effectiveSelectedReasonMetricsDay]);
+
+  const selectReasonMetricsDay = useCallback((day) => {
+    setSelectedReasonMetricsCampaignId(selectedDashboardCampaign?.id || null);
+    setSelectedReasonMetricsDay(day);
+  }, [selectedDashboardCampaign?.id]);
 
   const saveCampaign = useCallback(async (draft) => { setSaving(true); try { const data = await api(draft.id ? `${API}/campaigns/${draft.id}` : `${API}/campaigns`, { method: draft.id ? "PUT" : "POST", body: JSON.stringify(draft) }); setCampaigns((items) => draft.id ? items.map((i) => i.id === draft.id ? { ...i, ...data.campaign } : i) : [data.campaign, ...items]); setSelectedCampaignId(data.campaign.id); notify({ title: draft.id ? "Campaign saved" : "Campaign created", variant: "success" }); return data.campaign; } catch (err) { notify({ title: "Campaign save failed", description: err.message, variant: "error" }); return null; } finally { setSaving(false); } }, []);
   const runCampaignAction = async (campaign, action) => {
@@ -400,7 +411,7 @@ export default function OutboundDialerPage() {
     <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
       <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Outbound dialer sections" />
       <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col"><div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3"><div className="min-w-0"><h2 className="text-sm font-semibold">{activeMeta.label}</h2><p className="text-xs text-muted-foreground">{activeMeta.description}</p></div></div><div className="flex-1 min-h-0 overflow-y-auto p-5">{loading ? <LoadingState /> : error ? <ErrorState error={error} onRetry={() => refresh()} /> : active === "dashboard" ? <DashboardView campaigns={campaigns} contactLists={contactLists} executionDebugByCampaign={executionDebugByCampaign} selectedCampaignId={selectedDashboardCampaign?.id} setSelectedCampaignId={setSelectedCampaignId} runCampaignAction={runCampaignAction} saving={saving} /> : active === "campaigns" ? <CampaignsView campaigns={campaigns} selectedCampaign={selectedCampaign} setSelectedCampaignId={setSelectedCampaignId} archive={(item) => archive("campaign", item)} saving={saving} /> : active === "contact-lists" ? <ContactListsView contactLists={contactLists} selectedList={selectedList} setSelectedListId={setSelectedListId} archive={(item) => archive("list", item)} saving={saving} /> : active === "dnc" ? <DncListsView dncLists={dncLists} selectedDncList={selectedDncList} setSelectedDncId={setSelectedDncId} archive={(item) => archive("dnc", item)} saving={saving} /> : active === "filters" ? <FiltersView filters={filters} selectedFilter={selectedFilter} setSelectedFilterId={setSelectedFilterId} archive={(item) => archive("filter", item)} saving={saving} /> : active === "time-sets" ? <TimeSetsView timeSets={timeSets} selectedTimeSet={selectedTimeSet} setSelectedTimeSetId={setSelectedTimeSetId} archive={(item) => archive("time-set", item)} saving={saving} /> : active === "attempt-controls" ? <AttemptControlsView attemptControls={attemptControls} selectedAttemptControl={selectedAttemptControl} setSelectedAttemptControlId={setSelectedAttemptControlId} archive={(item) => archive("attempt-control", item)} saving={saving} /> : active === "reports" ? <ReportsView campaigns={campaigns} contactLists={contactLists} dncLists={dncLists} /> : active === "event-viewer" ? <EventViewerView campaigns={campaigns} /> : active === "settings" ? <SettingsSummaryView settings={outboundSettings} /> : <ComingSoonView item={activeMeta} />}</div></section>
-      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : "Context settings"} description={active === "dashboard" ? "Execution status details" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${selectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={selectedReasonMetricsDay} onSelectReasonDay={setSelectedReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} /></aside>
+      <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col"><PanelHeader title={active === "dashboard" ? "Campaign monitor" : "Context settings"} description={active === "dashboard" ? "Execution status details" : `${activeMeta.label} configuration`} /><SettingsPanel active={active} campaign={active === "dashboard" ? selectedDashboardCampaign : selectedCampaign} contactList={selectedList} dncList={selectedDncList} filter={selectedFilter} timeSet={selectedTimeSet} attemptControl={selectedAttemptControl} outboundSettings={outboundSettings} inventoryNumbers={inventoryNumbers} forms={forms} contactLists={contactLists} dncLists={dncLists} filters={filters} timeSets={timeSets} attemptControls={attemptControls} handlerReferences={handlerReferences} schema={schema} saveCampaign={saveCampaign} saveList={saveList} saveDncList={saveDncList} saveFilter={saveFilter} saveTimeSet={saveTimeSet} saveAttemptControl={saveAttemptControl} saveOutboundSettings={saveOutboundSettings} saving={saving} onImported={refresh} registerHeaderSaveAction={registerHeaderSaveAction} reasonMetrics={campaignReasonMetrics[`${selectedDashboardCampaign?.id || ""}:${effectiveSelectedReasonMetricsDay || "all"}`] || null} reasonMetricsLoading={reasonMetricsLoading} selectedReasonDay={effectiveSelectedReasonMetricsDay} onSelectReasonDay={selectReasonMetricsDay} executionDebug={selectedDashboardCampaign?.id ? executionDebugByCampaign[selectedDashboardCampaign.id] : null} /></aside>
     </main></SupervisorPageShell>;
 }
 

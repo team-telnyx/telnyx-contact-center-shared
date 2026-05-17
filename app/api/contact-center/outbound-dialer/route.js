@@ -32,26 +32,40 @@ async function loadAiAssistants() {
 async function loadInventoryNumbers() {
   if (!process.env.TELNYX_API_KEY) return [];
   try {
-    const params = new URLSearchParams();
-    params.set("page[size]", "250");
-    params.set("filter[status]", "active");
-    const res = await fetch(`${buildTelnyxV2Url("/phone_numbers")}?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data?.data)
-      ? data.data
-        .map((item) => ({
+    const pageSize = 250;
+    const numbers = [];
+    const seen = new Set();
+
+    for (let page = 1; ; page += 1) {
+      const params = new URLSearchParams();
+      params.set("page[size]", String(pageSize));
+      params.set("page[number]", String(page));
+      params.set("filter[status]", "active");
+      const res = await fetch(`${buildTelnyxV2Url("/phone_numbers")}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
+        cache: "no-store",
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      const rows = Array.isArray(data?.data) ? data.data : [];
+      for (const item of rows) {
+        if (!item?.phone_number || seen.has(item.phone_number)) continue;
+        seen.add(item.phone_number);
+        numbers.push({
           id: item.id,
           phone_number: item.phone_number || null,
           status: item.status || null,
           connection_name: item.connection_name || null,
           country_code: item.country_code || null,
-        }))
-        .filter((item) => item.phone_number)
-      : [];
+        });
+      }
+
+      const currentPage = Number(data?.meta?.page_number || data?.meta?.page?.number || page);
+      const totalPages = Number(data?.meta?.total_pages || data?.meta?.page?.total_pages || data?.meta?.page?.totalPages || 0);
+      if (rows.length < pageSize || (totalPages && currentPage >= totalPages)) break;
+    }
+
+    return numbers;
   } catch (err) {
     console.warn("[Outbound Dialer] inventory numbers load failed:", err?.message || err);
     return [];

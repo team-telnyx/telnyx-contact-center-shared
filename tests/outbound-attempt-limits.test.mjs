@@ -5,6 +5,7 @@ import {
   DEFAULT_GLOBAL_MAX_ATTEMPTS,
   normalizeGlobalMaxAttempts,
   normalizeAttemptCount,
+  normalizeCampaignMaxAttempts,
   normalizeAttemptRules,
   normalizeAttemptControlLimits,
 } from '../lib/outbound-dialer/attempt-limits.js';
@@ -23,6 +24,13 @@ test('normalizeAttemptCount clamps attempt controls to 0..global max attempts', 
   assert.equal(normalizeAttemptCount(6, 2, 5), 5);
   assert.equal(normalizeAttemptCount('', 2, 5), 2);
   assert.equal(normalizeAttemptCount('4', 2, 5), 4);
+});
+
+test('normalizeCampaignMaxAttempts follows the configured global ceiling', () => {
+  assert.equal(normalizeCampaignMaxAttempts(8, 4, 10), 8);
+  assert.equal(normalizeCampaignMaxAttempts(8, 4, 5), 5);
+  assert.equal(normalizeCampaignMaxAttempts(undefined, 4, 3), 3);
+  assert.equal(normalizeCampaignMaxAttempts(0, 4, 10), 1);
 });
 
 test('normalizeAttemptRules clamps recall rule attempts and keeps delay non-negative', () => {
