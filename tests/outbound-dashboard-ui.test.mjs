@@ -58,3 +58,20 @@ test("expanded history call attempt rows render one right-aligned status reason 
   assert.match(accordionSource, /<Badge variant="outline" className=\{reasonCodeClass\(reason\)\}>\{statusReasonLabel\}<\/Badge>[\s\S]*<Button size="icon"/, "single status/reason badge should render immediately before the info button");
   assert.doesNotMatch(accordionSource, /<Badge variant="outline" className=\{attemptStatusClass\(attempt\.status\)\}>\{title\(attempt\.status\)\}<\/Badge>/, "attempt row should not render a separate status badge on the left");
 });
+
+test("settings allowed numbers card uses requested title and CLI subtitle", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const settingsSummaryStart = source.indexOf("function SettingsSummaryView");
+  const settingsSummaryEnd = source.indexOf("function CrudTable", settingsSummaryStart);
+  const outboundFormStart = source.indexOf("function OutboundSettingsForm");
+  const outboundFormEnd = source.indexOf("function ContactListSettingsForm", outboundFormStart);
+  assert.ok(settingsSummaryStart > -1 && settingsSummaryEnd > settingsSummaryStart, "SettingsSummaryView should exist");
+  assert.ok(outboundFormStart > -1 && outboundFormEnd > outboundFormStart, "OutboundSettingsForm should exist");
+
+  const summarySource = source.slice(settingsSummaryStart, settingsSummaryEnd);
+  const formSource = source.slice(outboundFormStart, outboundFormEnd);
+  assert.match(summarySource, /title="Allowed Numbers" subtitle="Numbers enabled for campaigns to be used as CLI"/);
+  assert.match(formSource, /title="Allowed Numbers" subtitle="Numbers enabled for campaigns to be used as CLI"/);
+  assert.doesNotMatch(source, /Selected allowed numbers/);
+  assert.doesNotMatch(source, /Numbers currently enabled for campaign FROM selection/);
+});
