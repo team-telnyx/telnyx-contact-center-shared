@@ -170,6 +170,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       failure_reason: row.failure_reason || metadata.failure_reason || null,
       skip_reason: metadata.skip_reason || null,
       reason_code: metadata.reason_code || null,
+      retry_eligible: metadata.retry_eligible ?? metadata.retryEligible ?? false,
     });
   }
 
