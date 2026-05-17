@@ -99,5 +99,21 @@ test("campaign save action is disabled until audience and FROM slots are complet
   assert.match(source, /campaignSaveRequirements/, "page should import campaign save requirement validation");
   assert.match(formSource, /campaignSaveRequirements\(draft, \{ maxAttempts: campaignMaxAttempts \}\)/, "form should evaluate campaign save requirements with effective max attempts");
   assert.match(formSource, /disabled: saving \|\| !saveRequirements\.canSave/, "Save campaign header action should be disabled until requirements pass");
-  assert.match(formSource, /campaignSaveRequirementsMessage\(saveRequirements\)/, "form should show the missing required campaign fields");
+});
+
+test("campaign required fields are marked with red asterisks instead of a missing-fields description", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const formStart = source.indexOf("function CampaignSettingsForm");
+  const formEnd = source.indexOf("function parseTtsVoiceString", formStart);
+  assert.ok(formStart > -1 && formEnd > formStart, "CampaignSettingsForm should exist");
+
+  const formSource = source.slice(formStart, formEnd);
+  assert.match(source, /function RequiredFieldLabel/, "page should render required field labels with a reusable helper");
+  assert.match(source, /text-red-500/, "required asterisk should be styled red");
+  assert.match(formSource, /<InputBlock label="Campaign Name"[^>]*required/, "Campaign Name should be marked required");
+  assert.match(formSource, /<ConfigSelect label="Contact List"[^>]*required/, "Contact List should be marked required");
+  assert.match(formSource, /<MultiSelect label="Contact List Numbers"[^>]*required/, "Contact List Numbers should be marked required");
+  assert.match(formSource, /<ConfigSelect key=\{`from-slot-\$\{idx\}`\}[^>]*required/, "FROM number slots should be marked required");
+  assert.doesNotMatch(formSource, /saveRequirementsMessage/, "Campaign form should not render missing-fields descriptions");
+  assert.doesNotMatch(formSource, /Required before saving/, "Campaign form should not render Required before saving copy");
 });
