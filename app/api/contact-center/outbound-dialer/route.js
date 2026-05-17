@@ -90,13 +90,16 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
         l.updated_at,
         l.metadata,
         l.failure_reason,
+        r.row_data AS contact_row_data,
+        r.contact_methods AS contact_methods,
         ROW_NUMBER() OVER (PARTITION BY l.campaign_id ORDER BY l.created_at DESC, l.id DESC) AS rn
       FROM outbound_attempt_ledger l
+      LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
       WHERE l.campaign_id = ANY($1::uuid[])
     )
-    SELECT campaign_id, id, contact_record_id, call_control_id, call_session_id, status, created_at, updated_at, metadata, failure_reason
+    SELECT campaign_id, id, contact_record_id, call_control_id, call_session_id, status, created_at, updated_at, metadata, failure_reason, contact_row_data, contact_methods
     FROM ranked
-    WHERE rn <= 50
+    WHERE rn <= 500
     ORDER BY campaign_id, created_at DESC, id DESC`,
     [ids],
     [],
@@ -130,6 +133,41 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     [],
   );
 
+  const contactRecords = await safeQuery(
+    pool,
+    `WITH campaign_lists AS (
+      SELECT id AS campaign_id, contact_list_id
+      FROM outbound_campaigns
+      WHERE id = ANY($1::uuid[]) AND contact_list_id IS NOT NULL
+    ), ranked AS (
+      SELECT
+        cl.campaign_id,
+        r.id AS contact_record_id,
+        r.row_data,
+        r.contact_methods,
+        r.validation_status,
+        r.last_attempt_at,
+        COUNT(l.id)::int AS attempt_count,
+        COALESCE(jsonb_object_agg(l.status, status_counts.count ORDER BY l.status) FILTER (WHERE l.status IS NOT NULL), '{}'::jsonb) AS status_counts,
+        ROW_NUMBER() OVER (PARTITION BY cl.campaign_id ORDER BY COALESCE(r.last_attempt_at, r.created_at) DESC, r.id DESC) AS rn
+      FROM campaign_lists cl
+      JOIN outbound_contact_records r ON r.contact_list_id = cl.contact_list_id
+      LEFT JOIN outbound_attempt_ledger l ON l.campaign_id = cl.campaign_id AND l.contact_record_id = r.id
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS count
+        FROM outbound_attempt_ledger ls
+        WHERE ls.campaign_id = cl.campaign_id AND ls.contact_record_id = r.id AND ls.status = l.status
+      ) status_counts ON TRUE
+      GROUP BY cl.campaign_id, r.id, r.row_data, r.contact_methods, r.validation_status, r.last_attempt_at, r.created_at
+    )
+    SELECT campaign_id, contact_record_id, row_data, contact_methods, validation_status, last_attempt_at, attempt_count, status_counts
+    FROM ranked
+    WHERE rn <= 200
+    ORDER BY campaign_id, COALESCE(last_attempt_at, NOW() - INTERVAL '100 years') DESC, contact_record_id`,
+    [ids],
+    [],
+  );
+
   const byCampaign = Object.fromEntries(ids.map((id) => [id, {
     runner: getRunnerState(id),
     summary: {
@@ -152,6 +190,7 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       last_attempt_at: null,
     },
     recent_attempts: [],
+    contact_records: [],
   }]));
 
   for (const row of summaryRows) {
@@ -177,6 +216,19 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     };
   }
 
+  for (const row of contactRecords) {
+    if (!byCampaign[row.campaign_id]) continue;
+    byCampaign[row.campaign_id].contact_records.push({
+      contact_record_id: row.contact_record_id || null,
+      row_data: row.row_data && typeof row.row_data === "object" ? row.row_data : {},
+      contact_methods: row.contact_methods && typeof row.contact_methods === "object" ? row.contact_methods : {},
+      validation_status: row.validation_status || null,
+      last_attempt_at: row.last_attempt_at || null,
+      attempt_count: Number(row.attempt_count || 0),
+      status_counts: row.status_counts && typeof row.status_counts === "object" ? row.status_counts : {},
+    });
+  }
+
   for (const row of recentAttempts) {
     if (!byCampaign[row.campaign_id]) continue;
     const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
@@ -190,6 +242,8 @@ export async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       updated_at: row.updated_at,
       to_number: metadata.to_number || null,
       from_number: metadata.from_number || null,
+      contact_row_data: row.contact_row_data && typeof row.contact_row_data === "object" ? row.contact_row_data : {},
+      contact_methods: row.contact_methods && typeof row.contact_methods === "object" ? row.contact_methods : {},
       suppression_reason: metadata.suppression_reason || null,
       failure_reason: row.failure_reason || metadata.failure_reason || null,
       skip_reason: metadata.skip_reason || null,
