@@ -15,6 +15,20 @@ const normalizeRetryPolicy = (value = {}, globalMaxAttempts) => {
   return { ...policy, maxAttempts };
 };
 
+async function loadCampaignWithLookups(pool, campaignId) {
+  const { rows } = await pool.query(
+    `SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name
+     FROM outbound_campaigns c
+     LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id
+     LEFT JOIN form_definitions f ON f.id = c.attached_form_id
+     LEFT JOIN outbound_attempt_controls ac ON ac.id = c.attempt_control_id
+     WHERE c.id = $1 AND c.status <> 'archived'
+     LIMIT 1`,
+    [campaignId],
+  );
+  return rows[0] || null;
+}
+
 export async function GET(request, context) {
   const user = await requireOutboundSupervisor(); if (!user) return jsonError("Forbidden", 403);
   const { campaignId } = await context.params;
@@ -114,7 +128,8 @@ export async function PUT(request, context) {
       const checked = await annotateCampaignDncScaffold(pool, campaign, username);
       campaign = checked.campaign;
     }
-    return NextResponse.json({ ok: true, campaign: mapCampaign(campaign) });
+    const campaignWithLookups = await loadCampaignWithLookups(pool, campaign.id);
+    return NextResponse.json({ ok: true, campaign: mapCampaign(campaignWithLookups || campaign) });
   } catch (err) { console.error("[Outbound Dialer] update campaign error:", err); return jsonError(err.message || "Failed to update campaign", 400); }
 }
 

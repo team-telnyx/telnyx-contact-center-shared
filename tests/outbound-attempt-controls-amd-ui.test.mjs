@@ -60,3 +60,23 @@ test("voice webhook can start outbound AI assistant from ledger columns when eve
   assert.match(source, /finalizedMetadata\?\.outbound_handler_type \|\| finalizedLedger\?\.handler_type \|\| payloadMetadata\?\.outbound_handler_type/, "handler type should fall back to ledger columns");
   assert.match(source, /finalizedMetadata\?\.outbound_handler_ref \|\| finalizedLedger\?\.handler_ref \|\| payloadMetadata\?\.outbound_handler_ref/, "handler ref should fall back to ledger columns");
 });
+
+test("campaign inventory keeps contact list names visible and removes readiness column", async () => {
+  const source = await sourcePromise;
+  const campaignsView = functionSource(source, "CampaignsView", "ContactListsView");
+
+  assert.match(campaignsView, /columns=\{\["Name", "Status", "List", "Mode", "Actions"\]\}/, "campaign table should not render the Ready column");
+  assert.doesNotMatch(campaignsView, /"Ready"/, "Ready column header should be removed from Campaigns inventory");
+  assert.doesNotMatch(campaignsView, /readiness\(c\)/, "Ready percentage cell should be removed with the column");
+  assert.match(campaignsView, /campaignListName\(c, contactLists\)/, "List cell should resolve names from attached contactLists when the campaign payload lacks contact_list_name");
+});
+
+test("campaign update API returns refreshed contact list name after save", async () => {
+  const updateRoute = await readFile(new URL("../app/api/contact-center/outbound-dialer/campaigns/[campaignId]/route.js", import.meta.url), "utf8");
+  const putRoute = updateRoute.slice(updateRoute.indexOf("export async function PUT"), updateRoute.indexOf("export async function DELETE"));
+
+  assert.match(updateRoute, /SELECT c\.\*, l\.name AS contact_list_name/, "save campaign response should be able to reload the updated campaign with joined contact list name");
+  assert.match(updateRoute, /LEFT JOIN outbound_contact_lists l ON l\.id = c\.contact_list_id/, "save campaign response should join the selected contact list");
+  assert.match(putRoute, /loadCampaignWithLookups\(pool, campaign\.id\)/, "PUT should reload lookup names after UPDATE RETURNING");
+  assert.doesNotMatch(putRoute, /campaign:\s*mapCampaign\(campaign\)/, "PUT response must not return raw UPDATE RETURNING row without lookup names");
+});
