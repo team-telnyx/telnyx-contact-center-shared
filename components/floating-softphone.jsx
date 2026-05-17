@@ -7,7 +7,7 @@ import { X as IconClose, Phone as IconPhone } from "lucide-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import clsx from "clsx";
 import { getStatusDisplay } from "@/lib/call-status-utils";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 
 export default function FloatingSoftphone() {
   const { visible, toggle } = usePhoneUi();
@@ -59,15 +59,15 @@ export default function FloatingSoftphone() {
 
   const copySipUri = async () => {
     if (!sipUri) {
-      toast.error("WebRTC SIP URI is not configured for this profile");
+      notify({ title: "WebRTC URI unavailable", description: "WebRTC SIP URI is not configured for this profile.", variant: "warning" });
       return;
     }
 
     try {
       await navigator.clipboard.writeText(sipUri);
-      toast.success("WebRTC URI copied", { description: sipUri });
+      notify({ title: "WebRTC URI copied", description: `${sipUri} has been copied to your clipboard.`, variant: "success" });
     } catch (_) {
-      toast.error("Failed to copy WebRTC URI");
+      notify({ title: "WebRTC URI copy failed", description: "The WebRTC SIP URI could not be copied. Please try again.", variant: "error" });
     }
   };
 

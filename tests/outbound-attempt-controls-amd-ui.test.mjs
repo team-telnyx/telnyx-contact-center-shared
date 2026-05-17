@@ -80,3 +80,22 @@ test("campaign update API returns refreshed contact list name after save", async
   assert.match(putRoute, /loadCampaignWithLookups\(pool, campaign\.id\)/, "PUT should reload lookup names after UPDATE RETURNING");
   assert.doesNotMatch(putRoute, /campaign:\s*mapCampaign\(campaign\)/, "PUT response must not return raw UPDATE RETURNING row without lookup names");
 });
+
+test("outbound dialer notifications include short descriptions", async () => {
+  const source = await sourcePromise;
+  const notifyCalls = [...source.matchAll(/notify\(\{[\s\S]*?\}\)/g)].map((match) => match[0]);
+  const missingDescriptions = notifyCalls.filter((call) => !/description\s*:/.test(call));
+
+  assert.equal(missingDescriptions.length, 0, `Every outbound notify call should include a description. Missing: ${missingDescriptions.join("\n")}`);
+  assert.match(source, /Campaign saved[\s\S]*campaignToastDescription/, "Campaign save notifications should keep the title and render a success description");
+  assert.match(source, /Contact list saved[\s\S]*contact list/, "Contact list save notifications should include a descriptive success message");
+});
+
+test("floating phone WebRTC URI copy uses shared notify toast component", async () => {
+  const source = await readFile(new URL("../components/floating-softphone.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /import \{ notify \} from "@\/components\/ToastNotify"/, "Floating phone should use the same ToastNotify component as Outbound Dialer");
+  assert.doesNotMatch(source, /import \{ toast \} from "sonner"/, "Floating phone should not use raw sonner toasts");
+  assert.doesNotMatch(source, /toast\.(success|error)/, "Floating phone WebRTC URI copy should not render raw sonner success/error toast formats");
+  assert.match(source, /notify\(\{[\s\S]*title: "WebRTC URI copied"[\s\S]*description:/, "Copied URI notification should include a title and description");
+});
