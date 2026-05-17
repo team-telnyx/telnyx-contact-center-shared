@@ -46,10 +46,6 @@ async function loadInventoryNumbers() {
         cache: "no-store",
       });
       if (!res.ok) {
-        if (numbers.length > 0) {
-          console.warn(`[Outbound Dialer] inventory page ${page} failed with ${res.status}; returning ${numbers.length} previously fetched numbers`);
-          return numbers;
-        }
         throw new Error(`Telnyx inventory page ${page} failed with ${res.status}`);
       }
       const data = await res.json();

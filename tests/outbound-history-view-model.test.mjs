@@ -126,6 +126,18 @@ test("contact record label uses contact-list field schema semantic mappings", ()
   assert.deepEqual(label, { to: "+48600111222", name: "Jan Kowalski", displayName: "", company: "Telnyx" });
 });
 
+test("contact record label ignores non-callable contact methods when choosing a phone number", () => {
+  const label = contactRecordLabel({
+    row_data: { first_name: "Ada" },
+    contact_methods: {
+      email: { primary: "ada@example.com" },
+      number: { work: "+48100100100" },
+    },
+  });
+
+  assert.equal(label.to, "+48100100100");
+});
+
 test("campaign status events include persisted campaign run lifecycle rows", () => {
   const events = campaignStatusEventsFromCampaigns(
     [{ id: "campaign-1", name: "Campaign 1", updated_at: "2026-05-17T10:00:00.000Z", metadata: {} }],

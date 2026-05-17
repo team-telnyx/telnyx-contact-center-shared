@@ -104,6 +104,9 @@ export async function POST(request, context) {
     if (!isAgentlessMode(campaign.mode)) {
       return jsonError("Tick currently supported only for agentless campaign modes", 400);
     }
+    if (campaign.status !== "running") {
+      return jsonError("Campaign must be running before tick execution", 409);
+    }
 
     const runResult = await pool.query(
       `SELECT * FROM outbound_campaign_runs
