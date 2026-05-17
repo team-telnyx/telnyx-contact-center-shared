@@ -61,6 +61,12 @@ const liveBadgeClasses = {
   hangups: "border-amber-500/45 bg-transparent text-amber-700 dark:text-amber-300",
   failed: "border-rose-500/45 bg-transparent text-rose-700 dark:text-rose-300",
 };
+const AMD_ELIGIBLE_CAMPAIGN_MODES = ["agentless_ai", "agentless_flow", "power", "predictive"];
+const AMD_ACTION_OPTIONS = [
+  { value: "disconnect", label: "Disconnect" },
+  { value: "leave_message", label: "Leave message" },
+];
+const DEFAULT_AMD_MESSAGE = "Hello, this is a message from Contact Center Services. Please call us back when you are available.";
 const emptySchema = { channels: ["voice", "sms", "whatsapp"], campaignModes: ["preview", "progressive", "power", "predictive", "agentless_ai", "agentless_flow"], campaignStatuses: ["draft", "ready", "paused", "running", "stopped", "completed"], handlerTypes: ["queue", "ai_assistant", "call_flow"], contactListStatuses: ["draft", "validating", "validated"], dncListStatuses: ["draft", "active", "paused"], contactFieldTypes: ["text", "boolean", "number", "date", "datetime", "enum", "select", "phone", "email", "first_name", "last_name", "display_name", "company", "url", "currency"], standardContactColumns: [] };
 const CSV_CONTACT_MAPPING_GROUPS = [
   { group: "Number", icon: IconPhoneCall, labelClass: "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300", iconClass: "text-emerald-600 dark:text-emerald-300", options: ["mobile", "landline", "work", "home", "daytime", "evening"] },
@@ -712,6 +718,7 @@ function CampaignSettingsForm({ campaign, outboundSettings, forms, contactLists,
   const handlerOptions = handlerReferences?.[draft.handler_type] || [];
   const mode = draft.mode || "preview";
   const showPacing = ["power", "predictive"].includes(mode);
+  const amdAvailable = AMD_ELIGIBLE_CAMPAIGN_MODES.includes(mode);
   const maxLines = draft.concurrency_config?.maxLines ?? draft.concurrency_config?.maxConcurrent ?? 10;
   const delayMinutes = draft.retry_policy?.delayBetweenAttemptsMinutes ?? (((Number(draft.retry_policy?.minDelayHours) || 0) * 60) || 360);
   const selectedNumberFields = draft.metadata?.contact_list_numbers || [];
@@ -726,14 +733,81 @@ function CampaignSettingsForm({ campaign, outboundSettings, forms, contactLists,
   const rotationSlots = Array.from({ length: rotationSlotCount }, (_, idx) => allowedCampaignNumbers[idx] || "");
   const campaignModes = [...(schema.campaignModes || [])].sort((a, b) => (["agentless_ai", "agentless_flow"].includes(a) ? 1 : 0) - (["agentless_ai", "agentless_flow"].includes(b) ? 1 : 0));
   const channelOptions = (schema.channels || ["voice", "sms", "whatsapp"]).map((channel) => ({ value: channel, label: channel === "voice" ? "Voice" : `${title(channel)} — not available yet`, disabled: channel !== "voice" }));
-  const save = useCallback(() => saveCampaign({ ...draft, retry_policy: { ...(draft.retry_policy || {}), maxAttempts: campaignMaxAttempts } }), [campaignMaxAttempts, draft, saveCampaign]);
+  const save = useCallback(() => saveCampaign({ ...draft, retry_policy: { ...(draft.retry_policy || {}), maxAttempts: campaignMaxAttempts }, amd_config: amdAvailable ? { ...(draft.amd_config || {}), enabled: draft.amd_config?.enabled === true } : { enabled: false } }), [amdAvailable, campaignMaxAttempts, draft, saveCampaign]);
   useEffect(() => { registerHeaderSaveAction({ section: "campaigns", label: "Save campaign", disabled: saving || !draft.name?.trim(), busy: saving, onSave: save }); return () => registerHeaderSaveAction(null); }, [draft, saving, save, registerHeaderSaveAction]);
   return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
     <SettingCard icon={IconPhoneCall} title="Campaign Details" subtitle="Name, description, and launch state"><InputBlock label="Campaign Name" value={draft.name} onChange={(v) => update({ name: v })} /><div className="mt-3"><Label>Description</Label><Textarea className="mt-2" rows={3} value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} /></div><div className="mt-3"><ConfigSelect label="Launch State" value={draft.status} options={schema.campaignStatuses} onChange={(v) => update({ status: v })} /></div></SettingCard>
-    <SettingCard icon={IconAdjustmentsHorizontal} title="Dialing Strategy" subtitle="Voice execution settings; worker remains scaffolded"><div className="grid grid-cols-2 gap-3"><ConfigSelect label="Channel" value={draft.channel || "voice"} options={channelOptions} onChange={(v) => update({ channel: v })} /><ConfigSelect label="Mode" value={mode} options={campaignModes} onChange={(v) => update({ mode: v })} /><ConfigSelect label="Handler" value={draft.handler_type || "queue"} options={schema.handlerTypes} onChange={(v) => update({ handler_type: v, handler_ref: "" })} /><ConfigSelect label="Reference" value={draft.handler_ref || "none"} options={[{ value: "none", label: handlerOptions.length ? "Select reference" : `No ${title(draft.handler_type)} references loaded` }, ...handlerOptions.map((ref) => ({ value: ref.id, label: ref.name }))]} onChange={(v) => update({ handler_ref: v === "none" ? "" : v })} /><InputBlock label="Max Lines" type="number" value={maxLines} onChange={(v) => updateJson("concurrency_config", { maxLines: Number(v) || 0, maxConcurrent: Number(v) || 0 })} />{showPacing ? <InputBlock label="Pacing Ratio" type="number" value={draft.pacing_config?.ratio || 1} onChange={(v) => updateJson("pacing_config", { ratio: Number(v) || 1 })} /> : null}<InputBlock label="Max attempts" type="number" min={1} max={globalMaxAttempts} value={campaignMaxAttempts} onChange={(v) => updateJson("retry_policy", { maxAttempts: Math.max(1, normalizeAttemptCount(v, 1, globalMaxAttempts)) })} /><InputBlock label="Attempts delay (min)" type="number" value={delayMinutes} onChange={(v) => updateJson("retry_policy", { delayBetweenAttemptsMinutes: Number(v) || 0, minDelayHours: Math.round((Number(v) || 0) / 60) })} /></div><div className="mt-3"><ToggleRow label="Answering Machine Detection" checked={draft.amd_config?.enabled !== false} onCheckedChange={(v) => updateJson("amd_config", { enabled: v })} /></div></SettingCard>
+    <SettingCard icon={IconAdjustmentsHorizontal} title="Dialing Strategy" subtitle="Voice execution settings; worker remains scaffolded"><div className="grid grid-cols-2 gap-3"><ConfigSelect label="Channel" value={draft.channel || "voice"} options={channelOptions} onChange={(v) => update({ channel: v })} /><ConfigSelect label="Mode" value={mode} options={campaignModes} onChange={(v) => update({ mode: v })} /><ConfigSelect label="Handler" value={draft.handler_type || "queue"} options={schema.handlerTypes} onChange={(v) => update({ handler_type: v, handler_ref: "" })} /><ConfigSelect label="Reference" value={draft.handler_ref || "none"} options={[{ value: "none", label: handlerOptions.length ? "Select reference" : `No ${title(draft.handler_type)} references loaded` }, ...handlerOptions.map((ref) => ({ value: ref.id, label: ref.name }))]} onChange={(v) => update({ handler_ref: v === "none" ? "" : v })} /><InputBlock label="Max Lines" type="number" value={maxLines} onChange={(v) => updateJson("concurrency_config", { maxLines: Number(v) || 0, maxConcurrent: Number(v) || 0 })} />{showPacing ? <InputBlock label="Pacing Ratio" type="number" value={draft.pacing_config?.ratio || 1} onChange={(v) => updateJson("pacing_config", { ratio: Number(v) || 1 })} /> : null}<InputBlock label="Max attempts" type="number" min={1} max={globalMaxAttempts} value={campaignMaxAttempts} onChange={(v) => updateJson("retry_policy", { maxAttempts: Math.max(1, normalizeAttemptCount(v, 1, globalMaxAttempts)) })} /><InputBlock label="Attempts delay (min)" type="number" value={delayMinutes} onChange={(v) => updateJson("retry_policy", { delayBetweenAttemptsMinutes: Number(v) || 0, minDelayHours: Math.round((Number(v) || 0) / 60) })} /></div>{amdAvailable ? <CampaignAmdSettings amdConfig={draft.amd_config || {}} onChange={(patch) => updateJson("amd_config", patch)} /> : <div className="mt-3 rounded-lg border border-dashed bg-muted/20 p-3 text-xs text-muted-foreground">Answering Machine Detection is available only for agentless, power, and predictive campaigns.</div>}</SettingCard>
     <SettingCard icon={IconForms} title="Campaign Options" subtitle="Audience, scripts, suppression, filters, and contactable windows"><div className="grid gap-3"><ConfigSelect label="Contact List" value={draft.contact_list_id || "none"} options={[{ value: "none", label: "Not attached" }, ...contactListOptions]} onChange={(v) => update({ contact_list_id: v === "none" || v === "__no_validated_contact_lists__" ? null : v })} /><MultiSelect label="Contact List Numbers" values={selectedNumberFields} options={phoneFields} emptyLabel="Attach a contact list with phone fields to choose callable numbers." onChange={(values) => updateMetadata({ contact_list_numbers: values })} /><ToggleRow label="Rotate numbers" checked={rotateNumbers} onCheckedChange={(checked) => { const nextChecked = checked === true; const current = Array.isArray(draft.metadata?.from_numbers) ? draft.metadata.from_numbers : []; updateMetadata({ rotate_numbers: nextChecked, from_numbers: nextChecked ? current.slice(0, campaignMaxAttempts) : current.slice(0, 1) }); }} /><div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-2"><div className="font-medium">FROM number slots</div><p className="text-muted-foreground">Default call + {maxRetriesPerContact} retry slots (max {campaignMaxAttempts} total attempts).</p>{rotationSlots.map((slotValue, idx) => <ConfigSelect key={`from-slot-${idx}`} label={idx === 0 ? "Default" : `Retry ${idx}`} value={slotValue || "none"} options={[{ value: "none", label: "Not set" }, ...allowedCampaignNumberOptions]} onChange={(value) => { const next = [...rotationSlots]; next[idx] = value === "none" ? "" : value; const cleaned = next.filter((item, itemIdx) => item || itemIdx === 0).filter(Boolean).slice(0, rotationSlotCount); updateMetadata({ from_numbers: cleaned }); }} />)}</div><ConfigSelect label="Agent Script" value={draft.attached_form_id || "none"} options={[{ value: "none", label: "Not attached" }, ...forms.map((f) => ({ value: f.id, label: f.name }))]} onChange={(v) => update({ attached_form_id: v === "none" ? null : v })} /><ConfigSelect label="DNC List" value={draft.metadata?.dnc_list_id || "none"} options={[{ value: "none", label: "No DNC list" }, ...dncLists.map((l) => ({ value: l.id, label: l.name }))]} onChange={(v) => updateMetadata({ dnc_list_id: v === "none" ? null : v })} /><ConfigSelect label="Contact List Filter" value={draft.metadata?.contact_list_filter_id || "none"} options={[{ value: "none", label: "No filter" }, ...filters.map((f) => ({ value: f.id, label: f.name }))]} onChange={(v) => updateMetadata({ contact_list_filter_id: v === "none" ? null : v })} /><ConfigSelect label="Contactable Time Set" value={draft.metadata?.contactable_time_set_id || "none"} options={[{ value: "none", label: "No time set" }, ...timeSets.map((t) => ({ value: t.id, label: `${t.name} · ${t.timezone || "timezone"}` }))]} onChange={(v) => updateMetadata({ contactable_time_set_id: v === "none" ? null : v })} /><ConfigSelect label="Attempt Control" value={draft.attempt_control_id || "none"} options={[{ value: "none", label: "No attempt control" }, ...attemptControls.map((a) => ({ value: a.id, label: `${a.name} · ${title(a.reset_period || "daily")}` }))]} onChange={(v) => update({ attempt_control_id: v === "none" ? null : v })} /></div></SettingCard>
     <MappingEditor campaign={draft} forms={forms} contactLists={contactLists} update={update} />
   </div>;
+}
+
+
+function parseTtsVoiceString(value) {
+  const safe = String(value || "").trim();
+  const parts = safe.split(".");
+  return { provider: parts[0] || "", model: parts.length >= 3 ? parts[1] || "" : "", voiceName: safe };
+}
+
+function normalizeLocaleCode(code) {
+  const match = String(code || "").replace(/_/g, "-").match(/^([a-zA-Z]{2,3})-([a-zA-Z]{2}|\d{3})$/);
+  return match ? `${match[1].toLowerCase()}-${match[2].toUpperCase()}` : null;
+}
+
+function CampaignAmdSettings({ amdConfig = {}, onChange = () => {} }) {
+  const enabled = amdConfig.enabled === true;
+  const action = amdConfig.machine_action || amdConfig.voicemailAction || "disconnect";
+  const message = amdConfig.voicemail_message || amdConfig.message || DEFAULT_AMD_MESSAGE;
+  const voiceConfig = amdConfig.voicemail_tts || {};
+  const parsedVoice = parseTtsVoiceString(voiceConfig.voice || "");
+  const [providers, setProviders] = useState([]);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [languageFilter, setLanguageFilter] = useState(voiceConfig.language || "");
+  const providerValue = voiceConfig.provider || parsedVoice.provider || providers[0]?.id || providers[0]?.provider || "";
+  const selectedProvider = providers.find((p) => p.id === providerValue || p.provider === providerValue) || null;
+  const models = (selectedProvider?.models || []).map((m) => typeof m === "string" ? { id: m, name: m, voices: [] } : { id: m.id || m.name || "", name: m.name || m.id || "", voices: m.voices || [] }).filter((m) => m.id);
+  const modelValue = voiceConfig.model || parsedVoice.model || models[0]?.id || "";
+  const allVoices = selectedProvider?.models?.flatMap((m) => typeof m === "object" && (!modelValue || (m.id || m.name) === modelValue) ? (m.voices || []) : []) || [];
+  const languageOptions = Array.from(new Set(allVoices.map((v) => normalizeLocaleCode(v?.language)).filter(Boolean))).sort().map((value) => ({ value, label: value.toUpperCase() }));
+  const voices = allVoices.filter((v) => v?.id && (!languageFilter || normalizeLocaleCode(v?.language) === languageFilter));
+  const voiceValue = voiceConfig.voice || parsedVoice.voiceName || "";
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVoices() {
+      try {
+        setTtsLoading(true);
+        const response = await fetch("/api/tts/voices", { cache: "no-store" });
+        const data = await response.json();
+        if (!cancelled && response.ok && data?.ok) setProviders(data.providers || []);
+      } catch (error) {
+        console.error("Failed to load AMD TTS voices", error);
+      } finally {
+        if (!cancelled) setTtsLoading(false);
+      }
+    }
+    loadVoices();
+    return () => { cancelled = true; };
+  }, []);
+  const updateTts = (patch) => onChange({ voicemail_tts: { ...(amdConfig.voicemail_tts || {}), ...patch } });
+  const testVoice = async () => {
+    if (!message.trim() || !voiceValue) return;
+    try {
+      setIsPlaying(true);
+      const response = await fetch("/api/tts/speech", { method: "POST", headers: { "Content-Type": "application/json", "Cache-Control": "no-cache, no-store, must-revalidate" }, cache: "no-store", body: JSON.stringify({ text: message, voice: voiceValue, voice_api_key_ref: voiceConfig.voice_api_key_ref || "" }) });
+      if (!response.ok) throw new Error("Failed to generate AMD voicemail preview");
+      const audioUrl = URL.createObjectURL(await response.blob());
+      const audio = new Audio(audioUrl);
+      audio.onended = () => { setIsPlaying(false); URL.revokeObjectURL(audioUrl); };
+      audio.onerror = () => { setIsPlaying(false); URL.revokeObjectURL(audioUrl); };
+      await audio.play();
+    } catch (error) {
+      setIsPlaying(false);
+      notify({ title: "Error", description: error.message || "Failed to test voice", variant: "error" });
+    }
+  };
+  return <div className="mt-4 space-y-3 rounded-xl border bg-muted/20 p-3"><ToggleRow label="Answering Machine Detection" checked={enabled} onCheckedChange={(checked) => onChange({ enabled: checked === true })} />{enabled ? <div className="space-y-3 rounded-lg border bg-background/70 p-3"><ConfigSelect label="Answering machine action" value={action} options={AMD_ACTION_OPTIONS} onChange={(value) => onChange({ machine_action: value, voicemailAction: value })} />{action === "leave_message" ? <div className="space-y-3"><div><Label>Voicemail message</Label><Textarea className="mt-2" rows={4} maxLength={3000} value={message} onChange={(event) => onChange({ voicemail_message: event.target.value, message: event.target.value })} placeholder="Message to leave on answering machine" /><p className="mt-1 text-xs text-muted-foreground">Text or SSML left after answering machine detection. Supports campaign/contact variables.</p></div><ConfigSelect label="Provider" value={providerValue} options={providers.map((p) => ({ value: p.id || p.provider, label: p.name || p.provider || p.id }))} onChange={(value) => updateTts({ provider: value, model: "", voice: "", language: "" })} /><ConfigSelect label="Model" value={modelValue} options={models.map((m) => ({ value: m.id, label: m.name || m.id }))} onChange={(value) => updateTts({ model: value, voice: "", language: "" })} /><ConfigSelect label="Language Filter" value={languageFilter || "__any__"} options={[{ value: "__any__", label: `All languages (${languageOptions.length} available)` }, ...languageOptions]} onChange={(value) => { const next = value === "__any__" ? "" : value; setLanguageFilter(next); updateTts({ language: next, voice: "" }); }} /><ConfigSelect label="Voice" value={voiceValue} options={voices.map((voice) => ({ value: voice.id, label: voice.language ? `${voice.name || voice.id} (${voice.language})` : (voice.name || voice.id) }))} onChange={(value) => updateTts({ provider: providerValue, model: modelValue, language: languageFilter, voice: value })} /><Button type="button" variant="outline" className="w-full" onClick={testVoice} disabled={ttsLoading || !message.trim() || !voiceValue}>{isPlaying ? <IconPlayerStop className="mr-2 h-4 w-4" /> : <IconPlayerPlay className="mr-2 h-4 w-4" />}Test Voice</Button></div> : <p className="rounded-lg border border-dashed bg-muted/25 p-3 text-xs text-muted-foreground">Machine calls will be disconnected immediately after answering machine detection.</p>}</div> : null}</div>;
 }
 
 
@@ -766,7 +840,7 @@ function AttemptControlSettingsForm({ attemptControl, outboundSettings, schema, 
 }
 
 function RecallRows({ rows, updateRow, removeRow, addRow, compact = false, maxAttempts = 5 }) {
-  return <div className="space-y-2">{rows.map((row, idx) => <div key={idx} className="grid grid-cols-[minmax(0,1fr)_88px_88px_36px] items-end gap-2 rounded-lg border bg-background/70 p-2"><ConfigSelect label={compact ? null : "Outcome"} bare={compact} value={row.outcome || "busy"} options={RECALL_OUTCOMES} onChange={(v) => updateRow(idx, { outcome: v })} /><InputBlock label={compact ? "" : "Attempts"} type="number" min={0} max={maxAttempts} value={normalizeAttemptCount(row.attempts ?? 1, 1, maxAttempts)} onChange={(v) => updateRow(idx, { attempts: normalizeAttemptCount(v, 0, maxAttempts) })} /><InputBlock label={compact ? "" : "Minutes"} type="number" min={0} value={Math.max(0, Number(row.minutes_between_attempts ?? row.minutesBetweenAttempts ?? 30) || 0)} onChange={(v) => updateRow(idx, { minutes_between_attempts: Math.max(0, Number(v) || 0) })} /><Button type="button" variant="ghost" size="icon" onClick={() => removeRow(idx)}><IconX className="h-4 w-4" /></Button></div>)}<Button type="button" size="sm" variant="outline" onClick={addRow}><IconPlus className="mr-2 h-4 w-4" />Add recall rule</Button></div>;
+  return <div className="space-y-2">{rows.map((row, idx) => <div key={idx} className="space-y-3 rounded-xl border bg-background/70 p-3 shadow-sm"><div className="grid grid-cols-[minmax(0,1fr)_36px] items-end gap-2"><ConfigSelect label="Outcome" value={row.outcome || "busy"} options={RECALL_OUTCOMES} onChange={(v) => updateRow(idx, { outcome: v })} /><Button type="button" variant="ghost" size="icon" className="mb-0 h-10 w-10 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600" onClick={() => removeRow(idx)} title="Remove recall rule"><IconX className="h-4 w-4" /></Button></div><div className="grid grid-cols-2 gap-2"><InputBlock label="Attempts" type="number" min={0} max={maxAttempts} value={normalizeAttemptCount(row.attempts ?? 1, 1, maxAttempts)} onChange={(v) => updateRow(idx, { attempts: normalizeAttemptCount(v, 0, maxAttempts) })} /><InputBlock label="Minutes" type="number" min={0} value={Math.max(0, Number(row.minutes_between_attempts ?? row.minutesBetweenAttempts ?? 30) || 0)} onChange={(v) => updateRow(idx, { minutes_between_attempts: Math.max(0, Number(v) || 0) })} /></div></div>)}<Button type="button" size="sm" variant="outline" onClick={addRow}><IconPlus className="mr-2 h-4 w-4" />Add recall rule</Button></div>;
 }
 
 function OutboundSettingsForm({ settings, inventoryNumbers, saveOutboundSettings, saving, registerHeaderSaveAction }) {

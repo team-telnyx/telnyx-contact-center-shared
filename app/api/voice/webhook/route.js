@@ -808,8 +808,8 @@ export async function POST(request) {
           const payloadMetadata = payload?.metadata && typeof payload.metadata === "object"
             ? payload.metadata
             : {};
-          const outboundHandlerType = finalizedMetadata?.outbound_handler_type || payloadMetadata?.outbound_handler_type;
-          const outboundHandlerRef = finalizedMetadata?.outbound_handler_ref || payloadMetadata?.outbound_handler_ref;
+          const outboundHandlerType = finalizedMetadata?.outbound_handler_type || finalizedLedger?.handler_type || payloadMetadata?.outbound_handler_type;
+          const outboundHandlerRef = finalizedMetadata?.outbound_handler_ref || finalizedLedger?.handler_ref || payloadMetadata?.outbound_handler_ref;
 
           if (
             eventType === "call.answered" &&

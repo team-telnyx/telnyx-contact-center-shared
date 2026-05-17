@@ -170,12 +170,14 @@ test('executeAgentlessAttempt persists outbound AI assistant handler metadata fo
 });
 
 test('finalizeAgentlessAttemptByWebhook mapuje call.answered -> answered', async () => {
+  let usedColumnFallback = false;
   const poolAnswered = createMockPool(async (sql) => {
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
-      return { rows: [{ id: 'l3', campaign_id: 'camp3', status: 'dialing' }] };
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
+      usedColumnFallback = true;
+      return { rows: [{ id: 'l3', campaign_id: 'camp3', status: 'dialing', handler_type: 'ai_assistant', handler_ref: 'assistant-123' }] };
     }
     if (sql.includes("SET status = 'answered'")) {
-      return { rows: [{ id: 'l3', status: 'answered' }] };
+      return { rows: [{ id: 'l3', status: 'answered', handler_type: 'ai_assistant', handler_ref: 'assistant-123' }] };
     }
     throw new Error(`Unexpected SQL(answered): ${sql}`);
   });
@@ -185,12 +187,13 @@ test('finalizeAgentlessAttemptByWebhook mapuje call.answered -> answered', async
     eventType: 'call.answered',
   });
   assert.equal(answered.status, 'answered');
+  assert.equal(usedColumnFallback, true);
 });
 
 test('finalizeAgentlessAttemptByWebhook mapuje retryable hangup (busy) -> failed + retry metadata', async () => {
   const captured = { terminalStatus: null, metadata: null };
   const poolBusy = createMockPool(async (sql, params) => {
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
       return { rows: [{ id: 'l4', campaign_id: 'camp4', status: 'answered' }] };
     }
     if (sql.includes('FROM outbound_campaigns')) {
@@ -222,7 +225,7 @@ test('finalizeAgentlessAttemptByWebhook mapuje retryable hangup (busy) -> failed
 test('finalizeAgentlessAttemptByWebhook mapuje cancelled hangup -> cancelled bez retry', async () => {
   const captured = { terminalStatus: null, metadata: null };
   const poolCancelled = createMockPool(async (sql, params) => {
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
       return { rows: [{ id: 'l5', campaign_id: 'camp5', status: 'answered' }] };
     }
     if (sql.includes('FROM outbound_campaigns')) {
@@ -305,7 +308,7 @@ test('reason-code mapping: originator_cancel -> cancelled bez retry', async () =
     if (sql.includes('INSERT INTO outbound_webhook_events')) {
       return { rows: [{ event_id: 'evt-originator-cancel' }] };
     }
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
       return { rows: [{ id: 'l9', campaign_id: 'camp9', status: 'answered' }] };
     }
     if (sql.includes('FROM outbound_campaigns')) {
@@ -338,7 +341,7 @@ test('reason-code mapping: not_found -> failed z retry', async () => {
     if (sql.includes('INSERT INTO outbound_webhook_events')) {
       return { rows: [{ event_id: 'evt-not-found' }] };
     }
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
       return { rows: [{ id: 'l10', campaign_id: 'camp10', status: 'answered' }] };
     }
     if (sql.includes('FROM outbound_campaigns')) {
@@ -372,7 +375,7 @@ test('reason-code mapping: time_limit -> completed bez retry', async () => {
     if (sql.includes('INSERT INTO outbound_webhook_events')) {
       return { rows: [{ event_id: 'evt-time-limit' }] };
     }
-    if (sql.includes('WHERE metadata->>\'call_control_id\'')) {
+    if (sql.includes("call_control_id = $1 OR metadata->>'call_control_id' = $1")) {
       return { rows: [{ id: 'l11', campaign_id: 'camp11', status: 'answered' }] };
     }
     if (sql.includes('FROM outbound_campaigns')) {
