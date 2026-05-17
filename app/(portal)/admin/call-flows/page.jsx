@@ -440,7 +440,8 @@ export default function CallFlowsPage() {
                                 (node) =>
                                   node.data?.nodeType === "incoming_call" ||
                                   node.data?.nodeType === "http_request" ||
-                                  node.data?.nodeType === "form_submit"
+                                  node.data?.nodeType === "form_submit" ||
+                                  node.data?.nodeType === "outbound_campaign"
                               )
                             : null;
 
@@ -459,7 +460,7 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "incoming_call") {
                             return (
-                              <Badge className="bg-telnyx-green/10 text-telnyx-green border-telnyx-green/20 hover:bg-telnyx-green/20 dark:bg-telnyx-green/20 dark:text-telnyx-green dark:border-telnyx-green/30">
+                              <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-300">
                                 Incoming Call
                               </Badge>
                             );
@@ -467,7 +468,7 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "http_request") {
                             return (
-                              <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30">
+                              <Badge className="border-orange-500/20 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400">
                                 HTTP Request
                               </Badge>
                             );
@@ -475,8 +476,16 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "form_submit") {
                             return (
-                              <Badge className="bg-teal-500/10 text-teal-600 border-teal-500/20 hover:bg-teal-500/20 dark:bg-teal-500/20 dark:text-teal-400 dark:border-teal-500/30">
+                              <Badge className="border-violet-500/20 bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300">
                                 Form Submit
+                              </Badge>
+                            );
+                          }
+
+                          if (initiatorType === "outbound_campaign") {
+                            return (
+                              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                Outbound Campaign
                               </Badge>
                             );
                           }
