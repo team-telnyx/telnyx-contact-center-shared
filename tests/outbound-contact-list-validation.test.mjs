@@ -10,9 +10,10 @@ const list = (overrides = {}) => ({
   ...overrides,
 });
 
-test("contact list can be validated only after import and number/email mapping", () => {
+test("contact list can be validated only after import and number/email/whatsapp mapping", () => {
   assert.equal(canValidateContactList(list({ record_count: 1, metadata: { csv_import_settings: { column_mappings: { Phone: ["number:mobile"] } } } })), true);
   assert.equal(canValidateContactList(list({ record_count: 1, metadata: { csv_import_settings: { column_mappings: { Email: ["email:primary"] } } } })), true);
+  assert.equal(canValidateContactList(list({ record_count: 1, metadata: { csv_import_settings: { column_mappings: { WhatsApp: ["whatsapp:primary"] } } } })), true);
   assert.equal(canValidateContactList(list({ record_count: 0, metadata: { csv_import_settings: { column_mappings: { Phone: ["number:mobile"] } } } })), false);
   assert.equal(canValidateContactList(list({ record_count: 1, metadata: { csv_import_settings: { column_mappings: { Name: ["text:name"] } } } })), false);
 });

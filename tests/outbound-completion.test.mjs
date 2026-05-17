@@ -31,7 +31,10 @@ test("completeCampaignIfExhausted stops running campaign when no active, future 
   const result = await completeCampaignIfExhausted(pool, { id: "campaign-1", status: "running", contact_list_id: "list-1", retry_policy: { maxAttempts: 3 } }, "tester");
   assert.equal(result.completed, true);
   assert.equal(result.remaining, 0);
+  assert.equal(/status = 'claimed' AND COALESCE\(lease_expires_at/.test(pool.calls[0].sql), true);
   assert.equal(pool.calls.some((call) => /UPDATE outbound_campaigns/.test(call.sql) && /status = 'stopped'/.test(call.sql)), true);
+  assert.equal(pool.calls.some((call) => /UPDATE outbound_campaign_runs/.test(call.sql) && /stopped_at = COALESCE\(stopped_at, NOW\(\)\)/.test(call.sql) && /stopped_by = \$2/.test(call.sql)), true);
+  assert.equal(pool.calls.some((call) => /UPDATE outbound_campaign_runs/.test(call.sql) && /ended_at|ended_by/.test(call.sql)), false);
 });
 
 test("completeCampaignIfExhausted waits while retry is scheduled", async () => {

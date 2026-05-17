@@ -45,7 +45,9 @@ async function loadInventoryNumbers() {
         headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
         cache: "no-store",
       });
-      if (!res.ok) break;
+      if (!res.ok) {
+        throw new Error(`Telnyx inventory page ${page} failed with ${res.status}`);
+      }
       const data = await res.json();
       const rows = Array.isArray(data?.data) ? data.data : [];
       for (const item of rows) {
