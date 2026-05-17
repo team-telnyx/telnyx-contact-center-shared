@@ -196,7 +196,7 @@ export async function GET() {
       safeQuery(pool, `SELECT * FROM outbound_attempt_controls WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
       safeQuery(pool, `SELECT * FROM outbound_settings WHERE id='default' LIMIT 1`),
       safeQuery(pool, `SELECT id, name, display_name, enabled, active FROM cc_queues WHERE enabled = true AND active = true ORDER BY priority DESC, name ASC LIMIT 200`),
-      safeQuery(pool, `SELECT id, name, description FROM voice_flows ORDER BY updated_at DESC LIMIT 200`),
+      safeQuery(pool, `SELECT id, name, description FROM voice_flows WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(nodes) AS n WHERE n->'data'->>'nodeType' = 'outbound_campaign') ORDER BY updated_at DESC LIMIT 200`),
       loadAiAssistants(),
       loadInventoryNumbers(),
     ]);

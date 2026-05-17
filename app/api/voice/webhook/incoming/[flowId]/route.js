@@ -38,6 +38,46 @@ function findCustomHeader(headers, name) {
   );
 }
 
+async function lookupOutboundContactRecord(payload = {}) {
+  const pool = getPostgresPool();
+  if (!pool) return null;
+
+  const metadata = payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {};
+  const callControlId = payload?.call_control_id || null;
+  const ledgerId = metadata?.outbound_ledger_id || null;
+
+  try {
+    let query = `
+      SELECT r.row_data, l.contact_record_id, l.campaign_id
+      FROM outbound_attempt_ledger l
+      LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
+      WHERE l.call_control_id = $1
+      LIMIT 1`;
+    let params = [callControlId];
+
+    if (ledgerId) {
+      query = `
+        SELECT r.row_data, l.contact_record_id, l.campaign_id
+        FROM outbound_attempt_ledger l
+        LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
+        WHERE l.id = $1
+        LIMIT 1`;
+      params = [ledgerId];
+    }
+
+    const { rows } = await pool.query(query, params);
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      contactRecord: row.row_data && typeof row.row_data === "object" ? row.row_data : {},
+      contactRecordId: row.contact_record_id || null,
+      campaignId: row.campaign_id || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function updateConversationMetadata(conversationId, metadata) {
   const apiKey = process.env.TELNYX_API_KEY;
   if (!apiKey || !conversationId) return null;
@@ -564,31 +604,64 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Find the incoming call initiator node
+    // Find initiator nodes for this flow
     const incomingCallNode = flow.nodes?.find(
       (node) => node.data?.nodeType === "incoming_call",
     );
+    const outboundCampaignNode = flow.nodes?.find(
+      (node) => node.data?.nodeType === "outbound_campaign",
+    );
 
-    if (!incomingCallNode) {
+    if (!incomingCallNode && !outboundCampaignNode) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Flow does not have an incoming call trigger",
+          error: "Flow does not have a supported trigger (incoming_call or outbound_campaign)",
         },
         { status: 400 },
       );
     }
 
-    // Verify that the voice application ID matches (if configured)
-    const configuredAppId = incomingCallNode.data?.config?.voice_application_id;
+    const isOutboundCampaignEvent =
+      event === "call.initiated" &&
+      payload.direction === "outgoing" &&
+      (payload?.metadata?.outbound_campaign_id || payload?.metadata?.outbound_ledger_id);
+
+    const initiatorNode =
+      isOutboundCampaignEvent && outboundCampaignNode
+        ? outboundCampaignNode
+        : incomingCallNode;
+
+    if (!initiatorNode) {
+      return NextResponse.json({
+        ok: true,
+        message: "No matching initiator in flow for this webhook event",
+      });
+    }
+
+    // Verify that the voice application ID matches (if configured on incoming_call initiator)
+    const configuredAppId = initiatorNode.data?.config?.voice_application_id;
     const receivedAppId = body?.data?.payload?.connection_id;
 
-    if (configuredAppId && receivedAppId && configuredAppId !== receivedAppId) {
+    if (
+      initiatorNode.data?.nodeType === "incoming_call" &&
+      configuredAppId &&
+      receivedAppId &&
+      configuredAppId !== receivedAppId
+    ) {
       console.warn(
         `Voice application mismatch: expected ${configuredAppId}, received ${receivedAppId}`,
       );
       // We'll still process it, but log the warning
     }
+
+    const outboundContact =
+      initiatorNode.data?.nodeType === "outbound_campaign"
+        ? await lookupOutboundContactRecord(payload)
+        : null;
+
+    const outboundPayloadVariable =
+      initiatorNode.data?.config?.payloadVariable || "contact_record";
 
     // Extract webhook data into variables (payload already extracted above)
     const variables = {
@@ -616,14 +689,23 @@ export async function POST(request, { params }) {
       payload: payload,
 
       // Metadata
-      trigger_type: "incoming_call",
+      trigger_type: initiatorNode.data?.nodeType,
       flow_id: flowId,
+      outbound_campaign_id: outboundContact?.campaignId || payload?.metadata?.outbound_campaign_id || null,
+      outbound_contact_record_id: outboundContact?.contactRecordId || null,
     };
+
+    if (initiatorNode.data?.nodeType === "outbound_campaign") {
+      variables[outboundPayloadVariable] = outboundContact?.contactRecord || {};
+      variables.contact_record = outboundContact?.contactRecord || {};
+    }
 
     // Handle different event types
     if (event === "call.initiated") {
-      // Only trigger for incoming calls, not outgoing calls (e.g., from transfer nodes)
-      if (payload.direction !== "incoming") {
+      if (
+        initiatorNode.data?.nodeType === "incoming_call" &&
+        payload.direction !== "incoming"
+      ) {
         return NextResponse.json({
           ok: true,
           message: `Call initiated but direction is ${payload.direction}, expected "incoming"`,
@@ -631,13 +713,24 @@ export async function POST(request, { params }) {
         });
       }
 
-      // Find all next nodes after the incoming_call initiator (supports parallel execution)
-      const nextNodes = findNextNodes(flow, incomingCallNode.id);
+      if (
+        initiatorNode.data?.nodeType === "outbound_campaign" &&
+        payload.direction !== "outgoing"
+      ) {
+        return NextResponse.json({
+          ok: true,
+          message: `Call initiated but direction is ${payload.direction}, expected "outgoing"`,
+          variables,
+        });
+      }
 
-      // Process edge variable mappings for edges from incoming_call node
+      // Find all next nodes after the selected initiator (supports parallel execution)
+      const nextNodes = findNextNodes(flow, initiatorNode.id);
+
+      // Process edge variable mappings for edges from selected initiator node
       const edges = flow.edges || [];
       const matchingEdges = edges.filter(
-        (e) => e.source === incomingCallNode.id,
+        (e) => e.source === initiatorNode.id,
       );
 
       // Process edge variable mappings

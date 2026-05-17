@@ -796,11 +796,19 @@ export async function POST(request) {
             eventId: body?.data?.id || body?.id || null,
           });
 
-          const ledgerMeta = finalizedLedger?.metadata || {};
+          const finalizedMetadata = finalizedLedger?.metadata && typeof finalizedLedger.metadata === "object"
+            ? finalizedLedger.metadata
+            : {};
+          const payloadMetadata = payload?.metadata && typeof payload.metadata === "object"
+            ? payload.metadata
+            : {};
+          const outboundHandlerType = finalizedMetadata?.outbound_handler_type || payloadMetadata?.outbound_handler_type;
+          const outboundHandlerRef = finalizedMetadata?.outbound_handler_ref || payloadMetadata?.outbound_handler_ref;
+
           if (
             (eventType === "call.answered" || eventType === "call.bridged") &&
-            ledgerMeta?.outbound_handler_type === "ai_assistant" &&
-            ledgerMeta?.outbound_handler_ref &&
+            outboundHandlerType === "ai_assistant" &&
+            outboundHandlerRef &&
             callControlId
           ) {
             try {
@@ -813,7 +821,7 @@ export async function POST(request) {
                     "Content-Type": "application/json",
                   },
                   body: JSON.stringify({
-                    assistant_id: ledgerMeta.outbound_handler_ref,
+                    assistant_id: outboundHandlerRef,
                   }),
                 });
               }

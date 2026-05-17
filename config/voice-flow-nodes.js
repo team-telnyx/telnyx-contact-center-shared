@@ -139,6 +139,32 @@ export const VOICE_FLOW_NODES = {
     },
   },
 
+  outbound_campaign: {
+    id: "outbound_campaign",
+    category: NODE_CATEGORIES.INITIATOR,
+    label: "Outbound Campaign",
+    icon: "IconPhoneOutgoing",
+    color: NODE_COLORS[NODE_CATEGORIES.INITIATOR],
+    description: "Trigger flow for outbound campaign attempts",
+    telnyxAction: "outbound_campaign_trigger",
+    telnyxEndpoint: null,
+    inputs: 0,
+    outputs: 1,
+    outputLabels: ["Campaign Attempt"],
+    outputEvents: ["call.initiated"],
+    config: {
+      payloadVariable: {
+        type: "string",
+        label: "Contact Record Variable",
+        required: false,
+        default: "contact_record",
+        placeholder: "contact_record",
+        description:
+          "Variable that receives the full outbound contact list record (JSON row_data) for downstream nodes.",
+      },
+    },
+  },
+
   // CALL CONTROL NODES
   dial: {
     id: "dial",
