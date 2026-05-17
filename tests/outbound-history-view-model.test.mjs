@@ -138,6 +138,38 @@ test("contact record label ignores non-callable contact methods when choosing a 
   assert.equal(label.to, "+48100100100");
 });
 
+test("contact record label uses joined attempt contact_row_data with semantic mappings", () => {
+  const label = contactRecordLabel(
+    {
+      to_number: "+48666368808",
+      contact_row_data: { First: "Marta", Last: "Nowak", Display: "Marta N.", Company: "Telnyx PL" },
+      contact_methods: { number: { mobile: "+48666368808" } },
+    },
+    {
+      custom_field_schema: [
+        { name: "First", type: "first_name" },
+        { name: "Last", type: "last_name" },
+        { name: "Display", type: "display_name" },
+        { name: "Company", type: "company" },
+      ],
+    },
+  );
+
+  assert.deepEqual(label, { to: "+48666368808", name: "Marta Nowak", displayName: "Marta N.", company: "Telnyx PL" });
+});
+
+test("contact record label infers identity columns from imported header names", () => {
+  const label = contactRecordLabel(
+    {
+      row_data: { "First & Last Name": "Anna Zielinska", "Display Name": "Anna Z.", Company: "Telnyx", Phone: "+48600111222" },
+      contact_methods: {},
+    },
+    { custom_field_schema: [{ name: "First & Last Name", type: "text" }, { name: "Display Name", type: "text" }, { name: "Company", type: "text" }, { name: "Phone", type: "phone" }] },
+  );
+
+  assert.deepEqual(label, { to: "+48600111222", name: "Anna Zielinska", displayName: "Anna Z.", company: "Telnyx" });
+});
+
 test("campaign status events include persisted campaign run lifecycle rows", () => {
   const events = campaignStatusEventsFromCampaigns(
     [{ id: "campaign-1", name: "Campaign 1", updated_at: "2026-05-17T10:00:00.000Z", metadata: {} }],

@@ -42,10 +42,12 @@ test('pickContactPhoneNumber preferuje contact_methods, fallbackuje do row_data'
 
 test('normalizeOutboundDialTimeoutSecs clamps unsafe values', () => {
   assert.equal(normalizeOutboundDialTimeoutSecs(undefined), 30);
-  assert.equal(normalizeOutboundDialTimeoutSecs('2'), 5);
+  assert.equal(normalizeOutboundDialTimeoutSecs('2'), 15);
+  assert.equal(normalizeOutboundDialTimeoutSecs('14'), 15);
   assert.equal(normalizeOutboundDialTimeoutSecs('45'), 45);
   assert.equal(normalizeOutboundDialTimeoutSecs('999'), 600);
   assert.equal(normalizeOutboundDialTimeoutSecs('bad', 20), 20);
+  assert.equal(normalizeOutboundDialTimeoutSecs('bad', 12), 15);
 });
 
 test('executeAgentlessAttempt sends a bounded Telnyx dial timeout', async () => {
