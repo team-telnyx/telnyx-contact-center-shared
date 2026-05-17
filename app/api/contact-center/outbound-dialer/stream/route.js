@@ -60,6 +60,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     pool,
     `SELECT
       l.campaign_id,
+      COUNT(*)::int AS attempts_total,
       COUNT(*) FILTER (WHERE l.created_at > NOW() - INTERVAL '15 minutes')::int AS attempts_last_15m,
       COUNT(*) FILTER (WHERE l.status = 'dialing')::int AS dialing_now,
       COUNT(*) FILTER (WHERE l.status IN ('claimed','dialing','answered'))::int AS active_now,
@@ -87,6 +88,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   const byCampaign = Object.fromEntries(ids.map((id) => [id, {
     runner: getRunnerState(id),
     summary: {
+      attempts_total: 0,
       attempts_last_15m: 0,
       dialing_now: 0,
       active_now: 0,
@@ -111,6 +113,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   for (const row of summaryResult.rows || []) {
     if (!byCampaign[row.campaign_id]) continue;
     byCampaign[row.campaign_id].summary = {
+      attempts_total: Number(row.attempts_total || 0),
       attempts_last_15m: Number(row.attempts_last_15m || 0),
       dialing_now: Number(row.dialing_now || 0),
       active_now: Number(row.active_now || 0),
