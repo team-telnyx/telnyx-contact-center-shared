@@ -6,6 +6,7 @@ import {
   getWebrtcCallLegMappingBySessionId,
 } from "@/lib/mobile-call-leg-store";
 import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
+import { startAgentlessAiAssistantForCall } from "@/lib/outbound-dialer/ai-assistant";
 
 async function dialAndBridge({
   to,
@@ -811,27 +812,57 @@ export async function POST(request) {
           const outboundHandlerRef = finalizedMetadata?.outbound_handler_ref || payloadMetadata?.outbound_handler_ref;
 
           if (
-            (eventType === "call.answered" || eventType === "call.bridged") &&
+            eventType === "call.answered" &&
             outboundHandlerType === "ai_assistant" &&
             outboundHandlerRef &&
             callControlId
           ) {
-            try {
-              const apiKey = process.env.TELNYX_API_KEY;
-              if (apiKey) {
-                await fetch(buildTelnyxV2Url(`/calls/${callControlId}/actions/ai_assistant_start`), {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    assistant_id: outboundHandlerRef,
-                  }),
+            const startedAt = finalizedMetadata?.ai_assistant_started_at;
+            if (!startedAt) {
+              try {
+                const assistantStart = await startAgentlessAiAssistantForCall({
+                  callControlId,
+                  assistantId: outboundHandlerRef,
+                  eventType,
+                  ledgerId: finalizedLedger?.id || payloadMetadata?.outbound_ledger_id || null,
+                  campaignId: finalizedLedger?.campaign_id || payloadMetadata?.outbound_campaign_id || null,
                 });
+
+                if (assistantStart.ok) {
+                  if (finalizedLedger?.id) {
+                    await pool.query(
+                      `UPDATE outbound_attempt_ledger
+                       SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb,
+                           updated_at = NOW()
+                       WHERE id = $2`,
+                      [
+                        JSON.stringify({
+                          ai_assistant_started_at: new Date().toISOString(),
+                          ai_assistant_id: outboundHandlerRef,
+                          ai_assistant_start_command_id: assistantStart.request?.command_id || null,
+                        }),
+                        finalizedLedger.id,
+                      ],
+                    );
+                  }
+                  console.log("[voice-webhook] ✅ Started Agentless AI assistant for outbound call", {
+                    callControlId,
+                    assistantId: outboundHandlerRef,
+                    ledgerId: finalizedLedger?.id || null,
+                  });
+                } else {
+                  console.error("[voice-webhook] Failed to start Agentless AI assistant for outbound call", {
+                    callControlId,
+                    assistantId: outboundHandlerRef,
+                    ledgerId: finalizedLedger?.id || null,
+                    reason: assistantStart.reason,
+                    status: assistantStart.status || null,
+                    error: assistantStart.error || null,
+                  });
+                }
+              } catch (assistErr) {
+                console.error("[voice-webhook] Failed to start Agentless AI assistant for outbound call:", assistErr);
               }
-            } catch (assistErr) {
-              console.error("[voice-webhook] Failed to start AI assistant for outbound call:", assistErr);
             }
           }
 
