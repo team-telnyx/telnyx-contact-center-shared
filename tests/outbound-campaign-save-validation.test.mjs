@@ -58,3 +58,21 @@ test("new campaign save requires default and every retry FROM slot when rotation
   assert.equal(complete.canSave, true);
   assert.deepEqual(complete.missing, []);
 });
+
+test("new campaign save caps required rotating FROM slots to runtime rotation limit", () => {
+  const draft = {
+    ...baseCampaign,
+    metadata: {
+      ...baseCampaign.metadata,
+      rotate_numbers: true,
+      from_numbers: ["+48602410402", "+48602410403", "+48602410404", "+48602410405", "+48602410406"],
+    },
+    retry_policy: { maxAttempts: 8 },
+  };
+
+  const requirements = campaignSaveRequirements(draft, { maxAttempts: 8 });
+
+  assert.equal(requirements.requiredFromSlots, 5);
+  assert.equal(requirements.canSave, true);
+  assert.deepEqual(requirements.missing, []);
+});
