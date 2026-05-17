@@ -194,6 +194,15 @@ test("contact record label infers identity columns from imported header names", 
   assert.deepEqual(label, { to: "+48600111222", name: "Anna Zielinska", displayName: "Anna Z.", company: "Telnyx" });
 });
 
+test("contact record label infers DEV imported row_data headers when contact list schema is unavailable", () => {
+  const label = contactRecordLabel({
+    row_data: { "First name": "Leszek", "Last name": "Winiarski", Company: "Telnyx", Number: "+48602410402" },
+    contact_methods: { number: { mobile: "+48602410402" } },
+  });
+
+  assert.deepEqual(label, { to: "+48602410402", name: "Leszek Winiarski", displayName: "", company: "Telnyx" });
+});
+
 test("campaign status events include persisted campaign run lifecycle rows", () => {
   const events = campaignStatusEventsFromCampaigns(
     [{ id: "campaign-1", name: "Campaign 1", updated_at: "2026-05-17T10:00:00.000Z", metadata: {} }],
