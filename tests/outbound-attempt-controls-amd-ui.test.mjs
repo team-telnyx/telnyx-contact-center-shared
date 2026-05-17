@@ -92,6 +92,18 @@ test("outbound dialer notifications include short descriptions", async () => {
   assert.match(source, /Contact list saved[\s\S]*contact list/, "Contact list save notifications should include a descriptive success message");
 });
 
+test("time set calendar day checkboxes use high-contrast outbound checked styling", async () => {
+  const source = await sourcePromise;
+  const calendarView = functionSource(source, "TimeSetCalendar", "parseCsvPreview");
+
+  assert.match(calendarView, /aria-label=\{`\$\{enabled \? "Disable" : "Enable"\} \$\{d\.label\}`\}/, "calendar day toggles should remain accessible by weekday label");
+  assert.match(calendarView, /data-\[state=checked\]:!?bg-emerald-500/, "checked day boxes should use the outbound emerald checked background");
+  assert.match(calendarView, /dark:data-\[state=checked\]:!?bg-emerald-500/, "dark mode must keep checked day boxes emerald instead of falling back to muted primary styles");
+  assert.match(calendarView, /data-\[state=checked\]:!?text-white/, "checked day boxes should render the checkmark in white");
+  assert.match(calendarView, /dark:data-\[state=checked\]:!?text-white/, "dark mode must keep the checkmark white for contrast");
+  assert.match(calendarView, /data-\[state=checked\]:border-emerald-500/, "checked day boxes should have a matching emerald border");
+});
+
 test("floating phone WebRTC URI copy uses shared notify toast component", async () => {
   const source = await readFile(new URL("../components/floating-softphone.jsx", import.meta.url), "utf8");
 
