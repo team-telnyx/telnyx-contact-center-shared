@@ -361,6 +361,11 @@ export default function OutboundDialerPage() {
         if (!cancelled) setLiveCallsLoading(false);
       }
     };
+    const startPollingFallback = () => {
+      if (cancelled || fallbackTimer) return;
+      loadLiveCalls(true);
+      fallbackTimer = setInterval(() => loadLiveCalls(false), 2000);
+    };
     if (typeof window !== "undefined" && "EventSource" in window) {
       setLiveCallsLoading(true);
       eventSource = new EventSource(`${API}/live-calls/stream`);
@@ -374,10 +379,10 @@ export default function OutboundDialerPage() {
       });
       eventSource.addEventListener("error", () => {
         if (!cancelled) setLiveCallsLoading(false);
+        startPollingFallback();
       });
     } else {
-      loadLiveCalls(true);
-      fallbackTimer = setInterval(() => loadLiveCalls(false), 2000);
+      startPollingFallback();
     }
     return () => {
       cancelled = true;
