@@ -287,8 +287,19 @@ export default function OutboundDialerPage() {
       }, 5000);
     };
 
+    const disablePollingFallback = () => {
+      fallbackEnabled = false;
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+
     try {
       eventSource = new EventSource(`${API}/stream`);
+      eventSource.onopen = () => {
+        disablePollingFallback();
+      };
       eventSource.addEventListener("outbound_update", (event) => {
         try {
           const payload = JSON.parse(event.data || "{}");
@@ -298,7 +309,6 @@ export default function OutboundDialerPage() {
         }
       });
       eventSource.onerror = () => {
-        try { eventSource?.close(); } catch {}
         enablePollingFallback();
       };
     } catch {

@@ -4,6 +4,14 @@ import { getRunnerState } from "@/lib/outbound-dialer/runner";
 
 export const maxDuration = 300;
 
+async function safeQuery(pool, sql, params = [], fallbackRows = []) {
+  try {
+    return await pool.query(sql, params);
+  } catch {
+    return { rows: Array.isArray(fallbackRows) ? fallbackRows : [] };
+  }
+}
+
 async function loadCampaigns(pool) {
   const result = await pool.query(
     `SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name
@@ -22,7 +30,8 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
   const ids = Array.isArray(campaignIds) ? campaignIds.filter((id) => typeof id === "string" && id.trim()) : [];
   if (!ids.length) return {};
 
-  const recentAttemptsResult = await pool.query(
+  const recentAttemptsResult = await safeQuery(
+    pool,
     `WITH ranked AS (
       SELECT
         l.campaign_id,
@@ -39,9 +48,11 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     FROM ranked
     WHERE rn <= 8`,
     [ids],
+    [],
   );
 
-  const summaryResult = await pool.query(
+  const summaryResult = await safeQuery(
+    pool,
     `SELECT
       l.campaign_id,
       COUNT(*) FILTER (WHERE l.created_at > NOW() - INTERVAL '15 minutes')::int AS attempts_last_15m,
@@ -65,6 +76,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
     WHERE l.campaign_id = ANY($1::uuid[])
     GROUP BY l.campaign_id`,
     [ids],
+    [],
   );
 
   const byCampaign = Object.fromEntries(ids.map((id) => [id, {

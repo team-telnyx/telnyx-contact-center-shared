@@ -69,7 +69,14 @@ export async function POST(request, context) {
 
       let run = null;
       if ((action === "start" || action === "resume") && isAgentlessMode(updated?.mode)) {
-        run = await startCampaignRun(pool, campaignId, username);
+        const runResult = await pool.query(
+          `SELECT * FROM outbound_campaign_runs
+           WHERE campaign_id = $1 AND status = 'running'
+           ORDER BY started_at DESC
+           LIMIT 1`,
+          [campaignId],
+        );
+        run = runResult.rows[0] || (await startCampaignRun(pool, campaignId, username));
         startAgentlessRunner({ pool, campaignId, username });
       }
 
