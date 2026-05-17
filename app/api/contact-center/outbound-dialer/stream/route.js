@@ -72,7 +72,7 @@ async function loadExecutionDebugByCampaign(pool, campaignIds = []) {
       COUNT(DISTINCT l.contact_record_id) FILTER (WHERE l.status = 'completed')::int AS completed_records,
       COUNT(*) FILTER (WHERE COALESCE(l.metadata->>'reason_code','') IN ('answering_machine','machine','machine_detected'))::int AS machine_total,
       COUNT(*) FILTER (
-        WHERE l.status IN ('completed','failed','cancelled','suppressed','skipped')
+        WHERE l.status IN ('completed','failed','cancelled')
           AND NOT (l.status = 'answered' OR COALESCE(l.metadata, '{}'::jsonb) ? 'answered_at')
           AND COALESCE(l.metadata->>'reason_code','') NOT IN ('answering_machine','machine','machine_detected')
       )::int AS calls_failed_total,
