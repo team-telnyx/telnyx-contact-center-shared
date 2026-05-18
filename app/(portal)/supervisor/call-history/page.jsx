@@ -40,6 +40,50 @@ import {
   SupervisorPageHeader,
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
+import useAppStateStore from "@/lib/stores/app-state-store";
+
+function toLocalDateTimeInput(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const hh = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+function defaultCallHistoryDateRange() {
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  const to = new Date();
+  to.setHours(23, 59, 0, 0);
+  return {
+    from: toLocalDateTimeInput(from),
+    to: toLocalDateTimeInput(to),
+  };
+}
+
+function quickCallHistoryDateRange(days) {
+  const safeDays = Math.max(1, Number(days) || 1);
+  const from = new Date();
+  from.setDate(from.getDate() - (safeDays - 1));
+  from.setHours(0, 0, 0, 0);
+  const to = new Date();
+  to.setHours(23, 59, 0, 0);
+  return {
+    from: toLocalDateTimeInput(from),
+    to: toLocalDateTimeInput(to),
+  };
+}
+
+function isValidDateRange(value) {
+  return Boolean(
+    value &&
+      typeof value.from === "string" &&
+      typeof value.to === "string" &&
+      toIsoDateTime(value.from) &&
+      toIsoDateTime(value.to),
+  );
+}
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -68,20 +112,18 @@ function toIsoDateTime(value) {
 }
 
 export default function SupervisorCallHistoryPage() {
+  const supervisorCallHistoryDateRange = useAppStateStore(
+    (state) => state.supervisorCallHistoryDateRange,
+  );
+  const setSupervisorCallHistoryDateRange = useAppStateStore(
+    (state) => state.setSupervisorCallHistoryDateRange,
+  );
   const [items, setItems] = useState([]);
-  const [filters, setFilters] = useState(() => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const today = `${yyyy}-${mm}-${dd}`;
-    return {
-      from: `${today}T00:00`,
-      to: `${today}T23:59`,
-      queue: "all",
-      agent: "all",
-    };
-  });
+  const [filters, setFilters] = useState(() => ({
+    ...defaultCallHistoryDateRange(),
+    queue: "all",
+    agent: "all",
+  }));
   const [filterOptions, setFilterOptions] = useState({
     queues: [],
     agents: [],
@@ -92,6 +134,37 @@ export default function SupervisorCallHistoryPage() {
   const [total, setTotal] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedInteraction, setSelectedInteraction] = useState(null);
+
+  useEffect(() => {
+    if (!isValidDateRange(supervisorCallHistoryDateRange)) return;
+    setFilters((prev) => {
+      if (
+        prev.from === supervisorCallHistoryDateRange.from &&
+        prev.to === supervisorCallHistoryDateRange.to
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        from: supervisorCallHistoryDateRange.from,
+        to: supervisorCallHistoryDateRange.to,
+      };
+    });
+  }, [supervisorCallHistoryDateRange]);
+
+  const updateDateRangeFilter = (updates) => {
+    const next = { ...filters, ...updates };
+    setPage(1);
+    setSupervisorCallHistoryDateRange({ from: next.from, to: next.to });
+    setFilters(next);
+  };
+
+  const setQuickDateRange = (days) => {
+    const nextRange = quickCallHistoryDateRange(days);
+    setPage(1);
+    setSupervisorCallHistoryDateRange(nextRange);
+    setFilters((prev) => ({ ...prev, ...nextRange }));
+  };
 
   const query = useMemo(() => {
     const sp = new URLSearchParams();
@@ -179,8 +252,7 @@ export default function SupervisorCallHistoryPage() {
                   type="datetime-local"
                   value={filters.from}
                   onChange={(e) => {
-                    setPage(1);
-                    setFilters((prev) => ({ ...prev, from: e.target.value }));
+                    updateDateRangeFilter({ from: e.target.value });
                   }}
                   className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
                 />
@@ -193,11 +265,35 @@ export default function SupervisorCallHistoryPage() {
                   type="datetime-local"
                   value={filters.to}
                   onChange={(e) => {
-                    setPage(1);
-                    setFilters((prev) => ({ ...prev, to: e.target.value }));
+                    updateDateRangeFilter({ to: e.target.value });
                   }}
                   className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50"
                 />
+              </div>
+              <div className="flex flex-col gap-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Quick range
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setQuickDateRange(1)}
+                  >1 day</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setQuickDateRange(7)}
+                  >7 days</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setQuickDateRange(30)}
+                  >30 days</Button>
+                </div>
               </div>
             </div>
             <div className="flex items-end gap-3">
