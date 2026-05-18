@@ -69,7 +69,7 @@ test("priority distribution cursor favors campaigns with fewer served records pe
   assert.equal(priorityDistributionCursor(campaigns)?.id, "B");
 });
 
-test("campaign settings show five-star Priority near top and persist metadata agent_priority", async () => {
+test("campaign settings show inline five-star Priority and no explanatory helper copy", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
 
   assert.match(source, /CampaignPriorityStarRating/);
@@ -77,15 +77,25 @@ test("campaign settings show five-star Priority near top and persist metadata ag
   assert.match(source, /agent_priority/);
   assert.match(source, /IconStarFilled/);
   assert.match(source, /IconStar/);
+  assert.match(source, /<Label>\{label\}<\/Label><div className="flex items-center gap-1"/);
+  assert.doesNotMatch(source, /Higher priority campaigns receive proportionally more records/);
+  assert.doesNotMatch(source, /Preview and progressive campaigns are served by agent campaign activation/);
 });
 
-test("agent campaign selector is a multi-activation popover with status badges and no status-disabled items", async () => {
+test("agent campaign selector matches compact queue activation formatting with inline mode badges and status icons", async () => {
   const source = await readFile(new URL("../components/contact-center/CampaignActivationSelector.jsx", import.meta.url), "utf8");
 
   assert.match(source, /Popover/);
   assert.match(source, /Checkbox/);
   assert.match(source, /campaignIds/);
-  assert.match(source, /agentCampaignStatusBadgeClass/);
+  assert.match(source, /Campaign Activation/);
+  assert.match(source, /IconPlayerPlay/);
+  assert.match(source, /IconPlayerPause/);
+  assert.match(source, /IconPlayerStop/);
+  assert.match(source, /campaignModeBadgeClass/);
+  assert.match(source, /PREVIEW/);
+  assert.match(source, /PROGRESSIVE/);
+  assert.doesNotMatch(source, /Activate one or more preview\/progressive campaigns/);
   assert.doesNotMatch(source, /disabled=\{campaign\.status !== "running"\}/);
 });
 
