@@ -316,7 +316,7 @@ export async function GET() {
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
 
   try {
-    const [campaignsResult, listsResult, dncListsResult, formsResult, filtersRows, timeSetsRows, attemptControlsRows, settingsRows, queueRows, flowRows, assistants, inventoryNumbers] = await Promise.all([
+    const [campaignsResult, listsResult, dncListsResult, formsResult, filtersRows, timeSetsRows, attemptControlsRows, settingsRows, queueRows, flowRows, workflowRows, assistants, inventoryNumbers] = await Promise.all([
       pool.query(`SELECT c.*, l.name AS contact_list_name, f.name AS attached_form_name, ac.name AS attempt_control_name FROM outbound_campaigns c LEFT JOIN outbound_contact_lists l ON l.id = c.contact_list_id LEFT JOIN form_definitions f ON f.id = c.attached_form_id LEFT JOIN outbound_attempt_controls ac ON ac.id = c.attempt_control_id WHERE c.status <> 'archived' ORDER BY c.updated_at DESC LIMIT 100`),
       loadOutboundContactLists(pool, 100),
       pool.query(`SELECT * FROM outbound_dnc_lists WHERE status <> 'archived' ORDER BY updated_at DESC LIMIT 100`),
@@ -327,6 +327,7 @@ export async function GET() {
       safeQuery(pool, `SELECT * FROM outbound_settings WHERE id='default' LIMIT 1`),
       safeQuery(pool, `SELECT id, name, display_name, enabled, active, routing_strategy FROM cc_queues WHERE enabled = true AND active = true ORDER BY priority DESC, name ASC LIMIT 200`),
       safeQuery(pool, `SELECT id, name, description FROM voice_flows WHERE jsonb_typeof(nodes) = 'array' AND EXISTS (SELECT 1 FROM jsonb_array_elements(nodes) AS n WHERE n->'data'->>'nodeType' = 'outbound_campaign') ORDER BY updated_at DESC LIMIT 200`),
+      safeQuery(pool, `SELECT id, name, description FROM aa_workflows WHERE is_active = true ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 200`),
       loadAiAssistants(),
       loadInventoryNumbers(),
     ]);
@@ -348,6 +349,7 @@ export async function GET() {
       handlerReferences: {
         queue: queueRows.map((row) => mapHandlerReference(row, "queue")),
         call_flow: flowRows.map((row) => mapHandlerReference(row, "call_flow")),
+        workflow: workflowRows.map((row) => mapHandlerReference(row, "workflow")),
         ai_assistant: assistants,
       },
       inventoryNumbers,

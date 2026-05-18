@@ -6,12 +6,14 @@ import { Separator } from "@/components/ui/separator";
 import SoftphoneMini from "@/components/softphone-mini";
 import { StatusSelector } from "@/components/contact-center/StatusSelector";
 import { QueueActivationPanel } from "@/components/contact-center/QueueActivationPanel";
+import { CampaignActivationSelector } from "@/components/contact-center/CampaignActivationSelector";
 import { DEFAULT_USER_STATUS } from "@/config/user";
 import { notify } from "@/components/ToastNotify";
 
 export function SiteHeader() {
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
   const [queues, setQueues] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [userRoles, setUserRoles] = useState([]);
   const hasAgentRole = userRoles.includes("agent");
   const loadQueuesRef = useRef(null);
@@ -68,12 +70,25 @@ export function SiteHeader() {
       }
     };
 
+    const loadCampaigns = async () => {
+      try {
+        const res = await fetch("/api/contact-center/agent/campaigns");
+        const data = await res.json();
+        if (data.ok) {
+          setCampaigns(data.campaigns || []);
+        }
+      } catch (err) {
+        console.error("Failed to load campaigns:", err);
+      }
+    };
+
     // Store loadQueues in a ref so it can be used in event listeners
     loadQueuesRef.current = loadQueues;
 
     if (hasAgentRole) {
       loadStatus();
       loadQueues();
+      loadCampaigns();
     }
 
     // Set up SSE connection for real-time status updates
@@ -194,6 +209,20 @@ export function SiteHeader() {
           {hasAgentRole && (
             <>
               <StatusSelector value={status} onChange={handleStatusChange} />
+              <CampaignActivationSelector
+                campaigns={campaigns}
+                onUpdate={async () => {
+                  try {
+                    const res = await fetch("/api/contact-center/agent/campaigns");
+                    const data = await res.json();
+                    if (data.ok) {
+                      setCampaigns(data.campaigns || []);
+                    }
+                  } catch (err) {
+                    // Error reloading campaigns
+                  }
+                }}
+              />
               <QueueActivationPanel
                 queues={queues}
                 onUpdate={async () => {
