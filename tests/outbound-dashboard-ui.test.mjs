@@ -83,7 +83,7 @@ test("outbound dialer restores and persists the supervisor's last selected secti
   assert.match(source, /id: "time-sets"/, "Time Sets should remain a valid persisted section");
 });
 
-test("dashboard header has a right-aligned default-on running campaign toggle that filters cards", async () => {
+test("campaign command center has a right-aligned default-off active campaign toggle that hides exhausted cards", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const pageStart = source.indexOf("export default function OutboundDialerPage");
   const pageEnd = source.indexOf("function LiveCallsView", pageStart);
@@ -94,23 +94,55 @@ test("dashboard header has a right-aligned default-on running campaign toggle th
 
   const pageSource = source.slice(pageStart, pageEnd);
   const dashboardSource = source.slice(dashboardStart, dashboardEnd);
+  const sectionHeaderSource = pageSource.slice(pageSource.indexOf("<section"), pageSource.indexOf("<DashboardView", pageSource.indexOf("<section")));
 
-  assert.match(pageSource, /const \[showOnlyRunningDashboardCampaigns, setShowOnlyRunningDashboardCampaigns\] = useState\(true\)/, "Show only running campaign should default on");
-  assert.match(source, /supervisor\.outbound-dialer\.showOnlyRunningDashboardCampaigns/, "Show only running campaign should be persisted for supervisor return visits");
-  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyRunningDashboardCampaigns\)/, "Show only running campaign should restore from localStorage after hydration");
-  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyRunningDashboardCampaigns, String\(showOnlyRunningDashboardCampaigns\)\)/, "Show only running campaign changes should be saved to localStorage");
-  assert.match(pageSource, /Show only running campaign/, "Dashboard header should render the requested toggle label");
-  assert.match(pageSource, /<Switch[\s\S]*id="show-only-running-dashboard-campaigns"[\s\S]*checked=\{showOnlyRunningDashboardCampaigns\}[\s\S]*onCheckedChange=\{setShowOnlyRunningDashboardCampaigns\}/, "Dashboard header toggle should be wired to page state");
-  assert.match(pageSource, /className="ml-auto flex items-center gap-3/, "Dashboard header toggle should be aligned to the right side of the header");
-  assert.match(pageSource, /<DashboardView[\s\S]*showOnlyRunningCampaigns=\{showOnlyRunningDashboardCampaigns\}/, "DashboardView should receive the running-only filter flag");
-  assert.match(pageSource, /const selectableDashboardCampaigns = useMemo\(\(\) => showOnlyRunningDashboardCampaigns \? dashboardCampaigns\.filter\(\(campaign\) => executionStateFor\(campaign\) === "running"\) : dashboardCampaigns/, "Dashboard selected campaign should be constrained to the same running-only filter");
+  assert.match(source, /ACTIVE_DASHBOARD_CAMPAIGN_STATES = new Set\(\["running", "stopped", "paused", "recycled"\]\)/, "Active campaign filter should allow running, stopped, paused, and recycled states");
+  assert.match(source, /const isActiveDashboardCampaign = \(campaign\) => ACTIVE_DASHBOARD_CAMPAIGN_STATES\.has\(executionStateFor\(campaign\)\)/, "Active campaign filter should derive from normalized execution state");
+  assert.match(pageSource, /const \[showOnlyActiveDashboardCampaigns, setShowOnlyActiveDashboardCampaigns\] = useState\(false\)/, "Show only active campaign should default off");
+  assert.match(source, /supervisor\.outbound-dialer\.showOnlyActiveDashboardCampaigns/, "Show only active campaign should be persisted for supervisor return visits");
+  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyActiveDashboardCampaigns\)/, "Show only active campaign should restore from localStorage after hydration");
+  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyActiveDashboardCampaigns, String\(showOnlyActiveDashboardCampaigns\)\)/, "Show only active campaign changes should be saved to localStorage");
+  assert.doesNotMatch(sectionHeaderSource, /Show only active campaign/, "Top section header should not render the active-campaign toggle");
+  assert.match(pageSource, /<DashboardView[\s\S]*showOnlyActiveCampaigns=\{showOnlyActiveDashboardCampaigns\}[\s\S]*setShowOnlyActiveCampaigns=\{setShowOnlyActiveDashboardCampaigns\}/, "DashboardView should receive the active-only filter flag and setter");
+  assert.match(pageSource, /const selectableDashboardCampaigns = useMemo\(\(\) => showOnlyActiveDashboardCampaigns \? dashboardCampaigns\.filter\(isActiveDashboardCampaign\) : dashboardCampaigns/, "Dashboard selected campaign should be constrained to the same active-only filter");
   assert.match(pageSource, /const selectedDashboardCampaign = useMemo\(\(\) => selectableDashboardCampaigns\.find\(\(c\) => c\.id === selectedCampaignId\) \|\| selectableDashboardCampaigns\[0\] \|\| null/, "Dashboard detail panel should fall back within the filtered card list");
   assert.match(pageSource, /const selectedCampaignIsDashboard = dashboardCampaigns\.some\(\(campaign\) => campaign\.id === selectedCampaignId\)/, "Dashboard reconciliation should only consider existing dashboard campaign selections");
   assert.match(pageSource, /const selectedCampaignIsSelectable = selectableDashboardCampaigns\.some\(\(campaign\) => campaign\.id === selectedCampaignId\)/, "Dashboard reconciliation should detect whether the dashboard selection is still visible under the filter");
   assert.match(pageSource, /if \(!selectedCampaignIsDashboard \|\| selectedCampaignIsSelectable\) return;[\s\S]*setSelectedCampaignId\(selectedDashboardCampaign\.id\);/, "Dashboard selection should only be reconciled when the current dashboard campaign is hidden by the filter");
-  assert.match(dashboardSource, /function DashboardView\(\{[\s\S]*showOnlyRunningCampaigns[\s\S]*\}\)/, "DashboardView should accept the running-only filter flag");
-  assert.match(dashboardSource, /const dashboardCampaignCards = showOnlyRunningCampaigns \? runningCampaigns : visibleCampaigns;/, "Dashboard cards should filter to running campaigns when the toggle is on");
+  assert.match(dashboardSource, /function DashboardView\(\{[\s\S]*showOnlyActiveCampaigns[\s\S]*setShowOnlyActiveCampaigns[\s\S]*\}\)/, "DashboardView should accept the active-only filter flag and setter");
+  assert.match(dashboardSource, /Campaign command center[\s\S]*Show only active campaign/, "Campaign command center should render the requested toggle label");
+  assert.match(dashboardSource, /className="ml-auto flex items-center gap-3/, "Campaign command center toggle should be aligned to the right side of the card header");
+  assert.match(dashboardSource, /<Switch[\s\S]*id="show-only-active-dashboard-campaigns"[\s\S]*checked=\{showOnlyActiveCampaigns\}[\s\S]*onCheckedChange=\{setShowOnlyActiveCampaigns\}/, "Campaign command center toggle should be wired to page state");
+  assert.match(dashboardSource, /const activeCampaigns = visibleCampaigns\.filter\(isActiveDashboardCampaign\);/, "Dashboard should compute active campaigns from normalized states");
+  assert.match(dashboardSource, /const dashboardCampaignCards = showOnlyActiveCampaigns \? activeCampaigns : visibleCampaigns;/, "Dashboard cards should hide exhausted campaigns when the toggle is on");
   assert.match(dashboardSource, /dashboardCampaignCards\.map/, "Dashboard should render campaign cards from the filtered list");
+});
+
+test("time sets editor defaults to calendar view and persists the selected tab in localStorage", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const pageStart = source.indexOf("export default function OutboundDialerPage");
+  const pageEnd = source.indexOf("function LiveCallsView", pageStart);
+  const formStart = source.indexOf("function TimeSetSettingsForm");
+  const formEnd = source.indexOf("function TimeSetCalendar", formStart);
+  assert.ok(pageStart > -1 && pageEnd > pageStart, "OutboundDialerPage should exist before LiveCallsView");
+  assert.ok(formStart > -1 && formEnd > formStart, "TimeSetSettingsForm should exist before TimeSetCalendar");
+
+  const pageSource = source.slice(pageStart, pageEnd);
+  const formSource = source.slice(formStart, formEnd);
+
+  assert.match(source, /timeSetEditorView: "supervisor\.outbound-dialer\.timeSetEditorView"/, "Time Sets view should use a scoped storage key");
+  assert.match(source, /const TIME_SET_EDITOR_VIEWS = \["calendar", "detail"\]/, "Time Sets persisted tab should be validated against known views");
+  assert.match(pageSource, /const \[timeSetEditorView, setTimeSetEditorView\] = useState\("calendar"\)/, "Time Sets editor should default to Calendar View");
+  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.timeSetEditorView\)/, "Time Sets editor should restore selected tab from localStorage");
+  assert.match(pageSource, /TIME_SET_EDITOR_VIEWS\.includes\(savedTimeSetEditorView\)/, "Restored Time Sets tab should be validated");
+  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.timeSetEditorView, timeSetEditorView\)/, "Time Sets editor should save tab changes to localStorage");
+  assert.match(pageSource, /<SettingsPanel[\s\S]*timeSetEditorView=\{timeSetEditorView\}[\s\S]*setTimeSetEditorView=\{setTimeSetEditorView\}/, "SettingsPanel should receive the persisted Time Sets tab state");
+  assert.match(source, /<TimeSetSettingsForm[\s\S]*view=\{timeSetEditorView\}[\s\S]*setView=\{setTimeSetEditorView\}/, "TimeSetSettingsForm should be controlled by the page-level store state");
+  assert.match(formSource, /function TimeSetSettingsForm\(\{[\s\S]*view[\s\S]*setView[\s\S]*\}\)/, "TimeSetSettingsForm should accept controlled tab props");
+  assert.match(formSource, /variant=\{view === "calendar" \? "default" : "ghost"\}/, "Calendar tab should still reflect selected view");
+  assert.match(formSource, /onClick=\{\(\) => setView\("calendar"\)\}/, "Calendar tab should update the persisted tab state");
+  assert.match(formSource, /onClick=\{\(\) => setView\("detail"\)\}/, "Detail tab should update the persisted tab state");
+  assert.doesNotMatch(formSource, /setView\(timeSet\?\.metadata\?\.view/, "Saved time set metadata should not override the user's persisted editor tab");
 });
 
 test("expanded history call attempt rows render one right-aligned status reason badge before info", async () => {
