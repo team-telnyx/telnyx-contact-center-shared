@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import {
   campaignAgentAssistConfig,
   campaignAssignmentPayload,
+  isCampaignInsideTimeSetWindow,
   isPreviewProgressiveMode,
   resolveCampaignContactPhone,
 } from "../lib/outbound-dialer/agent-campaigns.js";
@@ -102,6 +103,48 @@ test("agent desktop polls assigned campaign records and dials progressive record
   assert.match(source, /Outbound Campaign Record/);
   assert.match(source, /Start outbound call/);
 });
+
+test("campaign activation trigger summarizes active campaigns like queue activation", async () => {
+  const source = await readFile(new URL("../components/contact-center/CampaignActivationSelector.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /`Campaigns \$\{activeCampaigns\.length\}\/\$\{localCampaigns\.length\}`/);
+  assert.doesNotMatch(source, /activeCampaigns\[0\]\.name/);
+});
+
+test("agent campaign claiming skips campaigns outside their configured time set window", () => {
+  const campaign = {
+    metadata: { contactable_time_set_id: "time-set-1" },
+    time_set_timezone: "UTC",
+    time_set_windows: [
+      { day: "mon", enabled: true, start: "09:00", end: "17:00" },
+    ],
+  };
+
+  assert.equal(
+    isCampaignInsideTimeSetWindow(campaign, new Date("2026-05-18T10:30:00.000Z")),
+    true,
+  );
+  assert.equal(
+    isCampaignInsideTimeSetWindow(campaign, new Date("2026-05-18T18:30:00.000Z")),
+    false,
+  );
+});
+
+test("agent campaign preview renders record details in collapsed dark accordion without starting workflow", async () => {
+  const source = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
+  const componentStart = source.indexOf("function OutboundCampaignRecord");
+  const componentEnd = source.indexOf("function CampaignDispositionSheet", componentStart);
+  const recordSource = source.slice(componentStart, componentEnd);
+
+  assert.match(recordSource, /<details/);
+  assert.match(recordSource, /<summary/);
+  assert.match(recordSource, /Outbound Campaign Record/);
+  assert.match(recordSource, /bg-neutral-900\/80/);
+  assert.match(recordSource, /Start outbound call/);
+  assert.doesNotMatch(recordSource, /bg-orange-50|orange-950|text-orange|bg-orange/);
+  assert.doesNotMatch(source, /<InteractionDetail interaction=\{campaignPreviewInteraction\}/);
+});
+
 test("campaign configuration form exposes one grouped Agent Script selector for preview/progressive agent desktop", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const formStart = source.indexOf("function CampaignSettingsForm");

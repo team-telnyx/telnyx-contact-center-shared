@@ -56,11 +56,7 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
     [localCampaigns],
   );
   const campaignIds = useMemo(() => activeCampaigns.map((campaign) => campaign.id), [activeCampaigns]);
-  const label = activeCampaigns.length === 0
-    ? "Campaigns"
-    : activeCampaigns.length === 1
-      ? activeCampaigns[0].name
-      : `${activeCampaigns.length} campaigns`;
+  const label = `Campaigns ${activeCampaigns.length}/${localCampaigns.length}`;
 
   const updateCampaignIds = async (nextCampaignIds) => {
     setSaving(true);

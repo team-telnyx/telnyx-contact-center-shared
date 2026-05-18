@@ -42,38 +42,44 @@ const DATA_SOURCE_VIEW_LABELS = {
 function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial }) {
   if (!assignment) return null;
   const record = assignment.contact_record || {};
-  const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 8);
+  const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 12);
   const isProgressive = assignment.campaign_mode === "progressive";
   return (
-    <div className="rounded-xl border bg-orange-50/60 p-4 shadow-sm dark:bg-orange-950/20">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">Outbound Campaign Record</p>
-          <h3 className="text-base font-semibold">{assignment.campaign_name || "Campaign"}</h3>
-          <p className="font-mono text-sm text-muted-foreground">{assignment.to_number || "No phone number"}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground">{assignment.campaign_mode}</span>
-          {isProgressive ? <span className="font-mono text-sm font-semibold text-orange-600">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {previewFields.map(([key, value]) => (
-          <div key={key} className="rounded-md bg-background/80 px-3 py-2 text-sm">
-            <div className="text-[11px] uppercase text-muted-foreground">{key.replace(/_/g, " ")}</div>
-            <div className="font-medium">{String(value)}</div>
+    <details className="group rounded-xl border border-neutral-800 bg-neutral-900/80 text-neutral-100 shadow-sm" open={false}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-neutral-800/80 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Outbound Campaign Record</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 className="truncate text-base font-semibold text-neutral-50">{assignment.campaign_name || "Campaign"}</h3>
+            <span className="font-mono text-sm text-neutral-300">{assignment.to_number || "No phone number"}</span>
+            <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[11px] font-semibold uppercase text-neutral-400">{assignment.campaign_mode}</span>
+            {isProgressive ? <span className="font-mono text-sm font-semibold text-neutral-200">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
           </div>
-        ))}
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-md bg-neutral-100 px-3 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDial?.();
+          }}
+          disabled={dialing || !assignment.to_number}
+        >
+          {dialing ? "Starting outbound call..." : "Start outbound call"}
+        </button>
+      </summary>
+      <div className="border-t border-neutral-800 px-4 pb-4 pt-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {previewFields.map(([key, value]) => (
+            <div key={key} className="rounded-md border border-neutral-800 bg-neutral-950/70 px-3 py-2 text-sm">
+              <div className="text-[11px] uppercase text-neutral-500">{key.replace(/_/g, " ")}</div>
+              <div className="font-medium text-neutral-100">{String(value)}</div>
+            </div>
+          ))}
+        </div>
       </div>
-      <button
-        type="button"
-        className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-orange-600 px-3 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-        onClick={onDial}
-        disabled={dialing || !assignment.to_number}
-      >
-        {dialing ? "Starting outbound call..." : "Start outbound call"}
-      </button>
-    </div>
+    </details>
   );
 }
 
@@ -1362,23 +1368,6 @@ export function AgentDesktop() {
     return () => clearInterval(interval);
   }, [campaignAssignment, dialCampaignAssignment]);
 
-  const campaignPreviewInteraction = useMemo(() => {
-    if (!campaignAssignment) return null;
-    return {
-      id: `campaign-${campaignAssignment.id}`,
-      interaction_type: "voice",
-      direction: "outbound",
-      state: "preview",
-      from_number: campaignAssignment.to_number,
-      to_number: campaignAssignment.to_number,
-      caller_name: campaignAssignment.contact_record?.name || campaignAssignment.contact_record?.first_name || campaignAssignment.campaign_name,
-      metadata: {
-        outbound_campaign_assignment: campaignAssignment,
-        agent_assist_config: campaignAssignment.agent_assist_config,
-      },
-    };
-  }, [campaignAssignment]);
-
   const detailTitle =
     activeView === "desktop"
       ? "Interaction Details"
@@ -1459,7 +1448,6 @@ export function AgentDesktop() {
                 dialing={campaignDialing}
                 onDial={() => dialCampaignAssignment(campaignAssignment)}
               />
-              {campaignPreviewInteraction ? <InteractionDetail interaction={campaignPreviewInteraction} /> : null}
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
