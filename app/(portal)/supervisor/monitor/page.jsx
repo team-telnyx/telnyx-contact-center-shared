@@ -83,6 +83,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { agentCampaignStatusBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
 
 const MONITOR_RAIL_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
@@ -512,8 +513,11 @@ export default function MonitorPage() {
   const [connected, setConnected] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentQueues, setAgentQueues] = useState([]);
+  const [agentCampaigns, setAgentCampaigns] = useState([]);
   const [loadingQueues, setLoadingQueues] = useState(false);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
@@ -642,6 +646,9 @@ export default function MonitorPage() {
             if (updatedAgent) {
               if (prevAgent.activeQueues !== updatedAgent.activeQueues) {
                 highlightCell(`agent-${String(prevAgent.userId)}-queues`);
+              }
+              if (prevAgent.activeCampaigns !== updatedAgent.activeCampaigns) {
+                highlightCell(`agent-${String(prevAgent.userId)}-campaigns`);
               }
               if (prevAgent.currentCalls !== updatedAgent.currentCalls) {
                 highlightCell(`agent-${String(prevAgent.userId)}-calls`);
@@ -833,6 +840,22 @@ export default function MonitorPage() {
         }
       } catch (error) {
         console.error("[Monitor] Error handling queue change:", error);
+      }
+    });
+
+    eventSource.addEventListener("campaign_changed", (event) => {
+      try {
+        const update = JSON.parse(event.data);
+        if (update.userId && Array.isArray(update.campaignIds)) {
+          updateAgentCampaigns(update.userId, update.campaignIds);
+          if (selectedAgent && String(selectedAgent.userId) === String(update.userId)) {
+            loadAgentCampaigns(update.userId);
+          }
+        } else if (selectedAgent?.userId) {
+          loadAgentCampaigns(selectedAgent.userId);
+        }
+      } catch (error) {
+        console.error("[Monitor] Error handling campaign change:", error);
       }
     });
 
@@ -1036,6 +1059,66 @@ export default function MonitorPage() {
         },
       };
     });
+  }
+
+  function updateAgentCampaigns(userId, campaignIds) {
+    const userIdStr = String(userId);
+    highlightCell(`agent-${userIdStr}-campaigns`);
+
+    setData((prevData) => {
+      if (!prevData || !prevData.agents?.stats) return prevData;
+      const activeCampaignIds = Array.isArray(campaignIds) ? campaignIds.map(String) : [];
+      return {
+        ...prevData,
+        agents: {
+          ...prevData.agents,
+          stats: prevData.agents.stats.map((agent) =>
+            String(agent.userId) === userIdStr
+              ? { ...agent, activeCampaigns: activeCampaignIds.length, activeCampaignIds }
+              : agent,
+          ),
+        },
+      };
+    });
+  }
+
+  async function loadAgentCampaigns(userId) {
+    try {
+      setLoadingCampaigns(true);
+      const res = await fetch(`/api/contact-center/agent/campaigns?userId=${userId}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load campaigns");
+      const payload = await res.json();
+      setAgentCampaigns(payload.campaigns || []);
+    } catch (error) {
+      console.error("[Monitor] Error loading agent campaigns:", error);
+      notify({ title: "Failed to load campaigns", description: error.message, variant: "error" });
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  }
+
+  async function toggleCampaignActivation(campaignId, currentlyActivated) {
+    try {
+      if (!selectedAgent) throw new Error("No agent selected");
+      const nextCampaigns = agentCampaigns.map((campaign) =>
+        campaign.id === campaignId ? { ...campaign, activated: !currentlyActivated } : campaign,
+      );
+      const campaignIds = nextCampaigns.filter((campaign) => campaign.activated).map((campaign) => campaign.id);
+      const res = await fetch("/api/contact-center/agent/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedAgent.userId, campaignIds }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update campaigns");
+      }
+      setAgentCampaigns(nextCampaigns);
+      updateAgentCampaigns(selectedAgent.userId, campaignIds);
+    } catch (error) {
+      console.error("[Monitor] Error toggling campaign:", error);
+      notify({ title: "Update failed", description: error.message, variant: "error" });
+    }
   }
 
   async function loadAgentQueues(userId) {
@@ -2038,6 +2121,7 @@ export default function MonitorPage() {
                             <TableHead>Status</TableHead>
                             <TableHead>Idle Time</TableHead>
                             <TableHead>Active Queues</TableHead>
+                            <TableHead>Active Campaigns</TableHead>
                             <TableHead>Current Calls</TableHead>
                             <TableHead>Today: Total</TableHead>
                             <TableHead>Today: Completed</TableHead>
@@ -2207,6 +2291,31 @@ export default function MonitorPage() {
                                   <TableCell
                                     className={
                                       highlightedCells.has(
+                                        `agent-${agentId}-campaigns`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span>{agent.activeCampaigns || 0}</span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAgent(agent);
+                                          setCampaignDialogOpen(true);
+                                          loadAgentCampaigns(agent.userId);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                        title="View campaign activations"
+                                      >
+                                        <IconInfoCircle className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
                                         `agent-${agentId}-calls`,
                                       )
                                         ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
@@ -2233,7 +2342,7 @@ export default function MonitorPage() {
                                 {isExpanded && (
                                   <TableRow>
                                     <TableCell
-                                      colSpan={8}
+                                      colSpan={9}
                                       className="p-0 border-t bg-muted/30"
                                     >
                                       <div className="px-4 py-2">
@@ -2709,6 +2818,69 @@ export default function MonitorPage() {
                           }
                           className="ml-4"
                         />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Campaign Management Dialog */}
+      <Dialog open={campaignDialogOpen} onOpenChange={setCampaignDialogOpen}>
+        <DialogContent
+          className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0"
+          style={{
+            backgroundColor: "var(--sheet, var(--muted))",
+            color: "var(--sheet-foreground, var(--foreground))",
+            borderColor: "var(--sheet-border, var(--border))",
+          }}
+        >
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle>
+              Active Campaigns
+              {selectedAgent && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  {selectedAgent.firstName || selectedAgent.first_name
+                    ? `${selectedAgent.firstName || selectedAgent.first_name} ${selectedAgent.lastName || selectedAgent.last_name || ""}`.trim()
+                    : selectedAgent.username}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Manage Preview and Progressive campaign activations. Agents may be activated regardless of campaign status; records are served when the campaign is running.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <Card className="mx-5 my-4">
+              <CardContent className="p-6">
+                {loadingCampaigns ? (
+                  <div className="space-y-2 py-4">
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : agentCampaigns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No Preview or Progressive campaigns available</p>
+                ) : (
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    {agentCampaigns.map((campaign) => (
+                      <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium truncate">{campaign.name}</span>
+                            <Badge variant="outline" className={agentCampaignStatusBadgeClass(campaign.status)}>{campaign.status}</Badge>
+                            <Badge variant="secondary" className="capitalize">{campaign.mode}</Badge>
+                            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-300">
+                              <IconStarFilled className="h-3 w-3" />
+                              {campaign.priority || 3}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">Priority controls proportional record distribution across this agent's active campaigns.</p>
+                        </div>
+                        <Switch checked={campaign.activated === true} onCheckedChange={() => toggleCampaignActivation(campaign.id, campaign.activated === true)} className="ml-4" />
                       </div>
                     ))}
                   </div>

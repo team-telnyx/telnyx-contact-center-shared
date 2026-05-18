@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconCopy, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconHeadphones, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPhoneOff, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
+  IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconCopy, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconHeadphones, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPhoneOff, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconStar, IconStarFilled, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,10 +30,11 @@ import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
 import { CSV_FILTER_OPERATORS, applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 import { canValidateContactList, campaignContactListTargets, contactListValidationMessage } from "@/lib/outbound-dialer/contact-list-validation";
 import { normalizeAttemptControlLimits, normalizeAttemptCount, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
-import { campaignReferenceKindForMode, campaignSaveRequirements } from "@/lib/outbound-dialer/campaign-validation";
+import { campaignReferenceKindForMode, campaignRequiresQueueTarget, campaignSaveRequirements } from "@/lib/outbound-dialer/campaign-validation";
 import { buildDashboardCampaignExpandedStats } from "@/lib/outbound-dialer/dashboard-view-model";
 import { attemptReasonCode, attemptStatusReasonLabel, campaignControlState, campaignStatusEventsFromCampaigns, contactRecordHeaderLabel, contactRecordLabel, groupAttemptsByContactRecord, normalizeCampaignExecutionState, singleCampaignSelection } from "@/lib/outbound-dialer/history-view-model";
 import { campaignContactProgress, campaignInventoryDisplayState } from "@/lib/outbound-dialer/progress-view-model";
+import { normalizeCampaignPriority } from "@/lib/outbound-dialer/agent-campaigns-view-model";
 import { shouldShowOutboundLiveCallInUi } from "@/lib/outbound-dialer/live-calls";
 
 const API = "/api/contact-center/outbound-dialer";
@@ -979,7 +980,8 @@ function CampaignSettingsForm({ campaign, outboundSettings, forms, contactLists,
   const contactListOptions = contactLists.length ? contactLists.map((l) => ({ value: l.id, label: l.name })) : [{ value: "__no_validated_contact_lists__", label: "Validate a contact list first", disabled: true }];
   const mode = draft.mode || "preview";
   const referenceKind = campaignReferenceKindForMode(mode);
-  const handlerOptions = handlerReferences?.[referenceKind] || [];
+  const queueTargetRequired = campaignRequiresQueueTarget(mode);
+  const handlerOptions = queueTargetRequired ? handlerReferences?.[referenceKind] || [] : [];
   const workflowOptions = handlerReferences?.workflow || [];
   const showPacing = ["power", "predictive"].includes(mode);
   const showAgentScript = ["preview", "progressive"].includes(mode);
@@ -1003,9 +1005,11 @@ function CampaignSettingsForm({ campaign, outboundSettings, forms, contactLists,
   const saveRequirements = campaignSaveRequirements(normalizedDraft, { maxAttempts: campaignMaxAttempts });
   const channelOptions = (schema.channels || ["voice", "sms", "whatsapp"]).map((channel) => ({ value: channel, label: channel === "voice" ? "Voice" : `${title(channel)} — not available yet`, disabled: channel !== "voice" }));
   const agentScriptValue = draft.attached_form_id ? `form:${draft.attached_form_id}` : draft.metadata?.attached_workflow_id ? `workflow:${draft.metadata.attached_workflow_id}` : "none";
+  const campaignPriority = normalizeCampaignPriority(draft);
   const handleModeChange = (nextMode) => {
     const nextReferenceKind = campaignReferenceKindForMode(nextMode);
-    update((draft.handler_type || referenceKind) === nextReferenceKind ? { mode: nextMode, handler_type: nextReferenceKind } : { mode: nextMode, handler_type: nextReferenceKind, handler_ref: "" });
+    const nextRequiresQueueTarget = campaignRequiresQueueTarget(nextMode);
+    update((draft.handler_type || referenceKind) === nextReferenceKind && nextRequiresQueueTarget ? { mode: nextMode, handler_type: nextReferenceKind } : { mode: nextMode, handler_type: nextReferenceKind, handler_ref: "" });
   };
   const handleAgentScriptChange = (value) => {
     if (value === "none") return update({ attached_form_id: null, metadata: { ...(draft.metadata || {}), attached_workflow_id: null, workflow_id: null } });
@@ -1027,12 +1031,13 @@ function CampaignSettingsForm({ campaign, outboundSettings, forms, contactLists,
       <InputBlock label="Campaign Name" required value={draft.name} onChange={(v) => update({ name: v })} />
       <div className="mt-3"><Label>Description</Label><Textarea className="mt-2" rows={3} value={draft.description || ""} onChange={(e) => update({ description: e.target.value })} /></div>
       <div className="mt-3"><ConfigSelect label="Launch State" value={draft.status} options={schema.campaignStatuses} onChange={(v) => update({ status: v })} /></div>
+      <CampaignPriorityStarRating label="Priority" value={campaignPriority} onChange={(priority) => updateMetadata({ agent_priority: priority })} />
     </SettingCard>
     <SettingCard icon={IconAdjustmentsHorizontal} title="Dialing Strategy" subtitle="Voice execution settings and Agent desktop script selection">
       <div className="grid grid-cols-2 gap-3">
         <ConfigSelect label="Channel" value={draft.channel || "voice"} options={channelOptions} onChange={(v) => update({ channel: v })} />
         <ConfigSelect label="Mode" value={mode} options={campaignModes} onChange={handleModeChange} />
-        <CampaignReferenceSelect label="Target" required kind={referenceKind} value={draft.handler_ref || "none"} options={handlerOptions} onChange={(v) => update({ handler_type: referenceKind, handler_ref: v === "none" ? "" : v })} />
+        <CampaignReferenceSelect label="Target" required={queueTargetRequired} disabled={!queueTargetRequired} disabledMessage="Preview and progressive campaigns are served by agent campaign activation; queue target is only used by power and predictive modes for routing connected backend-dialed calls." kind={referenceKind} value={queueTargetRequired ? draft.handler_ref || "none" : "none"} options={handlerOptions} onChange={(v) => update({ handler_type: referenceKind, handler_ref: v === "none" ? "" : v })} />
         {showAgentScript ? <AgentScriptSelect label="Agent Script" value={agentScriptValue} forms={forms} workflows={workflowOptions} onChange={handleAgentScriptChange} /> : null}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1765,11 +1770,16 @@ function routingTypeBadgeClass(routingType) {
   return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
 }
 
-function CampaignReferenceSelect({ label, value, options = [], onChange = () => {}, required = false, kind = "queue" }) {
+function CampaignPriorityStarRating({ label = "Priority", value = 3, onChange = () => {}, maxStars = 5 }) {
+  const currentValue = Math.min(maxStars, Math.max(1, Number(value) || 3));
+  return <div className="mt-3 space-y-2"><Label>{label}</Label><div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2"><div className="flex items-center gap-1" aria-label={`${label}: ${currentValue} of ${maxStars} stars`}>{Array.from({ length: maxStars }, (_, index) => { const starValue = index + 1; const filled = starValue <= currentValue; return <button key={starValue} type="button" onClick={() => onChange(starValue)} className="rounded p-0.5 transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-amber-500/40" aria-label={`Set priority to ${starValue} stars`}>{filled ? <IconStarFilled className="h-5 w-5 text-amber-400" /> : <IconStar className="h-5 w-5 text-muted-foreground/40" />}</button>; })}</div><p className="text-xs text-muted-foreground">Higher priority campaigns receive proportionally more records when an agent is active in multiple campaigns.</p></div></div>;
+}
+
+function CampaignReferenceSelect({ label, value, options = [], onChange = () => {}, required = false, kind = "queue", disabled = false, disabledMessage = "" }) {
   const normalized = Array.isArray(options) ? options.filter(Boolean) : [];
-  const emptyLabel = normalized.length ? "Select target" : `No ${title(kind)} targets loaded`;
+  const emptyLabel = disabled ? "Agent activation" : normalized.length ? "Select target" : `No ${title(kind)} targets loaded`;
   const selected = normalized.find((option) => option.id === value);
-  return <div className="min-w-0 space-y-2"><RequiredFieldLabel required={required}>{label}</RequiredFieldLabel><Select value={value || "none"} onValueChange={onChange}><SelectTrigger className="w-full min-w-0"><SelectValue placeholder={emptyLabel}>{selected?.name || emptyLabel}</SelectValue></SelectTrigger><SelectContent className="w-[--radix-select-trigger-width] max-w-[--radix-select-trigger-width]"><SelectItem value="none" disabled={normalized.length > 0}><span className="block min-w-0 max-w-full truncate text-muted-foreground">{emptyLabel}</span></SelectItem>{normalized.map((ref) => <SelectItem key={ref.id} value={ref.id}><span className="flex min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate">{ref.name}</span>{kind === "queue" ? <Badge variant="outline" className={`${routingTypeBadgeClass(ref.routing_type || ref.routingType)} shrink-0 text-[10px]`}>{title(ref.routing_type || ref.routingType || "fifo")}</Badge> : null}</span></SelectItem>)}</SelectContent></Select></div>;
+  return <div className="min-w-0 space-y-2"><RequiredFieldLabel required={required}>{label}</RequiredFieldLabel><Select value={value || "none"} onValueChange={onChange} disabled={disabled}><SelectTrigger className="w-full min-w-0"><SelectValue placeholder={emptyLabel}>{selected?.name || emptyLabel}</SelectValue></SelectTrigger><SelectContent className="w-[--radix-select-trigger-width] max-w-[--radix-select-trigger-width]"><SelectItem value="none" disabled={normalized.length > 0}><span className="block min-w-0 max-w-full truncate text-muted-foreground">{emptyLabel}</span></SelectItem>{normalized.map((ref) => <SelectItem key={ref.id} value={ref.id}><span className="flex min-w-0 items-center gap-2"><span className="min-w-0 flex-1 truncate">{ref.name}</span>{kind === "queue" ? <Badge variant="outline" className={`${routingTypeBadgeClass(ref.routing_type || ref.routingType)} shrink-0 text-[10px]`}>{title(ref.routing_type || ref.routingType || "fifo")}</Badge> : null}</span></SelectItem>)}</SelectContent></Select>{disabledMessage ? <p className="text-xs text-muted-foreground">{disabledMessage}</p> : null}</div>;
 }
 
 function AgentScriptSelect({ label, value = "none", forms = [], workflows = [], onChange = () => {} }) {

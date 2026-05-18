@@ -15,6 +15,7 @@ import {
   updateCampaignExecutionControl,
 } from "@/lib/outbound-dialer/execution";
 import { completeCampaignIfExhausted } from "@/lib/outbound-dialer/completion";
+import { broadcastCampaignActivationChanged } from "@/lib/outbound-dialer/agent-campaigns";
 import { startAgentlessRunner, stopAgentlessRunner, getRunnerState } from "@/lib/outbound-dialer/runner";
 
 function isAgentlessMode(mode) {
@@ -52,6 +53,7 @@ export async function POST(request, context) {
         }
         await closeCampaignRun(pool, campaignId, "stopped", username, "recycle", { action: "recycle" });
         const { updatedCampaign, recycledAttempts } = await recycleCampaignRecords(pool, campaignId, username);
+        await broadcastCampaignActivationChanged(pool, updatedCampaign || campaign, "campaign_status_changed");
         return NextResponse.json({
           ok: true,
           action,
@@ -91,6 +93,8 @@ export async function POST(request, context) {
       if (action === "stop") {
         await closeCampaignRun(pool, campaignId, "stopped", username, "manual_stop", { action: "stop" });
       }
+
+      await broadcastCampaignActivationChanged(pool, updated, "campaign_status_changed");
 
       return NextResponse.json({
         ok: true,

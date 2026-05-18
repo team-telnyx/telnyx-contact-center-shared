@@ -17,6 +17,7 @@ export function SiteHeader() {
   const [userRoles, setUserRoles] = useState([]);
   const hasAgentRole = userRoles.includes("agent");
   const loadQueuesRef = useRef(null);
+  const loadCampaignsRef = useRef(null);
 
   // Load user roles and status/queues if agent
   useEffect(() => {
@@ -82,8 +83,9 @@ export function SiteHeader() {
       }
     };
 
-    // Store loadQueues in a ref so it can be used in event listeners
+    // Store loaders in refs so they can be used in event listeners
     loadQueuesRef.current = loadQueues;
+    loadCampaignsRef.current = loadCampaigns;
 
     if (hasAgentRole) {
       loadStatus();
@@ -147,6 +149,23 @@ export function SiteHeader() {
             }
           } catch (err) {
             // Failed to parse queue SSE message
+          }
+        });
+
+        statusEventSource.addEventListener("campaign_changed", async (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (
+              data.type === "campaign_status_changed" ||
+              data.type === "campaign_activation_changed" ||
+              data.type === "campaign_updated"
+            ) {
+              if (loadCampaignsRef.current) {
+                loadCampaignsRef.current();
+              }
+            }
+          } catch (err) {
+            // Failed to parse campaign SSE message
           }
         });
 

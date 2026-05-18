@@ -1,41 +1,72 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { listAgentCampaigns, setAgentCampaignActivation } from "@/lib/outbound-dialer/agent-campaigns";
+import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import {
+  broadcastCampaignActivationChanged,
+  listAgentCampaigns,
+  setAgentCampaignActivation,
+} from "@/lib/outbound-dialer/agent-campaigns";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
 }
 
-export async function GET() {
+async function resolveTargetAgent(pool, requester, requestedUserId) {
+  if (!requestedUserId || String(requestedUserId) === String(requester.id)) {
+    return { userId: requester.id, username: usernameFor(requester) };
+  }
+  if (!isSupervisorOrAdmin(requester)) {
+    throw Object.assign(new Error("Only supervisors and admins can manage other users' campaigns"), { status: 403 });
+  }
+  const { rows } = await pool.query(
+    `SELECT id, username, email FROM users WHERE id = $1 LIMIT 1`,
+    [requestedUserId],
+  );
+  const target = rows[0];
+  if (!target) throw Object.assign(new Error("Target user not found"), { status: 404 });
+  return { userId: target.id, username: target.username || target.email };
+}
+
+export async function GET(request) {
   try {
     const user = await getAuthenticatedUser();
-    const agentUsername = usernameFor(user);
-    if (!agentUsername) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const pool = getPostgresPool();
     if (!pool) return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
-    const campaigns = await listAgentCampaigns(pool, agentUsername);
+    const { searchParams } = new URL(request.url);
+    const target = await resolveTargetAgent(pool, user, searchParams.get("userId"));
+    if (!target.username) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    const campaigns = await listAgentCampaigns(pool, target.username);
     return NextResponse.json({ ok: true, campaigns });
   } catch (err) {
     console.error("[Agent Campaigns] list failed:", err);
-    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 500 });
   }
 }
 
 export async function POST(request) {
   try {
     const user = await getAuthenticatedUser();
-    const agentUsername = usernameFor(user);
-    if (!agentUsername) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!user) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     const pool = getPostgresPool();
     if (!pool) return NextResponse.json({ ok: false, error: "Server not ready" }, { status: 500 });
     const body = await request.json().catch(() => ({}));
-    const campaignId = body?.campaignId && body.campaignId !== "none" ? String(body.campaignId) : null;
-    await setAgentCampaignActivation(pool, agentUsername, campaignId);
-    const campaigns = await listAgentCampaigns(pool, agentUsername);
-    return NextResponse.json({ ok: true, campaigns, activeCampaignId: campaignId });
+    const target = await resolveTargetAgent(pool, user, body?.userId ? String(body.userId) : null);
+    if (!target.username) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+    const campaignIds = Array.isArray(body?.campaignIds)
+      ? body.campaignIds.filter(Boolean).map(String)
+      : body?.campaignId && body.campaignId !== "none"
+        ? [String(body.campaignId)]
+        : [];
+
+    await setAgentCampaignActivation(pool, target.username, campaignIds);
+    const campaigns = await listAgentCampaigns(pool, target.username);
+    await broadcastCampaignActivationChanged(pool, { id: "agent-campaign-assignments", name: "Agent campaign assignments", status: "updated", mode: "preview", userId: target.userId, campaignIds }, "campaign_activation_changed");
+    return NextResponse.json({ ok: true, campaigns, activeCampaignIds: campaignIds });
   } catch (err) {
     console.error("[Agent Campaigns] activation failed:", err);
-    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 400 });
   }
 }
