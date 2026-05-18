@@ -44,14 +44,13 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
   const record = assignment.contact_record || {};
   const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 8);
   const isProgressive = assignment.campaign_mode === "progressive";
-
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-xl border bg-orange-50/60 p-4 shadow-sm dark:bg-orange-950/20">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-orange-600">Outbound Campaign Record</div>
-          <h3 className="text-lg font-semibold">{assignment.campaign_name || "Campaign record"}</h3>
-          <p className="text-sm text-muted-foreground">{assignment.to_number || "No callable number"}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">Outbound Campaign Record</p>
+          <h3 className="text-base font-semibold">{assignment.campaign_name || "Campaign"}</h3>
+          <p className="font-mono text-sm text-muted-foreground">{assignment.to_number || "No phone number"}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground">{assignment.campaign_mode}</span>
@@ -59,16 +58,16 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
         </div>
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {previewFields.length ? previewFields.map(([key, value]) => (
-          <div key={key} className="rounded-lg border bg-muted/20 px-3 py-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{key.replace(/_/g, " ")}</div>
-            <div className="truncate text-sm font-medium">{String(value)}</div>
+        {previewFields.map(([key, value]) => (
+          <div key={key} className="rounded-md bg-background/80 px-3 py-2 text-sm">
+            <div className="text-[11px] uppercase text-muted-foreground">{key.replace(/_/g, " ")}</div>
+            <div className="font-medium">{String(value)}</div>
           </div>
-        )) : <div className="rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">No contact fields available.</div>}
+        ))}
       </div>
       <button
         type="button"
-        className="inline-flex h-9 items-center justify-center rounded-md bg-orange-600 px-3 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-orange-600 px-3 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
         onClick={onDial}
         disabled={dialing || !assignment.to_number}
       >
@@ -76,6 +75,59 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
       </button>
     </div>
   );
+}
+
+function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
+  const [codes, setCodes] = useState([]);
+  const [selectedCode, setSelectedCode] = useState("");
+  const [callbackAt, setCallbackAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    if (!open || !assignment?.campaign_id) return;
+    fetch(`/api/contact-center/agent/campaigns/disposition?campaignId=${encodeURIComponent(assignment.campaign_id)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        const nextCodes = data.dispositionCodes || [];
+        setCodes(nextCodes);
+        setSelectedCode(nextCodes[0]?.wrapup_code_id || "");
+      })
+      .catch(() => setCodes([]));
+  }, [open, assignment?.campaign_id]);
+  if (!open || !assignment) return null;
+  const selected = codes.find((code) => code.wrapup_code_id === selectedCode);
+  const requiresCallback = selected?.requires_callback === true;
+  const submit = async () => {
+    if (!selectedCode) return alert("Select a disposition code");
+    if (requiresCallback && !callbackAt) return alert("Callback date/time is required");
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/contact-center/agent/campaigns/disposition", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attemptId: assignment.id, dispositionCodeId: selectedCode, callback_at: callbackAt ? new Date(callbackAt).toISOString() : null, notes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to save campaign disposition");
+      onSubmitted?.(data);
+      onClose?.();
+    } catch (err) {
+      alert(err.message || "Failed to save campaign disposition");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-4 sm:items-center">
+    <div className="w-full max-w-lg overflow-hidden rounded-2xl border bg-background shadow-2xl">
+      <div className="border-b bg-muted/40 px-5 py-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaign Disposition</p><h3 className="text-lg font-semibold">Wrap up campaign record</h3><p className="mt-1 text-sm text-muted-foreground">Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.</p></div>
+      <div className="space-y-4 p-5">
+        <div className="space-y-2"><label className="text-sm font-medium">Disposition code</label><Select value={selectedCode || undefined} onValueChange={setSelectedCode}><SelectTrigger><SelectValue placeholder="Select code" /></SelectTrigger><SelectContent>{codes.map((code) => <SelectItem key={code.wrapup_code_id} value={code.wrapup_code_id}>{code.wrapup_code_name || code.wrapup_code_id}</SelectItem>)}</SelectContent></Select>{selected ? <p className="text-xs text-muted-foreground">{selected.classification?.replace(/_/g, " ")} {selected.business_category && selected.business_category !== "none" ? `· ${selected.business_category}` : ""}</p> : null}</div>
+        {requiresCallback ? <div className="space-y-2"><label className="text-sm font-medium">Callback date/time</label><input type="datetime-local" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={callbackAt} onChange={(event) => setCallbackAt(event.target.value)} /></div> : null}
+        <div className="space-y-2"><label className="text-sm font-medium">Notes</label><textarea className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for supervisor/reporting" /></div>
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-5 py-4"><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="rounded-md bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Submit disposition"}</button></div>
+    </div>
+  </div>;
 }
 
 export function AgentDesktop() {
@@ -87,6 +139,7 @@ export function AgentDesktop() {
   const [agentForms, setAgentForms] = useState([]);
   const [selectedAgentFormId, setSelectedAgentFormId] = useState("");
   const [campaignAssignment, setCampaignAssignment] = useState(null);
+  const [campaignDispositionAssignment, setCampaignDispositionAssignment] = useState(null);
   const [campaignCountdownSeconds, setCampaignCountdownSeconds] = useState(null);
   const [campaignDialing, setCampaignDialing] = useState(false);
   const campaignDialedAttemptRef = useRef(null);
@@ -1275,6 +1328,7 @@ export function AgentDesktop() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || data.execution?.reason || "Failed to start outbound call");
       campaignDialedAttemptRef.current = assignment.id;
+      setCampaignDispositionAssignment(assignment);
       setCampaignAssignment(null);
       setCampaignCountdownSeconds(null);
     } catch (err) {
@@ -1335,6 +1389,7 @@ export function AgentDesktop() {
     AGENT_RAIL_ITEMS.find((item) => item.id === activeView)?.icon || Info;
 
   return (
+    <>
     <div
       className={SECTION_RAIL_PAGE_GRID_CLASS}
       style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0, 1fr)` }}
@@ -1428,5 +1483,15 @@ export function AgentDesktop() {
         )}
       </Card>
     </div>
+    <CampaignDispositionSheet
+      assignment={campaignDispositionAssignment}
+      open={Boolean(campaignDispositionAssignment)}
+      onClose={() => setCampaignDispositionAssignment(null)}
+      onSubmitted={() => {
+        setCampaignDispositionAssignment(null);
+        refreshCampaignAssignment();
+      }}
+    />
+    </>
   );
 }
