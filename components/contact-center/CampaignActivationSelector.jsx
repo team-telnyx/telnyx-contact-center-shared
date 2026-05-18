@@ -99,26 +99,30 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
           {localCampaigns.length === 0 ? (
             <div className="py-4 text-center text-sm text-muted-foreground">No campaigns available</div>
           ) : (
-            localCampaigns.map((campaign) => (
-              <div key={campaign.id} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Checkbox
-                    checked={campaignIds.includes(campaign.id)}
-                    onCheckedChange={(checked) => toggleCampaign(campaign.id, checked === true)}
-                    disabled={saving}
-                  />
-                  <label className="text-sm font-medium cursor-pointer flex-1">
-                    {campaign.name}
-                  </label>
+            localCampaigns.map((campaign) => {
+              const checkboxId = `campaign-activation-${campaign.id}`;
+              return (
+                <div key={campaign.id} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <Checkbox
+                      id={checkboxId}
+                      checked={campaignIds.includes(campaign.id)}
+                      onCheckedChange={(checked) => toggleCampaign(campaign.id, checked === true)}
+                      disabled={saving}
+                    />
+                    <label htmlFor={checkboxId} className="text-sm font-medium cursor-pointer flex-1">
+                      {campaign.name}
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CampaignStatusIcon status={campaign.status} />
+                    <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
+                      {campaignModeLabel(campaign.mode)}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <CampaignStatusIcon status={campaign.status} />
-                  <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
-                    {campaignModeLabel(campaign.mode)}
-                  </Badge>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </PopoverContent>
