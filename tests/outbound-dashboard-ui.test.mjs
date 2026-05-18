@@ -68,6 +68,21 @@ test("live calls filters include a default-on disconnected calls toggle that fil
   assert.match(settingsSource, /setShowDisconnectedCalls/, "Live call filters should wire toggle changes back to page state");
 });
 
+test("outbound dialer restores and persists the supervisor's last selected section", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const pageStart = source.indexOf("export default function OutboundDialerPage");
+  const pageEnd = source.indexOf("function LiveCallsView", pageStart);
+  assert.ok(pageStart > -1 && pageEnd > pageStart, "OutboundDialerPage should exist before LiveCallsView");
+
+  const pageSource = source.slice(pageStart, pageEnd);
+
+  assert.match(source, /activeSection: "supervisor\.outbound-dialer\.activeSection"/, "Outbound dialer should use a scoped storage key for the selected section");
+  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.activeSection\)/, "Outbound dialer should restore the selected section from localStorage");
+  assert.match(pageSource, /NAV_ITEMS\.some\(\(item\) => item\.id === savedActive\)/, "Restored outbound section should be validated against known nav items");
+  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.activeSection, active\)/, "Outbound dialer should save section changes to localStorage");
+  assert.match(source, /id: "time-sets"/, "Time Sets should remain a valid persisted section");
+});
+
 test("dashboard header has a right-aligned default-on running campaign toggle that filters cards", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const pageStart = source.indexOf("export default function OutboundDialerPage");
@@ -81,6 +96,9 @@ test("dashboard header has a right-aligned default-on running campaign toggle th
   const dashboardSource = source.slice(dashboardStart, dashboardEnd);
 
   assert.match(pageSource, /const \[showOnlyRunningDashboardCampaigns, setShowOnlyRunningDashboardCampaigns\] = useState\(true\)/, "Show only running campaign should default on");
+  assert.match(source, /supervisor\.outbound-dialer\.showOnlyRunningDashboardCampaigns/, "Show only running campaign should be persisted for supervisor return visits");
+  assert.match(pageSource, /localStorage\.getItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyRunningDashboardCampaigns\)/, "Show only running campaign should restore from localStorage after hydration");
+  assert.match(pageSource, /localStorage\.setItem\(OUTBOUND_UI_STATE_STORAGE_KEYS\.showOnlyRunningDashboardCampaigns, String\(showOnlyRunningDashboardCampaigns\)\)/, "Show only running campaign changes should be saved to localStorage");
   assert.match(pageSource, /Show only running campaign/, "Dashboard header should render the requested toggle label");
   assert.match(pageSource, /<Switch[\s\S]*id="show-only-running-dashboard-campaigns"[\s\S]*checked=\{showOnlyRunningDashboardCampaigns\}[\s\S]*onCheckedChange=\{setShowOnlyRunningDashboardCampaigns\}/, "Dashboard header toggle should be wired to page state");
   assert.match(pageSource, /className="ml-auto flex items-center gap-3/, "Dashboard header toggle should be aligned to the right side of the header");

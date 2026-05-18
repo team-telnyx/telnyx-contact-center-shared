@@ -50,6 +50,10 @@ const NAV_ITEMS = [
   { id: "event-viewer", label: "Event Viewer", icon: IconListDetails, description: "Dialer timeline" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Workspace defaults" },
 ];
+const OUTBOUND_UI_STATE_STORAGE_KEYS = {
+  activeSection: "supervisor.outbound-dialer.activeSection",
+  showOnlyRunningDashboardCampaigns: "supervisor.outbound-dialer.showOnlyRunningDashboardCampaigns",
+};
 const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300", rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300" };
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 const neutralCardHoverClass = "hover:border-foreground/25 hover:bg-muted/50";
@@ -262,6 +266,7 @@ export default function OutboundDialerPage() {
   const [showOnlyRunningDashboardCampaigns, setShowOnlyRunningDashboardCampaigns] = useState(true);
   const [selectedLiveCallDetails, setSelectedLiveCallDetails] = useState(null);
   const [selectedSupervisionCall, setSelectedSupervisionCall] = useState(null);
+  const outboundUiStateHydratedRef = useRef(false);
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
   const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
   const dashboardCampaigns = useMemo(() => campaigns.filter(isDashboardCampaign), [campaigns]);
@@ -274,6 +279,26 @@ export default function OutboundDialerPage() {
   const selectedTimeSet = useMemo(() => timeSets.find((t) => t.id === selectedTimeSetId) || timeSets[0] || null, [timeSets, selectedTimeSetId]);
   const selectedAttemptControl = useMemo(() => attemptControls.find((a) => a.id === selectedAttemptControlId) || attemptControls[0] || null, [attemptControls, selectedAttemptControlId]);
   const refresh = useCallback(async (toast = false) => { if (!isAuthorized) return; try { setLoading(true); setError(null); const data = await api(API); const nextCampaigns = data.campaigns || []; const nextContactLists = data.contactLists || []; const nextDncLists = data.dncLists || []; const nextFilters = data.filters || []; const nextTimeSets = data.timeSets || []; const nextAttemptControls = data.attemptControls || []; setCampaigns(nextCampaigns); setContactLists(nextContactLists); setDncLists(nextDncLists); setFilters(nextFilters); setTimeSets(nextTimeSets); setAttemptControls(nextAttemptControls); setOutboundSettings(data.settings || defaultOutboundSettings()); setInventoryNumbers(data.inventoryNumbers || []); setExecutionDebugByCampaign(data.executionDebugByCampaign || {}); setForms(data.forms || []); setHandlerReferences(data.handlerReferences || { queue: [], call_flow: [], ai_assistant: [] }); setSchema(data.schema || emptySchema); setSelectedCampaignId(keepSelectedRecord(nextCampaigns)); setSelectedListId(keepSelectedRecord(nextContactLists)); setSelectedDncId(keepSelectedRecord(nextDncLists)); setSelectedFilterId(keepSelectedRecord(nextFilters)); setSelectedTimeSetId(keepSelectedRecord(nextTimeSets)); setSelectedAttemptControlId(keepSelectedRecord(nextAttemptControls)); if (toast) notify({ title: "Outbound dialer refreshed", description: "Outbound dialer data has been successfully refreshed.", variant: "success" }); } catch (err) { setError(err.message); notify({ title: "Failed to load outbound dialer", description: err.message, variant: "error" }); } finally { setLoading(false); } }, [isAuthorized]);
+  useEffect(() => {
+    try {
+      const savedActive = localStorage.getItem(OUTBOUND_UI_STATE_STORAGE_KEYS.activeSection);
+      if (savedActive && NAV_ITEMS.some((item) => item.id === savedActive)) setActive(savedActive);
+      const savedShowOnlyRunning = localStorage.getItem(OUTBOUND_UI_STATE_STORAGE_KEYS.showOnlyRunningDashboardCampaigns);
+      if (savedShowOnlyRunning === "true" || savedShowOnlyRunning === "false") setShowOnlyRunningDashboardCampaigns(savedShowOnlyRunning === "true");
+    } catch {
+      // Ignore storage errors so supervisor screens still load in locked-down browsers.
+    } finally {
+      window.setTimeout(() => { outboundUiStateHydratedRef.current = true; }, 0);
+    }
+  }, []);
+  useEffect(() => {
+    if (!outboundUiStateHydratedRef.current) return;
+    try { localStorage.setItem(OUTBOUND_UI_STATE_STORAGE_KEYS.activeSection, active); } catch {}
+  }, [active]);
+  useEffect(() => {
+    if (!outboundUiStateHydratedRef.current) return;
+    try { localStorage.setItem(OUTBOUND_UI_STATE_STORAGE_KEYS.showOnlyRunningDashboardCampaigns, String(showOnlyRunningDashboardCampaigns)); } catch {}
+  }, [showOnlyRunningDashboardCampaigns]);
   useEffect(() => {
     let cancelled = false;
     async function checkAuth() {

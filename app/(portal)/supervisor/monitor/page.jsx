@@ -90,6 +90,9 @@ const MONITOR_RAIL_ITEMS = [
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
   { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Trend visualizations" },
 ];
+const MONITOR_UI_STATE_STORAGE_KEYS = {
+  activeSection: "supervisor.monitor.activeSection",
+};
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
@@ -535,10 +538,27 @@ export default function MonitorPage() {
   const [selectedCallForSupervision, setSelectedCallForSupervision] =
     useState(null);
   const selectedQueueRef = useRef(null);
+  const monitorUiStateHydratedRef = useRef(false);
   const loadQueueCallsRef = useRef(null);
   const isLoadingDashboardRef = useRef(false);
   const isPageVisibleRef = useRef(true);
   const pollIntervalRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const savedActiveTab = localStorage.getItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection);
+      if (savedActiveTab && MONITOR_RAIL_ITEMS.some((item) => item.id === savedActiveTab)) setActiveTab(savedActiveTab);
+    } catch {
+      // Ignore storage errors so supervisor monitoring still works without persisted UI state.
+    } finally {
+      window.setTimeout(() => { monitorUiStateHydratedRef.current = true; }, 0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!monitorUiStateHydratedRef.current) return;
+    try { localStorage.setItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection, activeTab); } catch {}
+  }, [activeTab]);
 
   useEffect(() => {
     selectedQueueRef.current = selectedQueue;
