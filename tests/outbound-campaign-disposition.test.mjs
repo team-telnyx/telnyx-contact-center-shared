@@ -88,6 +88,12 @@ test("outbound dialer exposes Disposition codes menu below Time Sets and CRUD wi
   assert.match(page, /"contact_uncallable"/);
   assert.match(page, /counts\[key\] \|\| 0/, "Unused classifications should still render with a 0 count");
   assert.match(page, /Icon\s*=\s*dispositionSummaryIcon/, "Disposition code tiles should render a top-right icon");
+  assert.match(page, /bg-background\/85 p-5 shadow-sm/, "Disposition codes summary card should match the darker list-card background");
+  assert.match(page, /tone:\s*"emerald"/);
+  assert.match(page, /tone:\s*"violet"/);
+  assert.match(page, /tone:\s*"amber"/);
+  assert.match(page, /tone:\s*"rose"/);
+  assert.match(page, /bg-gradient-to-br p-2 \$\{toneClasses\[tone\]/, "Disposition summary icons should use the same colored tone treatment as History tiles");
   assert.match(page, /grid-cols-1 gap-3 sm:grid-cols-5/, "Disposition code tiles should span the card width as five columns");
   assert.match(page, /Classification decides what happens to the outbound record/);
   assert.doesNotMatch(page, /Genesys-style classification that decides what happens to the outbound record after the agent submits the sheet\./);

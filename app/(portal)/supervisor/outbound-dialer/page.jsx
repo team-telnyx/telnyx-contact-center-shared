@@ -777,20 +777,20 @@ function defaultDispositionCode(wrapupCodes = []) {
 function DispositionCodesView({ dispositionCodes, selectedDispositionCode, setSelectedDispositionCodeId, archive, saving }) {
   const counts = dispositionCodes.reduce((acc, item) => ({ ...acc, [item.classification || "none"]: (acc[item.classification || "none"] || 0) + 1 }), {});
   const dispositionSummaryClassifications = [
-    { key: "none", icon: IconListDetails },
-    { key: "right_party_contact", icon: IconCheck },
-    { key: "retry", icon: IconRefresh },
-    { key: "number_uncallable", icon: IconPhoneOff },
-    { key: "contact_uncallable", icon: IconShieldCheck },
+    { key: "none", icon: IconListDetails, tone: "blue" },
+    { key: "right_party_contact", icon: IconCheck, tone: "emerald" },
+    { key: "retry", icon: IconRefresh, tone: "amber" },
+    { key: "number_uncallable", icon: IconPhoneOff, tone: "rose" },
+    { key: "contact_uncallable", icon: IconShieldCheck, tone: "violet" },
   ];
   return <div className="space-y-5">
-    <div className="overflow-hidden rounded-3xl border bg-card p-5 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="space-y-4">
         <h3 className="text-xl font-semibold tracking-tight">Disposition codes</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 text-xs">
-          {dispositionSummaryClassifications.map(({ key, icon: dispositionSummaryIcon }) => {
+          {dispositionSummaryClassifications.map(({ key, icon: dispositionSummaryIcon, tone }) => {
             const Icon = dispositionSummaryIcon;
-            return <div key={key} className="relative overflow-hidden rounded-2xl border bg-white/90 p-3 pr-10 shadow-sm dark:bg-white/10"><div className="text-lg font-semibold">{counts[key] || 0}</div><div className="mt-1 text-muted-foreground">{dispositionClassificationLabel(key)}</div>{Icon ? <Icon className="absolute right-3 top-3 h-4 w-4 text-muted-foreground/70" /> : null}</div>;
+            return <div key={key} className="relative overflow-hidden rounded-2xl border bg-white/90 p-3 pr-12 shadow-sm dark:bg-white/10"><div className="text-lg font-semibold">{counts[key] || 0}</div><div className="mt-1 text-muted-foreground">{dispositionClassificationLabel(key)}</div>{Icon ? <span className={`absolute right-3 top-3 rounded-xl bg-gradient-to-br p-2 ${toneClasses[tone] || toneClasses.blue}`}><Icon className="h-4 w-4" /></span> : null}</div>;
           })}
         </div>
       </div>
