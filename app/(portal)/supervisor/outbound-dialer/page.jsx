@@ -194,7 +194,6 @@ const api = async (url, options = {}) => { const res = await fetch(url, { cache:
 const isDashboardCampaign = (campaign) => campaign && !["draft", "design", "archived"].includes(String(campaign.status || "").toLowerCase());
 const executionStateFor = normalizeCampaignExecutionState;
 const ACTIVE_DASHBOARD_CAMPAIGN_STATES = new Set(["running", "stopped", "paused", "recycled"]);
-const isActiveDashboardCampaign = (campaign) => ACTIVE_DASHBOARD_CAMPAIGN_STATES.has(executionStateFor(campaign));
 
 const campaignLiveMetrics = (campaign, executionDebug = null) => {
   const summary = executionDebug?.summary || {};
@@ -224,6 +223,12 @@ const campaignLiveMetrics = (campaign, executionDebug = null) => {
     noAnswer: hasNoAnswerMetric ? Number(metrics.no_answer ?? metrics.noAnswer ?? 0) || 0 : null,
   };
 };
+const campaignRuntimeContext = (campaign, contactLists = [], executionDebug = null) => ({
+  progress: campaignContactProgress(campaign, contactLists, executionDebug),
+  live: campaignLiveMetrics(campaign, executionDebug),
+});
+const executionStateWithRuntimeFor = (campaign, contactLists = [], executionDebug = null) => executionStateFor(campaign, campaignRuntimeContext(campaign, contactLists, executionDebug));
+const isActiveDashboardCampaign = (campaign, contactLists = [], executionDebug = null) => ACTIVE_DASHBOARD_CAMPAIGN_STATES.has(executionStateWithRuntimeFor(campaign, contactLists, executionDebug));
 const campaignTimeline = (campaign) => {
   const events = campaign?.metadata?.event_timeline || campaign?.metadata?.eventTimeline || campaign?.metadata?.events || [];
   return Array.isArray(events) ? events.slice(0, 5) : [];
@@ -275,7 +280,7 @@ export default function OutboundDialerPage() {
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
   const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
   const dashboardCampaigns = useMemo(() => campaigns.filter(isDashboardCampaign), [campaigns]);
-  const selectableDashboardCampaigns = useMemo(() => showOnlyActiveDashboardCampaigns ? dashboardCampaigns.filter(isActiveDashboardCampaign) : dashboardCampaigns, [dashboardCampaigns, showOnlyActiveDashboardCampaigns]);
+  const selectableDashboardCampaigns = useMemo(() => showOnlyActiveDashboardCampaigns ? dashboardCampaigns.filter((campaign) => isActiveDashboardCampaign(campaign, contactLists, executionDebugByCampaign?.[campaign.id])) : dashboardCampaigns, [contactLists, dashboardCampaigns, executionDebugByCampaign, showOnlyActiveDashboardCampaigns]);
   const selectedDashboardCampaign = useMemo(() => selectableDashboardCampaigns.find((c) => c.id === selectedCampaignId) || selectableDashboardCampaigns[0] || null, [selectableDashboardCampaigns, selectedCampaignId]);
   const effectiveSelectedReasonMetricsDay = selectedReasonMetricsCampaignId === selectedDashboardCampaign?.id ? selectedReasonMetricsDay : null;
   const selectedList = useMemo(() => contactLists.find((l) => l.id === selectedListId) || contactLists[0] || null, [contactLists, selectedListId]);
@@ -617,8 +622,8 @@ function LiveCallsSettings({ payload, campaignFilter, setCampaignFilter, statusF
 function DashboardView({ campaigns, contactLists, executionDebugByCampaign, selectedCampaignId, setSelectedCampaignId, runCampaignAction, saving, showOnlyActiveCampaigns, setShowOnlyActiveCampaigns }) {
   const [expandedCampaignId, setExpandedCampaignId] = useState(null);
   const visibleCampaigns = campaigns.filter(isDashboardCampaign);
-  const activeCampaigns = visibleCampaigns.filter(isActiveDashboardCampaign);
-  const runningCampaigns = visibleCampaigns.filter((campaign) => executionStateFor(campaign) === "running");
+  const activeCampaigns = visibleCampaigns.filter((campaign) => isActiveDashboardCampaign(campaign, contactLists, executionDebugByCampaign?.[campaign.id]));
+  const runningCampaigns = visibleCampaigns.filter((campaign) => executionStateWithRuntimeFor(campaign, contactLists, executionDebugByCampaign?.[campaign.id]) === "running");
   const dashboardCampaignCards = showOnlyActiveCampaigns ? activeCampaigns : visibleCampaigns;
   const runningCampaignIds = new Set(runningCampaigns.map((campaign) => campaign.id));
   const totalContacts = runningCampaigns.reduce((sum, campaign) => sum + campaignContactProgress(campaign, contactLists, executionDebugByCampaign?.[campaign.id]).total, 0);
