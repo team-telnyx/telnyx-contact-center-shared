@@ -1191,6 +1191,17 @@ function VariableCard({
   );
 }
 
+function normalizeAiAssistants(payload) {
+  const rows = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data) ? payload.data : [];
+  return rows
+    .map((assistant) => ({
+      id: String(assistant?.id || assistant?.assistant_id || "").trim(),
+      name: assistant?.name || assistant?.display_name || assistant?.id || "Untitled assistant",
+      status: assistant?.status || "active",
+    }))
+    .filter((assistant) => assistant.id);
+}
+
 export default function FlowBuilderPage() {
   const params = useParams();
   const router = useRouter();
@@ -1634,7 +1645,22 @@ export default function FlowBuilderPage() {
     loadQueues();
   }, []);
 
-  // AI assistants not available in contact center - leave empty
+  // Load AI assistants for Start AI Assistant node
+  useEffect(() => {
+    async function loadAiAssistants() {
+      try {
+        const res = await fetch("/api/ai/assistants?pageSize=1000");
+        const data = await res.json();
+        if (res.ok) {
+          setAiAssistants(normalizeAiAssistants(data));
+        }
+      } catch (error) {
+        console.error("Error loading AI assistants:", error);
+      }
+    }
+
+    loadAiAssistants();
+  }, []);
 
   // Validate flow whenever nodes/edges or queues change
   useEffect(() => {

@@ -189,7 +189,7 @@ test("campaign inventory uses runtime display state instead of raw campaign stat
   assert.doesNotMatch(viewSource, /statusClass\(c\.status\)/, "Campaign Inventory should not show raw running status for exhausted runtime campaigns");
 });
 
-test("campaign save action is disabled until audience and FROM slots are complete", async () => {
+test("campaign save action is disabled until audience, Reference, and FROM slots are complete", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const formStart = source.indexOf("function CampaignSettingsForm");
   const formEnd = source.indexOf("function parseTtsVoiceString", formStart);
@@ -197,8 +197,13 @@ test("campaign save action is disabled until audience and FROM slots are complet
 
   const formSource = source.slice(formStart, formEnd);
   assert.match(source, /campaignSaveRequirements/, "page should import campaign save requirement validation");
-  assert.match(formSource, /campaignSaveRequirements\(draft, \{ maxAttempts: campaignMaxAttempts \}\)/, "form should evaluate campaign save requirements with effective max attempts");
+  assert.match(formSource, /campaignReferenceKindForMode\(mode\)/, "Campaign form should derive Reference kind directly from selected Mode");
+  assert.match(formSource, /campaignSaveRequirements\(normalizedDraft, \{ maxAttempts: campaignMaxAttempts \}\)/, "form should evaluate campaign save requirements with effective max attempts");
   assert.match(formSource, /disabled: saving \|\| !saveRequirements\.canSave/, "Save campaign header action should be disabled until requirements pass");
+  assert.doesNotMatch(formSource, /label="Handler"/, "Dialing Strategy should not render a Handler dropdown");
+  assert.match(formSource, /<CampaignReferenceSelect[\s\S]*label="Reference"[\s\S]*required[\s\S]*kind=\{referenceKind\}/, "Dialing Strategy should render one required Reference selector based on Mode");
+  assert.match(source, /function CampaignReferenceSelect/, "Campaign Reference selector should support richer queue labels");
+  assert.match(source, /routingTypeBadgeClass/, "Queue references should render routing type badges");
 });
 
 test("campaign required fields are marked with red asterisks instead of a missing-fields description", async () => {

@@ -5,6 +5,9 @@ import { campaignSaveRequirements } from "../lib/outbound-dialer/campaign-valida
 
 const baseCampaign = {
   name: "New campaign",
+  mode: "preview",
+  handler_type: "queue",
+  handler_ref: "queue-1",
   contact_list_id: "list-1",
   metadata: {
     contact_list_numbers: ["Number"],
@@ -75,4 +78,33 @@ test("new campaign save caps required rotating FROM slots to runtime rotation li
   assert.equal(requirements.requiredFromSlots, 5);
   assert.equal(requirements.canSave, true);
   assert.deepEqual(requirements.missing, []);
+});
+
+test("campaign save requires a Reference matching the selected mode", () => {
+  const missingQueueReference = campaignSaveRequirements({
+    ...baseCampaign,
+    mode: "preview",
+    handler_type: "queue",
+    handler_ref: "",
+  });
+  assert.equal(missingQueueReference.canSave, false);
+  assert.ok(missingQueueReference.missing.includes("handler_ref"));
+
+  const missingAiReference = campaignSaveRequirements({
+    ...baseCampaign,
+    mode: "agentless_ai",
+    handler_type: "ai_assistant",
+    handler_ref: "",
+  });
+  assert.equal(missingAiReference.canSave, false);
+  assert.ok(missingAiReference.missing.includes("handler_ref"));
+
+  const completeAiReference = campaignSaveRequirements({
+    ...baseCampaign,
+    mode: "agentless_ai",
+    handler_type: "ai_assistant",
+    handler_ref: "assistant-1",
+  });
+  assert.equal(completeAiReference.canSave, true);
+  assert.deepEqual(completeAiReference.missing, []);
 });
