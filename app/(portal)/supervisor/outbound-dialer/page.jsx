@@ -499,11 +499,12 @@ function LiveCallsView({ payload, loading, campaignFilter, statusFilter, showDis
   return <div className="space-y-3">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing live calls…</div> : null}{calls.length ? calls.map((call) => <LiveCallCard key={call.id} call={call} now={now} onOpenDetails={() => onOpenDetails(call)} onOpenSupervision={() => onOpenSupervision(call)} />) : <Empty title="No live calls" description="Active campaign calls will appear here when they start ringing, connect, or hang up within the last 60 seconds." />}</div>;
 }
 
-function copyLiveCallValue(value, label) {
+async function copyLiveCallValue(value, label) {
   const text = String(value || "").trim();
   if (!text) return;
   try {
-    navigator?.clipboard?.writeText(text);
+    if (!navigator?.clipboard?.writeText) throw new Error("Clipboard is not available");
+    await navigator.clipboard.writeText(text);
     notify({ title: "Copied", description: `${label} copied to clipboard`, variant: "success" });
   } catch (error) {
     notify({ title: "Copy failed", description: error?.message || `Could not copy ${label}`, variant: "error" });

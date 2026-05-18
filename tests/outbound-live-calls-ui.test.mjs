@@ -16,6 +16,18 @@ test("live call card renders failure reason, full session id, and copy buttons f
   assert.match(cardSource, /CopyValueButton[\s\S]*value=\{call\.contact_record_id\}/, "contact record id should be copyable");
 });
 
+test("live call copy helper waits for clipboard writes before reporting success", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const helperStart = source.indexOf("async function copyLiveCallValue");
+  const helperEnd = source.indexOf("function CopyValueButton", helperStart);
+  assert.ok(helperStart > -1 && helperEnd > helperStart, "copyLiveCallValue should be async and exist before CopyValueButton");
+  const helperSource = source.slice(helperStart, helperEnd);
+
+  assert.match(helperSource, /await navigator\.clipboard\.writeText\(text\)/, "clipboard write should be awaited before success notification");
+  assert.match(helperSource, /Clipboard is not available/, "missing clipboard API should show a failure notification");
+  assert.match(helperSource, /title: "Copy failed"/, "clipboard failures should show an error notification");
+});
+
 test("outbound live calls SQL selects failure reason and hangup causes for failed calls", async () => {
   const source = await readFile(new URL("../lib/outbound-dialer/live-calls.js", import.meta.url), "utf8");
   assert.match(source, /l\.failure_reason/, "live calls query should select ledger failure_reason");
