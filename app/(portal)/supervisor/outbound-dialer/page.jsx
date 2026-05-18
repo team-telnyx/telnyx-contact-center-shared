@@ -776,16 +776,22 @@ function defaultDispositionCode(wrapupCodes = []) {
 
 function DispositionCodesView({ dispositionCodes, selectedDispositionCode, setSelectedDispositionCodeId, archive, saving }) {
   const counts = dispositionCodes.reduce((acc, item) => ({ ...acc, [item.classification || "none"]: (acc[item.classification || "none"] || 0) + 1 }), {});
+  const dispositionSummaryClassifications = [
+    { key: "none", icon: IconListDetails },
+    { key: "right_party_contact", icon: IconCheck },
+    { key: "retry", icon: IconRefresh },
+    { key: "number_uncallable", icon: IconPhoneOff },
+    { key: "contact_uncallable", icon: IconShieldCheck },
+  ];
   return <div className="space-y-5">
-    <div className="overflow-hidden rounded-3xl border bg-gradient-to-br from-violet-500/12 via-background to-sky-500/10 p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl space-y-2">
-          <Badge variant="outline" className="border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300">Genesys-style mappings</Badge>
-          <h3 className="text-xl font-semibold tracking-tight">Disposition codes</h3>
-          <p className="text-sm leading-6 text-muted-foreground">Map the same wrap-up codes agents already know to outbound campaign outcomes: right-party contact, uncallable number/contact, retry or callback. Agent sheets stay familiar, while campaign records get operational outcomes.</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-          {["right_party_contact", "retry", "number_uncallable", "contact_uncallable"].map((key) => <div key={key} className="rounded-2xl border bg-background/80 p-3 shadow-sm"><div className="text-lg font-semibold">{counts[key] || 0}</div><div className="mt-1 text-muted-foreground">{dispositionClassificationLabel(key)}</div></div>)}
+    <div className="overflow-hidden rounded-3xl border bg-card p-5 shadow-sm">
+      <div className="space-y-4">
+        <h3 className="text-xl font-semibold tracking-tight">Disposition codes</h3>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 text-xs">
+          {dispositionSummaryClassifications.map(({ key, icon: dispositionSummaryIcon }) => {
+            const Icon = dispositionSummaryIcon;
+            return <div key={key} className="relative overflow-hidden rounded-2xl border bg-white/90 p-3 pr-10 shadow-sm dark:bg-white/10"><div className="text-lg font-semibold">{counts[key] || 0}</div><div className="mt-1 text-muted-foreground">{dispositionClassificationLabel(key)}</div>{Icon ? <Icon className="absolute right-3 top-3 h-4 w-4 text-muted-foreground/70" /> : null}</div>;
+          })}
         </div>
       </div>
     </div>
@@ -1240,7 +1246,7 @@ function DispositionCodesSettingsForm({ dispositionCode, wrapupCodes = [], campa
       {selectedWrapup ? <div className="mt-3 rounded-xl border bg-muted/30 p-3 text-xs text-muted-foreground"><div className="font-medium text-foreground">{selectedWrapup.name}</div><div className="mt-1">{selectedWrapup.description || "No description"}</div></div> : null}
       <div className="mt-3"><ConfigSelect label="Scope" value={draft.campaign_id || "global"} options={campaignOptions} onChange={(value) => update({ campaign_id: value === "global" ? null : value })} /></div>
     </SettingCard>
-    <SettingCard title="Disposition outcome" icon={IconSparkles} subtitle="Genesys-style classification that decides what happens to the outbound record after the agent submits the sheet.">
+    <SettingCard title="Disposition outcome" icon={IconSparkles} subtitle="Classification decides what happens to the outbound record">
       <ConfigSelect label="Classification" value={classification} options={[{ value: "none", label: "Complete only" }, { value: "right_party_contact", label: "Right Party Contact" }, { value: "retry", label: "Retry / Callback" }, { value: "number_uncallable", label: "Number Uncallable" }, { value: "contact_uncallable", label: "Contact Uncallable / DNC" }]} onChange={(value) => update({ classification: value })} />
       {classification === "right_party_contact" ? <div className="mt-3"><ConfigSelect label="Business Category" value={draft.business_category || "none"} options={[{ value: "success", label: "Success" }, { value: "neutral", label: "Neutral" }, { value: "failure", label: "Failure" }, { value: "none", label: "None" }]} onChange={(value) => update({ business_category: value })} /></div> : null}
       {classification === "retry" ? <div className="mt-3 space-y-3 rounded-xl border bg-muted/20 p-3"><ToggleRow label="Retry eligible" checked={draft.retry_eligible !== false} onCheckedChange={(checked) => update({ retry_eligible: checked })} /><ToggleRow label="Requires callback date/time" checked={draft.requires_callback === true} onCheckedChange={(checked) => update({ requires_callback: checked })} /></div> : null}
@@ -1772,7 +1778,7 @@ function AgentScriptSelect({ label, value = "none", forms = [], workflows = [], 
   const workflowOptions = (workflows || []).map((workflow) => ({ value: `workflow:${workflow.id}`, label: workflow.name || workflow.label || workflow.id }));
   const selected = [...formOptions, ...workflowOptions].find((option) => option.value === value);
   const choose = (nextValue) => { onChange(nextValue); setOpen(false); };
-  return <div className="min-w-0 space-y-2"><Label>{label}</Label><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" className="w-full justify-between bg-background px-3 font-normal"><span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>{selected?.label || "Not attached"}</span><IconChevronDown className={`ml-2 h-4 w-4 shrink-0 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} /></Button></PopoverTrigger><PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="Search forms or workflows..." className="h-9" /><CommandEmpty>No agent script found.</CommandEmpty><CommandGroup><CommandItem value="none" onSelect={() => choose("none")}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === "none" ? "opacity-100" : "opacity-0"}`} /><span>Not attached</span></CommandItem></CommandGroup><CommandGroup heading="Forms">{formOptions.map((option) => <CommandItem key={option.value} value={`form ${option.label} ${option.value}`} onSelect={() => choose(option.value)}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === option.value ? "opacity-100" : "opacity-0"}`} /><IconForms className="mr-2 h-4 w-4 text-sky-600" /><span className="truncate">{option.label}</span></CommandItem>)}</CommandGroup><CommandGroup heading="Workflows">{workflowOptions.map((option) => <CommandItem key={option.value} value={`workflow ${option.label} ${option.value}`} onSelect={() => choose(option.value)}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === option.value ? "opacity-100" : "opacity-0"}`} /><IconWand className="mr-2 h-4 w-4 text-violet-600" /><span className="truncate">{option.label}</span></CommandItem>)}</CommandGroup></Command></PopoverContent></Popover><p className="text-xs text-muted-foreground">Agent desktop shows the selected form or workflow for preview/progressive records.</p></div>;
+  return <div className="min-w-0 space-y-2"><Label>{label}</Label><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" className="w-full justify-between bg-background px-3 font-normal"><span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>{selected?.label || "Not attached"}</span><IconChevronDown className={`ml-2 h-4 w-4 shrink-0 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} /></Button></PopoverTrigger><PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="Search forms or workflows..." className="h-9" /><CommandEmpty>No agent script found.</CommandEmpty><CommandGroup><CommandItem value="none" onSelect={() => choose("none")}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === "none" ? "opacity-100" : "opacity-0"}`} /><span>Not attached</span></CommandItem></CommandGroup><CommandGroup heading="Forms">{formOptions.map((option) => <CommandItem key={option.value} value={`form ${option.label} ${option.value}`} onSelect={() => choose(option.value)}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === option.value ? "opacity-100" : "opacity-0"}`} /><IconForms className="mr-2 h-4 w-4 text-sky-600" /><span className="truncate">{option.label}</span></CommandItem>)}</CommandGroup><CommandGroup heading="Workflows">{workflowOptions.map((option) => <CommandItem key={option.value} value={`workflow ${option.label} ${option.value}`} onSelect={() => choose(option.value)}><IconCheck className={`mr-2 h-4 w-4 shrink-0 text-telnyx-green ${value === option.value ? "opacity-100" : "opacity-0"}`} /><IconWand className="mr-2 h-4 w-4 text-violet-600" /><span className="truncate">{option.label}</span></CommandItem>)}</CommandGroup></Command></PopoverContent></Popover></div>;
 }
 
 function TimeZoneSelect({ label, value, options = [], onChange = () => {} }) {

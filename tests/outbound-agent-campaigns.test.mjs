@@ -116,5 +116,6 @@ test("campaign configuration form exposes one grouped Agent Script selector for 
   assert.match(formSource, /attached_form_id/);
   assert.match(formSource, /attached_workflow_id/);
   assert.match(formSource, /Agent desktop/);
+  assert.doesNotMatch(formSource, /Agent desktop shows the selected form or workflow for preview\/progressive records\./);
   assert.doesNotMatch(formSource, /<ConfigSelect label="Agent Script"/);
 });
