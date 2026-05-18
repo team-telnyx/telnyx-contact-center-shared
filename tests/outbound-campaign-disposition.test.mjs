@@ -78,6 +78,11 @@ test("outbound dialer exposes Disposition codes menu below Time Sets and CRUD wi
   assert.match(page, /number_uncallable/);
   assert.match(page, /Business Category/);
   assert.match(page, /\/disposition-codes/);
+  const formStart = page.indexOf("function DispositionCodesSettingsForm");
+  const formEnd = page.indexOf("function AttemptControlSettingsForm", formStart);
+  assert.ok(formStart > -1 && formEnd > formStart, "DispositionCodesSettingsForm should exist");
+  const formSource = page.slice(formStart, formEnd);
+  assert.doesNotMatch(formSource, /<Field\b/, "Disposition Codes form should not reference an undefined Field component");
 });
 
 test("schema seeds On Campaign Call system status and disposition mapping tables", async () => {

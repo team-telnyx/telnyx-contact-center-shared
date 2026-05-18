@@ -102,15 +102,19 @@ test("agent desktop polls assigned campaign records and dials progressive record
   assert.match(source, /Outbound Campaign Record/);
   assert.match(source, /Start outbound call/);
 });
-
-test("campaign configuration form exposes form and workflow attachment controls for preview/progressive agent desktop", async () => {
+test("campaign configuration form exposes one grouped Agent Script selector for preview/progressive agent desktop", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const formStart = source.indexOf("function CampaignSettingsForm");
   const formEnd = source.indexOf("function parseTtsVoiceString", formStart);
+  assert.ok(formStart > -1 && formEnd > formStart, "CampaignSettingsForm should exist");
   const formSource = source.slice(formStart, formEnd);
 
+  assert.match(formSource, /const showAgentScript = \["preview", "progressive"\]\.includes\(mode\)/);
+  assert.match(formSource, /<AgentScriptSelect[\s\S]*label="Agent Script"/);
+  assert.match(source, /CommandGroup heading="Forms"/);
+  assert.match(source, /CommandGroup heading="Workflows"/);
   assert.match(formSource, /attached_form_id/);
   assert.match(formSource, /attached_workflow_id/);
   assert.match(formSource, /Agent desktop/);
-  assert.match(formSource, /workflow/i);
+  assert.doesNotMatch(formSource, /<ConfigSelect label="Agent Script"/);
 });
