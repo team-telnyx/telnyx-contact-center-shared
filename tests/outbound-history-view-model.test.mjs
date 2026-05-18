@@ -246,6 +246,38 @@ test("campaign status events include persisted campaign run lifecycle rows", () 
   assert.ok(events.some((event) => event.details.includes("manual")));
 });
 
+test("event viewer preserves the complete DEV campaign run list alongside exhausted metadata", () => {
+  const campaignId = "17602910-316a-4435-9b40-d578f84fd68a";
+  const campaignRuns = Array.from({ length: 10 }, (_, index) => ({
+    id: `run-${index + 1}`,
+    status: index === 9 ? "completed" : "stopped",
+    started_by: "leszek@telnyx.com",
+    stopped_by: index === 9 ? "manual-dev-db" : "leszek@telnyx.com",
+    stop_reason: index === 9 ? "all_callable_records_exhausted" : index % 3 === 0 ? "recycle" : "manual_stop",
+    metadata: index === 9 ? { reason: "all_callable_records_exhausted", auto_completed: true } : { action: index % 3 === 0 ? "recycle" : "stop" },
+    started_at: `2026-05-17T0${Math.min(index, 9)}:00:00.000Z`,
+    stopped_at: `2026-05-17T0${Math.min(index, 9)}:05:00.000Z`,
+  }));
+
+  const events = campaignStatusEventsFromCampaigns(
+    [{
+      id: campaignId,
+      name: "Voice API Campaign",
+      updated_at: "2026-05-17T15:17:50.627Z",
+      metadata: {
+        auto_completed_reason: "all_callable_records_exhausted",
+        execution_control: { last_action: "auto_complete", updated_at: "2026-05-17T13:00:08.172Z" },
+      },
+    }],
+    { [campaignId]: { campaign_runs: campaignRuns } },
+  );
+
+  const campaignRunEvents = events.filter((event) => event.run_id);
+  assert.equal(campaignRunEvents.length, 20);
+  assert.equal(new Set(campaignRunEvents.map((event) => event.run_id)).size, 10);
+  assert.ok(events.some((event) => event.type === "exhausted" && event.run_id === "run-10"));
+});
+
 test("history keeps attempts without contact records in separate fallback groups", () => {
   const groups = groupAttemptsByContactRecord(
     [],

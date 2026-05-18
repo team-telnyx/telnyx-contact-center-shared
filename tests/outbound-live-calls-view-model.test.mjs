@@ -73,3 +73,28 @@ test("buildOutboundLiveCallsPayload returns totals, filters, timers, numbers and
   assert.equal(payload.calls[0].sessionDetails.call_control_id, "call-a");
   assert.equal(payload.calls[0].supervisionCall.callControlId, "call-a");
 });
+
+test("failed live calls expose a human-readable failure reason from ledger columns and metadata", () => {
+  const payload = buildOutboundLiveCallsPayload([
+    {
+      id: "attempt-failed",
+      campaign_id: "campaign-1",
+      campaign_name: "Renewals",
+      status: "failed",
+      call_control_id: "v3:failed-call-control",
+      call_session_id: "session-failed",
+      failure_reason: "user_busy",
+      metadata: { hangup_cause: "user_busy", sip_hangup_cause: "486", reason_code: "user_busy" },
+      created_at: "2026-05-17T17:59:00.000Z",
+      updated_at: "2026-05-17T17:59:45.000Z",
+    },
+  ], { now: new Date("2026-05-17T18:00:00.000Z") });
+
+  assert.equal(payload.calls.length, 1);
+  assert.equal(payload.calls[0].status, "failed");
+  assert.equal(payload.calls[0].failure_reason, "user_busy");
+  assert.equal(payload.calls[0].failure_reason_label, "User busy");
+  assert.equal(payload.calls[0].hangup_cause, "user_busy");
+  assert.equal(payload.calls[0].sip_hangup_cause, "486");
+  assert.equal(payload.calls[0].sessionDetails.metadata.failure_reason, "user_busy");
+});
