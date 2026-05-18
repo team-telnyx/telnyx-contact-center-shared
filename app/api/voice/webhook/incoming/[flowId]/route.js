@@ -7,7 +7,7 @@ import {
   determineNextNodes,
 } from "@/lib/voice-flow-engine.js";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { addWebhookEvent } from "@/lib/call-monitor-store.js";
+import { addNodeExecutionEvent, addWebhookEvent } from "@/lib/call-monitor-store.js";
 import { logCallEvent } from "@/lib/call-logger.js";
 import { getValueByPath } from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
@@ -77,6 +77,30 @@ async function lookupOutboundContactRecord(payload = {}) {
   } catch {
     return null;
   }
+}
+
+function recordOutboundCampaignInitiatorMonitorEvent({ callControlId, flowId, initiatorNode, event, variables }) {
+  if (!callControlId || !flowId || initiatorNode?.data?.nodeType !== "outbound_campaign") return;
+
+  addNodeExecutionEvent(
+    callControlId,
+    "outbound_campaign",
+    initiatorNode.id,
+    initiatorNode.data?.label || "Outbound Campaign",
+    {
+      event_type: event,
+      description: "Outbound campaign initiator received a Telnyx webhook and exposed these variables to the flow.",
+      variables: {
+        ...variables,
+        call_control_id: variables?.call_control_id || callControlId,
+        contact_record: variables?.contact_record || {},
+        outbound_campaign_id: variables?.outbound_campaign_id || null,
+      },
+    },
+    true,
+    0,
+    flowId,
+  );
 }
 
 async function updateConversationMetadata(conversationId, metadata) {
@@ -625,9 +649,13 @@ export async function POST(request, { params }) {
       );
     }
 
-    const isOutboundCampaignEvent = Boolean(
+    const outboundMetadataPresent = Boolean(
       payload?.metadata?.outbound_campaign_id || payload?.metadata?.outbound_ledger_id,
     );
+    const outboundContact = outboundCampaignNode
+      ? await lookupOutboundContactRecord(payload)
+      : null;
+    const isOutboundCampaignEvent = Boolean(outboundMetadataPresent || outboundContact?.campaignId);
 
     const initiatorNode =
       isOutboundCampaignEvent && outboundCampaignNode
@@ -656,11 +684,6 @@ export async function POST(request, { params }) {
       );
       // We'll still process it, but log the warning
     }
-
-    const outboundContact =
-      initiatorNode.data?.nodeType === "outbound_campaign"
-        ? await lookupOutboundContactRecord(payload)
-        : null;
 
     const outboundPayloadVariable =
       initiatorNode.data?.config?.payloadVariable || "contact_record";
@@ -700,6 +723,13 @@ export async function POST(request, { params }) {
     if (initiatorNode.data?.nodeType === "outbound_campaign") {
       variables[outboundPayloadVariable] = outboundContact?.contactRecord || {};
       variables.contact_record = outboundContact?.contactRecord || {};
+      recordOutboundCampaignInitiatorMonitorEvent({
+        callControlId: payload.call_control_id,
+        flowId,
+        initiatorNode,
+        event,
+        variables,
+      });
     }
 
     // Handle different event types

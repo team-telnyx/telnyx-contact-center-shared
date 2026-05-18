@@ -150,8 +150,8 @@ export const VOICE_FLOW_NODES = {
     telnyxEndpoint: null,
     inputs: 0,
     outputs: 1,
-    outputLabels: ["Campaign Attempt"],
-    outputEvents: ["call.initiated"],
+    outputLabels: ["Call Answered"],
+    outputEvents: ["call.answered"],
     config: {
       payloadVariable: {
         type: "string",
