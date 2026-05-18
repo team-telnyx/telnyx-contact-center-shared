@@ -66,7 +66,7 @@ export const menuConfig = {
           title: "Outbound Dialer",
           url: "/supervisor/outbound-dialer",
           icon: IconSpeakerphone,
-          role_access: ["supervisor", "admin", "owner"],
+          role_access: ["owner"],
         },
       ],
     },

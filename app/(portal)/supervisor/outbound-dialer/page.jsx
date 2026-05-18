@@ -481,7 +481,6 @@ export default function OutboundDialerPage() {
   return <SupervisorPageShell className={supervisorPurplePageShellClass}>
     <SupervisorPageHeader
       title="Outbound Dialer"
-      badges={<><Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Phase 2 CRUD</Badge><Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Persisted</Badge></>}
       actions={headerAction ? <><Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={loading}><IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</Button>{activeSaveAction ? <Button size="sm" className={neutralActionClass} onClick={activeSaveAction.onSave} disabled={activeSaveAction.disabled}>{activeSaveAction.busy ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconCheck className="mr-2 h-4 w-4" />}{activeSaveAction.label}</Button> : null}{headerAction.create ? <Button size="sm" className={neutralActionClass} onClick={headerAction.create} disabled={saving}><IconWand className="mr-2 h-4 w-4" />{headerAction.label}</Button> : null}</> : null}
     />
     <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>

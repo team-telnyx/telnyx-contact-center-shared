@@ -1390,21 +1390,17 @@ export default function MonitorPage() {
         <SupervisorPageHeader
           title="Supervisory Console"
           badges={(
-            <>
-              <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">Live monitor</Badge>
-              <Badge variant="outline" className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300">Agents · Queues · Statistics</Badge>
-              <Badge
-                variant="outline"
-                className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
-                  connected
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                    : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-                }`}
-              >
-                <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                {connected ? "Connected" : "Disconnected"}
-              </Badge>
-            </>
+            <Badge
+              variant="outline"
+              className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
+                connected
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+              {connected ? "Connected" : "Disconnected"}
+            </Badge>
           )}
           actions={(
             <Button

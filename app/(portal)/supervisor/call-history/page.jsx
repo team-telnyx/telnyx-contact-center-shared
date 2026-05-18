@@ -154,22 +154,6 @@ export default function SupervisorCallHistoryPage() {
     <SupervisorPageShell>
       <SupervisorPageHeader
         title="Call History"
-        badges={(
-          <>
-            <Badge
-              variant="outline"
-              className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-            >
-              Interaction records
-            </Badge>
-            <Badge
-              variant="outline"
-              className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
-            >
-              Recordings · Events
-            </Badge>
-          </>
-        )}
         actions={(
           <Button
             variant="outline"

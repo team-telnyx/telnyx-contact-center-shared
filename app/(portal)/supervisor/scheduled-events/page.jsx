@@ -478,22 +478,6 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,He
     <SupervisorPageShell>
       <SupervisorPageHeader
         title="Scheduled Events"
-        badges={(
-          <>
-            <Badge
-              variant="outline"
-              className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-            >
-              Assistant automation
-            </Badge>
-            <Badge
-              variant="outline"
-              className="border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300"
-            >
-              Retry-aware
-            </Badge>
-          </>
-        )}
         actions={(
           <>
             <Button
