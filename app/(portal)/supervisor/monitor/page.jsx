@@ -106,9 +106,9 @@ const CAMPAIGN_MODE_LABELS = {
 
 function CampaignStatusIcon({ status }) {
   const value = String(status || "").toLowerCase();
-  if (value === "running") return <IconPlayerPlay className="h-4 w-4 text-emerald-500" aria-label="Running" />;
-  if (value === "paused") return <IconPlayerPause className="h-4 w-4 text-amber-500" aria-label="Paused" />;
-  return <IconPlayerStop className="h-4 w-4 text-rose-500" aria-label="Stopped" />;
+  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label="Running" />;
+  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label="Paused" />;
+  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label="Stopped" />;
 }
 
 function campaignModeLabel(mode) {
@@ -118,8 +118,8 @@ function campaignModeLabel(mode) {
 
 function CampaignPriorityBadge({ priority }) {
   return (
-    <Badge variant="outline" className="shrink-0 gap-1 rounded-xl border-amber-500/40 px-3 py-1 text-sm font-semibold leading-none text-amber-600 dark:text-amber-300">
-      <IconStarFilled className="h-3.5 w-3.5" />
+    <Badge variant="outline" className="gap-1 text-xs uppercase border-amber-500/40 text-amber-600 dark:text-amber-300">
+      <IconStarFilled className="h-3 w-3" />
       {priority || 3}
     </Badge>
   );
@@ -2895,12 +2895,14 @@ export default function MonitorPage() {
                 ) : (
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {agentCampaigns.map((campaign) => (
-                      <div key={campaign.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="truncate text-lg font-semibold leading-none">{campaign.name}</div>
-                          <div className="flex flex-wrap items-center gap-2">
+                      <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{campaign.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                             <CampaignStatusIcon status={campaign.status} />
-                            <Badge variant="outline" className={`shrink-0 rounded-xl px-3 py-1 text-sm font-semibold leading-none tracking-wide ${campaignModeBadgeClass(campaign.mode)}`}>
+                            <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
                               {campaignModeLabel(campaign.mode)}
                             </Badge>
                             <CampaignPriorityBadge priority={campaign.priority} />

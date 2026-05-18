@@ -89,12 +89,17 @@ test("agent campaign selector matches compact queue activation formatting with i
   assert.match(source, /Checkbox/);
   assert.match(source, /campaignIds/);
   assert.match(source, /Campaign Activation/);
+  assert.match(source, /<div className="font-semibold">Campaign Activation<\/div>/);
+  assert.match(source, /className="text-sm font-medium cursor-pointer flex-1"/);
+  assert.match(source, /className=\{`text-xs uppercase/);
   assert.match(source, /IconPlayerPlay/);
   assert.match(source, /IconPlayerPause/);
   assert.match(source, /IconPlayerStop/);
   assert.match(source, /campaignModeBadgeClass/);
   assert.match(source, /PREVIEW/);
   assert.match(source, /PROGRESSIVE/);
+  assert.doesNotMatch(source, /text-xl/);
+  assert.doesNotMatch(source, /text-lg/);
   assert.doesNotMatch(source, /Activate one or more preview\/progressive campaigns/);
   assert.doesNotMatch(source, /disabled=\{campaign\.status !== "running"\}/);
 });
@@ -113,6 +118,10 @@ test("supervisor monitor exposes Active Campaigns with queue-like campaign row f
   assert.match(source, /campaignModeBadgeClass/);
   assert.match(source, /CampaignStatusIcon/);
   assert.match(source, /CampaignPriorityBadge/);
+  assert.match(source, /<span className="font-medium">\{campaign\.name\}<\/span>/);
+  assert.match(source, /<div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">/);
+  assert.match(source, /className=\{`text-xs uppercase/);
+  assert.doesNotMatch(source, /truncate text-lg font-semibold/);
   assert.doesNotMatch(source, /Priority controls proportional record distribution/);
 });
 
