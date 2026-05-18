@@ -34,6 +34,9 @@ import {
   IconPhoneIncoming,
   IconPhoneOutgoing,
   IconGauge,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconPlayerStop,
 } from "@tabler/icons-react";
 import { ChevronDownIcon } from "lucide-react";
 import {
@@ -83,7 +86,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { agentCampaignStatusBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
+import { campaignModeBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
 
 const MONITOR_RAIL_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
@@ -96,6 +99,31 @@ const MONITOR_UI_STATE_STORAGE_KEYS = {
 };
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
+const CAMPAIGN_MODE_LABELS = {
+  preview: "PREVIEW",
+  progressive: "PROGRESSIVE",
+};
+
+function CampaignStatusIcon({ status }) {
+  const value = String(status || "").toLowerCase();
+  if (value === "running") return <IconPlayerPlay className="h-4 w-4 text-emerald-500" aria-label="Running" />;
+  if (value === "paused") return <IconPlayerPause className="h-4 w-4 text-amber-500" aria-label="Paused" />;
+  return <IconPlayerStop className="h-4 w-4 text-rose-500" aria-label="Stopped" />;
+}
+
+function campaignModeLabel(mode) {
+  const value = String(mode || "").toLowerCase();
+  return CAMPAIGN_MODE_LABELS[value] || value.toUpperCase();
+}
+
+function CampaignPriorityBadge({ priority }) {
+  return (
+    <Badge variant="outline" className="shrink-0 gap-1 rounded-xl border-amber-500/40 px-3 py-1 text-sm font-semibold leading-none text-amber-600 dark:text-amber-300">
+      <IconStarFilled className="h-3.5 w-3.5" />
+      {priority || 3}
+    </Badge>
+  );
+}
 
 // Component to display skills with relaxation indicator
 function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
@@ -2867,18 +2895,16 @@ export default function MonitorPage() {
                 ) : (
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
                     {agentCampaigns.map((campaign) => (
-                      <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex-1 min-w-0">
+                      <div key={campaign.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="truncate text-lg font-semibold leading-none">{campaign.name}</div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium truncate">{campaign.name}</span>
-                            <Badge variant="outline" className={agentCampaignStatusBadgeClass(campaign.status)}>{campaign.status}</Badge>
-                            <Badge variant="secondary" className="capitalize">{campaign.mode}</Badge>
-                            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600 dark:text-amber-300">
-                              <IconStarFilled className="h-3 w-3" />
-                              {campaign.priority || 3}
+                            <CampaignStatusIcon status={campaign.status} />
+                            <Badge variant="outline" className={`shrink-0 rounded-xl px-3 py-1 text-sm font-semibold leading-none tracking-wide ${campaignModeBadgeClass(campaign.mode)}`}>
+                              {campaignModeLabel(campaign.mode)}
                             </Badge>
+                            <CampaignPriorityBadge priority={campaign.priority} />
                           </div>
-                          <p className="mt-2 text-xs text-muted-foreground">Priority controls proportional record distribution across this agent's active campaigns.</p>
                         </div>
                         <Switch checked={campaign.activated === true} onCheckedChange={() => toggleCampaignActivation(campaign.id, campaign.activated === true)} className="ml-4" />
                       </div>

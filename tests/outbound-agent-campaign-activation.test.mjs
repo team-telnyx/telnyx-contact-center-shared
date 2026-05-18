@@ -99,7 +99,7 @@ test("agent campaign selector matches compact queue activation formatting with i
   assert.doesNotMatch(source, /disabled=\{campaign\.status !== "running"\}/);
 });
 
-test("supervisor monitor exposes Active Campaigns next to Active Queues with campaign management modal", async () => {
+test("supervisor monitor exposes Active Campaigns with queue-like campaign row formatting", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/monitor/page.jsx", import.meta.url), "utf8");
 
   assert.match(source, /Active Campaigns/);
@@ -107,6 +107,13 @@ test("supervisor monitor exposes Active Campaigns next to Active Queues with cam
   assert.match(source, /loadAgentCampaigns/);
   assert.match(source, /toggleCampaignActivation/);
   assert.match(source, /\/api\/contact-center\/agent\/campaigns\?userId=/);
+  assert.match(source, /IconPlayerPlay/);
+  assert.match(source, /IconPlayerPause/);
+  assert.match(source, /IconPlayerStop/);
+  assert.match(source, /campaignModeBadgeClass/);
+  assert.match(source, /CampaignStatusIcon/);
+  assert.match(source, /CampaignPriorityBadge/);
+  assert.doesNotMatch(source, /Priority controls proportional record distribution/);
 });
 
 test("campaign status changes are broadcast to agents so activation lists refresh", async () => {
