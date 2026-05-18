@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   IconActivity, IconAdjustmentsHorizontal, IconBrandWhatsapp, IconCalendar, IconChartBar, IconCheck, IconChevronDown, IconClockHour4, IconCopy, IconDatabase, IconDots, IconEye, IconFilter, IconForms, IconHeadphones, IconInfoCircle, IconListDetails, IconLoader2, IconMail, IconPhoneCall, IconPhoneOff, IconPlayerPause, IconPlayerPlay, IconPlayerStop, IconPlus, IconRefresh, IconReportAnalytics, IconRotateClockwise, IconSettings, IconShieldCheck, IconSparkles, IconTrash, IconUpload, IconUsers, IconWand, IconWorld, IconX,
 } from "@tabler/icons-react";
@@ -239,9 +240,12 @@ const campaignToastDescription = (campaign, action) => `Campaign ${outboundToast
 const outboundToastDescription = (record, label, action) => `${label} ${outboundToastName(record, label.toLowerCase())} has been successfully ${action}.`;
 
 export default function OutboundDialerPage() {
+  const router = useRouter();
   const [active, setActive] = useState("dashboard");
   const [campaigns, setCampaigns] = useState([]); const [contactLists, setContactLists] = useState([]); const [dncLists, setDncLists] = useState([]); const [filters, setFilters] = useState([]); const [timeSets, setTimeSets] = useState([]); const [attemptControls, setAttemptControls] = useState([]); const [outboundSettings, setOutboundSettings] = useState(defaultOutboundSettings()); const [inventoryNumbers, setInventoryNumbers] = useState([]); const [executionDebugByCampaign, setExecutionDebugByCampaign] = useState({}); const [forms, setForms] = useState([]); const [handlerReferences, setHandlerReferences] = useState({ queue: [], call_flow: [], ai_assistant: [] }); const [schema, setSchema] = useState(emptySchema);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null); const [selectedListId, setSelectedListId] = useState(null); const [selectedDncId, setSelectedDncId] = useState(null); const [selectedFilterId, setSelectedFilterId] = useState(null); const [selectedTimeSetId, setSelectedTimeSetId] = useState(null); const [selectedAttemptControlId, setSelectedAttemptControlId] = useState(null); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [headerSaveAction, setHeaderSaveAction] = useState(null);
   const [campaignReasonMetrics, setCampaignReasonMetrics] = useState({});
   const [reasonMetricsLoading, setReasonMetricsLoading] = useState(false);
@@ -266,10 +270,38 @@ export default function OutboundDialerPage() {
   const selectedFilter = useMemo(() => filters.find((f) => f.id === selectedFilterId) || filters[0] || null, [filters, selectedFilterId]);
   const selectedTimeSet = useMemo(() => timeSets.find((t) => t.id === selectedTimeSetId) || timeSets[0] || null, [timeSets, selectedTimeSetId]);
   const selectedAttemptControl = useMemo(() => attemptControls.find((a) => a.id === selectedAttemptControlId) || attemptControls[0] || null, [attemptControls, selectedAttemptControlId]);
-  const refresh = useCallback(async (toast = false) => { try { setLoading(true); setError(null); const data = await api(API); const nextCampaigns = data.campaigns || []; const nextContactLists = data.contactLists || []; const nextDncLists = data.dncLists || []; const nextFilters = data.filters || []; const nextTimeSets = data.timeSets || []; const nextAttemptControls = data.attemptControls || []; setCampaigns(nextCampaigns); setContactLists(nextContactLists); setDncLists(nextDncLists); setFilters(nextFilters); setTimeSets(nextTimeSets); setAttemptControls(nextAttemptControls); setOutboundSettings(data.settings || defaultOutboundSettings()); setInventoryNumbers(data.inventoryNumbers || []); setExecutionDebugByCampaign(data.executionDebugByCampaign || {}); setForms(data.forms || []); setHandlerReferences(data.handlerReferences || { queue: [], call_flow: [], ai_assistant: [] }); setSchema(data.schema || emptySchema); setSelectedCampaignId(keepSelectedRecord(nextCampaigns)); setSelectedListId(keepSelectedRecord(nextContactLists)); setSelectedDncId(keepSelectedRecord(nextDncLists)); setSelectedFilterId(keepSelectedRecord(nextFilters)); setSelectedTimeSetId(keepSelectedRecord(nextTimeSets)); setSelectedAttemptControlId(keepSelectedRecord(nextAttemptControls)); if (toast) notify({ title: "Outbound dialer refreshed", description: "Outbound dialer data has been successfully refreshed.", variant: "success" }); } catch (err) { setError(err.message); notify({ title: "Failed to load outbound dialer", description: err.message, variant: "error" }); } finally { setLoading(false); } }, []);
-  useEffect(() => { refresh(); }, [refresh]);
+  const refresh = useCallback(async (toast = false) => { if (!isAuthorized) return; try { setLoading(true); setError(null); const data = await api(API); const nextCampaigns = data.campaigns || []; const nextContactLists = data.contactLists || []; const nextDncLists = data.dncLists || []; const nextFilters = data.filters || []; const nextTimeSets = data.timeSets || []; const nextAttemptControls = data.attemptControls || []; setCampaigns(nextCampaigns); setContactLists(nextContactLists); setDncLists(nextDncLists); setFilters(nextFilters); setTimeSets(nextTimeSets); setAttemptControls(nextAttemptControls); setOutboundSettings(data.settings || defaultOutboundSettings()); setInventoryNumbers(data.inventoryNumbers || []); setExecutionDebugByCampaign(data.executionDebugByCampaign || {}); setForms(data.forms || []); setHandlerReferences(data.handlerReferences || { queue: [], call_flow: [], ai_assistant: [] }); setSchema(data.schema || emptySchema); setSelectedCampaignId(keepSelectedRecord(nextCampaigns)); setSelectedListId(keepSelectedRecord(nextContactLists)); setSelectedDncId(keepSelectedRecord(nextDncLists)); setSelectedFilterId(keepSelectedRecord(nextFilters)); setSelectedTimeSetId(keepSelectedRecord(nextTimeSets)); setSelectedAttemptControlId(keepSelectedRecord(nextAttemptControls)); if (toast) notify({ title: "Outbound dialer refreshed", description: "Outbound dialer data has been successfully refreshed.", variant: "success" }); } catch (err) { setError(err.message); notify({ title: "Failed to load outbound dialer", description: err.message, variant: "error" }); } finally { setLoading(false); } }, [isAuthorized]);
   useEffect(() => {
-    if (active !== "dashboard") return;
+    let cancelled = false;
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!data?.isAuth || !data?.user) {
+          router.push("/signin");
+          return;
+        }
+        const userRoles = Array.isArray(data.user.roles) && data.user.roles.length > 0
+          ? data.user.roles.map((role) => String(role).toLowerCase())
+          : ["agent"];
+        if (!userRoles.includes("owner")) {
+          notify({ title: "Access Denied", description: "Only owners can access the outbound dialer.", variant: "error" });
+          router.push("/");
+          return;
+        }
+        if (!cancelled) setIsAuthorized(true);
+      } catch {
+        router.push("/signin");
+      } finally {
+        if (!cancelled) setCheckingAuth(false);
+      }
+    }
+    checkAuth();
+    return () => { cancelled = true; };
+  }, [router]);
+  useEffect(() => { if (isAuthorized) refresh(); }, [isAuthorized, refresh]);
+  useEffect(() => {
+    if (!isAuthorized || active !== "dashboard") return;
 
     let eventSource = null;
     let pollTimer = null;
@@ -334,10 +366,10 @@ export default function OutboundDialerPage() {
       if (pollTimer) clearInterval(pollTimer);
       try { eventSource?.close(); } catch {}
     };
-  }, [active]);
+  }, [active, isAuthorized]);
 
   useEffect(() => {
-    if (active !== "live-calls") return;
+    if (!isAuthorized || active !== "live-calls") return;
     let cancelled = false;
     let eventSource = null;
     let fallbackTimer = null;
@@ -391,7 +423,7 @@ export default function OutboundDialerPage() {
       if (eventSource) eventSource.close();
       if (fallbackTimer) clearInterval(fallbackTimer);
     };
-  }, [active]);
+  }, [active, isAuthorized]);
 
   useEffect(() => {
     setSelectedReasonMetricsDay(null);
@@ -399,7 +431,7 @@ export default function OutboundDialerPage() {
   }, [selectedDashboardCampaign?.id]);
 
   useEffect(() => {
-    if (active !== "dashboard") return;
+    if (!isAuthorized || active !== "dashboard") return;
     if (!selectedDashboardCampaign?.id) return;
     const cacheKey = `${selectedDashboardCampaign.id}:${effectiveSelectedReasonMetricsDay || "all"}`;
     if (Object.prototype.hasOwnProperty.call(campaignReasonMetrics, cacheKey)) {
@@ -424,7 +456,7 @@ export default function OutboundDialerPage() {
         setReasonMetricsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [active, selectedDashboardCampaign?.id, campaignReasonMetrics, effectiveSelectedReasonMetricsDay]);
+  }, [active, isAuthorized, selectedDashboardCampaign?.id, campaignReasonMetrics, effectiveSelectedReasonMetricsDay]);
 
   const selectReasonMetricsDay = useCallback((day) => {
     setSelectedReasonMetricsCampaignId(selectedDashboardCampaign?.id || null);
@@ -477,6 +509,8 @@ export default function OutboundDialerPage() {
   const headerAction = { campaigns: { label: "New campaign", create: () => { setActive("campaigns"); saveCampaign(defaultCampaign()); } }, "contact-lists": { label: "New contact list", create: () => { setActive("contact-lists"); saveList(defaultList()); } }, dnc: { label: "New DNC list", create: () => { setActive("dnc"); saveDncList(defaultDncList()); } }, filters: { label: "New filter", create: () => { setActive("filters"); saveFilter(defaultFilter()); } }, "time-sets": { label: "New time set", create: () => { setActive("time-sets"); saveTimeSet(defaultTimeSetFromSettings(outboundSettings)); } }, "attempt-controls": { label: "New attempt control", create: () => { setActive("attempt-controls"); saveAttemptControl(defaultAttemptControl()); } }, "live-calls": { label: null, create: null }, settings: { label: null, create: null } }[active];
   const registerHeaderSaveAction = useCallback((action) => setHeaderSaveAction(action), []);
   const activeSaveAction = headerSaveAction?.section === active ? headerSaveAction : null;
+
+  if (checkingAuth || !isAuthorized) return <SupervisorPageShell className={supervisorPurplePageShellClass}><LoadingState /></SupervisorPageShell>;
 
   return <SupervisorPageShell className={supervisorPurplePageShellClass}>
     <SupervisorPageHeader

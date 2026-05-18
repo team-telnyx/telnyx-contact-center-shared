@@ -26,3 +26,12 @@ test("Outbound Dialer menu item is owner-only", () => {
     "Outbound Dialer sidebar item should be visible only to owners",
   );
 });
+
+test("Outbound Dialer page and APIs are owner-only", () => {
+  const page = source("app/(portal)/supervisor/outbound-dialer/page.jsx");
+  const api = source("lib/outbound-dialer/api.js");
+
+  assert.match(page, /userRoles\.includes\("owner"\)/, "direct page access should require owner role");
+  assert.doesNotMatch(api, /isSupervisorOrAdmin/, "outbound API guard should not allow supervisors/admins by default");
+  assert.match(api, /isOwner\(user\)/, "outbound API guard should require owner role");
+});
