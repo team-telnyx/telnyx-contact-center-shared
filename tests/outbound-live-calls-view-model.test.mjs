@@ -104,7 +104,30 @@ test("failed live calls expose a human-readable failure reason from ledger colum
   assert.equal(payload.calls[0].status, "failed");
   assert.equal(payload.calls[0].failure_reason, "user_busy");
   assert.equal(payload.calls[0].failure_reason_label, "User busy");
+  assert.equal(payload.calls[0].status_reason_label, "Failed - User Busy");
   assert.equal(payload.calls[0].hangup_cause, "user_busy");
   assert.equal(payload.calls[0].sip_hangup_cause, "486");
   assert.equal(payload.calls[0].sessionDetails.metadata.failure_reason, "user_busy");
+});
+
+test("non-failed hangup live calls expose the hangup reason without a failure label", () => {
+  const payload = buildOutboundLiveCallsPayload([
+    {
+      id: "attempt-hangup",
+      campaign_id: "campaign-1",
+      campaign_name: "Renewals",
+      status: "completed",
+      call_control_id: "v3:hangup-call-control",
+      call_session_id: "session-hangup",
+      metadata: { hangup_cause: "normal_clearing", sip_hangup_cause: "unspecified", reason_code: "normal_clearing" },
+      created_at: "2026-05-17T17:59:00.000Z",
+      updated_at: "2026-05-17T17:59:45.000Z",
+    },
+  ], { now: new Date("2026-05-17T18:00:00.000Z") });
+
+  assert.equal(payload.calls.length, 1);
+  assert.equal(payload.calls[0].status, "hangup");
+  assert.equal(payload.calls[0].failure_reason, null);
+  assert.equal(payload.calls[0].failure_reason_label, null);
+  assert.equal(payload.calls[0].status_reason_label, "Normal Clearing");
 });

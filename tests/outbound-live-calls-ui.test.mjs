@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("live call card renders failure reason, full session id, and copy buttons for identifiers", async () => {
+test("live call card renders combined status/reason badges like History and suppresses failure labels for hangups", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const cardStart = source.indexOf("function LiveCallCard");
   const cardEnd = source.indexOf("function LiveCallsSettings", cardStart);
   assert.ok(cardStart > -1 && cardEnd > cardStart, "LiveCallCard should exist");
   const cardSource = source.slice(cardStart, cardEnd);
 
-  assert.match(cardSource, /call\.failure_reason_label/, "failed cards should render a failure reason label");
+  assert.match(cardSource, /liveCallBadgeLabel\(call\)/, "live cards should derive one status/reason badge label");
+  assert.match(cardSource, /liveCallBadgeClass\(call\)/, "live cards should derive badge styling from status and reason");
+  assert.doesNotMatch(cardSource, /Failure reason:/, "live cards should not render a separate Failure reason line");
+  assert.doesNotMatch(cardSource, /call\.status === "failed" && call\.failure_reason_label/, "failed cards should not render a second reason badge");
   assert.doesNotMatch(cardSource, /String\(call\.call_session_id\)\.slice\(0, 8\)/, "session id should not be truncated in the header");
   assert.match(cardSource, /CopyValueButton[\s\S]*value=\{call\.call_session_id\}/, "session id should be copyable");
   assert.match(cardSource, /CopyValueButton[\s\S]*value=\{call\.call_control_id\}/, "call control id should be copyable");
