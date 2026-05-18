@@ -265,7 +265,8 @@ export default function OutboundDialerPage() {
   const activeMeta = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active]);
   const selectedCampaign = useMemo(() => campaigns.find((c) => c.id === selectedCampaignId) || campaigns[0] || null, [campaigns, selectedCampaignId]);
   const dashboardCampaigns = useMemo(() => campaigns.filter(isDashboardCampaign), [campaigns]);
-  const selectedDashboardCampaign = useMemo(() => dashboardCampaigns.find((c) => c.id === selectedCampaignId) || dashboardCampaigns[0] || null, [dashboardCampaigns, selectedCampaignId]);
+  const selectableDashboardCampaigns = useMemo(() => showOnlyRunningDashboardCampaigns ? dashboardCampaigns.filter((campaign) => executionStateFor(campaign) === "running") : dashboardCampaigns, [dashboardCampaigns, showOnlyRunningDashboardCampaigns]);
+  const selectedDashboardCampaign = useMemo(() => selectableDashboardCampaigns.find((c) => c.id === selectedCampaignId) || selectableDashboardCampaigns[0] || null, [selectableDashboardCampaigns, selectedCampaignId]);
   const effectiveSelectedReasonMetricsDay = selectedReasonMetricsCampaignId === selectedDashboardCampaign?.id ? selectedReasonMetricsDay : null;
   const selectedList = useMemo(() => contactLists.find((l) => l.id === selectedListId) || contactLists[0] || null, [contactLists, selectedListId]);
   const selectedDncList = useMemo(() => dncLists.find((l) => l.id === selectedDncId) || dncLists[0] || null, [dncLists, selectedDncId]);
@@ -426,6 +427,13 @@ export default function OutboundDialerPage() {
       if (fallbackTimer) clearInterval(fallbackTimer);
     };
   }, [active, isAuthorized]);
+
+  useEffect(() => {
+    if (active !== "dashboard") return;
+    if (!selectedDashboardCampaign?.id) return;
+    if (selectedCampaignId === selectedDashboardCampaign.id) return;
+    setSelectedCampaignId(selectedDashboardCampaign.id);
+  }, [active, selectedCampaignId, selectedDashboardCampaign?.id]);
 
   useEffect(() => {
     setSelectedReasonMetricsDay(null);
