@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { executeAgentlessAttempt } from "@/lib/outbound-dialer/execution";
-import { loadAgentCampaignAttempt } from "@/lib/outbound-dialer/agent-campaigns";
+import { loadAgentCampaignAttempt, markAgentCampaignAttemptDialing } from "@/lib/outbound-dialer/agent-campaigns";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
@@ -20,7 +19,7 @@ export async function POST(request) {
     if (!attemptId) return NextResponse.json({ ok: false, error: "Attempt ID is required" }, { status: 400 });
     const attempt = await loadAgentCampaignAttempt(pool, agentUsername, attemptId);
     if (!attempt) return NextResponse.json({ ok: false, error: "Assigned campaign record not found" }, { status: 404 });
-    const execution = await executeAgentlessAttempt(pool, attempt.campaign, attempt.ledger);
+    const execution = await markAgentCampaignAttemptDialing(pool, attempt, agentUsername);
     return NextResponse.json({ ok: execution?.ok === true, execution });
   } catch (err) {
     console.error("[Agent Campaigns] dial failed:", err);

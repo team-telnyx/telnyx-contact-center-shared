@@ -170,8 +170,12 @@ export default function SoftphoneMini() {
   useEffect(() => {
     const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
     if (hasActiveCall) {
+      const isCampaignOutboundCall = Array.isArray(activeCall?.options?.customHeaders)
+        && activeCall.options.customHeaders.some((header) => header?.name === "X-Outbound-Attempt-Id");
       autoStatusRef.current.forcedBusy = true;
-      updateUserStatus("Busy");
+      if (!isCampaignOutboundCall) {
+        updateUserStatus("Busy");
+      }
       return;
     }
     let wrapupOpen = false;
@@ -1137,12 +1141,12 @@ export default function SoftphoneMini() {
     }
   }
 
-  async function startCall() {
-    const to = (toNumber || "").trim();
-    let from = fromRef.current || "";
+  async function startCall(overrides = {}) {
+    const to = (overrides.toNumber || toNumber || "").trim();
+    let from = overrides.fromNumber || fromRef.current || "";
     if (!client || !to || activeCall) return;
 
-    let callerName = outboundCallerName;
+    let callerName = overrides.callerName || outboundCallerName;
     if (!callerName) {
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
@@ -1187,6 +1191,7 @@ export default function SoftphoneMini() {
         callerName: callerName || undefined,
         audio: true,
         video: false,
+        ...(overrides.customHeaders ? { customHeaders: overrides.customHeaders } : {}),
         ...(experimentalOptions.prefetchIceCandidates && {
           prefetchIceCandidates: true,
         }),
@@ -1196,8 +1201,25 @@ export default function SoftphoneMini() {
       setActiveCall(call, {
         direction: "outbound",
         fromNumber: from,
+        fromName: callerName || undefined,
         toNumber: to,
+        ...(overrides.metadata || {}),
       });
+
+      const outboundCallControlId = call.callControlId || call.call_control_id || call.id;
+      if (outboundCallControlId) {
+        useCallsStore.getState().addCall({
+          callControlId: outboundCallControlId,
+          callSessionId: call.callSessionId || call.call_session_id,
+          direction: "outbound",
+          status: call.state || "trying",
+          fromName: callerName || undefined,
+          fromNumber: from,
+          toNumber: to,
+          assignedAt: Date.now(),
+          metadata: overrides.metadata || {},
+        });
+      }
 
       // Immediately update status to ensure UI reflects dialing state
       const initialState = call.state || "trying";
@@ -1222,6 +1244,19 @@ export default function SoftphoneMini() {
       clearActiveCall();
     }
   }
+
+  useEffect(() => {
+    const handleSoftphoneStartCall = (event) => {
+      const detail = event.detail || {};
+      if (!detail.toNumber) return;
+      startCall(detail);
+      try {
+        toggle?.();
+      } catch (_) {}
+    };
+    window.addEventListener("softphone:start-call", handleSoftphoneStartCall);
+    return () => window.removeEventListener("softphone:start-call", handleSoftphoneStartCall);
+  }, [client, activeCall, toNumber, outboundCallerName]);
 
   async function toggleMute() {
     try {

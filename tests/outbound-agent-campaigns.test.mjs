@@ -130,19 +130,37 @@ test("agent campaign claiming skips campaigns outside their configured time set 
   );
 });
 
-test("agent campaign preview renders record details in collapsed dark accordion without starting workflow", async () => {
-  const source = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
-  const componentStart = source.indexOf("function OutboundCampaignRecord");
-  const componentEnd = source.indexOf("function CampaignDispositionSheet", componentStart);
-  const recordSource = source.slice(componentStart, componentEnd);
+test("agent campaign preview uses WebRTC softphone dialing, preserves assist content and waits for hangup before disposition", async () => {
+  const agentDesktopSource = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
+  const softphoneSource = await readFile(new URL("../components/softphone-mini.jsx", import.meta.url), "utf8");
+  const dialRouteSource = await readFile(new URL("../app/api/contact-center/agent/campaigns/dial/route.js", import.meta.url), "utf8");
+  const componentStart = agentDesktopSource.indexOf("function OutboundCampaignRecord");
+  const componentEnd = agentDesktopSource.indexOf("function CampaignDispositionSheet", componentStart);
+  const recordSource = agentDesktopSource.slice(componentStart, componentEnd);
 
   assert.match(recordSource, /<details/);
   assert.match(recordSource, /<summary/);
-  assert.match(recordSource, /Outbound Campaign Record/);
-  assert.match(recordSource, /bg-neutral-900\/80/);
+  assert.match(recordSource, /bg-card/);
+  assert.match(recordSource, /dark:bg-black/);
   assert.match(recordSource, /Start outbound call/);
+  assert.doesNotMatch(recordSource, /bg-neutral-900\/80|text-neutral-100/);
   assert.doesNotMatch(recordSource, /bg-orange-50|orange-950|text-orange|bg-orange/);
-  assert.doesNotMatch(source, /<InteractionDetail interaction=\{campaignPreviewInteraction\}/);
+
+  assert.match(agentDesktopSource, /softphone:start-call/);
+  assert.match(softphoneSource, /softphone:start-call/);
+  assert.match(softphoneSource, /client\.newCall/);
+  assert.match(softphoneSource, /customHeaders/);
+  assert.doesNotMatch(dialRouteSource, /executeAgentlessAttempt/);
+
+  assert.match(agentDesktopSource, /pendingCampaignDispositionRef/);
+  assert.match(agentDesktopSource, /END_STATUSES/);
+  assert.match(agentDesktopSource, /setCampaignDispositionAssignment\(pendingCampaignDispositionRef\.current\)/);
+  assert.doesNotMatch(agentDesktopSource, /setCampaignDispositionAssignment\(assignment\);\s*\n\s*setCampaignAssignment\(null\)/);
+
+  assert.match(agentDesktopSource, /updateAgentStatus\("On Outbound Call"\)/);
+  assert.match(agentDesktopSource, /campaignPreviewInteraction/);
+  assert.match(agentDesktopSource, /agent_assist_config: campaignAssignment\.agent_assist_config/);
+  assert.match(agentDesktopSource, /<InteractionDetail interaction=\{campaignPreviewInteraction\}/);
 });
 
 test("campaign configuration form exposes one grouped Agent Script selector for preview/progressive agent desktop", async () => {

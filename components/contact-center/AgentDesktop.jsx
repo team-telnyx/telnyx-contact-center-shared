@@ -5,6 +5,7 @@ import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Info, PhoneCall } from "lucide-react";
 import {
@@ -39,26 +40,38 @@ const DATA_SOURCE_VIEW_LABELS = {
   "kb-articles": "KB Articles",
 };
 
+const END_STATUSES = new Set(["ended", "hangup", "completed", "terminated", "destroy", "failed", "idle"]);
+
+async function updateAgentStatus(nextStatus) {
+  try {
+    await fetch("/api/contact-center/agent/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+  } catch (_) {}
+}
+
 function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial }) {
   if (!assignment) return null;
   const record = assignment.contact_record || {};
   const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 12);
   const isProgressive = assignment.campaign_mode === "progressive";
   return (
-    <details className="group rounded-xl border border-neutral-800 bg-neutral-900/80 text-neutral-100 shadow-sm" open={false}>
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-neutral-800/80 [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-zinc-800 dark:bg-black dark:text-zinc-100" open={false}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-muted/60 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Outbound Campaign Record</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-400">Outbound Campaign Record</p>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <h3 className="truncate text-base font-semibold text-neutral-50">{assignment.campaign_name || "Campaign"}</h3>
-            <span className="font-mono text-sm text-neutral-300">{assignment.to_number || "No phone number"}</span>
-            <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[11px] font-semibold uppercase text-neutral-400">{assignment.campaign_mode}</span>
-            {isProgressive ? <span className="font-mono text-sm font-semibold text-neutral-200">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
+            <h3 className="truncate text-base font-semibold text-foreground dark:text-zinc-50">{assignment.campaign_name || "Campaign"}</h3>
+            <span className="font-mono text-sm text-muted-foreground dark:text-zinc-300">{assignment.to_number || "No phone number"}</span>
+            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground dark:border-zinc-700 dark:text-zinc-400">{assignment.campaign_mode}</span>
+            {isProgressive ? <span className="font-mono text-sm font-semibold text-foreground dark:text-zinc-200">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
           </div>
         </div>
         <button
           type="button"
-          className="shrink-0 rounded-md bg-neutral-100 px-3 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -69,12 +82,12 @@ function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial 
           {dialing ? "Starting outbound call..." : "Start outbound call"}
         </button>
       </summary>
-      <div className="border-t border-neutral-800 px-4 pb-4 pt-3">
+      <div className="border-t border-border px-4 pb-4 pt-3 dark:border-zinc-800">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {previewFields.map(([key, value]) => (
-            <div key={key} className="rounded-md border border-neutral-800 bg-neutral-950/70 px-3 py-2 text-sm">
-              <div className="text-[11px] uppercase text-neutral-500">{key.replace(/_/g, " ")}</div>
-              <div className="font-medium text-neutral-100">{String(value)}</div>
+            <div key={key} className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+              <div className="text-[11px] uppercase text-muted-foreground dark:text-zinc-500">{key.replace(/_/g, " ")}</div>
+              <div className="font-medium text-foreground dark:text-zinc-100">{String(value)}</div>
             </div>
           ))}
         </div>
@@ -123,17 +136,21 @@ function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
       setSubmitting(false);
     }
   };
-  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 p-4 sm:items-center">
-    <div className="w-full max-w-lg overflow-hidden rounded-2xl border bg-background shadow-2xl">
-      <div className="border-b bg-muted/40 px-5 py-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaign Disposition</p><h3 className="text-lg font-semibold">Wrap up campaign record</h3><p className="mt-1 text-sm text-muted-foreground">Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.</p></div>
-      <div className="space-y-4 p-5">
+  return <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
+    <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
+      <SheetHeader className="px-6 py-4 border-b">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaign Disposition</p>
+        <SheetTitle className="text-xl font-bold text-telnyx-green">Wrap up campaign record</SheetTitle>
+        <p className="text-sm text-muted-foreground">Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.</p>
+      </SheetHeader>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 p-5">
         <div className="space-y-2"><label className="text-sm font-medium">Disposition code</label><Select value={selectedCode || undefined} onValueChange={setSelectedCode}><SelectTrigger><SelectValue placeholder="Select code" /></SelectTrigger><SelectContent>{codes.map((code) => <SelectItem key={code.wrapup_code_id} value={code.wrapup_code_id}>{code.wrapup_code_name || code.wrapup_code_id}</SelectItem>)}</SelectContent></Select>{selected ? <p className="text-xs text-muted-foreground">{selected.classification?.replace(/_/g, " ")} {selected.business_category && selected.business_category !== "none" ? `· ${selected.business_category}` : ""}</p> : null}</div>
         {requiresCallback ? <div className="space-y-2"><label className="text-sm font-medium">Callback date/time</label><input type="datetime-local" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={callbackAt} onChange={(event) => setCallbackAt(event.target.value)} /></div> : null}
         <div className="space-y-2"><label className="text-sm font-medium">Notes</label><textarea className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for supervisor/reporting" /></div>
       </div>
-      <div className="flex items-center justify-end gap-2 border-t bg-muted/30 px-5 py-4"><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="rounded-md bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60" onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Submit disposition"}</button></div>
-    </div>
-  </div>;
+      <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2"><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Submit disposition"}</button></SheetFooter>
+    </SheetContent>
+  </Sheet>;
 }
 
 export function AgentDesktop() {
@@ -149,6 +166,8 @@ export function AgentDesktop() {
   const [campaignCountdownSeconds, setCampaignCountdownSeconds] = useState(null);
   const [campaignDialing, setCampaignDialing] = useState(false);
   const campaignDialedAttemptRef = useRef(null);
+  const pendingCampaignDispositionRef = useRef(null);
+  const campaignCallStartedRef = useRef(false);
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
@@ -802,14 +821,7 @@ export function AgentDesktop() {
   }, [callInteractionId, callTranscriptions]);
 
   useEffect(() => {
-    const endedStatuses = [
-      "hangup",
-      "ended",
-      "destroy",
-      "terminated",
-      "failed",
-    ];
-    const isEnded = endedStatuses.includes(callStatus);
+    const isEnded = END_STATUSES.has(callStatus);
     const wasActive = lastStatusRef.current && lastStatusRef.current !== "idle";
     const isCleared = callStatus === "idle" && wasActive;
     const wasDisconnected =
@@ -829,9 +841,16 @@ export function AgentDesktop() {
       }, 300);
     }
 
-    // Trigger wrapup check if call ended, cleared, or disconnected
+    // Trigger wrapup/disposition check if call ended, cleared, or disconnected
     if (!isEnded && !isCleared && !wasDisconnected) {
       return;
+    }
+
+    // Campaign disposition follows the same timing as wrap-up: only after WebRTC hangup/clear.
+    if (pendingCampaignDispositionRef.current && campaignCallStartedRef.current) {
+      setCampaignDispositionAssignment(pendingCampaignDispositionRef.current);
+      pendingCampaignDispositionRef.current = null;
+      campaignCallStartedRef.current = false;
     }
 
     const interactionId =
@@ -1332,12 +1351,36 @@ export function AgentDesktop() {
         body: JSON.stringify({ attemptId: assignment.id }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error || data.execution?.reason || "Failed to start outbound call");
+      if (!res.ok || !data.ok) throw new Error(data.error || data.execution?.reason || "Failed to prepare outbound call");
       campaignDialedAttemptRef.current = assignment.id;
-      setCampaignDispositionAssignment(assignment);
+      pendingCampaignDispositionRef.current = assignment;
+      campaignCallStartedRef.current = true;
+      await updateAgentStatus("On Outbound Call");
+      setAgentStatus("On Outbound Call");
+      window.dispatchEvent(new CustomEvent("softphone:start-call", {
+        detail: {
+          toNumber: data.execution?.to_number || assignment.to_number,
+          fromNumber: assignment.from_number || assignment.caller_id || null,
+          callerName: assignment.campaign_name || "Campaign",
+          customHeaders: [
+            { name: "X-Outbound-Attempt-Id", value: assignment.id },
+            { name: "X-Outbound-Campaign-Id", value: assignment.campaign_id },
+            { name: "X-Outbound-Campaign-Mode", value: assignment.campaign_mode },
+          ].filter((header) => header.value),
+          metadata: {
+            outbound_attempt_id: assignment.id,
+            outbound_campaign_id: assignment.campaign_id,
+            outbound_campaign_name: assignment.campaign_name,
+            agent_assist_config: assignment.agent_assist_config,
+          },
+        },
+      }));
       setCampaignAssignment(null);
       setCampaignCountdownSeconds(null);
+      setActiveView("desktop");
     } catch (err) {
+      pendingCampaignDispositionRef.current = null;
+      campaignCallStartedRef.current = false;
       alert(err.message || "Failed to start outbound call");
     } finally {
       setCampaignDialing(false);
@@ -1367,6 +1410,25 @@ export function AgentDesktop() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [campaignAssignment, dialCampaignAssignment]);
+
+  const campaignPreviewInteraction = campaignAssignment ? {
+    id: `campaign-preview-${campaignAssignment.id}`,
+    direction: "outbound",
+    state: "preview",
+    interaction_type: "voice",
+    is_contact_center: true,
+    from_number: campaignAssignment.from_number || campaignAssignment.caller_id || "",
+    to_number: campaignAssignment.to_number || "",
+    from_name: campaignAssignment.campaign_name || "Campaign",
+    metadata: {
+      outbound_attempt_id: campaignAssignment.id,
+      outbound_campaign_id: campaignAssignment.campaign_id,
+      outbound_campaign_name: campaignAssignment.campaign_name,
+      preview_only: true,
+      agent_assist_config: campaignAssignment.agent_assist_config,
+      contact_record: campaignAssignment.contact_record || {},
+    },
+  } : null;
 
   const detailTitle =
     activeView === "desktop"
@@ -1448,6 +1510,7 @@ export function AgentDesktop() {
                 dialing={campaignDialing}
                 onDial={() => dialCampaignAssignment(campaignAssignment)}
               />
+              {campaignPreviewInteraction ? <div className="min-h-[420px] overflow-hidden rounded-xl border bg-background"><InteractionDetail interaction={campaignPreviewInteraction} /></div> : null}
             </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">

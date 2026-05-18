@@ -347,6 +347,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // Initialize workflow session
   useEffect(() => {
     if (!interactionId) return;
+    if (interaction?.metadata?.preview_only === true) return;
 
     fetchSession(interactionId).then((existingSession) => {
       if (!existingSession && workflowId) {
@@ -357,7 +358,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     }).catch((err) => {
       console.error("[AgentAssistWorkflow] Failed to fetch session:", err);
     });
-  }, [interactionId, workflowId, fetchSession, startWorkflow]);
+  }, [interactionId, workflowId, interaction?.metadata?.preview_only, fetchSession, startWorkflow]);
 
   // Analyze new transcriptions as they come in
   useEffect(() => {

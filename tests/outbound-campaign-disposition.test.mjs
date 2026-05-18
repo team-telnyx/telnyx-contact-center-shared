@@ -104,11 +104,11 @@ test("outbound dialer exposes Disposition codes menu below Time Sets and CRUD wi
   assert.doesNotMatch(formSource, /<Field\b/, "Disposition Codes form should not reference an undefined Field component");
 });
 
-test("schema seeds On Campaign Call system status and disposition mapping tables", async () => {
+test("schema seeds On Outbound Call system status and disposition mapping tables", async () => {
   const schema = await readFile(new URL("../lib/postgres-schema.mjs", import.meta.url), "utf8");
 
-  assert.match(schema, /'on-campaign-call', 'On Campaign Call'/);
-  assert.match(schema, /'On Campaign Call'[\s\S]*false/);
+  assert.match(schema, /'on-outbound-call', 'On Outbound Call'/);
+  assert.match(schema, /'On Outbound Call'[\s\S]*false/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS outbound_disposition_code_mappings/);
   assert.match(schema, /right_party_contact/);
   assert.match(schema, /business_category/);
@@ -123,5 +123,5 @@ test("agent desktop opens a campaign disposition sheet after campaign dialing an
 
   const submitRoute = await readFile(new URL("../app/api/contact-center/agent/campaigns/disposition/route.js", import.meta.url), "utf8");
   assert.match(submitRoute, /applyCampaignDispositionToLedger/);
-  assert.match(submitRoute, /On Campaign Call/);
+  assert.match(submitRoute, /On Outbound Call/);
 });
