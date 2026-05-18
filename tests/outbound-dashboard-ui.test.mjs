@@ -45,6 +45,29 @@ test("live calls view does not render the redundant hero card", async () => {
   assert.doesNotMatch(viewSource, /Hangup calls stay visible for 60 seconds/);
 });
 
+test("live calls filters include a default-on disconnected calls toggle that filters terminal statuses from the list", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const pageStart = source.indexOf("export default function OutboundDialerPage");
+  const pageEnd = source.indexOf("function LiveCallsView", pageStart);
+  const viewStart = source.indexOf("function LiveCallsView");
+  const viewEnd = source.indexOf("function LiveCallCard", viewStart);
+  const settingsStart = source.indexOf("function LiveCallsSettings");
+  const settingsEnd = source.indexOf("function DashboardView", settingsStart);
+  assert.ok(pageStart > -1 && pageEnd > pageStart, "OutboundDialerPage should exist before LiveCallsView");
+  assert.ok(viewStart > -1 && viewEnd > viewStart, "LiveCallsView should exist");
+  assert.ok(settingsStart > -1 && settingsEnd > settingsStart, "LiveCallsSettings should exist");
+
+  const pageSource = source.slice(pageStart, pageEnd);
+  const viewSource = source.slice(viewStart, viewEnd);
+  const settingsSource = source.slice(settingsStart, settingsEnd);
+
+  assert.match(pageSource, /const \[showDisconnectedLiveCalls, setShowDisconnectedLiveCalls\] = useState\(true\)/, "Show disconnected calls should default on");
+  assert.match(viewSource, /showDisconnectedCalls/, "LiveCallsView should accept the disconnected-call visibility flag");
+  assert.match(viewSource, /\(showDisconnectedCalls \|\| !\["hangup", "failed"\]\.includes\(call\.status\)\)/, "LiveCallsView should hide terminal calls immediately when the toggle is off");
+  assert.match(settingsSource, /Show disconnected calls/, "Live call filters should render the requested toggle label");
+  assert.match(settingsSource, /setShowDisconnectedCalls/, "Live call filters should wire toggle changes back to page state");
+});
+
 test("expanded history call attempt rows render one right-aligned status reason badge before info", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const accordionStart = source.indexOf("function ContactRecordAttemptAccordion");
