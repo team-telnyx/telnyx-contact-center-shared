@@ -68,6 +68,28 @@ test("live calls filters include a default-on disconnected calls toggle that fil
   assert.match(settingsSource, /setShowDisconnectedCalls/, "Live call filters should wire toggle changes back to page state");
 });
 
+test("dashboard header has a right-aligned default-on running campaign toggle that filters cards", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const pageStart = source.indexOf("export default function OutboundDialerPage");
+  const pageEnd = source.indexOf("function LiveCallsView", pageStart);
+  const dashboardStart = source.indexOf("function DashboardView");
+  const dashboardEnd = source.indexOf("function DashboardCampaignCard", dashboardStart);
+  assert.ok(pageStart > -1 && pageEnd > pageStart, "OutboundDialerPage should exist before LiveCallsView");
+  assert.ok(dashboardStart > -1 && dashboardEnd > dashboardStart, "DashboardView should exist before DashboardCampaignCard");
+
+  const pageSource = source.slice(pageStart, pageEnd);
+  const dashboardSource = source.slice(dashboardStart, dashboardEnd);
+
+  assert.match(pageSource, /const \[showOnlyRunningDashboardCampaigns, setShowOnlyRunningDashboardCampaigns\] = useState\(true\)/, "Show only running campaign should default on");
+  assert.match(pageSource, /Show only running campaign/, "Dashboard header should render the requested toggle label");
+  assert.match(pageSource, /<Switch[\s\S]*id="show-only-running-dashboard-campaigns"[\s\S]*checked=\{showOnlyRunningDashboardCampaigns\}[\s\S]*onCheckedChange=\{setShowOnlyRunningDashboardCampaigns\}/, "Dashboard header toggle should be wired to page state");
+  assert.match(pageSource, /className="ml-auto flex items-center gap-3/, "Dashboard header toggle should be aligned to the right side of the header");
+  assert.match(pageSource, /<DashboardView[\s\S]*showOnlyRunningCampaigns=\{showOnlyRunningDashboardCampaigns\}/, "DashboardView should receive the running-only filter flag");
+  assert.match(dashboardSource, /function DashboardView\(\{[\s\S]*showOnlyRunningCampaigns[\s\S]*\}\)/, "DashboardView should accept the running-only filter flag");
+  assert.match(dashboardSource, /const dashboardCampaignCards = showOnlyRunningCampaigns \? runningCampaigns : visibleCampaigns;/, "Dashboard cards should filter to running campaigns when the toggle is on");
+  assert.match(dashboardSource, /dashboardCampaignCards\.map/, "Dashboard should render campaign cards from the filtered list");
+});
+
 test("expanded history call attempt rows render one right-aligned status reason badge before info", async () => {
   const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
   const accordionStart = source.indexOf("function ContactRecordAttemptAccordion");
