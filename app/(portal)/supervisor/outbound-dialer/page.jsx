@@ -456,9 +456,11 @@ export default function OutboundDialerPage() {
   useEffect(() => {
     if (active !== "dashboard") return;
     if (!selectedDashboardCampaign?.id) return;
-    if (selectedCampaignId === selectedDashboardCampaign.id) return;
+    const selectedCampaignIsDashboard = dashboardCampaigns.some((campaign) => campaign.id === selectedCampaignId);
+    const selectedCampaignIsSelectable = selectableDashboardCampaigns.some((campaign) => campaign.id === selectedCampaignId);
+    if (!selectedCampaignIsDashboard || selectedCampaignIsSelectable) return;
     setSelectedCampaignId(selectedDashboardCampaign.id);
-  }, [active, selectedCampaignId, selectedDashboardCampaign?.id]);
+  }, [active, dashboardCampaigns, selectableDashboardCampaigns, selectedCampaignId, selectedDashboardCampaign?.id]);
 
   useEffect(() => {
     setSelectedReasonMetricsDay(null);
