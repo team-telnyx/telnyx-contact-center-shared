@@ -34,6 +34,7 @@ import { campaignSaveRequirements } from "@/lib/outbound-dialer/campaign-validat
 import { buildDashboardCampaignExpandedStats } from "@/lib/outbound-dialer/dashboard-view-model";
 import { attemptReasonCode, attemptStatusReasonLabel, campaignControlState, campaignStatusEventsFromCampaigns, contactRecordHeaderLabel, contactRecordLabel, groupAttemptsByContactRecord, normalizeCampaignExecutionState, singleCampaignSelection } from "@/lib/outbound-dialer/history-view-model";
 import { campaignContactProgress, campaignInventoryDisplayState } from "@/lib/outbound-dialer/progress-view-model";
+import { shouldShowOutboundLiveCallInUi } from "@/lib/outbound-dialer/live-calls";
 
 const API = "/api/contact-center/outbound-dialer";
 const NAV_ITEMS = [
@@ -529,7 +530,7 @@ export default function OutboundDialerPage() {
 function LiveCallsView({ payload, loading, campaignFilter, statusFilter, showDisconnectedCalls, onOpenDetails, onOpenSupervision }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
-  const calls = useMemo(() => (payload?.calls || []).filter((call) => (campaignFilter === "all" || call.campaign_id === campaignFilter) && (statusFilter === "all" || call.status === statusFilter) && (showDisconnectedCalls || !["hangup", "failed"].includes(call.status))), [payload, campaignFilter, statusFilter, showDisconnectedCalls]);
+  const calls = useMemo(() => (payload?.calls || []).filter((call) => (campaignFilter === "all" || call.campaign_id === campaignFilter) && (statusFilter === "all" || call.status === statusFilter) && shouldShowOutboundLiveCallInUi(call, { now, showDisconnectedCalls })), [payload, campaignFilter, statusFilter, showDisconnectedCalls, now]);
   return <div className="space-y-3">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing live calls…</div> : null}{calls.length ? calls.map((call) => <LiveCallCard key={call.id} call={call} now={now} onOpenDetails={() => onOpenDetails(call)} onOpenSupervision={() => onOpenSupervision(call)} />) : <Empty title="No live calls" description="Active campaign calls will appear here when they start ringing, connect, or hang up within the last 60 seconds." />}</div>;
 }
 

@@ -4,6 +4,7 @@ import {
   buildOutboundLiveCallsPayload,
   normalizeOutboundLiveCallStatus,
   shouldShowOutboundLiveCall,
+  shouldShowOutboundLiveCallInUi,
 } from "../lib/outbound-dialer/live-calls.js";
 
 test("normalizeOutboundLiveCallStatus maps active attempt states to live call states", () => {
@@ -19,6 +20,15 @@ test("shouldShowOutboundLiveCall keeps hangup calls for 60 seconds only", () => 
   assert.equal(shouldShowOutboundLiveCall({ status: "completed", updated_at: "2026-05-17T17:59:01.000Z" }, now), true);
   assert.equal(shouldShowOutboundLiveCall({ status: "completed", updated_at: "2026-05-17T17:58:59.000Z" }, now), false);
   assert.equal(shouldShowOutboundLiveCall({ status: "answered", updated_at: "2026-05-17T17:00:00.000Z" }, now), true);
+});
+
+test("shouldShowOutboundLiveCallInUi hides expired disconnected calls even when disconnected toggle is enabled", () => {
+  const now = new Date("2026-05-17T18:00:00.000Z");
+
+  assert.equal(shouldShowOutboundLiveCallInUi({ status: "hangup", hangup_visible_until: "2026-05-17T18:00:01.000Z" }, { now, showDisconnectedCalls: true }), true);
+  assert.equal(shouldShowOutboundLiveCallInUi({ status: "hangup", hangup_visible_until: "2026-05-17T17:59:59.000Z" }, { now, showDisconnectedCalls: true }), false);
+  assert.equal(shouldShowOutboundLiveCallInUi({ status: "failed", hangup_visible_until: "2026-05-17T18:00:01.000Z" }, { now, showDisconnectedCalls: false }), false);
+  assert.equal(shouldShowOutboundLiveCallInUi({ status: "connected" }, { now, showDisconnectedCalls: false }), true);
 });
 
 test("buildOutboundLiveCallsPayload returns totals, filters, timers, numbers and session payload", () => {

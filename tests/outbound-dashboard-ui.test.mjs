@@ -63,7 +63,7 @@ test("live calls filters include a default-on disconnected calls toggle that fil
 
   assert.match(pageSource, /const \[showDisconnectedLiveCalls, setShowDisconnectedLiveCalls\] = useState\(true\)/, "Show disconnected calls should default on");
   assert.match(viewSource, /showDisconnectedCalls/, "LiveCallsView should accept the disconnected-call visibility flag");
-  assert.match(viewSource, /\(showDisconnectedCalls \|\| !\["hangup", "failed"\]\.includes\(call\.status\)\)/, "LiveCallsView should hide terminal calls immediately when the toggle is off");
+  assert.match(viewSource, /shouldShowOutboundLiveCallInUi\(call, \{ now, showDisconnectedCalls \}\)/, "LiveCallsView should apply disconnected-call toggle and 60-second retention in the UI");
   assert.match(settingsSource, /Show disconnected calls/, "Live call filters should render the requested toggle label");
   assert.match(settingsSource, /setShowDisconnectedCalls/, "Live call filters should wire toggle changes back to page state");
 });
