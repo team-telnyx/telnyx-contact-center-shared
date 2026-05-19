@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildOutboundLiveCallsPayload,
   normalizeOutboundLiveCallStatus,
+  OUTBOUND_LIVE_CALLS_SQL,
   shouldShowOutboundLiveCall,
   shouldShowOutboundLiveCallInUi,
 } from "../lib/outbound-dialer/live-calls.js";
@@ -20,6 +21,21 @@ test("shouldShowOutboundLiveCall keeps hangup calls for 60 seconds only", () => 
   assert.equal(shouldShowOutboundLiveCall({ status: "completed", updated_at: "2026-05-17T17:59:01.000Z" }, now), true);
   assert.equal(shouldShowOutboundLiveCall({ status: "completed", updated_at: "2026-05-17T17:58:59.000Z" }, now), false);
   assert.equal(shouldShowOutboundLiveCall({ status: "answered", updated_at: "2026-05-17T17:00:00.000Z" }, now), true);
+});
+
+test("shouldShowOutboundLiveCall hides expired claims and preview assignment claims without a real call", () => {
+  const now = new Date("2026-05-17T18:00:00.000Z");
+  assert.equal(shouldShowOutboundLiveCall({ status: "claimed", lease_expires_at: "2026-05-17T18:00:01.000Z", campaign_mode: "power" }, now), true);
+  assert.equal(shouldShowOutboundLiveCall({ status: "claimed", lease_expires_at: "2026-05-17T17:59:59.000Z", campaign_mode: "power" }, now), false);
+  assert.equal(shouldShowOutboundLiveCall({ status: "claimed", lease_expires_at: "2026-05-17T18:00:01.000Z", campaign_mode: "preview", call_control_id: null, call_session_id: null, metadata: {} }, now), false);
+  assert.equal(shouldShowOutboundLiveCall({ status: "dialing", lease_expires_at: "2026-05-17T17:59:59.000Z", campaign_mode: "preview", metadata: { dial_started_at: "2026-05-17T17:58:00.000Z" } }, now), true);
+});
+
+test("OUTBOUND_LIVE_CALLS_SQL guards claimed rows with active lease and excludes preview-only assignments", () => {
+  assert.match(OUTBOUND_LIVE_CALLS_SQL, /l\.status = 'claimed'/);
+  assert.match(OUTBOUND_LIVE_CALLS_SQL, /COALESCE\(l\.lease_expires_at, NOW\(\) \+ INTERVAL '1 second'\) > NOW\(\)/);
+  assert.match(OUTBOUND_LIVE_CALLS_SQL, /c\.mode IN \('preview','progressive'\)/);
+  assert.match(OUTBOUND_LIVE_CALLS_SQL, /COALESCE\(l\.metadata->>'dial_started_at', ''\) = ''/);
 });
 
 test("shouldShowOutboundLiveCallInUi hides expired disconnected calls even when disconnected toggle is enabled", () => {
