@@ -102,6 +102,17 @@ const statusClass = (status) => {
   if (["draft", "validating"].includes(value)) return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
   return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
 };
+const activationBadgeClass = (active) => active ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+const campaignModeClass = (mode) => {
+  const value = String(mode || "").toLowerCase();
+  if (value === "preview") return "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300";
+  if (value === "progressive") return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (value === "agentless_ai") return "border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300";
+  if (value === "agentless_flow") return "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (value === "power") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (value === "predictive") return "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+};
 
 const attemptStatusClass = (status) => {
   const value = String(status || "").toLowerCase();
@@ -690,14 +701,20 @@ function CampaignsView({ campaigns, contactLists = [], executionDebugByCampaign 
     description="Rows select configuration in the right Settings card; execution controls stay on Dashboard."
     emptyTitle="No campaigns yet"
     emptyDescription="Use New campaign in the workspace header to create the first persisted campaign."
-    columns={["Name", "Active", "List", "Mode", "Actions"]}
+    columns={["Name", "Mode", "State", "Contact List", "Active", "Actions"]}
     rows={campaigns.map((c) => {
       const displayState = campaignInventoryDisplayState(c, contactLists, executionDebugByCampaign?.[c.id]);
       return {
         id: c.id,
         selected: selectedCampaign?.id === c.id,
         onSelect: () => setSelectedCampaignId(c.id),
-        cells: [<span key="name" className="font-medium">{c.name}</span>, <Badge key="status" variant="outline" className={statusClass(displayState)}>{isActiveCampaignConfig(c) ? "Active" : "Not active"}</Badge>, campaignListName(c, contactLists), title(c.mode)],
+        cells: [
+          <span key="name" className="font-medium">{c.name}</span>,
+          <Badge key="mode" variant="outline" className={campaignModeClass(c.mode)}>{title(c.mode)}</Badge>,
+          <Badge key="state" variant="outline" className={statusClass(displayState)}>{title(displayState)}</Badge>,
+          campaignListName(c, contactLists),
+          <Badge key="active" variant="outline" className={activationBadgeClass(isActiveCampaignConfig(c))}>{isActiveCampaignConfig(c) ? "Active" : "Not active"}</Badge>,
+        ],
         actions: <DeleteButton disabled={saving} onClick={() => archive(c)} label="Archive campaign" />,
       };
     })}
@@ -715,7 +732,7 @@ function ContactListsView({ contactLists, selectedList, setSelectedListId, archi
       id: l.id,
       selected: selectedList?.id === l.id,
       onSelect: () => setSelectedListId(l.id),
-      cells: [<span key="name" className="font-medium">{l.name}</span>, <Badge key="status" variant="outline" className={statusClass(l.status === "validated" ? "active" : "draft")}>{l.status === "validated" ? "Active" : "Not active"}</Badge>, Number(l.record_count || 0).toLocaleString(), Number(l.valid_phone_count || 0).toLocaleString(), (l.custom_field_schema || []).length],
+      cells: [<span key="name" className="font-medium">{l.name}</span>, <Badge key="status" variant="outline" className={activationBadgeClass(l.status === "validated")}>{l.status === "validated" ? "Active" : "Not active"}</Badge>, Number(l.record_count || 0).toLocaleString(), Number(l.valid_phone_count || 0).toLocaleString(), (l.custom_field_schema || []).length],
       actions: <DeleteButton disabled={saving} onClick={() => archive(l)} label="Archive contact list" />,
     }))}
   />;
@@ -732,7 +749,7 @@ function DncListsView({ dncLists, selectedDncList, setSelectedDncId, archive, sa
       id: l.id,
       selected: selectedDncList?.id === l.id,
       onSelect: () => setSelectedDncId(l.id),
-      cells: [<span key="name" className="font-medium">{l.name}</span>, <Badge key="status" variant="outline" className={statusClass(isActiveConfigItem(l) ? "active" : "draft")}>{isActiveConfigItem(l) ? "Active" : "Not active"}</Badge>, title(l.source_type || "csv"), title(l.match_strategy || "phone"), Number(l.record_count || 0).toLocaleString()],
+      cells: [<span key="name" className="font-medium">{l.name}</span>, <Badge key="status" variant="outline" className={activationBadgeClass(isActiveConfigItem(l))}>{isActiveConfigItem(l) ? "Active" : "Not active"}</Badge>, title(l.source_type || "csv"), title(l.match_strategy || "phone"), Number(l.record_count || 0).toLocaleString()],
       actions: <DeleteButton disabled={saving} onClick={() => archive(l)} label="Archive DNC list" />,
     }))}
   />;
@@ -750,7 +767,7 @@ function FiltersView({ filters, selectedFilter, setSelectedFilterId, archive, sa
       id: f.id,
       selected: selectedFilter?.id === f.id,
       onSelect: () => setSelectedFilterId(f.id),
-      cells: [<span key="name" className="font-medium">{f.name}</span>, <Badge key="status" variant="outline" className={statusClass(isActiveConfigItem(f) ? "active" : "draft")}>{isActiveConfigItem(f) ? "Active" : "Not active"}</Badge>, f.contact_list_name || "Any list", `${(f.conditions || []).length} rule${(f.conditions || []).length === 1 ? "" : "s"}`],
+      cells: [<span key="name" className="font-medium">{f.name}</span>, <Badge key="status" variant="outline" className={activationBadgeClass(isActiveConfigItem(f))}>{isActiveConfigItem(f) ? "Active" : "Not active"}</Badge>, f.contact_list_name || "Any list", `${(f.conditions || []).length} rule${(f.conditions || []).length === 1 ? "" : "s"}`],
       actions: <DeleteButton disabled={saving} onClick={() => archive(f)} label="Archive filter" />,
     }))}
   />;
@@ -767,7 +784,7 @@ function TimeSetsView({ timeSets, selectedTimeSet, setSelectedTimeSetId, archive
       id: t.id,
       selected: selectedTimeSet?.id === t.id,
       onSelect: () => setSelectedTimeSetId(t.id),
-      cells: [<span key="name" className="font-medium">{t.name}</span>, <Badge key="status" variant="outline" className={statusClass(isActiveConfigItem(t) ? "active" : "draft")}>{isActiveConfigItem(t) ? "Active" : "Not active"}</Badge>, t.timezone || "Europe/Warsaw", `${(t.windows || []).filter((w) => w.enabled !== false).length} active`],
+      cells: [<span key="name" className="font-medium">{t.name}</span>, <Badge key="status" variant="outline" className={activationBadgeClass(isActiveConfigItem(t))}>{isActiveConfigItem(t) ? "Active" : "Not active"}</Badge>, t.timezone || "Europe/Warsaw", `${(t.windows || []).filter((w) => w.enabled !== false).length} active`],
       actions: <DeleteButton disabled={saving} onClick={() => archive(t)} label="Archive time set" />,
     }))}
   />;
@@ -817,7 +834,7 @@ function DispositionCodesView({ dispositionCodes, selectedDispositionCode, setSe
           d.campaign_name || "Global",
           <Badge key="classification" variant="outline" className="border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300">{dispositionClassificationLabel(d.classification)}</Badge>,
           d.business_category && d.business_category !== "none" ? title(d.business_category) : "—",
-          <Badge key="status" variant="outline" className={statusClass(isActiveConfigItem(d) ? "active" : "draft")}>{isActiveConfigItem(d) ? "Active" : "Not active"}</Badge>,
+          <Badge key="status" variant="outline" className={activationBadgeClass(isActiveConfigItem(d))}>{isActiveConfigItem(d) ? "Active" : "Not active"}</Badge>,
         ],
         actions: <DeleteButton disabled={saving} onClick={() => archive(d)} label="Archive disposition mapping" />,
       }))}

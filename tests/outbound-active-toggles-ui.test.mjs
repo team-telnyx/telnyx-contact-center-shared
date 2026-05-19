@@ -28,10 +28,18 @@ test("contact list, DNC, filter, time set, and disposition forms use Active togg
 });
 
 test("inventory tables present Active instead of status labels for outbound reusable resources", () => {
-  assert.match(source, /columns=\{\["Name", "Active", "List", "Mode", "Actions"\]\}/);
+  assert.match(source, /columns=\{\["Name", "Mode", "State", "Contact List", "Active", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Name", "Active", "Records", "Valid phones", "Fields", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Name", "Active", "Source", "Match", "Records", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Name", "Active", "Contact list", "Rules", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Name", "Active", "Time zone", "Windows", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Wrap-up code", "Scope", "Classification", "Business Category", "Active", "Actions"\]\}/);
+});
+
+test("inventory activation badges are green or red and campaign state stays separate from visibility", () => {
+  assert.match(source, /const activationBadgeClass = \(active\) => active \? "border-emerald-500\/35 bg-emerald-500\/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500\/35 bg-rose-500\/10 text-rose-700 dark:text-rose-300";/);
+  assert.match(source, /<Badge key="state" variant="outline" className=\{statusClass\(displayState\)\}>\{title\(displayState\)\}<\/Badge>/);
+  assert.match(source, /<Badge key="mode" variant="outline" className=\{campaignModeClass\(c\.mode\)\}>\{title\(c\.mode\)\}<\/Badge>/);
+  assert.match(source, /<Badge key="active" variant="outline" className=\{activationBadgeClass\(isActiveCampaignConfig\(c\)\)\}>\{isActiveCampaignConfig\(c\) \? "Active" : "Not active"\}<\/Badge>/);
+  assert.doesNotMatch(source, /className=\{statusClass\(isActiveConfigItem\([^)]*\) \? "active" : "draft"\)\}>\{isActiveConfigItem\([^)]*\) \? "Active" : "Not active"\}/);
 });
