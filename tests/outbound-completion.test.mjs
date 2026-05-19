@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { completeCampaignIfExhausted, deriveFailureReasonFromHangupOutcome } from "../lib/outbound-dialer/completion.js";
+import { completeCampaignIfExhausted, deriveFailureReasonFromHangupOutcome, loadCampaignMaxAttempts } from "../lib/outbound-dialer/completion.js";
 
 function poolWith(results) {
   const calls = [];
@@ -43,4 +44,25 @@ test("completeCampaignIfExhausted waits while retry is scheduled", async () => {
   assert.equal(result.completed, false);
   assert.equal(result.futureRetry, 1);
   assert.equal(pool.calls.length, 1);
+});
+
+test("attempt controls only cap completion when active", async () => {
+  const pool = poolWith([
+    { rows: [{ settings: { global_max_attempts: 5 } }] },
+    { rows: [{ max_attempts_per_contact: 2 }] },
+  ]);
+
+  const result = await loadCampaignMaxAttempts(pool, {
+    attempt_control_id: "attempt-control-1",
+    retry_policy: { maxAttempts: 4 },
+  });
+
+  assert.equal(result.maxAttemptsPerContact, 2);
+  assert.match(pool.calls[1].sql, /WHERE id = \$1 AND status = 'active'/);
+});
+
+test("attempt controls only cap outbound execution when active", async () => {
+  const source = await readFile(new URL("../lib/outbound-dialer/execution.js", import.meta.url), "utf8");
+  assert.match(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status = 'active'\s+LIMIT 1/);
+  assert.doesNotMatch(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status <> 'archived'/);
 });
