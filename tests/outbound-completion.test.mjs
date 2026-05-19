@@ -66,3 +66,9 @@ test("attempt controls only cap outbound execution when active", async () => {
   assert.match(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status = 'active'\s+LIMIT 1/);
   assert.doesNotMatch(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status <> 'archived'/);
 });
+
+test("attempt controls only cap agent campaigns when active", async () => {
+  const source = await readFile(new URL("../lib/outbound-dialer/agent-campaigns.js", import.meta.url), "utf8");
+  assert.match(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status = 'active'\s+LIMIT 1/);
+  assert.doesNotMatch(source, /FROM outbound_attempt_controls\s+WHERE id = \$1 AND status <> 'archived'/);
+});
