@@ -130,6 +130,14 @@ test("agent campaign claiming skips campaigns outside their configured time set 
   );
 });
 
+test("agent campaign claiming only applies active reusable campaign resources", async () => {
+  const source = await readFile(new URL("../lib/outbound-dialer/agent-campaigns.js", import.meta.url), "utf8");
+
+  assert.match(source, /FROM outbound_time_sets\s+WHERE id = \$1 AND status = 'active'/);
+  assert.match(source, /FROM outbound_contact_filters\s+WHERE id = \$1 AND status = 'active'/);
+  assert.match(source, /outbound_dnc_lists l ON l\.id = e\.dnc_list_id AND l\.status = 'active'/);
+});
+
 test("agent campaign preview uses WebRTC softphone dialing, preserves assist content and waits for hangup before disposition", async () => {
   const agentDesktopSource = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
   const softphoneSource = await readFile(new URL("../components/softphone-mini.jsx", import.meta.url), "utf8");

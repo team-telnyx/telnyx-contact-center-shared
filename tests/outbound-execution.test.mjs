@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   normalizeE164Like,
@@ -16,6 +17,14 @@ function createMockPool(handler) {
     },
   };
 }
+
+test('agentless execution only applies active reusable campaign resources', async () => {
+  const source = await readFile(new URL('../lib/outbound-dialer/execution.js', import.meta.url), 'utf8');
+
+  assert.match(source, /outbound_dnc_lists l ON l\.id = e\.dnc_list_id AND l\.status = 'active'/);
+  assert.match(source, /FROM outbound_contact_filters\s+WHERE id = \$1 AND status = 'active'/);
+  assert.match(source, /FROM outbound_time_sets\s+WHERE id = \$1 AND status = 'active'/);
+});
 
 test('normalizeE164Like normalizuje poprawnie i odrzuca śmieci', () => {
   assert.equal(normalizeE164Like('+1 (555) 123-4567'), '+15551234567');
