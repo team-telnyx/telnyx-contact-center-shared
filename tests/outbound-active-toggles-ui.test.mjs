@@ -14,17 +14,20 @@ test("campaign configuration only receives active reusable resources", () => {
   assert.match(source, /const activeDncLists = useMemo\(\(\) => dncLists\.filter\(isActiveConfigItem\), \[dncLists\]\);/);
   assert.match(source, /const activeFilters = useMemo\(\(\) => filters\.filter\(isActiveConfigItem\), \[filters\]\);/);
   assert.match(source, /const activeTimeSets = useMemo\(\(\) => timeSets\.filter\(isActiveConfigItem\), \[timeSets\]\);/);
-  assert.match(source, /dncLists=\{active === "campaigns" \? activeDncLists : dncLists\} filters=\{active === "campaigns" \? activeFilters : filters\} timeSets=\{active === "campaigns" \? activeTimeSets : timeSets\}/);
+  assert.match(source, /const activeAttemptControls = useMemo\(\(\) => attemptControls\.filter\(isActiveConfigItem\), \[attemptControls\]\);/);
+  assert.match(source, /dncLists=\{active === "campaigns" \? activeDncLists : dncLists\} filters=\{active === "campaigns" \? activeFilters : filters\} timeSets=\{active === "campaigns" \? activeTimeSets : timeSets\} attemptControls=\{active === "campaigns" \? activeAttemptControls : attemptControls\}/);
 });
 
-test("contact list, DNC, filter, time set, and disposition forms use Active toggles", () => {
+test("contact list, DNC, filter, time set, disposition, and attempt control forms use Active toggles", () => {
   assert.match(source, /ToggleRow label="Active" checked=\{draft\.status === "validated"\} disabled=\{!validationAllowed\} onCheckedChange=\{\(checked\) => update\(activeToggleStatusPatch\(checked && validationAllowed, "validated", "draft"\)\)\}/);
   assert.match(source, /ToggleRow label="Active" checked=\{draft\.status === "active"\} onCheckedChange=\{\(checked\) => update\(activeToggleStatusPatch\(checked\)\)\}/);
   assert.match(source, /Active DNC lists are visible on campaign configuration\./);
   assert.match(source, /Active filters are visible on campaign configuration\./);
   assert.match(source, /Active time sets are visible on campaign configuration\./);
   assert.match(source, /Active disposition mappings are available for campaign workflows\./);
+  assert.match(source, /Active attempt controls are visible on campaign configuration\./);
   assert.doesNotMatch(source, /ToggleRow label="Validated"/);
+  assert.doesNotMatch(source, /ConfigSelect label="Status" value=\{draft\.status \|\| "draft"\} options=\{schema\.attemptControlStatuses/);
 });
 
 test("inventory tables present Active instead of status labels for outbound reusable resources", () => {
@@ -34,6 +37,7 @@ test("inventory tables present Active instead of status labels for outbound reus
   assert.match(source, /columns=\{\["Name", "Active", "Contact list", "Rules", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Name", "Active", "Time zone", "Windows", "Actions"\]\}/);
   assert.match(source, /columns=\{\["Wrap-up code", "Scope", "Classification", "Business Category", "Active", "Actions"\]\}/);
+  assert.match(source, /columns=\{\["Name", "Active", "Reset", "Caps", "Recall", "Actions"\]\}/);
 });
 
 test("inventory activation badges are green or red and campaign state stays separate from visibility", () => {
