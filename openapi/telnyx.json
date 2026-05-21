@@ -131005,6 +131005,12 @@
             "default": false,
             "description": "If async, the assistant will move forward without waiting for your server to respond."
           },
+          "async_timeout_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 15000,
+            "description": "Maximum time in milliseconds that the conversation worker waits for an async webhook response before returning \"Submitted\" to the LLM. If unset, the platform default (currently 300ms) is used."
+          },
           "timeout_ms": {
             "type": "integer",
             "minimum": 500,
