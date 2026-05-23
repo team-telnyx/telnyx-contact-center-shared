@@ -47472,6 +47472,52 @@
         "x-latency-category": "responsive"
       }
     },
+    "/v2/whatsapp/user_data": {
+      "get": {
+        "tags": [
+          "Whatsapp Business Accounts"
+        ],
+        "summary": "Fetch Whatsapp user data",
+        "operationId": "GetWhatsappUserData",
+        "responses": {
+          "200": {
+            "description": "Whatsapp user data",
+            "$ref": "#/components/responses/WhatsappUserDataResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/messaging_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      },
+      "patch": {
+        "tags": [
+          "Whatsapp Business Accounts"
+        ],
+        "summary": "Update Whatsapp user data",
+        "operationId": "PatchWhatsappUserData",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchWhatsappUserDataRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user data",
+            "$ref": "#/components/responses/WhatsappUserDataResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/messaging_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/v2/whatsapp_message_templates/{id}": {
       "delete": {
         "tags": [
@@ -62730,6 +62776,21 @@
           }
         }
       },
+      "WhatsappUserDataResponse": {
+        "description": "Successful response with Whatsapp user data",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "$ref": "#/components/schemas/WhatsappUserData"
+                }
+              }
+            }
+          }
+        }
+      },
       "WireguardInterfaceListResponse": {
         "description": "Successful response",
         "content": {
@@ -73308,6 +73369,7 @@
             "start_conference_on_enter": true
           },
           "audio_url": "http://www.example.com/sounds/greeting.wav",
+          "send_digits_on_answer": "wwww200",
           "timeout_secs": 60,
           "time_limit_secs": 60,
           "webhook_url": "https://www.example.com/server-b/",
@@ -73383,7 +73445,7 @@
             "$ref": "#/components/schemas/CallAssistantRequest"
           },
           "to": {
-            "description": "The DID or SIP URI to dial out to. Multiple DID or SIP URIs can be provided using an array of strings. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter.",
+            "description": "The DID or SIP URI to dial out to. Multiple DID or SIP URIs can be provided using an array of strings. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter. For a single string destination, you may append a comma followed by DTMF digits (e.g. `+18004247767,200`) to play those digits as DTMF once the called party answers \u2014 equivalent to setting `send_digits_on_answer` separately. If both are present, the explicit `send_digits_on_answer` parameter takes precedence. This shorthand is not supported when `to` is an array.",
             "oneOf": [
               {
                 "type": "string",
@@ -73428,6 +73490,11 @@
             "type": "string",
             "example": "http://example.com/message.wav",
             "description": "The URL of a file to be played back to the callee when the call is answered. The URL can point to either a WAV or MP3 file. media_name and audio_url cannot be used together in one request."
+          },
+          "send_digits_on_answer": {
+            "type": "string",
+            "example": "wwww200",
+            "description": "DTMF digits to send automatically after the called party answers. Useful for reaching an extension behind an IVR (e.g. `\"200\"` to dial extension 200 once the called party picks up). Allowed characters: `0-9`, `A-D`, `w` (0.5s pause), `W` (1s pause), `*`, `#`. Maximum 64 characters. When omitted, no automatic DTMF is sent. May also be supplied inline by appending `,<digits>` to `to` (e.g. `to=+18004247767,200`); if both forms are present, this explicit field takes precedence."
           },
           "media_name": {
             "type": "string",
@@ -104381,6 +104448,21 @@
           }
         }
       },
+      "PatchWhatsappUserDataRequest": {
+        "type": "object",
+        "properties": {
+          "webhook_url": {
+            "type": "string",
+            "format": "url",
+            "description": "URL to send Whatsapp signup events"
+          },
+          "webhook_failover_url": {
+            "type": "string",
+            "format": "url",
+            "description": "Failover URL to send Whatsapp signup events"
+          }
+        }
+      },
       "PauseConferenceRecordingRequest": {
         "type": "object",
         "title": "Pause Recording Request",
@@ -122406,6 +122488,7 @@
           "from": "+18005550101",
           "from_display_name": "Company Name",
           "audio_url": "http://www.example.com/sounds/greeting.wav",
+          "send_digits_on_answer": "wwww200",
           "timeout_secs": 60,
           "time_limit_secs": 60,
           "webhook_url": "https://www.example.com/server-b/",
@@ -122449,7 +122532,7 @@
         },
         "properties": {
           "to": {
-            "description": "The DID or SIP URI to dial out to. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter.",
+            "description": "The DID or SIP URI to dial out to. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter. You may also append a comma followed by DTMF digits (e.g. `+18004247767,200`) to play those digits as DTMF once the transfer destination answers \u2014 equivalent to setting `send_digits_on_answer` separately. If both are present, the explicit `send_digits_on_answer` parameter takes precedence.",
             "type": "string",
             "example": "+18005550100 or sip:username@sip.telnyx.com;secure=srtp"
           },
@@ -122476,6 +122559,11 @@
             "type": "string",
             "example": "http://example.com/message.wav",
             "description": "The URL of a file to be played back when the transfer destination answers before bridging the call. The URL can point to either a WAV or MP3 file. media_name and audio_url cannot be used together in one request."
+          },
+          "send_digits_on_answer": {
+            "type": "string",
+            "example": "wwww200",
+            "description": "DTMF digits to send automatically after the transfer destination answers. Useful for reaching an extension behind an IVR (e.g. `\"200\"` to dial extension 200 once the called party picks up). Allowed characters: `0-9`, `A-D`, `w` (0.5s pause), `W` (1s pause), `*`, `#`. Maximum 64 characters. When omitted, no automatic DTMF is sent. May also be supplied inline by appending `,<digits>` to `to` (e.g. `to=+18004247767,200`); if both forms are present, this explicit field takes precedence."
           },
           "early_media": {
             "type": "boolean",
@@ -132326,6 +132414,33 @@
               ],
               "description": "A template component. Additional Meta component types not listed here are also accepted."
             }
+          }
+        }
+      },
+      "WhatsappUserData": {
+        "type": "object",
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "example": "whatsapp_user_data"
+          },
+          "webhook_url": {
+            "type": "string",
+            "format": "url",
+            "description": "URL to receive Whatsapp signup events"
+          },
+          "webhook_failover_url": {
+            "type": "string",
+            "format": "url",
+            "description": "Failover URL to receive Whatsapp signup events"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
