@@ -119952,7 +119952,7 @@
             "format": "date-time",
             "title": "Created At",
             "description": "Timestamp when the test run was created and queued.",
-            "example": "2024-01-23T10:30:00Z"
+            "example": "2024-01-24T10:30:00Z"
           },
           "updated_at": {
             "type": "string",
