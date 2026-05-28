@@ -151,10 +151,10 @@ const TRANSCRIPTION_PROVIDERS = [
 ];
 
 const GOOGLE_MODELS = [
+  { value: "phone_call", label: "Phone Call" },
   { value: "latest_long", label: "Latest Long" },
   { value: "latest_short", label: "Latest Short" },
   { value: "command_and_search", label: "Command and Search" },
-  { value: "phone_call", label: "Phone Call" },
   { value: "video", label: "Video" },
   { value: "default", label: "Default" },
   { value: "medical_conversation", label: "Medical Conversation" },
@@ -298,6 +298,14 @@ function supportsInterimResults(provider, model) {
   return provider === "Google" || INTERIM_RESULTS_MODELS.has(model);
 }
 
+function getDefaultVoiceApiLanguage(provider, model) {
+  const languages = getLanguagesForProviderModel(provider, model);
+  if (languages.includes("en")) return "en";
+  if (languages.includes("auto_detect")) return "auto_detect";
+  if (languages.includes("auto")) return "auto";
+  return getDefaultTranscriptionLanguage(model, "en");
+}
+
 function coerceCurrentModelIntoOptions(provider, model, models) {
   if (!model || models.some((m) => m.value === model)) return models;
   return [{ value: model, label: `${model} (saved value)` }, ...models];
@@ -312,7 +320,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Determine initial model based on provider
   let initialModel = "";
   if (initialProvider === "Google") {
-    initialModel = engineConfig.model || config.model || "";
+    initialModel = engineConfig.model || config.model || "phone_call";
   } else if (initialProvider === "Deepgram") {
     initialModel = savedModel || "deepgram/nova-3";
   } else {
@@ -323,7 +331,10 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   const initialLanguage =
     engineConfig.language ||
     config.language ||
-    getDefaultTranscriptionLanguage(initialModel || (initialProvider === "Deepgram" ? "deepgram/nova-3" : ""), "en");
+    getDefaultVoiceApiLanguage(
+      initialProvider,
+      initialModel || (initialProvider === "Deepgram" ? "deepgram/nova-3" : ""),
+    );
 
   const [provider, setProvider] = useState(initialProvider);
   const [model, setModel] = useState(initialModel);
@@ -334,7 +345,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
 
   // Google-specific parameters
   const [interimResults, setInterimResults] = useState(
-    engineConfig.interim_results ?? config.interim_results ?? false
+    engineConfig.interim_results ?? config.interim_results ?? true
   );
   const [enableSpeakerDiarization, setEnableSpeakerDiarization] = useState(
     engineConfig.enable_speaker_diarization ??
@@ -609,7 +620,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const langs = getLanguagesForProviderModel(newProvider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : getDefaultTranscriptionLanguage(newModel, "");
+      : getDefaultVoiceApiLanguage(newProvider, newModel);
 
     // Update state
     setProvider(newProvider);
@@ -636,7 +647,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const langs = getLanguagesForProviderModel(provider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : getDefaultTranscriptionLanguage(newModel, "");
+      : getDefaultVoiceApiLanguage(provider, newModel);
 
     // Update state
     setModel(newModel);

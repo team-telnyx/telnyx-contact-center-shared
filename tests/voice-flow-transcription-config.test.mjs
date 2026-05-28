@@ -49,6 +49,7 @@ test("answer transcription keeps nested Deepgram model and language", async () =
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
+      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -124,6 +125,7 @@ test("answer transcription replaces Deepgram Flux with a Voice API model", async
     transcription_engine_config: {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
+      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -268,6 +270,8 @@ test("answer transcription fills minimal Google config", async () => {
     transcription_engine_config: {
       transcription_engine: "Google",
       language: "en",
+      model: "phone_call",
+      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -287,6 +291,7 @@ test("answer transcription fills minimal Deepgram config", async () => {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
+      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -306,6 +311,8 @@ test("start transcription fills minimal Google config", async () => {
     transcription_engine_config: {
       transcription_engine: "Google",
       language: "en",
+      model: "phone_call",
+      interim_results: true,
     },
   });
 });
@@ -325,6 +332,7 @@ test("start transcription fills minimal Deepgram config", async () => {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
+      interim_results: true,
     },
   });
 });
