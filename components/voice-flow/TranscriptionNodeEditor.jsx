@@ -468,6 +468,8 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       setInterimResults(engineConfig.interim_results);
     } else if (config.interim_results !== undefined) {
       setInterimResults(config.interim_results);
+    } else {
+      setInterimResults(true);
     }
 
     // Google-specific parameters - read from transcription_engine_config first, then flat structure
