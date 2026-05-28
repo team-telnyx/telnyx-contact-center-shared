@@ -255,6 +255,80 @@ test("answer transcription omits language for AssemblyAI", async () => {
   });
 });
 
+test("answer transcription fills minimal Google config", async () => {
+  const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
+
+  const body = transformTranscriptionOptions({
+    transcription_engine: "Google",
+    transcription_tracks: "both",
+  });
+
+  assert.deepEqual(plain(body.transcription_config), {
+    transcription_engine: "Google",
+    transcription_engine_config: {
+      transcription_engine: "Google",
+      language: "en",
+    },
+    transcription_tracks: "both",
+  });
+});
+
+test("answer transcription fills minimal Deepgram config", async () => {
+  const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
+
+  const body = transformTranscriptionOptions({
+    transcription_engine: "Deepgram",
+    transcription_tracks: "both",
+  });
+
+  assert.deepEqual(plain(body.transcription_config), {
+    transcription_engine: "Deepgram",
+    transcription_engine_config: {
+      transcription_engine: "Deepgram",
+      transcription_model: "deepgram/nova-3",
+      language: "en",
+    },
+    transcription_tracks: "both",
+  });
+});
+
+test("start transcription fills minimal Google config", async () => {
+  const { normalizeTranscriptionStartConfig } = await loadTranscriptionHelpers();
+
+  const body = normalizeTranscriptionStartConfig({
+    transcription_engine: "Google",
+    transcription_tracks: "both",
+  });
+
+  assert.deepEqual(plain(body), {
+    transcription_engine: "Google",
+    transcription_tracks: "both",
+    transcription_engine_config: {
+      transcription_engine: "Google",
+      language: "en",
+    },
+  });
+});
+
+test("start transcription fills minimal Deepgram config", async () => {
+  const { normalizeTranscriptionStartConfig } = await loadTranscriptionHelpers();
+
+  const body = normalizeTranscriptionStartConfig({
+    transcription_engine: "Deepgram",
+    transcription_tracks: "both",
+  });
+
+  assert.deepEqual(plain(body), {
+    transcription_engine: "Deepgram",
+    transcription_tracks: "both",
+    transcription_engine_config: {
+      transcription_engine: "Deepgram",
+      transcription_model: "deepgram/nova-3",
+      language: "en",
+    },
+  });
+});
+
 test("start transcription normalizes legacy flat model fields", async () => {
   const { normalizeTranscriptionStartConfig } = await loadTranscriptionHelpers();
 
