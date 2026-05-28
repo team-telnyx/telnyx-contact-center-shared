@@ -49,7 +49,6 @@ test("answer transcription keeps nested Deepgram model and language", async () =
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
-      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -125,7 +124,6 @@ test("answer transcription replaces Deepgram Flux with a Voice API model", async
     transcription_engine_config: {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
-      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -277,7 +275,7 @@ test("answer transcription fills minimal Google config", async () => {
   });
 });
 
-test("answer transcription fills minimal Deepgram config", async () => {
+test("answer transcription fills minimal Deepgram config without forcing interim results", async () => {
   const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
 
   const body = transformTranscriptionOptions({
@@ -291,7 +289,6 @@ test("answer transcription fills minimal Deepgram config", async () => {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
-      interim_results: true,
     },
     transcription_tracks: "both",
   });
@@ -317,7 +314,7 @@ test("start transcription fills minimal Google config", async () => {
   });
 });
 
-test("start transcription fills minimal Deepgram config", async () => {
+test("start transcription fills minimal Deepgram config without forcing interim results", async () => {
   const { normalizeTranscriptionStartConfig } = await loadTranscriptionHelpers();
 
   const body = normalizeTranscriptionStartConfig({
@@ -332,7 +329,32 @@ test("start transcription fills minimal Deepgram config", async () => {
       transcription_engine: "Deepgram",
       transcription_model: "deepgram/nova-3",
       language: "en",
-      interim_results: true,
+    },
+  });
+});
+
+test("start transcription preserves explicit Deepgram interim results", async () => {
+  const { normalizeTranscriptionStartConfig } = await loadTranscriptionHelpers();
+
+  const body = normalizeTranscriptionStartConfig({
+    transcription_engine: "Deepgram",
+    transcription_tracks: "both",
+    transcription_engine_config: {
+      transcription_engine: "Deepgram",
+      transcription_model: "deepgram/nova-3",
+      language: "en",
+      interim_results: false,
+    },
+  });
+
+  assert.deepEqual(plain(body), {
+    transcription_engine: "Deepgram",
+    transcription_tracks: "both",
+    transcription_engine_config: {
+      transcription_engine: "Deepgram",
+      transcription_model: "deepgram/nova-3",
+      language: "en",
+      interim_results: false,
     },
   });
 });
