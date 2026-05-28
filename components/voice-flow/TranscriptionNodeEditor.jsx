@@ -635,6 +635,11 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const newLanguage = langs.includes(language)
       ? language
       : getDefaultVoiceApiLanguage(newProvider, newModel);
+    const shouldSetProviderInterimDefault =
+      !hasInterimResultsConfig && getDefaultInterimResults(newProvider);
+    const newInterimResults = shouldSetProviderInterimDefault
+      ? getDefaultInterimResults(newProvider)
+      : interimResults;
 
     // Update state
     setProvider(newProvider);
@@ -643,6 +648,10 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       setAzureRegion("eastus");
     }
     setLanguage(newLanguage);
+    if (shouldSetProviderInterimDefault) {
+      setHasInterimResultsConfig(true);
+      setInterimResults(newInterimResults);
+    }
 
     // Build config with new values directly
     onChange?.(
@@ -651,6 +660,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
         model: newModel,
         language: newLanguage,
         azureRegion: newAzureRegion,
+        ...(shouldSetProviderInterimDefault && {
+          interim_results: newInterimResults,
+        }),
       })
     );
   };
