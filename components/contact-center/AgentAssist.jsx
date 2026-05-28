@@ -518,6 +518,7 @@ export function AgentAssist({ interactionId, interaction }) {
  */
 function TranscriptionBubble({ transcription, isSelected, onClick }) {
   const isInbound = transcription.track === "inbound";
+  const isInterim = !transcription.isFinal;
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -526,7 +527,7 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
           isSelected
             ? "border-green-500 shadow-md ring-2 ring-green-500/20"
             : "border-border hover:border-green-500/50"
-        }`}
+        } ${isInterim ? "opacity-80 ring-1 ring-blue-500/20" : ""}`}
         onClick={onClick}
       >
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">

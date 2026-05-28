@@ -694,6 +694,34 @@ export default function AgentAssistNodeEditor({
             />
           </div>
 
+          {/* Intent Recognition */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable Intent Recognition</Label>
+              <p className="text-xs text-muted-foreground">
+                Detect intent for finalized transcription messages
+              </p>
+            </div>
+            <Switch
+              checked={config.enable_intent_recognition === true}
+              onCheckedChange={(checked) => handleChange("enable_intent_recognition", checked)}
+            />
+          </div>
+
+          {/* Sentiment Analysis */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable Sentiment Analysis</Label>
+              <p className="text-xs text-muted-foreground">
+                Analyze sentiment for finalized transcription messages
+              </p>
+            </div>
+            <Switch
+              checked={config.enable_sentiment_analysis === true}
+              onCheckedChange={(checked) => handleChange("enable_sentiment_analysis", checked)}
+            />
+          </div>
+
           {/* Online Translation — experimental, visible only for leszek@telnyx.com */}
           {isExperimentalUser && (
             <div className="flex items-center justify-between">

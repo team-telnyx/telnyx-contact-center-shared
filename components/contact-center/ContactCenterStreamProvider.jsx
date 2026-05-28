@@ -84,8 +84,11 @@ export function ContactCenterStreamProvider({ children }) {
                 useActiveCallStore.getState().addTranscription;
               if (addTranscription && data.transcription) {
                 addTranscription({
+                  transcription_key:
+                    data.transcription.transcription_key || data.transcriptionKey,
                   transcript: data.transcription.transcript,
                   is_final: data.transcription.is_final,
+                  speech_final: data.transcription.speech_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
                   translation: data.transcription.translation || null,
@@ -94,19 +97,22 @@ export function ContactCenterStreamProvider({ children }) {
                 const updateTranscriptionAnalysis =
                   useActiveCallStore.getState().updateTranscriptionAnalysis;
                 if (updateTranscriptionAnalysis && data.transcription.intent) {
-                  const transcriptions =
-                    useActiveCallStore.getState().transcriptions;
-                  const lastTranscription =
-                    transcriptions[transcriptions.length - 1];
-                  if (lastTranscription) {
-                    updateTranscriptionAnalysis(lastTranscription.id, {
+                  updateTranscriptionAnalysis(
+                    data.transcription.transcription_key || data.transcriptionKey,
+                    {
                       intent: data.transcription.intent,
                       sentiment: data.transcription.sentiment,
                       sentimentScore: data.transcription.sentimentScore,
                       tags: data.transcription.tags || [],
-                    });
-                  }
+                    }
+                  );
                 }
+              }
+            } else if (data.type === "transcription_update") {
+              const updateTranscriptionAnalysis =
+                useActiveCallStore.getState().updateTranscriptionAnalysis;
+              if (updateTranscriptionAnalysis && data.transcriptionKey) {
+                updateTranscriptionAnalysis(data.transcriptionKey, data.updates || {});
               }
             } else if (data.type === "interaction_updated") {
               if (data.callControlId && data.updates) {

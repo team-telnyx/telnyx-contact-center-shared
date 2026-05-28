@@ -59,6 +59,23 @@ export async function POST(request) {
       });
     }
 
+    let assistConfig = {};
+    if (workflowSession.interaction_id) {
+      const { rows: [interaction] } = await pool.query(
+        `SELECT metadata FROM cc_interactions WHERE id = $1`,
+        [workflowSession.interaction_id]
+      );
+      assistConfig = interaction?.metadata?.agent_assist_config || {};
+    }
+
+    if (assistConfig.auto_detect_completion === false) {
+      return NextResponse.json({
+        ok: true,
+        message: "Auto-detect completion is disabled",
+        updates: [],
+      });
+    }
+
     // Get pending items for current and upcoming stages
     const { rows: pendingItems } = await pool.query(
       `SELECT 
@@ -82,7 +99,20 @@ export async function POST(request) {
       [workflowSession.id, workflowSession.workflow_id]
     );
 
-    if (pendingItems.length === 0) {
+    const speakerType = speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : null;
+    const relevantPendingItems = pendingItems
+      .filter((item) => {
+        const completionTrigger = item.completion_trigger || "agent";
+        return (
+          item.type === "slot" ||
+          completionTrigger === "either" ||
+          !speakerType ||
+          completionTrigger === speakerType
+        );
+      })
+      .slice(0, 12);
+
+    if (relevantPendingItems.length === 0) {
       return NextResponse.json({
         ok: true,
         message: "No pending items to analyze",
@@ -104,9 +134,11 @@ export async function POST(request) {
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems,
+      pendingItems: relevantPendingItems,
       slotsFilled,
       model: llmModel,
+      includeIntent: assistConfig.enable_intent_recognition === true,
+      includeSentiment: assistConfig.enable_sentiment_analysis === true,
     });
 
     // Process completed items
@@ -118,11 +150,10 @@ export async function POST(request) {
 
       for (const completed of analysisResult.completed_items || []) {
         // Get item details including completion_trigger
-        const item = pendingItems.find(p => p.item_id === completed.item_id);
+        const item = relevantPendingItems.find(p => p.item_id === completed.item_id);
         if (!item) continue;
         
         // Check if completion_trigger matches speaker
-        const speakerType = speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : null;
         const completionTrigger = item.completion_trigger || "agent";
         
         // Determine if we should complete based on trigger

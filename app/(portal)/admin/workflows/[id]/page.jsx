@@ -2043,17 +2043,17 @@ function ItemEditor({ item, onSave }) {
                   key={hint}
                   variant="outline"
                   className={cn(
-                    "flex items-center gap-1 pr-1 border-2",
+                    "flex max-w-full items-start gap-1 whitespace-normal break-words pr-1 text-left leading-relaxed border-2",
                     color.border,
                     color.text
                   )}
                 >
-                  {hint}
+                  <span className="min-w-0 flex-1 break-words">{hint}</span>
                   <button
                     type="button"
                     onClick={() => removeHint(hint)}
                     className={cn(
-                      "ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
+                      "ml-1 shrink-0 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
                       color.text
                     )}
                   >

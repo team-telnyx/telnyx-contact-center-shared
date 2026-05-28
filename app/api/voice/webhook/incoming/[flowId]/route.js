@@ -31,6 +31,16 @@ const completedFlows = new Map();
 
 const AI_CALL_ID_HEADER = "X-AI-Call-ID";
 
+function canContinueAfterFailedImmediateNode(nodeType, result) {
+  const nodeDef = VOICE_FLOW_NODES[nodeType];
+  return (
+    result?.success === false &&
+    typeof result.output === "number" &&
+    result.output > 0 &&
+    (nodeDef?.outputs || 0) > 1
+  );
+}
+
 function findCustomHeader(headers, name) {
   if (!Array.isArray(headers)) return null;
   return headers.find(
@@ -848,10 +858,6 @@ export async function POST(request, { params }) {
           for (const { node, result } of results) {
             const nodeType = node.data?.nodeType || node.type;
 
-            if (!result.success) {
-              continue;
-            }
-
             // Check if this is a logical node that should continue immediately
             const logicalNodeTypes = [
               "http_request_action",
@@ -862,9 +868,17 @@ export async function POST(request, { params }) {
               "flow_end",
               "set_queue_options",
               "agent_assist",
+              "transcription_start",
             ];
 
             const isLogical = logicalNodeTypes.includes(nodeType);
+            const shouldContinueChain =
+              result.success ||
+              (isLogical && canContinueAfterFailedImmediateNode(nodeType, result));
+
+            if (!shouldContinueChain) {
+              continue;
+            }
 
             if (isLogical) {
               // Logical nodes execute and immediately continue to next node
@@ -1275,10 +1289,6 @@ export async function POST(request, { params }) {
             for (const { node, result } of results) {
               const nodeType = node.data?.nodeType || node.type;
 
-              if (!result.success) {
-                continue;
-              }
-
               // Check if this is a logical node that should continue immediately
               const logicalNodeTypes = [
                 "http_request_action",
@@ -1289,9 +1299,17 @@ export async function POST(request, { params }) {
                 "flow_end",
                 "set_queue_options",
                 "agent_assist",
+                "transcription_start",
               ];
 
               const isLogical = logicalNodeTypes.includes(nodeType);
+              const shouldContinueChain =
+                result.success ||
+                (isLogical && canContinueAfterFailedImmediateNode(nodeType, result));
+
+              if (!shouldContinueChain) {
+                continue;
+              }
 
               if (isLogical) {
                 // Logical nodes execute and immediately continue to next node
@@ -1537,10 +1555,16 @@ async function executeNodeChain(
       "flow_end",
       "set_queue_options",
       "agent_assist",
+      "transcription_start",
     ];
     const isLogicalNode = logicalNodeTypes.includes(nextNodeType);
 
-    if (result.success && isLogicalNode) {
+    const shouldContinueChain =
+      result.success ||
+      (isLogicalNode &&
+        canContinueAfterFailedImmediateNode(nextNodeType, result));
+
+    if (shouldContinueChain && isLogicalNode) {
       // Logical node - continue chain immediately after execution
       // For nodes that update client_state, add a small delay and update body with new client_state
       if (nextNodeType === "set_queue_options" || nextNodeType === "agent_assist") {
@@ -1665,4 +1689,3 @@ async function handleRecordStartNode(
 
   return true; // Handled (no nodes on output 0)
 }
-

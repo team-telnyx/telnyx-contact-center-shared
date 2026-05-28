@@ -149,7 +149,37 @@ async function handleStepUpdate(step, workflow, stages, items, workflowId, apiKe
 /**
  * Generate greeting message based on workflow name
  */
-function generateGreeting(workflowName) {
+function extractQuotedOpening(text) {
+  const match = String(text || "").match(/["“]([^"”]+)["”]/);
+  return match?.[1]?.trim() || null;
+}
+
+function findWorkflowOpening(stages = []) {
+  const firstStage = [...stages].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))[0];
+  const firstItem = firstStage?.items?.[0];
+  if (!firstItem) return null;
+
+  const promptOpening = extractQuotedOpening(firstItem.prompt_hint);
+  if (promptOpening) return promptOpening;
+
+  const hintOpening = (Array.isArray(firstItem.hints) ? firstItem.hints : [])
+    .map((hint) => extractQuotedOpening(hint))
+    .find(Boolean);
+  if (hintOpening) return hintOpening;
+
+  const label = firstItem.label || "";
+  const identity = label.match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i)?.[1]?.trim();
+  if (identity) {
+    return `Hello! I'm ${identity}. How may I help you today?`;
+  }
+
+  return null;
+}
+
+function generateGreeting(workflowName, stages = []) {
+  const workflowOpening = findWorkflowOpening(stages);
+  if (workflowOpening) return workflowOpening;
+
   const title = workflowName || "AI Assistant";
   return `Hello! I'm your AI assistant for ${title}. How may I help you today?`;
 }
@@ -161,7 +191,7 @@ async function updateInstructionsStep(workflow, stages, apiKey) {
   console.log(`${LOG_PREFIX} Updating instructions for: ${workflow.name}`);
 
   const instructions = generateWorkflowInstructions(workflow, stages);
-  const greeting = generateGreeting(workflow.name);
+  const greeting = generateGreeting(workflow.name, stages);
 
   const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
     method: "POST",
@@ -283,7 +313,7 @@ async function updateGroupAssignmentStep(workflow, workflowId, apiKey, pool) {
  */
 async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, pool) {
   const instructions = generateWorkflowInstructions(workflow, stages);
-  const greeting = generateGreeting(workflow.name);
+  const greeting = generateGreeting(workflow.name, stages);
 
   let insightGroupId = workflow.insight_group_id;
   let insightsSynced = false;

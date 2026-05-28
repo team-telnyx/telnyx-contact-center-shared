@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import { findNextNodes } from '../lib/voice-flow-routing.js';
 import { VOICE_FLOW_NODES } from '../config/voice-flow-nodes.js';
@@ -60,4 +61,20 @@ test('legacy outbound campaign output-0 edge waits for call.answered before runn
 
   assert.deepEqual(findNextNodes(flow, 'outbound-trigger', 'call.initiated').map((node) => node.id), []);
   assert.deepEqual(findNextNodes(flow, 'outbound-trigger', 'call.answered').map((node) => node.id), ['speak']);
+});
+
+test('start transcription node does not wait for transcription webhook output', () => {
+  assert.equal(VOICE_FLOW_NODES.transcription_start.outputs, 2);
+  assert.deepEqual(VOICE_FLOW_NODES.transcription_start.outputLabels, ['Transcribing', 'Failed']);
+  assert.deepEqual(VOICE_FLOW_NODES.transcription_start.outputEvents, []);
+});
+
+test('webhook route can continue start transcription failure output immediately', async () => {
+  const source = await readFile(
+    new URL('../app/api/voice/webhook/incoming/[flowId]/route.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(source, /function canContinueAfterFailedImmediateNode/);
+  assert.match(source, /"transcription_start"/);
 });
