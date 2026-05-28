@@ -298,6 +298,10 @@ function supportsInterimResults(provider, model) {
   return provider === "Google" || INTERIM_RESULTS_MODELS.has(model);
 }
 
+function getDefaultInterimResults(provider) {
+  return provider === "Google";
+}
+
 function getDefaultVoiceApiLanguage(provider, model) {
   const languages = getLanguagesForProviderModel(provider, model);
   if (languages.includes("en")) return "en";
@@ -345,7 +349,13 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
 
   // Google-specific parameters
   const [interimResults, setInterimResults] = useState(
-    engineConfig.interim_results ?? config.interim_results ?? true
+    engineConfig.interim_results ??
+      config.interim_results ??
+      getDefaultInterimResults(initialProvider)
+  );
+  const [hasInterimResultsConfig, setHasInterimResultsConfig] = useState(
+    engineConfig.interim_results !== undefined ||
+      config.interim_results !== undefined
   );
   const [enableSpeakerDiarization, setEnableSpeakerDiarization] = useState(
     engineConfig.enable_speaker_diarization ??
@@ -464,12 +474,15 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       setTranscriptionTracks(config.transcription_tracks);
     }
 
-    if (engineConfig.interim_results !== undefined) {
+    const hasNestedInterimResults = engineConfig.interim_results !== undefined;
+    const hasFlatInterimResults = config.interim_results !== undefined;
+    setHasInterimResultsConfig(hasNestedInterimResults || hasFlatInterimResults);
+    if (hasNestedInterimResults) {
       setInterimResults(engineConfig.interim_results);
-    } else if (config.interim_results !== undefined) {
+    } else if (hasFlatInterimResults) {
       setInterimResults(config.interim_results);
     } else {
-      setInterimResults(true);
+      setInterimResults(getDefaultInterimResults(currentProvider));
     }
 
     // Google-specific parameters - read from transcription_engine_config first, then flat structure
@@ -537,10 +550,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const currentUseEnhanced = overrides.use_enhanced ?? useEnhanced;
     const currentAzureRegion = overrides.azureRegion ?? azureRegion;
     const currentAzureApiKeyRef = overrides.azureApiKeyRef ?? azureApiKeyRef;
-    const shouldIncludeInterimResults = supportsInterimResults(
-      currentProvider,
-      currentModel
-    );
+    const shouldIncludeInterimResults =
+      supportsInterimResults(currentProvider, currentModel) &&
+      (overrides.interim_results !== undefined || hasInterimResultsConfig);
     const currentLanguages = getLanguagesForProviderModel(
       currentProvider,
       currentModel
@@ -682,6 +694,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const updates = {};
     switch (paramName) {
       case "interim_results":
+        setHasInterimResultsConfig(true);
         setInterimResults(nextValue);
         updates.interim_results = nextValue;
         break;
