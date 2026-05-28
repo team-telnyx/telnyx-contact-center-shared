@@ -32,6 +32,8 @@ export async function POST(request) {
       itemId,
       itemLabel,
       itemDescription,
+      itemPromptHint,
+      itemHints,
       itemType,
       slotOptions,
       workflowId,
@@ -64,44 +66,31 @@ export async function POST(request) {
 
     // Special case: AI-assisted call, first item — generate handoff greeting
     if (isAiAssisted && isFirstItem) {
-      const { systemPrompt: hsys, userPrompt: husr } = buildHandoffGreetingPrompt({
-        agentName: agentName || null,
-        brandName: brandName || null,
-        prefilledSlots: prefilledSlots || {},
-      });
-
-      const hResponse = await fetch(`${TELNYX_API_BASE}/ai/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${TELNYX_API_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: hsys },
-            { role: "user", content: husr },
-          ],
-          model: llmModel,
-          temperature: 0.7,
-          max_tokens: 200,
+      return NextResponse.json({
+        ok: true,
+        suggestion: buildDefaultHandoffGreeting({
+          agentName,
+          prefilledSlots: prefilledSlots || {},
         }),
+        model: "template",
+        isHandoffGreeting: true,
       });
+    }
 
-      if (hResponse.ok) {
-        const hData = await hResponse.json();
-        let hSuggestion = hData.choices?.[0]?.message?.content || hData.choices?.[0]?.message?.reasoning || "";
-        hSuggestion = hSuggestion.replace(/^```(?:json|text)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-        for (let i = 0; i < 3; i++) {
-          hSuggestion = hSuggestion.replace(/^["'\u2018\u2019\u201c\u201d\u201e\u00ab\u00bb]|["'\u2018\u2019\u201c\u201d\u201e\u00bb\u00ab]$/g, "").trim();
-        }
-        if (agentName && agentName !== "the agent") {
-          hSuggestion = hSuggestion.replace(/\[Your Name\]/gi, agentName).replace(/\[Agent Name\]/gi, agentName);
-        }
-        if (hSuggestion) {
-          return NextResponse.json({ ok: true, suggestion: hSuggestion, model: llmModel, isHandoffGreeting: true });
-        }
-      }
-      // Fall through to regular suggestion if handoff generation fails
+    const deterministicSuggestion = buildDeterministicSuggestion({
+      itemType,
+      itemLabel,
+      itemPromptHint,
+      itemHints,
+      agentName,
+      brandName,
+    });
+    if (deterministicSuggestion) {
+      return NextResponse.json({
+        ok: true,
+        suggestion: deterministicSuggestion,
+        model: "template",
+      });
     }
 
     // Build prompt for suggestion generation
@@ -109,13 +98,17 @@ export async function POST(request) {
       itemType,
       agentName,
       brandName,
+      isAiAssisted,
     });
 
     const userPrompt = buildSuggestionUserPrompt({
+      itemType,
       itemLabel,
       itemDescription,
+      itemHints,
       slotOptions,
       previousConversation,
+      prefilledSlots,
     });
 
     // Call Telnyx AI
@@ -131,8 +124,8 @@ export async function POST(request) {
           { role: "user", content: userPrompt },
         ],
         model: llmModel,
-        temperature: 0.7,
-        max_tokens: 300,
+        temperature: 0.4,
+        max_tokens: 90,
       }),
     });
 
@@ -159,21 +152,28 @@ export async function POST(request) {
       );
     }
 
-    // Clean up the suggestion - remove quotes, leading/trailing whitespace
-    suggestion = suggestion.trim();
-    // Remove wrapping quotes (single or double, including fancy quotes) - run multiple times for nested quotes
-    for (let i = 0; i < 3; i++) {
-      suggestion = suggestion.replace(/^["'"'„"«»]|["'"'"»«]$/g, '').trim();
-    }
-    // Replace [Your Name] placeholders with actual agent name
-    const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
-    if (finalAgentName) {
-      suggestion = suggestion.replace(/\[Your Name\]/gi, finalAgentName);
-      suggestion = suggestion.replace(/\[Agent Name\]/gi, finalAgentName);
-      suggestion = suggestion.replace(/\[Agent's Name\]/gi, finalAgentName);
-      suggestion = suggestion.replace(/\[Name\]/gi, finalAgentName);
-      suggestion = suggestion.replace(/\{Your Name\}/gi, finalAgentName);
-      suggestion = suggestion.replace(/\{Agent Name\}/gi, finalAgentName);
+    suggestion = cleanSuggestedResponse(suggestion, { agentName });
+    if (!suggestion) {
+      const fallbackSuggestion = buildDeterministicSuggestion({
+        itemType,
+        itemLabel,
+        itemPromptHint,
+        itemHints,
+        agentName,
+        brandName,
+        allowGeneric: true,
+      });
+      if (fallbackSuggestion) {
+        return NextResponse.json({
+          ok: true,
+          suggestion: fallbackSuggestion,
+          model: "template",
+        });
+      }
+      return NextResponse.json(
+        { error: "No usable suggestion generated" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
@@ -193,59 +193,78 @@ export async function POST(request) {
 /**
  * Build system prompt for suggestion generation
  */
-function buildSuggestionSystemPrompt({ itemType, agentName, brandName }) {
+function buildSuggestionSystemPrompt({ itemType, agentName, brandName, isAiAssisted }) {
   const agentIdentity = agentName || "an agent";
   const brand = brandName || "the company";
 
   return `You are an expert contact center assistant helping ${agentIdentity} at ${brand}.
-Your task is to generate a helpful script suggestion for the agent to use during a customer call.
+Your task is to generate the exact words the agent should say next to the customer.
 
-## Guidelines:
+Hard rules:
+- Return only the spoken line. No summary, no explanation, no labels, no markdown, no bullet points.
+- Write in first person as the agent, ready to say aloud.
+- Keep it concise: one short paragraph, preferably one sentence, maximum two sentences.
+- Do not describe what the agent should do. Say the actual words.
+- Do not include internal workflow names, item ids, analysis, or recap sections.
+- If the item is a greeting or introduction, introduce the agent by name when known.
+- If the call was transferred from an AI assistant, acknowledge that briefly only when it helps the first handoff.
 
-1. **Write in first person** - The agent will speak these words directly
-2. **Be natural and conversational** - Sound like a real person, not a robot
-3. **Be concise** - Keep it to 1-3 sentences maximum
-4. **Match the item type:**
+Match the item type:
    - **action**: Suggest what the agent should say while performing the action
    - **question**: Generate a clear question to ask the customer
    - **topic**: Suggest how to introduce or discuss this topic
    - **slot**: Generate a polite question to collect the specific information
 
-5. **Be professional but friendly** - Maintain ${brand}'s tone
-6. **Include context when helpful** - Reference previous conversation if relevant
-
-Generate ONLY the suggested script - no explanations, no meta-commentary.`;
+Context:
+- Agent: ${agentIdentity}
+- Brand: ${brand}
+- Item type: ${itemType || "workflow item"}
+- AI-assisted call: ${isAiAssisted ? "yes" : "no"}`;
 }
 
 /**
  * Build user prompt for suggestion generation
  */
 function buildSuggestionUserPrompt({
+  itemType,
   itemLabel,
   itemDescription,
   slotOptions,
   previousConversation,
+  prefilledSlots,
 }) {
-  let prompt = `Generate a script suggestion for this workflow item:
+  let prompt = `Generate only the exact sentence(s) the agent should say next.
 
-**Item**: ${itemLabel}`;
+Workflow item:
+- Type: ${itemType || "unknown"}
+- Label: ${itemLabel}`;
 
   if (itemDescription) {
     prompt += `\n**Context**: ${itemDescription}`;
   }
 
   if (slotOptions && slotOptions.length > 0) {
-    prompt += `\n**Options**: Customer should choose from: ${slotOptions.join(", ")}`;
+    prompt += `\nOptions the customer can choose from: ${slotOptions.join(", ")}`;
+  }
+
+  const filledSlots = Object.entries(prefilledSlots || {}).filter(
+    ([, value]) => value !== null && value !== undefined && value !== ""
+  );
+  if (filledSlots.length > 0) {
+    prompt += `\nAlready collected customer data: ${filledSlots
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(", ")}`;
   }
 
   if (previousConversation && previousConversation.length > 0) {
     const recentMessages = previousConversation.slice(-5);
-    prompt += `\n\n**Recent conversation context:**\n`;
+    prompt += `\n\nRecent conversation context:\n`;
     prompt += recentMessages
       .map((msg) => `${msg.speaker}: "${msg.text}"`)
       .join("\n");
   }
 
+  prompt += `\n\nReturn the spoken response only.`;
   return prompt;
 }
 
@@ -264,18 +283,172 @@ function buildHandoffGreetingPrompt({ agentName, brandName, prefilledSlots }) {
       ? `The AI assistant has already collected the following customer information: ${filledSlotNames.map((k) => `${k}: ${prefilledSlots[k]}`).join(", ")}.`
       : "The AI assistant started the conversation but did not collect any specific data yet.";
 
-  const systemPrompt = `You are an expert contact center script writer for ${brand}.
-Generate a natural, warm greeting for a human agent who is taking over a call that was started by an AI assistant.
-The greeting should:
-1. Introduce the agent by name (if known)
-2. Acknowledge that the call was handled by an AI assistant first
-3. Show awareness of information already collected (briefly, naturally)
-4. Ask if the customer wants to continue on the same topic
-Keep it to 2-3 sentences maximum. Sound natural and human, not robotic. Write in first person.`;
+  const systemPrompt = `Generate the exact words a human contact center agent should say when taking over from an AI assistant.
+Return only the spoken line. No labels, no summary, no markdown.
+Write in first person as the agent. Keep it to one concise, natural sentence or two short sentences.
+Use this style when the agent name is known: "Hello, I'm John. I can see you've been redirected from our AI assistant, which already collected some information. Would you like us to continue from there?"`;
 
   const userPrompt = `Generate a handoff greeting for agent ${agent || "the agent"} at ${brand}.
 ${slotsContext}
 The agent is now taking over the call.`;
 
   return { systemPrompt, userPrompt };
+}
+
+function buildDefaultHandoffGreeting({ agentName, prefilledSlots }) {
+  const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
+  const intro = finalAgentName
+    ? `Hello, I'm ${finalAgentName}.`
+    : "Hello, I'm your support agent.";
+  const hasPrefilledSlots = Object.values(prefilledSlots || {}).some(
+    (value) => value !== null && value !== undefined && value !== ""
+  );
+  const context = hasPrefilledSlots
+    ? "I can see you've been redirected from our AI assistant, which already collected some information."
+    : "I can see you've been redirected from our AI assistant.";
+
+  return `${intro} ${context} Would you like us to continue from there?`;
+}
+
+function buildDeterministicSuggestion({
+  itemType,
+  itemLabel,
+  itemPromptHint,
+  itemHints,
+  agentName,
+  brandName,
+  allowGeneric = false,
+}) {
+  const label = String(itemLabel || "").trim();
+  const promptHint = [
+    itemPromptHint,
+    ...(Array.isArray(itemHints) ? itemHints : []),
+  ].filter(Boolean).join("\n");
+  const labelLower = label.toLowerCase();
+  const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
+  const brand = brandName || extractBrandFromIntro(label) || extractBrandFromOpening(promptHint) || "the company";
+
+  const introduceMatch = label.match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i);
+  if (introduceMatch) {
+    const identity = buildHumanIntroIdentity({
+      labelIdentity: introduceMatch[1],
+      promptHint,
+      agentName: finalAgentName,
+      brand,
+    });
+    return `Hello, I'm ${identity}. I'll be helping you today.`;
+  }
+
+  const introduceAsMatch = label.match(/(?:^|\b)(?:i am|i'm|my name is)\s+(.+?)$/i);
+  if (introduceAsMatch) {
+    const identity = buildHumanIntroIdentity({
+      labelIdentity: introduceAsMatch[1],
+      promptHint,
+      agentName: finalAgentName,
+      brand,
+    });
+    return `Hello, I'm ${identity}. I'll be helping you today.`;
+  }
+
+  if (/\b(greet|greeting|welcome|say hello|introduce)\b/i.test(label)) {
+    if (finalAgentName) {
+      return `Hello, I'm ${finalAgentName}. I'll be helping you today.`;
+    }
+    return `Hello, I'm calling from ${brand}. I'll be helping you today.`;
+  }
+
+  if (allowGeneric && itemType === "slot") {
+    return `Could you please provide your ${labelLower}?`;
+  }
+
+  return null;
+}
+
+function buildHumanIntroIdentity({ labelIdentity, promptHint, agentName, brand }) {
+  const rawIdentity = String(labelIdentity || "").trim().replace(/[.!?]+$/, "");
+  const introBrand = extractBrandFromIntro(rawIdentity) || extractBrandFromOpening(promptHint) || brand;
+  if (agentName && introBrand) return `${agentName} from ${introBrand}`;
+  if (agentName) return agentName;
+  return rawIdentity || `your support agent from ${introBrand || "the company"}`;
+}
+
+function extractBrandFromIntro(text) {
+  return String(text || "").match(/\bfrom\s+(.+)$/i)?.[1]?.trim() || null;
+}
+
+function extractBrandFromOpening(text) {
+  const opening = extractQuotedOpening(text) || text;
+  return String(opening || "").match(/\b(?:at|from)\s+([A-Z][\p{L}\p{N}& '-]+)/u)?.[1]?.trim() || null;
+}
+
+function extractQuotedOpening(text) {
+  const match = String(text || "").match(/["“]([^"”]+)["”]/);
+  return match?.[1]?.trim() || null;
+}
+
+function cleanSuggestedResponse(rawSuggestion, { agentName } = {}) {
+  let suggestion = String(rawSuggestion || "")
+    .replace(/^```(?:json|text|markdown)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  suggestion = suggestion
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^(summary|suggested response|response|script|agent should say|agent|assistant|note|explanation)\s*:/i.test(line))
+    .join(" ");
+
+  suggestion = suggestion
+    .replace(/^[-*]\s+/, "")
+    .replace(/\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (looksLikeReasoningResponse(suggestion)) {
+    return "";
+  }
+
+  for (let i = 0; i < 3; i++) {
+    suggestion = suggestion
+      .replace(/^["'\u2018\u2019\u201c\u201d\u201e\u00ab\u00bb]|["'\u2018\u2019\u201c\u201d\u201e\u00bb\u00ab]$/g, "")
+      .trim();
+  }
+
+  const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
+  if (finalAgentName) {
+    suggestion = suggestion
+      .replace(/\[Your Name\]/gi, finalAgentName)
+      .replace(/\[Agent Name\]/gi, finalAgentName)
+      .replace(/\[Agent's Name\]/gi, finalAgentName)
+      .replace(/\[Name\]/gi, finalAgentName)
+      .replace(/\{Your Name\}/gi, finalAgentName)
+      .replace(/\{Agent Name\}/gi, finalAgentName);
+  }
+
+  const sentences = suggestion.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+  if (sentences.length > 2) {
+    suggestion = sentences.slice(0, 2).join(" ").trim();
+  }
+
+  const words = suggestion.split(/\s+/).filter(Boolean);
+  if (words.length > 55) {
+    suggestion = `${words.slice(0, 55).join(" ").replace(/[,.!?;:]+$/, "")}.`;
+  }
+
+  return suggestion.trim();
+}
+
+function looksLikeReasoningResponse(suggestion) {
+  const lower = String(suggestion || "").toLowerCase();
+  return (
+    lower.startsWith("the user wants") ||
+    lower.startsWith("we need") ||
+    lower.startsWith("i need") ||
+    lower.includes("key details:") ||
+    lower.includes("from context") ||
+    lower.includes("this is a contradiction") ||
+    lower.includes("workflow item says") ||
+    lower.includes("the exact words the agent should say")
+  );
 }

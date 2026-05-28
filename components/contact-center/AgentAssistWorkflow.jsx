@@ -90,6 +90,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // AI Handoff polling timeout ref
   const aiPollTimeoutRef = useRef(null);
   const aiPollCountRef = useRef(0);
+  const analyzedTranscriptionIdsRef = useRef(new Set());
   const AI_POLL_MAX_ATTEMPTS = 10; // 10 attempts * 3 seconds = 30 seconds
   const AI_POLL_INTERVAL_MS = 3000;
 
@@ -363,9 +364,12 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // Analyze new transcriptions as they come in
   useEffect(() => {
     if (!session || transcriptions.length === 0) return;
+    if (assistConfig.auto_detect_completion === false) return;
 
     const latestTranscription = transcriptions[transcriptions.length - 1];
     if (!latestTranscription.isFinal) return;
+    if (analyzedTranscriptionIdsRef.current.has(latestTranscription.id)) return;
+    analyzedTranscriptionIdsRef.current.add(latestTranscription.id);
 
     const analyzeIfNew = async () => {
       try {
@@ -380,7 +384,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
     const timer = setTimeout(analyzeIfNew, 500);
     return () => clearTimeout(timer);
-  }, [session, transcriptions, analyzeTranscript]);
+  }, [session, transcriptions, analyzeTranscript, assistConfig.auto_detect_completion]);
 
   // Find the current slot that needs filling (for suggested response)
   // MUST be before any conditional returns to maintain hook order
@@ -483,6 +487,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           onCompleteItem={completeItem}
           onSkipItem={skipItem}
           aiSlotsDetails={aiHandoff.slotsDetails}
+          slotsFilled={slotsFilled}
         />
 
         {/* Center: Live Transcription */}
@@ -511,6 +516,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           completedItems={completedItems}
           totalItems={totalItems}
           isComplete={session?.status === "completed"}
+          slotsFilled={slotsFilled}
         />
       </div>
     </div>
@@ -764,7 +770,7 @@ function AiSummaryPanel({ summary, sentiment }) {
 /**
  * Workflow Stages Card with Accordions
  */
-function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {} }) {
+function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {} }) {
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
 
@@ -773,12 +779,13 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     for (const stage of stages) {
       const hasIncomplete = stage.items?.some((item) => {
         const status = itemStatuses[item.id]?.status;
-        return status !== "completed" && status !== "skipped";
+        if (status === "completed" || status === "skipped") return false;
+        return !isSlotFilledFromWorkflowState(item, slotsFilled);
       });
       if (hasIncomplete) return stage.id;
     }
     return stages[stages.length - 1]?.id; // All complete - show last
-  }, [stages, itemStatuses]);
+  }, [stages, itemStatuses, slotsFilled]);
 
   // Auto-expand next section when current section completes
   useEffect(() => {
@@ -847,7 +854,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
               className="w-full"
             >
               {stages.map((stage, stageIndex) => {
-                const stageCompletion = getStageCompletion(stage, itemStatuses);
+                const stageCompletion = getStageCompletion(stage, itemStatuses, slotsFilled);
                 const isActive = stage.id === activeStageId;
 
                 return (
@@ -894,11 +901,11 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                       <div className="space-y-1.5 pt-1">
                         {stage.items?.map((item) => {
                           const status = itemStatuses[item.id] || { status: "pending" };
-                          const isCompleted = status.status === "completed";
+                          const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
-                          const slotValue = status.value || status.extracted_value;
+                          const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.confidence_score;
                           // Check AI slots details for additional context
@@ -1108,18 +1115,15 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcriptions]);
 
-  // Filter to only final transcriptions
-  const finalTranscriptions = transcriptions.filter((t) => t.isFinal);
-
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-blue-500" />
           Live Transcription
-          {finalTranscriptions.length > 0 && (
+          {transcriptions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs">
-              {finalTranscriptions.length} messages
+              {transcriptions.length} messages
             </Badge>
           )}
         </CardTitle>
@@ -1127,13 +1131,13 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full" ref={scrollRef}>
           <div className="p-4 space-y-3">
-            {finalTranscriptions.length === 0 ? (
+            {transcriptions.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Waiting for conversation...</p>
               </div>
             ) : (
-              finalTranscriptions.map((t) => (
+              transcriptions.map((t) => (
                 <TranscriptionBubble
                   key={t.id}
                   transcription={t}
@@ -1159,6 +1163,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
   const sentimentScore = transcription.sentimentScore;
   const intent = transcription.intent;
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const isInterim = !transcription.isFinal;
 
   const SentimentIcon = sentiment === "positive" ? Smile :
     sentiment === "negative" ? Frown : Meh;
@@ -1223,7 +1228,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
           isCustomer
             ? "bg-muted rounded-tl-sm"
             : "bg-purple-500/20 text-foreground rounded-tr-sm"
-        }`}
+        } ${isInterim ? "opacity-80 ring-1 ring-blue-500/30" : ""}`}
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
       </div>
@@ -1300,6 +1305,8 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
         itemId: item.id,
         itemLabel: item.label,
         itemDescription: item.description,
+        itemPromptHint: item.prompt_hint,
+        itemHints: Array.isArray(item.hints) ? item.hints : [],
         itemType: item.type,
         slotOptions: Array.isArray(item.slot_options) ? item.slot_options : null,
         workflowId: session?.workflow_id,
@@ -1315,12 +1322,12 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
     if (!res.ok) {
       console.error("[generateSuggestion] API error:", res.status);
       // Fallback to static template
-      return generateStaticSuggestion(stage, item);
+      return generateStaticSuggestion(stage, item, session?.agent_name);
     }
 
     const data = await res.json();
     if (!data.suggestion) {
-      return generateStaticSuggestion(stage, item);
+      return generateStaticSuggestion(stage, item, session?.agent_name);
     }
 
     const slotOptions = Array.isArray(item.slot_options) ? item.slot_options : [];
@@ -1338,14 +1345,33 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
     };
   } catch (error) {
     console.error("[generateSuggestion] Error:", error);
-    return generateStaticSuggestion(stage, item);
+    return generateStaticSuggestion(stage, item, session?.agent_name);
   }
 }
 
 /**
  * Fallback: Generate a static suggestion (when API fails)
  */
-function generateStaticSuggestion(stage, item) {
+function generateStaticSuggestion(stage, item, agentName = null) {
+  const introMatch = String(item.label || "").match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i);
+  if (introMatch) {
+    const identity = getHumanAgentIntroIdentity({
+      labelIdentity: introMatch[1],
+      promptHint: item.prompt_hint,
+      agentName,
+    });
+    return {
+      id: `${item.id}-${Date.now()}`,
+      text: `Hello, I'm ${identity}. I'll be helping you today.`,
+      stageName: stage.name,
+      itemId: item.id,
+      itemLabel: item.label,
+      itemType: item.type,
+      slotOptions: null,
+      timestamp: new Date(),
+    };
+  }
+
   const questionTemplates = {
     slot: {
       name: "Could you please tell me your full name?",
@@ -1398,6 +1424,21 @@ function generateStaticSuggestion(stage, item) {
     slotOptions: slotOptions.length > 0 ? slotOptions : null,
     timestamp: new Date(),
   };
+}
+
+function getHumanAgentIntroIdentity({ labelIdentity, promptHint, agentName }) {
+  const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
+  const rawIdentity = String(labelIdentity || "").trim().replace(/[.!?]+$/, "");
+  const brandFromIdentity = rawIdentity.match(/\bfrom\s+(.+)$/i)?.[1]?.trim();
+  const brandFromHint = String(promptHint || "").match(/\bat\s+([A-Z][\p{L}\p{N}& '-]+)/u)?.[1]?.trim();
+  const brand = brandFromIdentity || brandFromHint;
+  if (brand && finalAgentName) {
+    return `${finalAgentName} from ${brand}`;
+  }
+  if (rawIdentity.includes("{{agent_name}}") && finalAgentName) {
+    return rawIdentity.replace(/\{\{agent_name\}\}/gi, finalAgentName);
+  }
+  return rawIdentity || finalAgentName || "your support agent";
 }
 
 /**
@@ -1662,6 +1703,7 @@ function WorkflowProgressBar({
   completedItems,
   totalItems,
   isComplete,
+  slotsFilled = {},
 }) {
   // Calculate percentage from items if not provided
   const displayPercentage = completionPercentage ?? 
@@ -1673,7 +1715,7 @@ function WorkflowProgressBar({
         {/* Stage indicators */}
         <div className="flex items-center gap-1 shrink-0">
           {stages.map((stage, index) => {
-            const completion = getStageCompletion(stage, itemStatuses);
+            const completion = getStageCompletion(stage, itemStatuses, slotsFilled);
             return (
               <div
                 key={stage.id}
@@ -1736,13 +1778,19 @@ function WorkflowProgressBar({
 /**
  * Helper: Calculate stage completion
  */
-function getStageCompletion(stage, itemStatuses) {
+function isSlotFilledFromWorkflowState(item, slotsFilled = {}) {
+  if (item?.type !== "slot" || !item.slot_name) return false;
+  const value = slotsFilled[item.slot_name];
+  return value !== undefined && value !== null && value !== "";
+}
+
+function getStageCompletion(stage, itemStatuses, slotsFilled = {}) {
   if (!stage?.items) return { completed: 0, total: 0, isComplete: false };
 
   const total = stage.items.length;
   const completed = stage.items.filter((item) => {
     const status = itemStatuses[item.id];
-    return status?.status === "completed";
+    return status?.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
   }).length;
 
   return {
