@@ -550,9 +550,18 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const currentUseEnhanced = overrides.use_enhanced ?? useEnhanced;
     const currentAzureRegion = overrides.azureRegion ?? azureRegion;
     const currentAzureApiKeyRef = overrides.azureApiKeyRef ?? azureApiKeyRef;
+    const configuredEngineConfig = config.transcription_engine_config || {};
+    const configProvider =
+      config.transcription_engine || configuredEngineConfig.transcription_engine;
+    const configHasInterimResults =
+      configProvider === currentProvider &&
+      (configuredEngineConfig.interim_results !== undefined ||
+        config.interim_results !== undefined);
     const shouldIncludeInterimResults =
       supportsInterimResults(currentProvider, currentModel) &&
-      (overrides.interim_results !== undefined || hasInterimResultsConfig);
+      (overrides.interim_results !== undefined ||
+        hasInterimResultsConfig ||
+        configHasInterimResults);
     const currentLanguages = getLanguagesForProviderModel(
       currentProvider,
       currentModel
