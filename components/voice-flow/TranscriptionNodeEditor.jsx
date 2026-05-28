@@ -649,7 +649,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     }
     setLanguage(newLanguage);
     if (shouldSetProviderInterimDefault) {
-      setHasInterimResultsConfig(true);
+      // Keep provider defaults scoped to the provider switch. Do not mark the
+      // value as user-configured, otherwise Google's default can leak when
+      // exploring other providers that also support interim results.
       setInterimResults(newInterimResults);
     }
 
