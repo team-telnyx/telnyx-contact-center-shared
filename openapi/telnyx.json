@@ -494,6 +494,10 @@
       "description": "Short codes"
     },
     {
+      "name": "Speech To Text Capabilities",
+      "description": "Discover available speech-to-text providers, models, and supported languages."
+    },
+    {
       "name": "Speech To Text over WebSockets",
       "description": "Speech to text command operations"
     },
@@ -42254,11 +42258,93 @@
         "x-latency-category": "responsive"
       }
     },
+    "/speech-to-text/providers": {
+      "get": {
+        "summary": "List supported STT providers",
+        "description": "Retrieve the canonical list of supported speech-to-text providers, models, accepted language codes, and the service types each model supports.\n\nService types:\n  * `streaming` \u2014 standalone WebSocket transcription via `/speech-to-text/transcription`.\n  * `file_transcription` \u2014 file-based transcription via `/ai/audio/transcriptions`.\n  * `in_call_transcription` \u2014 live call transcription via Call Control `transcription_start`.\n\nUse this endpoint to discover which (provider, model) combinations are available for the surface you need, and which language codes each accepts. `auto` in a `languages` array indicates the provider performs language detection.",
+        "operationId": "listSttProviders",
+        "servers": [
+          {
+            "url": "https://api.telnyx.com/v2",
+            "description": "Telnyx API v2"
+          }
+        ],
+        "tags": [
+          "Speech To Text Capabilities"
+        ],
+        "parameters": [
+          {
+            "name": "service_type",
+            "in": "query",
+            "required": false,
+            "description": "Filter to entries that support the given service type.",
+            "schema": {
+              "$ref": "#/components/schemas/STTServiceType"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "required": false,
+            "description": "Filter to entries for a specific STT provider. The enum mirrors the providers advertised across the speech-to-text spec (including `google` and `telnyx`, which are accepted as WebSocket transcription engines). A provider that has no models currently registered for any service type will return an empty `data` array rather than an error.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "deepgram",
+                "speechmatics",
+                "assemblyai",
+                "xai",
+                "soniox",
+                "azure",
+                "openai",
+                "google",
+                "telnyx"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of supported STT providers and models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/STTProvidersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request \u2014 invalid filter value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/speech-to-text_Errors"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed \u2014 missing or invalid API key."
+          },
+          "422": {
+            "$ref": "#/components/responses/speech-to-text_UnprocessableEntityResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/speech-to-text/transcription": {
       "get": {
         "summary": "Speech to text over WebSocket",
         "description": "Open a WebSocket connection to stream audio and receive transcriptions in real-time. Authentication is provided via the standard `Authorization: Bearer <API_KEY>` header.\n\nSupported engines: `Azure`, `Deepgram`, `Google`, `Telnyx`, `xAI`, `Speechmatics`, `Soniox`.\n\n**Connection flow:**\n1. Open WebSocket with query parameters specifying engine, input format, and language.\n2. Send binary audio frames (mp3/wav format).\n3. Receive JSON transcript frames with `transcript`, `is_final`, and `confidence` fields.\n4. Close connection when done.",
         "operationId": "TranscriptionOverWs",
+        "servers": [
+          {
+            "url": "wss://api.telnyx.com/v2",
+            "description": "Telnyx API v2 (WebSocket)"
+          }
+        ],
         "tags": [
           "Speech To Text over WebSockets"
         ],
@@ -65852,6 +65938,9 @@
           "assistant": {
             "$ref": "#/components/schemas/CallAssistantRequest"
           },
+          "conversation_relay_config": {
+            "$ref": "#/components/schemas/ConversationRelayEmbeddedConfig"
+          },
           "billing_group_id": {
             "description": "Use this field to set the Billing Group ID for the call. Must be a valid and existing Billing Group ID.",
             "type": "string",
@@ -73801,11 +73890,27 @@
           "dialogflow_config": {
             "analyze_sentiment": false,
             "partial_automated_agent_reply": false
+          },
+          "conversation_relay_config": {
+            "url": "wss://example.com/conversation-relay",
+            "dtmf_detection": true,
+            "greeting": "Hi! Ask me anything!",
+            "voice": "Telnyx.KokoroTTS.af",
+            "tts_provider": "telnyx",
+            "language": "en-US",
+            "interruptible": "speech",
+            "interruptible_greeting": "dtmf",
+            "custom_parameters": {
+              "customer_id": "12345"
+            }
           }
         },
         "properties": {
           "assistant": {
             "$ref": "#/components/schemas/CallAssistantRequest"
+          },
+          "conversation_relay_config": {
+            "$ref": "#/components/schemas/ConversationRelayEmbeddedConfig"
           },
           "to": {
             "description": "The DID or SIP URI to dial out to. Multiple DID or SIP URIs can be provided using an array of strings. For SIP URI destinations, append `;secure=true` or `;secure=srtp` to enable SRTP media encryption for that endpoint, or `;secure=dtls` to enable DTLS media encryption for that endpoint. If `media_encryption` is set to `SRTP` or `DTLS`, it takes precedence over any per-endpoint `secure` URI parameter. For a single string destination, you may append a comma followed by DTMF digits (e.g. `+18004247767,200`) to play those digits as DTMF once the called party answers \u2014 equivalent to setting `send_digits_on_answer` separately. If both are present, the explicit `send_digits_on_answer` parameter takes precedence. This shorthand is not supported when `to` is an array.",
@@ -79712,7 +79817,7 @@
             "example": "ssml"
           },
           "voice": {
-            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
+            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`, `ArcanaV3`, `Coda`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
             "type": "string",
             "example": "Telnyx.KokoroTTS.af"
           },
@@ -80519,6 +80624,173 @@
         },
         "additionalProperties": true
       },
+      "ConversationRelayEmbeddedConfig": {
+        "type": "object",
+        "title": "Conversation Relay Embedded Config",
+        "description": "Starts a Conversation Relay session automatically when the answered/dialed call is answered. This embedded shape is supported on `answer` and `dial`. It uses public field names (`url`, `dtmf_detection`, `greeting`, `voice`, `language`, etc.) and maps them to the underlying Conversation Relay action. `client_state`, `tts_language`, and `transcription_language` inside this object are ignored; use the parent command's `client_state` and `command_id` fields instead.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "pattern": "^wss?://",
+            "description": "WebSocket URL for your Conversation Relay server. Must start with `ws://` or `wss://`.",
+            "example": "wss://example.com/conversation-relay"
+          },
+          "dtmf_detection": {
+            "type": "boolean",
+            "description": "Enable DTMF detection for the relay session.",
+            "default": false,
+            "example": true
+          },
+          "greeting": {
+            "type": "string",
+            "description": "Text played when the relay session starts.",
+            "example": "Hi! Ask me anything!"
+          },
+          "voice": {
+            "$ref": "#/components/schemas/VoiceConfig"
+          },
+          "voice_settings": {
+            "description": "The settings associated with the voice selected",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ElevenLabsVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/TelnyxVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AWSVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/MinimaxVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AzureVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/RimeVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/ResembleVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/InworldVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/XAIVoiceSettings"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "elevenlabs": "#/components/schemas/ElevenLabsVoiceSettings",
+                "telnyx": "#/components/schemas/TelnyxVoiceSettings",
+                "aws": "#/components/schemas/AWSVoiceSettings",
+                "minimax": "#/components/schemas/MinimaxVoiceSettings",
+                "azure": "#/components/schemas/AzureVoiceSettings",
+                "rime": "#/components/schemas/RimeVoiceSettings",
+                "resemble": "#/components/schemas/ResembleVoiceSettings",
+                "inworld": "#/components/schemas/InworldVoiceSettings",
+                "xai": "#/components/schemas/XAIVoiceSettings"
+              }
+            }
+          },
+          "tts_provider": {
+            "type": "string",
+            "description": "Text-to-speech provider. If omitted, Telnyx derives it from `voice` or `provider`.",
+            "example": "telnyx"
+          },
+          "provider": {
+            "type": "string",
+            "description": "Structured voice provider. Must be supplied together with `structured_provider`.",
+            "example": "elevenlabs"
+          },
+          "structured_provider": {
+            "$ref": "#/components/schemas/ConversationRelayStructuredProvider"
+          },
+          "language": {
+            "type": "string",
+            "description": "Default language for both text-to-speech and speech recognition.",
+            "default": "en",
+            "example": "en-US"
+          },
+          "languages": {
+            "type": "array",
+            "description": "Per-language TTS and transcription settings.",
+            "items": {
+              "$ref": "#/components/schemas/ConversationRelayLanguage"
+            }
+          },
+          "interruptible": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "interruptible_greeting": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "interruption_settings": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptionSettings"
+          },
+          "transcription_engine": {
+            "description": "Engine to use for speech recognition. Legacy values `A` - `Google`, `B` - `Telnyx` are supported for backward compatibility. For Conversation Relay, use this field with `transcription_engine_config`; the `transcription` object is not supported.",
+            "type": "string",
+            "enum": [
+              "Google",
+              "Telnyx",
+              "Deepgram",
+              "Azure",
+              "xAI",
+              "AssemblyAI",
+              "Speechmatics",
+              "Soniox",
+              "A",
+              "B"
+            ],
+            "default": "Google",
+            "example": "Google"
+          },
+          "transcription_engine_config": {
+            "$ref": "#/components/schemas/ConversationRelayTranscriptionEngineConfig"
+          },
+          "custom_parameters": {
+            "type": "object",
+            "description": "Custom key-value parameters forwarded to the relay session as assistant dynamic variables.",
+            "additionalProperties": true,
+            "example": {
+              "customer_id": "12345"
+            }
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "example": {
+          "url": "wss://example.com/conversation-relay",
+          "dtmf_detection": true,
+          "greeting": "Hi! Ask me anything!",
+          "voice": "Telnyx.KokoroTTS.af",
+          "tts_provider": "telnyx",
+          "voice_settings": {
+            "type": "telnyx"
+          },
+          "language": "en-US",
+          "languages": [
+            {
+              "language": "en-US",
+              "voice": "Telnyx.Ultra.alloy",
+              "tts_provider": "telnyx",
+              "transcription_engine": "Deepgram",
+              "transcription_engine_config": {
+                "transcription_model": "deepgram/nova-3"
+              }
+            }
+          ],
+          "interruptible": "speech",
+          "interruptible_greeting": "dtmf",
+          "custom_parameters": {
+            "customer_id": "12345"
+          }
+        }
+      },
       "ConversationRelayInterruptible": {
         "type": "string",
         "description": "Controls when caller input can interrupt assistant speech. `any` allows speech or DTMF interruptions; `none` disables interruptions; `speech` allows speech only; `dtmf` allows DTMF only.",
@@ -80554,39 +80826,109 @@
       "ConversationRelayLanguage": {
         "type": "object",
         "title": "Conversation Relay Language",
-        "description": "Language-specific speech and transcription settings for Conversation Relay.",
+        "description": "Language-specific TTS and transcription settings for Conversation Relay.",
         "properties": {
-          "code": {
+          "language": {
             "type": "string",
-            "description": "BCP 47 language code.",
+            "description": "BCP 47 language tag for this language configuration.",
             "example": "en-US"
           },
           "tts_provider": {
             "type": "string",
-            "description": "Text-to-speech provider for this language.",
-            "example": "ElevenLabs"
+            "description": "Text-to-speech provider for this language. If omitted and `voice` is provided, Telnyx derives the provider from the voice identifier.",
+            "example": "telnyx"
           },
           "voice": {
             "type": "string",
             "description": "Voice identifier for this language.",
-            "example": "alice"
+            "example": "Telnyx.KokoroTTS.af"
+          },
+          "voice_settings": {
+            "description": "The settings associated with the voice selected",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ElevenLabsVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/TelnyxVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AWSVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/MinimaxVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/AzureVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/RimeVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/ResembleVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/InworldVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/XAIVoiceSettings"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type",
+              "mapping": {
+                "elevenlabs": "#/components/schemas/ElevenLabsVoiceSettings",
+                "telnyx": "#/components/schemas/TelnyxVoiceSettings",
+                "aws": "#/components/schemas/AWSVoiceSettings",
+                "minimax": "#/components/schemas/MinimaxVoiceSettings",
+                "azure": "#/components/schemas/AzureVoiceSettings",
+                "rime": "#/components/schemas/RimeVoiceSettings",
+                "resemble": "#/components/schemas/ResembleVoiceSettings",
+                "inworld": "#/components/schemas/InworldVoiceSettings",
+                "xai": "#/components/schemas/XAIVoiceSettings"
+              }
+            }
+          },
+          "transcription_engine": {
+            "description": "Engine to use for speech recognition. Legacy values `A` - `Google`, `B` - `Telnyx` are supported for backward compatibility. When provided in a Conversation Relay language entry, Telnyx derives `transcription_provider` and `speech_model` for that language.",
+            "type": "string",
+            "enum": [
+              "Google",
+              "Telnyx",
+              "Deepgram",
+              "Azure",
+              "xAI",
+              "AssemblyAI",
+              "Speechmatics",
+              "Soniox",
+              "A",
+              "B"
+            ],
+            "default": "Google",
+            "example": "Google"
+          },
+          "transcription_engine_config": {
+            "$ref": "#/components/schemas/ConversationRelayTranscriptionEngineConfig"
           },
           "transcription_provider": {
             "type": "string",
-            "description": "Speech-to-text provider for this language.",
+            "description": "Conversation Relay transcription provider name. Prefer `transcription_engine` when configuring speech-to-text.",
             "example": "Deepgram"
           },
           "speech_model": {
             "type": "string",
-            "description": "Speech recognition model for this language.",
-            "example": "nova-2"
+            "description": "Conversation Relay speech model. Prefer `transcription_engine_config.transcription_model` when configuring speech-to-text.",
+            "example": "nova-3"
           }
-        }
+        },
+        "required": [
+          "language"
+        ]
       },
       "ConversationRelaySettings": {
         "type": "object",
         "title": "Conversation Relay Settings",
-        "description": "Conversation Relay connection settings. This object is used by TeXML Call Scripting's `<ConversationRelay>` verb. The `interruptible` and `interruptible_greeting` fields are shorthand for `interruption_settings.interruptible` and `interruption_settings.interruptible_greeting`; use top-level `interruption_settings` for the full interruption settings shape.",
+        "description": "Conversation Relay connection settings. This object can provide `url`, `dtmf_detection`, `interruptible`, `interruptible_greeting`, and `languages`. Top-level aliases override nested values when both are present.",
         "properties": {
           "url": {
             "type": "string",
@@ -80616,15 +80958,44 @@
         },
         "required": [
           "url"
-        ]
+        ],
+        "example": {
+          "url": "wss://example.com/conversation-relay",
+          "dtmf_detection": true,
+          "interruptible": "speech",
+          "interruptible_greeting": "dtmf",
+          "languages": [
+            {
+              "language": "en-US",
+              "tts_provider": "telnyx",
+              "voice": "Telnyx.KokoroTTS.af",
+              "transcription_engine": "Deepgram",
+              "transcription_engine_config": {
+                "transcription_model": "deepgram/nova-3"
+              }
+            }
+          ]
+        }
       },
       "ConversationRelayStartRequest": {
         "type": "object",
         "title": "Conversation Relay Start Request",
-        "description": "Start a Conversation Relay session. Provide either `conversation_relay_url` or `conversation_relay_settings.url`; when both nested and top-level equivalents are provided, top-level values take precedence as described on `conversation_relay_settings`.",
+        "description": "Start a Conversation Relay session. You may provide the WebSocket URL as `url`, `conversation_relay_url`, or `conversation_relay_settings.url`; top-level values take precedence over nested settings. Use `transcription_engine` and `transcription_engine_config` for speech-to-text configuration; the `transcription` object is not supported.",
         "properties": {
           "conversation_relay_settings": {
             "$ref": "#/components/schemas/ConversationRelaySettings"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^wss?://",
+            "description": "Public alias for `conversation_relay_url`. Must start with `ws://` or `wss://`. If both are present, this value wins.",
+            "example": "wss://example.com/conversation-relay"
+          },
+          "dtmf_detection": {
+            "type": "boolean",
+            "description": "Public alias for `conversation_relay_dtmf_detection`. If both are present, this value wins.",
+            "default": false,
+            "example": true
           },
           "conversation_relay_url": {
             "type": "string",
@@ -80654,6 +81025,9 @@
                 "$ref": "#/components/schemas/AWSVoiceSettings"
               },
               {
+                "$ref": "#/components/schemas/MinimaxVoiceSettings"
+              },
+              {
                 "$ref": "#/components/schemas/AzureVoiceSettings"
               },
               {
@@ -80661,6 +81035,9 @@
               },
               {
                 "$ref": "#/components/schemas/ResembleVoiceSettings"
+              },
+              {
+                "$ref": "#/components/schemas/InworldVoiceSettings"
               },
               {
                 "$ref": "#/components/schemas/XAIVoiceSettings"
@@ -80672,9 +81049,11 @@
                 "elevenlabs": "#/components/schemas/ElevenLabsVoiceSettings",
                 "telnyx": "#/components/schemas/TelnyxVoiceSettings",
                 "aws": "#/components/schemas/AWSVoiceSettings",
+                "minimax": "#/components/schemas/MinimaxVoiceSettings",
                 "azure": "#/components/schemas/AzureVoiceSettings",
                 "rime": "#/components/schemas/RimeVoiceSettings",
                 "resemble": "#/components/schemas/ResembleVoiceSettings",
+                "inworld": "#/components/schemas/InworldVoiceSettings",
                 "xai": "#/components/schemas/XAIVoiceSettings"
               }
             }
@@ -80686,23 +81065,13 @@
           },
           "language": {
             "type": "string",
-            "description": "Default language for the relay session. This value is used for both text-to-speech and speech recognition unless `tts_language` or `transcription_language` are provided.",
+            "description": "Default language for the relay session. This value is used for both text-to-speech and speech recognition.",
             "default": "en",
-            "example": "en-US"
-          },
-          "tts_language": {
-            "type": "string",
-            "description": "Language to use for text-to-speech. Overrides `language` for TTS when provided.",
-            "example": "es"
-          },
-          "transcription_language": {
-            "type": "string",
-            "description": "Language to use for speech recognition. Overrides `language` for transcription when provided.",
             "example": "en-US"
           },
           "languages": {
             "type": "array",
-            "description": "Language-specific TTS and transcription settings. Use this when the relay session needs per-language provider, voice, or speech model configuration.",
+            "description": "Per-language TTS and transcription settings.",
             "items": {
               "$ref": "#/components/schemas/ConversationRelayLanguage"
             }
@@ -80711,7 +81080,10 @@
             "$ref": "#/components/schemas/ConversationRelayInterruptionSettings"
           },
           "transcription": {
-            "$ref": "#/components/schemas/ConversationRelayTranscriptionSettings"
+            "type": "object",
+            "deprecated": true,
+            "description": "Not supported for Conversation Relay start requests. Use `transcription_engine` and `transcription_engine_config` instead.",
+            "additionalProperties": true
           },
           "assistant": {
             "$ref": "#/components/schemas/ConversationRelayAssistant"
@@ -80725,37 +81097,89 @@
             "description": "Use this field to avoid duplicate commands. Telnyx will ignore any command with the same `command_id` for the same `call_control_id`.",
             "type": "string",
             "example": "891510ac-f3e4-11e8-af5b-de00688a4901"
-          }
-        },
-        "example": {
-          "conversation_relay_settings": {
-            "url": "wss://example.com/conversation-relay",
-            "dtmf_detection": true,
-            "interruptible": "speech",
-            "interruptible_greeting": "any",
-            "languages": [
-              {
-                "code": "en-US",
-                "tts_provider": "ElevenLabs",
-                "voice": "alice",
-                "transcription_provider": "Deepgram",
-                "speech_model": "nova-2"
-              }
-            ]
           },
-          "greeting": "Hi! Ask me anything!",
-          "voice": "Telnyx.KokoroTTS.af",
-          "language": "en-US",
-          "transcription": {
-            "provider": "deepgram"
+          "tts_provider": {
+            "type": "string",
+            "description": "Text-to-speech provider. If omitted, Telnyx derives it from `voice` or `provider`.",
+            "example": "telnyx"
           },
-          "assistant": {
-            "dynamic_variables": {
+          "provider": {
+            "type": "string",
+            "description": "Structured voice provider. Must be supplied together with `structured_provider`.",
+            "example": "elevenlabs"
+          },
+          "structured_provider": {
+            "$ref": "#/components/schemas/ConversationRelayStructuredProvider"
+          },
+          "transcription_engine": {
+            "description": "Engine to use for speech recognition. Legacy values `A` - `Google`, `B` - `Telnyx` are supported for backward compatibility. For Conversation Relay, use this field with `transcription_engine_config`; the `transcription` object is not supported.",
+            "type": "string",
+            "enum": [
+              "Google",
+              "Telnyx",
+              "Deepgram",
+              "Azure",
+              "xAI",
+              "AssemblyAI",
+              "Speechmatics",
+              "Soniox",
+              "A",
+              "B"
+            ],
+            "default": "Google",
+            "example": "Google"
+          },
+          "transcription_engine_config": {
+            "$ref": "#/components/schemas/ConversationRelayTranscriptionEngineConfig"
+          },
+          "interruptible": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "interruptible_greeting": {
+            "$ref": "#/components/schemas/ConversationRelayInterruptible"
+          },
+          "custom_parameters": {
+            "type": "object",
+            "description": "Custom key-value parameters forwarded to the relay session as `assistant.dynamic_variables`. If `assistant.dynamic_variables` is also present, these values are merged in.",
+            "additionalProperties": true,
+            "example": {
               "customer_id": "12345"
             }
           }
         },
+        "example": {
+          "url": "wss://example.com/conversation-relay",
+          "dtmf_detection": true,
+          "interruptible": "speech",
+          "interruptible_greeting": "dtmf",
+          "greeting": "Hi! Ask me anything!",
+          "voice": "Telnyx.KokoroTTS.af",
+          "tts_provider": "telnyx",
+          "voice_settings": {
+            "type": "telnyx"
+          },
+          "language": "en-US",
+          "languages": [
+            {
+              "language": "en-US",
+              "tts_provider": "telnyx",
+              "voice": "Telnyx.KokoroTTS.af",
+              "transcription_engine": "Deepgram",
+              "transcription_engine_config": {
+                "transcription_model": "deepgram/nova-3"
+              }
+            }
+          ],
+          "custom_parameters": {
+            "customer_id": "12345"
+          }
+        },
         "anyOf": [
+          {
+            "required": [
+              "url"
+            ]
+          },
           {
             "required": [
               "conversation_relay_url"
@@ -80784,25 +81208,26 @@
           }
         }
       },
-      "ConversationRelayTranscriptionSettings": {
+      "ConversationRelayStructuredProvider": {
         "type": "object",
-        "title": "Conversation Relay Transcription Settings",
-        "description": "Speech-to-text settings for Conversation Relay.",
-        "properties": {
-          "provider": {
-            "type": "string",
-            "description": "Transcription provider to use.",
-            "example": "deepgram"
-          },
-          "model": {
-            "type": "string",
-            "description": "Transcription model to use.",
-            "example": "nova-2"
-          },
-          "language": {
-            "type": "string",
-            "description": "Transcription language.",
-            "example": "en-US"
+        "title": "Conversation Relay Structured Provider",
+        "description": "Provider-specific structured voice settings. Must be supplied together with `provider`; Telnyx sends the value as the nested provider configuration for Conversation Relay.",
+        "additionalProperties": true,
+        "example": {
+          "voice_id": "voice-id",
+          "model_id": "Default"
+        }
+      },
+      "ConversationRelayTranscriptionEngineConfig": {
+        "type": "object",
+        "title": "Conversation Relay Transcription Engine Config",
+        "description": "Engine-specific transcription settings for Conversation Relay. This accepts the same provider-specific options used by the Call Transcription Start command, such as `transcription_model`, without requiring the engine discriminator to be repeated inside this object.",
+        "additionalProperties": true,
+        "example": {
+          "transcription_model": "deepgram/nova-3",
+          "interim_results": true,
+          "keywords_boosting": {
+            "telnyx": 2.0
           }
         }
       },
@@ -91583,7 +92008,7 @@
             "example": "premium"
           },
           "voice": {
-            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
+            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`, `ArcanaV3`, `Coda`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
             "type": "string",
             "example": "Telnyx.KokoroTTS.af"
           },
@@ -114311,6 +114736,88 @@
           }
         }
       },
+      "STTProvider": {
+        "type": "object",
+        "description": "A (provider, model) tuple along with its supported service types and languages.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "STT provider name.",
+            "example": "deepgram"
+          },
+          "model": {
+            "type": "string",
+            "description": "Provider-scoped model name.",
+            "example": "nova-3"
+          },
+          "service_types": {
+            "type": "array",
+            "description": "Service surfaces this (provider, model) supports.",
+            "items": {
+              "$ref": "#/components/schemas/STTServiceType"
+            }
+          },
+          "languages": {
+            "type": "array",
+            "description": "Languages this (provider, model) accepts, in the provider's native code format. `auto` indicates the provider performs language detection.",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "en",
+              "es",
+              "fr"
+            ]
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "service_types",
+          "languages"
+        ]
+      },
+      "STTProvidersMeta": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Total number of entries returned.",
+            "example": 12
+          }
+        },
+        "required": [
+          "total"
+        ]
+      },
+      "STTProvidersResponse": {
+        "type": "object",
+        "description": "List of supported STT providers and models.",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/STTProvider"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/STTProvidersMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "STTServiceType": {
+        "type": "string",
+        "description": "Service surface a model is available on.",
+        "enum": [
+          "streaming",
+          "file_transcription",
+          "in_call_transcription"
+        ]
+      },
       "ScheduledEventResponse": {
         "anyOf": [
           {
@@ -116084,7 +116591,7 @@
             "example": "current"
           },
           "voice": {
-            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
+            "description": "Specifies the voice used in speech synthesis.\n\n- Define voices using the format `<Provider>.<Model>.<VoiceId>`. Specifying only the provider will give default values for voice_id and model_id.\n\n **Supported Providers:**\n- **AWS:** Use `AWS.Polly.<VoiceId>` (e.g., `AWS.Polly.Joanna`). For neural voices, which provide more realistic, human-like speech, append `-Neural` to the `VoiceId` (e.g., `AWS.Polly.Joanna-Neural`). Check the [available voices](https://docs.aws.amazon.com/polly/latest/dg/available-voices.html) for compatibility.\n- **Azure:** Use `Azure.<VoiceId>` (e.g., `Azure.en-CA-ClaraNeural`, `Azure.en-US-BrianMultilingualNeural`, `Azure.en-US-Ava:DragonHDLatestNeural`). For a complete list of voices, go to [Azure Voice Gallery](https://speech.microsoft.com/portal/voicegallery). Use `voice_settings` to configure custom deployments, regions, or API keys.\n- **ElevenLabs:** Use `ElevenLabs.<ModelId>.<VoiceId>` (e.g., `ElevenLabs.eleven_multilingual_v2.21m00Tcm4TlvDq8ikWAM`). The `ModelId` part is optional. To use ElevenLabs, you must provide your ElevenLabs API key as an integration identifier secret in `\"voice_settings\": {\"api_key_ref\": \"<secret_identifier>\"}`. See [integration secrets documentation](https://developers.telnyx.com/api/secrets-manager/integration-secrets/create-integration-secret) for details. Check [available voices](https://elevenlabs.io/docs/api-reference/get-voices).\n- **Telnyx:** Use `Telnyx.<model_id>.<voice_id>` (e.g., `Telnyx.KokoroTTS.af`). Use `voice_settings` to configure voice_speed and other synthesis parameters.\n- **Minimax:** Use `Minimax.<ModelId>.<VoiceId>` (e.g., `Minimax.speech-02-hd.Wise_Woman`). Supported models: `speech-02-turbo`, `speech-02-hd`, `speech-2.6-turbo`, `speech-2.8-turbo`. Use `voice_settings` to configure speed, volume, pitch, and language_boost.\n- **Rime:** Use `Rime.<model_id>.<voice_id>` (e.g., `Rime.Arcana.cove`). Supported model_ids: `Arcana`, `Mist`, `ArcanaV3`, `Coda`. Use `voice_settings` to configure voice_speed.\n- **Resemble:** Use `Resemble.Turbo.<voice_id>` (e.g., `Resemble.Turbo.my_voice`). Only `Turbo` model is supported. Use `voice_settings` to configure precision, sample_rate, and format.\n- **Inworld:** Use `Inworld.<ModelId>.<VoiceId>` (e.g., `Inworld.Mini.Loretta`, `Inworld.Max.Oliver`). Supported models: `Mini`, `Max`.\n- **xAI:** Use `xAI.<VoiceId>` (e.g., `xAI.eve`). Available voices: `eve`, `ara`, `rex`, `sal`, `leo`.\n\nFor service_level basic, you may define the gender of the speaker (male or female).",
             "type": "string",
             "example": "Telnyx.KokoroTTS.af"
           },
