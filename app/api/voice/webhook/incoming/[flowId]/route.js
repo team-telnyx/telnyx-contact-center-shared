@@ -870,6 +870,7 @@ export async function POST(request, { params }) {
             // Check if this is a logical node that should continue immediately
             const logicalNodeTypes = [
               "http_request_action",
+              "data_action",
               "set_variable",
               "condition",
               "switch",
@@ -1301,6 +1302,7 @@ export async function POST(request, { params }) {
               // Check if this is a logical node that should continue immediately
               const logicalNodeTypes = [
                 "http_request_action",
+                "data_action",
                 "set_variable",
                 "condition",
                 "switch",
@@ -1557,6 +1559,7 @@ async function executeNodeChain(
     // Telephony nodes send command and STOP (wait for webhook)
     const logicalNodeTypes = [
       "http_request_action",
+      "data_action",
       "set_variable",
       "condition",
       "switch",
