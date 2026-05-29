@@ -189,6 +189,37 @@
   }
 }
 
+/* React Flow controls should inherit the app theme instead of the library's light defaults. */
+.call-flow-controls {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 10px 30px oklch(0 0 0 / 25%) !important;
+  overflow: hidden;
+}
+
+.call-flow-controls .react-flow__controls-button {
+  width: 2rem;
+  height: 2rem;
+  background: var(--card) !important;
+  border-bottom-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+  fill: currentColor !important;
+}
+
+.call-flow-controls .react-flow__controls-button:hover {
+  background: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.call-flow-controls .react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+.call-flow-canvas .react-flow__attribution {
+  display: none !important;
+}
+
 /* Recharts tooltip and bar hover styles for dark mode */
 .dark .recharts-tooltip-wrapper {
   background-color: var(--card) !important;

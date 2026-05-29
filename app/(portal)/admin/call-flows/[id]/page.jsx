@@ -2811,9 +2811,11 @@ export default function FlowBuilderPage() {
                   nodeTypes={nodeTypes}
                   edgeTypes={edgeTypes}
                   fitView
+                  proOptions={{ hideAttribution: true }}
+                  className="call-flow-canvas"
                 >
                   <Background />
-                  <Controls />
+                  <Controls className="call-flow-controls" />
                   <Panel
                     position="bottom-right"
                     className="bg-card border rounded p-2 text-xs"
