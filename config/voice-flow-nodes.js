@@ -113,6 +113,14 @@ export const VOICE_FLOW_NODES = {
         default: false,
         description: "Require authentication token in request headers",
       },
+      auth_token: {
+        type: "string",
+        label: "Authentication Token",
+        required: false,
+        placeholder: "Enter bearer/header token",
+        description:
+          "Token required when authentication is enabled. Send it as a Bearer token, x-flow-token, or x-api-key header.",
+      },
       payloadVariable: {
         type: "string",
         label: "Payload Variable Name",
