@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -79,7 +80,7 @@ export async function GET(request) {
     // Get items
     queryParams.push(pageSize, offset);
     const itemsRes = await pool.query(
-      `SELECT id, username, title, slug, summary, content, category, subcategory, tags, keywords, author_name, status, language, published_at, created_at, updated_at
+      `SELECT id, username, title, slug, summary, content, category, subcategory, tags, keywords, author_name, status, language, custom_data, published_at, created_at, updated_at
        FROM kb_articles
        ${whereClause}
        ORDER BY created_at DESC
@@ -126,6 +127,16 @@ export async function POST(request) {
       language,
     } = body;
 
+    let customData;
+    try {
+      customData = normalizeCustomDataValue(body.custom_data);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err?.message || "Custom data must be a valid JSON object" },
+        { status: 400 }
+      );
+    }
+
     if (!title || !slug || !content || !category) {
       return NextResponse.json(
         { error: "Title, slug, content, and category are required" },
@@ -146,8 +157,8 @@ export async function POST(request) {
       status === "Published" ? new Date().toISOString() : null;
 
     await pool.query(
-      `INSERT INTO kb_articles (id, username, title, slug, summary, content, category, subcategory, tags, keywords, author_name, status, language, published_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())`,
+      `INSERT INTO kb_articles (id, username, title, slug, summary, content, category, subcategory, tags, keywords, author_name, status, language, custom_data, published_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())`,
       [
         id,
         username,
@@ -162,6 +173,7 @@ export async function POST(request) {
         authorName?.trim() || null,
         status,
         language?.trim() || "en",
+        JSON.stringify(customData),
         publishedAt,
       ]
     );

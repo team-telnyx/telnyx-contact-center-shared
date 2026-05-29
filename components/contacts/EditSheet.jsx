@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { IconEdit } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatCustomDataText, parseCustomDataText } from "@/lib/custom-data-utils";
 
 /**
  * Edit sheet component for Contacts
@@ -53,6 +54,7 @@ export default function ContactEditSheet({
   const [addressZip, setAddressZip] = React.useState("");
   const [addressCountry, setAddressCountry] = React.useState("");
   const [notes, setNotes] = React.useState("");
+  const [customDataText, setCustomDataText] = React.useState("{}");
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
 
@@ -82,6 +84,7 @@ export default function ContactEditSheet({
           setAddressZip("");
           setAddressCountry("");
           setNotes("");
+          setCustomDataText("{}");
         }
         return;
       }
@@ -116,6 +119,7 @@ export default function ContactEditSheet({
           setAddressZip(d.address_zip || "");
           setAddressCountry(d.address_country || "");
           setNotes(d.notes || "");
+          setCustomDataText(formatCustomDataText(d.custom_data));
         } else {
           notify({
             title: "Failed to load contact",
@@ -151,6 +155,18 @@ export default function ContactEditSheet({
       return;
     }
 
+    let customData;
+    try {
+      customData = parseCustomDataText(customDataText);
+    } catch (err) {
+      notify({
+        title: "Validation error",
+        description: err?.message || "Custom Data must be a valid JSON object",
+        variant: "error",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
@@ -174,6 +190,7 @@ export default function ContactEditSheet({
         address_zip: addressZip || null,
         address_country: addressCountry || null,
         notes: notes || null,
+        custom_data: customData,
       };
 
       const url = contactId
@@ -471,6 +488,28 @@ export default function ContactEditSheet({
                           rows={4}
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t" />
+
+                  {/* Custom Data Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                      Custom Data
+                    </h3>
+                    <div className="grid gap-2">
+                      <Label className="text-sm">JSON object</Label>
+                      <Textarea
+                        value={customDataText}
+                        onChange={(e) => setCustomDataText(e.target.value)}
+                        rows={6}
+                        className="font-mono text-xs"
+                        placeholder={'{"externalId":"123","segment":"vip"}'}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter a valid JSON object. Leave empty to save an empty object.
+                      </p>
                     </div>
                   </div>
                 </>

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatCustomDataText, parseCustomDataText } from "@/lib/custom-data-utils";
 
 const STATUS_OPTIONS = [
   { value: "Draft", label: "Draft" },
@@ -49,6 +50,7 @@ export default function KbArticleEditSheet({
   const [authorName, setAuthorName] = useState("");
   const [status, setStatus] = useState("Draft");
   const [language, setLanguage] = useState("en");
+  const [customDataText, setCustomDataText] = useState("{}");
 
   useEffect(() => {
     if (open) {
@@ -67,6 +69,7 @@ export default function KbArticleEditSheet({
         setAuthorName("");
         setStatus("Draft");
         setLanguage("en");
+        setCustomDataText("{}");
       }
     }
   }, [open, articleId]);
@@ -110,6 +113,7 @@ export default function KbArticleEditSheet({
         setAuthorName(article.author_name || "");
         setStatus(article.status || "Draft");
         setLanguage(article.language || "en");
+        setCustomDataText(formatCustomDataText(article.custom_data));
       }
     } catch (error) {
       console.error("[KbArticleEditSheet] Load error:", error);
@@ -160,6 +164,18 @@ export default function KbArticleEditSheet({
       return;
     }
 
+    let customData;
+    try {
+      customData = parseCustomDataText(customDataText);
+    } catch (err) {
+      notify({
+        title: "Validation error",
+        description: err?.message || "Custom Data must be a valid JSON object",
+        variant: "error",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       // Parse tags and keywords from comma-separated strings
@@ -184,6 +200,7 @@ export default function KbArticleEditSheet({
         authorName: authorName.trim() || null,
         status,
         language: language.trim() || "en",
+        custom_data: customData,
       };
 
       const url = articleId
@@ -399,6 +416,21 @@ export default function KbArticleEditSheet({
                     />
                     <p className="text-xs text-muted-foreground">
                       ISO 639-1 language code (e.g., en, es, fr)
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="customData">Custom Data</Label>
+                    <Textarea
+                      id="customData"
+                      value={customDataText}
+                      onChange={(e) => setCustomDataText(e.target.value)}
+                      placeholder={'{"source":"portal","audience":"agents"}'}
+                      rows={6}
+                      className="font-mono text-xs"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter a valid JSON object. Leave empty to save an empty object.
                     </p>
                   </div>
                 </>
