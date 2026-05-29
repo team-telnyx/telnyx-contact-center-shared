@@ -495,7 +495,6 @@ function renderNodeExecutionDetails(nodeType, details, success) {
                 code={resultJsonPreview}
                 language="json"
                 className="mt-1"
-                showLineNumbers
               >
                 <CodeBlockCopyButton />
               </CodeBlock>
