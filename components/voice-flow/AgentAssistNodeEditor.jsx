@@ -86,6 +86,8 @@ export default function AgentAssistNodeEditor({
   const [kbCategories, setKbCategories] = useState([]);
   const [forms, setForms] = useState([]);
   const [webPages, setWebPages] = useState([]);
+  const [workflowDetails, setWorkflowDetails] = useState(null);
+  const [loadingWorkflowDetails, setLoadingWorkflowDetails] = useState(false);
   const [loadingWorkflows, setLoadingWorkflows] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingForms, setLoadingForms] = useState(true);
@@ -113,6 +115,38 @@ export default function AgentAssistNodeEditor({
     }
     loadWorkflows();
   }, []);
+
+  // Load workflow details when a workflow is selected so slot names can be mapped.
+  useEffect(() => {
+    if (assistType !== "workflows" || !config.workflow_id) {
+      setWorkflowDetails(null);
+      setLoadingWorkflowDetails(false);
+      return;
+    }
+
+    let cancelled = false;
+    async function loadWorkflowDetails() {
+      setLoadingWorkflowDetails(true);
+      try {
+        const res = await fetch(`/api/admin/workflows/${encodeURIComponent(config.workflow_id)}`, {
+          cache: "no-store",
+        });
+        const data = await res.json();
+        if (!cancelled) {
+          setWorkflowDetails(data.ok ? data.workflow : null);
+        }
+      } catch (err) {
+        console.error("Failed to load workflow details:", err);
+        if (!cancelled) setWorkflowDetails(null);
+      } finally {
+        if (!cancelled) setLoadingWorkflowDetails(false);
+      }
+    }
+    loadWorkflowDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [assistType, config.workflow_id]);
 
   // Load forms on mount
   useEffect(() => {
@@ -202,6 +236,14 @@ export default function AgentAssistNodeEditor({
   }
 
   const selectedWorkflow = workflows.find((w) => w.id === config.workflow_id);
+  const selectedWorkflowSlots = useMemo(() => {
+    const stages = workflowDetails?.stages || [];
+    return stages.flatMap((stage) =>
+      (stage.items || [])
+        .filter((item) => item.type === "slot" && item.slot_name)
+        .map((item) => ({ ...item, stageName: stage.name })),
+    );
+  }, [workflowDetails]);
   const selectedWebPageId = getSelectedWebPageId();
   const selectedWebPage = webPages.find((page) => page.id === selectedWebPageId);
   const selectedForm = forms.find((form) => form.id === config.form_id);
@@ -213,6 +255,7 @@ export default function AgentAssistNodeEditor({
     );
   }, [selectedForm]);
   const formDataConfig = config.form_data && typeof config.form_data === "object" ? config.form_data : {};
+  const workflowDataConfig = config.workflow_data && typeof config.workflow_data === "object" ? config.workflow_data : {};
 
   function updateFormDataField(variableName, patch) {
     const current = formDataConfig[variableName] || { source: "none", value: "" };
@@ -221,6 +264,22 @@ export default function AgentAssistNodeEditor({
     if (!nextEntry.source || nextEntry.source === "none") delete nextFormData[variableName];
     else nextFormData[variableName] = nextEntry;
     onChange({ ...config, form_data: nextFormData });
+  }
+
+  function updateWorkflowDataField(slotName, patch) {
+    const current = workflowDataConfig[slotName] || { source: "none", value: "" };
+    const nextEntry = { ...current, ...patch };
+    const nextWorkflowData = { ...workflowDataConfig };
+    if (!nextEntry.source || nextEntry.source === "none") delete nextWorkflowData[slotName];
+    else nextWorkflowData[slotName] = nextEntry;
+    onChange({ ...config, workflow_data: nextWorkflowData });
+  }
+
+  function handleWorkflowSelect(value) {
+    const workflowId = value === "none" ? "" : value;
+    const nextConfig = { ...config, workflow_id: workflowId };
+    if (!workflowId) nextConfig.workflow_data = {};
+    onChange(nextConfig);
   }
 
   function handleFormSelect(value) {
@@ -609,7 +668,7 @@ export default function AgentAssistNodeEditor({
             ) : (
               <Select
                 value={config.workflow_id || "none"}
-                onValueChange={(value) => handleChange("workflow_id", value === "none" ? "" : value)}
+                onValueChange={handleWorkflowSelect}
               >
                 <SelectTrigger className={selectTriggerClassName}>
                   <SelectValue placeholder="Select a workflow..." />
@@ -651,6 +710,72 @@ export default function AgentAssistNodeEditor({
               </div>
             )}
           </div>
+
+          {selectedWorkflow && (
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div>
+                <Label>Workflow data prefill</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optional values to pass from call flow client state into matching workflow slot names. Values are stored under <span className="font-mono">workflow_data</span> and only slots defined by this workflow are applied.
+                </p>
+              </div>
+              {loadingWorkflowDetails ? (
+                <Skeleton className="h-20 w-full" />
+              ) : selectedWorkflowSlots.length ? (
+                <div className="space-y-3">
+                  {selectedWorkflowSlots.map((slot) => {
+                    const entry = workflowDataConfig[slot.slot_name] || { source: "none", value: "" };
+                    const source = entry.source || "none";
+                    return (
+                      <div key={slot.id} className="space-y-2 rounded-md border bg-background p-3">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium">{slot.label || slot.slot_name}</span>
+                          <Badge variant="outline" className="font-mono text-[10px]">{slot.slot_name}</Badge>
+                          <Badge variant="secondary" className="text-[10px]">{slot.slot_type || "text"}</Badge>
+                          {slot.stageName && <Badge variant="outline" className="text-[10px]">{slot.stageName}</Badge>}
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-1.5 md:flex-row md:items-start">
+                          <Select value={source} onValueChange={(value) => updateWorkflowDataField(slot.slot_name, { source: value, value: value === "none" ? "" : entry.value || "" })}>
+                            <SelectTrigger className="h-9 w-full md:w-[108px] md:shrink-0"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">None</SelectItem>
+                              <SelectItem value="static">Static</SelectItem>
+                              <SelectItem value="variable">Variable</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <div className="min-w-0 flex-1">
+                            {source === "variable" ? (
+                              <VariableInput
+                                value={entry.value || ""}
+                                onChange={(value) => updateWorkflowDataField(slot.slot_name, { source: "variable", value })}
+                                availableVariables={availableVariables}
+                                placeholder="{{customer_name}} or {{client_state.customer.name}}"
+                                className="h-9"
+                              />
+                            ) : source === "static" ? (
+                              <Input
+                                type={slot.slot_type === "number" ? "number" : "text"}
+                                value={entry.value ?? ""}
+                                onChange={(e) => updateWorkflowDataField(slot.slot_name, { source: "static", value: e.target.value })}
+                                placeholder="Value to prefill"
+                                className="h-9"
+                              />
+                            ) : (
+                              <div className="flex h-9 items-center text-xs text-muted-foreground">Leave blank</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  This workflow has no slot items with slot names.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Auto-start */}
           <div className="flex items-center justify-between">

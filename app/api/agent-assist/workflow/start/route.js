@@ -9,7 +9,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { applyPendingAiHandoff, broadcastAiHandoffToAgent } from "@/lib/agent-assist/ai-handoff-processor";
+import { applyPendingAiHandoff, broadcastAiHandoffToAgent, recalculateCurrentStage } from "@/lib/agent-assist/ai-handoff-processor";
+import { buildWorkflowPrefillFromClientState } from "@/lib/agent-assist/workflow-prefill";
 
 // POST /api/agent-assist/workflow/start - Start workflow session
 export async function POST(request) {
@@ -115,31 +116,41 @@ export async function POST(request) {
       );
       const wasCompleted = prevSession?.status === 'completed';
 
-      // Create workflow session — ON CONFLICT: return existing session if already started
-      // If the previous session was 'completed', fully reset progress.
-      const { rows: [workflowSession] } = await client.query(
-        `INSERT INTO aa_workflow_sessions 
-         (interaction_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
-         VALUES ($1, $2, $3, 'in_progress', NOW(), '{}'::jsonb, 0)
-         ON CONFLICT (interaction_id) DO UPDATE
-           SET workflow_id = EXCLUDED.workflow_id,
-               current_stage_id = EXCLUDED.current_stage_id,
-               status = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 'in_progress' ELSE aa_workflow_sessions.status END,
-               started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END,
-               slots_filled = CASE WHEN aa_workflow_sessions.status = 'completed' THEN '{}'::jsonb ELSE aa_workflow_sessions.slots_filled END,
-               completion_percentage = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 0 ELSE aa_workflow_sessions.completion_percentage END
-         RETURNING *`,
-        [interactionId, workflowId, firstStage?.id || null]
-      );
-
-      // Create item status records for all items in the workflow
+      // Read workflow slot items before creating the session so call-flow data can
+      // become the initial slots_filled payload.
       const { rows: items } = await client.query(
-        `SELECT i.id as item_id
+        `SELECT i.id as item_id, i.id, i.type, i.slot_name
          FROM aa_workflow_items i
          JOIN aa_workflow_stages s ON i.stage_id = s.id
          WHERE s.workflow_id = $1
          ORDER BY s.order_index, i.order_index`,
         [workflowId]
+      );
+
+      const callFlowWorkflowData =
+        interaction.metadata?.workflow_data ||
+        interaction.metadata?.agent_assist_config?.workflow_data_resolved ||
+        {};
+      const workflowPrefill = buildWorkflowPrefillFromClientState(
+        { workflow_data: callFlowWorkflowData },
+        { items },
+      );
+
+      // Create workflow session — ON CONFLICT: return existing session if already started
+      // If the previous session was 'completed', fully reset progress.
+      const { rows: [workflowSession] } = await client.query(
+        `INSERT INTO aa_workflow_sessions 
+         (interaction_id, workflow_id, current_stage_id, status, started_at, slots_filled, completion_percentage)
+         VALUES ($1, $2, $3, 'in_progress', NOW(), $4::jsonb, 0)
+         ON CONFLICT (interaction_id) DO UPDATE
+           SET workflow_id = EXCLUDED.workflow_id,
+               current_stage_id = EXCLUDED.current_stage_id,
+               status = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 'in_progress' ELSE aa_workflow_sessions.status END,
+               started_at = CASE WHEN aa_workflow_sessions.status = 'completed' THEN NOW() ELSE aa_workflow_sessions.started_at END,
+               slots_filled = CASE WHEN aa_workflow_sessions.status = 'completed' THEN $4::jsonb ELSE aa_workflow_sessions.slots_filled END,
+               completion_percentage = CASE WHEN aa_workflow_sessions.status = 'completed' THEN 0 ELSE aa_workflow_sessions.completion_percentage END
+         RETURNING *`,
+        [interactionId, workflowId, firstStage?.id || null, JSON.stringify(workflowPrefill.slotsFilled)]
       );
 
       // If restarting a completed session, reset all item statuses back to pending
@@ -165,7 +176,43 @@ export async function POST(request) {
         );
       }
 
+      if (workflowPrefill.itemCompletions.length > 0) {
+        await client.query(
+          `UPDATE aa_workflow_sessions
+           SET slots_filled = COALESCE(slots_filled, '{}'::jsonb) || $2::jsonb,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [workflowSession.id, JSON.stringify(workflowPrefill.slotsFilled)]
+        );
+
+        for (const completion of workflowPrefill.itemCompletions) {
+          await client.query(
+            `INSERT INTO aa_workflow_item_status
+             (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript)
+             VALUES ($1, $2, 'completed', $3, NULL, NOW(), 'call_flow', $4)
+             ON CONFLICT (session_id, item_id)
+             DO UPDATE SET
+               status = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.status ELSE 'completed' END,
+               extracted_value = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.extracted_value ELSE $3 END,
+               confidence_score = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.confidence_score ELSE NULL END,
+               completed_at = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.completed_at ELSE NOW() END,
+               completed_by = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN 'agent' ELSE 'call_flow' END,
+               source_transcript = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.source_transcript ELSE $4 END,
+               updated_at = NOW()`,
+            [
+              workflowSession.id,
+              completion.itemId,
+              typeof completion.value === "string" ? completion.value : JSON.stringify(completion.value),
+              "client_state.workflow_data",
+            ]
+          );
+        }
+      }
+
       await client.query("COMMIT");
+      if (workflowPrefill.itemCompletions.length > 0) {
+        await recalculateCurrentStage(workflowSession.id);
+      }
 
       // Check for pending AI handoff data and apply it
       let aiHandoffApplied = false;
