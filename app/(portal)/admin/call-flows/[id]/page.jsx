@@ -425,6 +425,38 @@ function NodeExecutionToolHeader({
   );
 }
 
+function getJsonObjectPreview(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify(parsed, null, 2);
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function formatInlineValue(value) {
+  if (typeof value === "string") return value;
+  if (value === undefined) return "undefined";
+  return JSON.stringify(value);
+}
+
 // Render node execution details based on node type
 function renderNodeExecutionDetails(nodeType, details, success) {
   if (!details) {
@@ -437,29 +469,44 @@ function renderNodeExecutionDetails(nodeType, details, success) {
 
   // Set Variable Node
   if (nodeType === "set_variable") {
+    const resultJsonPreview = success
+      ? getJsonObjectPreview(details.result)
+      : null;
+
     return (
-      <div className="p-3 space-y-2 text-sm">
-        <div>
+      <div className="p-3 space-y-3 text-sm">
+        <div className="space-y-1">
           <span className="font-semibold">Variable Name:</span>
-          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
+          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
             {details.variable_name}
           </code>
         </div>
-        <div>
+        <div className="space-y-1">
           <span className="font-semibold">Expression:</span>
-          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
+          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
             {details.expression}
           </code>
         </div>
         {success ? (
-          <div>
+          <div className="space-y-1 border-t pt-3">
             <span className="font-semibold">Result:</span>
-            <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
-              {JSON.stringify(details.result)}
-            </code>
+            {resultJsonPreview ? (
+              <CodeBlock
+                code={resultJsonPreview}
+                language="json"
+                className="mt-1"
+                showLineNumbers
+              >
+                <CodeBlockCopyButton />
+              </CodeBlock>
+            ) : (
+              <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
+                {formatInlineValue(details.result)}
+              </code>
+            )}
           </div>
         ) : (
-          <div className="text-destructive">
+          <div className="text-destructive border-t pt-3">
             <span className="font-semibold">Error:</span>
             <span className="ml-2">{details.error}</span>
           </div>
