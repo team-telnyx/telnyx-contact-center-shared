@@ -9,7 +9,10 @@ import {
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { addNodeExecutionEvent, addWebhookEvent } from "@/lib/call-monitor-store.js";
 import { logCallEvent } from "@/lib/call-logger.js";
-import { getValueByPath } from "@/lib/variable-utils.js";
+import {
+  DEFAULT_INCOMING_CALL_PAYLOAD_VARIABLE,
+  getValueByPath,
+} from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
 import { findNextEdges, findNextNodes } from "@/lib/voice-flow-routing.js";
@@ -697,6 +700,10 @@ export async function POST(request, { params }) {
 
     const outboundPayloadVariable =
       initiatorNode.data?.config?.payloadVariable || "contact_record";
+    const incomingPayloadVariable =
+      initiatorNode.data?.config?.payloadVariable ||
+      initiatorNode.data?.config?.payloadVariableName ||
+      DEFAULT_INCOMING_CALL_PAYLOAD_VARIABLE;
 
     // Extract webhook data into variables (payload already extracted above)
     const variables = {
@@ -740,6 +747,8 @@ export async function POST(request, { params }) {
         event,
         variables,
       });
+    } else if (initiatorNode.data?.nodeType === "incoming_call") {
+      variables[incomingPayloadVariable] = payload;
     }
 
     // Handle different event types

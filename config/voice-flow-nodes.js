@@ -61,6 +61,15 @@ export const VOICE_FLOW_NODES = {
         readOnly: true,
         description: "Your voice application webhook URL",
       },
+      payloadVariable: {
+        type: "string",
+        label: "Payload Variable Name",
+        required: false,
+        default: "call_payload",
+        placeholder: "call_payload",
+        description:
+          "Variable that receives the full Telnyx incoming call webhook payload for downstream nodes. Built-in call variables like {{from}} and {{payload.from}} remain available.",
+      },
     },
   },
 
@@ -103,6 +112,15 @@ export const VOICE_FLOW_NODES = {
         required: false,
         default: false,
         description: "Require authentication token in request headers",
+      },
+      payloadVariable: {
+        type: "string",
+        label: "Payload Variable Name",
+        required: false,
+        default: "request_payload",
+        placeholder: "request_payload",
+        description:
+          "Variable that receives the full incoming HTTP request payload for downstream nodes. POST exposes body fields at {{payload.*}}; GET exposes query fields at {{query.*}}.",
       },
     },
   },
