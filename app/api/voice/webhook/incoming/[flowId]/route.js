@@ -738,8 +738,10 @@ export async function POST(request, { params }) {
     };
 
     if (initiatorNode.data?.nodeType === "outbound_campaign") {
-      variables[outboundPayloadVariable] = outboundContact?.contactRecord || {};
-      variables.contact_record = outboundContact?.contactRecord || {};
+      const contactRecord = outboundContact?.contactRecord || {};
+      variables[outboundPayloadVariable] = contactRecord;
+      variables.contact_record = contactRecord;
+      variables.contact_data = contactRecord;
       recordOutboundCampaignInitiatorMonitorEvent({
         callControlId: payload.call_control_id,
         flowId,
