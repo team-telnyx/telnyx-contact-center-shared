@@ -82,3 +82,18 @@ test("edge mappings can resolve Data Action response variables", async () => {
     "legacy Data Action list mappings using rows[] should resolve to the first row instead of failing",
   );
 });
+
+test("edge mappings preserve nested array fallback markers before final list extraction", async () => {
+  const source = await read(enginePath);
+
+  assert.match(
+    source,
+    /sourcePath\.endsWith\("\[\]"\)\s*\?\s*sourcePath\.slice\(0, -2\)\.replaceAll\("\[\]", "\.0"\)/,
+    "final [] mappings should strip only the final marker while earlier array markers fall back to the first parent item",
+  );
+  assert.doesNotMatch(
+    source,
+    /sourcePath\.replaceAll\("\[\]", ""\)/,
+    "nested list mappings must not strip every array marker because paths like orders[].items[] would become orders.items",
+  );
+});
