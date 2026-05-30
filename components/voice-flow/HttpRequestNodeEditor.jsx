@@ -773,9 +773,9 @@ export default function HttpRequestNodeEditor({
         onOpenChange={setTestModalOpen}
         config={config}
         availableVariables={availableVariables}
-        onTestSuccess={(testResponse, testedConfig) => {
+        onTestSuccess={(testResponse) => {
           onChange({
-            ...(testedConfig || latestConfigRef.current),
+            ...latestConfigRef.current,
             testResponse: {
               ...testResponse,
               testedAt: new Date().toISOString(),
