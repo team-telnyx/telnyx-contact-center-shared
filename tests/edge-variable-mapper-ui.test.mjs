@@ -25,9 +25,52 @@ test("HTTP Request action edge mapper can read persisted test response payloads"
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /sourceNode\?\.data\?\.config\?\.testResponse/);
-  assert.match(source, /extractPathsFromObject\(testResponse\.body, responseVariable\)/);
+  assert.match(source, /extractPathsFromObject\(testResponse\.body, responseVariable/);
   assert.match(source, /sourceLabel: "HTTP Response Structure"/);
   assert.doesNotMatch(source, /Please run a test request[\s\S]*without checking persisted testResponse/);
+});
+
+test("HTTP response payload paths include nested array item fields", async () => {
+  const { extractPathsFromObject } = await import("../config/webhook-schemas.js");
+  const paths = extractPathsFromObject(
+    {
+      ok: true,
+      data: {
+        rows: [
+          {
+            id: "a96fcf27-46eb-4bde-bbb0-0bbfaee57eb6",
+            username: "abdullah@telnyx.com",
+            first_name: "John",
+            last_name: "Wick",
+            custom_data: null,
+            active: true,
+            created_at: "2026-03-10T04:29:29.539Z",
+            nested: { score: 42 },
+          },
+        ],
+        count: 2,
+      },
+    },
+    "http_response",
+    10,
+  ).map((field) => field.path);
+
+  assert.deepEqual(paths, [
+    "http_response.ok",
+    "http_response.data",
+    "http_response.data.rows",
+    "http_response.data.rows[]",
+    "http_response.data.rows[].id",
+    "http_response.data.rows[].username",
+    "http_response.data.rows[].first_name",
+    "http_response.data.rows[].last_name",
+    "http_response.data.rows[].custom_data",
+    "http_response.data.rows[].active",
+    "http_response.data.rows[].created_at",
+    "http_response.data.rows[].nested",
+    "http_response.data.rows[].nested.score",
+    "http_response.data.count",
+  ]);
 });
 
 test("Expected payload structure supports checkbox multi-select and batch Add Mapping", async () => {

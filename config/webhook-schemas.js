@@ -1551,15 +1551,9 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
         const newPath = currentPath ? `${currentPath}.${key}` : key;
 
         // Add leaf nodes
-        if (
-          value === null ||
-          typeof value !== "object" ||
-          Array.isArray(value)
-        ) {
+        if (value === null || typeof value !== "object") {
           let type = "string";
-          if (Array.isArray(value)) {
-            type = "array";
-          } else if (typeof value === "number") {
+          if (typeof value === "number") {
             type = "number";
           } else if (typeof value === "boolean") {
             type = "boolean";
@@ -1572,6 +1566,41 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
             type,
             example: value,
           });
+        } else if (Array.isArray(value)) {
+          paths.push({
+            path: newPath,
+            type: "array",
+            example: value,
+          });
+
+          if (value.length > 0 && depth < maxDepth) {
+            const sampleItem = value.find(
+              (item) => item !== null && item !== undefined,
+            );
+            const itemPath = `${newPath}[]`;
+
+            if (sampleItem !== undefined) {
+              if (
+                sampleItem !== null &&
+                typeof sampleItem === "object" &&
+                !Array.isArray(sampleItem)
+              ) {
+                traverse(sampleItem, itemPath, depth + 1);
+              } else {
+                const itemType = Array.isArray(sampleItem)
+                  ? "array"
+                  : sampleItem === null
+                    ? "null"
+                    : typeof sampleItem;
+
+                paths.push({
+                  path: itemPath,
+                  type: itemType,
+                  example: sampleItem,
+                });
+              }
+            }
+          }
         } else {
           // Traverse deeper for objects
           traverse(value, newPath, depth + 1);
