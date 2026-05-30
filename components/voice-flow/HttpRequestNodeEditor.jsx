@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -76,6 +76,8 @@ export default function HttpRequestNodeEditor({
   const [queryParamsExpanded, setQueryParamsExpanded] = useState(false);
   const [bodyParamsExpanded, setBodyParamsExpanded] = useState(false);
   const [availableSecrets, setAvailableSecrets] = useState([]);
+  const latestConfigRef = useRef(config);
+  latestConfigRef.current = config;
 
   // Load available secrets
   const loadSecrets = async () => {
@@ -773,7 +775,7 @@ export default function HttpRequestNodeEditor({
         availableVariables={availableVariables}
         onTestSuccess={(testResponse) => {
           onChange({
-            ...config,
+            ...latestConfigRef.current,
             testResponse: {
               ...testResponse,
               testedAt: new Date().toISOString(),

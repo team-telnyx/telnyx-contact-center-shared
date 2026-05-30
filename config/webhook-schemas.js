@@ -1579,26 +1579,13 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
             );
             const itemPath = `${newPath}[]`;
 
-            if (sampleItem !== undefined) {
-              if (
-                sampleItem !== null &&
-                typeof sampleItem === "object" &&
-                !Array.isArray(sampleItem)
-              ) {
-                traverse(sampleItem, itemPath, depth + 1);
-              } else {
-                const itemType = Array.isArray(sampleItem)
-                  ? "array"
-                  : sampleItem === null
-                    ? "null"
-                    : typeof sampleItem;
-
-                paths.push({
-                  path: itemPath,
-                  type: itemType,
-                  example: sampleItem,
-                });
-              }
+            if (
+              sampleItem !== undefined &&
+              sampleItem !== null &&
+              typeof sampleItem === "object" &&
+              !Array.isArray(sampleItem)
+            ) {
+              traverse(sampleItem, itemPath, depth + 1);
             }
           }
         } else {
