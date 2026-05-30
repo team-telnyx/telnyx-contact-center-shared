@@ -482,6 +482,10 @@
       "description": "SIM Cards operations"
     },
     {
+      "name": "SIP Registration Status",
+      "description": "Look up SIP registration status across credential types"
+    },
+    {
       "name": "SIPREC Connectors",
       "description": "SIPREC connectors configuration."
     },
@@ -42145,6 +42149,75 @@
           },
           "default": {
             "$ref": "#/components/responses/wireless_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/sip_registration_status": {
+      "get": {
+        "summary": "Check SIP registration status",
+        "description": "Returns the live SIP registration state of a connection or credential. Supports UAC third-party credentials, telephony credentials, and SIP credential connections.",
+        "operationId": "GetSipRegistrationStatus",
+        "tags": [
+          "SIP Registration Status"
+        ],
+        "parameters": [
+          {
+            "name": "credential_type",
+            "in": "query",
+            "required": true,
+            "description": "The kind of credential to look up.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "uac_external_credential",
+                "telephony_credential",
+                "sip_credential_connection"
+              ]
+            }
+          },
+          {
+            "name": "connection_id",
+            "in": "query",
+            "required": true,
+            "description": "Identifier of the connection or credential to look up.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": true,
+            "description": "Owner of the connection. Used to authorize the lookup.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registration status payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SipRegistrationStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Connection exists but is not owned by user_id"
+          },
+          "404": {
+            "description": "No connection or credential matches connection_id"
           }
         },
         "x-latency-category": "responsive"
@@ -90026,6 +90099,42 @@
         "default": "zoom",
         "example": "zoom"
       },
+      "ExternalUacSettings": {
+        "type": "object",
+        "description": "Outward-facing SIP settings used for registration. Password is redacted.",
+        "properties": {
+          "proxy": {
+            "type": "string"
+          },
+          "outbound_proxy": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "TCP",
+              "UDP",
+              "TLS"
+            ]
+          },
+          "username": {
+            "type": "string"
+          },
+          "auth_username": {
+            "type": "string"
+          },
+          "from_user": {
+            "type": "string"
+          },
+          "expiration_sec": {
+            "type": "integer"
+          },
+          "password": {
+            "type": "string",
+            "example": "***"
+          }
+        }
+      },
       "ExternalVetting": {
         "title": "ExternalVetting",
         "type": "object",
@@ -96090,6 +96199,16 @@
         "description": "The current status of the interface deployment.",
         "readOnly": true,
         "example": "provisioned"
+      },
+      "InternalUacSettings": {
+        "type": "object",
+        "description": "Internal routing target the connection delivers calls to.",
+        "properties": {
+          "destination_uri": {
+            "type": "string",
+            "example": "1006@assistant-abc123.sip.telnyx.com"
+          }
+        }
       },
       "InterruptionSettings": {
         "type": "object",
@@ -116202,6 +116321,47 @@
         "example": {
           "name": "User-to-User",
           "value": "value"
+        }
+      },
+      "SipRegistrationStatus": {
+        "type": "object",
+        "properties": {
+          "connection_id": {
+            "type": "string",
+            "description": "Identifier of the resource."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Owner of the resource."
+          },
+          "connection_name": {
+            "type": "string",
+            "description": "Human-readable connection name."
+          },
+          "username": {
+            "type": "string",
+            "description": "SIP username used for the registration."
+          },
+          "pair_state": {
+            "type": "string",
+            "description": "Internal pairing state, e.g. ACTIVE or INACTIVE.",
+            "example": "ACTIVE"
+          },
+          "registered": {
+            "type": "boolean",
+            "description": "True if the endpoint is currently registered."
+          },
+          "last_registration_response": {
+            "type": "string",
+            "description": "SIP response from the last registration attempt.",
+            "example": "200 OK"
+          },
+          "external_uac_settings": {
+            "$ref": "#/components/schemas/ExternalUacSettings"
+          },
+          "internal_uac_settings": {
+            "$ref": "#/components/schemas/InternalUacSettings"
+          }
         }
       },
       "SiprecConnector": {
