@@ -26,7 +26,6 @@ import {
   IconVariable,
   IconEye,
   IconChevronRight,
-  IconChevronDown,
 } from "@tabler/icons-react";
 import {
   CodeBlock,
@@ -54,10 +53,8 @@ export default function HttpRequestTestModal({
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testError, setTestError] = useState(null);
-  const [expandedResponse, setExpandedResponse] = useState(false);
   const [variablesExpanded, setVariablesExpanded] = useState(true);
   const [requestExpanded, setRequestExpanded] = useState(true);
-  const [responseExpanded, setResponseExpanded] = useState(false);
 
   // Extract variables used in the configuration
   const extractUsedVariables = () => {
@@ -207,7 +204,6 @@ export default function HttpRequestTestModal({
 
       if (result.success) {
         setTestResult(result.response);
-        setExpandedResponse(true);
       } else {
         setTestError(result.error || "Request failed");
       }
@@ -521,48 +517,30 @@ export default function HttpRequestTestModal({
           {/* Response Display */}
           {testResult && (
             <Card className="border border-border bg-card">
-              <Collapsible
-                open={responseExpanded}
-                onOpenChange={setResponseExpanded}
-              >
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
-                    <div className="flex items-center gap-2">
-                      <IconCode className="h-3 w-3 text-green-600" />
-                      <CardTitle className="text-sm font-semibold">
-                        Response
-                      </CardTitle>
-                      <div className="ml-auto flex items-center gap-2">
-                        {getStatusBadge(testResult.status)}
-                        <IconChevronRight
-                          className={`h-3 w-3 transition-transform ${
-                            responseExpanded ? "rotate-90" : ""
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Response data from the test request
-                    </p>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="px-3 pb-3 space-y-4">
-                    <div>
-                      <Label className="text-xs font-medium flex items-center gap-2 mb-2">
-                        <IconCode className="h-3 w-3" />
-                        Response Body
-                      </Label>
-                      <CodeBlock
-                        code={JSON.stringify(testResult.body, null, 2)}
-                        language="json"
-                      >
-                        <CodeBlockCopyButton />
-                      </CodeBlock>
-                    </div>
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
+              <CardHeader className="p-3">
+                <div className="flex items-center gap-2">
+                  <IconCode className="h-3 w-3 text-green-600" />
+                  <CardTitle className="text-sm font-semibold">Response</CardTitle>
+                  <div className="ml-auto">{getStatusBadge(testResult.status)}</div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Response data from the test request
+                </p>
+              </CardHeader>
+              <CardContent className="px-3 pb-3 space-y-4">
+                <div>
+                  <Label className="text-xs font-medium flex items-center gap-2 mb-2">
+                    <IconCode className="h-3 w-3" />
+                    Response Body
+                  </Label>
+                  <CodeBlock
+                    code={JSON.stringify(testResult.body, null, 2)}
+                    language="json"
+                  >
+                    <CodeBlockCopyButton />
+                  </CodeBlock>
+                </div>
+              </CardContent>
             </Card>
           )}
         </div>

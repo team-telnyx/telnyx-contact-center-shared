@@ -71,3 +71,14 @@ test("test HTTP request route parses empty or non-JSON responses safely", async 
   assert.match(source, /return null;/);
   assert.doesNotMatch(source, /await response\.json\(\)/);
 });
+
+test("Test HTTP Request sheet renders response body directly instead of as accordion", async () => {
+  const source = await readFile(testModalUrl, "utf8");
+  const responseSection = source.slice(source.indexOf("{/* Response Display */}"));
+
+  assert.match(responseSection, /Response Body/);
+  assert.match(responseSection, /<CodeBlock/);
+  assert.doesNotMatch(responseSection, /<Collapsible/);
+  assert.doesNotMatch(responseSection, /<CollapsibleTrigger/);
+  assert.doesNotMatch(responseSection, /responseExpanded/);
+});
