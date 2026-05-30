@@ -195,7 +195,10 @@ export default function HttpRequestTestModal({
         body: JSON.stringify(testConfig),
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      const result = responseText.trim()
+        ? JSON.parse(responseText)
+        : { success: false, error: "Test endpoint returned an empty response" };
 
       if (!response.ok) {
         setTestError(result.error || "Test request failed");
@@ -385,9 +388,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-blue-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
@@ -419,9 +425,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-cyan-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
@@ -453,9 +462,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-indigo-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
