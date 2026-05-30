@@ -1,45 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
+  IconAlertCircle,
+  IconChevronRight,
+  IconCode,
+  IconEdit,
+  IconList,
   IconPlus,
   IconTrash,
-  IconChevronRight,
-  IconX,
-  IconList,
-  IconCode,
-  IconAlertCircle,
   IconWand,
+  IconX,
 } from "@tabler/icons-react";
 import { VariableTextarea } from "./VariableTextarea";
 import {
-  getWebhookSchema,
-  getSchemaPath,
   extractPathsFromObject,
+  getSchemaPath,
+  getWebhookSchema,
 } from "@/config/webhook-schemas";
-import { checkDuplicateVariableName } from "@/lib/variable-utils";
 import {
-  suggestVariableName,
+  checkDuplicateVariableName,
   generateUniqueVariableName,
+  suggestVariableName,
   validateVariableName,
 } from "@/lib/variable-utils";
-import { Badge } from "@/components/ui/badge";
-import {
-  CodeBlock,
-  CodeBlockCopyButton,
-} from "@/components/ai-elements/code-block";
+import { getEntitySchema } from "@/lib/data-sources-schema.js";
 
 /**
  * Edge Variable Mapper Modal
@@ -58,103 +50,163 @@ export function EdgeVariableMapper({
 }) {
   const [variableMappings, setVariableMappings] = useState([]);
   const [expandedSchema, setExpandedSchema] = useState(false);
-  const [schemaViewMode, setSchemaViewMode] = useState("list"); // 'list' or 'json'
+  const [schemaViewMode, setSchemaViewMode] = useState("list");
   const [samplePayload, setSamplePayload] = useState("");
   const [payloadError, setPayloadError] = useState("");
   const [samplePayloadExpanded, setSamplePayloadExpanded] = useState(false);
+  const [selectedSourcePaths, setSelectedSourcePaths] = useState(new Set());
 
-  // Check if source node is HTTP request action or HTTP request initiator
   const nodeType = sourceNode?.data?.nodeType;
   const isHttpRequestActionNode = nodeType === "http_request_action";
   const isHttpRequestInitiatorNode = nodeType === "http_request";
   const isHttpRequestNode =
     isHttpRequestActionNode || isHttpRequestInitiatorNode;
-
-  // Get webhook schema based on source node output event OR HTTP response
+  const isDataActionNode = nodeType === "data_action";
   const outputEvent = getOutputEvent(sourceNode, edge);
-  let webhookSchema = null;
-  let schemaPaths = [];
-  let examplePayload = null;
 
-  if (isHttpRequestActionNode) {
-    // For HTTP request action nodes, use the test response if available
-    const testResponse = sourceNode?.data?.config?.testResponse;
-    const responseVariable =
-      sourceNode?.data?.config?.responseVariable || "http_response";
-
-    if (testResponse && testResponse.body) {
-      // Extract paths from body only
-      schemaPaths = extractPathsFromObject(testResponse.body, responseVariable);
-
-      examplePayload = testResponse.body;
+  const mappingContext = useMemo(() => {
+    if (!sourceNode) {
+      return {
+        webhookSchema: null,
+        schemaPaths: [],
+        examplePayload: null,
+        sourceLabel: "Expected Payload Structure",
+      };
     }
-  } else if (isHttpRequestInitiatorNode) {
-    // For HTTP Request initiator nodes, use sample payload from edge data or state
-    const edgeSamplePayload = samplePayload || edge?.data?.samplePayload || "";
-    const httpMethod = sourceNode?.data?.config?.http_method || "POST";
 
-    if (edgeSamplePayload) {
-      try {
-        const parsed = JSON.parse(edgeSamplePayload);
-        // For GET requests, treat as query parameters
-        // For POST requests, treat as body
-        if (httpMethod === "GET") {
-          // Extract paths with "query." prefix
-          schemaPaths = extractPathsFromObject(parsed, "query", 10);
-          examplePayload = parsed;
-        } else {
-          // Extract paths with "payload." prefix
-          schemaPaths = extractPathsFromObject(parsed, "payload", 10);
-          examplePayload = parsed;
+    if (isHttpRequestActionNode) {
+      const testResponse = sourceNode?.data?.config?.testResponse;
+      const responseVariable =
+        sourceNode?.data?.config?.responseVariable || "http_response";
+
+      if (testResponse?.body) {
+        return {
+          webhookSchema: null,
+          schemaPaths: extractPathsFromObject(testResponse.body, responseVariable),
+          examplePayload: testResponse.body,
+          sourceLabel: "HTTP Response Structure",
+        };
+      }
+
+      return {
+        webhookSchema: null,
+        schemaPaths: [],
+        examplePayload: null,
+        sourceLabel: "HTTP Response Structure",
+      };
+    }
+
+    if (isHttpRequestInitiatorNode) {
+      const edgeSamplePayload = samplePayload || edge?.data?.samplePayload || "";
+      const httpMethod = sourceNode?.data?.config?.http_method || "POST";
+
+      if (edgeSamplePayload) {
+        try {
+          const parsed = JSON.parse(edgeSamplePayload);
+          const rootPath = httpMethod === "GET" ? "query" : "payload";
+          return {
+            webhookSchema: null,
+            schemaPaths: extractPathsFromObject(parsed, rootPath, 10),
+            examplePayload: parsed,
+            sourceLabel: "Request Payload Structure",
+          };
+        } catch {
+          return {
+            webhookSchema: null,
+            schemaPaths: [],
+            examplePayload: null,
+            sourceLabel: "Request Payload Structure",
+          };
         }
-      } catch (error) {
-        // Error will be shown in the UI
-        schemaPaths = [];
+      }
+
+      return {
+        webhookSchema: null,
+        schemaPaths: [],
+        examplePayload: null,
+        sourceLabel: "Request Payload Structure",
+      };
+    }
+
+    if (isDataActionNode) {
+      const dataSource = sourceNode?.data?.config?.dataSource;
+      const action = sourceNode?.data?.config?.action || "list";
+      const responseVariable =
+        sourceNode?.data?.config?.responseVariable || "data_response";
+      const dataActionContext = getDataActionResponseSchemaPaths(
+        dataSource,
+        action,
+        responseVariable,
+      );
+
+      return {
+        webhookSchema: null,
+        schemaPaths: dataActionContext.schemaPaths,
+        examplePayload: dataActionContext.examplePayload,
+        sourceLabel: "Data Action Response Structure",
+      };
+    }
+
+    const webhookSchema = outputEvent ? getWebhookSchema(outputEvent) : null;
+    return {
+      webhookSchema,
+      schemaPaths: webhookSchema ? getSchemaPath(webhookSchema) : [],
+      examplePayload: null,
+      sourceLabel: "Expected Payload Structure",
+    };
+  }, [
+    edge?.data?.samplePayload,
+    isDataActionNode,
+    isHttpRequestActionNode,
+    isHttpRequestInitiatorNode,
+    outputEvent,
+    samplePayload,
+    sourceNode,
+  ]);
+
+  const { webhookSchema, schemaPaths, examplePayload, sourceLabel } =
+    mappingContext;
+
+  useEffect(() => {
+    if (open && edge) {
+      const existingMappings = edge.data?.variableMappings || [];
+      const mappingsWithIds = existingMappings.map((m, i) => ({
+        ...m,
+        id: m.id || `mapping_${Date.now()}_${i}`,
+      }));
+      setVariableMappings(mappingsWithIds.length > 0 ? mappingsWithIds : []);
+      setSelectedSourcePaths(new Set());
+
+      if (isHttpRequestInitiatorNode) {
+        setSamplePayload(edge.data?.samplePayload || "");
       }
     }
-  } else {
-    // For other nodes, use webhook schemas
-    webhookSchema = outputEvent ? getWebhookSchema(outputEvent) : null;
-    schemaPaths = webhookSchema ? getSchemaPath(webhookSchema) : [];
-  }
+  }, [open, edge, isHttpRequestInitiatorNode]);
 
-  // Build example JSON from schema
+  useEffect(() => {
+    if (!isHttpRequestInitiatorNode || !samplePayload) {
+      setPayloadError("");
+      return;
+    }
+
+    try {
+      JSON.parse(samplePayload);
+      setPayloadError("");
+    } catch {
+      setPayloadError("Invalid JSON. Please check your payload format.");
+    }
+  }, [samplePayload, isHttpRequestInitiatorNode]);
+
   const buildExampleJson = () => {
-    // If HTTP request node and we have a test response, use it
-    if (isHttpRequestNode && examplePayload) {
+    if ((isHttpRequestNode || isDataActionNode) && examplePayload) {
       return examplePayload;
     }
 
-    // Otherwise build from webhook schema
     if (!webhookSchema) return null;
 
     const payload = {};
     Object.entries(webhookSchema).forEach(([fieldName, fieldDef]) => {
-      // Always use example if it exists, regardless of type
-      if (fieldDef.example !== undefined) {
-        payload[fieldName] = fieldDef.example;
-      } else {
-        // Provide default examples based on type only if no example exists
-        switch (fieldDef.type) {
-          case "string":
-            payload[fieldName] = "example_value";
-            break;
-          case "number":
-            payload[fieldName] = 0;
-            break;
-          case "boolean":
-            payload[fieldName] = true;
-            break;
-          case "array":
-            payload[fieldName] = [];
-            break;
-          case "object":
-            payload[fieldName] = {};
-            break;
-          default:
-            payload[fieldName] = null;
-        }
-      }
+      payload[fieldName] = buildExampleValue(fieldDef);
     });
 
     return {
@@ -165,49 +217,60 @@ export function EdgeVariableMapper({
     };
   };
 
-  useEffect(() => {
-    if (open && edge) {
-      // Load existing mappings or initialize empty
-      const existingMappings = edge.data?.variableMappings || [];
-      // Ensure each mapping has a unique ID for React keys
-      const mappingsWithIds = existingMappings.map((m, i) => ({
-        ...m,
-        id: m.id || `mapping_${Date.now()}_${i}`, // Add ID if missing
-      }));
-      setVariableMappings(mappingsWithIds.length > 0 ? mappingsWithIds : []);
+  const getKnownVariableNames = () => [
+    ...existingVariableNames,
+    ...variableMappings.map((m) => m.variableName).filter(Boolean),
+  ];
 
-      // Load sample payload for HTTP Request initiator nodes
-      if (isHttpRequestInitiatorNode) {
-        setSamplePayload(edge.data?.samplePayload || "");
-      }
-    }
-  }, [open, edge, isHttpRequestInitiatorNode]);
+  const createMappingFromField = (field, knownNames = getKnownVariableNames()) => {
+    const suggested = suggestVariableName(field.path);
+    const uniqueName = generateUniqueVariableName(suggested, knownNames);
+    knownNames.push(uniqueName);
 
-  // Validate sample payload for HTTP Request initiator
-  useEffect(() => {
-    if (!isHttpRequestInitiatorNode || !samplePayload) {
-      setPayloadError("");
+    return {
+      id: `mapping_${Date.now()}_${Math.random()}`,
+      variableName: uniqueName,
+      sourcePath: field.path,
+      description: field.description || "",
+    };
+  };
+
+  const addSelectedMappings = () => {
+    if (selectedSourcePaths.size === 0) return;
+
+    const existingPaths = new Set(
+      variableMappings.map((mapping) => mapping.sourcePath).filter(Boolean),
+    );
+    const knownNames = getKnownVariableNames();
+    const selectedFields = schemaPaths.filter(
+      (field) => selectedSourcePaths.has(field.path) && !existingPaths.has(field.path),
+    );
+
+    if (selectedFields.length === 0) {
+      setSelectedSourcePaths(new Set());
       return;
     }
 
-    try {
-      JSON.parse(samplePayload);
-      setPayloadError("");
-    } catch (error) {
-      setPayloadError("Invalid JSON. Please check your payload format.");
-    }
-  }, [samplePayload, isHttpRequestInitiatorNode]);
-
-  const addMapping = () => {
     setVariableMappings([
       ...variableMappings,
-      {
-        id: `mapping_${Date.now()}_${Math.random()}`, // Unique ID for React key
-        variableName: "",
-        sourcePath: "",
-        description: "",
-      },
+      ...selectedFields.map((field) => createMappingFromField(field, knownNames)),
     ]);
+    setSelectedSourcePaths(new Set());
+  };
+
+  const autoSuggestMappings = () => {
+    if (schemaPaths.length === 0) return;
+
+    const existingPaths = new Set(
+      variableMappings.map((m) => m.sourcePath).filter(Boolean),
+    );
+    const knownNames = getKnownVariableNames();
+    const suggestedMappings = schemaPaths
+      .filter((path) => path.type !== "object" && !existingPaths.has(path.path))
+      .slice(0, 10)
+      .map((path) => createMappingFromField(path, knownNames));
+
+    setVariableMappings([...variableMappings, ...suggestedMappings]);
   };
 
   const removeMapping = (index) => {
@@ -215,121 +278,67 @@ export function EdgeVariableMapper({
   };
 
   const updateMapping = (index, field, value) => {
+    if (field === "sourcePath") return;
+
     const newMappings = [...variableMappings];
     newMappings[index] = {
       ...newMappings[index],
       [field]: value,
     };
-
-    // Auto-suggest variable name when source path is selected
-    if (field === "sourcePath" && value && !newMappings[index].variableName) {
-      const suggested = suggestVariableName(value);
-      const allVarNames = [
-        ...existingVariableNames,
-        ...variableMappings.map((m) => m.variableName).filter(Boolean),
-      ];
-      const uniqueName = generateUniqueVariableName(suggested, allVarNames);
-      newMappings[index].variableName = uniqueName;
-    }
-
     setVariableMappings(newMappings);
   };
 
-  // Auto-suggest mappings from sample payload
-  const autoSuggestMappings = () => {
-    if (!isHttpRequestInitiatorNode || schemaPaths.length === 0) {
-      return;
-    }
-
-    const suggestedMappings = schemaPaths
-      .filter((path) => {
-        // Only suggest leaf nodes (non-object types)
-        return (
-          path.type !== "object" &&
-          (!path.path.includes(".") || path.path.split(".").length <= 3)
-        );
-      })
-      .slice(0, 10) // Limit to 10 suggestions
-      .map((path) => {
-        // Generate variable name from path
-        const pathParts = path.path
-          .replace(/^(payload|query)\./, "")
-          .split(".");
-        const varName = pathParts
-          .map((part, i) => {
-            if (i === 0) return part;
-            return part.charAt(0).toUpperCase() + part.slice(1);
-          })
-          .join("");
-
-        return {
-          id: `mapping_${Date.now()}_${Math.random()}`,
-          variableName: varName,
-          sourcePath: path.path,
-          description: "",
-        };
-      });
-
-    // Merge with existing mappings (don't overwrite)
-    const existingPaths = new Set(
-      variableMappings.map((m) => m.sourcePath).filter(Boolean)
-    );
-    const newMappings = [
-      ...variableMappings,
-      ...suggestedMappings.filter((m) => !existingPaths.has(m.sourcePath)),
-    ];
-
-    setVariableMappings(newMappings);
+  const toggleSourcePath = (path) => {
+    setSelectedSourcePaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
   };
 
   const handleSave = () => {
-    // Validate sample payload for HTTP Request initiator
     if (isHttpRequestInitiatorNode && samplePayload) {
       try {
         JSON.parse(samplePayload);
-      } catch (error) {
+      } catch {
         alert("Invalid JSON in sample payload. Please fix the format.");
         return;
       }
     }
 
-    // Validate mappings
     const errors = [];
     const seenNames = new Set();
 
     variableMappings.forEach((mapping, index) => {
+      const mappingLabel = mapping.sourcePath || `Mapping ${index + 1}`;
       if (!mapping.variableName) {
-        errors.push(`Mapping ${index + 1}: Variable name is required`);
+        errors.push(`${mappingLabel}: Variable name is required`);
       }
       if (!mapping.sourcePath) {
-        errors.push(`Mapping ${index + 1}: Source path is required`);
+        errors.push(`${mappingLabel}: Source path is required`);
       }
-
-      // Check for duplicates within this edge
       if (seenNames.has(mapping.variableName)) {
-        errors.push(
-          `Mapping ${index + 1}: Duplicate variable name "${
-            mapping.variableName
-          }"`
-        );
+        errors.push(`${mappingLabel}: Duplicate variable name "${mapping.variableName}"`);
       }
       seenNames.add(mapping.variableName);
 
-      // Validate variable name format
       const validation = validateVariableName(mapping.variableName);
       if (!validation.valid) {
-        errors.push(`Mapping ${index + 1}: ${validation.error}`);
+        errors.push(`${mappingLabel}: ${validation.error}`);
       }
 
-      // Check for duplicates across the flow
       if (mapping.variableName) {
         const duplicateCheck = checkDuplicateVariableName(
           mapping.variableName,
           { nodes, edges, globalVariables },
-          { type: "edge", edgeId: edge?.id }
+          { type: "edge", edgeId: edge?.id },
         );
         if (duplicateCheck.isDuplicate) {
-          errors.push(`Mapping ${index + 1}: ${duplicateCheck.message}`);
+          errors.push(`${mappingLabel}: ${duplicateCheck.message}`);
         }
       }
     });
@@ -339,25 +348,20 @@ export function EdgeVariableMapper({
       return;
     }
 
-    // Strip the 'id' field before saving (it's only for React keys)
-    const mappingsToSave = variableMappings.map(
-      ({ id, ...mapping }) => mapping
-    );
-
+    const mappingsToSave = variableMappings.map(({ id, ...mapping }) => mapping);
     onSave(
       mappingsToSave,
-      isHttpRequestInitiatorNode ? { samplePayload } : undefined
+      isHttpRequestInitiatorNode ? { samplePayload } : undefined,
     );
     onClose();
   };
 
-  // Check if save should be disabled
   const hasDuplicates = variableMappings.some((mapping) => {
     if (!mapping.variableName) return false;
     const duplicateCheck = checkDuplicateVariableName(
       mapping.variableName,
       { nodes, edges, globalVariables },
-      { type: "edge", edgeId: edge?.id }
+      { type: "edge", edgeId: edge?.id },
     );
     return duplicateCheck.isDuplicate;
   });
@@ -368,162 +372,216 @@ export function EdgeVariableMapper({
     return !validation.valid;
   });
 
-  // Allow saving with 0 mappings (to clear all variables from edge)
   const canSave = !hasDuplicates && !hasValidationErrors;
+  const supportsMapping = Boolean(outputEvent || isHttpRequestNode || isDataActionNode);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[40rem] bg-background border-l shadow-2xl z-50 flex flex-col animate-in slide-in-from-right">
-      {/* Panel Header */}
-      <div className="border-b p-4 flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <IconChevronRight className="h-5 w-5 text-telnyx-green" />
-            <h2 className="font-semibold text-lg">Configure Edge Variables</h2>
-          </div>
+    <div className="fixed inset-y-0 right-0 w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background border-l shadow-2xl z-50 animate-in slide-in-from-right">
+      <div className="px-6 py-4 border-b flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-telnyx-green flex items-center gap-2">
+            <IconEdit className="size-5" />
+            Configure Edge Variables
+          </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <IconX className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Extract variables from webhook payload as data flows through this edge
+        <p className="text-sm text-muted-foreground mt-1">
+          Extract variables from webhook, HTTP, or Data Action payloads as data flows through this edge.
         </p>
       </div>
 
-      {/* Show error if source node not found */}
       {!sourceNode && (
-        <div className="p-4 m-4 bg-destructive/10 border border-destructive rounded-md">
-          <p className="text-sm text-destructive font-medium">
-            Error: Source node not found
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            The source node for this edge could not be found. Please try closing
-            and reopening the flow.
-          </p>
-        </div>
+        <Card className="mx-5 my-4 border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4">
+            <p className="text-sm text-destructive font-medium">Error: Source node not found</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              The source node for this edge could not be found. Please try closing and reopening the flow.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Panel Content */}
       {sourceNode && (
         <>
-          {/* Static Content Section */}
-          <div className="flex-shrink-0 p-4 space-y-4">
-            {/* Source Info */}
-            <div className="p-3 bg-muted rounded-md text-sm">
-              <div className="font-medium mb-1">Source Node:</div>
-              <div className="text-muted-foreground">
-                {sourceNode.data?.label || sourceNode.id} (
-                {sourceNode.data?.nodeType})
-              </div>
-              {outputEvent && !isHttpRequestNode && (
-                <div className="mt-2">
-                  <Badge variant="secondary" className="text-xs">
-                    {outputEvent}
-                  </Badge>
-                </div>
-              )}
-              {isHttpRequestActionNode && (
-                <div className="mt-2">
-                  <Badge variant="secondary" className="text-xs">
-                    HTTP Response
-                  </Badge>
-                </div>
-              )}
-              {isHttpRequestInitiatorNode && (
-                <div className="mt-2">
-                  <Badge variant="secondary" className="text-xs">
-                    HTTP Request Trigger (
-                    {sourceNode?.data?.config?.http_method || "POST"})
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            {/* Sample Payload Section for HTTP Request Initiator */}
-            {isHttpRequestInitiatorNode && (
-              <div className="border rounded-md">
-                <div className="p-3 bg-muted/50 flex items-center justify-between">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer flex-1"
-                    onClick={() =>
-                      setSamplePayloadExpanded(!samplePayloadExpanded)
-                    }
-                  >
-                    <IconCode className="h-4 w-4" />
-                    <span className="text-sm font-medium">Sample Payload</span>
-                    <IconChevronRight
-                      className={`h-4 w-4 transition-transform ${
-                        samplePayloadExpanded ? "rotate-90" : ""
-                      }`}
-                    />
-                  </div>
-                </div>
-                {samplePayloadExpanded && (
-                  <div className="p-3 border-t space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      Provide a sample{" "}
-                      {sourceNode?.data?.config?.http_method || "POST"} request
-                      payload to automatically detect available fields for
-                      mapping.
-                      {sourceNode?.data?.config?.http_method === "GET" &&
-                        " For GET requests, provide query parameters as JSON."}
-                    </p>
-                    <VariableTextarea
-                      value={samplePayload}
-                      onChange={(value) => {
-                        setSamplePayload(value);
-                        setPayloadError("");
-                      }}
-                      placeholder={
-                        sourceNode?.data?.config?.http_method === "GET"
-                          ? JSON.stringify(
-                              { phone_number: "+1234567890", message: "Hello" },
-                              null,
-                              2
-                            )
-                          : JSON.stringify(
-                              {
-                                to: "+1234567890",
-                                from: "+0987654321",
-                                message: "Hello",
-                              },
-                              null,
-                              2
-                            )
-                      }
-                      rows={8}
-                      className="font-mono text-xs"
-                    />
-                    {payloadError && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <IconAlertCircle className="h-3 w-3" />
-                        {payloadError}
-                      </p>
+          <div className="flex-1 overflow-y-auto">
+            <Card className="mx-5 my-4">
+              <CardContent className="p-6 space-y-5">
+                <section className="space-y-2">
+                  <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
+                    <IconChevronRight className="size-3.5 text-telnyx-green" />
+                    Source Node
+                  </h3>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-2">
+                    <div className="font-medium">{sourceNode.data?.label || sourceNode.id}</div>
+                    <div className="text-muted-foreground font-mono text-xs">{sourceNode.data?.nodeType}</div>
+                    {outputEvent && !isHttpRequestNode && !isDataActionNode && (
+                      <Badge variant="secondary" className="text-xs">{outputEvent}</Badge>
                     )}
-                    {schemaPaths.length > 0 && (
-                      <div className="mt-2 p-2 bg-muted rounded text-xs">
-                        <p className="font-semibold mb-1">
-                          Detected {schemaPaths.length} field(s):
+                    {isHttpRequestActionNode && <Badge variant="secondary" className="text-xs">HTTP Response</Badge>}
+                    {isHttpRequestInitiatorNode && (
+                      <Badge variant="secondary" className="text-xs">
+                        HTTP Request Trigger ({sourceNode?.data?.config?.http_method || "POST"})
+                      </Badge>
+                    )}
+                    {isDataActionNode && (
+                      <Badge variant="secondary" className="text-xs">
+                        Data Action: {sourceNode?.data?.config?.dataSource || "select data source"}
+                      </Badge>
+                    )}
+                  </div>
+                </section>
+
+                {isHttpRequestInitiatorNode && (
+                  <section className="rounded-lg border overflow-hidden">
+                    <button
+                      type="button"
+                      className="w-full p-3 bg-muted/40 flex items-center justify-between text-left"
+                      onClick={() => setSamplePayloadExpanded(!samplePayloadExpanded)}
+                    >
+                      <span className="text-sm font-semibold flex items-center gap-2">
+                        <IconCode className="h-4 w-4" />
+                        Sample Payload
+                      </span>
+                      <IconChevronRight className={`h-4 w-4 transition-transform ${samplePayloadExpanded ? "rotate-90" : ""}`} />
+                    </button>
+                    {samplePayloadExpanded && (
+                      <div className="p-3 border-t space-y-3">
+                        <p className="text-xs text-muted-foreground">
+                          Provide a sample {sourceNode?.data?.config?.http_method || "POST"} request payload to detect fields for mapping.
+                          {sourceNode?.data?.config?.http_method === "GET" && " For GET requests, provide query parameters as JSON."}
                         </p>
-                        <div className="flex flex-wrap gap-1">
-                          {schemaPaths.slice(0, 10).map((path, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 bg-background rounded border text-xs font-mono"
-                              title={`Type: ${path.type}`}
-                            >
-                              {path.path}
-                            </span>
-                          ))}
-                          {schemaPaths.length > 10 && (
-                            <span className="px-2 py-1 text-muted-foreground">
-                              +{schemaPaths.length - 10} more
-                            </span>
+                        <VariableTextarea
+                          value={samplePayload}
+                          onChange={(value) => {
+                            setSamplePayload(value);
+                            setPayloadError("");
+                          }}
+                          placeholder={JSON.stringify(
+                            sourceNode?.data?.config?.http_method === "GET"
+                              ? { phone_number: "+1234567890", message: "Hello" }
+                              : { to: "+1234567890", from: "+0987654321", message: "Hello" },
+                            null,
+                            2,
                           )}
-                        </div>
+                          rows={8}
+                          className="font-mono text-xs"
+                        />
+                        {payloadError && (
+                          <p className="text-xs text-destructive flex items-center gap-1">
+                            <IconAlertCircle className="h-3 w-3" />
+                            {payloadError}
+                          </p>
+                        )}
                       </div>
                     )}
+                  </section>
+                )}
+
+                {!supportsMapping && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">No Variable Mapping Available</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      This node type does not generate output data that can be mapped to variables.
+                      {sourceNode.data?.nodeType === "set_variable" && " Variables set by this node are automatically available in subsequent nodes."}
+                    </p>
+                  </div>
+                )}
+
+                {isHttpRequestActionNode && schemaPaths.length === 0 && (
+                  <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                    <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">Test Required</p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                      Please run a test request in the HTTP Request node editor to see available response fields for variable mapping.
+                    </p>
+                  </div>
+                )}
+
+                {isHttpRequestInitiatorNode && schemaPaths.length === 0 && !samplePayload && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Sample Payload Recommended</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                      Provide a sample payload above to automatically detect available fields for mapping.
+                    </p>
+                  </div>
+                )}
+
+                {schemaPaths.length > 0 && (
+                  <section className="rounded-lg border overflow-hidden">
+                    <div className="p-3 bg-muted/40 flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 text-left flex-1"
+                        onClick={() => setExpandedSchema(!expandedSchema)}
+                      >
+                        <span className="text-sm font-semibold">{sourceLabel}</span>
+                        <Badge variant="outline" className="text-[10px]">{schemaPaths.length} fields</Badge>
+                        <IconChevronRight className={`h-4 w-4 transition-transform ${expandedSchema ? "rotate-90" : ""}`} />
+                      </button>
+                      <div className="flex items-center gap-1 border rounded-md bg-background">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={schemaViewMode === "list" ? "secondary" : "ghost"}
+                          className="h-7 px-2"
+                          onClick={() => setSchemaViewMode("list")}
+                        >
+                          <IconList className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={schemaViewMode === "json" ? "secondary" : "ghost"}
+                          className="h-7 px-2"
+                          onClick={() => setSchemaViewMode("json")}
+                        >
+                          <IconCode className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {expandedSchema && (
+                      <div className="border-t">
+                        {schemaViewMode === "list" ? (
+                          <div className="max-h-64 overflow-y-auto p-3 space-y-1">
+                            {schemaPaths.map((field) => renderSelectableFieldRow(field, selectedSourcePaths, toggleSourcePath))}
+                          </div>
+                        ) : (
+                          <div className="max-h-96 overflow-y-auto p-3 bg-slate-950 text-slate-100">
+                            {/* JSON object view with selectable keys */}
+                            {renderSelectableJsonView(schemaPaths, selectedSourcePaths, toggleSourcePath, buildExampleJson())}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {supportsMapping && (
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label className="font-semibold">Variable Mappings</Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Select one or more payload keys above, then add them as mappings in one click.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addSelectedMappings}
+                        className="h-8"
+                        disabled={selectedSourcePaths.size === 0 || (isHttpRequestActionNode && schemaPaths.length === 0)}
+                      >
+                        <IconPlus className="h-3 w-3 mr-1" />
+                        Add {selectedSourcePaths.size || ""} Mapping{selectedSourcePaths.size === 1 ? "" : "s"}
+                      </Button>
+                    </div>
+
                     {schemaPaths.length > 0 && (
                       <Button
                         type="button"
@@ -536,328 +594,108 @@ export function EdgeVariableMapper({
                         Auto-suggest Variable Mappings
                       </Button>
                     )}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* No Output Event Notice (for nodes like Set Variable) */}
-            {!outputEvent && !isHttpRequestNode && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
-                  No Variable Mapping Available
-                </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                  This node type does not generate output data that can be
-                  mapped to variables.
-                  {sourceNode.data?.nodeType === "set_variable" && (
-                    <>
-                      {" "}
-                      Variables set by this node are automatically available in
-                      subsequent nodes.
-                    </>
-                  )}
-                </p>
-              </div>
-            )}
-
-            {/* HTTP Request Action Test Notice */}
-            {isHttpRequestActionNode && schemaPaths.length === 0 && (
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
-                <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200">
-                  Test Required
-                </p>
-                <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                  Please run a test request in the HTTP Request node editor to
-                  see available response fields for variable mapping.
-                </p>
-              </div>
-            )}
-            {/* HTTP Request Initiator Sample Payload Notice */}
-            {isHttpRequestInitiatorNode &&
-              schemaPaths.length === 0 &&
-              !samplePayload && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                  <p className="text-xs font-medium text-blue-800 dark:text-blue-200">
-                    Sample Payload Recommended
-                  </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Provide a sample payload above to automatically detect
-                    available fields for mapping.
-                  </p>
-                </div>
-              )}
-
-            {/* Schema Explorer */}
-            {schemaPaths.length > 0 && (
-              <div className="border rounded-md">
-                <div className="p-3 bg-muted/50 flex items-center justify-between">
-                  <div
-                    className="flex items-center gap-2 cursor-pointer flex-1"
-                    onClick={() => setExpandedSchema(!expandedSchema)}
-                  >
-                    <span className="text-sm font-medium">
-                      {isHttpRequestActionNode
-                        ? "HTTP Response Structure"
-                        : isHttpRequestInitiatorNode
-                        ? "Request Payload Structure"
-                        : "Expected Payload Structure"}
-                    </span>
-                    <IconChevronRight
-                      className={`h-4 w-4 transition-transform ${
-                        expandedSchema ? "rotate-90" : ""
-                      }`}
-                    />
-                  </div>
-
-                  {/* View Mode Toggle */}
-                  {expandedSchema && (
-                    <div className="flex items-center gap-1 border rounded-md bg-background">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={
-                          schemaViewMode === "list" ? "secondary" : "ghost"
-                        }
-                        className="h-7 px-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSchemaViewMode("list");
-                        }}
-                      >
-                        <IconList className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={
-                          schemaViewMode === "json" ? "secondary" : "ghost"
-                        }
-                        className="h-7 px-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSchemaViewMode("json");
-                        }}
-                      >
-                        <IconCode className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {expandedSchema && (
-                  <>
-                    {/* List View */}
-                    {schemaViewMode === "list" && (
-                      <div className="max-h-48 overflow-y-auto p-3 border-t">
-                        <div className="space-y-1">
-                          {schemaPaths.map((field, index) => (
-                            <div
-                              key={index}
-                              className="text-xs font-mono flex items-start gap-2"
+                    <div className="space-y-3">
+                      {variableMappings.map((mapping, index) => (
+                        <div key={mapping.id} className="rounded-xl border bg-card p-4 space-y-4 shadow-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <Badge variant="outline" className={getSourcePathBadgeClass(mapping.sourcePath)}>
+                              {mapping.sourcePath || "No source selected"}
+                            </Badge>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeMapping(index)}
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                              aria-label={`Remove mapping ${mapping.sourcePath || index + 1}`}
                             >
-                              <span className="text-blue-600 font-semibold">
-                                {field.path}
-                              </span>
-                              <span className="text-muted-foreground">
-                                ({field.type})
-                              </span>
-                              {field.description && (
-                                <span className="text-muted-foreground text-[10px]">
-                                  - {field.description}
-                                </span>
-                              )}
+                              <IconTrash className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">Source Path</Label>
+                            <div className="mt-1 rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono text-muted-foreground">
+                              {mapping.sourcePath || "Select a payload field above"}
                             </div>
-                          ))}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Source path is locked after adding. Select a different payload field above to add another mapping.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs">Variable Name</Label>
+                              <Input
+                                value={mapping.variableName}
+                                onChange={(e) => updateMapping(index, "variableName", e.target.value)}
+                                placeholder="call_control_id"
+                                className={`mt-1 ${
+                                  mapping.variableName &&
+                                  checkDuplicateVariableName(
+                                    mapping.variableName,
+                                    { nodes, edges, globalVariables },
+                                    { type: "edge", edgeId: edge?.id },
+                                  ).isDuplicate
+                                    ? "border-yellow-500"
+                                    : ""
+                                }`}
+                              />
+                              {mapping.variableName &&
+                                checkDuplicateVariableName(
+                                  mapping.variableName,
+                                  { nodes, edges, globalVariables },
+                                  { type: "edge", edgeId: edge?.id },
+                                ).isDuplicate && (
+                                  <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1 flex items-center gap-1">
+                                    <IconAlertCircle className="h-3 w-3" />
+                                    {
+                                      checkDuplicateVariableName(
+                                        mapping.variableName,
+                                        { nodes, edges, globalVariables },
+                                        { type: "edge", edgeId: edge?.id },
+                                      ).message
+                                    }
+                                  </p>
+                                )}
+                            </div>
+
+                            <div>
+                              <Label className="text-xs">Description (Optional)</Label>
+                              <Input
+                                value={mapping.description || ""}
+                                onChange={(e) => updateMapping(index, "description", e.target.value)}
+                                placeholder="Brief description..."
+                                className="mt-1"
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      ))}
 
-                    {/* JSON View */}
-                    {schemaViewMode === "json" && (
-                      <div className="max-h-96 overflow-y-auto border-t">
-                        <CodeBlock
-                          code={JSON.stringify(buildExampleJson(), null, 2)}
-                          language="json"
-                        >
-                          <CodeBlockCopyButton />
-                        </CodeBlock>
-                      </div>
-                    )}
-                  </>
+                      {variableMappings.length === 0 && (
+                        <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl bg-muted/30">
+                          No variable mappings defined.
+                          <br />
+                          Select payload fields above and click "Add Mapping" to capture data from this edge.
+                        </div>
+                      )}
+                    </div>
+                  </section>
                 )}
-              </div>
-            )}
-
-            {/* Variable Mappings Header - Only show if node supports variable mapping */}
-            {(outputEvent || isHttpRequestNode) && (
-              <div className="flex items-center justify-between">
-                <Label className="font-semibold">Variable Mappings</Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={addMapping}
-                  className="h-8"
-                  disabled={isHttpRequestActionNode && schemaPaths.length === 0}
-                >
-                  <IconPlus className="h-3 w-3 mr-1" />
-                  Add Mapping
-                </Button>
-              </div>
-            )}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Scrollable Mappings List - Only show if node supports variable mapping */}
-          {(outputEvent || isHttpRequestNode) && (
-            <div className="flex-1 overflow-y-auto px-4">
-              <div className="space-y-3 pb-4">
-                {variableMappings.map((mapping, index) => (
-                  <div
-                    key={mapping.id}
-                    className="p-3 border rounded-md bg-card space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        Mapping {index + 1}
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeMapping(index)}
-                        className="h-6 w-6 p-0 text-destructive hover:bg-destructive/10"
-                      >
-                        <IconTrash className="h-3 w-3" />
-                      </Button>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs">Source Path</Label>
-                      {schemaPaths.length > 0 ? (
-                        <Select
-                          value={mapping.sourcePath}
-                          onValueChange={(value) =>
-                            updateMapping(index, "sourcePath", value)
-                          }
-                        >
-                          <SelectTrigger className="mt-1">
-                            <SelectValue placeholder="Select field..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {schemaPaths.map((field) => (
-                              <SelectItem key={field.path} value={field.path}>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs">
-                                    {field.path}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    ({field.type})
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={mapping.sourcePath}
-                          onChange={(e) =>
-                            updateMapping(index, "sourcePath", e.target.value)
-                          }
-                          placeholder="payload.call_control_id"
-                          className="mt-1"
-                        />
-                      )}
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Path to the data in the webhook payload
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label className="text-xs">Variable Name</Label>
-                      <Input
-                        value={mapping.variableName}
-                        onChange={(e) =>
-                          updateMapping(index, "variableName", e.target.value)
-                        }
-                        placeholder="call_control_id"
-                        className={`mt-1 ${
-                          mapping.variableName &&
-                          checkDuplicateVariableName(
-                            mapping.variableName,
-                            { nodes, edges, globalVariables },
-                            { type: "edge", edgeId: edge?.id }
-                          ).isDuplicate
-                            ? "border-yellow-500"
-                            : ""
-                        }`}
-                      />
-                      {mapping.variableName &&
-                        checkDuplicateVariableName(
-                          mapping.variableName,
-                          { nodes, edges, globalVariables },
-                          { type: "edge", edgeId: edge?.id }
-                        ).isDuplicate && (
-                          <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1 flex items-center gap-1">
-                            <IconAlertCircle className="h-3 w-3" />
-                            {
-                              checkDuplicateVariableName(
-                                mapping.variableName,
-                                { nodes, edges, globalVariables },
-                                { type: "edge", edgeId: edge?.id }
-                              ).message
-                            }
-                          </p>
-                        )}
-                      {!checkDuplicateVariableName(
-                        mapping.variableName,
-                        { nodes, edges, globalVariables },
-                        { type: "edge", edgeId: edge?.id }
-                      ).isDuplicate && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Name to store this value (auto-suggested from path)
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label className="text-xs">Description (Optional)</Label>
-                      <Input
-                        value={mapping.description || ""}
-                        onChange={(e) =>
-                          updateMapping(index, "description", e.target.value)
-                        }
-                        placeholder="Brief description..."
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {variableMappings.length === 0 && (
-                  <div className="text-center py-8 text-sm text-muted-foreground border rounded-md bg-muted/30">
-                    No variable mappings defined.
-                    <br />
-                    Click "Add Mapping" to capture data from this edge.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Fixed Footer - Only show Save button if node supports variable mapping */}
-          <div className="border-t p-4 flex-shrink-0 flex items-center justify-end gap-2">
+          <div className="border-t p-4 flex-shrink-0 flex items-center justify-end gap-2 bg-background">
             <Button variant="outline" onClick={onClose}>
-              {outputEvent || isHttpRequestNode ? "Cancel" : "Close"}
+              {supportsMapping ? "Cancel" : "Close"}
             </Button>
-            {(outputEvent || isHttpRequestNode) && (
+            {supportsMapping && (
               <Button
                 onClick={handleSave}
-                disabled={
-                  !canSave ||
-                  (isHttpRequestInitiatorNode && samplePayload && payloadError)
-                }
+                disabled={!canSave || Boolean(isHttpRequestInitiatorNode && samplePayload && payloadError)}
               >
                 Save Mappings
               </Button>
@@ -867,6 +705,174 @@ export function EdgeVariableMapper({
       )}
     </div>
   );
+}
+
+function renderSelectableFieldRow(field, selectedSourcePaths, toggleSourcePath) {
+  return (
+    <label
+      key={field.path}
+      className="flex items-start gap-3 rounded-md border bg-background/70 p-2 hover:bg-muted/60 cursor-pointer"
+    >
+      <Checkbox
+        checked={selectedSourcePaths.has(field.path)}
+        onCheckedChange={() => toggleSourcePath(field.path)}
+        className="mt-0.5"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-mono text-blue-600 font-semibold break-all">{field.path}</span>
+          <Badge variant="secondary" className="text-[10px] font-mono">{field.type}</Badge>
+        </div>
+        {field.description && (
+          <p className="text-[11px] text-muted-foreground mt-1">{field.description}</p>
+        )}
+      </div>
+    </label>
+  );
+}
+
+function renderSelectableJsonView(schemaPaths, selectedSourcePaths, toggleSourcePath, exampleJson) {
+  const preview = exampleJson ? JSON.stringify(exampleJson, null, 2).split("\n") : [];
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-slate-700 bg-slate-900 p-3">
+        <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">
+          Select keys from JSON object
+        </div>
+        <div className="space-y-1">
+          {schemaPaths.map((field) => (
+            <label key={field.path} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-slate-800 cursor-pointer">
+              <Checkbox
+                checked={selectedSourcePaths.has(field.path)}
+                onCheckedChange={() => toggleSourcePath(field.path)}
+                className="border-slate-500 data-[state=checked]:bg-telnyx-green data-[state=checked]:border-telnyx-green"
+              />
+              <span className="font-mono text-xs text-cyan-300">{field.path}</span>
+              <span className="text-[10px] text-slate-500">({field.type})</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      {preview.length > 0 && (
+        <pre className="rounded-md border border-slate-700 bg-slate-900 p-3 overflow-x-auto text-xs leading-5 text-slate-200">
+          {preview.join("\n")}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function getSourcePathBadgeClass(sourcePath) {
+  const path = sourcePath || "";
+  if (path.startsWith("payload.")) {
+    return "text-blue-700 border-blue-300 bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:bg-blue-950/30 font-mono text-[11px] break-all";
+  }
+  if (path.startsWith("query.")) {
+    return "text-purple-700 border-purple-300 bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:bg-purple-950/30 font-mono text-[11px] break-all";
+  }
+  if (path.includes("data_response")) {
+    return "text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-800 dark:bg-emerald-950/30 font-mono text-[11px] break-all";
+  }
+  return "text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:bg-amber-950/30 font-mono text-[11px] break-all";
+}
+
+function getDataActionResponseSchemaPaths(dataSource, action, responseVariable = "data_response") {
+  // Default list payload path: data_response.rows[]
+  if (!dataSource) {
+    return { schemaPaths: [], examplePayload: null };
+  }
+
+  const schema = getEntitySchema(dataSource);
+  const rowExample = {};
+  const schemaPaths = [];
+
+  Object.entries(schema).forEach(([fieldName, fieldDef]) => {
+    rowExample[fieldName] = buildExampleValue(fieldDef);
+  });
+
+  const addFieldPaths = (prefix) => {
+    Object.entries(schema).forEach(([fieldName, fieldDef]) => {
+      schemaPaths.push({
+        path: `${prefix}.${fieldName}`,
+        type: fieldDef.type || "string",
+        description: fieldDef.description || "",
+      });
+    });
+  };
+
+  schemaPaths.push({
+    path: `${responseVariable}.success`,
+    type: "boolean",
+    description: "Whether the Data Action request succeeded",
+  });
+  schemaPaths.push({
+    path: `${responseVariable}.status`,
+    type: "number",
+    description: "HTTP status returned by the Data Action API",
+  });
+
+  if (action === "list") {
+    schemaPaths.push({
+      path: `${responseVariable}.rows[]`,
+      type: "array",
+      description: `List of ${dataSource} records returned by the Data Action`,
+    });
+    addFieldPaths(`${responseVariable}.rows[]`);
+
+    return {
+      schemaPaths,
+      examplePayload: {
+        [responseVariable]: {
+          success: true,
+          status: 200,
+          rows: [rowExample],
+          total: 1,
+          page: 1,
+          pageSize: 25,
+        },
+      },
+    };
+  }
+
+  schemaPaths.push({
+    path: `${responseVariable}.data`,
+    type: "object",
+    description: `${dataSource} record returned by the Data Action`,
+  });
+  addFieldPaths(`${responseVariable}.data`);
+
+  return {
+    schemaPaths,
+    examplePayload: {
+      [responseVariable]: {
+        success: true,
+        status: action === "delete" ? 204 : 200,
+        data: action === "delete" ? { deleted: true } : rowExample,
+      },
+    },
+  };
+}
+
+function buildExampleValue(fieldDef = {}) {
+  if (fieldDef.example !== undefined) return fieldDef.example;
+  if (fieldDef.enum?.length) return fieldDef.enum[0];
+
+  switch (fieldDef.type) {
+    case "string":
+    case "enum":
+      return "example_value";
+    case "number":
+      return 0;
+    case "boolean":
+      return true;
+    case "array":
+      return [];
+    case "object":
+      return {};
+    default:
+      return null;
+  }
 }
 
 /**
@@ -880,7 +886,6 @@ function getOutputEvent(sourceNode, edge) {
 
   if (!nodeDef || !nodeDef.outputEvents) return null;
 
-  // Extract output index from sourceHandle (e.g., "output-0" -> 0)
   const sourceHandle = edge.sourceHandle || "output-0";
   const outputIndex = parseInt(sourceHandle.replace("output-", ""), 10);
 
