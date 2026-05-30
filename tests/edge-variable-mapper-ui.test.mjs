@@ -73,6 +73,22 @@ test("HTTP response payload paths include nested array item fields", async () =>
   ]);
 });
 
+test("Webhook schema paths include nested array example fields", async () => {
+  const { getSchemaPath, getWebhookSchema } = await import("../config/webhook-schemas.js");
+  const paths = getSchemaPath(getWebhookSchema("call.initiated")).map(
+    (field) => field.path,
+  );
+
+  assert.ok(paths.includes("payload.custom_headers"));
+  assert.ok(paths.includes("payload.custom_headers[]"));
+  assert.ok(paths.includes("payload.custom_headers[].name"));
+  assert.ok(paths.includes("payload.custom_headers[].value"));
+  assert.ok(paths.includes("payload.sip_headers[].name"));
+  assert.ok(paths.includes("payload.sip_headers[].value"));
+  assert.ok(paths.includes("payload.tags"));
+  assert.ok(paths.includes("payload.tags[]"));
+});
+
 test("Expected payload structure supports checkbox multi-select and batch Add Mapping", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
@@ -94,14 +110,16 @@ test("Mapping picker only adds selected keys and disables already mapped keys", 
   assert.match(source, /aria-disabled=\{isAlreadyMapped\}/);
 });
 
-test("Mapping list uses telnyx-green source badges without duplicate source path controls", async () => {
+test("Mapping list lets users edit selected source paths", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /getSourcePathBadgeClass/);
   assert.match(source, /text-telnyx-green border-telnyx-green\/40 bg-telnyx-green\/10/);
   assert.match(source, /<Badge[\s\S]*\{mapping\.sourcePath \|\| "No source selected"\}[\s\S]*<\/Badge>/);
   assert.doesNotMatch(source, /Mapping \{index \+ 1\}/);
-  assert.doesNotMatch(source, /<Label className="text-xs">Source Path<\/Label>/);
+  assert.match(source, /<Label className="text-xs">Source Path<\/Label>/);
+  assert.match(source, /updateMapping\(index, "sourcePath", e\.target\.value\)/);
+  assert.doesNotMatch(source, /if \(field === "sourcePath"\) return/);
   assert.doesNotMatch(source, /Source path is locked after adding\. Select a different payload field above to add another mapping\./);
   assert.match(source, /updateMapping\(index, "variableName", e\.target\.value\)/);
   assert.match(source, /updateMapping\(index, "description", e\.target\.value\)/);

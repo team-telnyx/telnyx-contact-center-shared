@@ -1496,12 +1496,41 @@ export function getWebhookSchema(eventType) {
 export function getSchemaPath(schema) {
   if (!schema) return [];
 
-  return Object.entries(schema).map(([fieldName, fieldDef]) => ({
-    path: `payload.${fieldName}`,
-    type: fieldDef.type || "string",
-    description: fieldDef.description || "",
-    example: fieldDef.example,
-  }));
+  const examplePayload = {};
+  const fieldMetadata = new Map();
+
+  Object.entries(schema).forEach(([fieldName, fieldDef]) => {
+    const path = `payload.${fieldName}`;
+    examplePayload[fieldName] = Object.prototype.hasOwnProperty.call(fieldDef, "example")
+      ? fieldDef.example
+      : getExampleValueForSchemaField(fieldDef);
+    fieldMetadata.set(path, fieldDef);
+  });
+
+  return extractPathsFromObject(examplePayload, "payload", 10).map((field) => {
+    const metadata = fieldMetadata.get(field.path);
+    return {
+      ...field,
+      description: metadata?.description || field.description || "",
+    };
+  });
+}
+
+function getExampleValueForSchemaField(fieldDef = {}) {
+  switch (fieldDef.type) {
+    case "array":
+      return [];
+    case "object":
+      return {};
+    case "number":
+      return 0;
+    case "boolean":
+      return false;
+    case "null":
+      return null;
+    default:
+      return "";
+  }
 }
 
 /**
@@ -1586,6 +1615,12 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
               !Array.isArray(sampleItem)
             ) {
               traverse(sampleItem, itemPath, depth + 1);
+            } else if (sampleItem !== undefined && sampleItem !== null) {
+              paths.push({
+                path: itemPath,
+                type: Array.isArray(sampleItem) ? "array" : typeof sampleItem,
+                example: sampleItem,
+              });
             }
           }
         } else {

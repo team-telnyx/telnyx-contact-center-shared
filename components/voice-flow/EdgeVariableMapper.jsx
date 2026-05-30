@@ -274,8 +274,6 @@ export function EdgeVariableMapper({
   };
 
   const updateMapping = (index, field, value) => {
-    if (field === "sourcePath") return;
-
     const newMappings = [...variableMappings];
     newMappings[index] = {
       ...newMappings[index],
@@ -603,7 +601,18 @@ export function EdgeVariableMapper({
                             </Button>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-xs">Source Path</Label>
+                              <Input
+                                value={mapping.sourcePath || ""}
+                                onChange={(e) => updateMapping(index, "sourcePath", e.target.value)}
+                                placeholder="payload.custom_headers[0].name"
+                                className="mt-1 font-mono text-xs"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                               <Label className="text-xs">Variable Name</Label>
                               <Input
@@ -651,7 +660,8 @@ export function EdgeVariableMapper({
                             </div>
                           </div>
                         </div>
-                      ))}
+                        </div>
+                        ))}
 
                       {variableMappings.length === 0 && (
                         <div className="text-center py-8 text-sm text-muted-foreground border rounded-xl bg-muted/30">
