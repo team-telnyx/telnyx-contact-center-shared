@@ -88,8 +88,10 @@ test("successful HTTP request tests are persisted on the node config for edge ma
   const modalSource = await readFile(testModalUrl, "utf8");
 
   assert.match(modalSource, /onTestSuccess/);
-  assert.match(modalSource, /onTestSuccess\?\.\(result\.response\)/);
-  assert.match(editorSource, /onTestSuccess=\{\(testResponse\) =>/);
+  assert.match(modalSource, /const configAtTestStart = config;/);
+  assert.match(modalSource, /onTestSuccess\?\.\(result\.response, configAtTestStart\)/);
+  assert.match(editorSource, /onTestSuccess=\{\(testResponse, testedConfig\) =>/);
+  assert.match(editorSource, /\.\.\.\(testedConfig \|\| latestConfigRef\.current\)/);
   assert.match(editorSource, /testResponse/);
   assert.match(editorSource, /testedAt: new Date\(\)\.toISOString\(\)/);
 });

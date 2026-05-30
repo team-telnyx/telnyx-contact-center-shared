@@ -181,6 +181,7 @@ export default function HttpRequestTestModal({
     setIsTesting(true);
     setTestError(null);
     setTestResult(null);
+    const configAtTestStart = config;
 
     try {
       const testConfig = buildTestConfig();
@@ -205,7 +206,7 @@ export default function HttpRequestTestModal({
 
       if (result.success) {
         setTestResult(result.response);
-        onTestSuccess?.(result.response);
+        onTestSuccess?.(result.response, configAtTestStart);
       } else {
         setTestError(result.error || "Request failed");
       }
