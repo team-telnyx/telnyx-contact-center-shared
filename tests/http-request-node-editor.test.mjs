@@ -82,3 +82,14 @@ test("Test HTTP Request sheet renders response body directly instead of as accor
   assert.doesNotMatch(responseSection, /<CollapsibleTrigger/);
   assert.doesNotMatch(responseSection, /responseExpanded/);
 });
+
+test("successful HTTP request tests are persisted on the node config for edge mapping", async () => {
+  const editorSource = await readFile(editorUrl, "utf8");
+  const modalSource = await readFile(testModalUrl, "utf8");
+
+  assert.match(modalSource, /onTestSuccess/);
+  assert.match(modalSource, /onTestSuccess\?\.\(result\.response\)/);
+  assert.match(editorSource, /onTestSuccess=\{\(testResponse\) =>/);
+  assert.match(editorSource, /testResponse/);
+  assert.match(editorSource, /testedAt: new Date\(\)\.toISOString\(\)/);
+});

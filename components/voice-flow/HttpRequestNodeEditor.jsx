@@ -771,6 +771,15 @@ export default function HttpRequestNodeEditor({
         onOpenChange={setTestModalOpen}
         config={config}
         availableVariables={availableVariables}
+        onTestSuccess={(testResponse) => {
+          onChange({
+            ...config,
+            testResponse: {
+              ...testResponse,
+              testedAt: new Date().toISOString(),
+            },
+          });
+        }}
       />
     </div>
   );

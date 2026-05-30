@@ -8,6 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import {
   IconAlertCircle,
@@ -17,7 +25,6 @@ import {
   IconList,
   IconPlus,
   IconTrash,
-  IconX,
 } from "@tabler/icons-react";
 import { VariableTextarea } from "./VariableTextarea";
 import {
@@ -366,24 +373,29 @@ export function EdgeVariableMapper({
   const canSave = !hasDuplicates && !hasValidationErrors;
   const supportsMapping = Boolean(outputEvent || isHttpRequestNode || isDataActionNode);
 
+  const handleOpenChange = (nextOpen) => {
+    if (!nextOpen) {
+      onClose?.();
+    }
+  };
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background border-l shadow-2xl z-50 animate-in slide-in-from-right">
-      <div className="px-6 py-4 border-b flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-telnyx-green flex items-center gap-2">
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
+      >
+        <SheetHeader className="px-6 py-4 border-b">
+          <SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2">
             <IconEdit className="size-5" />
             Configure Edge Variables
-          </h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <IconX className="h-4 w-4" />
-          </Button>
-        </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          Extract variables from webhook, HTTP, or Data Action payloads as data flows through this edge.
-        </p>
-      </div>
+          </SheetTitle>
+          <SheetDescription className="text-sm">
+            Extract variables from webhook, HTTP, or Data Action payloads as data flows through this edge.
+          </SheetDescription>
+        </SheetHeader>
 
       {!sourceNode && (
         <Card className="mx-5 my-4 border-destructive/40 bg-destructive/5">
@@ -655,7 +667,7 @@ export function EdgeVariableMapper({
             </Card>
           </div>
 
-          <div className="border-t p-4 flex-shrink-0 flex items-center justify-end gap-2 bg-background">
+          <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
               {supportsMapping ? "Cancel" : "Close"}
             </Button>
@@ -667,10 +679,11 @@ export function EdgeVariableMapper({
                 Save Mappings
               </Button>
             )}
-          </div>
+          </SheetFooter>
         </>
       )}
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

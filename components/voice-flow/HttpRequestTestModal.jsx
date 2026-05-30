@@ -48,6 +48,7 @@ export default function HttpRequestTestModal({
   onOpenChange,
   config,
   availableVariables = [],
+  onTestSuccess,
 }) {
   const [testVariables, setTestVariables] = useState({});
   const [isTesting, setIsTesting] = useState(false);
@@ -204,6 +205,7 @@ export default function HttpRequestTestModal({
 
       if (result.success) {
         setTestResult(result.response);
+        onTestSuccess?.(result.response);
       } else {
         setTestError(result.error || "Request failed");
       }

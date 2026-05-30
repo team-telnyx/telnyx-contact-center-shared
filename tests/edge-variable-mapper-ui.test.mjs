@@ -11,10 +11,23 @@ async function read(path) {
 test("Configure Edge Variables sheet matches standard edit sheet shell", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
-  assert.match(source, /fixed inset-y-0 right-0 w-full sm:max-w-xl overflow-hidden flex flex-col p-0/);
-  assert.match(source, /px-6 py-4 border-b/);
-  assert.match(source, /text-xl font-bold text-telnyx-green flex items-center gap-2/);
+  assert.match(source, /<Sheet open=\{open\} onOpenChange=\{handleOpenChange\}>/);
+  assert.match(source, /<SheetContent[\s\S]*side="right"[\s\S]*className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"/);
+  assert.match(source, /<SheetHeader className="px-6 py-4 border-b"/);
+  assert.match(source, /<SheetTitle className="text-xl font-bold text-telnyx-green flex items-center gap-2"/);
   assert.match(source, /Card className="mx-5 my-4"/);
+  assert.match(source, /<SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2"/);
+  assert.doesNotMatch(source, /fixed inset-y-0 right-0/);
+  assert.doesNotMatch(source, /bg-background border-l shadow-2xl/);
+});
+
+test("HTTP Request action edge mapper can read persisted test response payloads", async () => {
+  const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
+
+  assert.match(source, /sourceNode\?\.data\?\.config\?\.testResponse/);
+  assert.match(source, /extractPathsFromObject\(testResponse\.body, responseVariable\)/);
+  assert.match(source, /sourceLabel: "HTTP Response Structure"/);
+  assert.doesNotMatch(source, /Please run a test request[\s\S]*without checking persisted testResponse/);
 });
 
 test("Expected payload structure supports checkbox multi-select and batch Add Mapping", async () => {
