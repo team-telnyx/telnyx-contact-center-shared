@@ -41,20 +41,22 @@ export async function POST(request) {
       );
     }
 
-    let requestUrl = url;
-    Object.entries(pathParams || {}).forEach(([key, value]) => {
+    let requestUrl = await resolveSecretReferences(String(url));
+    for (const [key, value] of Object.entries(pathParams || {})) {
+      const resolvedValue = await resolveSecretReferences(String(value ?? ""));
       requestUrl = requestUrl.replace(
         new RegExp(`\\{${key}\\}`, "g"),
-        encodeURIComponent(value ?? ""),
+        encodeURIComponent(resolvedValue),
       );
-    });
+    }
 
     const urlObject = new URL(requestUrl);
-    Object.entries(queryParams || {}).forEach(([key, value]) => {
+    for (const [key, value] of Object.entries(queryParams || {})) {
       if (value !== undefined && value !== null && value !== "") {
-        urlObject.searchParams.set(key, String(value));
+        const resolvedValue = await resolveSecretReferences(String(value));
+        urlObject.searchParams.set(key, resolvedValue);
       }
-    });
+    }
 
     const resolvedHeaders = {};
     for (const [key, value] of Object.entries(headers || {})) {
@@ -71,7 +73,7 @@ export async function POST(request) {
     };
 
     if (method !== "GET" && body !== undefined && body !== null && body !== "") {
-      fetchOptions.body = body;
+      fetchOptions.body = await resolveSecretReferences(String(body));
     }
 
     try {
