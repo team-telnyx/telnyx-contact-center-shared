@@ -62,3 +62,23 @@ test("Data Action execution returns explicit output indexes for success and erro
     "configuration errors should explicitly route to Data Action Error output",
   );
 });
+
+test("edge mappings can resolve Data Action response variables", async () => {
+  const source = await read(enginePath);
+
+  assert.match(
+    source,
+    /extractVariablesFromWebhook\(\s*payload,\s*edge\.data\.variableMappings,\s*executionState\.variables \|\| \{},\s*\)/,
+    "determineNextNodes must pass existing execution variables so Data Action response mappings can resolve",
+  );
+  assert.match(
+    source,
+    /const rootScope = \{[\s\S]*payload,[\s\S]*query: payload\?\.query \|\| \{},[\s\S]*\.\.\.\(variablesScope \|\| \{}\),[\s\S]*\}/,
+    "edge mapping extraction should resolve source paths against execution variables as well as webhook payload roots",
+  );
+  assert.match(
+    source,
+    /sourcePath\.includes\("\[\]"\)[\s\S]*sourcePath\.replaceAll\("\[\]", "\.0"\)/,
+    "legacy Data Action list mappings using rows[] should resolve to the first row instead of failing",
+  );
+});

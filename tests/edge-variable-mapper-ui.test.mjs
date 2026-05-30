@@ -67,6 +67,7 @@ test("Data Action edge mapping exposes response payload structures from data-sou
   assert.match(source, /isDataActionNode/);
   assert.match(source, /getDataActionResponseSchemaPaths/);
   assert.match(source, /getEntitySchema\(dataSource\)/);
-  assert.match(source, /data_response\.rows\[\]/);
+  assert.match(source, /data_response\.rows\.0/);
+  assert.doesNotMatch(source, /path: `\$\{responseVariable\}\.rows\[\]`/);
   assert.match(source, /Data Action Response Structure/);
 });

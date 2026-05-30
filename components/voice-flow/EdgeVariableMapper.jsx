@@ -743,7 +743,7 @@ function getSourcePathBadgeClass() {
 }
 
 function getDataActionResponseSchemaPaths(dataSource, action, responseVariable = "data_response") {
-  // Default list payload path: data_response.rows[]
+  // Default list payload path: data_response.rows.0
   if (!dataSource) {
     return { schemaPaths: [], examplePayload: null };
   }
@@ -779,11 +779,11 @@ function getDataActionResponseSchemaPaths(dataSource, action, responseVariable =
 
   if (action === "list") {
     schemaPaths.push({
-      path: `${responseVariable}.rows[]`,
+      path: `${responseVariable}.rows`,
       type: "array",
       description: `List of ${dataSource} records returned by the Data Action`,
     });
-    addFieldPaths(`${responseVariable}.rows[]`);
+    addFieldPaths(`${responseVariable}.rows.0`);
 
     return {
       schemaPaths,
