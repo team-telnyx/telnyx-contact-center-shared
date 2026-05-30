@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import {
   IconAlertCircle,
   IconChevronRight,
@@ -16,7 +17,6 @@ import {
   IconList,
   IconPlus,
   IconTrash,
-  IconWand,
   IconX,
 } from "@tabler/icons-react";
 import { VariableTextarea } from "./VariableTextarea";
@@ -166,6 +166,10 @@ export function EdgeVariableMapper({
 
   const { webhookSchema, schemaPaths, examplePayload, sourceLabel } =
     mappingContext;
+  const mappedSourcePaths = useMemo(
+    () => new Set(variableMappings.map((mapping) => mapping.sourcePath).filter(Boolean)),
+    [variableMappings],
+  );
 
   useEffect(() => {
     if (open && edge) {
@@ -258,21 +262,6 @@ export function EdgeVariableMapper({
     setSelectedSourcePaths(new Set());
   };
 
-  const autoSuggestMappings = () => {
-    if (schemaPaths.length === 0) return;
-
-    const existingPaths = new Set(
-      variableMappings.map((m) => m.sourcePath).filter(Boolean),
-    );
-    const knownNames = getKnownVariableNames();
-    const suggestedMappings = schemaPaths
-      .filter((path) => path.type !== "object" && !existingPaths.has(path.path))
-      .slice(0, 10)
-      .map((path) => createMappingFromField(path, knownNames));
-
-    setVariableMappings([...variableMappings, ...suggestedMappings]);
-  };
-
   const removeMapping = (index) => {
     setVariableMappings(variableMappings.filter((_, i) => i !== index));
   };
@@ -289,6 +278,8 @@ export function EdgeVariableMapper({
   };
 
   const toggleSourcePath = (path) => {
+    if (mappedSourcePaths.has(path)) return;
+
     setSelectedSourcePaths((current) => {
       const next = new Set(current);
       if (next.has(path)) {
@@ -547,12 +538,11 @@ export function EdgeVariableMapper({
                       <div className="border-t">
                         {schemaViewMode === "list" ? (
                           <div className="max-h-64 overflow-y-auto p-3 space-y-1">
-                            {schemaPaths.map((field) => renderSelectableFieldRow(field, selectedSourcePaths, toggleSourcePath))}
+                            {schemaPaths.map((field) => renderSelectableFieldRow(field, selectedSourcePaths, mappedSourcePaths, toggleSourcePath))}
                           </div>
                         ) : (
-                          <div className="max-h-96 overflow-y-auto p-3 bg-slate-950 text-slate-100">
-                            {/* JSON object view with selectable keys */}
-                            {renderSelectableJsonView(schemaPaths, selectedSourcePaths, toggleSourcePath, buildExampleJson())}
+                          <div className="p-3">
+                            {renderJsonPayloadView(mappedSourcePaths, buildExampleJson())}
                           </div>
                         )}
                       </div>
@@ -582,19 +572,6 @@ export function EdgeVariableMapper({
                       </Button>
                     </div>
 
-                    {schemaPaths.length > 0 && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={autoSuggestMappings}
-                        className="w-full"
-                      >
-                        <IconWand className="h-4 w-4 mr-2" />
-                        Auto-suggest Variable Mappings
-                      </Button>
-                    )}
-
                     <div className="space-y-3">
                       {variableMappings.map((mapping, index) => (
                         <div key={mapping.id} className="rounded-xl border bg-card p-4 space-y-4 shadow-sm">
@@ -612,16 +589,6 @@ export function EdgeVariableMapper({
                             >
                               <IconTrash className="h-3.5 w-3.5" />
                             </Button>
-                          </div>
-
-                          <div>
-                            <Label className="text-xs">Source Path</Label>
-                            <div className="mt-1 rounded-md border bg-muted/40 px-3 py-2 text-xs font-mono text-muted-foreground">
-                              {mapping.sourcePath || "Select a payload field above"}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Source path is locked after adding. Select a different payload field above to add another mapping.
-                            </p>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -707,21 +674,34 @@ export function EdgeVariableMapper({
   );
 }
 
-function renderSelectableFieldRow(field, selectedSourcePaths, toggleSourcePath) {
+function renderSelectableFieldRow(field, selectedSourcePaths, mappedSourcePaths, toggleSourcePath) {
+  const isAlreadyMapped = mappedSourcePaths.has(field.path);
+
   return (
     <label
       key={field.path}
-      className="flex items-start gap-3 rounded-md border bg-background/70 p-2 hover:bg-muted/60 cursor-pointer"
+      aria-disabled={isAlreadyMapped}
+      className={`flex items-start gap-3 rounded-md border bg-background/70 p-2 ${
+        isAlreadyMapped
+          ? "cursor-not-allowed opacity-70 bg-muted/50"
+          : "hover:bg-muted/60 cursor-pointer"
+      }`}
     >
       <Checkbox
-        checked={selectedSourcePaths.has(field.path)}
+        checked={isAlreadyMapped || selectedSourcePaths.has(field.path)}
+        disabled={isAlreadyMapped}
         onCheckedChange={() => toggleSourcePath(field.path)}
-        className="mt-0.5"
+        className="mt-0.5 data-[state=checked]:bg-telnyx-green data-[state=checked]:border-telnyx-green"
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-mono text-blue-600 font-semibold break-all">{field.path}</span>
+          <span className="text-xs font-mono text-telnyx-green font-semibold break-all">{field.path}</span>
           <Badge variant="secondary" className="text-[10px] font-mono">{field.type}</Badge>
+          {isAlreadyMapped && (
+            <Badge variant="outline" className="text-[10px] text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10">
+              mapped
+            </Badge>
+          )}
         </div>
         {field.description && (
           <p className="text-[11px] text-muted-foreground mt-1">{field.description}</p>
@@ -731,50 +711,35 @@ function renderSelectableFieldRow(field, selectedSourcePaths, toggleSourcePath) 
   );
 }
 
-function renderSelectableJsonView(schemaPaths, selectedSourcePaths, toggleSourcePath, exampleJson) {
-  const preview = exampleJson ? JSON.stringify(exampleJson, null, 2).split("\n") : [];
+function renderJsonPayloadView(mappedSourcePaths, exampleJson) {
+  const code = exampleJson ? JSON.stringify(exampleJson, null, 2) : "{}";
+  const mappedPaths = Array.from(mappedSourcePaths);
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border border-slate-700 bg-slate-900 p-3">
-        <div className="text-[11px] uppercase tracking-wide text-slate-400 mb-2">
-          Select keys from JSON object
+      {mappedPaths.length > 0 && (
+        <div className="rounded-md border border-telnyx-green/30 bg-telnyx-green/5 p-3">
+          <div className="text-[11px] uppercase tracking-wide text-telnyx-green font-semibold mb-2">
+            Mapped in this edge
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {mappedPaths.map((path) => (
+              <Badge key={path} variant="outline" className={getSourcePathBadgeClass(path)}>
+                {path}
+              </Badge>
+            ))}
+          </div>
         </div>
-        <div className="space-y-1">
-          {schemaPaths.map((field) => (
-            <label key={field.path} className="flex items-center gap-2 rounded px-2 py-1 hover:bg-slate-800 cursor-pointer">
-              <Checkbox
-                checked={selectedSourcePaths.has(field.path)}
-                onCheckedChange={() => toggleSourcePath(field.path)}
-                className="border-slate-500 data-[state=checked]:bg-telnyx-green data-[state=checked]:border-telnyx-green"
-              />
-              <span className="font-mono text-xs text-cyan-300">{field.path}</span>
-              <span className="text-[10px] text-slate-500">({field.type})</span>
-            </label>
-          ))}
-        </div>
-      </div>
-      {preview.length > 0 && (
-        <pre className="rounded-md border border-slate-700 bg-slate-900 p-3 overflow-x-auto text-xs leading-5 text-slate-200">
-          {preview.join("\n")}
-        </pre>
       )}
+      <CodeBlock code={code} language="json" showLineNumbers maxHeight={384}>
+        <CodeBlockCopyButton type="button" />
+      </CodeBlock>
     </div>
   );
 }
 
-function getSourcePathBadgeClass(sourcePath) {
-  const path = sourcePath || "";
-  if (path.startsWith("payload.")) {
-    return "text-blue-700 border-blue-300 bg-blue-50 dark:text-blue-300 dark:border-blue-800 dark:bg-blue-950/30 font-mono text-[11px] break-all";
-  }
-  if (path.startsWith("query.")) {
-    return "text-purple-700 border-purple-300 bg-purple-50 dark:text-purple-300 dark:border-purple-800 dark:bg-purple-950/30 font-mono text-[11px] break-all";
-  }
-  if (path.includes("data_response")) {
-    return "text-emerald-700 border-emerald-300 bg-emerald-50 dark:text-emerald-300 dark:border-emerald-800 dark:bg-emerald-950/30 font-mono text-[11px] break-all";
-  }
-  return "text-amber-700 border-amber-300 bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:bg-amber-950/30 font-mono text-[11px] break-all";
+function getSourcePathBadgeClass() {
+  return "text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 dark:bg-telnyx-green/15 font-mono text-[11px] break-all";
 }
 
 function getDataActionResponseSchemaPaths(dataSource, action, responseVariable = "data_response") {

@@ -21,29 +21,44 @@ test("Expected payload structure supports checkbox multi-select and batch Add Ma
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /selectedSourcePaths/);
-  assert.match(source, /Checkbox[\s\S]*checked=\{selectedSourcePaths\.has\(field\.path\)\}/);
+  assert.match(source, /Checkbox[\s\S]*checked=\{isAlreadyMapped \|\| selectedSourcePaths\.has\(field\.path\)\}/);
   assert.match(source, /addSelectedMappings/);
   assert.match(source, /Add \{selectedSourcePaths\.size \|\| ""\} Mapping/);
   assert.doesNotMatch(source, /<Select[\s\S]*updateMapping\(index, "sourcePath"/);
 });
 
-test("Mapping list renders source paths as immutable colored badges and editable names/descriptions", async () => {
+test("Mapping picker only adds selected keys and disables already mapped keys", async () => {
+  const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
+
+  assert.doesNotMatch(source, /Auto-suggest Variable Mappings/);
+  assert.doesNotMatch(source, /autoSuggestMappings/);
+  assert.match(source, /mappedSourcePaths/);
+  assert.match(source, /checked=\{isAlreadyMapped \|\| selectedSourcePaths\.has\(field\.path\)\}/);
+  assert.match(source, /disabled=\{isAlreadyMapped\}/);
+  assert.match(source, /aria-disabled=\{isAlreadyMapped\}/);
+});
+
+test("Mapping list uses telnyx-green source badges without duplicate source path controls", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /getSourcePathBadgeClass/);
+  assert.match(source, /text-telnyx-green border-telnyx-green\/40 bg-telnyx-green\/10/);
   assert.match(source, /<Badge[\s\S]*\{mapping\.sourcePath \|\| "No source selected"\}[\s\S]*<\/Badge>/);
   assert.doesNotMatch(source, /Mapping \{index \+ 1\}/);
-  assert.match(source, /Source path is locked after adding\. Select a different payload field above to add another mapping\./);
+  assert.doesNotMatch(source, /<Label className="text-xs">Source Path<\/Label>/);
+  assert.doesNotMatch(source, /Source path is locked after adding\. Select a different payload field above to add another mapping\./);
   assert.match(source, /updateMapping\(index, "variableName", e\.target\.value\)/);
   assert.match(source, /updateMapping\(index, "description", e\.target\.value\)/);
 });
 
-test("JSON payload view renders selectable key rows instead of read-only code only", async () => {
+test("JSON payload view uses the standard CodeBlock viewer and shows mapped key badges", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
-  assert.match(source, /renderSelectableJsonView/);
-  assert.match(source, /JSON object view with selectable keys/);
-  assert.match(source, /selectedSourcePaths\.has\(field\.path\)/);
+  assert.match(source, /CodeBlock,/);
+  assert.match(source, /CodeBlockCopyButton/);
+  assert.match(source, /renderJsonPayloadView/);
+  assert.match(source, /Mapped in this edge/);
+  assert.doesNotMatch(source, /JSON object view with selectable keys/);
 });
 
 test("Data Action edge mapping exposes response payload structures from data-source schemas", async () => {
