@@ -30,7 +30,7 @@ function assertTelnyxSttPreset(source, providerId, engine, model, language) {
   assert.match(block, /interim_results: true/);
 }
 
-test("Telnyx STT WebSocket presets include Deepgram Nova 2 and Nova 3", async () => {
+test("Telnyx STT WebSocket presets include Deepgram Nova 2, Nova 3, and Flux", async () => {
   const source = await providerSource();
 
   assertTelnyxSttPreset(
@@ -45,6 +45,13 @@ test("Telnyx STT WebSocket presets include Deepgram Nova 2 and Nova 3", async ()
     "telnyx-stt-deepgram-nova-3",
     "Deepgram",
     "nova-3",
+    "en-US",
+  );
+  assertTelnyxSttPreset(
+    source,
+    "telnyx-stt-deepgram-flux",
+    "Deepgram",
+    "flux",
     "en-US",
   );
 });
