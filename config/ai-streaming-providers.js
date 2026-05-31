@@ -112,11 +112,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google phone_call. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Google",
       model: "phone_call",
       language: "en-US",
@@ -132,11 +134,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google latest_long. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Google",
       model: "latest_long",
       language: "en-US",
@@ -152,11 +156,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google default. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Google",
       model: "default",
       language: "en-US",
@@ -172,11 +178,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using xAI Grok STT. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "xAI",
       model: "xai/grok-stt",
       language: "en",
@@ -192,11 +200,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2 with native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Deepgram",
       model: "nova-2",
       language: "en-US",
@@ -212,11 +222,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3 with native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Deepgram",
       model: "nova-3",
       language: "en-US",
@@ -232,11 +244,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Speechmatics standard. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      stream_track: "both_tracks",
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
       stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
+      transcription_tracks: "both",
       transcription_engine: "Speechmatics",
       model: "speechmatics/standard",
       language: "en",

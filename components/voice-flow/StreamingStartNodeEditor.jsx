@@ -67,6 +67,12 @@ const STREAM_TRACK_OPTIONS = [
   { value: "both_tracks", label: "Both Tracks" },
 ];
 
+const TELNYX_STT_TRACK_OPTIONS = [
+  { value: "inbound", label: "Inbound — customer leg only" },
+  { value: "outbound", label: "Outbound — agent leg only" },
+  { value: "both", label: "Both — customer + agent legs" },
+];
+
 const CODEC_OPTIONS = [
   { value: "PCMU", label: "PCMU (G.711 μ-law)" },
   { value: "PCMA", label: "PCMA (G.711 A-law)" },
@@ -652,13 +658,24 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
               <strong>{providerConfig?.label}</strong>
               <p className="mt-1">
                 Native telco transcription via Telnyx Speech-to-Text WebSocket.
-                This preset streams both call legs as PCMU and sends raw mulaw @ 8 kHz to the selected STT model.
+                Each selected call leg gets its own Telnyx media stream and STT WebSocket using raw PCMU/mulaw @ 8 kHz.
               </p>
               <p className="mt-1 font-mono">
                 {providerConfig?.telnyxStt?.transcription_engine} / {providerConfig?.telnyxStt?.model}
               </p>
             </div>
           </div>
+
+          {renderSelect(
+            "telnyx_stt_tracks",
+            "Transcription Channels",
+            TELNYX_STT_TRACK_OPTIONS,
+            providerConfig?.telnyxStt?.transcription_tracks || "both",
+            {
+              description:
+                "Inbound starts the customer-leg stream. Outbound starts the agent-leg stream after the agent answers. Both starts one stream per leg.",
+            }
+          )}
         </div>
       )}
 

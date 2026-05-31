@@ -19,8 +19,9 @@ function extractProviderBlock(source, providerId) {
 function assertTelnyxSttPreset(source, providerId, engine, model, language) {
   const block = extractProviderBlock(source, providerId);
   assert.match(block, /type: "telnyx-stt"/);
-  assert.match(block, /stream_track: "both_tracks"/);
+  assert.match(block, /stream_track: "inbound_track"/);
   assert.match(block, /stream_codec: "PCMU"/);
+  assert.match(block, /transcription_tracks: "both"/);
   assert.match(block, new RegExp(`transcription_engine: "${engine}"`));
   assert.match(block, new RegExp(`model: "${model.replace("/", "\\/")}"`));
   assert.match(block, new RegExp(`language: "${language}"`));
