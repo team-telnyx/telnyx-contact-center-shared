@@ -198,7 +198,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     telnyxStt: {
       enabled: true,
       transcription_engine: "Deepgram",
-      model: "deepgram/nova-2",
+      model: "nova-2",
       language: "en-US",
       input_format: "mulaw",
       sample_rate: 8000,
@@ -218,7 +218,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     telnyxStt: {
       enabled: true,
       transcription_engine: "Deepgram",
-      model: "deepgram/nova-3",
+      model: "nova-3",
       language: "en-US",
       input_format: "mulaw",
       sample_rate: 8000,
