@@ -39,3 +39,15 @@ test("voice-flow engine stores Telnyx STT selected tracks outside the Telnyx API
   assert.match(source, /stream_track:\s*body\.stream_track \|\| providerConfig\?\.stream_track \|\| null/);
   assert.match(source, /delete body\.telnyx_stt_tracks/);
 });
+
+test("Telnyx STT drops pre-answer media buffers by default", async () => {
+  const source = await readFile(
+    new URL("../lib/telnyx-stt-handler.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /Dropping pre-answer buffered audio/);
+  assert.match(source, /options\.replayBufferedAudio === true/);
+  assert.match(source, /telnyxSession\.clearBuffer\(mapping\.mediaTrack\)/);
+  assert.doesNotMatch(source, /Flushing buffers/);
+});
