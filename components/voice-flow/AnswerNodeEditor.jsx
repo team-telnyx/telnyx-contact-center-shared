@@ -45,9 +45,20 @@ const DEFAULT_TELNYX_STT_MODEL =
   TELNYX_STT_MODEL_OPTIONS[0]?.value || "telnyx-stt-google-phone-call";
 
 const STREAMING_PROVIDER_OPTIONS = [
-  { value: "custom", label: "Custom WebSocket" },
+  { value: "custom", label: "Custom" },
+  { value: "google-gemini", label: "Google Gemini Live" },
+  { value: "openai-realtime", label: "OpenAI Realtime" },
+  { value: "azure-transcription", label: "Azure Transcription + Translation" },
   TELNYX_STT_PROVIDER_OPTION,
 ];
+
+function getStreamingProviderPath(provider) {
+  if (provider === "google-gemini") return "google";
+  if (provider === "openai-realtime") return "openai";
+  if (provider === "azure-transcription") return "azure";
+  if (provider === "telnyx-stt") return "telnyx-stt";
+  return null;
+}
 
 const TELNYX_STT_TRACK_OPTIONS = [
   { value: "inbound", label: "Inbound — customer leg only" },
@@ -154,7 +165,7 @@ export default function AnswerNodeEditor({
     config.ai_streaming_provider === "telnyx-stt" ||
     AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
       ? "telnyx-stt"
-      : "custom";
+      : config.ai_streaming_provider || "custom";
   const initialTelnyxSttModel =
     config.telnyx_stt_model ||
     (AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
@@ -170,6 +181,10 @@ export default function AnswerNodeEditor({
   );
   const [wsBaseUrl, setWsBaseUrl] = useState(null);
   const selectedTelnyxSttProvider = AI_STREAMING_PROVIDERS[telnyxSttModel];
+  const selectedStreamingProvider =
+    streamingProvider === "telnyx-stt"
+      ? selectedTelnyxSttProvider
+      : AI_STREAMING_PROVIDERS[streamingProvider];
   const isTelnyxSttStreaming = streamingProvider === "telnyx-stt";
 
   // Transcription
@@ -233,14 +248,19 @@ export default function AnswerNodeEditor({
   };
 
   useEffect(() => {
-    if (!isTelnyxSttStreaming) return;
-    const streamUrl = getWebSocketUrl("telnyx-stt");
-    setStreamUrl(streamUrl);
-    setStreamTrack(selectedTelnyxSttProvider?.telnyx?.stream_track || "inbound_track");
-    setStreamCodec(selectedTelnyxSttProvider?.telnyx?.stream_codec || "PCMU");
-    const validation = validateWebSocketUrl(streamUrl);
+    if (streamingProvider === "custom") return;
+    const providerPath = getStreamingProviderPath(streamingProvider);
+    if (!providerPath) return;
+    const nextStreamUrl = getWebSocketUrl(providerPath);
+    setStreamUrl(nextStreamUrl);
+    setStreamTrack(selectedStreamingProvider?.telnyx?.stream_track || "inbound_track");
+    setStreamCodec(
+      selectedStreamingProvider?.telnyx?.stream_codec ||
+        (isTelnyxSttStreaming ? "PCMU" : "")
+    );
+    const validation = validateWebSocketUrl(nextStreamUrl);
     setStreamUrlError(validation.valid ? null : validation.error);
-  }, [isTelnyxSttStreaming, telnyxSttModel, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [streamingProvider, telnyxSttModel, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync state from config changes
   useEffect(() => {
@@ -303,7 +323,7 @@ export default function AnswerNodeEditor({
         config.ai_streaming_provider === "telnyx-stt" ||
         AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
           ? "telnyx-stt"
-          : "custom"
+          : config.ai_streaming_provider || "custom"
       );
     }
     if (config.telnyx_stt_model !== undefined) setTelnyxSttModel(config.telnyx_stt_model);
@@ -1099,12 +1119,23 @@ export default function AnswerNodeEditor({
                 if (value === "custom") {
                   setStreamUrl("");
                   setStreamCodec("");
-                } else if (value === "telnyx-stt") {
-                  const nextUrl = getWebSocketUrl("telnyx-stt");
-                  setStreamUrl(nextUrl);
-                  setStreamTrack(selectedTelnyxSttProvider?.telnyx?.stream_track || "inbound_track");
-                  setStreamCodec(selectedTelnyxSttProvider?.telnyx?.stream_codec || "PCMU");
+                  return;
                 }
+
+                const providerPath = getStreamingProviderPath(value);
+                const nextProvider =
+                  value === "telnyx-stt"
+                    ? selectedTelnyxSttProvider
+                    : AI_STREAMING_PROVIDERS[value];
+                if (!providerPath) return;
+
+                const nextUrl = getWebSocketUrl(providerPath);
+                setStreamUrl(nextUrl);
+                setStreamTrack(nextProvider?.telnyx?.stream_track || "inbound_track");
+                setStreamCodec(
+                  nextProvider?.telnyx?.stream_codec ||
+                    (value === "telnyx-stt" ? "PCMU" : "")
+                );
               }}
             >
               <SelectTrigger className="mt-1">
