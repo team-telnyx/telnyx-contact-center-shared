@@ -1290,6 +1290,102 @@ export default function AnswerNodeEditor({
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div>
+                    <Label>Bidirectional Stream Mode</Label>
+                    <Select
+                      value={streamBidirectionalMode}
+                      onValueChange={setStreamBidirectionalMode}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select bidirectional mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mp3">MP3</SelectItem>
+                        <SelectItem value="rtp">RTP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Method used when sending audio back over the bidirectional stream.
+                    </p>
+                  </div>
+
+                  {streamBidirectionalMode === "rtp" && (
+                    <>
+                      <div>
+                        <Label>Bidirectional RTP Codec</Label>
+                        <Select
+                          value={streamBidirectionalCodec}
+                          onValueChange={setStreamBidirectionalCodec}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select RTP codec" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PCMU">PCMU</SelectItem>
+                            <SelectItem value="PCMA">PCMA</SelectItem>
+                            <SelectItem value="G722">G722</SelectItem>
+                            <SelectItem value="OPUS">OPUS</SelectItem>
+                            <SelectItem value="AMR-WB">AMR-WB</SelectItem>
+                            <SelectItem value="L16">L16</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>Bidirectional RTP Sampling Rate</Label>
+                        <Select
+                          value={String(streamBidirectionalSamplingRate)}
+                          onValueChange={(value) =>
+                            setStreamBidirectionalSamplingRate(Number(value))
+                          }
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select sampling rate" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="8000">8000 Hz</SelectItem>
+                            <SelectItem value="16000">16000 Hz</SelectItem>
+                            <SelectItem value="24000">24000 Hz</SelectItem>
+                            <SelectItem value="48000">48000 Hz</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <Label>Bidirectional Stream Target Legs</Label>
+                    <Select
+                      value={streamBidirectionalTargetLegs}
+                      onValueChange={setStreamBidirectionalTargetLegs}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select target legs" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="self">Self</SelectItem>
+                        <SelectItem value="opposite">Opposite</SelectItem>
+                        <SelectItem value="both">Both</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Call legs that should receive bidirectional stream audio.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Establish Before Call Originate</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Establish the stream before originating a following outbound call.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={streamEstablishBeforeCallOriginate}
+                      onCheckedChange={setStreamEstablishBeforeCallOriginate}
+                    />
+                  </div>
                 </>
               )}
             </>

@@ -20,6 +20,8 @@ test("webhook starts inbound on caller leg and outbound on agent leg", async () 
 
   assert.match(source, /selectedTracks === "inbound" \|\| selectedTracks === "both"/);
   assert.match(source, /selectedTracks === "outbound" \|\| selectedTracks === "both"/);
+  assert.match(source, /wantsInbound && wantsOutbound && streamCcId && streamCcId === agentCcId/);
+  assert.match(source, /trackMappings:[\s\S]*mediaTrack: "inbound", outputTrack: "inbound"[\s\S]*mediaTrack: "outbound", outputTrack: "outbound"/);
   assert.match(source, /startTelnyxSttTranscription\([\s\S]*streamCcId[\s\S]*mediaTrack: "inbound", outputTrack: "inbound"/);
   assert.match(source, /startTelnyxSttMediaStream\(agentCcId, outboundConfig, interactionId, agentUsername, "outbound"\)/);
   assert.match(source, /startTelnyxSttTranscription\([\s\S]*agentCcId[\s\S]*mediaTrack: "inbound", outputTrack: "outbound"/);

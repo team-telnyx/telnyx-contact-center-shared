@@ -41,6 +41,11 @@ test("Answer UI has the same Telnyx STT streaming implementation as Streaming St
   assertTelnyxSttUi(answerSource, "AnswerNodeEditor");
   assert.match(answerSource, /ai_streaming_provider:\s*streamUrl \? streamingProvider : undefined/);
   assert.match(answerSource, /stream_url:\s*streamUrl \|\| undefined/);
+  assert.match(answerSource, /<Label>Bidirectional Stream Mode<\/Label>/);
+  assert.match(answerSource, /<Label>Bidirectional RTP Codec<\/Label>/);
+  assert.match(answerSource, /<Label>Bidirectional RTP Sampling Rate<\/Label>/);
+  assert.match(answerSource, /<Label>Bidirectional Stream Target Legs<\/Label>/);
+  assert.match(answerSource, /<Label>Establish Before Call Originate<\/Label>/);
 });
 
 test("Answer streaming provider selector matches Streaming Start providers", async () => {
