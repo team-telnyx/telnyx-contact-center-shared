@@ -47,6 +47,19 @@ test("Telnyx Standalone STT WebSocket transcripts are stored as distinct monitor
   assert.equal(flowEvents[0].id, event.id);
 });
 
+test("Telnyx STT handler routes websocket transcripts through Agent Assist canonical transcription processing", () => {
+  const handlerSource = readFileSync(join(repoRoot, "lib/telnyx-stt-handler.mjs"), "utf8");
+  const webhookSource = readFileSync(join(repoRoot, "lib/contact-center/webhook-handler.js"), "utf8");
+
+  assert.match(handlerSource, /handleTranscriptionEvent/);
+  assert.match(handlerSource, /routeTranscriptionThroughAgentAssist/);
+  assert.match(handlerSource, /speech_final: normalized\.isFinal/);
+  assert.match(handlerSource, /await routeTranscriptionThroughAgentAssist\(payload\)/);
+  assert.doesNotMatch(handlerSource, /broadcastToKey\(`contact-center:agent/);
+  assert.match(webhookSource, /payload\?\.interaction_id \|\| payload\?\.interactionId/);
+  assert.match(webhookSource, /PgDb\.findInteractionById/);
+});
+
 test("Telnyx STT handler records websocket transcripts in the Call Flow Monitor", () => {
   const handlerSource = readFileSync(join(repoRoot, "lib/telnyx-stt-handler.mjs"), "utf8");
 
