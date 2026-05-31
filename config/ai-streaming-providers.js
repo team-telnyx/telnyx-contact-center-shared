@@ -238,6 +238,28 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     },
   },
 
+  "telnyx-stt-deepgram-flux": {
+    id: "telnyx-stt-deepgram-flux",
+    label: "Telnyx STT WS — Deepgram Flux (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Flux with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Deepgram",
+      model: "flux",
+      language: "en-US",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+    },
+  },
+
   "telnyx-stt-speechmatics-standard": {
     id: "telnyx-stt-speechmatics-standard",
     label: "Telnyx STT WS — Speechmatics standard (PCMU telco)",
