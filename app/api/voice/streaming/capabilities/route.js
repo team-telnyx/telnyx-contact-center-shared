@@ -11,11 +11,15 @@ export async function GET() {
     10
   );
 
-  // If STREAMING_WS_URL is explicitly set, parse the port from it
+  // Match the runtime resolver used by voice-flow-engine.js. WS_BASE_URL is the
+  // canonical public reverse-proxy URL in production; STREAMING_WS_URL is kept
+  // as a legacy/alternate explicit override.
+  const configuredWsUrl = process.env.WS_BASE_URL || process.env.STREAMING_WS_URL;
+
   let resolvedPort = wsPort;
-  if (process.env.STREAMING_WS_URL) {
+  if (configuredWsUrl) {
     try {
-      const parsed = new URL(process.env.STREAMING_WS_URL);
+      const parsed = new URL(configuredWsUrl);
       if (parsed.port) resolvedPort = parseInt(parsed.port, 10);
     } catch (_) {}
   }
@@ -23,8 +27,6 @@ export async function GET() {
   return Response.json({
     wsPort: resolvedPort,
     // wsUrl is returned only when explicitly configured (e.g. behind a reverse proxy)
-    ...(process.env.STREAMING_WS_URL
-      ? { wsUrl: process.env.STREAMING_WS_URL }
-      : {}),
+    ...(configuredWsUrl ? { wsUrl: configuredWsUrl } : {}),
   });
 }

@@ -90,3 +90,16 @@ test("voice-flow engine resolves virtual Telnyx STT provider model for answer an
   assert.match(engineSource, /delete body\.telnyx_stt_interim_results/);
   assert.match(engineSource, /delete body\.telnyx_stt_model/);
 });
+
+test("streaming capabilities endpoint exposes the same WS_BASE_URL used by runtime commands", async () => {
+  const capabilitiesSource = await source("../app/api/voice/streaming/capabilities/route.js");
+  const engineSource = await source("../lib/voice-flow-engine.js");
+
+  assert.match(engineSource, /process\.env\.WS_BASE_URL \|\| process\.env\.STREAMING_WS_URL/);
+  assert.match(
+    capabilitiesSource,
+    /process\.env\.WS_BASE_URL \|\| process\.env\.STREAMING_WS_URL/,
+    "UI capabilities endpoint should prefer WS_BASE_URL before falling back to STREAMING_WS_URL",
+  );
+  assert.match(capabilitiesSource, /wsUrl:\s*configuredWsUrl/);
+});
