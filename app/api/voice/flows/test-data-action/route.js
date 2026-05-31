@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 import {
   getEntityBasePath,
   getEntitySearchPath,
 } from "@/lib/data-sources-schema";
+import { isAdmin } from "@/lib/role-utils";
 
 function parseDirectVariable(value) {
   if (typeof value !== "string") return null;
@@ -59,6 +61,14 @@ function addForwardedAuthHeaders(headers, request) {
 
 export async function POST(request) {
   try {
+    const user = await getAuthenticatedUser(request.url);
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    if (!isAdmin(user)) {
+      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
+    }
+
     const payload = await request.json();
     const {
       dataSource,
