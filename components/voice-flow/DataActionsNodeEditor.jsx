@@ -55,9 +55,9 @@ export default function DataActionsNodeEditor({
   const latestConfigRef = useRef(config || {});
   latestConfigRef.current = config || {};
 
-  const handleTestSuccess = (testResponse) => {
+  const handleTestSuccess = (testResponse, configAtTestStart = latestConfigRef.current) => {
     onChange({
-      ...latestConfigRef.current,
+      ...configAtTestStart,
       testResponse: {
         ...testResponse,
         testedAt: new Date().toISOString(),
