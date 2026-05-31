@@ -186,6 +186,46 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     },
   },
 
+  "telnyx-stt-deepgram-nova-2": {
+    id: "telnyx-stt-deepgram-nova-2",
+    label: "Telnyx STT WS — Deepgram Nova 2 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2 with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      stream_track: "both_tracks",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_engine: "Deepgram",
+      model: "deepgram/nova-2",
+      language: "en-US",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+    },
+  },
+
+  "telnyx-stt-deepgram-nova-3": {
+    id: "telnyx-stt-deepgram-nova-3",
+    label: "Telnyx STT WS — Deepgram Nova 3 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3 with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      stream_track: "both_tracks",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_engine: "Deepgram",
+      model: "deepgram/nova-3",
+      language: "en-US",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+    },
+  },
+
   "telnyx-stt-speechmatics-standard": {
     id: "telnyx-stt-speechmatics-standard",
     label: "Telnyx STT WS — Speechmatics standard (PCMU telco)",
