@@ -37,14 +37,14 @@ test("Telnyx STT WebSocket presets include Deepgram Nova 2 and Nova 3", async ()
     source,
     "telnyx-stt-deepgram-nova-2",
     "Deepgram",
-    "deepgram/nova-2",
+    "nova-2",
     "en-US",
   );
   assertTelnyxSttPreset(
     source,
     "telnyx-stt-deepgram-nova-3",
     "Deepgram",
-    "deepgram/nova-3",
+    "nova-3",
     "en-US",
   );
 });
