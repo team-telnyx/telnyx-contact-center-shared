@@ -49,11 +49,16 @@ function validateWebSocketUrl(url) {
   return { valid: true, error: null };
 }
 
+const TELNYX_STT_PROVIDER_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
+  .filter((provider) => provider.type === "telnyx-stt")
+  .map((provider) => ({ value: provider.id, label: provider.label }));
+
 const PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
   { value: "openai-realtime", label: "OpenAI Realtime" },
   { value: "azure-transcription", label: "Azure Transcription + Translation" },
+  ...TELNYX_STT_PROVIDER_OPTIONS,
 ];
 
 const STREAM_TRACK_OPTIONS = [
@@ -149,6 +154,8 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
   const isOpenAI = provider === "openai-realtime";
   const isGemini = provider === "google-gemini";
   const isAzure = provider === "azure-transcription";
+  const providerConfig = AI_STREAMING_PROVIDERS[provider];
+  const isTelnyxStt = providerConfig?.type === "telnyx-stt";
   const isAI = isOpenAI || isGemini; // AI providers with session config
   const isLocked = !isCustom;
 
@@ -215,6 +222,17 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         ...providerConfig.telnyx,
       };
       setStreamUrlError(null);
+      onChange?.(newConfig);
+    } else if (isTelnyxStt) {
+      const streamUrl = getWebSocketUrl("telnyx-stt");
+      const validation = validateWebSocketUrl(streamUrl);
+      const newConfig = {
+        ...config,
+        ai_streaming_provider: provider,
+        stream_url: streamUrl,
+        ...providerConfig.telnyx,
+      };
+      setStreamUrlError(validation.valid ? null : validation.error);
       onChange?.(newConfig);
     } else {
       const wsProvider = isGemini ? "google" : "openai";
@@ -321,7 +339,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       </div>
 
       {/* Auto-configuration notice for AI providers */}
-      {isLocked && !isAzure && (
+      {isLocked && !isAzure && !isTelnyxStt && (
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
           <IconInfoCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-blue-700 dark:text-blue-300">
@@ -625,6 +643,25 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         </div>
       )}
 
+      {/* ====== Telnyx Standalone STT WebSocket ====== */}
+      {isTelnyxStt && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
+            <IconMicrophone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-emerald-700 dark:text-emerald-300">
+              <strong>{providerConfig?.label}</strong>
+              <p className="mt-1">
+                Native telco transcription via Telnyx Speech-to-Text WebSocket.
+                This preset streams both call legs as PCMU and sends raw mulaw @ 8 kHz to the selected STT model.
+              </p>
+              <p className="mt-1 font-mono">
+                {providerConfig?.telnyxStt?.transcription_engine} / {providerConfig?.telnyxStt?.model}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ====== Custom: Telnyx Streaming Parameters ====== */}
       {isCustom && (
         <div className="space-y-4">
@@ -698,8 +735,8 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         </div>
       )}
 
-      {/* Show stream URL (read-only) for AI + Azure providers */}
-      {(isAI || isAzure) && (
+      {/* Show stream URL (read-only) for AI + Azure + Telnyx STT providers */}
+      {(isAI || isAzure || isTelnyxStt) && (
         <div className="space-y-4 pt-2 border-t">
           <div>
             <Label className="flex items-center gap-2">
@@ -714,7 +751,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
             />
             <p className="text-xs text-muted-foreground mt-1">
               Auto-configured WebSocket URL for{" "}
-              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : "Azure"} streaming
+              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : isAzure ? "Azure" : "Telnyx STT"} streaming
             </p>
           </div>
         </div>
