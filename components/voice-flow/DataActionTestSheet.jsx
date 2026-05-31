@@ -31,6 +31,28 @@ import {
   IconVariable,
 } from "@tabler/icons-react";
 
+function buildRequestPreview(config = {}) {
+  const {
+    action,
+    dataSource,
+    fields,
+    queryParams,
+    recordId,
+    responseVariable,
+  } = config || {};
+
+  return Object.fromEntries(
+    Object.entries({
+      responseVariable,
+      dataSource,
+      fields: fields || {},
+      queryParams: queryParams || {},
+      recordId,
+      action,
+    }).filter(([, value]) => value !== undefined && value !== null && value !== "")
+  );
+}
+
 function extractUsedVariables(config = {}) {
   const variables = new Set();
   const matches = JSON.stringify(config).match(/\{\{([^}]+)\}\}/g);
@@ -58,6 +80,7 @@ export default function DataActionTestSheet({
   const [responseExpanded, setResponseExpanded] = useState(true);
 
   const usedVariables = useMemo(() => extractUsedVariables(config), [config]);
+  const requestPreview = useMemo(() => buildRequestPreview(config), [config]);
 
   useEffect(() => {
     if (!open) return;
@@ -197,7 +220,13 @@ export default function DataActionTestSheet({
                       <div className="text-sm font-medium mt-1">{config.action || "Not selected"}</div>
                     </div>
                   </div>
-                  <CodeBlock code={JSON.stringify(config, null, 2)} language="json" showLineNumbers maxHeight={320}>
+                  <CodeBlock
+                    code={JSON.stringify(requestPreview, null, 2)}
+                    language="json"
+                    showLineNumbers
+                    maxHeight={320}
+                    className="max-h-80 overflow-auto"
+                  >
                     <CodeBlockCopyButton type="button" />
                   </CodeBlock>
                 </CardContent>
@@ -256,7 +285,13 @@ export default function DataActionTestSheet({
                         <IconCode className="h-3 w-3" />
                         Response Body
                       </Label>
-                      <CodeBlock code={JSON.stringify(testResult.body, null, 2)} language="json" showLineNumbers maxHeight={384}>
+                      <CodeBlock
+                        code={JSON.stringify(testResult.body, null, 2)}
+                        language="json"
+                        showLineNumbers
+                        maxHeight={384}
+                        className="max-h-96 overflow-auto"
+                      >
                         <CodeBlockCopyButton type="button" />
                       </CodeBlock>
                     </div>

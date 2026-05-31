@@ -24,6 +24,10 @@ test("Data Action editor exposes Test Data Action sheet and persists live respon
   assert.match(sheetSource, /Response Body/);
   assert.match(sheetSource, /\/api\/voice\/flows\/test-data-action/);
   assert.match(sheetSource, /CodeBlockCopyButton/);
+  assert.match(sheetSource, /function buildRequestPreview/);
+  assert.match(sheetSource, /JSON\.stringify\(requestPreview, null, 2\)/);
+  assert.match(sheetSource, /className="max-h-80 overflow-auto"/);
+  assert.doesNotMatch(sheetSource, /JSON\.stringify\(config, null, 2\)/);
 });
 
 test("Data Action test route supports CRUD and list actions with variable substitution", async () => {
