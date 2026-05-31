@@ -20,7 +20,9 @@ test("webhook starts inbound on caller leg and outbound on agent leg", async () 
 
   assert.match(source, /selectedTracks === "inbound" \|\| selectedTracks === "both"/);
   assert.match(source, /selectedTracks === "outbound" \|\| selectedTracks === "both"/);
-  assert.match(source, /wantsInbound && wantsOutbound && streamCcId && streamCcId === agentCcId/);
+  assert.match(source, /streamCarriesBothTracks = sttConfig\.stream_track === "both_tracks"/);
+  assert.match(source, /wantsInbound && wantsOutbound && streamCarriesBothTracks && streamCcId && streamCcId === agentCcId/);
+  assert.match(source, /not treating it as both_tracks/);
   assert.match(source, /trackMappings:[\s\S]*mediaTrack: "inbound", outputTrack: "inbound"[\s\S]*mediaTrack: "outbound", outputTrack: "outbound"/);
   assert.match(source, /startTelnyxSttTranscription\([\s\S]*streamCcId[\s\S]*mediaTrack: "inbound", outputTrack: "inbound"/);
   assert.match(source, /startTelnyxSttMediaStream\(agentCcId, outboundConfig, interactionId, agentUsername, "outbound"\)/);
@@ -34,5 +36,6 @@ test("voice-flow engine stores Telnyx STT selected tracks outside the Telnyx API
   );
 
   assert.match(source, /body\.telnyx_stt_tracks \|\|[\s\S]*fullProviderConfig\.telnyxStt\?\.transcription_tracks \|\|[\s\S]*"both"/);
+  assert.match(source, /stream_track:\s*body\.stream_track \|\| providerConfig\?\.stream_track \|\| null/);
   assert.match(source, /delete body\.telnyx_stt_tracks/);
 });

@@ -3467,6 +3467,7 @@ export default function FlowBuilderPage() {
                             "AnswerNodeEditor" ? (
                             <AnswerNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {

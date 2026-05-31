@@ -31,6 +31,8 @@ import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
 
 const SIP_HEADER_NAMES = ["User-to-User", "Diversion"];
 const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
+const EXPERIMENTAL_USER = "leszek@telnyx.com";
+const EXPERIMENTAL_PROVIDERS = ["azure-transcription"];
 
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
@@ -99,7 +101,9 @@ export default function AnswerNodeEditor({
   onChange,
   availableVariables = [],
   onOutputsChange,
+  currentUserEmail,
 }) {
+  const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   // Basic fields
   const [billingGroupId, setBillingGroupId] = useState(
     config.billing_group_id || ""
@@ -1142,7 +1146,11 @@ export default function AnswerNodeEditor({
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent>
-                {STREAMING_PROVIDER_OPTIONS.map((option) => (
+                {STREAMING_PROVIDER_OPTIONS.filter(
+                  (option) =>
+                    !EXPERIMENTAL_PROVIDERS.includes(option.value) ||
+                    isExperimentalUser,
+                ).map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

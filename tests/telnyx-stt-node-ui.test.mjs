@@ -50,6 +50,7 @@ test("Answer UI has the same Telnyx STT streaming implementation as Streaming St
 
 test("Answer streaming provider selector matches Streaming Start providers", async () => {
   const answerSource = await source("../components/voice-flow/AnswerNodeEditor.jsx");
+  const pageSource = await source("../app/(portal)/admin/call-flows/[id]/page.jsx");
   for (const [value, label] of [
     ["custom", "Custom"],
     ["google-gemini", "Google Gemini Live"],
@@ -74,6 +75,9 @@ test("Answer streaming provider selector matches Streaming Start providers", asy
     /getStreamingProviderPath\(value\)/,
     "Answer node should auto-configure stream URLs for Google, OpenAI, and Azure providers",
   );
+  assert.match(answerSource, /EXPERIMENTAL_PROVIDERS = \["azure-transcription"\]/);
+  assert.match(answerSource, /!EXPERIMENTAL_PROVIDERS\.includes\(option\.value\) \|\|[\s\S]*isExperimentalUser/);
+  assert.match(pageSource, /<AnswerNodeEditor[\s\S]*currentUserEmail=\{userEmail\}/);
 });
 
 test("voice-flow engine resolves virtual Telnyx STT provider model for answer and streaming_start", async () => {
