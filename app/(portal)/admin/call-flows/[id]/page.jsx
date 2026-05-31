@@ -294,9 +294,16 @@ const getNodeExecutionIcon = (nodeType) => {
 };
 
 // Custom ToolHeader for webhooks with icons
-function WebhookToolHeader({ eventType, direction, timestamp, className }) {
+function WebhookToolHeader({ eventType, direction, timestamp, source, label, className }) {
   const Icon = getWebhookIcon(eventType);
   const isSent = direction === "sent";
+  const isTelnyxStandaloneStt = source === "telnyx_standalone_stt_websocket";
+  const isVoiceApiTranscriptionWebhook = eventType === "call.transcription";
+  const displayLabel = isTelnyxStandaloneStt
+    ? label || "Telnyx Standalone STT Event"
+    : isVoiceApiTranscriptionWebhook
+      ? "Voice API In-call Transcription Webhook"
+      : eventType;
 
   // Format timestamp with milliseconds
   const formatTimestamp = (ts) => {
@@ -329,7 +336,12 @@ function WebhookToolHeader({ eventType, direction, timestamp, className }) {
       <div className="flex items-center justify-between w-full gap-4">
         <div className="flex items-center gap-2">
           {Icon}
-          <span className="font-medium text-sm">{eventType}</span>
+          <span className="font-medium text-sm">{displayLabel}</span>
+          {isTelnyxStandaloneStt && (
+            <Badge className="gap-1.5 rounded-full text-xs" variant="outline">
+              WebSocket
+            </Badge>
+          )}
           <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
             {isSent ? (
               <>
@@ -4361,6 +4373,8 @@ export default function FlowBuilderPage() {
                         eventType={item.event_type}
                         direction={item.direction}
                         timestamp={item.timestamp}
+                        source={item.source || item.payload?.source}
+                        label={item.payload?.label}
                       />
                       <ToolContent>
                         <CodeBlock
@@ -4608,6 +4622,8 @@ export default function FlowBuilderPage() {
                         eventType={item.event_type}
                         direction={item.direction}
                         timestamp={item.timestamp}
+                        source={item.source || item.payload?.source}
+                        label={item.payload?.label}
                       />
                       <ToolContent>
                         <CodeBlock
