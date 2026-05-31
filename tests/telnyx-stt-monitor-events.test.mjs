@@ -49,13 +49,17 @@ test("Telnyx Standalone STT WebSocket transcripts are stored as distinct monitor
 
 test("Telnyx STT handler routes websocket transcripts through Agent Assist canonical transcription processing", () => {
   const handlerSource = readFileSync(join(repoRoot, "lib/telnyx-stt-handler.mjs"), "utf8");
+  const routerSource = readFileSync(join(repoRoot, "lib/agent-assist-transcription-router.mjs"), "utf8");
   const webhookSource = readFileSync(join(repoRoot, "lib/contact-center/webhook-handler.js"), "utf8");
 
-  assert.match(handlerSource, /handleTranscriptionEvent/);
   assert.match(handlerSource, /routeTranscriptionThroughAgentAssist/);
-  assert.match(handlerSource, /speech_final: normalized\.isFinal/);
+  assert.match(handlerSource, /routeAgentAssistTranscription/);
+  assert.match(handlerSource, /speech_final: normalized\.speechFinal \?\? normalized\.isFinal/);
   assert.match(handlerSource, /await routeTranscriptionThroughAgentAssist\(payload\)/);
   assert.doesNotMatch(handlerSource, /broadcastToKey\(`contact-center:agent/);
+  assert.match(routerSource, /processFinalTranscriptionEnhancements/);
+  assert.match(routerSource, /interaction\.metadata\?\.agent_assist_config/);
+  assert.match(webhookSource, /export async function processFinalTranscriptionEnhancements/);
   assert.match(webhookSource, /payload\?\.interaction_id \|\| payload\?\.interactionId/);
   assert.match(webhookSource, /PgDb\.findInteractionById/);
 });
