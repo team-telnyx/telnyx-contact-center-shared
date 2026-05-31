@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,9 +19,10 @@ import {
   getEntityTableName,
 } from "@/lib/data-sources-schema.js";
 import { checkDuplicateVariableName } from "@/lib/variable-utils";
-import { IconAlertCircle, IconApi, IconInfoCircle } from "@tabler/icons-react";
+import { IconAlertCircle, IconApi, IconFlask, IconInfoCircle } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import ApiSchemaSheet from "@/components/data-sources/ApiSchemaSheet";
+import DataActionTestSheet from "./DataActionTestSheet";
 import {
   Popover,
   PopoverContent,
@@ -50,6 +51,19 @@ export default function DataActionsNodeEditor({
 
   // State for API schema sheet
   const [schemaSheetOpen, setSchemaSheetOpen] = useState(false);
+  const [testSheetOpen, setTestSheetOpen] = useState(false);
+  const latestConfigRef = useRef(config || {});
+  latestConfigRef.current = config || {};
+
+  const handleTestSuccess = (testResponse, testedConfig) => {
+    onChange({
+      ...(testedConfig || latestConfigRef.current),
+      testResponse: {
+        ...testResponse,
+        testedAt: new Date().toISOString(),
+      },
+    });
+  };
 
   // Get q parameter information for info popover
   const getQParameterInfo = (entityId) => {
@@ -584,6 +598,17 @@ export default function DataActionsNodeEditor({
         )}
       </div>
 
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => setTestSheetOpen(true)}
+        disabled={!dataSource || !action}
+      >
+        <IconFlask className="h-4 w-4 mr-2" />
+        Test Data Action
+      </Button>
+
       {/* API Schema Sheet */}
       {dataSource && (
         <ApiSchemaSheet
@@ -594,6 +619,13 @@ export default function DataActionsNodeEditor({
           onOpenChange={setSchemaSheetOpen}
         />
       )}
+
+      <DataActionTestSheet
+        open={testSheetOpen}
+        onOpenChange={setTestSheetOpen}
+        config={latestConfigRef.current}
+        onTestSuccess={handleTestSuccess}
+      />
     </div>
   );
 }
