@@ -14,6 +14,10 @@ test("Data Action editor exposes Test Data Action sheet and persists live respon
   assert.match(editorSource, /IconFlask/);
   assert.match(editorSource, /Test Data Action/);
   assert.match(editorSource, /testResponse/);
+  assert.match(editorSource, /getConfigWithoutTestResponse/);
+  assert.match(editorSource, /JSON\.stringify\(latestComparableConfig\) !== JSON\.stringify\(testedComparableConfig\)/);
+  assert.match(editorSource, /\.\.\.latestConfig/);
+  assert.doesNotMatch(editorSource, /\.\.\.configAtTestStart/);
   assert.match(editorSource, /testedAt: new Date\(\)\.toISOString\(\)/);
   assert.match(editorSource, /<DataActionTestSheet/);
 

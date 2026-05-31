@@ -55,9 +55,22 @@ export default function DataActionsNodeEditor({
   const latestConfigRef = useRef(config || {});
   latestConfigRef.current = config || {};
 
+  const getConfigWithoutTestResponse = (nodeConfig = {}) => {
+    const { testResponse: _testResponse, ...configWithoutTestResponse } = nodeConfig;
+    return configWithoutTestResponse;
+  };
+
   const handleTestSuccess = (testResponse, configAtTestStart = latestConfigRef.current) => {
+    const latestConfig = latestConfigRef.current;
+    const latestComparableConfig = getConfigWithoutTestResponse(latestConfig);
+    const testedComparableConfig = getConfigWithoutTestResponse(configAtTestStart);
+
+    if (JSON.stringify(latestComparableConfig) !== JSON.stringify(testedComparableConfig)) {
+      return;
+    }
+
     onChange({
-      ...configAtTestStart,
+      ...latestConfig,
       testResponse: {
         ...testResponse,
         testedAt: new Date().toISOString(),
