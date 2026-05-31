@@ -49,16 +49,26 @@ function validateWebSocketUrl(url) {
   return { valid: true, error: null };
 }
 
-const TELNYX_STT_PROVIDER_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
+const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
+
+const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
-  .map((provider) => ({ value: provider.id, label: provider.label }));
+  .map((provider) => {
+    const engine = String(provider.telnyxStt?.transcription_engine || "").toLowerCase();
+    const model = provider.telnyxStt?.model || provider.id;
+    const modelLabel = `${engine}/${model}`;
+    return { value: provider.id, label: modelLabel, provider };
+  });
+
+const DEFAULT_TELNYX_STT_MODEL =
+  TELNYX_STT_MODEL_OPTIONS[0]?.value || "telnyx-stt-google-phone-call";
 
 const PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
   { value: "openai-realtime", label: "OpenAI Realtime" },
   { value: "azure-transcription", label: "Azure Transcription + Translation" },
-  ...TELNYX_STT_PROVIDER_OPTIONS,
+  TELNYX_STT_PROVIDER_OPTION,
 ];
 
 const STREAM_TRACK_OPTIONS = [
@@ -149,9 +159,18 @@ const EXPERIMENTAL_PROVIDERS = ["azure-transcription"];
 
 export default function StreamingStartNodeEditor({ config = {}, onChange, currentUserEmail }) {
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
-  const [provider, setProvider] = useState(
-    config.ai_streaming_provider || "custom"
-  );
+  const initialProvider =
+    config.ai_streaming_provider === "telnyx-stt" ||
+    AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+      ? "telnyx-stt"
+      : config.ai_streaming_provider || "custom";
+  const initialTelnyxSttModel =
+    config.telnyx_stt_model ||
+    (AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+      ? config.ai_streaming_provider
+      : DEFAULT_TELNYX_STT_MODEL);
+  const [provider, setProvider] = useState(initialProvider);
+  const [telnyxSttModel, setTelnyxSttModel] = useState(initialTelnyxSttModel);
   const [streamUrlError, setStreamUrlError] = useState(null);
   const [wsBaseUrl, setWsBaseUrl] = useState(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -160,8 +179,11 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
   const isOpenAI = provider === "openai-realtime";
   const isGemini = provider === "google-gemini";
   const isAzure = provider === "azure-transcription";
-  const providerConfig = AI_STREAMING_PROVIDERS[provider];
-  const isTelnyxStt = providerConfig?.type === "telnyx-stt";
+  const providerConfig =
+    provider === "telnyx-stt"
+      ? AI_STREAMING_PROVIDERS[telnyxSttModel]
+      : AI_STREAMING_PROVIDERS[provider];
+  const isTelnyxStt = provider === "telnyx-stt";
   const isAI = isOpenAI || isGemini; // AI providers with session config
   const isLocked = !isCustom;
 
@@ -216,8 +238,11 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       return;
     }
 
-    const providerConfig = AI_STREAMING_PROVIDERS[provider];
-    if (!providerConfig) return;
+    const selectedProviderConfig =
+      provider === "telnyx-stt"
+        ? AI_STREAMING_PROVIDERS[telnyxSttModel]
+        : AI_STREAMING_PROVIDERS[provider];
+    if (!selectedProviderConfig) return;
 
     if (isAzure) {
       const streamUrl = getWebSocketUrl("azure");
@@ -225,7 +250,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         ...config,
         ai_streaming_provider: provider,
         stream_url: streamUrl,
-        ...providerConfig.telnyx,
+        ...selectedProviderConfig.telnyx,
       };
       setStreamUrlError(null);
       onChange?.(newConfig);
@@ -234,9 +259,11 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       const validation = validateWebSocketUrl(streamUrl);
       const newConfig = {
         ...config,
-        ai_streaming_provider: provider,
+        ai_streaming_provider: "telnyx-stt",
+        telnyx_stt_model: telnyxSttModel,
+        telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
         stream_url: streamUrl,
-        ...providerConfig.telnyx,
+        ...selectedProviderConfig.telnyx,
       };
       setStreamUrlError(validation.valid ? null : validation.error);
       onChange?.(newConfig);
@@ -249,11 +276,11 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         ...config,
         ai_streaming_provider: provider,
         stream_url: streamUrl,
-        ...providerConfig.telnyx,
+        ...selectedProviderConfig.telnyx,
       };
       onChange?.(newConfig);
     }
-  }, [provider, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [provider, telnyxSttModel, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Validate stream URL
   useEffect(() => {
@@ -267,16 +294,52 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
 
   // Sync provider from config
   useEffect(() => {
-    if (config.ai_streaming_provider && config.ai_streaming_provider !== provider) {
-      setProvider(config.ai_streaming_provider);
+    if (!config.ai_streaming_provider) return;
+    const nextProvider =
+      config.ai_streaming_provider === "telnyx-stt" ||
+      AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+        ? "telnyx-stt"
+        : config.ai_streaming_provider;
+    if (nextProvider !== provider) setProvider(nextProvider);
+    const nextModel =
+      config.telnyx_stt_model ||
+      (AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+        ? config.ai_streaming_provider
+        : telnyxSttModel);
+    if (nextProvider === "telnyx-stt" && nextModel !== telnyxSttModel) {
+      setTelnyxSttModel(nextModel);
     }
-  }, [config.ai_streaming_provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config.ai_streaming_provider, config.telnyx_stt_model]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleProviderChange = (newProvider) => {
     setProvider(newProvider);
     if (newProvider === "custom") {
       onChange?.({ ...config, ai_streaming_provider: "custom" });
+    } else if (newProvider === "telnyx-stt") {
+      const selectedProviderConfig = AI_STREAMING_PROVIDERS[telnyxSttModel];
+      onChange?.({
+        ...config,
+        ai_streaming_provider: "telnyx-stt",
+        telnyx_stt_model: telnyxSttModel,
+        telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+        stream_url: getWebSocketUrl("telnyx-stt"),
+        ...(selectedProviderConfig?.telnyx || {}),
+      });
     }
+  };
+
+
+  const handleTelnyxSttModelChange = (newModel) => {
+    const selectedProviderConfig = AI_STREAMING_PROVIDERS[newModel];
+    setTelnyxSttModel(newModel);
+    onChange?.({
+      ...config,
+      ai_streaming_provider: "telnyx-stt",
+      telnyx_stt_model: newModel,
+      telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+      stream_url: getWebSocketUrl("telnyx-stt"),
+      ...(selectedProviderConfig?.telnyx || {}),
+    });
   };
 
   const handleFieldChange = (field, value) => {
@@ -666,6 +729,25 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
             </div>
           </div>
 
+          <div>
+            <Label>Model</Label>
+            <Select value={telnyxSttModel} onValueChange={handleTelnyxSttModelChange}>
+              <SelectTrigger className="w-full mt-1">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {TELNYX_STT_MODEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Telnyx STT engine/model routed through the Standalone WebSocket interface.
+            </p>
+          </div>
+
           {renderSelect(
             "telnyx_stt_tracks",
             "Transcription Channels",
@@ -676,6 +758,21 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
                 "Inbound starts the customer-leg stream. Outbound starts the agent-leg stream after the agent answers. Both starts one stream per leg.",
             }
           )}
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Interim Results</Label>
+              <p className="text-xs text-muted-foreground">
+                Stream partial transcript deltas to Agent Desktop. Turn off to wait for final transcripts only.
+              </p>
+            </div>
+            <Switch
+              checked={config.telnyx_stt_interim_results !== false}
+              onCheckedChange={(checked) =>
+                handleFieldChange("telnyx_stt_interim_results", checked)
+              }
+            />
+          </div>
         </div>
       )}
 

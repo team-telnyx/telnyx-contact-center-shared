@@ -49,13 +49,14 @@ test("Telnyx STT WebSocket presets include Deepgram Nova 2 and Nova 3", async ()
   );
 });
 
-test("StreamingStartNodeEditor derives Telnyx STT options from provider config", async () => {
+test("StreamingStartNodeEditor exposes one Telnyx STT provider and derives model options from provider config", async () => {
   const source = await readFile(
     new URL("../components/voice-flow/StreamingStartNodeEditor.jsx", import.meta.url),
     "utf8",
   );
 
-  assert.match(source, /Object\.values\(AI_STREAMING_PROVIDERS\)[\s\S]*provider\.type === "telnyx-stt"/);
-  assert.match(source, /\.map\(\(provider\) => \(\{ value: provider\.id, label: provider\.label \}\)\)/);
-  assert.doesNotMatch(source, /telnyx-stt-deepgram-nova-[23]/);
+  assert.match(source, /TELNYX_STT_PROVIDER_OPTION\s*=\s*\{ value: "telnyx-stt", label: "Telnyx Standalone STT" \}/);
+  assert.match(source, /TELNYX_STT_MODEL_OPTIONS[\s\S]*provider\.type === "telnyx-stt"/);
+  assert.match(source, /const modelLabel = `\$\{engine\}\/\$\{model\}`/);
+  assert.doesNotMatch(source, /\.\.\.TELNYX_STT_PROVIDER_OPTIONS/);
 });

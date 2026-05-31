@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -22,11 +23,38 @@ import {
   IconPlus,
   IconChevronRight,
   IconAlertTriangle,
+  IconMicrophone,
 } from "@tabler/icons-react";
 import { VariableInput } from "./VariableInput";
 import TranscriptionNodeEditor from "./TranscriptionNodeEditor";
+import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
 
 const SIP_HEADER_NAMES = ["User-to-User", "Diversion"];
+const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
+
+const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
+  .filter((provider) => provider.type === "telnyx-stt")
+  .map((provider) => {
+    const engine = String(provider.telnyxStt?.transcription_engine || "").toLowerCase();
+    const model = provider.telnyxStt?.model || provider.id;
+    const modelLabel = `${engine}/${model}`;
+    return { value: provider.id, label: modelLabel, provider };
+  });
+
+const DEFAULT_TELNYX_STT_MODEL =
+  TELNYX_STT_MODEL_OPTIONS[0]?.value || "telnyx-stt-google-phone-call";
+
+const STREAMING_PROVIDER_OPTIONS = [
+  { value: "custom", label: "Custom WebSocket" },
+  TELNYX_STT_PROVIDER_OPTION,
+];
+
+const TELNYX_STT_TRACK_OPTIONS = [
+  { value: "inbound", label: "Inbound — customer leg only" },
+  { value: "outbound", label: "Outbound — agent leg only" },
+  { value: "both", label: "Both — customer + agent legs" },
+];
+
 
 // Validate WebSocket URL format (ws:// or wss://)
 function validateWebSocketUrl(url) {
@@ -122,6 +150,28 @@ export default function AnswerNodeEditor({
     setStreamEstablishBeforeCallOriginate,
   ] = useState(config.stream_establish_before_call_originate || false);
 
+  const initialStreamingProvider =
+    config.ai_streaming_provider === "telnyx-stt" ||
+    AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+      ? "telnyx-stt"
+      : "custom";
+  const initialTelnyxSttModel =
+    config.telnyx_stt_model ||
+    (AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+      ? config.ai_streaming_provider
+      : DEFAULT_TELNYX_STT_MODEL);
+  const [streamingProvider, setStreamingProvider] = useState(initialStreamingProvider);
+  const [telnyxSttModel, setTelnyxSttModel] = useState(initialTelnyxSttModel);
+  const [telnyxSttTracks, setTelnyxSttTracks] = useState(
+    config.telnyx_stt_tracks || "both"
+  );
+  const [telnyxSttInterimResults, setTelnyxSttInterimResults] = useState(
+    config.telnyx_stt_interim_results !== false
+  );
+  const [wsBaseUrl, setWsBaseUrl] = useState(null);
+  const selectedTelnyxSttProvider = AI_STREAMING_PROVIDERS[telnyxSttModel];
+  const isTelnyxSttStreaming = streamingProvider === "telnyx-stt";
+
   // Transcription
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(
     config.transcription_engine ? true : false
@@ -141,6 +191,56 @@ export default function AnswerNodeEditor({
   const [headersExpanded, setHeadersExpanded] = useState(false);
   const [streamingExpanded, setStreamingExpanded] = useState(false);
   const [transcriptionExpanded, setTranscriptionExpanded] = useState(false);
+
+
+  useEffect(() => {
+    fetch("/api/voice/streaming/capabilities")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.wsUrl) {
+          setWsBaseUrl(data.wsUrl.replace(/\/$/, ""));
+        } else if (data.wsPort) {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          setWsBaseUrl(`${protocol}//${window.location.hostname}:${data.wsPort}`);
+        }
+      })
+      .catch(() => {
+        if (typeof window !== "undefined") {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const mainPort = parseInt(
+            window.location.port || (window.location.protocol === "https:" ? "443" : "80"),
+            10
+          );
+          const wsPort = process.env.NEXT_PUBLIC_STREAMING_PORT || String(mainPort + 1);
+          setWsBaseUrl(`${protocol}//${window.location.hostname}:${wsPort}`);
+        }
+      });
+  }, []);
+
+  const getWebSocketUrl = (providerPath) => {
+    if (wsBaseUrl) return `${wsBaseUrl}/streaming/${providerPath}`;
+    if (typeof window === "undefined") {
+      const port = process.env.NEXT_PUBLIC_STREAMING_PORT || "3001";
+      return `wss://yourdomain.com:${port}/streaming/${providerPath}`;
+    }
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const mainPort = parseInt(
+      window.location.port || (window.location.protocol === "https:" ? "443" : "80"),
+      10
+    );
+    const wsPort = process.env.NEXT_PUBLIC_STREAMING_PORT || String(mainPort + 1);
+    return `${protocol}//${window.location.hostname}:${wsPort}/streaming/${providerPath}`;
+  };
+
+  useEffect(() => {
+    if (!isTelnyxSttStreaming) return;
+    const streamUrl = getWebSocketUrl("telnyx-stt");
+    setStreamUrl(streamUrl);
+    setStreamTrack(selectedTelnyxSttProvider?.telnyx?.stream_track || "inbound_track");
+    setStreamCodec(selectedTelnyxSttProvider?.telnyx?.stream_codec || "PCMU");
+    const validation = validateWebSocketUrl(streamUrl);
+    setStreamUrlError(validation.valid ? null : validation.error);
+  }, [isTelnyxSttStreaming, telnyxSttModel, wsBaseUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync state from config changes
   useEffect(() => {
@@ -198,6 +298,18 @@ export default function AnswerNodeEditor({
       setStreamEstablishBeforeCallOriginate(
         config.stream_establish_before_call_originate
       );
+    if (config.ai_streaming_provider !== undefined) {
+      setStreamingProvider(
+        config.ai_streaming_provider === "telnyx-stt" ||
+        AI_STREAMING_PROVIDERS[config.ai_streaming_provider]?.type === "telnyx-stt"
+          ? "telnyx-stt"
+          : "custom"
+      );
+    }
+    if (config.telnyx_stt_model !== undefined) setTelnyxSttModel(config.telnyx_stt_model);
+    if (config.telnyx_stt_tracks !== undefined) setTelnyxSttTracks(config.telnyx_stt_tracks);
+    if (config.telnyx_stt_interim_results !== undefined)
+      setTelnyxSttInterimResults(config.telnyx_stt_interim_results !== false);
     if (config.transcription_engine !== undefined) {
       setTranscriptionEnabled(!!config.transcription_engine);
       setTranscriptionEngine(config.transcription_engine);
@@ -246,6 +358,12 @@ export default function AnswerNodeEditor({
         finalCustomHeaders.length > 0 ? finalCustomHeaders : undefined,
       // Streaming parameters
       stream_url: streamUrl || undefined,
+      ai_streaming_provider: streamUrl ? streamingProvider : undefined,
+      telnyx_stt_model: isTelnyxSttStreaming ? telnyxSttModel : undefined,
+      telnyx_stt_tracks: isTelnyxSttStreaming ? telnyxSttTracks : undefined,
+      telnyx_stt_interim_results: isTelnyxSttStreaming
+        ? telnyxSttInterimResults
+        : undefined,
       stream_track: streamUrl ? streamTrack : undefined,
       stream_codec: streamUrl && streamCodec ? streamCodec : undefined,
       stream_bidirectional_mode: streamUrl
@@ -515,6 +633,10 @@ export default function AnswerNodeEditor({
     streamBidirectionalTargetLegs,
     streamBidirectionalSamplingRate,
     streamEstablishBeforeCallOriginate,
+    streamingProvider,
+    telnyxSttModel,
+    telnyxSttTracks,
+    telnyxSttInterimResults,
     transcriptionEnabled,
     transcriptionEngine,
     transcriptionEngineConfig,
@@ -969,118 +1091,165 @@ export default function AnswerNodeEditor({
         </CollapsibleTrigger>
         <CollapsibleContent className="p-3 pt-0 space-y-3">
           <div>
-            <Label className="flex items-center gap-2">
-              Stream URL
-              {streamUrlError && (
-                <IconAlertTriangle className="h-4 w-4 text-destructive" />
-              )}
-            </Label>
-            <VariableInput
-              value={streamUrl}
-              onChange={(value) => {
-                setStreamUrl(value);
-                const validation = validateWebSocketUrl(value);
-                setStreamUrlError(validation.valid ? null : validation.error);
+            <Label>Provider</Label>
+            <Select
+              value={streamingProvider}
+              onValueChange={(value) => {
+                setStreamingProvider(value);
+                if (value === "custom") {
+                  setStreamUrl("");
+                  setStreamCodec("");
+                } else if (value === "telnyx-stt") {
+                  const nextUrl = getWebSocketUrl("telnyx-stt");
+                  setStreamUrl(nextUrl);
+                  setStreamTrack(selectedTelnyxSttProvider?.telnyx?.stream_track || "inbound_track");
+                  setStreamCodec(selectedTelnyxSttProvider?.telnyx?.stream_codec || "PCMU");
+                }
               }}
-              availableVariables={availableVariables}
-              placeholder="wss://www.example.com/websocket"
-              className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              The destination WebSocket address where the stream is going to be
-              delivered
-            </p>
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {STREAMING_PROVIDER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
-          {streamUrl && (
+          {isTelnyxSttStreaming ? (
+            <>
+              <div className="flex items-start gap-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
+                <IconMicrophone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-emerald-700 dark:text-emerald-300">
+                  <strong>Telnyx Standalone STT</strong>
+                  <p className="mt-1">
+                    Native Telnyx Speech-to-Text WebSocket using PCMU/mulaw @ 8 kHz.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label>Model</Label>
+                <Select value={telnyxSttModel} onValueChange={setTelnyxSttModel}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TELNYX_STT_MODEL_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Telnyx STT model in provider/model format.
+                </p>
+              </div>
+
+              <div>
+                <Label>Transcription Channels</Label>
+                <Select value={telnyxSttTracks} onValueChange={setTelnyxSttTracks}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Select channels" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TELNYX_STT_TRACK_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Both starts one media stream per call leg after the agent answers.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Interim Results</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Stream partial transcript deltas to Agent Desktop. Turn off to wait for final transcripts only.
+                  </p>
+                </div>
+                <Switch
+                  checked={telnyxSttInterimResults}
+                  onCheckedChange={(checked) => {
+                    setTelnyxSttInterimResults(checked);
+                  }}
+                />
+              </div>
+
+              <div>
+                <Label className="flex items-center gap-2">
+                  Stream URL
+                  {streamUrlError && (
+                    <IconAlertTriangle className="h-4 w-4 text-destructive" />
+                  )}
+                </Label>
+                <Input value={streamUrl} readOnly className="mt-1" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Auto-configured WebSocket URL for Telnyx STT streaming.
+                </p>
+              </div>
+            </>
+          ) : (
             <>
               <div>
-                <Label>Stream Track</Label>
-                <Select
-                  value={streamTrack}
-                  onValueChange={(value) => {
-                    setStreamTrack(value);
+                <Label className="flex items-center gap-2">
+                  Stream URL
+                  {streamUrlError && (
+                    <IconAlertTriangle className="h-4 w-4 text-destructive" />
+                  )}
+                </Label>
+                <VariableInput
+                  value={streamUrl}
+                  onChange={(value) => {
+                    setStreamUrl(value);
+                    const validation = validateWebSocketUrl(value);
+                    setStreamUrlError(validation.valid ? null : validation.error);
                   }}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select track" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="inbound_track">Inbound Track</SelectItem>
-                    <SelectItem value="outbound_track">
-                      Outbound Track
-                    </SelectItem>
-                    <SelectItem value="both_tracks">Both Tracks</SelectItem>
-                  </SelectContent>
-                </Select>
+                  availableVariables={availableVariables}
+                  placeholder="wss://www.example.com/websocket"
+                  className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
+                />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Specifies which track should be streamed
+                  The destination WebSocket address where the stream is going to be delivered
                 </p>
               </div>
 
-              <div>
-                <Label>Stream Codec</Label>
-                <Select
-                  value={streamCodec || "default"}
-                  onValueChange={(value) => {
-                    setStreamCodec(value === "default" ? "" : value);
-                  }}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select codec (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">Default (from call)</SelectItem>
-                    <SelectItem value="PCMU">PCMU</SelectItem>
-                    <SelectItem value="PCMA">PCMA</SelectItem>
-                    <SelectItem value="G722">G722</SelectItem>
-                    <SelectItem value="OPUS">OPUS</SelectItem>
-                    <SelectItem value="AMR-WB">AMR-WB</SelectItem>
-                    <SelectItem value="L16">L16</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Specifies the codec to be used for the streamed audio. When
-                  set to default or when transcoding is not possible, the codec
-                  from the call will be used.
-                </p>
-              </div>
-
-              <div>
-                <Label>Bidirectional Stream Mode</Label>
-                <Select
-                  value={streamBidirectionalMode}
-                  onValueChange={(value) => {
-                    setStreamBidirectionalMode(value);
-                  }}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mp3">MP3</SelectItem>
-                    <SelectItem value="rtp">RTP</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Configures method of bidirectional streaming (mp3, rtp)
-                </p>
-              </div>
-
-              {streamBidirectionalMode === "rtp" && (
+              {streamUrl && (
                 <>
                   <div>
-                    <Label>Bidirectional Stream Codec</Label>
-                    <Select
-                      value={streamBidirectionalCodec}
-                      onValueChange={(value) => {
-                        setStreamBidirectionalCodec(value);
-                      }}
-                    >
+                    <Label>Stream Track</Label>
+                    <Select value={streamTrack} onValueChange={setStreamTrack}>
                       <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select codec" />
+                        <SelectValue placeholder="Select track" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="inbound_track">Inbound Track</SelectItem>
+                        <SelectItem value="outbound_track">Outbound Track</SelectItem>
+                        <SelectItem value="both_tracks">Both Tracks</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Stream Codec</Label>
+                    <Select
+                      value={streamCodec || "default"}
+                      onValueChange={(value) => setStreamCodec(value === "default" ? "" : value)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Select codec (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Default (from call)</SelectItem>
                         <SelectItem value="PCMU">PCMU</SelectItem>
                         <SelectItem value="PCMA">PCMA</SelectItem>
                         <SelectItem value="G722">G722</SelectItem>
@@ -1089,84 +1258,12 @@ export default function AnswerNodeEditor({
                         <SelectItem value="L16">L16</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Indicates codec for bidirectional streaming RTP payloads.
-                      Used only with stream_bidirectional_mode=rtp.
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label>Bidirectional Stream Sampling Rate</Label>
-                    <Select
-                      value={String(streamBidirectionalSamplingRate)}
-                      onValueChange={(value) => {
-                        setStreamBidirectionalSamplingRate(Number(value));
-                      }}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Select sampling rate" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="8000">8000 Hz</SelectItem>
-                        <SelectItem value="16000">16000 Hz</SelectItem>
-                        <SelectItem value="22050">22050 Hz</SelectItem>
-                        <SelectItem value="24000">24000 Hz</SelectItem>
-                        <SelectItem value="48000">48000 Hz</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Audio sampling rate for bidirectional RTP streaming
-                    </p>
                   </div>
                 </>
               )}
-
-              <div>
-                <Label>Bidirectional Stream Target Legs</Label>
-                <Select
-                  value={streamBidirectionalTargetLegs}
-                  onValueChange={(value) => {
-                    setStreamBidirectionalTargetLegs(value);
-                  }}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Select target legs" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="both">Both</SelectItem>
-                    <SelectItem value="self">Self</SelectItem>
-                    <SelectItem value="opposite">Opposite</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Specifies which call legs should receive the bidirectional
-                  stream audio
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="stream_establish_before_call_originate"
-                  checked={streamEstablishBeforeCallOriginate}
-                  onCheckedChange={(checked) => {
-                    setStreamEstablishBeforeCallOriginate(checked);
-                  }}
-                />
-                <Label
-                  htmlFor="stream_establish_before_call_originate"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Establish WebSocket Before Call Originate
-                </Label>
-              </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                Establish websocket connection before dialing the destination.
-                Useful for cases where the websocket connection takes a long
-                time to establish.
-              </p>
             </>
           )}
-        </CollapsibleContent>
+                </CollapsibleContent>
       </Collapsible>
 
       {/* Transcription - Collapsible */}
