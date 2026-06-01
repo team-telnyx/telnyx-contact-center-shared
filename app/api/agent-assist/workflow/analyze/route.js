@@ -233,14 +233,12 @@ export async function POST(request) {
           normalizedTranscriptionConfidence < sttConfidenceThreshold;
 
         // Auto-fill when LLM confidence is high enough and trigger matches.
-        // Keep workflow confidence_score as the LLM extraction confidence, but
-        // leave slot values pending when the source STT confidence is below the
-        // workflow's configured threshold so an agent can confirm or edit them.
+        // Keep workflow confidence_score as the LLM extraction confidence. STT
+        // confidence is returned as a separate display/review signal only — it
+        // must not change the pre-confidence slot recognition/completion behavior.
         if (shouldComplete && llmConfidence >= workflowConfidenceThreshold) {
-          const isLowConfidenceSlot =
-            item.type === "slot" && (belowThreshold || sttBelowThreshold);
-          const nextStatus = isLowConfidenceSlot ? "pending" : "completed";
-          const completedBy = isLowConfidenceSlot ? "auto" : (speakerType || "auto");
+          const nextStatus = "completed";
+          const completedBy = speakerType || "auto";
 
           // Update item status
           await client.query(

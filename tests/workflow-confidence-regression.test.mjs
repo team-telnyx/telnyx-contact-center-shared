@@ -72,7 +72,7 @@ test("agent transcription SSE payload preserves provider confidence for UI badge
   );
 });
 
-test("low STT confidence keeps auto-filled slots pending without lowering LLM score", async () => {
+test("STT confidence display must not block high-confidence LLM slot completion", async () => {
   const analyzeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
 
   assert.match(
@@ -80,11 +80,36 @@ test("low STT confidence keeps auto-filled slots pending without lowering LLM sc
     /normalizedTranscriptionConfidence\s*!==\s*null\s*&&[\s\S]*normalizedTranscriptionConfidence\s*<\s*sttConfidenceThreshold/,
     "workflow analysis should compare provider STT confidence with the configured STT threshold",
   );
-  assert.match(
+  assert.doesNotMatch(
     analyzeSource,
     /item\.type === "slot" && \(belowThreshold \|\| sttBelowThreshold\)/,
-    "slot values from low-confidence STT should stay pending for agent confirmation",
+    "STT confidence is a display/review signal and must not prevent the pre-confidence slot completion behavior",
   );
+  assert.match(
+    analyzeSource,
+    /const nextStatus = "completed"/,
+    "high-confidence LLM slot extraction should still complete the workflow item just like before PR #555",
+  );
+});
+
+test("batch workflow prompt preserves customer and agent speaker labels", async () => {
+  const { buildBatchAnalysisPrompt } = await import("../lib/agent-assist/workflow-prompts.js");
+
+  const { userPrompt } = buildBatchAnalysisPrompt({
+    transcripts: [
+      { speaker: "customer", transcript: "My first name is John" },
+      { speaker: "agent", transcript: "Can I have your last name?" },
+      { speaker: "inbound", transcript: "Applegate" },
+      { speaker: "outbound", transcript: "Thank you" },
+    ],
+    pendingItems: [],
+    slotsFilled: {},
+  });
+
+  assert.match(userPrompt, /\[1\] Customer: "My first name is John"/);
+  assert.match(userPrompt, /\[2\] Agent: "Can I have your last name\?"/);
+  assert.match(userPrompt, /\[3\] Customer: "Applegate"/);
+  assert.match(userPrompt, /\[4\] Agent: "Thank you"/);
 });
 
 test("workflow analysis receives recent conversation context for split slot values", async () => {
