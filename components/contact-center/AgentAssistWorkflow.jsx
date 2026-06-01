@@ -923,7 +923,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.llm_confidence ?? status.confidence_score;
-                          const isLowConfidence = status.below_threshold === true && status.status !== "completed";
+                          const needsConfidenceReview = (status.below_threshold === true || status.stt_below_threshold === true) && status.status !== "completed";
+                          const isLowConfidence = needsConfidenceReview;
                           const isHumanVerified = status.verified_by_agent === true || (status.status === "completed" && status.completed_by === "agent" && Boolean(slotValue));
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
@@ -1823,7 +1824,7 @@ function WorkflowProgressBar({
  * Helper: Calculate stage completion
  */
 function isSlotFilledFromWorkflowState(item, slotsFilled = {}, status = null) {
-  if (status?.below_threshold && status?.status !== "completed") return false;
+  if ((status?.below_threshold || status?.stt_below_threshold) && status?.status !== "completed") return false;
   if (item?.type !== "slot" || !item.slot_name) return false;
   const value = slotsFilled[item.slot_name];
   return value !== undefined && value !== null && value !== "";
