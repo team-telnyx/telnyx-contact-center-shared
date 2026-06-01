@@ -31,6 +31,7 @@ const editorNodes = [
     positionAbsolute: { x: 100, y: 200 },
     data: {
       ...persistedNodes[0].data,
+      isActive: true,
       nodeId: "node-1",
       nodeNumber: 1,
       onDelete: noop,
@@ -57,6 +58,7 @@ const editorEdges = [
     selected: false,
     data: {
       ...persistedEdges[0].data,
+      isActive: true,
       onDelete: noop,
       onConfigureVariables: noop,
     },
