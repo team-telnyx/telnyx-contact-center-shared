@@ -97,7 +97,6 @@ export default function WorkflowEditorPage() {
     category: "",
     is_active: false,
     llm_model: "moonshotai/Kimi-K2.5",
-    stt_confidence_threshold: "0.95",
   });
   
   // LLM models
@@ -252,9 +251,6 @@ export default function WorkflowEditorPage() {
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
         llm_model: data.workflow.llm_model || "moonshotai/Kimi-K2.5",
-        stt_confidence_threshold: Number(
-          data.workflow.stt_confidence_threshold ?? 0.95
-        ).toFixed(2),
       });
       const workflowStages = data.workflow.stages || data.stages || [];
       setStages(workflowStages);
@@ -604,16 +600,10 @@ export default function WorkflowEditorPage() {
   async function saveWorkflow() {
     setSaving(true);
     try {
-      const threshold = Number(workflowForm.stt_confidence_threshold ?? 0.95);
       const res = await fetch(`/api/admin/workflows/${workflowId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...workflowForm,
-          stt_confidence_threshold: Number.isFinite(threshold)
-            ? threshold.toFixed(2)
-            : "0.95",
-        }),
+        body: JSON.stringify(workflowForm),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to save workflow");
@@ -1269,40 +1259,6 @@ export default function WorkflowEditorPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Model used for workflow analysis and suggestions
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-stt-confidence-threshold">
-                STT Confidence Threshold
-              </Label>
-              <Input
-                id="edit-stt-confidence-threshold"
-                type="number"
-                min="0"
-                max="1"
-                step="0.01"
-                value={workflowForm.stt_confidence_threshold ?? "0.95"}
-                onChange={(e) =>
-                  setWorkflowForm((f) => ({
-                    ...f,
-                    stt_confidence_threshold: e.target.value,
-                  }))
-                }
-                onBlur={(e) => {
-                  const threshold = Math.min(
-                    1,
-                    Math.max(0, Number(e.target.value || 0.95))
-                  );
-                  setWorkflowForm((f) => ({
-                    ...f,
-                    stt_confidence_threshold: Number.isFinite(threshold)
-                      ? threshold.toFixed(2)
-                      : "0.95",
-                  }));
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Slots filled from STT below this confidence stay pending until an agent confirms or edits them.
               </p>
             </div>
             <div className="flex items-center justify-between">

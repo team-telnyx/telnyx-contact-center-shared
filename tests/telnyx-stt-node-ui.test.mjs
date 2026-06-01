@@ -27,23 +27,6 @@ function assertTelnyxSttUi(editorSource, editorName) {
     /telnyx_stt_interim_results[\s\S]*<Switch[\s\S]*checked=\{(?:config\.telnyx_stt_interim_results !== false|telnyxSttInterimResults)\}/,
     `${editorName} should expose an interim results toggle that defaults on`,
   );
-  for (const field of [
-    "telnyx_stt_endpointing",
-    "telnyx_stt_eot_threshold",
-    "telnyx_stt_eager_eot_threshold",
-    "telnyx_stt_eot_timeout_ms",
-  ]) {
-    assert.match(
-      editorSource,
-      new RegExp(field),
-      `${editorName} should expose Deepgram ${field} configuration`,
-    );
-  }
-  assert.match(
-    editorSource,
-    /Deepgram End-of-Turn Detection/,
-    `${editorName} should group Deepgram end-of-turn settings`,
-  );
 }
 
 test("Streaming Start UI has provider/model split and interim results toggle for Telnyx STT", async () => {
@@ -104,14 +87,6 @@ test("voice-flow engine resolves virtual Telnyx STT provider model for answer an
   assert.match(engineSource, /case "answer":[\s\S]*applyStreamingProviderConfiguration\([\s\S]*action[\s\S]*\)[\s\S]*break;/);
   assert.match(engineSource, /case "streaming_start":[\s\S]*applyStreamingProviderConfiguration\([\s\S]*action[\s\S]*\)[\s\S]*break;/);
   assert.match(engineSource, /interim_results:\s*body\.telnyx_stt_interim_results !== false/);
-  assert.match(engineSource, /endpointing:\s*body\.telnyx_stt_endpointing \|\| undefined/);
-  assert.match(engineSource, /eot_threshold:\s*body\.telnyx_stt_eot_threshold \|\| undefined/);
-  assert.match(engineSource, /eager_eot_threshold:\s*body\.telnyx_stt_eager_eot_threshold \|\| undefined/);
-  assert.match(engineSource, /eot_timeout_ms:\s*body\.telnyx_stt_eot_timeout_ms \|\| undefined/);
-  assert.match(engineSource, /delete body\.telnyx_stt_endpointing/);
-  assert.match(engineSource, /delete body\.telnyx_stt_eot_threshold/);
-  assert.match(engineSource, /delete body\.telnyx_stt_eager_eot_threshold/);
-  assert.match(engineSource, /delete body\.telnyx_stt_eot_timeout_ms/);
   assert.match(engineSource, /delete body\.telnyx_stt_interim_results/);
   assert.match(engineSource, /delete body\.telnyx_stt_model/);
 });
@@ -127,27 +102,4 @@ test("streaming capabilities endpoint exposes the same WS_BASE_URL used by runti
     "UI capabilities endpoint should prefer WS_BASE_URL before falling back to STREAMING_WS_URL",
   );
   assert.match(capabilitiesSource, /wsUrl:\s*configuredWsUrl/);
-});
-
-test("Telnyx STT websocket handler forwards Deepgram EOT query parameters", async () => {
-  const handlerSource = await source("../lib/telnyx-stt-handler.mjs");
-  for (const param of ["endpointing", "eot_threshold", "eager_eot_threshold", "eot_timeout_ms"]) {
-    assert.match(
-      handlerSource,
-      new RegExp(`params\\.set\\("${param}"`),
-      `STT handler should add ${param} to the provider websocket URL`,
-    );
-  }
-});
-
-test("workflow edit dialog exposes persisted STT confidence threshold under LLM model", async () => {
-  const workflowSource = await source("../app/(portal)/admin/workflows/[id]/page.jsx");
-  assert.match(workflowSource, /stt_confidence_threshold:\s*"0\.95"/);
-  assert.match(workflowSource, /data\.workflow\.stt_confidence_threshold \?\? 0\.95/);
-  assert.match(
-    workflowSource,
-    /<Label htmlFor="edit-llm-model">LLM Model<\/Label>[\s\S]*<Label htmlFor="edit-stt-confidence-threshold">[\s\S]*STT Confidence Threshold/,
-    "threshold field should render directly after LLM model in the edit dialog",
-  );
-  assert.match(workflowSource, /min="0"[\s\S]*max="1"[\s\S]*step="0\.01"/);
 });

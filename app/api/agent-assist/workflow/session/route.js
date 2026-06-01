@@ -84,7 +84,6 @@ async function getWorkflowSessionState(pool, sessionId) {
     `SELECT s.*, 
             w.name as workflow_name, 
             w.category as workflow_category,
-            COALESCE(w.stt_confidence_threshold, 0.95)::float as stt_confidence_threshold,
             i.agent_username,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name
@@ -130,19 +129,7 @@ async function getWorkflowSessionState(pool, sessionId) {
 
   // Create item status map
   const statusMap = itemStatuses.reduce((acc, status) => {
-    acc[status.item_id] = {
-      ...status,
-      // Low-confidence STT slot captures are persisted as pending rows with an
-      // extracted value and completed_by="auto". Rehydrate the transient flag
-      // used by the UI so a refresh does not count the unverified slot as done.
-      below_threshold:
-        status.status !== "completed" &&
-        status.completed_by === "auto" &&
-        status.extracted_value !== null &&
-        status.extracted_value !== undefined &&
-        status.extracted_value !== "",
-      threshold: session.stt_confidence_threshold,
-    };
+    acc[status.item_id] = status;
     return acc;
   }, {});
 
