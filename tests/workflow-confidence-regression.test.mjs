@@ -55,3 +55,35 @@ test("Agent Assist renders separate labels for STT bubble confidence and LLM ite
     "auto-filled workflow slots should still show the LLM confidence badge",
   );
 });
+
+test("agent transcription SSE payload preserves provider confidence for UI badges", async () => {
+  const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
+
+  assert.match(
+    routerSource,
+    /confidence:\s*normalizeConfidence\(transcriptionData\.confidence\)/,
+    "SSE transcription payload must include normalized STT confidence; otherwise the UI has nothing to render",
+  );
+});
+
+test("workflow analysis receives recent conversation context for split slot values", async () => {
+  const componentSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
+  const storeSource = await source("../lib/stores/workflow-store.js");
+  const analyzerSource = await source("../lib/agent-assist/workflow-analyzer.js");
+
+  assert.match(
+    componentSource,
+    /recentFinalTranscriptions/,
+    "client should send recent final transcript segments, not only the latest phrase",
+  );
+  assert.match(
+    storeSource,
+    /recentTranscripts:\s*options\.recentTranscripts/,
+    "workflow store should forward recent transcript context to the analyze API",
+  );
+  assert.match(
+    analyzerSource,
+    /buildBatchAnalysisPrompt/,
+    "analyzer should use the batch prompt so split utterances like first name + last name can fill one slot",
+  );
+});

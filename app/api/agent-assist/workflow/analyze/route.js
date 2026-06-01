@@ -7,7 +7,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
+import {
+  analyzeWorkflowTranscript,
+  analyzeWorkflowTranscriptBatch,
+} from "@/lib/agent-assist/workflow-analyzer";
 
 // POST /api/agent-assist/workflow/analyze - Analyze transcript
 export async function POST(request) {
@@ -26,7 +29,14 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { sessionId, interactionId, transcript, speaker, confidence: transcriptionConfidence } = body;
+    const {
+      sessionId,
+      interactionId,
+      transcript,
+      speaker,
+      confidence: transcriptionConfidence,
+      recentTranscripts,
+    } = body;
     const normalizedTranscriptionConfidence =
       typeof transcriptionConfidence === "number" &&
       Number.isFinite(transcriptionConfidence) &&
@@ -142,16 +152,48 @@ export async function POST(request) {
         ? workflow.stt_confidence_threshold
         : 0.95;
 
-    // Call LLM analyzer (using workflow's configured model)
-    const analysisResult = await analyzeWorkflowTranscript({
-      transcript,
-      speaker: speaker || "unknown",
-      pendingItems: relevantPendingItems,
-      slotsFilled,
-      model: llmModel,
-      includeIntent: assistConfig.enable_intent_recognition === true,
-      includeSentiment: assistConfig.enable_sentiment_analysis === true,
-    });
+    const normalizedRecentTranscripts = Array.isArray(recentTranscripts)
+      ? recentTranscripts
+          .map((item) => ({
+            transcript: typeof item?.transcript === "string" ? item.transcript.trim() : "",
+            speaker: item?.speaker || "unknown",
+            timestamp: item?.timestamp || null,
+          }))
+          .filter((item) => item.transcript)
+          .slice(-8)
+      : [];
+
+    const transcriptAlreadyIncluded = normalizedRecentTranscripts.some(
+      (item) => item.transcript === transcript.trim() && item.speaker === (speaker || "unknown"),
+    );
+    const analysisTranscripts = transcriptAlreadyIncluded
+      ? normalizedRecentTranscripts
+      : [
+          ...normalizedRecentTranscripts,
+          { transcript: transcript.trim(), speaker: speaker || "unknown", timestamp: null },
+        ].slice(-8);
+
+    // Call LLM analyzer (using workflow's configured model). Use recent context
+    // so slots split across utterances, e.g. first name then last name, can fill
+    // a single workflow item.
+    const analysisResult = analysisTranscripts.length > 1
+      ? await analyzeWorkflowTranscriptBatch({
+          transcripts: analysisTranscripts,
+          pendingItems: relevantPendingItems,
+          slotsFilled,
+          model: llmModel,
+          includeIntent: assistConfig.enable_intent_recognition === true,
+          includeSentiment: assistConfig.enable_sentiment_analysis === true,
+        })
+      : await analyzeWorkflowTranscript({
+          transcript,
+          speaker: speaker || "unknown",
+          pendingItems: relevantPendingItems,
+          slotsFilled,
+          model: llmModel,
+          includeIntent: assistConfig.enable_intent_recognition === true,
+          includeSentiment: assistConfig.enable_sentiment_analysis === true,
+        });
 
     // Process completed items
     const updates = [];

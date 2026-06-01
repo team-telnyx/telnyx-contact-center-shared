@@ -4,6 +4,17 @@ import { useEffect } from "react";
 import useCallsStore from "@/lib/stores/calls-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 
+function normalizeConfidence(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value >= 0 && value <= 1 ? value : null;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 1 ? numeric : null;
+  }
+  return null;
+}
+
 export function ContactCenterStreamProvider({ children }) {
   useEffect(() => {
     let contactCenterEventSource = null;
@@ -91,11 +102,12 @@ export function ContactCenterStreamProvider({ children }) {
                   speech_final: data.transcription.speech_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
-                  confidence:
+                  confidence: normalizeConfidence(
                     data.transcription.confidence ??
                     data.transcription.confidence_score ??
                     data.transcription.alternatives?.[0]?.confidence ??
-                    data.transcription.channel?.alternatives?.[0]?.confidence,
+                    data.transcription.channel?.alternatives?.[0]?.confidence
+                  ),
                   translation: data.transcription.translation || null,
                 });
 

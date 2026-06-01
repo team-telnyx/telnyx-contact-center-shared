@@ -374,10 +374,22 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
     const analyzeIfNew = async () => {
       try {
+        const recentFinalTranscriptions = transcriptions
+          .filter((t) => t?.isFinal && t?.transcript?.trim())
+          .slice(-8)
+          .map((t) => ({
+            transcript: t.transcript,
+            speaker: t.track,
+            timestamp: t.timestamp,
+          }));
+
         await analyzeTranscript(
           latestTranscription.transcript,
           latestTranscription.track,
-          { confidence: latestTranscription.confidence }
+          {
+            confidence: latestTranscription.confidence,
+            recentTranscripts: recentFinalTranscriptions,
+          }
         );
       } catch (err) {
         console.error("[AgentAssistWorkflow] Analysis error:", err);
