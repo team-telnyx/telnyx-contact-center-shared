@@ -29,6 +29,36 @@ test("webhook starts inbound on caller leg and outbound on agent leg", async () 
   assert.match(source, /startTelnyxSttTranscription\([\s\S]*agentCcId[\s\S]*mediaTrack: "inbound", outputTrack: "outbound"/);
 });
 
+test("agent-leg Telnyx STT is prewarmed during WebRTC transfer ringing", async () => {
+  const bridgeSource = await readFile(
+    new URL("../lib/contact-center/webrtc-bridge.js", import.meta.url),
+    "utf8",
+  );
+  const handlerSource = await readFile(
+    new URL("../lib/telnyx-stt-handler.mjs", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(bridgeSource, /prewarmTelnyxSttAgentLeg/);
+  assert.match(bridgeSource, /__telnyxSttStreamSessions\?\.get\(queuedCallControlId\)/);
+  assert.match(bridgeSource, /agentCallControlId,[\s\S]*sttConfig,[\s\S]*interaction\.id,[\s\S]*agentUsername/);
+  assert.match(handlerSource, /export async function prewarmTelnyxSttAgentLeg/);
+  assert.match(handlerSource, /startTelnyxSttTranscription\([\s\S]*mediaTrack: "inbound", outputTrack: "outbound"/);
+  assert.match(handlerSource, /startTelnyxSttMediaStream\(callControlId, outboundConfig, interactionId, agentUsername, "outbound"\)/);
+  assert.match(handlerSource, /command_id: commandId/);
+});
+
+test("Telnyx STT prewarmed agent-leg sessions are cleaned up on hangup", async () => {
+  const source = await readFile(
+    new URL("../lib/contact-center/webhook-handler.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /stopTelnyxSttTranscription/);
+  assert.match(source, /agent_call_control_id/);
+  assert.match(source, /original_call_control_id/);
+});
+
 test("voice-flow engine stores Telnyx STT selected tracks outside the Telnyx API body", async () => {
   const source = await readFile(
     new URL("../lib/voice-flow-engine.js", import.meta.url),
