@@ -67,3 +67,20 @@ test("StreamingStartNodeEditor exposes one Telnyx STT provider and derives model
   assert.match(source, /const modelLabel = `\$\{engine\}\/\$\{model\}`/);
   assert.doesNotMatch(source, /\.\.\.TELNYX_STT_PROVIDER_OPTIONS/);
 });
+
+test("Telnyx STT runtime strips stale bidirectional audio fields before Call Control", async () => {
+  const source = await readFile(
+    new URL("../lib/voice-flow-engine.js", import.meta.url),
+    "utf8",
+  );
+  const sttBranchStart = source.indexOf('fullProviderConfig?.type === "telnyx-stt"');
+  assert.ok(sttBranchStart >= 0, "voice-flow-engine should have a Telnyx STT branch");
+  const sttBranchEnd = source.indexOf("  } else {", sttBranchStart);
+  assert.ok(sttBranchEnd > sttBranchStart, "Telnyx STT branch should be parseable");
+  const sttBranch = source.slice(sttBranchStart, sttBranchEnd);
+
+  assert.match(sttBranch, /delete body\.stream_bidirectional_mode/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_codec/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_target_legs/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_sampling_rate/);
+});
