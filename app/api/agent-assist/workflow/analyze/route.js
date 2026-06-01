@@ -228,12 +228,17 @@ export async function POST(request) {
             : 0;
         const workflowConfidenceThreshold = 0.85;
         const belowThreshold = llmConfidence < workflowConfidenceThreshold;
+        const sttBelowThreshold =
+          normalizedTranscriptionConfidence !== null &&
+          normalizedTranscriptionConfidence < sttConfidenceThreshold;
 
         // Auto-fill when LLM confidence is high enough and trigger matches.
-        // STT confidence is kept separate for the transcription bubble; workflow
-        // confidence_score always represents the LLM extraction confidence.
-        if (shouldComplete && llmConfidence >= 0.85) {
-          const isLowConfidenceSlot = item.type === "slot" && belowThreshold;
+        // Keep workflow confidence_score as the LLM extraction confidence, but
+        // leave slot values pending when the source STT confidence is below the
+        // workflow's configured threshold so an agent can confirm or edit them.
+        if (shouldComplete && llmConfidence >= workflowConfidenceThreshold) {
+          const isLowConfidenceSlot =
+            item.type === "slot" && (belowThreshold || sttBelowThreshold);
           const nextStatus = isLowConfidenceSlot ? "pending" : "completed";
           const completedBy = isLowConfidenceSlot ? "auto" : (speakerType || "auto");
 
@@ -271,7 +276,9 @@ export async function POST(request) {
             llm_confidence: llmConfidence,
             transcription_confidence: normalizedTranscriptionConfidence,
             below_threshold: belowThreshold,
+            stt_below_threshold: sttBelowThreshold,
             threshold: workflowConfidenceThreshold,
+            stt_threshold: sttConfidenceThreshold,
             completed_by: completedBy,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
@@ -285,7 +292,9 @@ export async function POST(request) {
             llm_confidence: llmConfidence,
             transcription_confidence: normalizedTranscriptionConfidence,
             below_threshold: belowThreshold,
+            stt_below_threshold: sttBelowThreshold,
             threshold: workflowConfidenceThreshold,
+            stt_threshold: sttConfidenceThreshold,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
             completion_trigger_pending: !shouldComplete,

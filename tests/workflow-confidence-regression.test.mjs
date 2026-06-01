@@ -58,11 +58,32 @@ test("Agent Assist renders separate labels for STT bubble confidence and LLM ite
 
 test("agent transcription SSE payload preserves provider confidence for UI badges", async () => {
   const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
+  const webhookHandlerSource = await source("../lib/contact-center/webhook-handler.js");
 
   assert.match(
     routerSource,
     /confidence:\s*normalizeConfidence\(transcriptionData\.confidence\)/,
     "SSE transcription payload must include normalized STT confidence; otherwise the UI has nothing to render",
+  );
+  assert.match(
+    webhookHandlerSource,
+    /confidence:\s*normalizeConfidence\(transcriptionData\.confidence\)/,
+    "native call.transcription webhook SSE payload must also include normalized STT confidence",
+  );
+});
+
+test("low STT confidence keeps auto-filled slots pending without lowering LLM score", async () => {
+  const analyzeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
+
+  assert.match(
+    analyzeSource,
+    /normalizedTranscriptionConfidence\s*!==\s*null\s*&&[\s\S]*normalizedTranscriptionConfidence\s*<\s*sttConfidenceThreshold/,
+    "workflow analysis should compare provider STT confidence with the configured STT threshold",
+  );
+  assert.match(
+    analyzeSource,
+    /item\.type === "slot" && \(belowThreshold \|\| sttBelowThreshold\)/,
+    "slot values from low-confidence STT should stay pending for agent confirmation",
   );
 });
 
