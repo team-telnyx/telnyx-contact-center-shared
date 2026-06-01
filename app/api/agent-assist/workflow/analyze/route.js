@@ -186,7 +186,9 @@ export async function POST(request) {
           normalizedTranscriptionConfidence !== null
             ? Math.min(llmConfidence, normalizedTranscriptionConfidence)
             : llmConfidence;
-        const belowThreshold = computedConfidence < sttConfidenceThreshold;
+        const belowThreshold =
+          normalizedTranscriptionConfidence !== null &&
+          normalizedTranscriptionConfidence < sttConfidenceThreshold;
 
         // Auto-fill when confidence is high enough and trigger matches.
         // Low-confidence slots stay pending/red until an agent confirms or edits them.
