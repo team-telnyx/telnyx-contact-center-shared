@@ -46,6 +46,13 @@ const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
 const DEFAULT_TELNYX_STT_MODEL =
   TELNYX_STT_MODEL_OPTIONS[0]?.value || "telnyx-stt-google-phone-call";
 
+const DEEPGRAM_EOT_DEFAULTS = {
+  endpointing: "",
+  eot_threshold: "0.70",
+  eager_eot_threshold: "",
+  eot_timeout_ms: "5000",
+};
+
 const STREAMING_PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
@@ -183,6 +190,18 @@ export default function AnswerNodeEditor({
   const [telnyxSttInterimResults, setTelnyxSttInterimResults] = useState(
     config.telnyx_stt_interim_results !== false
   );
+  const [telnyxSttEndpointing, setTelnyxSttEndpointing] = useState(
+    config.telnyx_stt_endpointing ?? DEEPGRAM_EOT_DEFAULTS.endpointing
+  );
+  const [telnyxSttEotThreshold, setTelnyxSttEotThreshold] = useState(
+    config.telnyx_stt_eot_threshold ?? DEEPGRAM_EOT_DEFAULTS.eot_threshold
+  );
+  const [telnyxSttEagerEotThreshold, setTelnyxSttEagerEotThreshold] = useState(
+    config.telnyx_stt_eager_eot_threshold ?? DEEPGRAM_EOT_DEFAULTS.eager_eot_threshold
+  );
+  const [telnyxSttEotTimeoutMs, setTelnyxSttEotTimeoutMs] = useState(
+    config.telnyx_stt_eot_timeout_ms ?? DEEPGRAM_EOT_DEFAULTS.eot_timeout_ms
+  );
   const [wsBaseUrl, setWsBaseUrl] = useState(null);
   const selectedTelnyxSttProvider = AI_STREAMING_PROVIDERS[telnyxSttModel];
   const selectedStreamingProvider =
@@ -190,6 +209,9 @@ export default function AnswerNodeEditor({
       ? selectedTelnyxSttProvider
       : AI_STREAMING_PROVIDERS[streamingProvider];
   const isTelnyxSttStreaming = streamingProvider === "telnyx-stt";
+  const isDeepgramTelnyxSttStreaming =
+    isTelnyxSttStreaming &&
+    String(selectedTelnyxSttProvider?.telnyxStt?.transcription_engine || "").toLowerCase() === "deepgram";
 
   // Transcription
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(
@@ -334,6 +356,14 @@ export default function AnswerNodeEditor({
     if (config.telnyx_stt_tracks !== undefined) setTelnyxSttTracks(config.telnyx_stt_tracks);
     if (config.telnyx_stt_interim_results !== undefined)
       setTelnyxSttInterimResults(config.telnyx_stt_interim_results !== false);
+    if (config.telnyx_stt_endpointing !== undefined)
+      setTelnyxSttEndpointing(config.telnyx_stt_endpointing);
+    if (config.telnyx_stt_eot_threshold !== undefined)
+      setTelnyxSttEotThreshold(config.telnyx_stt_eot_threshold);
+    if (config.telnyx_stt_eager_eot_threshold !== undefined)
+      setTelnyxSttEagerEotThreshold(config.telnyx_stt_eager_eot_threshold);
+    if (config.telnyx_stt_eot_timeout_ms !== undefined)
+      setTelnyxSttEotTimeoutMs(config.telnyx_stt_eot_timeout_ms);
     if (config.transcription_engine !== undefined) {
       setTranscriptionEnabled(!!config.transcription_engine);
       setTranscriptionEngine(config.transcription_engine);
@@ -388,6 +418,22 @@ export default function AnswerNodeEditor({
       telnyx_stt_interim_results: isTelnyxSttStreaming
         ? telnyxSttInterimResults
         : undefined,
+      telnyx_stt_endpointing:
+        isDeepgramTelnyxSttStreaming && telnyxSttEndpointing !== ""
+          ? telnyxSttEndpointing
+          : undefined,
+      telnyx_stt_eot_threshold:
+        isDeepgramTelnyxSttStreaming && telnyxSttEotThreshold !== ""
+          ? telnyxSttEotThreshold
+          : undefined,
+      telnyx_stt_eager_eot_threshold:
+        isDeepgramTelnyxSttStreaming && telnyxSttEagerEotThreshold !== ""
+          ? telnyxSttEagerEotThreshold
+          : undefined,
+      telnyx_stt_eot_timeout_ms:
+        isDeepgramTelnyxSttStreaming && telnyxSttEotTimeoutMs !== ""
+          ? telnyxSttEotTimeoutMs
+          : undefined,
       stream_track: streamUrl ? streamTrack : undefined,
       stream_codec: streamUrl && streamCodec ? streamCodec : undefined,
       stream_bidirectional_mode: streamUrl
@@ -661,6 +707,10 @@ export default function AnswerNodeEditor({
     telnyxSttModel,
     telnyxSttTracks,
     telnyxSttInterimResults,
+    telnyxSttEndpointing,
+    telnyxSttEotThreshold,
+    telnyxSttEagerEotThreshold,
+    telnyxSttEotTimeoutMs,
     transcriptionEnabled,
     transcriptionEngine,
     transcriptionEngineConfig,
@@ -1223,6 +1273,72 @@ export default function AnswerNodeEditor({
                   }}
                 />
               </div>
+
+              {isDeepgramTelnyxSttStreaming && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <div>
+                    <Label>Deepgram End-of-Turn Detection</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional Telnyx STT WebSocket parameters for Deepgram endpointing and turn completion.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="answer-telnyx-stt-endpointing">Endpointing</Label>
+                      <Input
+                        id="answer-telnyx-stt-endpointing"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={telnyxSttEndpointing}
+                        onChange={(e) => setTelnyxSttEndpointing(e.target.value)}
+                        placeholder="Provider default"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="answer-telnyx-stt-eot-timeout-ms">EOT Timeout (ms)</Label>
+                      <Input
+                        id="answer-telnyx-stt-eot-timeout-ms"
+                        type="number"
+                        min="500"
+                        max="10000"
+                        step="100"
+                        value={telnyxSttEotTimeoutMs}
+                        onChange={(e) => setTelnyxSttEotTimeoutMs(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="answer-telnyx-stt-eot-threshold">EOT Threshold</Label>
+                      <Input
+                        id="answer-telnyx-stt-eot-threshold"
+                        type="number"
+                        min="0.5"
+                        max="0.9"
+                        step="0.01"
+                        value={telnyxSttEotThreshold}
+                        onChange={(e) => setTelnyxSttEotThreshold(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="answer-telnyx-stt-eager-eot-threshold">Eager EOT Threshold</Label>
+                      <Input
+                        id="answer-telnyx-stt-eager-eot-threshold"
+                        type="number"
+                        min="0.3"
+                        max="0.9"
+                        step="0.01"
+                        value={telnyxSttEagerEotThreshold}
+                        onChange={(e) => setTelnyxSttEagerEotThreshold(e.target.value)}
+                        placeholder="Disabled"
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <Label className="flex items-center gap-2">

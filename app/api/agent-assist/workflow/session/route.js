@@ -84,6 +84,7 @@ async function getWorkflowSessionState(pool, sessionId) {
     `SELECT s.*, 
             w.name as workflow_name, 
             w.category as workflow_category,
+            COALESCE(w.stt_confidence_threshold, 0.95)::float as stt_confidence_threshold,
             i.agent_username,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name

@@ -32,6 +32,7 @@ import {
   Copy,
   CheckCheck,
   User,
+  UserCheck,
   Headphones,
   Bot,
   ChevronRight,
@@ -375,7 +376,8 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       try {
         await analyzeTranscript(
           latestTranscription.transcript,
-          latestTranscription.track
+          latestTranscription.track,
+          { confidence: latestTranscription.confidence }
         );
       } catch (err) {
         console.error("[AgentAssistWorkflow] Analysis error:", err);
@@ -778,9 +780,10 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
   const activeStageId = useMemo(() => {
     for (const stage of stages) {
       const hasIncomplete = stage.items?.some((item) => {
-        const status = itemStatuses[item.id]?.status;
+        const itemStatus = itemStatuses[item.id];
+        const status = itemStatus?.status;
         if (status === "completed" || status === "skipped") return false;
-        return !isSlotFilledFromWorkflowState(item, slotsFilled);
+        return !isSlotFilledFromWorkflowState(item, slotsFilled, itemStatus);
       });
       if (hasIncomplete) return stage.id;
     }
@@ -901,13 +904,15 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                       <div className="space-y-1.5 pt-1">
                         {stage.items?.map((item) => {
                           const status = itemStatuses[item.id] || { status: "pending" };
-                          const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
+                          const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled, status);
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
                           const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.confidence_score;
+                          const isLowConfidence = status.below_threshold === true && status.status !== "completed";
+                          const isHumanVerified = status.verified_by_agent === true || (status.status === "completed" && status.completed_by === "agent" && Boolean(slotValue));
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
                           const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
@@ -917,7 +922,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             <div
                               key={item.id}
                               className={`flex items-start gap-2 p-2 rounded-md transition-all ${
-                                isCompleted
+                                isLowConfidence
+                                  ? "bg-red-500/10 ring-1 ring-red-500/50"
+                                  : isCompleted
                                   ? "bg-green-500/10"
                                   : isSkipped
                                   ? "bg-muted/50 opacity-60"
@@ -928,7 +935,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             >
                               <Checkbox
                                 checked={isCompleted}
-                                disabled={isCompleted || isSkipped}
+                                disabled={(isCompleted && !isLowConfidence) || isSkipped}
                                 onCheckedChange={(checked) => {
                                   if (checked) {
                                     onCompleteItem(item.id);
@@ -992,7 +999,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           {slotValue}
                                         </span>
                                         {/* Source indicator: AI or Agent */}
-                                        {isAiFilled ? (
+                                        {isHumanVerified ? (
+                                          <UserCheck className="h-3.5 w-3.5 text-green-500" title="Verified by Agent" />
+                                        ) : isAiFilled ? (
                                           <span className="text-sm" title="Filled by AI Assistant">🤖</span>
                                         ) : isAgentFilled ? (
                                           <span className="text-sm" title="Filled by Agent">👤</span>
@@ -1002,7 +1011,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <Badge
                                             variant="outline"
                                             className={`text-[10px] px-1.5 py-0 ${
-                                              confidenceScore >= 0.7
+                                              isLowConfidence
+                                                ? "bg-red-500/10 text-red-500 border-red-500/50"
+                                                : confidenceScore >= (status.threshold ?? 0.7)
                                                 ? "bg-green-500/10 text-green-500 border-green-500/50"
                                                 : confidenceScore >= 0.5
                                                 ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
@@ -1012,6 +1023,21 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           >
                                             {Math.round(confidenceScore * 100)}%
                                           </Badge>
+                                        )}
+                                        {isLowConfidence && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 px-2 text-xs bg-red-500/10 text-red-500 border-red-500/40 hover:bg-red-500/20"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onCompleteItem(item.id, slotValue);
+                                              setHighlightedItemId(item.id);
+                                            }}
+                                            title="Confirm low-confidence value"
+                                          >
+                                            Confirm
+                                          </Button>
                                         )}
                                         <Button
                                           size="icon"
@@ -1164,6 +1190,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
   const intent = transcription.intent;
   const [isSpeaking, setIsSpeaking] = useState(false);
   const isInterim = !transcription.isFinal;
+  const confidence = typeof transcription.confidence === "number" ? transcription.confidence : null;
 
   const SentimentIcon = sentiment === "positive" ? Smile :
     sentiment === "negative" ? Frown : Meh;
@@ -1231,6 +1258,11 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
         } ${isInterim ? "opacity-80 ring-1 ring-blue-500/30" : ""}`}
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
+        {confidence !== null && (
+          <div className={`mt-1 text-[10px] ${confidence >= 0.95 ? "text-green-500" : confidence >= 0.7 ? "text-amber-500" : "text-red-500"}`}>
+            Confidence {Math.round(confidence * 100)}%
+          </div>
+        )}
       </div>
 
       {/* Translation bubble */}
@@ -1778,7 +1810,8 @@ function WorkflowProgressBar({
 /**
  * Helper: Calculate stage completion
  */
-function isSlotFilledFromWorkflowState(item, slotsFilled = {}) {
+function isSlotFilledFromWorkflowState(item, slotsFilled = {}, status = null) {
+  if (status?.below_threshold && status?.status !== "completed") return false;
   if (item?.type !== "slot" || !item.slot_name) return false;
   const value = slotsFilled[item.slot_name];
   return value !== undefined && value !== null && value !== "";
@@ -1790,7 +1823,7 @@ function getStageCompletion(stage, itemStatuses, slotsFilled = {}) {
   const total = stage.items.length;
   const completed = stage.items.filter((item) => {
     const status = itemStatuses[item.id];
-    return status?.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
+    return status?.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled, status);
   }).length;
 
   return {

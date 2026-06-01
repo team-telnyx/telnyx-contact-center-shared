@@ -91,6 +91,7 @@ export function ContactCenterStreamProvider({ children }) {
                   speech_final: data.transcription.speech_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
+                  confidence: data.transcription.confidence,
                   translation: data.transcription.translation || null,
                 });
 

@@ -110,7 +110,16 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, ai_assistant_id, syncInsights } = body;
+    const {
+      name,
+      description,
+      category,
+      is_active,
+      llm_model,
+      stt_confidence_threshold,
+      ai_assistant_id,
+      syncInsights,
+    } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -136,6 +145,17 @@ export async function PUT(request, { params }) {
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);
       values.push(llm_model);
+    }
+    if (stt_confidence_threshold !== undefined) {
+      const threshold = Number(stt_confidence_threshold);
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+        return NextResponse.json(
+          { error: "STT confidence threshold must be between 0 and 1" },
+          { status: 400 }
+        );
+      }
+      updates.push(`stt_confidence_threshold = $${paramIndex++}`);
+      values.push(Number(threshold.toFixed(2)));
     }
     if (ai_assistant_id !== undefined) {
       updates.push(`ai_assistant_id = $${paramIndex++}`);

@@ -63,6 +63,13 @@ const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
 const DEFAULT_TELNYX_STT_MODEL =
   TELNYX_STT_MODEL_OPTIONS[0]?.value || "telnyx-stt-google-phone-call";
 
+const DEEPGRAM_EOT_DEFAULTS = {
+  endpointing: "",
+  eot_threshold: "0.70",
+  eager_eot_threshold: "",
+  eot_timeout_ms: "5000",
+};
+
 const PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
@@ -184,6 +191,9 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       ? AI_STREAMING_PROVIDERS[telnyxSttModel]
       : AI_STREAMING_PROVIDERS[provider];
   const isTelnyxStt = provider === "telnyx-stt";
+  const isDeepgramTelnyxStt =
+    isTelnyxStt &&
+    String(providerConfig?.telnyxStt?.transcription_engine || "").toLowerCase() === "deepgram";
   const isAI = isOpenAI || isGemini; // AI providers with session config
   const isLocked = !isCustom;
 
@@ -773,6 +783,72 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
               }
             />
           </div>
+
+          {isDeepgramTelnyxStt && (
+            <div className="space-y-3 rounded-md border p-3">
+              <div>
+                <Label>Deepgram End-of-Turn Detection</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Optional Telnyx STT WebSocket parameters for Deepgram endpointing and turn completion.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="telnyx-stt-endpointing">Endpointing</Label>
+                  <Input
+                    id="telnyx-stt-endpointing"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={config.telnyx_stt_endpointing ?? DEEPGRAM_EOT_DEFAULTS.endpointing}
+                    onChange={(e) => handleFieldChange("telnyx_stt_endpointing", e.target.value)}
+                    placeholder="Provider default"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="telnyx-stt-eot-timeout-ms">EOT Timeout (ms)</Label>
+                  <Input
+                    id="telnyx-stt-eot-timeout-ms"
+                    type="number"
+                    min="500"
+                    max="10000"
+                    step="100"
+                    value={config.telnyx_stt_eot_timeout_ms ?? DEEPGRAM_EOT_DEFAULTS.eot_timeout_ms}
+                    onChange={(e) => handleFieldChange("telnyx_stt_eot_timeout_ms", e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="telnyx-stt-eot-threshold">EOT Threshold</Label>
+                  <Input
+                    id="telnyx-stt-eot-threshold"
+                    type="number"
+                    min="0.5"
+                    max="0.9"
+                    step="0.01"
+                    value={config.telnyx_stt_eot_threshold ?? DEEPGRAM_EOT_DEFAULTS.eot_threshold}
+                    onChange={(e) => handleFieldChange("telnyx_stt_eot_threshold", e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="telnyx-stt-eager-eot-threshold">Eager EOT Threshold</Label>
+                  <Input
+                    id="telnyx-stt-eager-eot-threshold"
+                    type="number"
+                    min="0.3"
+                    max="0.9"
+                    step="0.01"
+                    value={config.telnyx_stt_eager_eot_threshold ?? DEEPGRAM_EOT_DEFAULTS.eager_eot_threshold}
+                    onChange={(e) => handleFieldChange("telnyx_stt_eager_eot_threshold", e.target.value)}
+                    placeholder="Disabled"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

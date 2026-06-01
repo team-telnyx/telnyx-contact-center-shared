@@ -70,3 +70,32 @@ test("final transcription update closes the same bubble with the final transcrip
   assert.equal(transcriptions[0].transcript, "can you hear me");
   assert.equal(transcriptions[0].isFinal, true);
 });
+
+test("transcription confidence is preserved across interim replacement and final update", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "utterance-confidence",
+    transcript: "name is less",
+    confidence: 0.62,
+    is_final: false,
+  });
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "utterance-confidence",
+    transcript: "name is Leszek",
+    confidence: 0.91,
+    is_final: true,
+    speech_final: true,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].transcript, "name is Leszek");
+  assert.equal(transcriptions[0].confidence, 0.91);
+});

@@ -26,7 +26,14 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { sessionId, interactionId, transcript, speaker } = body;
+    const { sessionId, interactionId, transcript, speaker, confidence: transcriptionConfidence } = body;
+    const normalizedTranscriptionConfidence =
+      typeof transcriptionConfidence === "number" &&
+      Number.isFinite(transcriptionConfidence) &&
+      transcriptionConfidence >= 0 &&
+      transcriptionConfidence <= 1
+        ? transcriptionConfidence
+        : null;
 
     if (!transcript?.trim()) {
       return NextResponse.json(
@@ -123,12 +130,17 @@ export async function POST(request) {
     // Get current slots filled
     const slotsFilled = workflowSession.slots_filled || {};
 
-    // Get workflow's llm_model
+    // Get workflow's LLM model and STT confidence threshold
     const { rows: [workflow] } = await pool.query(
-      `SELECT llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT llm_model, COALESCE(stt_confidence_threshold, 0.95)::float AS stt_confidence_threshold
+       FROM aa_workflows WHERE id = $1`,
       [workflowSession.workflow_id]
     );
     const llmModel = workflow?.llm_model || "moonshotai/Kimi-K2.5";
+    const sttConfidenceThreshold =
+      typeof workflow?.stt_confidence_threshold === "number"
+        ? workflow.stt_confidence_threshold
+        : 0.95;
 
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
@@ -166,47 +178,72 @@ export async function POST(request) {
           shouldComplete = true;
         }
         
-        // Only auto-complete if confidence is high enough AND trigger matches
-        if (shouldComplete && completed.confidence >= 0.85) {
+        const llmConfidence =
+          typeof completed.confidence === "number" && Number.isFinite(completed.confidence)
+            ? completed.confidence
+            : 0;
+        const computedConfidence =
+          normalizedTranscriptionConfidence !== null
+            ? Math.min(llmConfidence, normalizedTranscriptionConfidence)
+            : llmConfidence;
+        const belowThreshold = computedConfidence < sttConfidenceThreshold;
+
+        // Auto-fill when confidence is high enough and trigger matches.
+        // Low-confidence slots stay pending/red until an agent confirms or edits them.
+        if (shouldComplete && llmConfidence >= 0.85) {
+          const isLowConfidenceSlot = item.type === "slot" && belowThreshold;
+          const nextStatus = isLowConfidenceSlot ? "pending" : "completed";
+          const completedBy = isLowConfidenceSlot ? "auto" : (speakerType || "auto");
+
           // Update item status
           await client.query(
             `UPDATE aa_workflow_item_status 
-             SET status = 'completed',
-                 completed_at = NOW(),
-                 completed_by = $1,
-                 extracted_value = $2,
-                 confidence_score = $3,
-                 source_transcript = $4,
+             SET status = $1,
+                 completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+                 completed_by = $2,
+                 extracted_value = $3,
+                 confidence_score = $4,
+                 source_transcript = $5,
                  updated_at = NOW()
-             WHERE session_id = $5 AND item_id = $6`,
+             WHERE session_id = $6 AND item_id = $7`,
             [
-              speakerType || "auto",
+              nextStatus,
+              completedBy,
               completed.extracted_value || null,
-              completed.confidence,
+              computedConfidence,
               transcript,
               workflowSession.id,
               completed.item_id,
             ]
           );
 
-          // If this is a slot item with a value, update slots_filled
+          // If this is a slot item with a value, update slots_filled even when it needs agent verification.
           if (item?.slot_name && completed.extracted_value) {
             slotsFilled[item.slot_name] = completed.extracted_value;
           }
 
           updates.push({
             item_id: completed.item_id,
-            status: "completed",
-            confidence: completed.confidence,
+            status: nextStatus,
+            confidence: computedConfidence,
+            llm_confidence: llmConfidence,
+            transcription_confidence: normalizedTranscriptionConfidence,
+            below_threshold: belowThreshold,
+            threshold: sttConfidenceThreshold,
+            completed_by: completedBy,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
           });
-        } else if (completed.confidence >= 0.60) {
+        } else if (computedConfidence >= 0.60) {
           // Add as suggestion (don't auto-complete)
           updates.push({
             item_id: completed.item_id,
             status: "suggested",
-            confidence: completed.confidence,
+            confidence: computedConfidence,
+            llm_confidence: llmConfidence,
+            transcription_confidence: normalizedTranscriptionConfidence,
+            below_threshold: belowThreshold,
+            threshold: sttConfidenceThreshold,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
             completion_trigger_pending: !shouldComplete,
@@ -262,6 +299,7 @@ export async function POST(request) {
         updates,
         slotsFilled,
         completionPercentage,
+        sttConfidenceThreshold,
         intent: analysisResult.detected_intent,
         sentiment: analysisResult.sentiment,
         sentimentScore: analysisResult.sentiment_score,
