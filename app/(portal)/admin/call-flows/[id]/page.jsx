@@ -163,6 +163,10 @@ import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
 import {
+  createCallFlowDirtySnapshot,
+  hasCallFlowDirtyState,
+} from "@/lib/voice-flow-dirty-state";
+import {
   getAllVariableNames,
   checkDuplicateVariableName,
 } from "@/lib/variable-utils";
@@ -1386,12 +1390,7 @@ export default function FlowBuilderPage() {
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
   // Store initial state for comparison
-  const initialStateRef = useRef({
-    name: "",
-    description: "",
-    nodes: [],
-    edges: [],
-  });
+  const initialStateRef = useRef(null);
 
   const handleDeleteEdge = useCallback(
     (edgeId) => {
@@ -1644,13 +1643,16 @@ export default function FlowBuilderPage() {
         setNodes(nodesWithCallbacks);
         setEdges(edgesWithCallbacks);
 
-        // Store initial state
-        initialStateRef.current = {
+        // Store initial state after applying the same editor/runtime defaults used by ReactFlow.
+        // Dirty checks must ignore runtime-only callbacks/measurements, otherwise simply
+        // opening an existing flow appears as an unsaved change.
+        initialStateRef.current = createCallFlowDirtySnapshot({
           name: flow.name,
           description: flow.description || "",
-          nodes: JSON.parse(JSON.stringify(flow.nodes || [])),
-          edges: JSON.parse(JSON.stringify(flow.edges || [])),
-        };
+          nodes: nodesWithCallbacks,
+          edges: edgesWithCallbacks,
+          globalVariables: flow.globalVariables || {},
+        });
       } catch (error) {
         console.error("Error loading flow:", error);
         notify({
@@ -1851,16 +1853,21 @@ export default function FlowBuilderPage() {
 
   // Track unsaved changes
   useEffect(() => {
-    if (!initialStateRef.current.name) return; // Skip if not loaded yet
+    if (!initialStateRef.current) return; // Skip if not loaded yet
 
-    const hasChanges =
-      flowName !== initialStateRef.current.name ||
-      flowDescription !== initialStateRef.current.description ||
-      JSON.stringify(nodes) !== JSON.stringify(initialStateRef.current.nodes) ||
-      JSON.stringify(edges) !== JSON.stringify(initialStateRef.current.edges);
+    const hasChanges = hasCallFlowDirtyState(
+      {
+        name: flowName,
+        description: flowDescription,
+        nodes,
+        edges,
+        globalVariables,
+      },
+      initialStateRef.current,
+    );
 
     setHasUnsavedChanges(hasChanges);
-  }, [flowName, flowDescription, nodes, edges]);
+  }, [flowName, flowDescription, nodes, edges, globalVariables]);
 
   // Auto-save when Set Variable expression is saved
   useEffect(() => {
@@ -2151,12 +2158,13 @@ export default function FlowBuilderPage() {
       }
 
       // Update initial state after successful save
-      initialStateRef.current = {
+      initialStateRef.current = createCallFlowDirtySnapshot({
         name: flowName,
         description: flowDescription,
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        edges: JSON.parse(JSON.stringify(edges)),
-      };
+        nodes,
+        edges,
+        globalVariables,
+      });
       setHasUnsavedChanges(false);
 
       // Update voice app name display in incoming_call nodes
