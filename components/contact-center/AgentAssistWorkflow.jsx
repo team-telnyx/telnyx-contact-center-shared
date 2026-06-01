@@ -923,7 +923,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.llm_confidence ?? status.confidence_score;
-                          const needsConfidenceReview = (status.below_threshold === true || status.stt_below_threshold === true) && status.status !== "completed";
+                          const needsConfidenceReview = status.stt_below_threshold === true || (status.below_threshold === true && status.status !== "completed");
                           const isLowConfidence = needsConfidenceReview;
                           const isHumanVerified = status.verified_by_agent === true || (status.status === "completed" && status.completed_by === "agent" && Boolean(slotValue));
                           // Check AI slots details for additional context
