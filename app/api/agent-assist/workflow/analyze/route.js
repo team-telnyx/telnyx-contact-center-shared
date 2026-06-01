@@ -240,11 +240,17 @@ export async function POST(request) {
           const nextStatus = "completed";
           const completedBy = speakerType || "auto";
 
-          // Update item status
+          // Update item status.
+          // NOTE: pin the status parameter to varchar in BOTH the assignment and
+          // the CASE comparison. The status column is varchar and the 'completed'
+          // literal is text, so reusing a bare $1 made Postgres deduce two types
+          // for the same parameter -> "inconsistent types deduced for parameter
+          // $1" (42P08). That error aborted the whole analyze request and left
+          // every slot unfilled.
           await client.query(
             `UPDATE aa_workflow_item_status 
-             SET status = $1,
-                 completed_at = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+             SET status = $1::varchar,
+                 completed_at = CASE WHEN $1::varchar = 'completed' THEN NOW() ELSE NULL END,
                  completed_by = $2,
                  extracted_value = $3,
                  confidence_score = $4,

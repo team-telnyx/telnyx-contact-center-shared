@@ -130,6 +130,31 @@ test("workflow store applies analyze updates for completed, suggested, and auto-
   );
 });
 
+test("analyze item-status UPDATE pins the status parameter type to avoid Postgres 42P08", async () => {
+  const analyzeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
+
+  // The status column is varchar; the 'completed' literal is text. Reusing a
+  // bare $1 for both `status = $1` and `CASE WHEN $1 = 'completed'` makes
+  // Postgres deduce two types for the same parameter and abort the whole
+  // analyze request with 42P08 "inconsistent types deduced for parameter $1",
+  // which silently left every workflow slot unfilled at runtime.
+  assert.doesNotMatch(
+    analyzeSource,
+    /CASE WHEN \$1 = 'completed'/,
+    "the status CASE must not compare a bare $1 against a text literal (causes 42P08)",
+  );
+  assert.match(
+    analyzeSource,
+    /status = \$1::varchar/,
+    "the status assignment should pin $1 to varchar",
+  );
+  assert.match(
+    analyzeSource,
+    /CASE WHEN \$1::varchar = 'completed'/,
+    "the status CASE should compare $1::varchar so the parameter type is unambiguous",
+  );
+});
+
 test("batch workflow prompt preserves customer and agent speaker labels", async () => {
   const { buildBatchAnalysisPrompt } = await import("../lib/agent-assist/workflow-prompts.js");
 
