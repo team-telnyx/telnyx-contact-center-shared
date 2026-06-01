@@ -168,8 +168,10 @@ export async function POST(request) {
         // Check if completion_trigger matches speaker
         const completionTrigger = item.completion_trigger || "agent";
         
-        // Determine if we should complete based on trigger
-        let shouldComplete = false;
+        // Determine if we should complete based on trigger.
+        // Slot extraction is data capture, so it can be filled from either leg even when
+        // old workflow items still have the default completion_trigger='agent'.
+        let shouldComplete = item.type === "slot";
         if (completionTrigger === "either") {
           shouldComplete = true;
         } else if (completionTrigger === "customer" && speakerType === "customer") {
@@ -182,16 +184,12 @@ export async function POST(request) {
           typeof completed.confidence === "number" && Number.isFinite(completed.confidence)
             ? completed.confidence
             : 0;
-        const computedConfidence =
-          normalizedTranscriptionConfidence !== null
-            ? Math.min(llmConfidence, normalizedTranscriptionConfidence)
-            : llmConfidence;
-        const belowThreshold =
-          normalizedTranscriptionConfidence !== null &&
-          normalizedTranscriptionConfidence < sttConfidenceThreshold;
+        const workflowConfidenceThreshold = 0.85;
+        const belowThreshold = llmConfidence < workflowConfidenceThreshold;
 
-        // Auto-fill when confidence is high enough and trigger matches.
-        // Low-confidence slots stay pending/red until an agent confirms or edits them.
+        // Auto-fill when LLM confidence is high enough and trigger matches.
+        // STT confidence is kept separate for the transcription bubble; workflow
+        // confidence_score always represents the LLM extraction confidence.
         if (shouldComplete && llmConfidence >= 0.85) {
           const isLowConfidenceSlot = item.type === "slot" && belowThreshold;
           const nextStatus = isLowConfidenceSlot ? "pending" : "completed";
@@ -212,7 +210,7 @@ export async function POST(request) {
               nextStatus,
               completedBy,
               completed.extracted_value || null,
-              computedConfidence,
+              llmConfidence,
               transcript,
               workflowSession.id,
               completed.item_id,
@@ -227,25 +225,25 @@ export async function POST(request) {
           updates.push({
             item_id: completed.item_id,
             status: nextStatus,
-            confidence: computedConfidence,
+            confidence: llmConfidence,
             llm_confidence: llmConfidence,
             transcription_confidence: normalizedTranscriptionConfidence,
             below_threshold: belowThreshold,
-            threshold: sttConfidenceThreshold,
+            threshold: workflowConfidenceThreshold,
             completed_by: completedBy,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
           });
-        } else if (computedConfidence >= 0.60) {
+        } else if (llmConfidence >= 0.60) {
           // Add as suggestion (don't auto-complete)
           updates.push({
             item_id: completed.item_id,
             status: "suggested",
-            confidence: computedConfidence,
+            confidence: llmConfidence,
             llm_confidence: llmConfidence,
             transcription_confidence: normalizedTranscriptionConfidence,
             below_threshold: belowThreshold,
-            threshold: sttConfidenceThreshold,
+            threshold: workflowConfidenceThreshold,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
             completion_trigger_pending: !shouldComplete,

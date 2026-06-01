@@ -6,37 +6,37 @@ async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
 }
 
-test("workflow analysis applies STT threshold only to transcription confidence", async () => {
+test("workflow analysis keeps STT confidence separate from workflow LLM confidence", async () => {
   const routeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
 
   assert.match(
     routeSource,
-    /const belowThreshold =\s*normalizedTranscriptionConfidence !== null &&\s*normalizedTranscriptionConfidence < sttConfidenceThreshold;/,
-    "belowThreshold should be based on STT confidence, not combined LLM confidence",
+    /const workflowConfidenceThreshold = 0\.85;/,
+    "workflow item threshold should be based on LLM extraction confidence, not STT confidence",
   );
   assert.match(
     routeSource,
-    /if \(shouldComplete && llmConfidence >= 0\.85\)/,
-    "LLM confidence should continue to gate auto-completion separately",
+    /const belowThreshold = llmConfidence < workflowConfidenceThreshold;/,
+    "belowThreshold for workflow items should compare LLM confidence with the workflow confidence threshold",
   );
   assert.doesNotMatch(
     routeSource,
-    /const belowThreshold = computedConfidence < sttConfidenceThreshold;/,
-    "combined confidence should not be compared with the STT threshold",
+    /Math\.min\(llmConfidence,\s*normalizedTranscriptionConfidence\)/,
+    "LLM and STT confidence should never be collapsed into one computed score",
+  );
+  assert.match(
+    routeSource,
+    /transcription_confidence:\s*normalizedTranscriptionConfidence/,
+    "STT confidence should still be returned separately for UI diagnostics",
   );
 });
 
-test("workflow session reload rehydrates low-confidence pending slot state", async () => {
+test("workflow session reload preserves pending auto-filled slot verification state", async () => {
   const sessionRouteSource = await source("../app/api/agent-assist/workflow/session/route.js");
 
   assert.match(
     sessionRouteSource,
     /below_threshold:\s*status\.status !== "completed" &&\s*status\.completed_by === "auto" &&\s*status\.extracted_value !== null/,
-    "pending auto-filled slots with extracted values should reload as below-threshold",
-  );
-  assert.match(
-    sessionRouteSource,
-    /threshold: session\.stt_confidence_threshold/,
-    "rehydrated statuses should expose the workflow STT threshold to the UI",
+    "pending auto-filled slots with extracted values should reload as needing verification",
   );
 });

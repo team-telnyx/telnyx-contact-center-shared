@@ -910,12 +910,12 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const isEditing = editingItemId === item.id;
                           const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
-                          const confidenceScore = status.confidence_score;
+                          const confidenceScore = status.llm_confidence ?? status.confidence_score;
                           const isLowConfidence = status.below_threshold === true && status.status !== "completed";
                           const isHumanVerified = status.verified_by_agent === true || (status.status === "completed" && status.completed_by === "agent" && Boolean(slotValue));
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
-                          const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
+                          const isAiFilled = completedBy === "ai" || completedBy === "auto" || (aiSlotInfo?.value && !completedBy);
                           const isAgentFilled = completedBy === "agent";
 
                           return (
@@ -1019,9 +1019,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
                                                 : "bg-red-500/10 text-red-500 border-red-500/50"
                                             }`}
-                                            title={`AI confidence: ${Math.round(confidenceScore * 100)}%`}
+                                            title={`LLM confidence: ${Math.round(confidenceScore * 100)}%`}
                                           >
-                                            {Math.round(confidenceScore * 100)}%
+                                            LLM {Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
                                         {isLowConfidence && (
@@ -1088,7 +1088,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             : "bg-red-500/10 text-red-500 border-red-500/50"
                                         }`}
                                       >
-                                        {Math.round(confidenceScore * 100)}%
+                                        LLM {Math.round(confidenceScore * 100)}%
                                       </Badge>
                                     )}
                                   </div>
@@ -1260,7 +1260,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
         {confidence !== null && (
           <div className={`mt-1 text-[10px] ${confidence >= 0.95 ? "text-green-500" : confidence >= 0.7 ? "text-amber-500" : "text-red-500"}`}>
-            Confidence {Math.round(confidence * 100)}%
+            STT Confidence {Math.round(confidence * 100)}%
           </div>
         )}
       </div>

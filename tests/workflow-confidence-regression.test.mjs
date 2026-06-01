@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+async function source(path) {
+  return readFile(new URL(path, import.meta.url), "utf8");
+}
+
+test("workflow analyze keeps LLM slot confidence separate from STT transcription confidence", async () => {
+  const analyzeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
+
+  assert.doesNotMatch(
+    analyzeSource,
+    /Math\.min\(llmConfidence,\s*normalizedTranscriptionConfidence\)/,
+    "workflow item confidence_score must not be the min/average of LLM and STT confidence",
+  );
+  assert.match(
+    analyzeSource,
+    /confidence_score = \$4[\s\S]*completed\.extracted_value \|\| null,\s*llmConfidence,/,
+    "workflow item confidence_score persisted to DB should be the LLM confidence",
+  );
+  assert.match(
+    analyzeSource,
+    /updates\.push\(\{[\s\S]*confidence:\s*llmConfidence,[\s\S]*llm_confidence:\s*llmConfidence,[\s\S]*transcription_confidence:\s*normalizedTranscriptionConfidence/,
+    "analyze response should expose LLM and STT confidence separately",
+  );
+});
+
+test("slot extraction can complete from either speaker instead of being blocked by agent completion_trigger", async () => {
+  const analyzeSource = await source("../app/api/agent-assist/workflow/analyze/route.js");
+
+  assert.match(
+    analyzeSource,
+    /item\.type === "slot"\s*\|\|\s*completionTrigger === "either"/,
+    "slot items should be fillable from customer or agent utterances regardless of completion_trigger default",
+  );
+});
+
+test("Agent Assist renders separate labels for STT bubble confidence and LLM item confidence", async () => {
+  const componentSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
+
+  assert.match(
+    componentSource,
+    /STT\s*Confidence|STT conf/i,
+    "live transcription bubbles should label confidence as STT confidence",
+  );
+  assert.match(
+    componentSource,
+    /LLM\s*Confidence|LLM conf/i,
+    "workflow item badges should label confidence as LLM confidence",
+  );
+  assert.match(
+    componentSource,
+    /const isAiFilled = completedBy === "ai" \|\| completedBy === "auto"/,
+    "auto-filled workflow slots should still show the LLM confidence badge",
+  );
+});
