@@ -87,13 +87,18 @@ export function WorkflowChecklist() {
  * Individual checklist item
  */
 function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) {
-  const [inputValue, setInputValue] = useState(slotValue || "");
+  const resolvedInitial = slotValue || status?.extracted_value || "";
+  const [inputValue, setInputValue] = useState(resolvedInitial);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isCompleted = status.status === "completed";
   const isSkipped = status.status === "skipped";
-  const isPending = status.status === "pending";
+  const isSuggested = status.status === "suggested";
+  const isPending = status.status === "pending" || (!isCompleted && !isSkipped && !isSuggested);
   const isSlot = item.type === "slot";
+  // slotsFilled is only written for completed items; medium-confidence
+  // suggestions carry their value on the item status instead.
+  const resolvedValue = slotValue || status.extracted_value;
 
   const handleComplete = async (value = null) => {
     setIsSubmitting(true);
@@ -149,6 +154,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
         p-3 rounded-lg border-2 transition-all
         ${isCompleted ? "border-green-500/50 bg-green-500/5" : ""}
         ${isSkipped ? "border-muted bg-muted/30 opacity-60" : ""}
+        ${isSuggested ? "border-amber-500/50 bg-amber-500/5" : ""}
         ${isPending ? "border-border bg-card hover:border-purple-500/30" : ""}
       `}
     >
@@ -161,6 +167,7 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
             mt-0.5 flex-shrink-0 transition-colors
             ${isCompleted ? "text-green-500" : ""}
             ${isSkipped ? "text-muted-foreground" : ""}
+            ${isSuggested ? "text-amber-500 hover:text-green-500" : ""}
             ${isPending ? "text-muted-foreground hover:text-purple-500" : ""}
           `}
         >
@@ -168,6 +175,8 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
             <CheckCircle className="h-5 w-5" />
           ) : isSubmitting ? (
             <Loader2 className="h-5 w-5 animate-spin" />
+          ) : isSuggested ? (
+            <CheckCircle className="h-5 w-5 opacity-60" />
           ) : (
             <Circle className="h-5 w-5" />
           )}
@@ -190,7 +199,16 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
                     : "bg-amber-500/10 text-amber-500 border-amber-500/50"
                 }`}
               >
-                {Math.round(status.confidence_score * 100)}%
+                LLM {Math.round(status.confidence_score * 100)}%
+              </Badge>
+            )}
+
+            {isSuggested && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-amber-500/10 text-amber-500 border-amber-500/50"
+              >
+                Suggested
               </Badge>
             )}
           </div>
@@ -205,8 +223,8 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
             {item.label}
           </p>
 
-          {/* Slot input field */}
-          {isSlot && isPending && (
+          {/* Slot input field — editable while pending or suggested */}
+          {isSlot && (isPending || isSuggested) && (
             <div className="mt-2 flex items-center gap-2">
               <Input
                 value={inputValue}
@@ -221,21 +239,21 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
               />
               <Button
                 size="sm"
-                variant="secondary"
+                variant={isSuggested ? "default" : "secondary"}
                 onClick={() => handleComplete(inputValue.trim())}
                 disabled={!inputValue.trim() || isSubmitting}
                 className="h-8"
               >
-                Save
+                {isSuggested ? "Accept" : "Save"}
               </Button>
             </div>
           )}
 
           {/* Show extracted value for completed slots */}
-          {isSlot && isCompleted && status.extracted_value && (
+          {isSlot && isCompleted && resolvedValue && (
             <div className="mt-1">
               <Badge className="bg-purple-500 text-white">
-                {item.slot_name}: {status.extracted_value}
+                {item.slot_name}: {resolvedValue}
               </Badge>
             </div>
           )}

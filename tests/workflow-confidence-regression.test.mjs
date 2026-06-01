@@ -56,6 +56,25 @@ test("Agent Assist renders separate labels for STT bubble confidence and LLM ite
   );
 });
 
+test("workflow checklist surfaces LLM-suggested slot values, not only completed ones", async () => {
+  const checklistSource = await source("../components/contact-center/WorkflowChecklist.jsx");
+
+  // The analyze endpoint returns status "suggested" for 0.60-0.85 LLM confidence
+  // and only writes slotsFilled for completed items. So the checklist must read
+  // the proposed value from the item status (extracted_value) and render a
+  // "suggested" branch, otherwise medium-confidence extractions vanish.
+  assert.match(
+    checklistSource,
+    /status\.status === "suggested"|isSuggested/,
+    "checklist item must recognize the suggested status emitted by the analyze endpoint",
+  );
+  assert.match(
+    checklistSource,
+    /slotValue \|\| status\.extracted_value|status\.extracted_value \|\| slotValue/,
+    "checklist should fall back to the item status extracted_value when slotsFilled has no entry",
+  );
+});
+
 test("agent transcription SSE payload preserves provider confidence for UI badges", async () => {
   const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
   const webhookHandlerSource = await source("../lib/contact-center/webhook-handler.js");
@@ -89,6 +108,25 @@ test("STT confidence display must not block high-confidence LLM slot completion"
     analyzeSource,
     /const nextStatus = "completed"/,
     "high-confidence LLM slot extraction should still complete the workflow item just like before PR #555",
+  );
+});
+
+test("workflow store applies analyze updates for completed, suggested, and auto-filled slots", async () => {
+  const storeSource = await source("../lib/stores/workflow-store.js");
+
+  // The analyze endpoint never returns status "pending"; it returns "completed"
+  // (high LLM confidence) or "suggested" (0.60-0.85). PR #555 added a dead
+  // `status === "pending"` branch, so suggested slots with extracted values
+  // were silently dropped and never rendered in the UI.
+  assert.doesNotMatch(
+    storeSource,
+    /update\.status === "pending" && update\.extracted_value/,
+    'workflow store must not gate analyze updates on status "pending"; the endpoint emits "suggested" instead',
+  );
+  assert.match(
+    storeSource,
+    /update\.status === "completed"\s*\|\|\s*\(update\.status === "suggested" && update\.extracted_value\)/,
+    'workflow store should apply suggested slot updates that carry an extracted value',
   );
 });
 
