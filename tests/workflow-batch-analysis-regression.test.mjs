@@ -127,3 +127,15 @@ test('batch prompt explicitly forbids reasoning text around JSON', () => {
   assert.match(userPrompt, /Return ONLY one valid JSON object/);
   assert.match(userPrompt, /Do not include reasoning/);
 });
+
+test('batch prompt stays compact so reasoning models return JSON before token budget is exhausted', () => {
+  const { systemPrompt } = buildBatchAnalysisPrompt({
+    transcripts,
+    pendingItems,
+    slotsFilled: {},
+  });
+
+  assert.match(systemPrompt, /You are a JSON API/);
+  assert.doesNotMatch(systemPrompt, /## Detection Guidelines/);
+  assert.ok(systemPrompt.length < 2500, `batch system prompt was ${systemPrompt.length} chars`);
+});
