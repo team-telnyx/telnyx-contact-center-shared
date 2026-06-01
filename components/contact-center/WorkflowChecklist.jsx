@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -91,14 +91,20 @@ function WorkflowChecklistItem({ item, status, slotValue, onComplete, onSkip }) 
   const [inputValue, setInputValue] = useState(resolvedInitial);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isSlot = item.type === "slot";
   const isCompleted = status.status === "completed";
   const isSkipped = status.status === "skipped";
   const isSuggested = status.status === "suggested";
   const isPending = status.status === "pending" || (!isCompleted && !isSkipped && !isSuggested);
-  const isSlot = item.type === "slot";
   // slotsFilled is only written for completed items; medium-confidence
   // suggestions carry their value on the item status instead.
   const resolvedValue = slotValue || status.extracted_value;
+
+  useEffect(() => {
+    if (isSlot && (isSuggested || isCompleted)) {
+      setInputValue(resolvedInitial);
+    }
+  }, [isSlot, isSuggested, isCompleted, resolvedInitial]);
 
   const handleComplete = async (value = null) => {
     setIsSubmitting(true);
