@@ -155,6 +155,13 @@ export default function McpToolNodeEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedServer?.id]);
 
+  useEffect(() => {
+    if (!selectedTool?.input_schema) return;
+    if (JSON.stringify(config?.toolInputSchema || null) === JSON.stringify(selectedTool.input_schema)) return;
+    onChange({ ...(config || {}), toolInputSchema: selectedTool.input_schema });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTool?.name, selectedTool?.input_schema]);
+
   return (
     <div className="space-y-4">
       {error && (
@@ -176,7 +183,7 @@ export default function McpToolNodeEditor({
         <Select
           value={serverId || undefined}
           onValueChange={(value) => {
-            onChange({ ...(config || {}), serverId: value, toolName: "" });
+            onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null });
           }}
         >
           <SelectTrigger>
@@ -201,7 +208,14 @@ export default function McpToolNodeEditor({
             {toolsLoading ? "Loading…" : "Load tools"}
           </Button>
         </div>
-        <Select value={toolName || undefined} onValueChange={(value) => handleChange("toolName", value)} disabled={!selectedServer}>
+        <Select
+          value={toolName || undefined}
+          onValueChange={(value) => {
+            const nextTool = tools.find((tool) => tool.name === value) || null;
+            onChange({ ...(config || {}), toolName: value, toolInputSchema: nextTool?.input_schema || null });
+          }}
+          disabled={!selectedServer}
+        >
           <SelectTrigger>
             <SelectValue placeholder={toolsLoading ? "Loading tools…" : "Select allowed tool"} />
           </SelectTrigger>
