@@ -151,6 +151,7 @@ import SetVariableNodeEditor, {
 } from "@/components/voice-flow/SetVariableNodeEditor";
 import LogicGateNodeEditor from "@/components/voice-flow/LogicGateNodeEditor";
 import HttpRequestNodeEditor from "@/components/voice-flow/HttpRequestNodeEditor";
+import McpToolNodeEditor from "@/components/voice-flow/McpToolNodeEditor";
 import DataActionsNodeEditor from "@/components/voice-flow/DataActionsNodeEditor";
 import ReferNodeEditor from "@/components/voice-flow/ReferNodeEditor";
 import DialNodeEditor from "@/components/voice-flow/DialNodeEditor";
@@ -3338,6 +3339,34 @@ export default function FlowBuilderPage() {
                               edges={edges}
                               globalVariables={globalVariables}
                               selectedNodeId={selectedNode?.id}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "McpToolNodeEditor" ? (
+                            <McpToolNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
+                                  );
+                                }
+                              }}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
                             />
                           ) : selectedNodeDef.customEditor ===
                             "DataActionsNodeEditor" ? (

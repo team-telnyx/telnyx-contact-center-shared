@@ -2522,6 +2522,57 @@ export const VOICE_FLOW_NODES = {
   },
 
 
+  mcp_tool: {
+    id: "mcp_tool",
+    category: NODE_CATEGORIES.INTEGRATION,
+    label: "MCP Tool",
+    icon: "IconTools",
+    color: NODE_COLORS[NODE_CATEGORIES.INTEGRATION],
+    description: "Call a tool exposed by a configured MCP server",
+    telnyxAction: null,
+    telnyxEndpoint: null,
+    inputs: 1,
+    outputs: 2,
+    outputLabels: ["Success", "Error"],
+    outputEvents: ["mcp.success", "mcp.error"],
+    customEditor: "McpToolNodeEditor",
+    config: {
+      serverId: {
+        type: "mcp_server_select",
+        label: "MCP Server",
+        required: true,
+        description: "Configured MCP server to use",
+      },
+      toolName: {
+        type: "mcp_tool_select",
+        label: "Tool",
+        required: true,
+        description: "Allowed tool exposed by the selected MCP server",
+      },
+      input: {
+        type: "json",
+        label: "Tool Input",
+        required: false,
+        default: "{}",
+        description: "JSON input for the tool. Supports {{variable}} references with type preservation for pure variables.",
+      },
+      responseVariable: {
+        type: "string",
+        label: "Response Variable Name",
+        required: false,
+        default: "mcp_response",
+        description: "Variable name to store the normalized MCP response",
+      },
+      errorVariable: {
+        type: "string",
+        label: "Error Variable Name",
+        required: false,
+        default: "mcp_error",
+        description: "Variable name to store MCP errors",
+      },
+    },
+  },
+
   data_action: {
     id: "data_action",
     category: NODE_CATEGORIES.INTEGRATION,
