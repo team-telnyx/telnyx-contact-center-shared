@@ -38,6 +38,7 @@ test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx
   assert.match(schema, /CREATE TABLE IF NOT EXISTS mcp_servers/, "local MCP servers table should exist");
   assert.match(schema, /CREATE TABLE IF NOT EXISTS mcp_server_tools/, "local MCP server tools table should cache schemas");
   assert.match(schema, /input_schema JSONB NOT NULL DEFAULT '\{\}'::jsonb/, "tool schemas should be persisted as JSONB");
+  assert.match(schema, /oauth_client_credentials/, "MCP registry should persist OAuth client credentials auth type");
   assert.match(registry, /listMcpServers/, "registry helper should list local MCP servers");
   assert.match(registry, /upsertMcpServerTools/, "registry helper should upsert discovered tool schemas");
   assert.match(toolsRoute, /discoverMcpToolsForServer/, "tools route should discover schemas directly from MCP server");
@@ -54,7 +55,10 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(runner, /getMcpServerTool\(/, "runtime should load selected tool schema from local registry");
   assert.match(runner, /allowed_tools/, "runtime should enforce server allowed_tools allowlist");
   assert.match(runner, /getSecretByName/, "runtime should resolve local Contact Center secrets");
-  assert.doesNotMatch(runner, /isTelnyxMcpUrl|process\.env\.TELNYX_API_KEY|\/ai\/mcp_servers/, "runtime must not special-case official Telnyx MCP registry/auth");
+  assert.doesNotMatch(runner, /process\.env\.TELNYX_API_KEY|\/ai\/mcp_servers/, "runtime must not use Telnyx MCP registry or environment API key auth");
+  assert.match(runner, /oauth_client_credentials/, "runtime should support OAuth client credentials for protected MCP resources");
+  assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
+  assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
   assert.match(runner, /assertValidMcpToolArguments/, "runtime should validate args against schema before MCP call");
   assert.match(validator, /removeAdditional:\s*false/, "validator must respect additionalProperties instead of stripping unknown fields");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
@@ -68,6 +72,8 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(adminPage, /MCPServerEditorSheet/, "admin page should use the MCP server sheet");
   assert.match(sheet, /Select All \(\{availableTools\.length\} tools\)/, "sheet should support bulk allowlist selection");
   assert.match(sheet, /auth_secret_name/, "sheet should save local auth secret names");
+  assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
+  assert.match(sheet, /client_id.*client_secret/s, "sheet should explain OAuth credential secret format");
   assert.match(sheet, /\/api\/admin\/secrets/, "sheet should list local Contact Center secrets for runtime auth");
   assert.doesNotMatch(sheet, /\/api\/integration-secrets|Telnyx integration secrets|APIKeyRefCombobox/, "MCP auth picker must not use Telnyx integration secrets");
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");

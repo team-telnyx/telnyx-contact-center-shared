@@ -282,6 +282,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
                           <SelectItem value="bearer">Bearer token</SelectItem>
+                          <SelectItem value="oauth_client_credentials">OAuth Client Credentials</SelectItem>
                           <SelectItem value="api_key">API key header</SelectItem>
                           <SelectItem value="custom_header">Custom header</SelectItem>
                         </SelectContent>
@@ -291,6 +292,11 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Local Secret</label>
                         <SecretRefCombobox value={authSecretName} onChange={setAuthSecretName} />
+                        {authType === "oauth_client_credentials" && (
+                          <p className="text-xs text-muted-foreground">
+                            Store OAuth credentials as JSON {`{"client_id":"...","client_secret":"..."}`} or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.
+                          </p>
+                        )}
                       </div>
                     )}
                     {(authType === "api_key" || authType === "custom_header") && (
