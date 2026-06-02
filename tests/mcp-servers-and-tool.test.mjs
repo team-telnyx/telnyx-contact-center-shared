@@ -48,6 +48,7 @@ test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx
 
 test("MCP runtime resolves local Contact Center secrets and validates calls against persisted input schemas", async () => {
   const runner = await read("lib/mcp/mcp-tool-runner.js");
+  const secrets = await read("lib/secrets.js");
   const validator = await read("lib/mcp/mcp-schema-validator.js");
   const oauth = await read("lib/mcp/mcp-oauth.js");
   const beginRoute = await read("app/api/admin/mcp-servers/[id]/oauth/begin/route.js");
@@ -62,7 +63,11 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.doesNotMatch(runner, /process\.env\.TELNYX_API_KEY|\/ai\/mcp_servers/, "runtime must not use Telnyx MCP registry or environment API key auth");
   assert.match(runner, /oauth_client_credentials/, "runtime should support OAuth client credentials for protected MCP resources");
   assert.match(runner, /oauth_authorization_code/, "runtime should support interactive OAuth Authorization Code sessions");
-  assert.match(runner, /getValidTelnyxMcpOAuthAccessToken/, "runtime should load and refresh Telnyx MCP OAuth tokens");
+  assert.match(oauth, /getValidTelnyxMcpOAuthAccessToken/, "runtime should load and refresh Telnyx MCP OAuth tokens");
+  assert.match(oauth, /upsertSecretByName/, "OAuth callback should upsert token secrets by unique name");
+  assert.doesNotMatch(oauth, /createSecret/, "OAuth callback must not create duplicate token secrets on reconnect");
+  assert.match(secrets, /ON CONFLICT \(name\) DO UPDATE/, "secrets should support atomic upsert by unique name");
+  assert.match(secrets, /deleted_at = NULL/, "secret upsert should revive soft-deleted secrets with the same unique name");
   assert.match(runner, /Telnyx Portal OAuth can only be used with the Telnyx MCP URL/, "runtime should not send Telnyx Portal OAuth tokens to arbitrary MCP URLs");
   assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
