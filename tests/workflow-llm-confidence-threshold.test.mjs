@@ -39,6 +39,8 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
   assert.match(route, /source_transcript = \$4/);
   assert.doesNotMatch(route, /confidence >= 0\.60/);
   assert.doesNotMatch(analyzer, /confidence < 0\.60/);
+  assert.match(analyzer, /typeof rawConfidence !== "number" && typeof rawConfidence !== "string"/);
+  assert.match(analyzer, /typeof rawConfidence === "string" && rawConfidence\.trim\(\) === ""/);
   assert.doesNotMatch(prompts, /0\.85-0\.94|0\.70-0\.84|0\.60-0\.69|Below 0\.60|auto-complete/);
   assert.match(prompts, /The application will compare your confidence score against the workflow's configured confidence threshold/);
 });
