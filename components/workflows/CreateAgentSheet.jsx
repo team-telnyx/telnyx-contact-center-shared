@@ -176,7 +176,7 @@ export default function CreateAgentSheet({
   // AI Model settings
   const [llmModels, setLlmModels] = useState([]);
   const [loadingModels, setLoadingModels] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("moonshotai/Kimi-K2.5");
+  const [selectedModel, setSelectedModel] = useState("openai/gpt-4o");
   
   // TTS settings (default: Telnyx NaturalHD Astra)
   const DEFAULT_TTS_VOICE = "Telnyx.NaturalHD.astra";
@@ -235,7 +235,7 @@ export default function CreateAgentSheet({
       setAgentName(workflow?.name ? `${workflow.name} Agent` : "Test Agent");
       setCustomInstructions("");
       setCreatedAgent(null);
-      setSelectedModel(workflow?.llm_model || "moonshotai/Kimi-K2.5");
+      setSelectedModel(workflow?.llm_model || "openai/gpt-4o");
       setTtsProvider("telnyx");
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);

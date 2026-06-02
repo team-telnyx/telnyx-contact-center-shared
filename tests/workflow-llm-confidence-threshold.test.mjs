@@ -38,6 +38,8 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
   assert.match(route, /completed_by = 'ai'/);
   assert.match(route, /source_transcript = \$4/);
   assert.doesNotMatch(route, /confidence >= 0\.60/);
+  const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
+  assert.doesNotMatch(testRoute, /confidence >= 0\.60/);
   assert.doesNotMatch(analyzer, /confidence < 0\.60/);
   assert.match(analyzer, /typeof rawConfidence !== "number" && typeof rawConfidence !== "string"/);
   assert.match(analyzer, /typeof rawConfidence === "string" && rawConfidence\.trim\(\) === ""/);
@@ -134,4 +136,38 @@ test("AI handoff respects workflow LLM threshold and keeps low-confidence slots 
   assert.match(handoff, /slots_filled: slotsFilled/);
   assert.match(handoff, /slots_details: slotsDetails/);
   assert.match(handoff, /statusRow\?\.status \|\| \(Object\.prototype\.hasOwnProperty\.call\(slotsFilled, key\) \? "completed" : "suggested"\)/);
+});
+
+test("intent and sentiment transcription analysis uses workflow settings model instead of hardcoded Kimi", async () => {
+  const sentiment = await read("../lib/agent-assist/sentiment-analysis.js");
+  const router = await read("../lib/agent-assist-transcription-router.mjs");
+  const webhookHandler = await read("../lib/contact-center/webhook-handler.js");
+
+  assert.match(sentiment, /analyzeTranscription\(transcript, \{ model \} = \{\}\)/);
+  assert.match(sentiment, /model: model \|\| DEFAULT_AGENT_ASSIST_LLM_MODEL/);
+  assert.doesNotMatch(sentiment, /model: "moonshotai\/Kimi-K2\.5"/);
+
+  assert.match(router, /resolveAgentAssistAnalysisModel\(assistConfig\)/);
+  assert.match(router, /SELECT llm_model FROM aa_workflows WHERE id = \$1/);
+  assert.match(router, /analyzeTranscription\(transcriptionData\.transcript, \{ model: analysisModel \}\)/);
+
+  assert.match(webhookHandler, /resolveAgentAssistAnalysisModel\(assistConfig\)/);
+  assert.match(webhookHandler, /SELECT llm_model FROM aa_workflows WHERE id = \$1/);
+  assert.match(webhookHandler, /analyzeTranscription\(transcriptionData\.transcript, \{ model: analysisModel \}\)/);
+
+  const runtimeFiles = [
+    sentiment,
+    router,
+    webhookHandler,
+    await read("../lib/agent-assist/workflow-analyzer.js"),
+    await read("../lib/agent-assist/generate-test-scenario.js"),
+    await read("../app/api/agent-assist/workflow/analyze/route.js"),
+    await read("../app/api/agent-assist/workflow/generate-suggestion/route.js"),
+    await read("../app/api/admin/workflows/[id]/analyze-test/route.js"),
+    await read("../app/api/admin/workflows/[id]/generate-test-scenario/route.js"),
+    await read("../app/api/admin/workflows/[id]/generate-response/route.js"),
+  ];
+  for (const source of runtimeFiles) {
+    assert.doesNotMatch(source, /moonshotai\/Kimi-K2\.5/);
+  }
 });

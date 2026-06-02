@@ -171,7 +171,6 @@ export async function POST(request, { params }) {
       persona = "cooperative",
       customerData: providedCustomerData,
       filledSlots = {},
-      model,
     } = body;
 
     if (!lastAiMessage?.trim()) {
@@ -237,7 +236,7 @@ export async function POST(request, { params }) {
     });
 
     // Call LLM
-    const llmModel = model || workflow.llm_model || "moonshotai/Kimi-K2.5";
+    const llmModel = workflow.llm_model || "openai/gpt-4o";
     
     const response = await fetch(`${TELNYX_API_BASE}/ai/chat/completions`, {
       method: "POST",

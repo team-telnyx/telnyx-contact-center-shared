@@ -138,7 +138,7 @@ export async function POST(request) {
       `SELECT llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
       [workflowSession.workflow_id]
     );
-    const llmModel = workflow?.llm_model || "moonshotai/Kimi-K2.5";
+    const llmModel = workflow?.llm_model || "openai/gpt-4o";
     const confidenceThreshold = normalizeConfidenceThreshold(workflow?.llm_confidence_threshold);
 
     // Call LLM analyzer (using workflow's configured model)

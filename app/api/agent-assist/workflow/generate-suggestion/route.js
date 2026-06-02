@@ -53,7 +53,7 @@ export async function POST(request) {
     }
 
     // Get workflow to get LLM model
-    let llmModel = "moonshotai/Kimi-K2.5"; // Default
+    let llmModel = "openai/gpt-4o"; // Default
     if (workflowId) {
       const { rows: [workflow] } = await pool.query(
         `SELECT llm_model FROM aa_workflows WHERE id = $1`,

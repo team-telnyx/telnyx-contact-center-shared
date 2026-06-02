@@ -74,7 +74,7 @@ export async function POST(request, { params }) {
     const scenario = await generateTestScenario({
       workflow,
       scenarioType,
-      model: workflow.llm_model || "moonshotai/Kimi-K2.5",
+      model: workflow.llm_model || "openai/gpt-4o",
     });
 
     if (!scenario) {

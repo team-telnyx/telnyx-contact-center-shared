@@ -59,7 +59,7 @@ export async function POST(request, { params }) {
       );
     }
 
-    const llmModel = workflow.llm_model || "moonshotai/Kimi-K2.5";
+    const llmModel = workflow.llm_model || "openai/gpt-4o";
     const confidenceThreshold = normalizeConfidenceThreshold(workflow.llm_confidence_threshold);
 
     const { rows: stages } = await pool.query(
@@ -161,7 +161,7 @@ export async function POST(request, { params }) {
         if (item.slot_name && completed.extracted_value) {
           newSlotsFilled[item.slot_name] = completed.extracted_value;
         }
-      } else if (completed.confidence >= 0.60) {
+      } else {
         updates.push({
           item_id: completed.item_id,
           status: "suggested",

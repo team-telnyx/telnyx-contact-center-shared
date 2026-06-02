@@ -96,7 +96,7 @@ export default function WorkflowEditorPage() {
     description: "",
     category: "",
     is_active: false,
-    llm_model: "moonshotai/Kimi-K2.5",
+    llm_model: "openai/gpt-4o",
     llm_confidence_threshold: 0.95,
   });
   
@@ -251,7 +251,7 @@ export default function WorkflowEditorPage() {
         description: data.workflow.description || "",
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
-        llm_model: data.workflow.llm_model || "moonshotai/Kimi-K2.5",
+        llm_model: data.workflow.llm_model || "openai/gpt-4o",
         llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
       });
       const workflowStages = data.workflow.stages || data.stages || [];
