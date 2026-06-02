@@ -59,6 +59,8 @@ test("Call Flow exposes MCP Tool node with editor, success/error outputs, and ru
   assert.match(runner, /allowed_tools/, "runtime should enforce server allowed_tools allowlist");
   assert.match(runner, /resolveMcpTemplateValue/, "runtime should interpolate {{variable}} inputs");
   assert.match(runner, /buildMcpToolArguments\(\{[\s\S]*instruction: config\.instruction/, "runtime should build tool arguments from instruction plus advanced JSON");
+  assert.match(runner, /isTelnyxMcpUrl/, "runtime should detect official Telnyx MCP endpoints");
+  assert.match(runner, /process\.env\.TELNYX_API_KEY/, "official Telnyx MCP runtime should use the app Telnyx API key for outbound auth");
   assert.match(runner, /process\.env\[apiKeyRef\]/, "runtime should resolve selected API key refs from environment variables as well as local secrets");
   assert.match(runner, /no matching runtime secret was found/, "runtime should fail fast instead of calling authenticated MCP servers without auth");
   assert.doesNotMatch(runner, /if \(secret\?\.value\) headers\.Authorization[\s\S]*new URL\(server\.url\)/, "runtime must not silently omit auth when an API key ref cannot be resolved");
