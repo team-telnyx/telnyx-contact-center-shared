@@ -38,11 +38,15 @@ function APIKeyRefCombobox({ value, onChange }) {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/admin/secrets", { cache: "no-store" });
+        const res = await fetch("/api/integration-secrets", { cache: "no-store" });
         const data = await res.json();
-        if (!mounted || !res.ok) return;
+        if (!mounted || !res.ok || !data?.ok) return;
         const secrets = Array.isArray(data?.secrets) ? data.secrets : [];
-        setOptions(secrets.map((secret) => ({ value: secret.name, label: secret.name })));
+        setOptions(
+          secrets
+            .filter((secret) => secret?.identifier)
+            .map((secret) => ({ value: secret.identifier, label: secret.identifier })),
+        );
       } catch (_) {}
     })();
     return () => {
@@ -55,8 +59,8 @@ function APIKeyRefCombobox({ value, onChange }) {
       value={value}
       onChange={onChange}
       options={options}
-      placeholder="Select API key reference…"
-      emptyLabel="No secrets found"
+      placeholder="Select Telnyx secret identifier…"
+      emptyLabel="No Telnyx integration secrets found"
       triggerClassName="w-full"
       searchable
     />

@@ -18,8 +18,9 @@ test("Admin MCP Server routes proxy Telnyx MCP APIs without local DB schema chan
   const listRoute = await read("app/api/admin/mcp-servers/route.js");
   const detailRoute = await read("app/api/admin/mcp-servers/[id]/route.js");
   const toolsRoute = await read("app/api/admin/mcp-servers/[id]/tools/route.js");
+  const integrationSecretsRoute = await read("app/api/integration-secrets/route.js");
 
-  for (const source of [listRoute, detailRoute, toolsRoute]) {
+  for (const source of [listRoute, detailRoute, toolsRoute, integrationSecretsRoute]) {
     assert.match(source, /requireAdmin/, "MCP admin API should enforce admin access");
     assert.match(source, /TELNYX_API_KEY/, "MCP admin API should use the server-side Telnyx key");
     assert.doesNotMatch(source, /CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|TRUNCATE/i, "MCP admin proxy must not mutate DB schema");
@@ -29,6 +30,8 @@ test("Admin MCP Server routes proxy Telnyx MCP APIs without local DB schema chan
   assert.match(detailRoute, /\/ai\/mcp_servers\/\$\{encodeURIComponent\(id\)\}/, "detail route should proxy server id paths");
   assert.match(toolsRoute, /buildTelnyxV2Url\("\/ai\/mcp_servers\/list_tools"\)/, "tools route should use Telnyx list_tools endpoint");
   assert.match(toolsRoute, /normalizeTools/, "tools route should normalize OpenAI/function and raw MCP tool shapes");
+  assert.match(integrationSecretsRoute, /\/integration_secrets\?page\[number\]=/, "API key refs should be loaded from Telnyx integration secrets");
+  assert.match(integrationSecretsRoute, /identifier/, "integration secrets route should expose secret identifiers, not local secret names");
   assert.match(listRoute, /allowed_tools/, "create/update payloads should preserve allowed_tools allowlist");
   assert.match(detailRoute, /api_key_ref/, "create/update payloads should preserve API key references");
 });
@@ -74,5 +77,8 @@ test("MCP Tool editor discovers configured servers and allowed tools", async () 
   assert.match(adminPage, /MCPServerEditorSheet/, "admin page should use the MCP server sheet");
   assert.match(sheet, /Select All \(\{availableTools\.length\} tools\)/, "sheet should support bulk allowlist selection");
   assert.match(sheet, /api_key_ref/, "sheet should save API key reference names rather than secret values");
+  assert.match(sheet, /\/api\/integration-secrets/, "sheet should list Telnyx integration secret identifiers for api_key_ref");
+  assert.match(sheet, /secret\.identifier/, "sheet should use Telnyx secret identifiers, not local secret names");
+  assert.doesNotMatch(sheet, /\/api\/admin\/secrets/, "MCP api_key_ref picker must not use local app secrets");
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");
 });
