@@ -80,6 +80,7 @@ test("AI handoff respects workflow LLM threshold and keeps low-confidence slots 
   assert.match(handoff, /const isTrusted = confidence === undefined \|\| confidence >= confidenceThreshold/);
   assert.match(handoff, /const nextStatus = isTrusted \? "completed" : "suggested"/);
   assert.match(handoff, /completedAtSql = isTrusted \? "NOW\(\)" : "NULL"/);
+  assert.match(handoff, /\["pending", "suggested"\]\.includes\(i\.status\)/);
   assert.match(handoff, /slots_filled: slotsFilled/);
   assert.match(handoff, /slots_details: slotsDetails/);
   assert.match(handoff, /statusRow\?\.status \|\| \(Object\.prototype\.hasOwnProperty\.call\(slotsFilled, key\) \? "completed" : "suggested"\)/);
