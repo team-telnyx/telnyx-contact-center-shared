@@ -63,6 +63,7 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(runner, /oauth_client_credentials/, "runtime should support OAuth client credentials for protected MCP resources");
   assert.match(runner, /oauth_authorization_code/, "runtime should support interactive OAuth Authorization Code sessions");
   assert.match(runner, /getValidTelnyxMcpOAuthAccessToken/, "runtime should load and refresh Telnyx MCP OAuth tokens");
+  assert.match(runner, /Telnyx Portal OAuth can only be used with the Telnyx MCP URL/, "runtime should not send Telnyx Portal OAuth tokens to arbitrary MCP URLs");
   assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
   assert.match(runner, /assertValidMcpToolArguments/, "runtime should validate args against schema before MCP call");
@@ -85,6 +86,7 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /Select All \(\{availableTools\.length\} tools\)/, "sheet should support bulk allowlist selection");
   assert.match(sheet, /auth_secret_name/, "sheet should save local auth secret names");
   assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
+  assert.match(sheet, /OAuth Resource URL/, "sheet should expose the resource URL required by non-Telnyx OAuth client credentials servers");
   assert.match(sheet, /oauth_authorization_code/, "sheet should allow Claude-style Telnyx Portal OAuth");
   assert.match(sheet, /Connect Telnyx Portal/, "sheet should expose a Telnyx Portal connect button");
   assert.match(sheet, /Authorization Code \+ PKCE/, "sheet should describe the interactive OAuth flow");
@@ -173,22 +175,15 @@ test("MCP description Args enrich sparse request schemas for form-based argument
   const enriched = enrichMcpInputSchemaWithDescription(schema, description);
   assert.deepEqual(enriched.properties.request.required, ["from_", "to", "text"]);
   assert.equal(enriched.properties.request.properties.from_.description, "Sending address (phone number, alphanumeric sender ID, or short code).");
-  assert.equal(enriched.properties.request.properties.media_urls.type, "array");
-  assert.equal(enriched.properties.request.properties.use_profile_webhooks.type, "boolean");
+  assert.equal(enriched.properties.request.properties.messaging_profile_id, undefined);
+  assert.equal(enriched.properties.request.properties.media_urls, undefined);
+  assert.equal(enriched.properties.request.properties.use_profile_webhooks, undefined);
 
   assert.deepEqual(buildEmptyMcpArgsFromSchema(enriched), {
     request: {
       from_: "",
       to: "",
       text: "",
-      messaging_profile_id: "",
-      subject: "",
-      media_urls: [],
-      webhook_url: "",
-      webhook_failover_url: "",
-      use_profile_webhooks: false,
-      type: "",
-      auto_detect: false,
     },
   });
 });

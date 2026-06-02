@@ -5,6 +5,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { getMcpServer } from "@/lib/mcp/mcp-server-registry";
 import { beginTelnyxMcpOAuth } from "@/lib/mcp/mcp-oauth";
+import { isTelnyxMcpUrl } from "@/lib/mcp/mcp-tool-runner";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -33,6 +34,9 @@ export async function GET(request, context) {
     const server = await getMcpServer(id);
     if (!server) return NextResponse.json({ error: "MCP server not found" }, { status: 404 });
     if (server.type !== "http") return NextResponse.json({ error: "OAuth is supported for HTTP MCP servers" }, { status: 400 });
+    if (!isTelnyxMcpUrl(server.url)) {
+      return NextResponse.json({ error: "Telnyx Portal OAuth can only be used with the Telnyx MCP URL https://api.telnyx.com/v2/mcp" }, { status: 400 });
+    }
 
     const { authorizationUrl } = await beginTelnyxMcpOAuth({ server, request, userId: user.id });
     return NextResponse.redirect(authorizationUrl);

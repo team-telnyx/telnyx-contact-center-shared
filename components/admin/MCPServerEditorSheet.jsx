@@ -331,6 +331,15 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                         <Input value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder={authType === "api_key" ? "x-api-key" : "Authorization"} />
                       </div>
                     )}
+                    {authType === "oauth_client_credentials" && (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium">OAuth Resource URL</label>
+                        <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder="https://mcp.example.com/mcp" />
+                        <p className="text-xs text-muted-foreground">
+                          Required for non-Telnyx OAuth-protected MCP servers. Telnyx MCP URLs automatically use https://api.telnyx.com/v2/mcp.
+                        </p>
+                      </div>
+                    )}
                     {authType === "custom_header" && (
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Header Scheme (optional)</label>
