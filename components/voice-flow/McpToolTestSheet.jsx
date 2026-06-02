@@ -31,7 +31,7 @@ import {
   IconMessage2,
   IconVariable,
 } from "@tabler/icons-react";
-import { buildMcpToolArguments } from "@/lib/mcp/mcp-argument-builder";
+import { buildMcpToolArguments, enrichMcpInputSchemaWithDescription } from "@/lib/mcp/mcp-argument-builder";
 import { validateMcpToolArguments } from "@/lib/mcp/mcp-schema-validator";
 
 function extractUsedVariables(config = {}) {
@@ -47,7 +47,8 @@ function extractUsedVariables(config = {}) {
 function buildRequestPreview(config = {}, variables = {}, selectedTool = null) {
   let argumentsPreview;
   let validation = { valid: true, errors: [] };
-  const inputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
+  const rawInputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
+  const inputSchema = enrichMcpInputSchemaWithDescription(rawInputSchema, selectedTool?.description || config.toolDescription || "");
   try {
     argumentsPreview = buildMcpToolArguments({ input: config.input, variables });
     validation = validateMcpToolArguments(argumentsPreview, inputSchema);
@@ -84,7 +85,11 @@ export default function McpToolTestSheet({
   const [schemaExpanded, setSchemaExpanded] = useState(false);
   const [responseExpanded, setResponseExpanded] = useState(true);
 
-  const inputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
+  const rawInputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
+  const inputSchema = useMemo(
+    () => enrichMcpInputSchemaWithDescription(rawInputSchema, selectedTool?.description || config.toolDescription || ""),
+    [rawInputSchema, selectedTool?.description, config.toolDescription],
+  );
   const usedVariables = useMemo(() => extractUsedVariables(config), [config]);
   const requestPreview = useMemo(() => buildRequestPreview(config, testVariables, selectedTool), [config, testVariables, selectedTool]);
 

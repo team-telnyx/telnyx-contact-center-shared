@@ -15,7 +15,7 @@ import {
 import { VariableTextarea } from "./VariableTextarea";
 import { VariableInput } from "./VariableInput";
 import McpToolTestSheet from "./McpToolTestSheet";
-import { buildEmptyMcpArgsFromSchema } from "@/lib/mcp/mcp-argument-builder";
+import { buildEmptyMcpArgsFromSchema, enrichMcpInputSchemaWithDescription } from "@/lib/mcp/mcp-argument-builder";
 import {
   IconAlertCircle,
   IconFlask,
@@ -163,7 +163,12 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
 
   const selectedServer = useMemo(() => servers.find((server) => server.id === serverId) || null, [servers, serverId]);
   const selectedTool = useMemo(() => tools.find((tool) => tool.name === toolName) || null, [tools, toolName]);
-  const toolInputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config?.toolInputSchema || null;
+  const rawToolInputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config?.toolInputSchema || null;
+  const toolDescription = selectedTool?.description || config?.toolDescription || "";
+  const toolInputSchema = useMemo(
+    () => enrichMcpInputSchemaWithDescription(rawToolInputSchema, toolDescription),
+    [rawToolInputSchema, toolDescription],
+  );
   const inputObject = useMemo(() => parseJsonObject(input), [input]);
   const schemaProperties = getSchemaProperties(toolInputSchema);
   const topLevelRequiredNames = Array.isArray(toolInputSchema?.required) ? toolInputSchema.required : [];
@@ -237,12 +242,17 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
   useEffect(() => {
     if (!selectedTool) return;
     const schema = selectedTool.input_schema || selectedTool.inputSchema || null;
-    if (JSON.stringify(config?.toolInputSchema || null) === JSON.stringify(schema)) return;
+    const description = selectedTool.description || "";
+    const schemaChanged = JSON.stringify(config?.toolInputSchema || null) !== JSON.stringify(schema);
+    const descriptionChanged = (config?.toolDescription || "") !== description;
+    if (!schemaChanged && !descriptionChanged) return;
     const currentInput = parseJsonObject(config?.input);
+    const displaySchema = enrichMcpInputSchemaWithDescription(schema, description);
     onChange({
       ...(config || {}),
       toolInputSchema: schema,
-      input: Object.keys(currentInput).length === 0 && schema ? safeStringify(buildEmptyMcpArgsFromSchema(schema)) : config?.input,
+      toolDescription: description,
+      input: Object.keys(currentInput).length === 0 && displaySchema ? safeStringify(buildEmptyMcpArgsFromSchema(displaySchema)) : config?.input,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTool?.name]);
@@ -264,7 +274,7 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
             <IconRefresh className="size-4 mr-1" />Refresh
           </Button>
         </div>
-        <Select value={serverId || undefined} onValueChange={(value) => onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null, input: "{}" })}>
+        <Select value={serverId || undefined} onValueChange={(value) => onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null, toolDescription: "", input: "{}" })}>
           <SelectTrigger><SelectValue placeholder={serversLoading ? "Loading servers…" : "Select MCP server"} /></SelectTrigger>
           <SelectContent>
             {servers.map((server) => <SelectItem key={server.id} value={server.id}>{server.name} ({String(server.type || "mcp").toUpperCase()})</SelectItem>)}
@@ -285,7 +295,9 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
           onValueChange={(value) => {
             const nextTool = tools.find((tool) => tool.name === value) || null;
             const schema = nextTool?.input_schema || nextTool?.inputSchema || null;
-            onChange({ ...(config || {}), toolName: value, toolInputSchema: schema, input: schema ? safeStringify(buildEmptyMcpArgsFromSchema(schema)) : "{}" });
+            const description = nextTool?.description || "";
+            const displaySchema = enrichMcpInputSchemaWithDescription(schema, description);
+            onChange({ ...(config || {}), toolName: value, toolInputSchema: schema, toolDescription: description, input: displaySchema ? safeStringify(buildEmptyMcpArgsFromSchema(displaySchema)) : "{}" });
           }}
           disabled={!selectedServer}
         >

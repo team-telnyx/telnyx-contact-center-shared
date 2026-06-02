@@ -105,6 +105,71 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(route, /NextResponse\.json/);
 });
 
+test("MCP description Args enrich sparse request schemas for form-based argument mapping", async () => {
+  const {
+    buildEmptyMcpArgsFromSchema,
+    enrichMcpInputSchemaWithDescription,
+    parseMcpDescriptionArgs,
+  } = await loadMcpArgumentBuilderForUnitTests();
+
+  const description = `Send a message.
+
+    Args:
+        from_: Required. Sending address (phone number, alphanumeric sender ID, or short code).
+        to: Required. Receiving address(es).
+        text: Required. Message text.
+        messaging_profile_id: Optional. Messaging profile ID.
+        subject: Optional. Message subject.
+        media_urls: Optional. List of media URLs.
+        webhook_url: Optional. Webhook URL.
+        webhook_failover_url: Optional. Webhook failover URL.
+        use_profile_webhooks: Optional boolean. Whether to use profile webhooks. Defaults to True.
+        type: Optional. The protocol for sending the message, either "SMS" or "MMS".
+        auto_detect: Optional boolean. Automatically detect if an SMS message is unusually long.
+
+    Returns:
+        Dict[str, Any]: Response data`;
+
+  const schema = {
+    type: "object",
+    properties: {
+      request: {
+        title: "Request",
+        type: "object",
+      },
+    },
+    required: ["request"],
+  };
+
+  assert.deepEqual(parseMcpDescriptionArgs(description).slice(0, 3), [
+    { name: "from_", required: true, type: "string", description: "Sending address (phone number, alphanumeric sender ID, or short code)." },
+    { name: "to", required: true, type: "string", description: "Receiving address(es)." },
+    { name: "text", required: true, type: "string", description: "Message text." },
+  ]);
+
+  const enriched = enrichMcpInputSchemaWithDescription(schema, description);
+  assert.deepEqual(enriched.properties.request.required, ["from_", "to", "text"]);
+  assert.equal(enriched.properties.request.properties.from_.description, "Sending address (phone number, alphanumeric sender ID, or short code).");
+  assert.equal(enriched.properties.request.properties.media_urls.type, "array");
+  assert.equal(enriched.properties.request.properties.use_profile_webhooks.type, "boolean");
+
+  assert.deepEqual(buildEmptyMcpArgsFromSchema(enriched), {
+    request: {
+      from_: "",
+      to: "",
+      text: "",
+      messaging_profile_id: "",
+      subject: "",
+      media_urls: [],
+      webhook_url: "",
+      webhook_failover_url: "",
+      use_profile_webhooks: false,
+      type: "",
+      auto_detect: false,
+    },
+  });
+});
+
 test("MCP argument builder only resolves explicit schema-shaped args and preserves additional properties", async () => {
   const { buildMcpToolArguments, resolveMcpTemplateValue } = await loadMcpArgumentBuilderForUnitTests();
 
