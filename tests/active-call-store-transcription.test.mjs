@@ -70,3 +70,62 @@ test("final transcription update closes the same bubble with the final transcrip
   assert.equal(transcriptions[0].transcript, "can you hear me");
   assert.equal(transcriptions[0].isFinal, true);
 });
+
+test("transcription confidence is normalized and preserved on transcript bubbles", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "utterance-confidence",
+    transcript: "reset my password",
+    is_final: false,
+    confidence: "0.874",
+    source: "telnyx_standalone_stt_websocket",
+    provider: "deepgram",
+    model: "nova-3",
+    language: "en",
+  });
+
+  let { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].confidence, 0.874);
+  assert.equal(transcriptions[0].source, "telnyx_standalone_stt_websocket");
+  assert.equal(transcriptions[0].provider, "deepgram");
+  assert.equal(transcriptions[0].model, "nova-3");
+  assert.equal(transcriptions[0].language, "en");
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "utterance-confidence",
+    transcript: "reset my password please",
+    is_final: true,
+    speech_final: true,
+    confidence: 0.91,
+  });
+
+  ({ transcriptions } = useActiveCallStore.getState());
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].confidence, 0.91);
+  assert.equal(transcriptions[0].isFinal, true);
+});
+
+test("invalid or missing transcription confidence does not create a misleading zero-confidence value", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "utterance-invalid-confidence",
+    transcript: "hello",
+    is_final: true,
+    confidence: "not-a-number",
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].confidence, undefined);
+});

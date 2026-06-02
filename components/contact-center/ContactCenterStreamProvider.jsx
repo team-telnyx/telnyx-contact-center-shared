@@ -91,6 +91,11 @@ export function ContactCenterStreamProvider({ children }) {
                   speech_final: data.transcription.speech_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
+                  confidence: data.transcription.confidence,
+                  source: data.transcription.source,
+                  provider: data.transcription.provider,
+                  model: data.transcription.model,
+                  language: data.transcription.language,
                   translation: data.transcription.translation || null,
                 });
 

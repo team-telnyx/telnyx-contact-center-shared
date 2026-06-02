@@ -49,6 +49,13 @@ function getSentimentIcon(sentiment) {
   }
 }
 
+function formatSttConfidencePercent(confidence) {
+  if (confidence === null || confidence === undefined || confidence === "") return null;
+  const numeric = typeof confidence === "number" ? confidence : Number(confidence);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(Math.min(1, Math.max(0, numeric)) * 100);
+}
+
 function calculateSummary(transcriptions) {
   if (!Array.isArray(transcriptions) || transcriptions.length === 0) {
     return {
@@ -119,6 +126,7 @@ function calculateSummary(transcriptions) {
 
 function TranscriptionBubble({ transcription }) {
   const isInbound = transcription.track === "inbound";
+  const sttConfidencePercent = formatSttConfidencePercent(transcription.confidence);
 
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -146,6 +154,16 @@ function TranscriptionBubble({ transcription }) {
             >
               <Target className="h-3 w-3 mr-1" />
               {getIntentLabel(transcription.intent)}
+            </Badge>
+          )}
+          {sttConfidencePercent !== null && (
+            <Badge
+              variant="outline"
+              className="text-xs bg-cyan-500/10 text-cyan-500 border-cyan-500/50"
+              title="Speech-to-text recognition confidence from Telnyx Standalone STT"
+            >
+              <Activity className="h-3 w-3 mr-1" />
+              STT Confidence {sttConfidencePercent}%
             </Badge>
           )}
           <span className="text-xs text-muted-foreground ml-auto">
