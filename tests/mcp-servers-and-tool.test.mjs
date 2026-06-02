@@ -82,6 +82,12 @@ test("MCP Server admin page uses Telnyx integration secret identifiers for API r
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");
 });
 
+async function loadMcpRunnerForUnitTests() {
+  const source = await read("lib/mcp/mcp-tool-runner.js");
+  const stripped = source.replace(/^import .*$/gm, "");
+  return import(`data:text/javascript,${encodeURIComponent(stripped)}`);
+}
+
 test("MCP Tool editor uses natural-language instruction input and supports test response preview", async () => {
   const editor = await read("components/voice-flow/McpToolNodeEditor.jsx");
   const sheet = await read("components/voice-flow/McpToolTestSheet.jsx");
@@ -115,4 +121,21 @@ test("MCP Tool editor uses natural-language instruction input and supports test 
   assert.match(runner, /instruction/);
   assert.match(runner, /request:/, "instruction mode should map user text into a request argument by default");
   assert.match(runner, /filter_country_iso_alpha2 = "PL"/, "Polish number instructions should infer PL country filter for list_phone_numbers");
+});
+
+test("MCP list_phone_numbers instruction maps to supported Telnyx MCP arguments", async () => {
+  const { buildMcpToolArguments } = await loadMcpRunnerForUnitTests();
+
+  const args = buildMcpToolArguments({
+    toolName: "list_phone_numbers",
+    instruction: "List Polish phone numbers with prefix +4833440",
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      filter_country_iso_alpha2: "PL",
+      filter_phone_number: "+4833440",
+    },
+  });
+  assert.equal(args.request.instruction, undefined, "list_phone_numbers must not receive unsupported instruction kwarg");
 });
