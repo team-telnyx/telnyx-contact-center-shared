@@ -157,6 +157,26 @@ test("streaming websocket init is ignored while shutdown is in progress", async 
   await shutdownStreamingWSServer({ reason: "test_cleanup" });
 });
 
+test("streaming websocket shutdown stops accepting sockets before draining clients", async () => {
+  const source = await readFile(
+    new URL("../lib/streaming-ws-handler.mjs", import.meta.url),
+    "utf8",
+  );
+
+  const stopAcceptingIndex = source.indexOf("wss.close(() => {");
+  const snapshotIndex = source.indexOf("const clients = Array.from(wss.clients || []);");
+  assert.ok(stopAcceptingIndex > -1, "shutdown should close the WebSocket server");
+  assert.ok(snapshotIndex > -1, "shutdown should snapshot existing WebSocket clients");
+  assert.ok(
+    stopAcceptingIndex < snapshotIndex,
+    "shutdown should stop accepting new sockets before snapshotting clients",
+  );
+  assert.match(
+    source,
+    /if \(state\.closing\) \{\s*try \{ clientWs\.close\(SHUTDOWN_CLOSE_CODE, SHUTDOWN_CLOSE_REASON\); \} catch \(_\) \{\}\s*return;\s*\}/,
+  );
+});
+
 test("streaming websocket server releases its port on SIGTERM", async () => {
   const port = await getFreePort();
   const child = spawn(

@@ -11,12 +11,24 @@ const historySource = readFileSync(
   "components/contact-center/TranscriptionHistory.jsx",
   "utf8"
 );
+const webhookHandlerSource = readFileSync(
+  "lib/contact-center/webhook-handler.js",
+  "utf8"
+);
 
 test("Agent Assist transcription SSE preserves Telnyx STT confidence metadata", () => {
   assert.match(routerSource, /confidence: transcriptionData\.confidence/);
   assert.match(routerSource, /source: transcriptionData\.source/);
   assert.match(routerSource, /provider: transcriptionData\.provider/);
   assert.match(routerSource, /model: transcriptionData\.model/);
+});
+
+test("Voice API transcription webhooks preserve Telnyx STT confidence metadata", () => {
+  assert.match(webhookHandlerSource, /confidence: transcriptionData\.confidence/);
+  assert.match(webhookHandlerSource, /source: transcriptionData\.source/);
+  assert.match(webhookHandlerSource, /provider: transcriptionData\.provider/);
+  assert.match(webhookHandlerSource, /model: transcriptionData\.model/);
+  assert.match(webhookHandlerSource, /transcriptionData\.language_code/);
 });
 
 test("ContactCenterStreamProvider passes transcript confidence into active-call store", () => {
