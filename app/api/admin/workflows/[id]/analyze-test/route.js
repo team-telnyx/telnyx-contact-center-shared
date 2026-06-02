@@ -11,6 +11,14 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 
+function normalizeConfidenceThreshold(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
+    return 0.95;
+  }
+  return Math.round(numericValue * 100) / 100;
+}
+
 // POST /api/admin/workflows/[id]/analyze-test
 export async function POST(request, { params }) {
   try {
@@ -38,9 +46,9 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Fetch workflow (includes llm_model for analysis)
+    // Fetch workflow (includes LLM model and confidence threshold for analysis)
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT id, llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -52,6 +60,7 @@ export async function POST(request, { params }) {
     }
 
     const llmModel = workflow.llm_model || "moonshotai/Kimi-K2.5";
+    const confidenceThreshold = normalizeConfidenceThreshold(workflow.llm_confidence_threshold);
 
     const { rows: stages } = await pool.query(
       `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
@@ -141,7 +150,7 @@ export async function POST(request, { params }) {
         shouldComplete = true;
       }
 
-      if (shouldComplete && completed.confidence >= 0.85) {
+      if (shouldComplete && completed.confidence >= confidenceThreshold) {
         updates.push({
           item_id: completed.item_id,
           status: "completed",
@@ -159,6 +168,8 @@ export async function POST(request, { params }) {
           confidence: completed.confidence,
           extracted_value: completed.extracted_value,
           source_text: completed.source_text,
+          low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
+          confidence_threshold: confidenceThreshold,
         });
       }
     }

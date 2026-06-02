@@ -110,7 +110,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, ai_assistant_id, syncInsights } = body;
+    const { name, description, category, is_active, llm_model, llm_confidence_threshold, ai_assistant_id, syncInsights } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -136,6 +136,23 @@ export async function PUT(request, { params }) {
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);
       values.push(llm_model);
+    }
+    if (llm_confidence_threshold !== undefined) {
+      if (llm_confidence_threshold === null || llm_confidence_threshold === "") {
+        return NextResponse.json(
+          { error: "Invalid llm_confidence_threshold. Must be a number between 0 and 1." },
+          { status: 400 }
+        );
+      }
+      const confidenceThreshold = Number(llm_confidence_threshold);
+      if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
+        return NextResponse.json(
+          { error: "Invalid llm_confidence_threshold. Must be a number between 0 and 1." },
+          { status: 400 }
+        );
+      }
+      updates.push(`llm_confidence_threshold = $${paramIndex++}`);
+      values.push(Math.round(confidenceThreshold * 100) / 100);
     }
     if (ai_assistant_id !== undefined) {
       updates.push(`ai_assistant_id = $${paramIndex++}`);

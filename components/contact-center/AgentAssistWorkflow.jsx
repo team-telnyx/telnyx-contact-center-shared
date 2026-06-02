@@ -829,6 +829,12 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     setEditValue("");
   };
 
+  const handleConfirmSuggestedSlot = (itemId, value) => {
+    if (!value) return;
+    onCompleteItem(itemId, value);
+    setHighlightedItemId(itemId);
+  };
+
   return (
     <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
@@ -902,12 +908,15 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                         {stage.items?.map((item) => {
                           const status = itemStatuses[item.id] || { status: "pending" };
                           const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
+                          const isSuggested = status.status === "suggested";
                           const isSkipped = status.status === "skipped";
                           const isHighlighted = item.id === highlightedItemId;
                           const isEditing = editingItemId === item.id;
                           const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
                           const completedBy = status.completed_by; // 'ai' | 'agent' | null
                           const confidenceScore = status.confidence_score;
+                          const confidenceThreshold = status.confidence_threshold ?? 0.95;
+                          const isLowConfidence = isSuggested && slotValue && confidenceScore !== null && confidenceScore !== undefined && confidenceScore < confidenceThreshold;
                           // Check AI slots details for additional context
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
                           const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
@@ -917,7 +926,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             <div
                               key={item.id}
                               className={`flex items-start gap-2 p-2 rounded-md transition-all ${
-                                isCompleted
+                                isLowConfidence
+                                  ? "bg-red-500/10 ring-2 ring-red-500 border border-red-500 animate-pulse"
+                                  : isCompleted
                                   ? "bg-green-500/10"
                                   : isSkipped
                                   ? "bg-muted/50 opacity-60"
@@ -928,9 +939,13 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             >
                               <Checkbox
                                 checked={isCompleted}
-                                disabled={isCompleted || isSkipped}
+                                disabled={isCompleted || isSkipped || isLowConfidence}
                                 onCheckedChange={(checked) => {
                                   if (checked) {
+                                    if (isSuggested && slotValue) {
+                                      handleConfirmSuggestedSlot(item.id, slotValue);
+                                      return;
+                                    }
                                     onCompleteItem(item.id);
                                     setHighlightedItemId(item.id);
                                   }
@@ -1008,10 +1023,25 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                                 ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
                                                 : "bg-red-500/10 text-red-500 border-red-500/50"
                                             }`}
-                                            title={`AI confidence: ${Math.round(confidenceScore * 100)}%`}
+                                            title={`LLM confidence: ${Math.round(confidenceScore * 100)}% (threshold ${Math.round(confidenceThreshold * 100)}%)`}
                                           >
-                                            {Math.round(confidenceScore * 100)}%
+                                            LLM {Math.round(confidenceScore * 100)}%
                                           </Badge>
+                                        )}
+                                        {isLowConfidence && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-5 px-2 text-[10px] border-red-500/60 bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleConfirmSuggestedSlot(item.id, slotValue);
+                                            }}
+                                            title="Confirm this low-confidence LLM value"
+                                          >
+                                            <Check className="h-3 w-3 mr-1" />
+                                            Confirm
+                                          </Button>
                                         )}
                                         <Button
                                           size="icon"

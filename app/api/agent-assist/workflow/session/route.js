@@ -84,6 +84,7 @@ async function getWorkflowSessionState(pool, sessionId) {
     `SELECT s.*, 
             w.name as workflow_name, 
             w.category as workflow_category,
+            w.llm_confidence_threshold as workflow_confidence_threshold,
             i.agent_username,
             u.first_name as agent_first_name,
             u.last_name as agent_last_name
@@ -128,8 +129,17 @@ async function getWorkflowSessionState(pool, sessionId) {
   );
 
   // Create item status map
+  const confidenceThreshold = session.workflow_confidence_threshold ?? 0.95;
   const statusMap = itemStatuses.reduce((acc, status) => {
-    acc[status.item_id] = status;
+    acc[status.item_id] = {
+      ...status,
+      confidence_threshold: confidenceThreshold,
+      low_confidence:
+        status.status === "suggested" &&
+        status.confidence_score !== null &&
+        status.confidence_score !== undefined &&
+        Number(status.confidence_score) < Number(confidenceThreshold),
+    };
     return acc;
   }, {});
 

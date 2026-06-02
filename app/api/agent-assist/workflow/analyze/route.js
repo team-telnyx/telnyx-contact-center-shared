@@ -9,6 +9,14 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
 
+function normalizeConfidenceThreshold(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
+    return 0.95;
+  }
+  return Math.round(numericValue * 100) / 100;
+}
+
 // POST /api/agent-assist/workflow/analyze - Analyze transcript
 export async function POST(request) {
   try {
@@ -123,12 +131,13 @@ export async function POST(request) {
     // Get current slots filled
     const slotsFilled = workflowSession.slots_filled || {};
 
-    // Get workflow's llm_model
+    // Get workflow's LLM model and confidence threshold
     const { rows: [workflow] } = await pool.query(
-      `SELECT llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
       [workflowSession.workflow_id]
     );
     const llmModel = workflow?.llm_model || "moonshotai/Kimi-K2.5";
+    const confidenceThreshold = normalizeConfidenceThreshold(workflow?.llm_confidence_threshold);
 
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
@@ -167,7 +176,7 @@ export async function POST(request) {
         }
         
         // Only auto-complete if confidence is high enough AND trigger matches
-        if (shouldComplete && completed.confidence >= 0.85) {
+        if (shouldComplete && completed.confidence >= confidenceThreshold) {
           // Update item status
           await client.query(
             `UPDATE aa_workflow_item_status 
@@ -202,13 +211,36 @@ export async function POST(request) {
             source_text: completed.source_text,
           });
         } else if (completed.confidence >= 0.60) {
-          // Add as suggestion (don't auto-complete)
+          // Persist as suggestion (don't auto-complete) so the agent can confirm or correct it
+          await client.query(
+            `UPDATE aa_workflow_item_status
+             SET status = $1::varchar,
+                 completed_at = NULL,
+                 completed_by = 'ai',
+                 extracted_value = $2,
+                 confidence_score = $3,
+                 source_transcript = $4,
+                 updated_at = NOW()
+             WHERE session_id = $5 AND item_id = $6`,
+            [
+              'suggested',
+              completed.extracted_value || null,
+              completed.confidence,
+              transcript,
+              workflowSession.id,
+              completed.item_id,
+            ]
+          );
+
           updates.push({
             item_id: completed.item_id,
             status: "suggested",
             confidence: completed.confidence,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
+            completed_by: "ai",
+            low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
+            confidence_threshold: confidenceThreshold,
             completion_trigger_pending: !shouldComplete,
           });
         }

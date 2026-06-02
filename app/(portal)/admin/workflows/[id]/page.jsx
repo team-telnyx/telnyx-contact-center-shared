@@ -97,6 +97,7 @@ export default function WorkflowEditorPage() {
     category: "",
     is_active: false,
     llm_model: "moonshotai/Kimi-K2.5",
+    llm_confidence_threshold: 0.95,
   });
   
   // LLM models
@@ -251,6 +252,7 @@ export default function WorkflowEditorPage() {
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
         llm_model: data.workflow.llm_model || "moonshotai/Kimi-K2.5",
+        llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
       });
       const workflowStages = data.workflow.stages || data.stages || [];
       setStages(workflowStages);
@@ -600,10 +602,22 @@ export default function WorkflowEditorPage() {
   async function saveWorkflow() {
     setSaving(true);
     try {
+      if (workflowForm.llm_confidence_threshold === null || workflowForm.llm_confidence_threshold === "") {
+        throw new Error("LLM confidence threshold must be a number between 0 and 1.");
+      }
+      const confidenceThreshold = Number(workflowForm.llm_confidence_threshold);
+      if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
+        throw new Error("LLM confidence threshold must be a number between 0 and 1.");
+      }
+      const workflowPayload = {
+        ...workflowForm,
+        llm_confidence_threshold: Math.round(confidenceThreshold * 100) / 100,
+      };
+
       const res = await fetch(`/api/admin/workflows/${workflowId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(workflowForm),
+        body: JSON.stringify(workflowPayload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to save workflow");
@@ -1261,6 +1275,37 @@ export default function WorkflowEditorPage() {
                 Model used for workflow analysis and suggestions
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-llm-confidence-threshold">LLM Confidence Threshold</Label>
+              <Input
+                id="edit-llm-confidence-threshold"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={workflowForm.llm_confidence_threshold}
+                onChange={(e) =>
+                  setWorkflowForm((f) => ({
+                    ...f,
+                    llm_confidence_threshold: e.target.value,
+                  }))
+                }
+                onBlur={() =>
+                  setWorkflowForm((f) => {
+                    if (f.llm_confidence_threshold === "") return f;
+                    const value = Number(f.llm_confidence_threshold);
+                    if (!Number.isFinite(value)) return { ...f, llm_confidence_threshold: 0.95 };
+                    return {
+                      ...f,
+                      llm_confidence_threshold: Math.min(1, Math.max(0, Math.round(value * 100) / 100)),
+                    };
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Default: 0.95. Auto-filled LLM slots below this threshold stay red until the agent confirms or edits them.
+              </p>
+            </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-active">Active</Label>
               <Switch
@@ -1351,7 +1396,7 @@ export default function WorkflowEditorPage() {
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
             <DialogDescription>
-              Create a new item in the "{selectedStage?.name}" stage.
+              Create a new item in the &quot;{selectedStage?.name}&quot; stage.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
