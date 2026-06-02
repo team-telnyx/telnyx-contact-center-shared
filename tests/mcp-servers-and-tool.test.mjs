@@ -74,13 +74,15 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(oauth, /was not found while saving OAuth session/, "OAuth callback should expose DB/server mismatch instead of pretending success");
   assert.match(runner, /Telnyx Portal OAuth can only be used with the Telnyx MCP URL/, "runtime should not send Telnyx Portal OAuth tokens to arbitrary MCP URLs");
   assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
+  assert.match(runner, /parsed\.protocol === "https:"/, "runtime should only send Telnyx Portal OAuth tokens to HTTPS Telnyx MCP URLs");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
   assert.match(runner, /assertValidMcpToolArguments/, "runtime should validate args against schema before MCP call");
   assert.match(validator, /removeAdditional:\s*false/, "validator must respect additionalProperties instead of stripping unknown fields");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
   assert.match(runner, /output:\s*1/, "runtime should route MCP errors through output 1");
   assert.match(oauth, /browserSafeBaseUrl/, "OAuth should normalize server bind addresses before browser redirects");
-  assert.match(oauth, /baseUrl\.hostname === "0\.0\.0\.0"/, "OAuth should detect 0.0.0.0 origins");
+  assert.match(oauth, /hostname === "0\.0\.0\.0"/, "OAuth should detect 0.0.0.0 origins");
+  assert.match(oauth, /baseUrl\.hostname\.replace/, "OAuth should normalize bracketed IPv6 bind origins");
   assert.match(oauth, /baseUrl\.hostname = "localhost"/, "OAuth should redirect browsers to localhost instead of 0.0.0.0");
   assert.match(oauth, /code_challenge_method", "S256"/, "Telnyx Portal OAuth should use PKCE S256");
   assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/authorize/, "OAuth should use Telnyx authorization endpoint");
@@ -188,9 +190,9 @@ test("MCP description Args enrich sparse request schemas for form-based argument
   const enriched = enrichMcpInputSchemaWithDescription(schema, description);
   assert.deepEqual(enriched.properties.request.required, ["from_", "to", "text"]);
   assert.equal(enriched.properties.request.properties.from_.description, "Sending address (phone number, alphanumeric sender ID, or short code).");
-  assert.equal(enriched.properties.request.properties.messaging_profile_id, undefined);
-  assert.equal(enriched.properties.request.properties.media_urls, undefined);
-  assert.equal(enriched.properties.request.properties.use_profile_webhooks, undefined);
+  assert.equal(enriched.properties.request.properties.messaging_profile_id.description, "Messaging profile ID.");
+  assert.equal(enriched.properties.request.properties.media_urls.description, "List of media URLs.");
+  assert.equal(enriched.properties.request.properties.use_profile_webhooks.type, "boolean");
 
   assert.deepEqual(buildEmptyMcpArgsFromSchema(enriched), {
     request: {
