@@ -122,7 +122,7 @@ test("MCP Tool editor uses natural-language instruction input and supports test 
   assert.match(sheet, /buildMcpToolArguments/, "Request Preview should use the same schema-driven builder as runtime");
   assert.match(argumentBuilder, /instruction/);
   assert.match(argumentBuilder, /request:/, "instruction mode should map user text into a request argument by default");
-  assert.match(argumentBuilder, /countryIso:[\s\S]*"PL"/, "Polish number instructions should infer PL country filter for list_phone_numbers");
+  assert.match(argumentBuilder, /polish\|poland\|polska\|polski\)[\s\S]*"PL"/, "Polish number instructions should infer PL country filter for list_phone_numbers");
 });
 
 test("MCP list_phone_numbers instruction maps to supported Telnyx MCP arguments", async () => {
@@ -205,6 +205,36 @@ test("MCP list_phone_numbers instruction preserves German country filters", asyn
   assert.deepEqual(args, {
     request: {
       filter_country_iso_alpha2: "DE",
+    },
+  });
+});
+
+test("MCP list_phone_numbers instruction does not treat pronouns as country filters", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+
+  const args = buildMcpToolArguments({
+    toolName: "list_phone_numbers",
+    instruction: "List phone numbers and limit it to 20",
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      page_size: 20,
+    },
+  });
+});
+
+test("MCP list_phone_numbers instruction supports explicit ISO country filters", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+
+  const args = buildMcpToolArguments({
+    toolName: "list_phone_numbers",
+    instruction: "List phone numbers where country code is it",
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      filter_country_iso_alpha2: "IT",
     },
   });
 });
