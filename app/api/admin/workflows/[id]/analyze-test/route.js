@@ -19,6 +19,18 @@ function normalizeConfidenceThreshold(value) {
   return Math.round(numericValue * 100) / 100;
 }
 
+function normalizeSpeakerType(speaker) {
+  if (speaker === "inbound" || speaker === "customer") return "customer";
+  if (speaker === "outbound" || speaker === "agent") return "agent";
+  return null;
+}
+
+function hasMeaningfulExtractedValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
+
 // POST /api/admin/workflows/[id]/analyze-test
 export async function POST(request, { params }) {
   try {
@@ -126,12 +138,7 @@ export async function POST(request, { params }) {
     });
 
     // Apply completion_trigger and confidence threshold (same logic as live API)
-    const speakerType =
-      speaker === "inbound" || speaker === "customer"
-        ? "customer"
-        : speaker === "outbound" || speaker === "agent"
-        ? "agent"
-        : null;
+    const speakerType = normalizeSpeakerType(speaker);
 
     const updates = [];
     const newSlotsFilled = { ...slotsFilled };
@@ -141,16 +148,18 @@ export async function POST(request, { params }) {
       if (!item) continue;
 
       const completionTrigger = item.completion_trigger || getDefaultCompletionTrigger(item.type);
-      let shouldComplete = false;
-      if (completionTrigger === "either") {
-        shouldComplete = true;
-      } else if (completionTrigger === "customer" && speakerType === "customer") {
-        shouldComplete = true;
-      } else if (completionTrigger === "agent" && speakerType === "agent") {
-        shouldComplete = true;
+      const shouldComplete =
+        Boolean(speakerType) &&
+        (completionTrigger === "either" ||
+          (completionTrigger === "customer" && speakerType === "customer") ||
+          (completionTrigger === "agent" && speakerType === "agent"));
+      const hasExtractedSlotValue = item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
+
+      if (!shouldComplete || !hasExtractedSlotValue) {
+        continue;
       }
 
-      if (shouldComplete && completed.confidence >= confidenceThreshold) {
+      if (completed.confidence >= confidenceThreshold) {
         updates.push({
           item_id: completed.item_id,
           status: "completed",

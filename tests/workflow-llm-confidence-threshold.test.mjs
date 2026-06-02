@@ -32,7 +32,6 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
 
   assert.match(route, /SELECT llm_model, llm_confidence_threshold FROM aa_workflows/);
   assert.match(route, /confidenceThreshold = normalizeConfidenceThreshold/);
-  assert.match(route, /if \(item\.type === "slot"\) \{\s*shouldComplete = true;/);
   assert.match(route, /completed\.confidence >= confidenceThreshold/);
   assert.match(route, /'suggested'/);
   assert.match(route, /completed_by = 'ai'/);
@@ -45,6 +44,33 @@ test("live analyzer uses only the workflow threshold to split completed vs sugge
   assert.match(analyzer, /typeof rawConfidence === "string" && rawConfidence\.trim\(\) === ""/);
   assert.doesNotMatch(prompts, /0\.85-0\.94|0\.70-0\.84|0\.60-0\.69|Below 0\.60|auto-complete/);
   assert.match(prompts, /The application will compare your confidence score against the workflow's configured confidence threshold/);
+});
+
+test("slot completion respects the item's configured speaker trigger and requires a value", async () => {
+  const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
+  const testRoute = await read("../app/api/admin/workflows/[id]/analyze-test/route.js");
+  const prompts = await read("../lib/agent-assist/workflow-prompts.js");
+  const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
+
+  for (const source of [route, testRoute]) {
+    assert.doesNotMatch(source, /item\.type === "slot" \|\|/);
+    assert.doesNotMatch(source, /if \(item\.type === "slot"\) \{\s*shouldComplete = true;/);
+    assert.match(source, /const hasExtractedSlotValue = item\.type !== "slot" \|\| hasMeaningfulExtractedValue\(completed\.extracted_value\)/);
+    assert.match(source, /if \(!shouldComplete \|\| !hasExtractedSlotValue\) \{\s*continue;/);
+    assert.match(source, /Boolean\(speakerType\)/);
+    assert.doesNotMatch(source, /!speakerType/);
+    assert.match(source, /completionTrigger === "customer" && speakerType === "customer"/);
+    assert.match(source, /completionTrigger === "agent" && speakerType === "agent"/);
+  }
+
+  assert.match(prompts, /Completion trigger: \$\{formatCompletionTrigger\(item\.completion_trigger\)\}/);
+  assert.match(prompts, /Only evaluate an item when the transcript speaker matches its Completion trigger/);
+  assert.match(prompts, /For slot items, extracted_value must be a non-empty concrete value from the matching speaker/);
+  assert.match(prompts, /Do not complete a slot when the transcript only asks for the value/);
+
+  assert.match(analyzer, /hasMeaningfulExtractedValue\(item\.extracted_value\)/);
+  assert.match(analyzer, /pendingItem\.type === "slot" && !hasMeaningfulExtractedValue\(item\.extracted_value\)/);
+  assert.match(analyzer, /item\.confidence = confidence;\s*return true;/);
 });
 
 test("live analyzer keeps suggested items eligible for later higher-confidence slot extraction", async () => {

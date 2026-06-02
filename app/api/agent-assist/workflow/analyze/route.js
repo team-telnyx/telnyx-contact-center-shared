@@ -17,6 +17,18 @@ function normalizeConfidenceThreshold(value) {
   return Math.round(numericValue * 100) / 100;
 }
 
+function normalizeSpeakerType(speaker) {
+  if (speaker === "inbound" || speaker === "customer") return "customer";
+  if (speaker === "outbound" || speaker === "agent") return "agent";
+  return null;
+}
+
+function hasMeaningfulExtractedValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
+
 // POST /api/agent-assist/workflow/analyze - Analyze transcript
 export async function POST(request) {
   try {
@@ -109,15 +121,13 @@ export async function POST(request) {
       [workflowSession.id, workflowSession.workflow_id]
     );
 
-    const speakerType = speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : null;
+    const speakerType = normalizeSpeakerType(speaker);
     const relevantPendingItems = pendingItems
       .filter((item) => {
         const completionTrigger = item.completion_trigger || "agent";
         return (
-          item.type === "slot" ||
-          completionTrigger === "either" ||
-          !speakerType ||
-          completionTrigger === speakerType
+          Boolean(speakerType) &&
+          (completionTrigger === "either" || completionTrigger === speakerType)
         );
       })
       .slice(0, 12);
@@ -166,22 +176,21 @@ export async function POST(request) {
         
         // Check if completion_trigger matches speaker
         const completionTrigger = item.completion_trigger || "agent";
-        
-        // Determine if we should complete based on trigger. Slot values are data capture
-        // fields and can be completed from either speaker when confidence is trusted.
-        let shouldComplete = false;
-        if (item.type === "slot") {
-          shouldComplete = true;
-        } else if (completionTrigger === "either") {
-          shouldComplete = true;
-        } else if (completionTrigger === "customer" && speakerType === "customer") {
-          shouldComplete = true;
-        } else if (completionTrigger === "agent" && speakerType === "agent") {
-          shouldComplete = true;
+        const shouldComplete =
+          Boolean(speakerType) &&
+          (completionTrigger === "either" ||
+            (completionTrigger === "customer" && speakerType === "customer") ||
+            (completionTrigger === "agent" && speakerType === "agent"));
+        const hasExtractedSlotValue = item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
+
+        // Ignore wrong-speaker detections and empty slot hits. This prevents an agent's
+        // question or prompt hint from completing a customer-owned slot with a blank value.
+        if (!shouldComplete || !hasExtractedSlotValue) {
+          continue;
         }
         
-        // Only auto-complete if confidence is high enough AND trigger matches
-        if (shouldComplete && completed.confidence >= confidenceThreshold) {
+        // Only auto-complete if confidence is high enough; otherwise persist a suggestion.
+        if (completed.confidence >= confidenceThreshold) {
           // Update item status
           await client.query(
             `UPDATE aa_workflow_item_status 
