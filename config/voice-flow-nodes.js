@@ -2346,6 +2346,22 @@ export const VOICE_FLOW_NODES = {
         description: "Analyze sentiment for finalized transcription messages",
         showWhen: { assist_type: "workflows" },
       },
+      enable_stt_confidence: {
+        type: "boolean",
+        label: "Enable STT Confidence",
+        required: false,
+        default: true,
+        description: "Show speech-to-text confidence badges in the agent UI",
+        showWhen: { assist_type: "workflows" },
+      },
+      enable_llm_confidence: {
+        type: "boolean",
+        label: "Enable LLM Confidence",
+        required: false,
+        default: true,
+        description: "Show LLM extraction confidence badges in the agent UI",
+        showWhen: { assist_type: "workflows" },
+      },
     },
   },
 

@@ -105,6 +105,8 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   }, [interaction, activeCall]);
 
   const assistConfig = interaction?.metadata?.agent_assist_config || {};
+  const showSttConfidence = assistConfig.enable_stt_confidence !== false;
+  const showLlmConfidence = assistConfig.enable_llm_confidence !== false;
   const translationEnabled =
     assistConfig.assist_type === "workflows" &&
     assistConfig.enable_translation === true;
@@ -502,6 +504,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           onSkipItem={skipItem}
           aiSlotsDetails={aiHandoff.slotsDetails}
           slotsFilled={slotsFilled}
+          showLlmConfidence={showLlmConfidence}
         />
 
         {/* Center: Live Transcription */}
@@ -509,6 +512,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           transcriptions={transcriptions}
           translationConfig={interaction?.metadata?.agent_assist_config || {}}
           interactionId={interactionId}
+          showSttConfidence={showSttConfidence}
         />
 
         {/* Right: Suggested Response (single) */}
@@ -784,7 +788,7 @@ function AiSummaryPanel({ summary, sentiment }) {
 /**
  * Workflow Stages Card with Accordions
  */
-function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {} }) {
+function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true }) {
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
 
@@ -1027,7 +1031,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <span className="text-sm" title="Filled by Agent">👤</span>
                                         ) : null}
                                         {/* Confidence indicator for AI-filled slots */}
-                                        {isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
+                                        {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
                                           <Badge
                                             variant="outline"
                                             className={`text-[10px] px-1.5 py-0 ${
@@ -1095,7 +1099,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                     ) : isAgentFilled ? (
                                       <span className="text-sm" title="Completed by Agent">👤</span>
                                     ) : null}
-                                    {isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
+                                    {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
                                       <Badge
                                         variant="outline"
                                         className={`text-xs ${
@@ -1150,7 +1154,7 @@ function ItemTypeBadge({ type }) {
 /**
  * Live Transcription Card with chat bubbles
  */
-function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId }) {
+function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId, showSttConfidence = true }) {
   const scrollRef = useRef(null);
   const endRef = useRef(null);
 
@@ -1187,6 +1191,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
                   transcription={t}
                   translationConfig={translationConfig}
                   interactionId={interactionId}
+                  showSttConfidence={showSttConfidence}
                 />
               ))
             )}
@@ -1201,7 +1206,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
 /**
  * Single transcription bubble
  */
-function TranscriptionBubble({ transcription, translationConfig, interactionId }) {
+function TranscriptionBubble({ transcription, translationConfig, interactionId, showSttConfidence = true }) {
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
@@ -1305,18 +1310,18 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
       )}
 
       {/* Intent, sentiment, and STT confidence badges */}
-      {(intent || sentiment || sttConfidencePercent !== null) && (
+      {(intent || sentiment || (showSttConfidence && sttConfidencePercent !== null)) && (
         <div className={`flex items-center gap-1.5 mt-1 ${
           isCustomer ? "" : "flex-row-reverse"
         }`}>
-          {sttConfidencePercent !== null && (
+          {showSttConfidence && sttConfidencePercent !== null && (
             <Badge
               variant="outline"
               className="text-[10px] bg-cyan-500/10 text-cyan-500 border-cyan-500/50"
               title="Speech-to-text recognition confidence from Telnyx Standalone STT"
             >
               <Activity className="h-3 w-3 mr-1" />
-              STT Confidence {sttConfidencePercent}%
+              STT {sttConfidencePercent}%
             </Badge>
           )}
           {intent && (

@@ -163,7 +163,7 @@ function TranscriptionBubble({ transcription }) {
               title="Speech-to-text recognition confidence from Telnyx Standalone STT"
             >
               <Activity className="h-3 w-3 mr-1" />
-              STT Confidence {sttConfidencePercent}%
+              STT {sttConfidencePercent}%
             </Badge>
           )}
           <span className="text-xs text-muted-foreground ml-auto">

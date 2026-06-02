@@ -75,6 +75,31 @@ test("agent workflow UI renders low-confidence suggested slots with a blinking r
   assert.match(ui, /disabled=\{isCompleted \|\| isSkipped \|\| isLowConfidence\}/);
 });
 
+test("agent assist node exposes STT and LLM confidence display toggles below sentiment analysis", async () => {
+  const editor = await read("../components/voice-flow/AgentAssistNodeEditor.jsx");
+  const config = await read("../config/voice-flow-nodes.js");
+  const engine = await read("../lib/voice-flow-engine.js");
+
+  assert.match(editor, /Enable Sentiment Analysis[\s\S]*Enable STT Confidence[\s\S]*Enable LLM Confidence/);
+  assert.match(editor, /handleChange\("enable_stt_confidence", checked\)/);
+  assert.match(editor, /handleChange\("enable_llm_confidence", checked\)/);
+  assert.match(config, /enable_stt_confidence:[\s\S]*default: true/);
+  assert.match(config, /enable_llm_confidence:[\s\S]*default: true/);
+  assert.match(engine, /agentAssistConfig\.enable_stt_confidence = processedConfig\.enable_stt_confidence !== false/);
+  assert.match(engine, /agentAssistConfig\.enable_llm_confidence = processedConfig\.enable_llm_confidence !== false/);
+});
+
+test("agent workflow config can hide LLM confidence badges without changing slot processing", async () => {
+  const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+  const analyzeRoute = await read("../app/api/agent-assist/workflow/analyze/route.js");
+
+  assert.match(ui, /showLlmConfidence=\{showLlmConfidence\}/);
+  assert.match(ui, /showLlmConfidence = true/);
+  assert.match(ui, /showLlmConfidence && isAiFilled && confidenceScore !== null/);
+  assert.match(ui, /isLowConfidence &&/);
+  assert.match(analyzeRoute, /completed\.confidence >= confidenceThreshold/);
+});
+
 test("Edit Workflow modal exposes a 0-1 two-decimal LLM confidence threshold input", async () => {
   const page = await read("../app/(portal)/admin/workflows/[id]/page.jsx");
 

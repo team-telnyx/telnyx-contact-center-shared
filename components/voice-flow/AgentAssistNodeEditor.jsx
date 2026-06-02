@@ -847,6 +847,34 @@ export default function AgentAssistNodeEditor({
             />
           </div>
 
+          {/* STT Confidence display */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable STT Confidence</Label>
+              <p className="text-xs text-muted-foreground">
+                Show speech-to-text confidence badges in the agent UI
+              </p>
+            </div>
+            <Switch
+              checked={config.enable_stt_confidence !== false}
+              onCheckedChange={(checked) => handleChange("enable_stt_confidence", checked)}
+            />
+          </div>
+
+          {/* LLM Confidence display */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Enable LLM Confidence</Label>
+              <p className="text-xs text-muted-foreground">
+                Show LLM extraction confidence badges in the agent UI
+              </p>
+            </div>
+            <Switch
+              checked={config.enable_llm_confidence !== false}
+              onCheckedChange={(checked) => handleChange("enable_llm_confidence", checked)}
+            />
+          </div>
+
           {/* Online Translation — experimental, visible only for leszek@telnyx.com */}
           {isExperimentalUser && (
             <div className="flex items-center justify-between">

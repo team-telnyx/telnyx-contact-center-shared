@@ -42,17 +42,26 @@ test("ContactCenterStreamProvider passes transcript confidence into active-call 
   assert.match(streamProviderSource, /model: data\.transcription\.model/);
 });
 
-test("workflow live transcription bubbles render explicit STT Confidence percentage badge", () => {
+test("workflow live transcription bubbles render compact STT percentage badge", () => {
   assert.match(workflowSource, /function formatSttConfidencePercent/);
   assert.match(workflowSource, /const sttConfidencePercent = formatSttConfidencePercent\(transcription\.confidence\)/);
   assert.match(workflowSource, /Intent, sentiment, and STT confidence badges/);
-  assert.match(workflowSource, /STT Confidence \{sttConfidencePercent\}%/);
+  assert.match(workflowSource, /STT \{sttConfidencePercent\}%/);
+  assert.doesNotMatch(workflowSource, /STT Confidence \{sttConfidencePercent\}%/);
   assert.match(workflowSource, /Speech-to-text recognition confidence from Telnyx Standalone STT/);
   assert.match(workflowSource, /confidence: t\.confidence/);
 });
 
-test("historical transcription bubbles still render explicit STT Confidence percentage badge", () => {
+test("agent assist workflow config can hide STT confidence presentation without dropping confidence data", () => {
+  assert.match(workflowSource, /showSttConfidence=\{showSttConfidence\}/);
+  assert.match(workflowSource, /showSttConfidence = true/);
+  assert.match(workflowSource, /showSttConfidence && sttConfidencePercent !== null/);
+  assert.match(workflowSource, /confidence: t\.confidence/);
+});
+
+test("historical transcription bubbles still render compact STT percentage badge", () => {
   assert.match(historySource, /function formatSttConfidencePercent/);
-  assert.match(historySource, /STT Confidence \{sttConfidencePercent\}%/);
+  assert.match(historySource, /STT \{sttConfidencePercent\}%/);
+  assert.doesNotMatch(historySource, /STT Confidence \{sttConfidencePercent\}%/);
   assert.match(historySource, /Speech-to-text recognition confidence from Telnyx Standalone STT/);
 });
