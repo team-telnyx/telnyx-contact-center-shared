@@ -31,21 +31,21 @@ import {
   IconTools,
 } from "@tabler/icons-react";
 
-function APIKeyRefCombobox({ value, onChange }) {
+function SecretRefCombobox({ value, onChange }) {
   const [options, setOptions] = React.useState([]);
 
   React.useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/integration-secrets", { cache: "no-store" });
+        const res = await fetch("/api/admin/secrets", { cache: "no-store" });
         const data = await res.json();
         if (!mounted || !res.ok || !data?.ok) return;
         const secrets = Array.isArray(data?.secrets) ? data.secrets : [];
         setOptions(
           secrets
-            .filter((secret) => secret?.identifier)
-            .map((secret) => ({ value: secret.identifier, label: secret.identifier })),
+            .filter((secret) => secret?.name || secret?.identifier)
+            .map((secret) => ({ value: secret.name || secret.identifier, label: secret.name || secret.identifier })),
         );
       } catch (_) {}
     })();
@@ -59,8 +59,8 @@ function APIKeyRefCombobox({ value, onChange }) {
       value={value}
       onChange={onChange}
       options={options}
-      placeholder="Select Telnyx secret identifier…"
-      emptyLabel="No Telnyx integration secrets found"
+      placeholder="Select local secret…"
+      emptyLabel="No local Contact Center secrets found"
       triggerClassName="w-full"
       searchable
     />
@@ -75,7 +75,10 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [name, setName] = React.useState("");
   const [type, setType] = React.useState("sse");
   const [url, setUrl] = React.useState("");
-  const [apiKeyRef, setApiKeyRef] = React.useState("telnyx_api_key");
+  const [authType, setAuthType] = React.useState("none");
+  const [authHeaderName, setAuthHeaderName] = React.useState("");
+  const [authScheme, setAuthScheme] = React.useState("");
+  const [authSecretName, setAuthSecretName] = React.useState("");
   const [allowedTools, setAllowedTools] = React.useState([]);
   const [availableTools, setAvailableTools] = React.useState([]);
   const [expandedTools, setExpandedTools] = React.useState(new Set());
@@ -84,7 +87,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [toolsLoading, setToolsLoading] = React.useState(false);
   const [toolsError, setToolsError] = React.useState(null);
   const latestContextRef = React.useRef({});
-  latestContextRef.current = { open, id, isNew, type, url, apiKeyRef };
+  latestContextRef.current = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
 
   React.useEffect(() => {
     if (!open || !id) return;
@@ -93,7 +96,10 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     setName("");
     setType("sse");
     setUrl("");
-    setApiKeyRef("telnyx_api_key");
+    setAuthType("none");
+    setAuthHeaderName("");
+    setAuthScheme("");
+    setAuthSecretName("");
     setAllowedTools([]);
     setAvailableTools([]);
     setExpandedTools(new Set());
@@ -113,7 +119,10 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         setName(d.name || "");
         setType(d.type || "sse");
         setUrl(d.url || "");
-        setApiKeyRef(d.api_key_ref || "telnyx_api_key");
+        setAuthType(d.auth_type || "none");
+        setAuthHeaderName(d.auth_header_name || "");
+        setAuthScheme(d.auth_scheme || "");
+        setAuthSecretName(d.auth_secret_name || d.api_key_ref || "");
         setAllowedTools(Array.isArray(d.allowed_tools) ? d.allowed_tools : []);
       } catch (_) {
       } finally {
@@ -131,7 +140,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       return;
     }
     const requestId = ++toolsRequestRef.current;
-    const requestContext = { open, id, isNew, type, url, apiKeyRef };
+    const requestContext = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
     const isCurrentRequest = () => {
       const latest = latestContextRef.current;
       return toolsRequestRef.current === requestId &&
@@ -139,7 +148,10 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         requestContext.id === latest.id &&
         requestContext.type === latest.type &&
         requestContext.url === latest.url &&
-        requestContext.apiKeyRef === latest.apiKeyRef;
+        requestContext.authType === latest.authType &&
+        requestContext.authHeaderName === latest.authHeaderName &&
+        requestContext.authScheme === latest.authScheme &&
+        requestContext.authSecretName === latest.authSecretName;
     };
     setToolsLoading(true);
     setToolsError(null);
@@ -147,7 +159,14 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       const r = await fetch(`/api/admin/mcp-servers/${isNew ? "new" : encodeURIComponent(id)}/tools`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, url, api_key_ref: apiKeyRef }),
+        body: JSON.stringify({
+          type,
+          url,
+          auth_type: authType,
+          auth_header_name: authHeaderName,
+          auth_scheme: authScheme,
+          auth_secret_name: authSecretName,
+        }),
         cache: "no-store",
       });
       const d = await r.json();
@@ -180,7 +199,16 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       const r = await fetch(apiUrl, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, type, url, api_key_ref: apiKeyRef, allowed_tools: allowedTools }),
+        body: JSON.stringify({
+          name,
+          type,
+          url,
+          auth_type: authType,
+          auth_header_name: authHeaderName,
+          auth_scheme: authScheme,
+          auth_secret_name: authSecretName,
+          allowed_tools: allowedTools,
+        }),
       });
       if (r.ok) onSaved?.();
     } finally {
@@ -230,7 +258,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                     <label className="text-sm font-medium">Name</label>
                     <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CRM MCP" />
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[88px_minmax(0,1fr)_112px]">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[88px_minmax(0,1fr)]">
                     <div className="space-y-2">
                       <label className="text-sm font-medium">Type</label>
                       <Select value={type} onValueChange={setType}>
@@ -245,10 +273,38 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                       <label className="text-sm font-medium">URL</label>
                       <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/mcp" />
                     </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">API Key Ref</label>
-                      <APIKeyRefCombobox value={apiKeyRef} onChange={setApiKeyRef} />
+                      <label className="text-sm font-medium">Authentication</label>
+                      <Select value={authType} onValueChange={setAuthType}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          <SelectItem value="bearer">Bearer token</SelectItem>
+                          <SelectItem value="api_key">API key header</SelectItem>
+                          <SelectItem value="custom_header">Custom header</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
+                    {authType !== "none" && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Local Secret</label>
+                        <SecretRefCombobox value={authSecretName} onChange={setAuthSecretName} />
+                      </div>
+                    )}
+                    {(authType === "api_key" || authType === "custom_header") && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Header Name</label>
+                        <Input value={authHeaderName} onChange={(e) => setAuthHeaderName(e.target.value)} placeholder={authType === "api_key" ? "x-api-key" : "Authorization"} />
+                      </div>
+                    )}
+                    {authType === "custom_header" && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Header Scheme (optional)</label>
+                        <Input value={authScheme} onChange={(e) => setAuthScheme(e.target.value)} placeholder="Bearer" />
+                      </div>
+                    )}
                   </div>
                   <div className="grid gap-2 pt-4">
                     <div className="flex items-center justify-between gap-3">

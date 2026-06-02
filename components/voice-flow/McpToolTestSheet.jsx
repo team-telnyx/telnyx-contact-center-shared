@@ -32,10 +32,11 @@ import {
   IconVariable,
 } from "@tabler/icons-react";
 import { buildMcpToolArguments } from "@/lib/mcp/mcp-argument-builder";
+import { validateMcpToolArguments } from "@/lib/mcp/mcp-schema-validator";
 
 function extractUsedVariables(config = {}) {
   const variables = new Set();
-  const matches = JSON.stringify(config).match(/\{\{([^}]+)\}\}/g);
+  const matches = JSON.stringify({ input: config.input }).match(/\{\{([^}]+)\}\}/g);
   matches?.forEach((match) => {
     const name = match.replace(/\{\{|\}\}/g, "").trim();
     if (name && !name.includes("#") && !name.includes("/")) variables.add(name);
@@ -43,25 +44,24 @@ function extractUsedVariables(config = {}) {
   return Array.from(variables);
 }
 
-function buildRequestPreview(config = {}) {
+function buildRequestPreview(config = {}, variables = {}, selectedTool = null) {
   let argumentsPreview;
+  let validation = { valid: true, errors: [] };
+  const inputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
   try {
-    argumentsPreview = buildMcpToolArguments({
-      input: config.input,
-      instruction: config.instruction,
-      toolName: config.toolName,
-      toolInputSchema: config.toolInputSchema,
-    });
+    argumentsPreview = buildMcpToolArguments({ input: config.input, variables });
+    validation = validateMcpToolArguments(argumentsPreview, inputSchema);
   } catch (error) {
-    argumentsPreview = { error: error.message || "Invalid advanced JSON input" };
+    argumentsPreview = { error: error.message || "Invalid tool arguments JSON" };
+    validation = { valid: false, errors: [{ path: "/", message: error.message || "Invalid tool arguments JSON" }] };
   }
 
   return Object.fromEntries(
     Object.entries({
       serverId: config.serverId,
       toolName: config.toolName,
-      instruction: config.instruction,
       arguments: argumentsPreview,
+      schemaValidation: validation,
       responseVariable: config.responseVariable || "mcp_response",
     }).filter(([, value]) => value !== undefined && value !== null && value !== ""),
   );
@@ -81,10 +81,12 @@ export default function McpToolTestSheet({
   const [testError, setTestError] = useState(null);
   const [variablesExpanded, setVariablesExpanded] = useState(true);
   const [requestExpanded, setRequestExpanded] = useState(true);
+  const [schemaExpanded, setSchemaExpanded] = useState(false);
   const [responseExpanded, setResponseExpanded] = useState(true);
 
+  const inputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
   const usedVariables = useMemo(() => extractUsedVariables(config), [config]);
-  const requestPreview = useMemo(() => buildRequestPreview(config), [config]);
+  const requestPreview = useMemo(() => buildRequestPreview(config, testVariables, selectedTool), [config, testVariables, selectedTool]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,7 +134,7 @@ export default function McpToolTestSheet({
             Test MCP Tool
           </SheetTitle>
           <SheetDescription className="text-sm">
-            Test the selected MCP tool with variable substitution and inspect the response structure.
+            Test the selected MCP tool with schema validation and variable substitution.
           </SheetDescription>
         </SheetHeader>
 
@@ -148,23 +150,15 @@ export default function McpToolTestSheet({
                       <Badge variant="secondary" className="ml-auto text-xs">{usedVariables.length}</Badge>
                       <IconChevronRight className={`h-3 w-3 transition-transform ${variablesExpanded ? "rotate-90" : ""}`} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Provide sample values for variables in this MCP instruction.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Provide sample values for variables mapped to tool arguments.</p>
                   </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="px-3 pb-3 space-y-3">
                     {usedVariables.map((variable) => (
                       <div key={variable} className="space-y-1">
-                        <Label className="text-xs font-medium flex items-center gap-1">
-                          <IconVariable className="h-3 w-3" />
-                          {variable}
-                        </Label>
-                        <Input
-                          value={testVariables[variable] || ""}
-                          onChange={(event) => setTestVariables((prev) => ({ ...prev, [variable]: event.target.value }))}
-                          placeholder={`Enter value for ${variable}`}
-                          className="text-xs h-8"
-                        />
+                        <Label className="text-xs font-medium flex items-center gap-1"><IconVariable className="h-3 w-3" />{variable}</Label>
+                        <Input value={testVariables[variable] || ""} onChange={(event) => setTestVariables((prev) => ({ ...prev, [variable]: event.target.value }))} placeholder={`Enter value for ${variable}`} className="text-xs h-8" />
                       </div>
                     ))}
                   </CardContent>
@@ -180,55 +174,50 @@ export default function McpToolTestSheet({
                   <div className="flex items-center gap-2">
                     <IconEye className="h-3 w-3 text-green-600" />
                     <CardTitle className="text-sm font-semibold">Request Preview</CardTitle>
-                    <IconChevronRight className={`h-3 w-3 ml-auto transition-transform ${requestExpanded ? "rotate-90" : ""}`} />
+                    {requestPreview.schemaValidation?.valid ? <Badge variant="secondary" className="ml-auto">Schema valid</Badge> : <Badge variant="destructive" className="ml-auto">Schema errors</Badge>}
+                    <IconChevronRight className={`h-3 w-3 transition-transform ${requestExpanded ? "rotate-90" : ""}`} />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Server, tool, and arguments sent to MCP.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Server, tool, schema validation, and arguments sent to MCP.</p>
                 </CardHeader>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <CardContent className="px-3 pb-3 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-muted/50 rounded border">
-                      <Label className="text-xs text-muted-foreground">MCP Server</Label>
-                      <div className="text-sm font-medium mt-1">{selectedServer?.name || config.serverId || "Not selected"}</div>
-                    </div>
-                    <div className="p-3 bg-muted/50 rounded border">
-                      <Label className="text-xs text-muted-foreground">Tool</Label>
-                      <div className="text-sm font-medium mt-1">{selectedTool?.name || config.toolName || "Not selected"}</div>
-                    </div>
+                    <div className="p-3 bg-muted/50 rounded border"><Label className="text-xs text-muted-foreground">MCP Server</Label><div className="text-sm font-medium mt-1">{selectedServer?.name || config.serverId || "Not selected"}</div></div>
+                    <div className="p-3 bg-muted/50 rounded border"><Label className="text-xs text-muted-foreground">Tool</Label><div className="text-sm font-medium mt-1">{selectedTool?.name || config.toolName || "Not selected"}</div></div>
                   </div>
-                  <CodeBlock code={JSON.stringify(requestPreview, null, 2)} language="json" showLineNumbers maxHeight={320} className="max-h-80 overflow-auto">
-                    <CodeBlockCopyButton type="button" />
-                  </CodeBlock>
+                  <CodeBlock code={JSON.stringify(requestPreview, null, 2)} language="json" showLineNumbers maxHeight={320} className="max-h-80 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock>
                 </CardContent>
               </CollapsibleContent>
             </Collapsible>
           </Card>
 
-          <Button onClick={handleTest} disabled={isTesting || !config.serverId || !config.toolName || (!config.instruction && !config.input)} className="w-full" size="sm">
-            {isTesting ? (
-              <>
-                <IconLoader2 className="h-3 w-3 mr-2 animate-spin" />
-                Testing Tool...
-              </>
-            ) : (
-              <>
-                <IconFlask className="h-3 w-3 mr-2" />
-                Test Tool
-              </>
-            )}
+          <Card className="border border-border bg-card">
+            <Collapsible open={schemaExpanded} onOpenChange={setSchemaExpanded}>
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
+                  <div className="flex items-center gap-2">
+                    <IconCode className="h-3 w-3 text-blue-600" />
+                    <CardTitle className="text-sm font-semibold">Input Schema</CardTitle>
+                    <IconChevronRight className={`h-3 w-3 ml-auto transition-transform ${schemaExpanded ? "rotate-90" : ""}`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Persisted schema assigned to the selected tool.</p>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="px-3 pb-3">
+                  <CodeBlock code={JSON.stringify(inputSchema || {}, null, 2)} language="json" showLineNumbers maxHeight={320} className="max-h-80 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock>
+                </CardContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+
+          <Button onClick={handleTest} disabled={isTesting || !config.serverId || !config.toolName || !config.input} className="w-full" size="sm">
+            {isTesting ? <><IconLoader2 className="h-3 w-3 mr-2 animate-spin" />Testing Tool...</> : <><IconFlask className="h-3 w-3 mr-2" />Test Tool</>}
           </Button>
 
           {testError && (
-            <Card className="border-red-200 dark:border-red-800 bg-card">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
-                  <IconAlertCircle className="h-3 w-3" />
-                  <span className="text-xs font-medium">Test Failed</span>
-                </div>
-                <p className="text-xs text-red-700 dark:text-red-300 mt-1">{testError}</p>
-              </CardContent>
-            </Card>
+            <Card className="border-red-200 dark:border-red-800 bg-card"><CardContent className="p-3"><div className="flex items-center gap-2 text-red-800 dark:text-red-200"><IconAlertCircle className="h-3 w-3" /><span className="text-xs font-medium">Test Failed</span></div><p className="text-xs text-red-700 dark:text-red-300 mt-1">{testError}</p></CardContent></Card>
           )}
 
           {testResult && (
@@ -240,15 +229,7 @@ export default function McpToolTestSheet({
                       <IconDatabase className="h-3 w-3 text-green-600" />
                       <CardTitle className="text-sm font-semibold">Response Structure</CardTitle>
                       <div className="ml-auto flex items-center gap-2">
-                        {testResult.isError ? (
-                          <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                            <IconAlertCircle className="h-3 w-3 mr-1" /> Error
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            <IconCheck className="h-3 w-3 mr-1" /> Success
-                          </Badge>
-                        )}
+                        {testResult.isError ? <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"><IconAlertCircle className="h-3 w-3 mr-1" /> Error</Badge> : <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"><IconCheck className="h-3 w-3 mr-1" /> Success</Badge>}
                         <IconChevronRight className={`h-3 w-3 transition-transform ${responseExpanded ? "rotate-90" : ""}`} />
                       </div>
                     </div>
@@ -257,24 +238,8 @@ export default function McpToolTestSheet({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="px-3 pb-3 space-y-4">
-                    {testResult.text && (
-                      <div>
-                        <Label className="text-xs font-medium flex items-center gap-2 mb-2">
-                          <IconMessage2 className="h-3 w-3" />
-                          Response Text
-                        </Label>
-                        <div className="rounded border bg-muted/50 p-3 text-xs whitespace-pre-wrap">{testResult.text}</div>
-                      </div>
-                    )}
-                    <div>
-                      <Label className="text-xs font-medium flex items-center gap-2 mb-2">
-                        <IconCode className="h-3 w-3" />
-                        Response JSON
-                      </Label>
-                      <CodeBlock code={JSON.stringify(testResult, null, 2)} language="json" showLineNumbers maxHeight={384} className="max-h-96 overflow-auto">
-                        <CodeBlockCopyButton type="button" />
-                      </CodeBlock>
-                    </div>
+                    {testResult.text && <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconMessage2 className="h-3 w-3" />Response Text</Label><div className="rounded border bg-muted/50 p-3 text-xs whitespace-pre-wrap">{testResult.text}</div></div>}
+                    <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconCode className="h-3 w-3" />Response JSON</Label><CodeBlock code={JSON.stringify(testResult, null, 2)} language="json" showLineNumbers maxHeight={384} className="max-h-96 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>
                   </CardContent>
                 </CollapsibleContent>
               </Collapsible>

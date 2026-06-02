@@ -27,10 +27,10 @@ export async function GET(request) {
 
   try {
     const secrets = await getSecrets();
-    return NextResponse.json({ secrets });
+    return NextResponse.json({ ok: true, secrets });
   } catch (err) {
     const msg = err?.message || String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
 
@@ -57,9 +57,9 @@ export async function POST(request) {
       created_by: user.id,
     });
 
-    return NextResponse.json({ secret });
+    return NextResponse.json({ ok: true, secret });
   } catch (err) {
     const msg = err?.message || String(err);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ ok: false, error: msg }, { status: 400 });
   }
 }

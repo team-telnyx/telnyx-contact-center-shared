@@ -18,8 +18,6 @@ export async function POST(request) {
       serverId,
       toolName,
       input,
-      instruction,
-      toolInputSchema,
       testVariables = {},
     } = payload || {};
 
@@ -37,10 +35,7 @@ export async function POST(request) {
 
     const argumentsPayload = buildMcpToolArguments({
       input,
-      instruction,
       variables: testVariables,
-      toolName,
-      toolInputSchema,
     });
 
     const response = await callMcpTool({
