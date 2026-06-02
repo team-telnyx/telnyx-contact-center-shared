@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
-import { finishTelnyxMcpOAuth } from "@/lib/mcp/mcp-oauth";
+import { finishTelnyxMcpOAuth, browserSafeBaseUrl } from "@/lib/mcp/mcp-oauth";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -18,7 +18,7 @@ async function requireAdmin() {
 }
 
 function adminRedirect(request, params = {}) {
-  const url = new URL("/admin/mcp-servers", request.url);
+  const url = new URL("/admin/mcp-servers", browserSafeBaseUrl(request));
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
   }

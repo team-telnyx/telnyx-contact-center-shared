@@ -70,12 +70,16 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(validator, /removeAdditional:\s*false/, "validator must respect additionalProperties instead of stripping unknown fields");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
   assert.match(runner, /output:\s*1/, "runtime should route MCP errors through output 1");
+  assert.match(oauth, /browserSafeBaseUrl/, "OAuth should normalize server bind addresses before browser redirects");
+  assert.match(oauth, /baseUrl\.hostname === "0\.0\.0\.0"/, "OAuth should detect 0.0.0.0 origins");
+  assert.match(oauth, /baseUrl\.hostname = "localhost"/, "OAuth should redirect browsers to localhost instead of 0.0.0.0");
   assert.match(oauth, /code_challenge_method", "S256"/, "Telnyx Portal OAuth should use PKCE S256");
   assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/authorize/, "OAuth should use Telnyx authorization endpoint");
   assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/register/, "OAuth should support dynamic client registration");
   assert.match(oauth, /refresh_token/, "OAuth sessions should refresh tokens");
   assert.match(beginRoute, /NextResponse\.redirect\(authorizationUrl\)/, "begin route should redirect admins to Telnyx Portal");
   assert.match(callbackRoute, /finishTelnyxMcpOAuth/, "callback route should exchange the authorization code");
+  assert.match(callbackRoute, /browserSafeBaseUrl\(request\)/, "callback route should avoid redirecting browsers to 0.0.0.0");
 });
 
 test("MCP Server admin page uses local Contact Center secrets and persists discovered schemas", async () => {
