@@ -46,6 +46,7 @@ import {
   Brain,
   Heart,
   AlertCircle,
+  Activity,
   Volume2,
   Languages,
 } from "lucide-react";
@@ -294,6 +295,10 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           sentimentScore: t.sentimentScore,
           intent: t.intent,
           tags: t.tags,
+          confidence: t.confidence,
+          source: t.source,
+          provider: t.provider,
+          model: t.model,
         })),
         suggestions: currentSuggestions.map(s => ({
           id: s.id,
@@ -478,7 +483,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
       )}
 
       {/* 3 karty - równa szerokość, scrollable */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex gap-4 flex-1 min-h-0 min-w-0 overflow-hidden">
         {/* Left: Workflow Stages & Items */}
         <WorkflowStagesCard
           stages={stages}
@@ -836,7 +841,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
   };
 
   return (
-    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <ClipboardList className="h-4 w-4 text-purple-500" />
@@ -1146,7 +1151,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
   }, [transcriptions]);
 
   return (
-    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-blue-500" />
@@ -1192,6 +1197,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
   const intent = transcription.intent;
+  const sttConfidencePercent = formatSttConfidencePercent(transcription.confidence);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const isInterim = !transcription.isFinal;
 
@@ -1289,11 +1295,21 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
         </div>
       )}
 
-      {/* Intent and sentiment badges */}
-      {(intent || sentiment) && (
+      {/* Intent, sentiment, and STT confidence badges */}
+      {(intent || sentiment || sttConfidencePercent !== null) && (
         <div className={`flex items-center gap-1.5 mt-1 ${
           isCustomer ? "" : "flex-row-reverse"
         }`}>
+          {sttConfidencePercent !== null && (
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-cyan-500/10 text-cyan-500 border-cyan-500/50"
+              title="Speech-to-text recognition confidence from Telnyx Standalone STT"
+            >
+              <Activity className="h-3 w-3 mr-1" />
+              STT Confidence {sttConfidencePercent}%
+            </Badge>
+          )}
           {intent && (
             <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50">
               {intent}
@@ -1311,6 +1327,13 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId }
       )}
     </div>
   );
+}
+
+function formatSttConfidencePercent(confidence) {
+  if (confidence === null || confidence === undefined || confidence === "") return null;
+  const numeric = typeof confidence === "number" ? confidence : Number(confidence);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(Math.min(1, Math.max(0, numeric)) * 100);
 }
 
 /**
@@ -1570,7 +1593,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const isComplete = !currentSlot && suggestions.length > 0;
 
   return (
-    <Card className="w-1/3 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-amber-500" />

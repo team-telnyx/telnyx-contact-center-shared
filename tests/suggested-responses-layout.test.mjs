@@ -7,6 +7,9 @@ const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 test("suggested responses cards stay contained inside the right panel", async () => {
   const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
 
+  assert.match(ui, /className="flex gap-4 flex-1 min-h-0 min-w-0 overflow-hidden"/);
+  assert.match(ui, /className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border"/);
+  assert.doesNotMatch(ui, /className="w-1\/3 flex flex-col overflow-hidden border-2 border-border"/);
   assert.match(ui, /ScrollArea className="h-full overflow-x-hidden"/);
   assert.match(ui, /className="px-4 py-4 space-y-3 max-w-full overflow-x-hidden"/);
   assert.match(ui, /group w-full max-w-full overflow-hidden/);
