@@ -68,6 +68,10 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.doesNotMatch(oauth, /createSecret/, "OAuth callback must not create duplicate token secrets on reconnect");
   assert.match(secrets, /ON CONFLICT \(name\) DO UPDATE/, "secrets should support atomic upsert by unique name");
   assert.match(secrets, /deleted_at = NULL/, "secret upsert should revive soft-deleted secrets with the same unique name");
+  assert.match(runner, /tokenSecretName\(server\.id\)/, "Telnyx MCP runtime should prefer connected OAuth sessions by server id");
+  assert.match(runner, /authType !== "oauth_client_credentials"/, "Telnyx MCP OAuth session fallback should not override explicit client credentials");
+  assert.match(oauth, /serverUpdate\.rowCount < 1/, "OAuth callback should fail if the MCP server row was not updated");
+  assert.match(oauth, /was not found while saving OAuth session/, "OAuth callback should expose DB/server mismatch instead of pretending success");
   assert.match(runner, /Telnyx Portal OAuth can only be used with the Telnyx MCP URL/, "runtime should not send Telnyx Portal OAuth tokens to arbitrary MCP URLs");
   assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
