@@ -59,6 +59,9 @@ test("Call Flow exposes MCP Tool node with editor, success/error outputs, and ru
   assert.match(runner, /allowed_tools/, "runtime should enforce server allowed_tools allowlist");
   assert.match(runner, /resolveMcpTemplateValue/, "runtime should interpolate {{variable}} inputs");
   assert.match(runner, /parseMcpToolInputConfig\(config\.input, variables\)/, "runtime should resolve pure {{variable}} input before JSON parsing");
+  assert.match(runner, /process\.env\[apiKeyRef\]/, "runtime should resolve selected API key refs from environment variables as well as local secrets");
+  assert.match(runner, /no matching runtime secret was found/, "runtime should fail fast instead of calling authenticated MCP servers without auth");
+  assert.doesNotMatch(runner, /if \(secret\?\.value\) headers\.Authorization[\s\S]*new URL\(server\.url\)/, "runtime must not silently omit auth when an API key ref cannot be resolved");
   assert.doesNotMatch(runner, /JSON\.parse\(config\.input/, "runtime should not parse pure template input before resolving it");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
   assert.match(runner, /output:\s*1/, "runtime should route MCP errors through output 1");
