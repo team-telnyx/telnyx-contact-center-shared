@@ -31,6 +31,7 @@ import {
   IconMessage2,
   IconVariable,
 } from "@tabler/icons-react";
+import { buildMcpToolArguments } from "@/lib/mcp/mcp-argument-builder";
 
 function extractUsedVariables(config = {}) {
   const variables = new Set();
@@ -43,15 +44,24 @@ function extractUsedVariables(config = {}) {
 }
 
 function buildRequestPreview(config = {}) {
-  const advancedInput = config.input && String(config.input).trim() !== "{}"
-    ? config.input
-    : undefined;
+  let argumentsPreview;
+  try {
+    argumentsPreview = buildMcpToolArguments({
+      input: config.input,
+      instruction: config.instruction,
+      toolName: config.toolName,
+      toolInputSchema: config.toolInputSchema,
+    });
+  } catch (error) {
+    argumentsPreview = { error: error.message || "Invalid advanced JSON input" };
+  }
+
   return Object.fromEntries(
     Object.entries({
       serverId: config.serverId,
       toolName: config.toolName,
       instruction: config.instruction,
-      arguments: advancedInput ? "Advanced JSON overrides/enriches instruction mode" : { request: config.instruction || "" },
+      arguments: argumentsPreview,
       responseVariable: config.responseVariable || "mcp_response",
     }).filter(([, value]) => value !== undefined && value !== null && value !== ""),
   );

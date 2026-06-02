@@ -82,10 +82,9 @@ test("MCP Server admin page uses Telnyx integration secret identifiers for API r
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");
 });
 
-async function loadMcpRunnerForUnitTests() {
-  const source = await read("lib/mcp/mcp-tool-runner.js");
-  const stripped = source.replace(/^import .*$/gm, "");
-  return import(`data:text/javascript,${encodeURIComponent(stripped)}`);
+async function loadMcpArgumentBuilderForUnitTests() {
+  const source = await read("lib/mcp/mcp-argument-builder.js");
+  return import(`data:text/javascript,${encodeURIComponent(source)}`);
 }
 
 test("MCP Tool editor uses natural-language instruction input and supports test response preview", async () => {
@@ -117,14 +116,17 @@ test("MCP Tool editor uses natural-language instruction input and supports test 
   assert.match(route, /request\.headers\.get\("authorization"\)/);
   assert.match(route, /NextResponse\.json/);
 
-  assert.match(runner, /export function buildMcpToolArguments/);
-  assert.match(runner, /instruction/);
-  assert.match(runner, /request:/, "instruction mode should map user text into a request argument by default");
-  assert.match(runner, /filter_country_iso_alpha2 = "PL"/, "Polish number instructions should infer PL country filter for list_phone_numbers");
+  const argumentBuilder = await read("lib/mcp/mcp-argument-builder.js");
+
+  assert.match(runner, /buildMcpToolArguments/);
+  assert.match(sheet, /buildMcpToolArguments/, "Request Preview should use the same schema-driven builder as runtime");
+  assert.match(argumentBuilder, /instruction/);
+  assert.match(argumentBuilder, /request:/, "instruction mode should map user text into a request argument by default");
+  assert.match(argumentBuilder, /countryIso:[\s\S]*"PL"/, "Polish number instructions should infer PL country filter for list_phone_numbers");
 });
 
 test("MCP list_phone_numbers instruction maps to supported Telnyx MCP arguments", async () => {
-  const { buildMcpToolArguments } = await loadMcpRunnerForUnitTests();
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
 
   const args = buildMcpToolArguments({
     toolName: "list_phone_numbers",
@@ -138,4 +140,67 @@ test("MCP list_phone_numbers instruction maps to supported Telnyx MCP arguments"
     },
   });
   assert.equal(args.request.instruction, undefined, "list_phone_numbers must not receive unsupported instruction kwarg");
+});
+
+test("MCP instruction mapping respects nested tool inputSchema and does not pass unsupported instruction", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+  const toolInputSchema = {
+    type: "object",
+    properties: {
+      request: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient phone number" },
+          from_: { type: "string", description: "Sender ID or source address" },
+          text: { type: "string", description: "Message body text" },
+        },
+        required: ["to", "from_", "text"],
+      },
+    },
+  };
+
+  const args = buildMcpToolArguments({
+    toolName: "send_message",
+    instruction: "Send SMS to +48602410402 from Telnyx alphasender ID DEMO with text \"Welcome to Telnyx\"",
+    toolInputSchema,
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      to: "+48602410402",
+      from_: "DEMO",
+      text: "Welcome to Telnyx",
+    },
+  });
+  assert.equal(args.request.instruction, undefined, "schema-driven tools must not receive unsupported instruction field");
+});
+
+test("MCP advanced JSON is pruned to the selected tool inputSchema", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+  const toolInputSchema = {
+    type: "object",
+    properties: {
+      request: {
+        type: "object",
+        properties: {
+          to: { type: "string" },
+          text: { type: "string" },
+        },
+      },
+    },
+  };
+
+  const args = buildMcpToolArguments({
+    toolName: "send_message",
+    instruction: "Send SMS to +48602410402 with text \"Welcome\"",
+    input: JSON.stringify({ request: { instruction: "do not send", text: "Override", extra: "drop" }, ignored: true }),
+    toolInputSchema,
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      to: "+48602410402",
+      text: "Override",
+    },
+  });
 });
