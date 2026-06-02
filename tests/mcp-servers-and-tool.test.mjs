@@ -175,6 +175,40 @@ test("MCP instruction mapping respects nested tool inputSchema and does not pass
   assert.equal(args.request.instruction, undefined, "schema-driven tools must not receive unsupported instruction field");
 });
 
+test("MCP instruction mapping respects string request schemas", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+  const toolInputSchema = {
+    type: "object",
+    properties: {
+      request: { type: "string" },
+    },
+    required: ["request"],
+  };
+
+  const args = buildMcpToolArguments({
+    toolName: "search_docs",
+    instruction: "Find MCP authentication docs",
+    toolInputSchema,
+  });
+
+  assert.deepEqual(args, { request: "Find MCP authentication docs" });
+});
+
+test("MCP list_phone_numbers instruction preserves German country filters", async () => {
+  const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
+
+  const args = buildMcpToolArguments({
+    toolName: "list_phone_numbers",
+    instruction: "List German phone numbers",
+  });
+
+  assert.deepEqual(args, {
+    request: {
+      filter_country_iso_alpha2: "DE",
+    },
+  });
+});
+
 test("MCP advanced JSON is pruned to the selected tool inputSchema", async () => {
   const { buildMcpToolArguments } = await loadMcpArgumentBuilderForUnitTests();
   const toolInputSchema = {
