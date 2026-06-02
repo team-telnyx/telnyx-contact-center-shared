@@ -1589,8 +1589,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-        <ScrollArea className="h-full" ref={scrollRef}>
-          <div className="p-4 space-y-3">
+        <ScrollArea className="h-full overflow-x-hidden" ref={scrollRef}>
+          <div className="px-4 py-4 space-y-3 max-w-full overflow-x-hidden">
             {/* Fix 3: Show waiting state while AI data loads on AI-assisted calls */}
             {suggestions.length === 0 && isAiAssisted && aiDataLoading ? (
               <div className="text-center text-muted-foreground py-8">
@@ -1613,7 +1613,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                   return (
                     <div
                       key={suggestion.id}
-                      className={`group p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                      className={`group w-full max-w-full overflow-hidden p-3 rounded-lg border-2 transition-all cursor-pointer ${
                         isLatest
                           ? "border-amber-500/50 bg-amber-500/5 hover:border-amber-500/80 hover:bg-amber-500/10"
                           : "border-border/50 bg-muted/30 hover:border-border hover:bg-muted/50"
@@ -1621,10 +1621,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       onClick={() => handleCopy(suggestion)}
                     >
                       {/* Context badge */}
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] ${
+                          className={`text-[10px] max-w-full truncate ${
                             isLatest 
                               ? "bg-purple-500/10 text-purple-500 border-purple-500/50"
                               : "bg-muted text-muted-foreground"
@@ -1635,7 +1635,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                         <ChevronRight className="h-3 w-3 text-muted-foreground" />
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] ${
+                          className={`text-[10px] max-w-full truncate ${
                             isLatest
                               ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
                               : "bg-muted text-muted-foreground"
@@ -1656,7 +1656,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           isLatest ? "text-amber-500" : "text-muted-foreground"
                         }`} />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm leading-relaxed whitespace-pre-wrap ${
+                          <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
                             isLatest ? "font-medium" : "text-muted-foreground"
                           }`}>
                             "{suggestion.text}"
