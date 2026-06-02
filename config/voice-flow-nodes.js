@@ -2549,12 +2549,20 @@ export const VOICE_FLOW_NODES = {
         required: true,
         description: "Allowed tool exposed by the selected MCP server",
       },
+      instruction: {
+        type: "textarea",
+        label: "Instruction",
+        required: false,
+        default: "",
+        placeholder: "list all Polish numbers",
+        description: "Plain-language instruction for the MCP tool. It is sent as the request argument and supports {{variable}} references.",
+      },
       input: {
         type: "json",
-        label: "Tool Input",
+        label: "Advanced Input",
         required: false,
         default: "{}",
-        description: "JSON input for the tool. Supports {{variable}} references with type preservation for pure variables.",
+        description: "Optional advanced JSON arguments for the tool. Supports {{variable}} references with type preservation for pure variables.",
       },
       responseVariable: {
         type: "string",

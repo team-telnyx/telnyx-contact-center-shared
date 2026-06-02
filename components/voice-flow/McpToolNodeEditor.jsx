@@ -13,9 +13,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { VariableTextarea } from "./VariableTextarea";
 import { VariableInput } from "./VariableInput";
-import { IconAlertCircle, IconRefresh, IconTools } from "@tabler/icons-react";
+import McpToolTestSheet from "./McpToolTestSheet";
+import {
+  IconAlertCircle,
+  IconChevronRight,
+  IconFlask,
+  IconRefresh,
+  IconTools,
+} from "@tabler/icons-react";
 
 function safeStringify(value) {
   if (typeof value === "string") return value;
@@ -26,6 +34,11 @@ function safeStringify(value) {
   }
 }
 
+function getConfigWithoutTestResponse(nodeConfig = {}) {
+  const { testResponse: _testResponse, ...configWithoutTestResponse } = nodeConfig;
+  return configWithoutTestResponse;
+}
+
 export default function McpToolNodeEditor({
   config,
   onChange,
@@ -33,6 +46,7 @@ export default function McpToolNodeEditor({
 }) {
   const serverId = config?.serverId || "";
   const toolName = config?.toolName || "";
+  const instruction = config?.instruction || "";
   const input = config?.input ?? "{}";
   const responseVariable = config?.responseVariable || "mcp_response";
   const errorVariable = config?.errorVariable || "mcp_error";
@@ -42,8 +56,12 @@ export default function McpToolNodeEditor({
   const [tools, setTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [advancedOpen, setAdvancedOpen] = useState(Boolean(config?.input && config.input !== "{}"));
+  const [testOpen, setTestOpen] = useState(false);
   const latestServerRef = useRef(serverId);
+  const latestConfigRef = useRef(config || {});
   latestServerRef.current = serverId;
+  latestConfigRef.current = config || {};
 
   const selectedServer = useMemo(
     () => servers.find((server) => server.id === serverId) || null,
@@ -56,6 +74,21 @@ export default function McpToolNodeEditor({
 
   const handleChange = (field, value) => {
     onChange({ ...(config || {}), [field]: value });
+  };
+
+  const handleTestSuccess = (testResponse, configAtTestStart = latestConfigRef.current) => {
+    const latestConfig = latestConfigRef.current;
+    const latestComparableConfig = getConfigWithoutTestResponse(latestConfig);
+    const testedComparableConfig = getConfigWithoutTestResponse(configAtTestStart);
+    if (JSON.stringify(latestComparableConfig) !== JSON.stringify(testedComparableConfig)) return;
+
+    onChange({
+      ...latestConfig,
+      testResponse: {
+        ...testResponse,
+        testedAt: new Date().toISOString(),
+      },
+    });
   };
 
   async function loadServers() {
@@ -179,28 +212,47 @@ export default function McpToolNodeEditor({
           </SelectContent>
         </Select>
         {selectedTool?.description && <p className="text-xs text-muted-foreground">{selectedTool.description}</p>}
-        {selectedTool?.input_schema && (
-          <pre className="text-[11px] bg-muted rounded p-2 overflow-auto max-h-44">{JSON.stringify(selectedTool.input_schema, null, 2)}</pre>
-        )}
         {selectedServer && !toolsLoading && tools.length === 0 && (
           <Badge variant="outline">No allowed tools discovered</Badge>
         )}
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs">Tool Input JSON</Label>
+        <Label className="text-xs">Instruction</Label>
         <VariableTextarea
-          value={safeStringify(input)}
-          onChange={(value) => handleChange("input", value)}
+          value={instruction}
+          onChange={(value) => handleChange("instruction", value)}
           availableVariables={availableVariables}
-          placeholder={'{\n  "phone": "{{from}}",\n  "query": "Find customer {{from}}"\n}'}
-          rows={8}
-          className="font-mono text-xs"
+          placeholder="list all Polish numbers, show only active numbers, page size 20"
+          rows={4}
         />
         <p className="text-xs text-muted-foreground">
-          Supports variables. A pure value like <code>{"{{contact_record}}"}</code> keeps the original object/array type at runtime.
+          Describe what this tool should do in plain English. Variables like <code>{"{{customer_country}}"}</code> are supported.
         </p>
       </div>
+
+      <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+        <CollapsibleTrigger asChild>
+          <Button type="button" variant="ghost" size="sm" className="w-full justify-start px-0">
+            <IconChevronRight className={`h-4 w-4 mr-1 transition-transform ${advancedOpen ? "rotate-90" : ""}`} />
+            Advanced JSON arguments
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-2">
+          <Label className="text-xs">Advanced Input JSON</Label>
+          <VariableTextarea
+            value={safeStringify(input)}
+            onChange={(value) => handleChange("input", value)}
+            availableVariables={availableVariables}
+            placeholder={'{\n  "page_size": 20,\n  "filter_country_iso_alpha2": "PL"\n}'}
+            rows={6}
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Use only when you need exact tool arguments. This is merged with the instruction request.
+          </p>
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-2">
@@ -223,6 +275,26 @@ export default function McpToolNodeEditor({
           />
         </div>
       </div>
+
+      {config?.testResponse?.testedAt && (
+        <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+          Last tested: {new Date(config.testResponse.testedAt).toLocaleString()}
+        </div>
+      )}
+
+      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setTestOpen(true)} disabled={!serverId || !toolName}>
+        <IconFlask className="h-4 w-4 mr-2" />
+        Test Tool
+      </Button>
+
+      <McpToolTestSheet
+        open={testOpen}
+        onOpenChange={setTestOpen}
+        config={config || {}}
+        selectedServer={selectedServer}
+        selectedTool={selectedTool}
+        onTestSuccess={handleTestSuccess}
+      />
     </div>
   );
 }
