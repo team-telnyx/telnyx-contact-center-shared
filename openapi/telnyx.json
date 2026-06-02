@@ -483,7 +483,7 @@
     },
     {
       "name": "SIP Registration Status",
-      "description": "Look up SIP registration status across credential types"
+      "description": "Look up the live SIP registration status of a UAC connection."
     },
     {
       "name": "SIPREC Connectors",
@@ -42157,7 +42157,7 @@
     "/sip_registration_status": {
       "get": {
         "summary": "Check SIP registration status",
-        "description": "Returns the live SIP registration state of a connection or credential. Supports UAC third-party credentials, telephony credentials, and SIP credential connections.",
+        "description": "Returns the live SIP registration state of a UAC connection: whether it is currently registered, when it last registered, and the last response Telnyx received from the registrar. Only `uac_external_credential` is supported today.",
         "operationId": "GetSipRegistrationStatus",
         "tags": [
           "SIP Registration Status"
@@ -42167,13 +42167,11 @@
             "name": "credential_type",
             "in": "query",
             "required": true,
-            "description": "The kind of credential to look up.",
+            "description": "The kind of credential to look up. Only `uac_external_credential` is supported today.",
             "schema": {
               "type": "string",
               "enum": [
-                "uac_external_credential",
-                "telephony_credential",
-                "sip_credential_connection"
+                "uac_external_credential"
               ]
             }
           },
@@ -42181,10 +42179,11 @@
             "name": "connection_id",
             "in": "query",
             "required": true,
-            "description": "Identifier of the connection or credential to look up.",
+            "description": "Identifier of the UAC connection to look up.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "1234567890"
           },
           {
             "name": "user_id",
@@ -42193,7 +42192,8 @@
             "description": "Owner of the connection. Used to authorize the lookup.",
             "schema": {
               "type": "string"
-            }
+            },
+            "example": "100"
           }
         ],
         "responses": {
@@ -42217,7 +42217,7 @@
             "description": "Connection exists but is not owned by user_id"
           },
           "404": {
-            "description": "No connection or credential matches connection_id"
+            "description": "No connection matches connection_id"
           }
         },
         "x-latency-category": "responsive"
@@ -48199,6 +48199,19 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateVerificationResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "type": "call",
+                    "record_type": "verification",
+                    "phone_number": "+13035551234",
+                    "verify_profile_id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "timeout_secs": 300,
+                    "status": "pending",
+                    "created_at": "2020-09-14T17:03:32.965812",
+                    "updated_at": "2020-09-14T17:03:32.965812"
+                  }
                 }
               }
             }
@@ -48234,6 +48247,19 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateVerificationResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "type": "flashcall",
+                    "record_type": "verification",
+                    "phone_number": "+13035551234",
+                    "verify_profile_id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "timeout_secs": 300,
+                    "status": "pending",
+                    "created_at": "2020-09-14T17:03:32.965812",
+                    "updated_at": "2020-09-14T17:03:32.965812"
+                  }
                 }
               }
             }
@@ -48291,7 +48317,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateVerificationRequestSMS"
+                "$ref": "#/components/schemas/CreateVerificationRequestWhatsapp"
               }
             }
           },
@@ -48304,6 +48330,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CreateVerificationResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "type": "whatsapp",
+                    "record_type": "verification",
+                    "phone_number": "+13035551234",
+                    "verify_profile_id": "12ade33a-21c0-473b-b055-b3c836e1c292",
+                    "custom_code": "43612",
+                    "timeout_secs": 300,
+                    "status": "pending",
+                    "created_at": "2020-09-14T17:03:32.965812",
+                    "updated_at": "2020-09-14T17:03:32.965812"
+                  }
                 }
               }
             }
@@ -85802,6 +85842,42 @@
           }
         }
       },
+      "CreateVerificationRequestWhatsapp": {
+        "title": "CreateVerificationRequestWhatsapp",
+        "description": "The request body when creating a WhatsApp verification.",
+        "required": [
+          "phone_number",
+          "verify_profile_id"
+        ],
+        "type": "object",
+        "properties": {
+          "phone_number": {
+            "example": "+13035551234",
+            "type": "string",
+            "description": "+E164 formatted phone number."
+          },
+          "verify_profile_id": {
+            "example": "12ade33a-21c0-473b-b055-b3c836e1c292",
+            "type": "string",
+            "format": "uuid",
+            "description": "The identifier of the associated Verify profile."
+          },
+          "custom_code": {
+            "example": "43612",
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Send a self-generated numeric code to the end-user",
+            "default": null
+          },
+          "timeout_secs": {
+            "type": "integer",
+            "example": 300,
+            "description": "The number of seconds the verification code is valid for."
+          }
+        }
+      },
       "CreateVerificationResponse": {
         "title": "CreateVerifyVerificationResponse",
         "required": [
@@ -90107,46 +90183,31 @@
             "type": "string"
           },
           "outbound_proxy": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "transport": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": "string",
             "enum": [
               "TCP",
               "UDP",
-              "TLS",
-              null
+              "TLS"
             ]
           },
           "username": {
             "type": "string"
           },
           "auth_username": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "from_user": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "expiration_sec": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": "integer"
           },
           "password": {
             "type": "string",
+            "description": "Always redacted.",
             "example": "***"
           }
         }
@@ -96221,8 +96282,7 @@
         "description": "Internal routing target the connection delivers calls to.",
         "properties": {
           "destination_uri": {
-            "type": "string",
-            "example": "1006@assistant-abc123.sip.telnyx.com"
+            "type": "string"
           }
         }
       },
@@ -116342,13 +116402,20 @@
       "SipRegistrationStatus": {
         "type": "object",
         "properties": {
+          "credential_type": {
+            "type": "string",
+            "description": "The credential type that was looked up.",
+            "enum": [
+              "uac_external_credential"
+            ]
+          },
           "connection_id": {
             "type": "string",
-            "description": "Identifier of the resource."
+            "description": "Identifier of the UAC connection."
           },
           "user_id": {
             "type": "string",
-            "description": "Owner of the resource."
+            "description": "Owner of the connection."
           },
           "connection_name": {
             "type": "string",
@@ -116362,6 +116429,11 @@
             "type": "string",
             "description": "Internal pairing state, e.g. ACTIVE or INACTIVE.",
             "example": "ACTIVE"
+          },
+          "external_state": {
+            "type": "string",
+            "description": "Registration state on the external (UAC / PBX) side, e.g. REGED.",
+            "example": "REGED"
           },
           "registered": {
             "type": "boolean",
@@ -116377,6 +116449,16 @@
           },
           "internal_uac_settings": {
             "$ref": "#/components/schemas/InternalUacSettings"
+          },
+          "b2bua_external": {
+            "type": "object",
+            "description": "Raw external-side registration block reported by the registrar.",
+            "additionalProperties": true
+          },
+          "b2bua_internal": {
+            "type": "object",
+            "description": "Raw internal-side block reported by the registrar.",
+            "additionalProperties": true
           }
         }
       },
