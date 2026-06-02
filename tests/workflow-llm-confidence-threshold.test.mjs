@@ -36,6 +36,22 @@ test("live analyzer uses the workflow threshold and persists low-confidence sugg
   assert.match(route, /source_transcript = \$4/);
 });
 
+test("live analyzer keeps suggested items eligible for later higher-confidence slot extraction", async () => {
+  const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
+
+  assert.match(route, /AND ist\.status IN \('pending', 'suggested'\)/);
+  assert.doesNotMatch(route, /AND ist\.status = 'pending'/);
+});
+
+test("workflow UI analyzes every unprocessed final transcript, not only the latest one", async () => {
+  const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
+
+  assert.match(ui, /const finalTranscriptionsToAnalyze = transcriptions\.filter/);
+  assert.match(ui, /for \(const transcription of finalTranscriptionsToAnalyze\)/);
+  assert.match(ui, /analyzedTranscriptionIdsRef\.current\.add\(transcription\.id\)/);
+  assert.doesNotMatch(ui, /const latestTranscription = transcriptions\[transcriptions\.length - 1\]/);
+});
+
 test("workflow store keeps suggested slot values and exposes LLM confidence locally", async () => {
   const store = await read("../lib/stores/workflow-store.js");
 

@@ -371,19 +371,28 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     if (!session || transcriptions.length === 0) return;
     if (assistConfig.auto_detect_completion === false) return;
 
-    const latestTranscription = transcriptions[transcriptions.length - 1];
-    if (!latestTranscription.isFinal) return;
-    if (analyzedTranscriptionIdsRef.current.has(latestTranscription.id)) return;
-    analyzedTranscriptionIdsRef.current.add(latestTranscription.id);
+    const finalTranscriptionsToAnalyze = transcriptions.filter(
+      (transcription) =>
+        transcription?.isFinal &&
+        transcription?.id &&
+        !analyzedTranscriptionIdsRef.current.has(transcription.id)
+    );
+    if (finalTranscriptionsToAnalyze.length === 0) return;
+
+    for (const transcription of finalTranscriptionsToAnalyze) {
+      analyzedTranscriptionIdsRef.current.add(transcription.id);
+    }
 
     const analyzeIfNew = async () => {
-      try {
-        await analyzeTranscript(
-          latestTranscription.transcript,
-          latestTranscription.track
-        );
-      } catch (err) {
-        console.error("[AgentAssistWorkflow] Analysis error:", err);
+      for (const transcription of finalTranscriptionsToAnalyze) {
+        try {
+          await analyzeTranscript(
+            transcription.transcript,
+            transcription.track
+          );
+        } catch (err) {
+          console.error("[AgentAssistWorkflow] Analysis error:", err);
+        }
       }
     };
 

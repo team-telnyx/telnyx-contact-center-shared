@@ -84,7 +84,9 @@ export async function POST(request) {
       });
     }
 
-    // Get pending items for current and upcoming stages
+    // Get unfinished items for current and upcoming stages.
+    // Include suggested rows so a later, clearer utterance can replace a low-confidence
+    // suggestion instead of freezing the slot until the agent edits it manually.
     const { rows: pendingItems } = await pool.query(
       `SELECT 
         i.id as item_id,
@@ -102,7 +104,7 @@ export async function POST(request) {
        JOIN aa_workflow_stages s ON i.stage_id = s.id
        JOIN aa_workflow_item_status ist ON ist.item_id = i.id AND ist.session_id = $1
        WHERE s.workflow_id = $2 
-         AND ist.status = 'pending'
+         AND ist.status IN ('pending', 'suggested')
        ORDER BY s.order_index, i.order_index`,
       [workflowSession.id, workflowSession.workflow_id]
     );
