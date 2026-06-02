@@ -90183,27 +90183,43 @@
             "type": "string"
           },
           "outbound_proxy": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "transport": {
-            "type": "string",
+            "type": [
+              "string",
+              "null"
+            ],
             "enum": [
               "TCP",
               "UDP",
-              "TLS"
+              "TLS",
+              null
             ]
           },
           "username": {
             "type": "string"
           },
           "auth_username": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "from_user": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "expiration_sec": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "password": {
             "type": "string",
