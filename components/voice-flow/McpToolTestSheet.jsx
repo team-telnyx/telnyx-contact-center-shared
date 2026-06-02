@@ -243,7 +243,7 @@ export default function McpToolTestSheet({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="px-3 pb-3 space-y-4">
-                    {testResult.text && <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconMessage2 className="h-3 w-3" />Response Text</Label><div className="rounded border bg-muted/50 p-3 text-xs whitespace-pre-wrap">{testResult.text}</div></div>}
+                    {testResult.text && <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconMessage2 className="h-3 w-3" />Response Text</Label><CodeBlock code={testResult.text} language="json" showLineNumbers maxHeight={320} className="max-h-80 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>}
                     <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconCode className="h-3 w-3" />Response JSON</Label><CodeBlock code={JSON.stringify(testResult, null, 2)} language="json" showLineNumbers maxHeight={384} className="max-h-96 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>
                   </CardContent>
                 </CollapsibleContent>

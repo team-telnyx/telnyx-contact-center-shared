@@ -117,6 +117,8 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(sheet, /validateMcpToolArguments/, "test sheet should validate request preview against selected schema");
   assert.match(sheet, /\/api\/voice\/flows\/test-mcp-tool/);
   assert.match(sheet, /CodeBlockCopyButton/);
+  assert.match(sheet, /Response Text[\s\S]*CodeBlock code=\{testResult\.text\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response text should render in the same scrollable code preview pattern as schema previews");
+  assert.doesNotMatch(sheet, /Response Text[\s\S]*whitespace-pre-wrap/, "response text should not render as an unbounded plain text block");
   assert.match(sheet, /onTestSuccess/);
 
   assert.match(route, /callMcpTool/);
