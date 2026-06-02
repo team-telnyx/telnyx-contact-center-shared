@@ -25,15 +25,22 @@ test("admin workflow API validates and persists llm_confidence_threshold", async
   assert.match(route, /Math\.round\(confidenceThreshold \* 100\) \/ 100/);
 });
 
-test("live analyzer uses the workflow threshold and persists low-confidence suggested slot values", async () => {
+test("live analyzer uses only the workflow threshold to split completed vs suggested values", async () => {
   const route = await read("../app/api/agent-assist/workflow/analyze/route.js");
+  const analyzer = await read("../lib/agent-assist/workflow-analyzer.js");
+  const prompts = await read("../lib/agent-assist/workflow-prompts.js");
 
   assert.match(route, /SELECT llm_model, llm_confidence_threshold FROM aa_workflows/);
   assert.match(route, /confidenceThreshold = normalizeConfidenceThreshold/);
+  assert.match(route, /if \(item\.type === "slot"\) \{\s*shouldComplete = true;/);
   assert.match(route, /completed\.confidence >= confidenceThreshold/);
   assert.match(route, /'suggested'/);
   assert.match(route, /completed_by = 'ai'/);
   assert.match(route, /source_transcript = \$4/);
+  assert.doesNotMatch(route, /confidence >= 0\.60/);
+  assert.doesNotMatch(analyzer, /confidence < 0\.60/);
+  assert.doesNotMatch(prompts, /0\.85-0\.94|0\.70-0\.84|0\.60-0\.69|Below 0\.60|auto-complete/);
+  assert.match(prompts, /The application will compare your confidence score against the workflow's configured confidence threshold/);
 });
 
 test("live analyzer keeps suggested items eligible for later higher-confidence slot extraction", async () => {

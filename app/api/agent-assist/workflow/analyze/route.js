@@ -167,9 +167,12 @@ export async function POST(request) {
         // Check if completion_trigger matches speaker
         const completionTrigger = item.completion_trigger || "agent";
         
-        // Determine if we should complete based on trigger
+        // Determine if we should complete based on trigger. Slot values are data capture
+        // fields and can be completed from either speaker when confidence is trusted.
         let shouldComplete = false;
-        if (completionTrigger === "either") {
+        if (item.type === "slot") {
+          shouldComplete = true;
+        } else if (completionTrigger === "either") {
           shouldComplete = true;
         } else if (completionTrigger === "customer" && speakerType === "customer") {
           shouldComplete = true;
@@ -212,7 +215,7 @@ export async function POST(request) {
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
           });
-        } else if (completed.confidence >= 0.60) {
+        } else {
           // Persist as suggestion (don't auto-complete) so the agent can confirm or correct it
           await client.query(
             `UPDATE aa_workflow_item_status
@@ -241,7 +244,7 @@ export async function POST(request) {
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
             completed_by: "ai",
-            low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
+            low_confidence: completed.confidence < confidenceThreshold,
             confidence_threshold: confidenceThreshold,
             completion_trigger_pending: !shouldComplete,
           });
