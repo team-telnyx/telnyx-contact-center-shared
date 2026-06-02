@@ -85,6 +85,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [loading, setLoading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [toolsLoading, setToolsLoading] = React.useState(false);
+  const [oauthConnecting, setOauthConnecting] = React.useState(false);
   const [toolsError, setToolsError] = React.useState(null);
   const latestContextRef = React.useRef({});
   latestContextRef.current = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
@@ -216,6 +217,16 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     }
   }
 
+  async function connectTelnyxOAuth() {
+    if (isNew) {
+      setToolsError("Save the MCP server before starting Telnyx OAuth.");
+      return;
+    }
+    setOauthConnecting(true);
+    setToolsError(null);
+    window.location.href = `/api/admin/mcp-servers/${encodeURIComponent(id)}/oauth/begin`;
+  }
+
   const toggleTool = (toolName) => {
     setAllowedTools((prev) => prev.includes(toolName) ? prev.filter((tool) => tool !== toolName) : [...prev, toolName]);
   };
@@ -282,13 +293,14 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
                           <SelectItem value="bearer">Bearer token</SelectItem>
+                          <SelectItem value="oauth_authorization_code">OAuth via Telnyx Portal</SelectItem>
                           <SelectItem value="oauth_client_credentials">OAuth Client Credentials</SelectItem>
                           <SelectItem value="api_key">API key header</SelectItem>
                           <SelectItem value="custom_header">Custom header</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    {authType !== "none" && (
+                    {authType !== "none" && authType !== "oauth_authorization_code" && (
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Local Secret</label>
                         <SecretRefCombobox value={authSecretName} onChange={setAuthSecretName} />
@@ -297,6 +309,20 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                             Store OAuth credentials as JSON {`{"client_id":"...","client_secret":"..."}`} or as client_id:client_secret. Telnyx MCP HTTP uses resource https://api.telnyx.com/v2/mcp.
                           </p>
                         )}
+                      </div>
+                    )}
+                    {authType === "oauth_authorization_code" && (
+                      <div className="space-y-2 sm:col-span-2">
+                        <label className="text-sm font-medium">Telnyx Portal OAuth</label>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" variant="outline" onClick={connectTelnyxOAuth} disabled={isNew || oauthConnecting}>
+                            {oauthConnecting ? "Connecting…" : authSecretName ? "Reconnect Telnyx Portal" : "Connect Telnyx Portal"}
+                          </Button>
+                          {authSecretName && <Badge variant="outline">Connected</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Uses the same Authorization Code + PKCE flow as Claude Desktop. Save the server first; then connect and authorize access in Telnyx Portal.
+                        </p>
                       </div>
                     )}
                     {(authType === "api_key" || authType === "custom_header") && (
