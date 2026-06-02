@@ -55,6 +55,8 @@ test("Call Flow exposes MCP Tool node with editor, success/error outputs, and ru
   assert.match(runner, /StreamableHTTPClientTransport/, "runtime should support streamable HTTP MCP transport");
   assert.match(runner, /allowed_tools/, "runtime should enforce server allowed_tools allowlist");
   assert.match(runner, /resolveMcpTemplateValue/, "runtime should interpolate {{variable}} inputs");
+  assert.match(runner, /parseMcpToolInputConfig\(config\.input, variables\)/, "runtime should resolve pure {{variable}} input before JSON parsing");
+  assert.doesNotMatch(runner, /JSON\.parse\(config\.input/, "runtime should not parse pure template input before resolving it");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
   assert.match(runner, /output:\s*1/, "runtime should route MCP errors through output 1");
 });
