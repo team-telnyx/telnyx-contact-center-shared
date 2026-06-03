@@ -54,6 +54,11 @@ test("Expression Builder renders a saved-payload dropdown that loads JSON into T
     /aria-label="Test Data JSON code editor"[\s\S]*bg-black[\s\S]*font-mono/,
     "manual editing should remain available as a dark code-styled JSON editor",
   );
+  assert.match(
+    source,
+    /Right Column - Expression Editor & Testing[\s\S]*overflow-y-auto[\s\S]*Test Expression[\s\S]*border rounded-md p-4 bg-muted\/30 flex flex-col[\s\S]*Result:/,
+    "the right side should scroll and the test panel should size to content so large Test Data previews do not hide the Result section",
+  );
 });
 
 test("payload option helper exposes HTTP, Data Action, MCP Tool, HTTP initiator, and webhook payload shapes", async () => {

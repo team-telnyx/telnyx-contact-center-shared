@@ -394,7 +394,7 @@ export function ExpressionBuilderModal({
             </div>
 
             {/* Right Column - Expression Editor & Testing */}
-            <div className="space-y-4 flex flex-col min-h-0 overflow-hidden">
+            <div className="space-y-4 flex flex-col min-h-0 overflow-y-auto pr-2">
               {/* Expression Textarea */}
               <div className="min-w-0">
                 <Label className="text-sm font-semibold mb-2 block">
@@ -466,7 +466,7 @@ export function ExpressionBuilderModal({
               )}
 
               {/* Test Expression */}
-              <div className="border rounded-md p-4 bg-muted/30 flex-1 flex flex-col min-h-0">
+              <div className="border rounded-md p-4 bg-muted/30 flex flex-col">
                 <div className="mb-3 space-y-2">
                   <Label className="text-sm font-semibold block">
                     Test Data (provide a JSON object)
@@ -510,13 +510,13 @@ export function ExpressionBuilderModal({
                   )}
                 </div>
 
-                <div className="space-y-3 flex-1 flex flex-col min-h-0">
+                <div className="space-y-3">
                   {hasPreviewableTestData ? (
                     <CodeBlock
                       code={testData}
                       language="json"
-                      maxHeight={320}
-                      className="max-h-80 overflow-auto"
+                      maxHeight={220}
+                      className="max-h-[220px] overflow-auto"
                     >
                       <CodeBlockCopyButton type="button" />
                       <Button
@@ -576,18 +576,17 @@ export function ExpressionBuilderModal({
                   )}
 
                   {testResult && (
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    <div>
                       {testResult.success ? (
-                        <div className="h-full overflow-auto">
-                          <CodeBlock
-                            code={JSON.stringify(testResult.value, null, 2)}
-                            language="json"
-                          >
-                            <CodeBlockCopyButton />
-                          </CodeBlock>
-                        </div>
+                        <CodeBlock
+                          code={JSON.stringify(testResult.value, null, 2)}
+                          language="json"
+                          maxHeight={240}
+                        >
+                          <CodeBlockCopyButton />
+                        </CodeBlock>
                       ) : (
-                        <div className="h-full border rounded-md bg-destructive/10 overflow-auto">
+                        <div className="max-h-60 border rounded-md bg-destructive/10 overflow-auto">
                           <div className="text-xs font-mono break-all p-3 text-destructive">
                             {testResult.error}
                           </div>
