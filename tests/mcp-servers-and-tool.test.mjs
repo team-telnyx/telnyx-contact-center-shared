@@ -185,6 +185,12 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(adminPage, /oauthStatus=\{oauthStatus\}/, "admin page should pass OAuth status into the sheet");
   assert.match(sheet, /Select All \(\{availableTools\.length\} tools\)/, "sheet should support bulk allowlist selection");
   assert.match(sheet, /auth_secret_name/, "sheet should save local auth secret names");
+  assert.match(sheet, /buildAuthPayload/, "sheet should build auth payloads through one helper for connect and save");
+  assert.match(sheet, /auth_secret_name:\s*nextAuthType === "none" \? "" : nextAuthSecretName/s, "None auth should send an empty secret even when a stale secret remains in hidden UI state");
+  assert.match(sheet, /await loadTools\(\{ authOverride: \{ auth_type: nextAuthType, auth_scheme: nextAuthScheme \} \}\)/, "Connect should refresh tools using detected auth values instead of stale React state");
+  assert.match(toolsRoute, /sanitizeMcpServerAuthInput/, "tools discovery route should sanitize auth fields before merging with a saved server");
+  assert.match(toolsRoute, /auth_type === "none"[\s\S]*auth_secret_name: null/, "tools discovery route should clear auth secrets for explicit None auth");
+  assert.doesNotMatch(toolsRoute, /body\.auth_secret_name \|\| body\.api_key_ref \|\| server\.auth_secret_name/, "tools discovery route must not resurrect a stale saved secret when the request explicitly selects None auth");
   assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
   assert.match(sheet, /OAuth Resource URL/, "sheet should expose the resource URL required by non-Telnyx OAuth client credentials servers");
   assert.match(sheet, /oauth_authorization_code/, "sheet should allow Claude-style OAuth Authorization Code");

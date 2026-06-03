@@ -24,6 +24,26 @@ async function getId(context) {
   return id;
 }
 
+function sanitizeMcpServerAuthInput(body = {}) {
+  const auth_type = String(body.auth_type || (body.api_key_ref || body.auth_secret_name ? "bearer" : "none")).trim();
+  if (auth_type === "none") {
+    return {
+      auth_type,
+      auth_header_name: null,
+      auth_scheme: null,
+      auth_secret_name: null,
+      headers: body.headers || {},
+    };
+  }
+  return {
+    auth_type,
+    auth_header_name: body.auth_header_name || null,
+    auth_scheme: body.auth_scheme || null,
+    auth_secret_name: body.auth_secret_name || body.api_key_ref || null,
+    headers: body.headers || {},
+  };
+}
+
 export async function GET(request, context) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -48,6 +68,7 @@ export async function POST(request, context) {
     const body = await request.json().catch(() => ({}));
 
     if (id && id !== "new") server = await getMcpServer(id);
+    const authInput = sanitizeMcpServerAuthInput(body);
     if (!server) {
       const { type, url } = body;
       if (!type || !url) {
@@ -58,14 +79,10 @@ export async function POST(request, context) {
         name: body.name || "Unsaved MCP Server",
         type: String(type).trim(),
         url: String(url).trim(),
-        auth_type: body.auth_type || (body.api_key_ref || body.auth_secret_name ? "bearer" : "none"),
-        auth_header_name: body.auth_header_name || null,
-        auth_scheme: body.auth_scheme || null,
-        auth_secret_name: body.auth_secret_name || body.api_key_ref || null,
-        headers: body.headers || {},
+        ...authInput,
       };
     } else if (body && Object.keys(body).length > 0) {
-      server = { ...server, ...body, auth_secret_name: body.auth_secret_name || body.api_key_ref || server.auth_secret_name };
+      server = { ...server, ...body, ...authInput };
     }
 
     const tools = await discoverMcpToolsForServer(server);

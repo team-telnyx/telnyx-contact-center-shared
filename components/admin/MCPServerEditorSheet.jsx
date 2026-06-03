@@ -97,6 +97,19 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const latestContextRef = React.useRef({});
   latestContextRef.current = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
 
+  function buildAuthPayload(overrides = {}) {
+    const nextAuthType = overrides.auth_type ?? authType;
+    const nextAuthHeaderName = overrides.auth_header_name ?? authHeaderName;
+    const nextAuthScheme = overrides.auth_scheme ?? authScheme;
+    const nextAuthSecretName = overrides.auth_secret_name ?? authSecretName;
+    return {
+      auth_type: nextAuthType,
+      auth_header_name: nextAuthType === "none" ? "" : nextAuthHeaderName,
+      auth_scheme: nextAuthType === "none" ? "" : nextAuthScheme,
+      auth_secret_name: nextAuthType === "none" ? "" : nextAuthSecretName,
+    };
+  }
+
   React.useEffect(() => {
     if (!open || !id) return;
     let active = true;
@@ -143,15 +156,17 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     };
   }, [open, id, isNew]);
 
-  async function loadTools() {
+  async function loadTools({ authOverride = {} } = {}) {
     if (!type || !url) {
       setToolsError("Type and URL are required");
       return;
     }
+    const authPayload = buildAuthPayload(authOverride);
     const requestId = ++toolsRequestRef.current;
-    const requestContext = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
+    const requestContext = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName, authOverride: JSON.stringify(authPayload) };
     const isCurrentRequest = () => {
       const latest = latestContextRef.current;
+      const latestAuthPayload = JSON.stringify(buildAuthPayload(authOverride));
       return toolsRequestRef.current === requestId &&
         requestContext.open === latest.open &&
         requestContext.id === latest.id &&
@@ -160,7 +175,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         requestContext.authType === latest.authType &&
         requestContext.authHeaderName === latest.authHeaderName &&
         requestContext.authScheme === latest.authScheme &&
-        requestContext.authSecretName === latest.authSecretName;
+        requestContext.authSecretName === latest.authSecretName &&
+        requestContext.authOverride === latestAuthPayload;
     };
     setToolsLoading(true);
     setToolsError(null);
@@ -171,10 +187,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
         body: JSON.stringify({
           type,
           url,
-          auth_type: authType,
-          auth_header_name: authHeaderName,
-          auth_scheme: authScheme,
-          auth_secret_name: authSecretName,
+          ...authPayload,
         }),
         cache: "no-store",
       });
@@ -205,10 +218,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       name,
       type,
       url,
-      auth_type: authType,
-      auth_header_name: authHeaderName,
-      auth_scheme: authScheme,
-      auth_secret_name: authSecretName,
+      ...buildAuthPayload(overrides),
       allowed_tools: allowedTools,
       ...overrides,
     };
@@ -267,7 +277,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       if (nextAuthScheme) setAuthScheme(nextAuthScheme);
 
       if (nextAuthType !== "oauth_authorization_code") {
-        await loadTools();
+        await loadTools({ authOverride: { auth_type: nextAuthType, auth_scheme: nextAuthScheme } });
       }
     } catch (error) {
       setToolsError(error?.message || "Failed to connect MCP server");
