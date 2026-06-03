@@ -135,6 +135,7 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(secrets, /deleted_at = NULL/, "secret upsert should revive soft-deleted secrets with the same unique name");
   assert.match(runner, /tokenSecretName\(server\.id\)/, "Telnyx MCP runtime should prefer connected OAuth sessions by server id");
   assert.match(runner, /authType !== "oauth_client_credentials"/, "Telnyx MCP OAuth session fallback should not override explicit client credentials");
+  assert.match(runner, /await hasTelnyxMcpOAuthSession\(server\)/, "Telnyx MCP bearer guard should allow connected OAuth sessions");
   assert.match(oauth, /serverUpdate\.rowCount < 1/, "OAuth callback should fail if the MCP server row was not updated");
   assert.match(oauth, /was not found while saving OAuth session/, "OAuth callback should expose DB/server mismatch instead of pretending success");
   assert.doesNotMatch(runner, /Telnyx Portal OAuth can only be used/, "interactive OAuth should not be hardcoded to Telnyx URLs");
