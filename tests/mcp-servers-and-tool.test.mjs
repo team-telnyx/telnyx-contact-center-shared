@@ -176,6 +176,7 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
 test("MCP Server admin page uses local Contact Center secrets and persists discovered schemas", async () => {
   const adminPage = await read("app/(portal)/admin/mcp-servers/page.jsx");
   const sheet = await read("components/admin/MCPServerEditorSheet.jsx");
+  const toolDetailsSheet = await read("components/admin/MCPToolDetailsSheet.jsx");
   const toolsRoute = await read("app/api/admin/mcp-servers/[id]/tools/route.js");
 
   assert.match(adminPage, /MCPServerEditorSheet/, "admin page should use the MCP server sheet");
@@ -210,6 +211,16 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /\/api\/admin\/secrets/, "sheet should list local Contact Center secrets for runtime auth");
   assert.doesNotMatch(sheet, /\/api\/integration-secrets|Telnyx integration secrets|APIKeyRefCombobox/, "MCP auth picker must not use Telnyx integration secrets");
   assert.doesNotMatch(sheet, /secret\.value/, "sheet must not expose decrypted secret values client-side");
+  assert.match(adminPage, /MCPToolDetailsSheet/, "admin page should include the MCP tool details sheet");
+  assert.match(adminPage, /setToolDetails/, "clicking an expanded tool badge should open tool details");
+  assert.match(adminPage, /toolsByName\.get\(toolName\)/, "tool badges should pass discovered tool metadata, not only the tool name");
+  assert.match(adminPage, /View \$\{toolName\} tool details/, "tool badges should advertise the details action");
+  assert.match(toolDetailsSheet, /SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0 bg-background"/, "tool details should use the standard right-side sheet shell");
+  assert.match(toolDetailsSheet, /CodeBlock/, "tool details should render schemas in a code viewer");
+  assert.match(toolDetailsSheet, /Input Schema/, "tool details should show the input schema");
+  assert.match(toolDetailsSheet, /Output Schema/, "tool details should show the output schema");
+  assert.match(toolDetailsSheet, /Raw Tool Metadata/, "tool details should expose all available tool metadata");
+  assert.match(toolDetailsSheet, /Input Arguments/, "tool details should summarize schema properties");
 });
 
 test("MCP Tool editor and test sheet are schema-first and expose variable assignment to tool arguments", async () => {

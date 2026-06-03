@@ -26,6 +26,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import MCPServerEditorSheet from "@/components/admin/MCPServerEditorSheet";
+import MCPToolDetailsSheet from "@/components/admin/MCPToolDetailsSheet";
 
 function ServerTypeBadge({ type }) {
   const classes = {
@@ -46,6 +47,7 @@ export default function AdminMCPServersPage() {
   const [rows, setRows] = React.useState([]);
   const [expandedServers, setExpandedServers] = React.useState(new Set());
   const [sheetServerId, setSheetServerId] = React.useState(null);
+  const [toolDetails, setToolDetails] = React.useState(null);
   const [oauthStatus, setOauthStatus] = React.useState(null);
 
   async function load() {
@@ -146,6 +148,8 @@ export default function AdminMCPServersPage() {
               {!loading && rows.map((server) => {
                 const isExpanded = expandedServers.has(server.id);
                 const allowedTools = Array.isArray(server.allowed_tools) ? server.allowed_tools : [];
+                const discoveredTools = Array.isArray(server.tools) ? server.tools : [];
+                const toolsByName = new Map(discoveredTools.map((tool) => [tool.name, tool]));
                 return (
                   <div key={server.id} className="border rounded-xl p-4 flex items-start justify-between gap-4 bg-card/50">
                     <div className="space-y-2 min-w-0 flex-1">
@@ -167,10 +171,16 @@ export default function AdminMCPServersPage() {
                       {server.api_key_ref && <div className="text-xs text-muted-foreground">API Key Ref: {server.api_key_ref}</div>}
                       {isExpanded && (
                         <div className="flex items-center flex-wrap gap-2 mt-2 pt-2 border-t">
-                          {allowedTools.map((tool) => (
-                            <Badge key={tool} variant="outline" className="bg-telnyx-green/10 text-telnyx-green border-telnyx-green/30">
-                              {tool}
-                            </Badge>
+                          {allowedTools.map((toolName) => (
+                            <button
+                              key={toolName}
+                              type="button"
+                              className="inline-flex items-center rounded-md border border-telnyx-green/30 bg-telnyx-green/10 px-2.5 py-0.5 text-xs font-semibold text-telnyx-green shadow-sm transition-colors hover:bg-telnyx-green/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-telnyx-green/50"
+                              title={`View ${toolName} tool details`}
+                              onClick={() => setToolDetails({ server, tool: toolsByName.get(toolName) || { name: toolName } })}
+                            >
+                              {toolName}
+                            </button>
                           ))}
                         </div>
                       )}
@@ -216,6 +226,12 @@ export default function AdminMCPServersPage() {
           setSheetServerId(null);
           load();
         }}
+      />
+      <MCPToolDetailsSheet
+        open={Boolean(toolDetails)}
+        server={toolDetails?.server || null}
+        tool={toolDetails?.tool || null}
+        onOpenChange={(open) => !open && setToolDetails(null)}
       />
     </AdminPageShell>
   );
