@@ -39,6 +39,7 @@ import {
   validateVariableName,
 } from "@/lib/variable-utils";
 import { getEntitySchema } from "@/lib/data-sources-schema.js";
+import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 
 /**
  * Edge Variable Mapper Modal
@@ -69,6 +70,7 @@ export function EdgeVariableMapper({
   const isHttpRequestNode =
     isHttpRequestActionNode || isHttpRequestInitiatorNode;
   const isDataActionNode = nodeType === "data_action";
+  const isMcpToolNode = nodeType === "mcp_tool";
   const outputEvent = getOutputEvent(sourceNode, edge);
 
   const mappingContext = useMemo(() => {
@@ -154,6 +156,31 @@ export function EdgeVariableMapper({
       };
     }
 
+    if (isMcpToolNode) {
+      const testResponse = sourceNode?.data?.config?.testResponse;
+      const responseVariable =
+        sourceNode?.data?.config?.responseVariable || "mcp_response";
+      const responsePayload = testResponse?.body !== undefined
+        ? testResponse.body
+        : getMcpResponseVariablePayload(testResponse);
+
+      if (responsePayload && typeof responsePayload === "object") {
+        return {
+          webhookSchema: null,
+          schemaPaths: extractPathsFromObject(responsePayload, responseVariable, 10),
+          examplePayload: responsePayload,
+          sourceLabel: "MCP Tool Response Structure",
+        };
+      }
+
+      return {
+        webhookSchema: null,
+        schemaPaths: [],
+        examplePayload: null,
+        sourceLabel: "MCP Tool Response Structure",
+      };
+    }
+
     const webhookSchema = outputEvent ? getWebhookSchema(outputEvent) : null;
     return {
       webhookSchema,
@@ -166,6 +193,7 @@ export function EdgeVariableMapper({
     isDataActionNode,
     isHttpRequestActionNode,
     isHttpRequestInitiatorNode,
+    isMcpToolNode,
     outputEvent,
     samplePayload,
     sourceNode,
@@ -209,7 +237,7 @@ export function EdgeVariableMapper({
   }, [samplePayload, isHttpRequestInitiatorNode]);
 
   const buildExampleJson = () => {
-    if ((isHttpRequestNode || isDataActionNode) && examplePayload) {
+    if ((isHttpRequestNode || isDataActionNode || isMcpToolNode) && examplePayload) {
       return examplePayload;
     }
 

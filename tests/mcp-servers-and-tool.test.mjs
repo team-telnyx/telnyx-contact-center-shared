@@ -243,6 +243,7 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.doesNotMatch(nodes, /Plain-language instruction|list all Polish numbers/, "MCP node config should no longer depend on NLP instruction mapping");
 
   assert.match(editor, /toolInputSchema/, "editor should persist selected tool input schema on the node config");
+  assert.match(editor, /testResponse:[\s\S]*body:[\s\S]*getMcpResponseVariablePayload\(testResponse\)/, "successful MCP tool tests should persist the normalized response body on node config for edge variable mapping after workflow save");
   assert.match(editor, /Schema-driven Tool Arguments/, "editor should render schema-driven argument controls");
   assert.match(editor, /ArgumentMappingField/, "editor should allow assigning variables/templates to schema arguments");
   assert.match(editor, /buildEmptyMcpArgsFromSchema/, "editor should initialize arguments from schema");
@@ -274,9 +275,12 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.match(callFlowPage, /Request Payload[\s\S]*Response Payload/s, "MCP Tool monitor details should split request and response payload code views");
   assert.match(callFlowPage, /getMcpResponseVariablePayload/, "MCP Tool monitor should render the same response payload assigned to the response variable");
   assert.doesNotMatch(callFlowPage, /mcp_tool[\s\S]{0,1200}JSON\.stringify\(details, null, 2\)/, "MCP Tool monitor must not render request and response as one combined raw JSON object");
-  assert.match(sheet, /onTestSuccess/);
+  assert.match(sheet, /onTestSuccess\?\.\(result\.response, configAtTestStart\)/);
+  assert.match(sheet, /testResult\.body/, "MCP Test Tool sheet should display the normalized response body that will be available to edge variable mapping");
 
   assert.match(route, /callMcpTool/);
+  assert.match(route, /getMcpResponseVariablePayload/);
+  assert.match(route, /body:\s*responsePayload/, "MCP test route should include a normalized response body in result.response for persistence");
   assert.match(route, /buildMcpToolArguments/);
   assert.match(route, /request\.headers\.get\("cookie"\)/);
   assert.match(route, /request\.headers\.get\("authorization"\)/);

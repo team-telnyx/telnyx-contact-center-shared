@@ -21,12 +21,15 @@ test("Configure Edge Variables sheet matches standard edit sheet shell", async (
   assert.doesNotMatch(source, /bg-background border-l shadow-2xl/);
 });
 
-test("HTTP Request action edge mapper can read persisted test response payloads", async () => {
+test("HTTP Request and MCP Tool action edge mappers can read persisted test response payloads", async () => {
   const source = await read("components/voice-flow/EdgeVariableMapper.jsx");
 
   assert.match(source, /sourceNode\?\.data\?\.config\?\.testResponse/);
   assert.match(source, /extractPathsFromObject\(testResponse\.body, responseVariable/);
   assert.match(source, /sourceLabel: "HTTP Response Structure"/);
+  assert.match(source, /isMcpToolNode/, "Edge mapper should treat MCP Tool as a payload-producing logical/action node");
+  assert.match(source, /mcp_response/, "MCP Tool edge mapping should use the configured response variable root, defaulting to mcp_response");
+  assert.match(source, /MCP Tool Response Structure/, "MCP Tool edge mapping should label persisted test response payloads clearly");
   assert.doesNotMatch(source, /Please run a test request[\s\S]*without checking persisted testResponse/);
 });
 

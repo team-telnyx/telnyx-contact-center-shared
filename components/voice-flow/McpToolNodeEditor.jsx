@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { VariableInput } from "./VariableInput";
 import McpToolTestSheet from "./McpToolTestSheet";
-import { buildEmptyMcpArgsFromSchema, enrichMcpInputSchemaWithDescription } from "@/lib/mcp/mcp-argument-builder";
+import { buildEmptyMcpArgsFromSchema, enrichMcpInputSchemaWithDescription, getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 import {
   IconAlertCircle,
   IconFlask,
@@ -257,7 +257,14 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
   const handleTestSuccess = (testResponse, configAtTestStart = latestConfigRef.current) => {
     const latestConfig = latestConfigRef.current;
     if (JSON.stringify(getConfigWithoutTestResponse(latestConfig)) !== JSON.stringify(getConfigWithoutTestResponse(configAtTestStart))) return;
-    onChange({ ...latestConfig, testResponse: { ...testResponse, testedAt: new Date().toISOString() } });
+    onChange({
+      ...latestConfig,
+      testResponse: {
+        ...testResponse,
+        body: getMcpResponseVariablePayload(testResponse),
+        testedAt: new Date().toISOString(),
+      },
+    });
   };
 
   async function loadServers() {

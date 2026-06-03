@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isAdmin } from "@/lib/role-utils";
 import { buildMcpToolArguments, callMcpTool } from "@/lib/mcp/mcp-tool-runner";
+import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 
 export async function POST(request) {
   try {
@@ -44,6 +45,7 @@ export async function POST(request) {
       input: argumentsPayload,
       variables: testVariables,
     });
+    const responsePayload = getMcpResponseVariablePayload(response);
 
     return NextResponse.json({
       success: !response.isError,
@@ -53,7 +55,10 @@ export async function POST(request) {
         toolName,
         arguments: argumentsPayload,
       },
-      response,
+      response: {
+        ...response,
+        body: responsePayload,
+      },
     }, { status: response.isError ? 502 : 200 });
   } catch (error) {
     console.error("[test-mcp-tool] Error:", error);
