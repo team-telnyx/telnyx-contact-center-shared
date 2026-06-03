@@ -26,22 +26,24 @@ async function getId(context) {
 
 function sanitizeMcpServerAuthInput(body = {}) {
   const auth_type = String(body.auth_type || (body.api_key_ref || body.auth_secret_name ? "bearer" : "none")).trim();
-  if (auth_type === "none") {
-    return {
-      auth_type,
-      auth_header_name: null,
-      auth_scheme: null,
-      auth_secret_name: null,
-      headers: body.headers || {},
-    };
+  const sanitized =
+    auth_type === "none"
+      ? {
+          auth_type,
+          auth_header_name: null,
+          auth_scheme: null,
+          auth_secret_name: null,
+        }
+      : {
+          auth_type,
+          auth_header_name: body.auth_header_name || null,
+          auth_scheme: body.auth_scheme || null,
+          auth_secret_name: body.auth_secret_name || body.api_key_ref || null,
+        };
+  if (Object.prototype.hasOwnProperty.call(body, "headers")) {
+    sanitized.headers = body.headers || {};
   }
-  return {
-    auth_type,
-    auth_header_name: body.auth_header_name || null,
-    auth_scheme: body.auth_scheme || null,
-    auth_secret_name: body.auth_secret_name || body.api_key_ref || null,
-    headers: body.headers || {},
-  };
+  return sanitized;
 }
 
 export async function GET(request, context) {

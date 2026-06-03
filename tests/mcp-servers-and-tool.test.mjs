@@ -190,6 +190,8 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /await loadTools\(\{ authOverride: \{ auth_type: nextAuthType, auth_scheme: nextAuthScheme \} \}\)/, "Connect should refresh tools using detected auth values instead of stale React state");
   assert.match(toolsRoute, /sanitizeMcpServerAuthInput/, "tools discovery route should sanitize auth fields before merging with a saved server");
   assert.match(toolsRoute, /auth_type === "none"[\s\S]*auth_secret_name: null/, "tools discovery route should clear auth secrets for explicit None auth");
+  assert.match(toolsRoute, /hasOwnProperty\.call\(body, "headers"\)/, "tools discovery route should preserve saved custom headers when refresh requests omit headers");
+  assert.doesNotMatch(toolsRoute, /headers:\s*body\.headers \|\| \{\}/, "tools discovery route must not overwrite saved custom headers with an empty object when headers are omitted");
   assert.doesNotMatch(toolsRoute, /body\.auth_secret_name \|\| body\.api_key_ref \|\| server\.auth_secret_name/, "tools discovery route must not resurrect a stale saved secret when the request explicitly selects None auth");
   assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
   assert.match(sheet, /OAuth Resource URL/, "sheet should expose the resource URL required by non-Telnyx OAuth client credentials servers");
