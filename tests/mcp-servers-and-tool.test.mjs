@@ -264,6 +264,8 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.match(sheet, /validateMcpToolArguments/, "test sheet should validate request preview against selected schema");
   assert.match(sheet, /formatJsonLikeCode/, "test sheet should pretty-print JSON strings in Response Text");
   assert.match(sheet, /testSessionKey/, "test sheet should key transient result state to the selected server/tool/request");
+  assert.match(sheet, /useMemo\(\(\) => extractUsedVariables\(config\), \[config\.input\]\)/, "test sheet variable extraction must not depend on the full config object because saving testResponse rerenders config and would clear the visible response");
+  assert.match(sheet, /usedVariablesKey/, "test sheet reset effect should depend on a stable variable key instead of a fresh variables array");
   assert.match(sheet, /setTestResult\(null\)[\s\S]*setTestError\(null\)/, "test sheet should clear stale responses when reopened for a different MCP tool");
   assert.match(sheet, /testSessionKeyRef\.current !== sessionKeyAtTestStart/, "test sheet should ignore late responses from a previous server/tool selection");
   assert.doesNotMatch(sheet, /showLineNumbers/, "test sheet JSON/code previews should not show line numbers");
@@ -281,6 +283,9 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.match(route, /callMcpTool/);
   assert.match(route, /getMcpResponseVariablePayload/);
   assert.match(route, /body:\s*responsePayload/, "MCP test route should include a normalized response body in result.response for persistence");
+  assert.match(route, /buildMcpErrorResponse/, "MCP test route should return an error response object instead of only a top-level error string so the sheet can render failed remote MCP calls");
+  assert.match(route, /getMcpErrorStatus/, "MCP test route should preserve remote HTTP error codes such as 449 instead of collapsing every transport error to 500");
+  assert.match(route, /response:\s*\{[\s\S]*isError:\s*true[\s\S]*body:/, "MCP test route should include failed transport calls in result.response.body for Response Payload rendering");
   assert.match(route, /buildMcpToolArguments/);
   assert.match(route, /request\.headers\.get\("cookie"\)/);
   assert.match(route, /request\.headers\.get\("authorization"\)/);

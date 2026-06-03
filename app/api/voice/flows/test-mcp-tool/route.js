@@ -4,7 +4,39 @@ import { isAdmin } from "@/lib/role-utils";
 import { buildMcpToolArguments, callMcpTool } from "@/lib/mcp/mcp-tool-runner";
 import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 
+function getMcpErrorStatus(error) {
+  const rawStatus = Number(error?.code || error?.status || error?.statusCode || 0);
+  return rawStatus >= 400 && rawStatus < 600 ? rawStatus : 502;
+}
+
+function buildMcpErrorResponse(error, requestPayload = null) {
+  const status = getMcpErrorStatus(error);
+  const message = error?.message || "Failed to test MCP tool";
+  return {
+    success: false,
+    error: message,
+    request: requestPayload || undefined,
+    response: {
+      raw: {
+        error: message,
+        status,
+        code: error?.code || error?.status || error?.statusCode || undefined,
+      },
+      content: [],
+      text: message,
+      structuredContent: {},
+      isError: true,
+      body: {
+        error: message,
+        status,
+        code: error?.code || error?.status || error?.statusCode || undefined,
+      },
+    },
+  };
+}
+
 export async function POST(request) {
+  let requestPayload = null;
   try {
     const user = await getAuthenticatedUser(request.url);
     if (!user) {
@@ -38,6 +70,11 @@ export async function POST(request) {
       input,
       variables: testVariables,
     });
+    requestPayload = {
+      serverId,
+      toolName,
+      arguments: argumentsPayload,
+    };
 
     const response = await callMcpTool({
       serverId,
@@ -50,11 +87,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: !response.isError,
       error: response.isError ? response.text || "MCP tool returned an error" : undefined,
-      request: {
-        serverId,
-        toolName,
-        arguments: argumentsPayload,
-      },
+      request: requestPayload,
       response: {
         ...response,
         body: responsePayload,
@@ -62,9 +95,7 @@ export async function POST(request) {
     }, { status: response.isError ? 502 : 200 });
   } catch (error) {
     console.error("[test-mcp-tool] Error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to test MCP tool" },
-      { status: 500 },
-    );
+    const errorPayload = buildMcpErrorResponse(error, requestPayload);
+    return NextResponse.json(errorPayload, { status: getMcpErrorStatus(error) });
   }
 }

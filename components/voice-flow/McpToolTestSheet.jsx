@@ -114,7 +114,8 @@ export default function McpToolTestSheet({
     () => enrichMcpInputSchemaWithDescription(rawInputSchema, selectedTool?.description || config.toolDescription || ""),
     [rawInputSchema, selectedTool?.description, config.toolDescription],
   );
-  const usedVariables = useMemo(() => extractUsedVariables(config), [config]);
+  const usedVariables = useMemo(() => extractUsedVariables(config), [config.input]);
+  const usedVariablesKey = useMemo(() => usedVariables.join("\u0000"), [usedVariables]);
   const requestPreview = useMemo(() => buildRequestPreview(config, testVariables, selectedTool), [config, testVariables, selectedTool]);
 
   useEffect(() => {
@@ -131,7 +132,7 @@ export default function McpToolTestSheet({
       });
       return next;
     });
-  }, [open, testSessionKey, usedVariables]);
+  }, [open, testSessionKey, usedVariablesKey]);
 
   const handleTest = async () => {
     setIsTesting(true);
