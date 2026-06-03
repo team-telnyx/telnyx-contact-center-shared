@@ -93,6 +93,20 @@ test("MCP auth discovery detects OAuth protected remote servers generically", as
   assert.equal(summary.registrationEndpoint, "https://auth.example.com/register");
   assert.equal(summary.pkce, true);
   assert.equal(summary.scope, "admin");
+
+  const clientCredentialsOnlySummary = summarizeOAuthDiscovery({
+    resourceMetadata: {
+      resource: "https://api.example.com/mcp",
+      resource_name: "Example MCP",
+      authorization_servers: ["https://auth.example.com"],
+    },
+    authorizationServerMetadata: {
+      issuer: "https://auth.example.com",
+      token_endpoint: "https://auth.example.com/token",
+      grant_types_supported: ["client_credentials"],
+    },
+  });
+  assert.equal(clientCredentialsOnlySummary.authType, "bearer", "non-Telnyx client_credentials discovery should not auto-select an unsupported runtime flow");
 });
 
 test("MCP runtime resolves local Contact Center secrets and validates calls against persisted input schemas", async () => {
@@ -141,6 +155,8 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(oauth, /refresh_token/, "OAuth sessions should refresh tokens");
   assert.match(oauth, /grantType === "refresh_token" && authMethod === "none"/, "public PKCE refresh must not send client authentication to Telnyx");
   assert.match(oauth, /Telnyx returns invalid_client/, "OAuth helper should document the Telnyx invalid_client refresh pitfall");
+  assert.match(oauth, /tokenSession\.token_endpoint \|\|/, "OAuth refresh should tolerate older Telnyx sessions without a saved token endpoint");
+  assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/token/, "OAuth refresh should fall back to the Telnyx token endpoint for legacy Telnyx MCP sessions");
   assert.match(discovery, /WWW-Authenticate/i, "auth discovery should inspect WWW-Authenticate bearer challenges");
   assert.match(discovery, /oauth-protected-resource/, "auth discovery should probe OAuth protected resource metadata");
   assert.match(discovery, /oauth-authorization-server/, "auth discovery should probe OAuth authorization server metadata");
