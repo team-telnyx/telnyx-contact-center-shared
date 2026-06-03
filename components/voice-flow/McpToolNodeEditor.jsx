@@ -209,6 +209,7 @@ function buildToolSelectionPatch(tool) {
     toolInputSchema: schema,
     toolDescription: description,
     input: displaySchema ? safeStringify(buildEmptyMcpArgsFromSchema(displaySchema)) : "{}",
+    testResponse: null,
   };
 }
 
@@ -243,7 +244,8 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
   const topLevelRequiredNames = Array.isArray(toolInputSchema?.required) ? toolInputSchema.required : [];
 
   const handleChange = (field, value) => onChange({ ...(config || {}), [field]: value });
-  const updateInputObject = (nextObject) => handleChange("input", safeStringify(nextObject));
+  const handleToolCallConfigChange = (field, value) => onChange({ ...(config || {}), [field]: value, testResponse: null });
+  const updateInputObject = (nextObject) => handleToolCallConfigChange("input", safeStringify(nextObject));
 
   const handleArgumentChange = (path, value) => {
     updateInputObject(setPathValue(inputObject, path, value));
@@ -360,7 +362,7 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
             <IconRefresh className="size-4 mr-1" />Refresh
           </Button>
         </div>
-        <Select value={serverId || undefined} onValueChange={(value) => onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null, toolDescription: "", input: "{}" })}>
+        <Select value={serverId || undefined} onValueChange={(value) => onChange({ ...(config || {}), serverId: value, toolName: "", toolInputSchema: null, toolDescription: "", input: "{}", testResponse: null })}>
           <SelectTrigger><SelectValue placeholder={serversLoading ? "Loading servers…" : "Select MCP server"} /></SelectTrigger>
           <SelectContent>
             {servers.map((server) => <SelectItem key={server.id} value={server.id}>{server.name} ({String(server.type || "mcp").toUpperCase()})</SelectItem>)}
