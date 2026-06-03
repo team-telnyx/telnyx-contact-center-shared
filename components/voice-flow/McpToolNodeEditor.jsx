@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
@@ -91,22 +96,24 @@ function coerceEditorValueForSchema(rawValue, schema) {
 function ArgumentDescriptionInfo({ description, name }) {
   if (!description) return null;
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-5 w-5 text-muted-foreground hover:text-foreground"
-          aria-label={`Show ${name} description`}
-        >
-          <IconInfoCircle className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-3 text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </PopoverContent>
-    </Popover>
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-muted-foreground hover:text-foreground"
+            aria-label={`Show ${name} description`}
+          >
+            <IconInfoCircle className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="right" align="start" className="max-w-72 p-3 text-xs leading-relaxed text-muted-foreground">
+          {description}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -193,6 +200,18 @@ function getConfigWithoutTestResponse(nodeConfig = {}) {
   return configWithoutTestResponse;
 }
 
+function buildToolSelectionPatch(tool) {
+  const schema = tool?.input_schema || tool?.inputSchema || null;
+  const description = tool?.description || "";
+  const displaySchema = enrichMcpInputSchemaWithDescription(schema, description);
+  return {
+    toolName: tool?.name || "",
+    toolInputSchema: schema,
+    toolDescription: description,
+    input: displaySchema ? safeStringify(buildEmptyMcpArgsFromSchema(displaySchema)) : "{}",
+  };
+}
+
 export default function McpToolNodeEditor({ config, onChange, availableVariables = [] }) {
   const serverId = config?.serverId || "";
   const toolName = config?.toolName || "";
@@ -272,7 +291,17 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
       if (!response.ok) throw new Error(data?.error || "Failed to load MCP tools");
       const discoveredTools = Array.isArray(data.tools) ? data.tools : [];
       const allowed = Array.isArray(server.allowed_tools) ? server.allowed_tools : [];
-      setTools(allowed.length > 0 ? discoveredTools.filter((tool) => allowed.includes(tool.name)) : discoveredTools);
+      const filteredTools = allowed.length > 0 ? discoveredTools.filter((tool) => allowed.includes(tool.name)) : discoveredTools;
+      setTools(filteredTools);
+
+      const latestConfig = latestConfigRef.current;
+      const currentToolStillAvailable = filteredTools.some((tool) => tool.name === latestConfig.toolName);
+      if (filteredTools.length > 0 && !currentToolStillAvailable) {
+        onChange({
+          ...latestConfig,
+          ...buildToolSelectionPatch(filteredTools[0]),
+        });
+      }
     } catch (err) {
       if (latestServerRef.current !== requestServerId) return;
       setTools([]);
@@ -344,10 +373,7 @@ export default function McpToolNodeEditor({ config, onChange, availableVariables
           value={toolName || undefined}
           onValueChange={(value) => {
             const nextTool = tools.find((tool) => tool.name === value) || null;
-            const schema = nextTool?.input_schema || nextTool?.inputSchema || null;
-            const description = nextTool?.description || "";
-            const displaySchema = enrichMcpInputSchemaWithDescription(schema, description);
-            onChange({ ...(config || {}), toolName: value, toolInputSchema: schema, toolDescription: description, input: displaySchema ? safeStringify(buildEmptyMcpArgsFromSchema(displaySchema)) : "{}" });
+            onChange({ ...(config || {}), ...buildToolSelectionPatch(nextTool) });
           }}
           disabled={!selectedServer}
         >

@@ -220,7 +220,11 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(editor, /buildEmptyMcpArgsFromSchema/, "editor should initialize arguments from schema");
   assert.match(editor, /VariableInput/, "text argument fields should support {{variables}} in input controls");
   assert.match(editor, /Switch/, "boolean argument fields should render as toggles");
-  assert.match(editor, /IconInfoCircle/, "argument labels should expose clickable schema description info icons");
+  assert.match(editor, /IconInfoCircle/, "argument labels should expose schema description info icons");
+  assert.match(editor, /TooltipTrigger/, "argument info icons should use tooltip triggers so descriptions open on mouse hover");
+  assert.match(editor, /TooltipContent/, "argument info icons should show schema descriptions in hover tooltips");
+  assert.doesNotMatch(editor, /PopoverTrigger/, "argument info icons should not require click-only popovers");
+  assert.match(editor, /filteredTools\[0\]/, "tool refresh should auto-select the first discovered allowed tool instead of leaving an empty select value");
   assert.doesNotMatch(editor, /<VariableTextarea/, "text argument fields should not render as textarea controls");
   assert.doesNotMatch(editor, /Instruction[\s\S]*list all Polish numbers/i, "instruction/NLP mapping should no longer be primary MCP UX");
 
