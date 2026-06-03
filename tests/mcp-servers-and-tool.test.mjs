@@ -90,6 +90,8 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(oauth, /refresh_token/, "OAuth sessions should refresh tokens");
   assert.match(beginRoute, /NextResponse\.redirect\(authorizationUrl\)/, "begin route should redirect admins to Telnyx Portal");
   assert.match(callbackRoute, /finishTelnyxMcpOAuth/, "callback route should exchange the authorization code");
+  assert.match(callbackRoute, /getPendingTelnyxMcpOAuthServerId/, "callback route should preserve the initiating server id on OAuth errors");
+  assert.match(callbackRoute, /server_id: serverId/, "callback redirect should include the initiating MCP server id");
   assert.match(callbackRoute, /browserSafeBaseUrl\(request\)/, "callback route should avoid redirecting browsers to 0.0.0.0");
 });
 
@@ -98,12 +100,18 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   const sheet = await read("components/admin/MCPServerEditorSheet.jsx");
 
   assert.match(adminPage, /MCPServerEditorSheet/, "admin page should use the MCP server sheet");
+  assert.match(adminPage, /mcp_oauth/, "admin page should read OAuth callback status from query params");
+  assert.match(adminPage, /setSheetServerId\(serverId\)/, "admin page should reopen the initiating server sheet after OAuth callback");
+  assert.match(adminPage, /oauthStatus=\{oauthStatus\}/, "admin page should pass OAuth status into the sheet");
   assert.match(sheet, /Select All \(\{availableTools\.length\} tools\)/, "sheet should support bulk allowlist selection");
   assert.match(sheet, /auth_secret_name/, "sheet should save local auth secret names");
   assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
   assert.match(sheet, /OAuth Resource URL/, "sheet should expose the resource URL required by non-Telnyx OAuth client credentials servers");
   assert.match(sheet, /oauth_authorization_code/, "sheet should allow Claude-style Telnyx Portal OAuth");
   assert.match(sheet, /Connect Telnyx Portal/, "sheet should expose a Telnyx Portal connect button");
+  assert.match(sheet, /Authentication connected/, "sheet should show a clear colored connected OAuth badge");
+  assert.match(sheet, /Authentication failed/, "sheet should show a clear colored failed OAuth badge");
+  assert.match(sheet, /bg-gradient-to-br/, "OAuth section should use a polished highlighted card design");
   assert.match(sheet, /Authorization Code \+ PKCE/, "sheet should describe the interactive OAuth flow");
   assert.match(sheet, /client_id.*client_secret/s, "sheet should explain OAuth credential secret format");
   assert.match(sheet, /\/api\/admin\/secrets/, "sheet should list local Contact Center secrets for runtime auth");
@@ -124,7 +132,10 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(editor, /Schema-driven Tool Arguments/, "editor should render schema-driven argument controls");
   assert.match(editor, /ArgumentMappingField/, "editor should allow assigning variables/templates to schema arguments");
   assert.match(editor, /buildEmptyMcpArgsFromSchema/, "editor should initialize arguments from schema");
-  assert.match(editor, /VariableTextarea/, "argument fields should support {{variables}}");
+  assert.match(editor, /VariableInput/, "text argument fields should support {{variables}} in input controls");
+  assert.match(editor, /Switch/, "boolean argument fields should render as toggles");
+  assert.match(editor, /IconInfoCircle/, "argument labels should expose clickable schema description info icons");
+  assert.doesNotMatch(editor, /<VariableTextarea/, "text argument fields should not render as textarea controls");
   assert.doesNotMatch(editor, /Instruction[\s\S]*list all Polish numbers/i, "instruction/NLP mapping should no longer be primary MCP UX");
 
   assert.match(sheet, /Test MCP Tool/);

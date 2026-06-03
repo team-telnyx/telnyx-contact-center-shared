@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
-import { finishTelnyxMcpOAuth, browserSafeBaseUrl } from "@/lib/mcp/mcp-oauth";
+import { finishTelnyxMcpOAuth, browserSafeBaseUrl, getPendingTelnyxMcpOAuthServerId } from "@/lib/mcp/mcp-oauth";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -33,13 +33,17 @@ export async function GET(request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
-  if (error) return adminRedirect(request, { mcp_oauth_error: error });
-  if (!code || !state) return adminRedirect(request, { mcp_oauth_error: "missing_code_or_state" });
+  if (error) {
+    const serverId = await getPendingTelnyxMcpOAuthServerId(state);
+    return adminRedirect(request, { mcp_oauth: "error", mcp_oauth_error: error, server_id: serverId });
+  }
+  if (!code || !state) return adminRedirect(request, { mcp_oauth: "error", mcp_oauth_error: "missing_code_or_state" });
 
   try {
     const { serverId } = await finishTelnyxMcpOAuth({ code, state, userId: user.id });
     return adminRedirect(request, { mcp_oauth: "connected", server_id: serverId });
   } catch (err) {
-    return adminRedirect(request, { mcp_oauth_error: err?.message || "oauth_callback_failed" });
+    const serverId = await getPendingTelnyxMcpOAuthServerId(state);
+    return adminRedirect(request, { mcp_oauth: "error", mcp_oauth_error: err?.message || "oauth_callback_failed", server_id: serverId });
   }
 }

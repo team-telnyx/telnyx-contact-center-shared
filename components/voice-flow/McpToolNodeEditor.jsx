@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Select,
@@ -12,13 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { VariableTextarea } from "./VariableTextarea";
 import { VariableInput } from "./VariableInput";
 import McpToolTestSheet from "./McpToolTestSheet";
 import { buildEmptyMcpArgsFromSchema, enrichMcpInputSchemaWithDescription } from "@/lib/mcp/mcp-argument-builder";
 import {
   IconAlertCircle,
   IconFlask,
+  IconInfoCircle,
   IconRefresh,
   IconTools,
 } from "@tabler/icons-react";
@@ -86,6 +88,28 @@ function coerceEditorValueForSchema(rawValue, schema) {
   return rawValue;
 }
 
+function ArgumentDescriptionInfo({ description, name }) {
+  if (!description) return null;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+          aria-label={`Show ${name} description`}
+        >
+          <IconInfoCircle className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-3 text-xs leading-relaxed text-muted-foreground">
+        {description}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ArgumentMappingField({ name, schema, path, value, onValueChange, availableVariables, required = false }) {
   const type = schemaType(schema);
   const requiredNames = Array.isArray(schema?.required) ? schema.required : [];
@@ -95,10 +119,14 @@ function ArgumentMappingField({ name, schema, path, value, onValueChange, availa
     return (
       <div className="rounded-md border border-border p-3 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs font-semibold">{name}</Label>
+          <div className="flex items-center gap-1 min-w-0">
+            <Label className="text-xs font-semibold truncate">
+              {name} {required && <span className="text-red-500">*</span>}
+            </Label>
+            <ArgumentDescriptionInfo name={name} description={schema?.description} />
+          </div>
           <Badge variant="outline">object</Badge>
         </div>
-        {schema?.description && <p className="text-xs text-muted-foreground">{schema.description}</p>}
         <div className="space-y-3 pl-2 border-l border-border">
           {Object.entries(properties).map(([childName, childSchema]) => (
             <ArgumentMappingField
@@ -117,22 +145,44 @@ function ArgumentMappingField({ name, schema, path, value, onValueChange, availa
     );
   }
 
+  if (type === "boolean") {
+    return (
+      <div className="rounded-md border border-border/60 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-1 min-w-0">
+            <Label className="text-xs truncate">
+              {name} {required && <span className="text-red-500">*</span>}
+            </Label>
+            <ArgumentDescriptionInfo name={name} description={schema?.description} />
+            <Badge variant="outline" className="ml-1">boolean</Badge>
+          </div>
+          <Switch
+            checked={Boolean(value)}
+            onCheckedChange={(checked) => onValueChange(path, Boolean(checked))}
+            aria-label={name}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <Label className="text-xs">
-          {name} {required && <span className="text-red-500">*</span>}
-        </Label>
+        <div className="flex items-center gap-1 min-w-0">
+          <Label className="text-xs truncate">
+            {name} {required && <span className="text-red-500">*</span>}
+          </Label>
+          <ArgumentDescriptionInfo name={name} description={schema?.description} />
+        </div>
         <Badge variant="outline">{type}</Badge>
       </div>
-      {schema?.description && <p className="text-xs text-muted-foreground">{schema.description}</p>}
-      <VariableTextarea
+      <VariableInput
         value={value === undefined || value === null ? "" : typeof value === "string" ? value : safeStringify(value)}
         onChange={(nextValue) => onValueChange(path, coerceEditorValueForSchema(nextValue, schema))}
         availableVariables={availableVariables}
-        placeholder={type === "array" || type === "object" ? "[]" : `Map ${name} or use {{variable}}`}
-        rows={type === "array" || type === "object" ? 3 : 2}
-        className="font-mono text-xs"
+        placeholder={type === "array" || type === "object" ? "JSON value or {{variable}}" : `Map ${name} or use {{variable}}`}
+        className={type === "array" || type === "object" ? "font-mono text-xs" : ""}
       />
     </div>
   );

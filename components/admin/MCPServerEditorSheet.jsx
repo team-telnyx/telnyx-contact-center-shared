@@ -26,8 +26,10 @@ import {
 } from "@/components/ui/sheet";
 import {
   IconAlertTriangle,
+  IconCheck,
   IconChevronDown,
   IconChevronUp,
+  IconShieldCheck,
   IconTools,
 } from "@tabler/icons-react";
 
@@ -67,7 +69,7 @@ function SecretRefCombobox({ value, onChange }) {
   );
 }
 
-export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onSaved }) {
+export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onSaved, oauthStatus = null }) {
   const id = serverId;
   const isNew = id === "new";
   const toolsRequestRef = React.useRef(0);
@@ -87,6 +89,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [toolsLoading, setToolsLoading] = React.useState(false);
   const [oauthConnecting, setOauthConnecting] = React.useState(false);
   const [toolsError, setToolsError] = React.useState(null);
+  const activeOauthStatus = oauthStatus && oauthStatus.serverId === id ? oauthStatus : null;
+  const isOAuthConnected = Boolean(authSecretName);
   const latestContextRef = React.useRef({});
   latestContextRef.current = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
 
@@ -312,17 +316,51 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                       </div>
                     )}
                     {authType === "oauth_authorization_code" && (
-                      <div className="space-y-2 sm:col-span-2">
-                        <label className="text-sm font-medium">Telnyx Portal OAuth</label>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button type="button" variant="outline" onClick={connectTelnyxOAuth} disabled={isNew || oauthConnecting}>
-                            {oauthConnecting ? "Connecting…" : authSecretName ? "Reconnect Telnyx Portal" : "Connect Telnyx Portal"}
+                      <div className="sm:col-span-2 rounded-2xl border border-telnyx-green/25 bg-gradient-to-br from-telnyx-green/10 via-card to-card p-4 shadow-sm">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-telnyx-green/15 text-telnyx-green ring-1 ring-telnyx-green/25">
+                                <IconShieldCheck className="h-5 w-5" />
+                              </span>
+                              <div>
+                                <label className="text-sm font-semibold">Telnyx Portal OAuth</label>
+                                <p className="text-xs text-muted-foreground">Authorization Code + PKCE for Telnyx Remote MCP.</p>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {activeOauthStatus?.status === "connected" ? (
+                                <Badge className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                  <IconCheck className="mr-1 h-3.5 w-3.5" /> Authentication connected
+                                </Badge>
+                              ) : activeOauthStatus?.status === "error" ? (
+                                <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300">
+                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" /> Authentication failed
+                                </Badge>
+                              ) : isOAuthConnected ? (
+                                <Badge className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                  <IconCheck className="mr-1 h-3.5 w-3.5" /> Connected
+                                </Badge>
+                              ) : (
+                                <Badge className="border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                                  Not connected
+                                </Badge>
+                              )}
+                              {authSecretName && <Badge variant="outline" className="max-w-full truncate">Session: {authSecretName}</Badge>}
+                            </div>
+                            {activeOauthStatus?.message && (
+                              <p className={activeOauthStatus.status === "error" ? "text-xs text-red-600 dark:text-red-300" : "text-xs text-emerald-700 dark:text-emerald-300"}>
+                                {activeOauthStatus.message}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Save the server first, then connect and authorize access in Telnyx Portal. After callback, this sheet reopens and shows the authentication result.
+                            </p>
+                          </div>
+                          <Button type="button" variant="outline" onClick={connectTelnyxOAuth} disabled={isNew || oauthConnecting} className="shrink-0">
+                            {oauthConnecting ? "Connecting…" : isOAuthConnected ? "Reconnect Telnyx Portal" : "Connect Telnyx Portal"}
                           </Button>
-                          {authSecretName && <Badge variant="outline">Connected</Badge>}
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          Uses the same Authorization Code + PKCE flow as Claude Desktop. Save the server first; then connect and authorize access in Telnyx Portal.
-                        </p>
                       </div>
                     )}
                     {(authType === "api_key" || authType === "custom_header") && (

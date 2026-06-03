@@ -46,6 +46,7 @@ export default function AdminMCPServersPage() {
   const [rows, setRows] = React.useState([]);
   const [expandedServers, setExpandedServers] = React.useState(new Set());
   const [sheetServerId, setSheetServerId] = React.useState(null);
+  const [oauthStatus, setOauthStatus] = React.useState(null);
 
   async function load() {
     setLoading(true);
@@ -64,6 +65,33 @@ export default function AdminMCPServersPage() {
 
   React.useEffect(() => {
     load();
+  }, []);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthResult = params.get("mcp_oauth");
+    const serverId = params.get("server_id");
+    const oauthError = params.get("mcp_oauth_error");
+    if (!oauthResult && !oauthError) return;
+
+    const status = oauthResult === "connected" && !oauthError ? "connected" : "error";
+    const message = status === "connected"
+      ? "Telnyx Portal authentication completed successfully."
+      : `Telnyx Portal authentication failed: ${oauthError || "unknown error"}`;
+
+    setOauthStatus({ status, serverId, message });
+    if (serverId) setSheetServerId(serverId);
+    notify({
+      title: status === "connected" ? "MCP OAuth connected" : "MCP OAuth failed",
+      description: message,
+      variant: status === "connected" ? "success" : "error",
+    });
+
+    params.delete("mcp_oauth");
+    params.delete("mcp_oauth_error");
+    params.delete("server_id");
+    const nextUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
   }, []);
 
   async function onDelete(id) {
@@ -182,6 +210,7 @@ export default function AdminMCPServersPage() {
       <MCPServerEditorSheet
         open={Boolean(sheetServerId)}
         serverId={sheetServerId}
+        oauthStatus={oauthStatus}
         onOpenChange={(open) => !open && setSheetServerId(null)}
         onSaved={() => {
           setSheetServerId(null);
