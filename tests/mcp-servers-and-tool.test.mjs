@@ -261,6 +261,9 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(sheet, /Input Schema/);
   assert.match(sheet, /validateMcpToolArguments/, "test sheet should validate request preview against selected schema");
   assert.match(sheet, /formatJsonLikeCode/, "test sheet should pretty-print JSON strings in Response Text");
+  assert.match(sheet, /testSessionKey/, "test sheet should key transient result state to the selected server/tool/request");
+  assert.match(sheet, /setTestResult\(null\)[\s\S]*setTestError\(null\)/, "test sheet should clear stale responses when reopened for a different MCP tool");
+  assert.match(sheet, /testSessionKeyRef\.current !== sessionKeyAtTestStart/, "test sheet should ignore late responses from a previous server/tool selection");
   assert.doesNotMatch(sheet, /showLineNumbers/, "test sheet JSON/code previews should not show line numbers");
   assert.match(sheet, /\/api\/voice\/flows\/test-mcp-tool/);
   assert.match(sheet, /CodeBlockCopyButton/);

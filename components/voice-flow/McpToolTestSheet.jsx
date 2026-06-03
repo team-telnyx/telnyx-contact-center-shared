@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -100,6 +100,16 @@ export default function McpToolTestSheet({
   const [responseExpanded, setResponseExpanded] = useState(true);
 
   const rawInputSchema = selectedTool?.input_schema || selectedTool?.inputSchema || config.toolInputSchema || null;
+  const testSessionKey = useMemo(
+    () => JSON.stringify({
+      serverId: config.serverId || null,
+      toolName: config.toolName || null,
+      input: config.input || null,
+      responseVariable: config.responseVariable || "mcp_response",
+    }),
+    [config.serverId, config.toolName, config.input, config.responseVariable],
+  );
+  const testSessionKeyRef = useRef(testSessionKey);
   const inputSchema = useMemo(
     () => enrichMcpInputSchemaWithDescription(rawInputSchema, selectedTool?.description || config.toolDescription || ""),
     [rawInputSchema, selectedTool?.description, config.toolDescription],
@@ -108,21 +118,27 @@ export default function McpToolTestSheet({
   const requestPreview = useMemo(() => buildRequestPreview(config, testVariables, selectedTool), [config, testVariables, selectedTool]);
 
   useEffect(() => {
+    testSessionKeyRef.current = testSessionKey;
     if (!open) return;
-    setTestVariables((prev) => {
-      const next = { ...prev };
+    setTestResult(null);
+    setTestError(null);
+    setIsTesting(false);
+    setResponseExpanded(true);
+    setTestVariables(() => {
+      const next = {};
       usedVariables.forEach((variable) => {
-        if (!(variable in next)) next[variable] = "";
+        next[variable] = "";
       });
       return next;
     });
-  }, [open, usedVariables]);
+  }, [open, testSessionKey, usedVariables]);
 
   const handleTest = async () => {
     setIsTesting(true);
     setTestError(null);
     setTestResult(null);
     const configAtTestStart = config;
+    const sessionKeyAtTestStart = testSessionKey;
 
     try {
       const response = await fetch("/api/voice/flows/test-mcp-tool", {
@@ -131,6 +147,7 @@ export default function McpToolTestSheet({
         body: JSON.stringify({ ...config, testVariables }),
       });
       const result = await response.json();
+      if (testSessionKeyRef.current !== sessionKeyAtTestStart) return;
       if (result.response) setTestResult(result.response);
       if (!response.ok || !result.success) {
         setTestError(result.error || "MCP Tool test failed");
@@ -138,9 +155,10 @@ export default function McpToolTestSheet({
       }
       onTestSuccess?.(result.response, configAtTestStart);
     } catch (error) {
+      if (testSessionKeyRef.current !== sessionKeyAtTestStart) return;
       setTestError(error.message || "Failed to test MCP Tool");
     } finally {
-      setIsTesting(false);
+      if (testSessionKeyRef.current === sessionKeyAtTestStart) setIsTesting(false);
     }
   };
 
