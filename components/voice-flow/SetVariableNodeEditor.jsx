@@ -16,6 +16,7 @@ import { validateExpression } from "@/lib/expression-engine";
 import { checkDuplicateVariableName } from "@/lib/variable-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ExpressionBuilderModal } from "./ExpressionBuilderModal";
+import { buildExpressionTestPayloadOptions } from "@/lib/voice-flow-expression-test-payloads";
 
 /**
  * Set Variable Node Editor
@@ -43,6 +44,10 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
 
   const variableName = config.variableName || "";
   const expression = config.expression || "";
+  const testPayloadOptions = useMemo(
+    () => buildExpressionTestPayloadOptions({ nodes, edges }),
+    [nodes, edges],
+  );
 
   // Initialize pending values from config
   useEffect(() => {
@@ -420,6 +425,7 @@ const SetVariableNodeEditor = forwardRef(function SetVariableNodeEditor(
         onOpenChange={setIsModalOpen}
         initialExpression={pendingExpression}
         availableVariables={availableVariables}
+        testPayloadOptions={testPayloadOptions}
         onApply={handleApplyExpression}
       />
 

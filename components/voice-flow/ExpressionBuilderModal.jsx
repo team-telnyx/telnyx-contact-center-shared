@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from "react";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -56,10 +65,12 @@ export function ExpressionBuilderModal({
   onOpenChange,
   initialExpression = "",
   availableVariables = [],
+  testPayloadOptions = [],
   onApply,
 }) {
   const [expression, setExpression] = useState(initialExpression);
   const [testData, setTestData] = useState("");
+  const [selectedPayloadId, setSelectedPayloadId] = useState("manual-json");
   const [testResult, setTestResult] = useState(null);
   const [accordionValue, setAccordionValue] = useState("string");
 
@@ -73,6 +84,27 @@ export function ExpressionBuilderModal({
 
   // Get all available functions
   const allFunctions = getAvailableFunctions();
+
+  const groupedTestPayloadOptions = testPayloadOptions.reduce((groups, option) => {
+    const group = option.group || "Saved payloads";
+    if (!groups[group]) {
+      groups[group] = [];
+    }
+    groups[group].push(option);
+    return groups;
+  }, {});
+
+  const handleSelectTestPayload = (payloadId) => {
+    setSelectedPayloadId(payloadId);
+    setTestResult(null);
+
+    if (payloadId === "manual-json") return;
+
+    const option = testPayloadOptions.find((item) => item.id === payloadId);
+    if (!option) return;
+
+    setTestData(JSON.stringify(option.payload, null, 2));
+  };
 
   // Function categories
   const categories = [
@@ -421,15 +453,57 @@ export function ExpressionBuilderModal({
 
               {/* Test Expression */}
               <div className="border rounded-md p-4 bg-muted/30 flex-1 flex flex-col min-h-0">
-                <Label className="text-sm font-semibold mb-3 block">
-                  Test Data (provide a JSON object)
-                </Label>
+                <div className="mb-3 space-y-2">
+                  <Label className="text-sm font-semibold block">
+                    Test Data (provide a JSON object)
+                  </Label>
+                  {testPayloadOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Select
+                        value={selectedPayloadId}
+                        onValueChange={handleSelectTestPayload}
+                      >
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue placeholder="Choose a saved payload" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-80">
+                          <SelectItem value="manual-json">Manual JSON / custom test data</SelectItem>
+                          {Object.entries(groupedTestPayloadOptions).map(
+                            ([group, options]) => (
+                              <SelectGroup key={group}>
+                                <SelectLabel>{group}</SelectLabel>
+                                {options.map((option) => (
+                                  <SelectItem key={option.id} value={option.id}>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                      <span className="text-sm">{option.label}</span>
+                                      {option.description && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {option.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Choose a saved webhook/request/response payload from this call flow, or edit the JSON below.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <div className="space-y-3 flex-1 flex flex-col min-h-0">
                   <div>
                     <Textarea
                       value={testData}
-                      onChange={(e) => setTestData(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedPayloadId("manual-json");
+                        setTestData(e.target.value);
+                      }}
                       placeholder={
                         '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
                       }
