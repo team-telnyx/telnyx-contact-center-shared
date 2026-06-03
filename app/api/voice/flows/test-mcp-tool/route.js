@@ -5,7 +5,7 @@ import { buildMcpToolArguments, callMcpTool } from "@/lib/mcp/mcp-tool-runner";
 import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 
 function getMcpErrorStatus(error) {
-  const rawStatus = Number(error?.code || error?.status || error?.statusCode || 0);
+  const rawStatus = Number(error?.status || error?.statusCode || error?.code || 0);
   return rawStatus >= 400 && rawStatus < 600 ? rawStatus : 502;
 }
 

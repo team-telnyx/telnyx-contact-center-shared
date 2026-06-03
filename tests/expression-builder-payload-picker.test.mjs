@@ -76,8 +76,8 @@ test("payload option helper exposes HTTP, Data Action, MCP Tool, HTTP initiator,
   );
   assert.match(
     source,
-    /nodeType === "mcp_tool"[\s\S]*group:\s*"MCP Tool responses"[\s\S]*\[responseVariable\]: responsePayload/,
-    "MCP Tool test responses should be wrapped under their configured response variable",
+    /nodeType === "mcp_tool"[\s\S]*group:\s*"MCP Tool responses"[\s\S]*\[responseVariable\]: getMcpResponseVariablePayload\(testResponse\)[\s\S]*\`\$\{responseVariable\}_text\`[\s\S]*\`\$\{responseVariable\}_structured\`/,
+    "MCP Tool test responses should include the runtime response variable and helper variables",
   );
   assert.match(
     source,
