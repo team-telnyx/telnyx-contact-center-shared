@@ -31,7 +31,6 @@ import {
   IconCheck,
   IconAlertCircle,
   IconPlayerPlay,
-  IconX,
   IconPlus,
   IconInfoCircle,
   IconCode,
@@ -70,6 +69,7 @@ export function ExpressionBuilderModal({
 }) {
   const [expression, setExpression] = useState(initialExpression);
   const [testData, setTestData] = useState("");
+  const [isEditingTestData, setIsEditingTestData] = useState(true);
   const [selectedPayloadId, setSelectedPayloadId] = useState("manual-json");
   const [testResult, setTestResult] = useState(null);
   const [accordionValue, setAccordionValue] = useState("string");
@@ -98,13 +98,27 @@ export function ExpressionBuilderModal({
     setSelectedPayloadId(payloadId);
     setTestResult(null);
 
-    if (payloadId === "manual-json") return;
+    if (payloadId === "manual-json") {
+      setIsEditingTestData(true);
+      return;
+    }
 
     const option = testPayloadOptions.find((item) => item.id === payloadId);
     if (!option) return;
 
     setTestData(JSON.stringify(option.payload, null, 2));
+    setIsEditingTestData(false);
   };
+
+  const hasPreviewableTestData = (() => {
+    if (isEditingTestData || !testData.trim()) return false;
+    try {
+      JSON.parse(testData);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  })();
 
   // Function categories
   const categories = [
@@ -497,22 +511,46 @@ export function ExpressionBuilderModal({
                 </div>
 
                 <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                  <div className="rounded-md border border-zinc-800 bg-black overflow-hidden">
-                    <Textarea
-                      value={testData}
-                      onChange={(e) => {
-                        setSelectedPayloadId("manual-json");
-                        setTestData(e.target.value);
-                      }}
-                      placeholder={
-                        '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
-                      }
-                      rows={8}
-                      spellCheck={false}
-                      aria-label="Test Data JSON code editor"
-                      className="font-mono text-xs w-full min-h-48 resize-y border-0 bg-black text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-zinc-500"
-                    />
-                  </div>
+                  {hasPreviewableTestData ? (
+                    <CodeBlock
+                      code={testData}
+                      language="json"
+                      maxHeight={320}
+                      className="max-h-80 overflow-auto"
+                    >
+                      <CodeBlockCopyButton type="button" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 bg-background/90 shadow-sm backdrop-blur hover:bg-muted"
+                        onClick={() => {
+                          setSelectedPayloadId("manual-json");
+                          setIsEditingTestData(true);
+                        }}
+                      >
+                        Edit JSON
+                      </Button>
+                    </CodeBlock>
+                  ) : (
+                    <div className="rounded-md border border-zinc-800 bg-black overflow-hidden">
+                      <Textarea
+                        value={testData}
+                        onChange={(e) => {
+                          setSelectedPayloadId("manual-json");
+                          setIsEditingTestData(true);
+                          setTestData(e.target.value);
+                        }}
+                        placeholder={
+                          '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
+                        }
+                        rows={8}
+                        spellCheck={false}
+                        aria-label="Test Data JSON code editor"
+                        className="font-mono text-xs w-full min-h-48 resize-y border-0 bg-black text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-zinc-500"
+                      />
+                    </div>
+                  )}
                   <Button
                     type="button"
                     onClick={handleTestExpression}

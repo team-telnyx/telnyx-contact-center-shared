@@ -46,8 +46,13 @@ test("Expression Builder renders a saved-payload dropdown that loads JSON into T
   );
   assert.match(
     source,
+    /hasPreviewableTestData \? \([\s\S]*<CodeBlock[\s\S]*code=\{testData\}[\s\S]*language="json"[\s\S]*Edit JSON/,
+    "selected JSON payloads should render as a real CodeBlock preview with an explicit edit affordance",
+  );
+  assert.match(
+    source,
     /aria-label="Test Data JSON code editor"[\s\S]*bg-black[\s\S]*font-mono/,
-    "Test Data should use a code-preview styled JSON editor instead of a plain textarea look",
+    "manual editing should remain available as a dark code-styled JSON editor",
   );
 });
 
