@@ -200,36 +200,54 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loading, isNew, id]);
 
+  async function persistServer({ closeAfterSave = false, overrides = {} } = {}) {
+    const payload = {
+      name,
+      type,
+      url,
+      auth_type: authType,
+      auth_header_name: authHeaderName,
+      auth_scheme: authScheme,
+      auth_secret_name: authSecretName,
+      allowed_tools: allowedTools,
+      ...overrides,
+    };
+    const targetId = overrides.id || id;
+    const creating = targetId === "new";
+    const apiUrl = creating ? "/api/admin/mcp-servers" : `/api/admin/mcp-servers/${encodeURIComponent(targetId)}`;
+    const method = creating ? "POST" : "PUT";
+    const r = await fetch(apiUrl, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || "Failed to save MCP server");
+    if (closeAfterSave) onSaved?.();
+    return d?.data || d;
+  }
+
   async function onSave() {
     setSaving(true);
     try {
-      const apiUrl = isNew ? "/api/admin/mcp-servers" : `/api/admin/mcp-servers/${encodeURIComponent(id)}`;
-      const method = isNew ? "POST" : "PUT";
-      const r = await fetch(apiUrl, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          type,
-          url,
-          auth_type: authType,
-          auth_header_name: authHeaderName,
-          auth_scheme: authScheme,
-          auth_secret_name: authSecretName,
-          allowed_tools: allowedTools,
-        }),
-      });
-      if (r.ok) onSaved?.();
+      await persistServer({ closeAfterSave: true });
+    } catch (error) {
+      setToolsError(error?.message || "Failed to save MCP server");
     } finally {
       setSaving(false);
     }
   }
 
-  async function detectAuthentication() {
-    if (!type || !url) {
-      setToolsError("Type and URL are required before authentication detection.");
+  async function connectServer() {
+    if (!name || !type || !url) {
+      setToolsError("Name, type, and URL are required before connecting.");
       return;
     }
+    if (type !== "http") {
+      await loadTools();
+      return;
+    }
+    setOauthConnecting(true);
     setAuthDetecting(true);
     setToolsError(null);
     setDetectedAuth(null);
@@ -244,25 +262,33 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       if (!r.ok || !d?.ok) throw new Error(d?.error || "Failed to detect authentication");
       const discovery = d.discovery || null;
       setDetectedAuth(discovery);
-      if (discovery?.detected && discovery.authType) {
-        setAuthType(discovery.authType);
-        if (discovery.resource) setAuthScheme(discovery.resource);
+      const nextAuthType = discovery?.detected && discovery.authType ? discovery.authType : authType;
+      const nextAuthScheme = discovery?.resource || authScheme;
+      if (nextAuthType) setAuthType(nextAuthType);
+      if (nextAuthScheme) setAuthScheme(nextAuthScheme);
+
+      if (nextAuthType === "oauth_authorization_code") {
+        const saved = await persistServer({
+          closeAfterSave: false,
+          overrides: {
+            auth_type: nextAuthType,
+            auth_scheme: nextAuthScheme,
+          },
+        });
+        const savedId = saved?.id || id;
+        if (!savedId || savedId === "new") throw new Error("MCP server was saved without an id; cannot start OAuth.");
+        window.location.href = `/api/admin/mcp-servers/${encodeURIComponent(savedId)}/oauth/begin`;
+        return;
       }
+
+      await loadTools();
+      setOauthConnecting(false);
+      setAuthDetecting(false);
     } catch (error) {
-      setToolsError(error?.message || "Failed to detect authentication");
-    } finally {
+      setToolsError(error?.message || "Failed to connect MCP server");
+      setOauthConnecting(false);
       setAuthDetecting(false);
     }
-  }
-
-  async function connectOAuth() {
-    if (isNew) {
-      setToolsError("Save the MCP server before starting OAuth.");
-      return;
-    }
-    setOauthConnecting(true);
-    setToolsError(null);
-    window.location.href = `/api/admin/mcp-servers/${encodeURIComponent(id)}/oauth/begin`;
   }
 
   const toggleTool = (toolName) => {
@@ -322,8 +348,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                       <label className="text-sm font-medium">URL</label>
                       <div className="flex gap-2">
                         <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/mcp" />
-                        <Button type="button" variant="outline" onClick={detectAuthentication} disabled={authDetecting || type !== "http" || !url} className="shrink-0">
-                          {authDetecting ? "Detecting…" : "Detect Authentication"}
+                        <Button type="button" variant="outline" onClick={connectServer} disabled={authDetecting || oauthConnecting || !name || !type || !url} className="shrink-0">
+                          {authDetecting || oauthConnecting ? "Connecting…" : "Connect"}
                         </Button>
                       </div>
                     </div>
@@ -409,12 +435,9 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Use Detect Authentication to discover OAuth metadata from any compliant remote MCP server. Save the server first, then connect and authorize access. After callback, this sheet reopens and shows the authentication result.
+                              Click Connect to detect the MCP server authentication method. For OAuth-protected servers, Contact Center saves this draft automatically and starts Authorization Code + PKCE; after callback this sheet reopens so you can review tools and save the final configuration.
                             </p>
                           </div>
-                          <Button type="button" variant="outline" onClick={connectOAuth} disabled={isNew || oauthConnecting} className="shrink-0">
-                            {oauthConnecting ? "Connecting…" : isOAuthConnected ? "Reconnect OAuth" : "Connect OAuth"}
-                          </Button>
                         </div>
                       </div>
                     )}
