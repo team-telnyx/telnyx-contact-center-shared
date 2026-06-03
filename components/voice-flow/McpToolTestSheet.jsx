@@ -28,7 +28,6 @@ import {
   IconEye,
   IconFlask,
   IconLoader2,
-  IconMessage2,
   IconVariable,
 } from "@tabler/icons-react";
 import { buildMcpToolArguments, enrichMcpInputSchemaWithDescription } from "@/lib/mcp/mcp-argument-builder";
@@ -276,7 +275,6 @@ export default function McpToolTestSheet({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <CardContent className="px-3 pb-3 space-y-4">
-                    {testResult.text && <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconMessage2 className="h-3 w-3" />Response Text</Label><CodeBlock code={formatJsonLikeCode(testResult.text)} language="json" maxHeight={320} className="max-h-80 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>}
                     {testResult.body !== undefined && <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconDatabase className="h-3 w-3" />Response Payload</Label><CodeBlock code={formatJsonLikeCode(testResult.body)} language="json" maxHeight={320} className="max-h-80 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>}
                     <div><Label className="text-xs font-medium flex items-center gap-2 mb-2"><IconCode className="h-3 w-3" />Response JSON</Label><CodeBlock code={JSON.stringify(testResult, null, 2)} language="json" maxHeight={384} className="max-h-96 overflow-auto"><CodeBlockCopyButton type="button" /></CodeBlock></div>
                   </CardContent>

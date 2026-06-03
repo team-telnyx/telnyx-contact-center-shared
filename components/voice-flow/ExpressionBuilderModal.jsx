@@ -497,7 +497,7 @@ export function ExpressionBuilderModal({
                 </div>
 
                 <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                  <div>
+                  <div className="rounded-md border border-zinc-800 bg-black overflow-hidden">
                     <Textarea
                       value={testData}
                       onChange={(e) => {
@@ -508,7 +508,9 @@ export function ExpressionBuilderModal({
                         '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
                       }
                       rows={8}
-                      className="font-mono text-xs w-full"
+                      spellCheck={false}
+                      aria-label="Test Data JSON code editor"
+                      className="font-mono text-xs w-full min-h-48 resize-y border-0 bg-black text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-zinc-500"
                     />
                   </div>
                   <Button

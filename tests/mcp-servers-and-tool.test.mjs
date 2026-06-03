@@ -262,7 +262,7 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.match(sheet, /Request Preview/);
   assert.match(sheet, /Input Schema/);
   assert.match(sheet, /validateMcpToolArguments/, "test sheet should validate request preview against selected schema");
-  assert.match(sheet, /formatJsonLikeCode/, "test sheet should pretty-print JSON strings in Response Text");
+  assert.match(sheet, /formatJsonLikeCode/, "test sheet should pretty-print JSON-like response payloads");
   assert.match(sheet, /testSessionKey/, "test sheet should key transient result state to the selected server/tool/request");
   assert.match(sheet, /useMemo\(\(\) => extractUsedVariables\(config\), \[config\.input\]\)/, "test sheet variable extraction must not depend on the full config object because saving testResponse rerenders config and would clear the visible response");
   assert.match(sheet, /usedVariablesKey/, "test sheet reset effect should depend on a stable variable key instead of a fresh variables array");
@@ -271,8 +271,8 @@ test("MCP Tool editor, test sheet, and monitor expose normalized response payloa
   assert.doesNotMatch(sheet, /showLineNumbers/, "test sheet JSON/code previews should not show line numbers");
   assert.match(sheet, /\/api\/voice\/flows\/test-mcp-tool/);
   assert.match(sheet, /CodeBlockCopyButton/);
-  assert.match(sheet, /Response Text[\s\S]*CodeBlock code=\{formatJsonLikeCode\(testResult\.text\)\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response text should render pretty-printed JSON strings in the same scrollable code preview pattern as schema previews");
-  assert.doesNotMatch(sheet, /Response Text[\s\S]*whitespace-pre-wrap/, "response text should not render as an unbounded plain text block");
+  assert.doesNotMatch(sheet, /Response Text/, "test sheet should not show a duplicate response text panel when response payload contains the same data");
+  assert.match(sheet, /Response Payload[\s\S]*CodeBlock code=\{formatJsonLikeCode\(testResult\.body\)\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response payload should render pretty-printed JSON strings in the same scrollable code preview pattern as schema previews");
   assert.match(callFlowPage, /if \(nodeType === "mcp_tool"\)/, "Call Monitor should have a dedicated MCP Tool renderer instead of falling back to raw JSON");
   assert.match(callFlowPage, /Request Payload[\s\S]*Response Payload/s, "MCP Tool monitor details should split request and response payload code views");
   assert.match(callFlowPage, /getMcpResponseVariablePayload/, "MCP Tool monitor should render the same response payload assigned to the response variable");

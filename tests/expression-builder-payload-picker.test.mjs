@@ -44,9 +44,14 @@ test("Expression Builder renders a saved-payload dropdown that loads JSON into T
     /Manual JSON \/ custom test data/,
     "manual editing should remain available",
   );
+  assert.match(
+    source,
+    /aria-label="Test Data JSON code editor"[\s\S]*bg-black[\s\S]*font-mono/,
+    "Test Data should use a code-preview styled JSON editor instead of a plain textarea look",
+  );
 });
 
-test("payload option helper exposes HTTP, Data Action, HTTP initiator, and webhook payload shapes", async () => {
+test("payload option helper exposes HTTP, Data Action, MCP Tool, HTTP initiator, and webhook payload shapes", async () => {
   const source = await read("lib/voice-flow-expression-test-payloads.js");
 
   assert.match(
@@ -58,6 +63,11 @@ test("payload option helper exposes HTTP, Data Action, HTTP initiator, and webho
     source,
     /group:\s*"Data Action responses"[\s\S]*buildDataActionExample/,
     "Data Action payload options should fall back to generated schema examples",
+  );
+  assert.match(
+    source,
+    /nodeType === "mcp_tool"[\s\S]*group:\s*"MCP Tool responses"[\s\S]*\[responseVariable\]: responsePayload/,
+    "MCP Tool test responses should be wrapped under their configured response variable",
   );
   assert.match(
     source,
@@ -73,5 +83,15 @@ test("payload option helper exposes HTTP, Data Action, HTTP initiator, and webho
     source,
     /getNodeWebhookEvents\(node, edges\)/,
     "webhook payload choices should be derived from call-flow nodes and outgoing edges",
+  );
+});
+
+test("available variable helper exposes MCP Tool response variables", async () => {
+  const source = await read("lib/variable-utils.js");
+
+  assert.match(
+    source,
+    /nodeType === "mcp_tool"[\s\S]*responseVariable \|\| "mcp_response"[\s\S]*names\.push\(responseVariable\.trim\(\)\)/,
+    "Expression Builder variable chips should include MCP Tool response variables, defaulting to mcp_response",
   );
 });
