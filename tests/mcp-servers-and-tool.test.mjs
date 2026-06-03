@@ -221,6 +221,7 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(toolDetailsSheet, /Output Schema/, "tool details should show the output schema");
   assert.match(toolDetailsSheet, /Raw Tool Metadata/, "tool details should expose all available tool metadata");
   assert.match(toolDetailsSheet, /Input Arguments/, "tool details should summarize schema properties");
+  assert.doesNotMatch(toolDetailsSheet, /showLineNumbers/, "MCP tool details code viewers should not show line numbers");
 });
 
 test("MCP Tool editor and test sheet are schema-first and expose variable assignment to tool arguments", async () => {
@@ -251,9 +252,11 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(sheet, /Request Preview/);
   assert.match(sheet, /Input Schema/);
   assert.match(sheet, /validateMcpToolArguments/, "test sheet should validate request preview against selected schema");
+  assert.match(sheet, /formatJsonLikeCode/, "test sheet should pretty-print JSON strings in Response Text");
+  assert.doesNotMatch(sheet, /showLineNumbers/, "test sheet JSON/code previews should not show line numbers");
   assert.match(sheet, /\/api\/voice\/flows\/test-mcp-tool/);
   assert.match(sheet, /CodeBlockCopyButton/);
-  assert.match(sheet, /Response Text[\s\S]*CodeBlock code=\{testResult\.text\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response text should render in the same scrollable code preview pattern as schema previews");
+  assert.match(sheet, /Response Text[\s\S]*CodeBlock code=\{formatJsonLikeCode\(testResult\.text\)\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response text should render pretty-printed JSON strings in the same scrollable code preview pattern as schema previews");
   assert.doesNotMatch(sheet, /Response Text[\s\S]*whitespace-pre-wrap/, "response text should not render as an unbounded plain text block");
   assert.match(sheet, /onTestSuccess/);
 

@@ -54,7 +54,7 @@ function JsonViewerCard({ title, icon: Icon = IconCode, value, emptyLabel = "Not
           <div className="text-sm font-semibold">{title}</div>
         </div>
         {hasValue ? (
-          <CodeBlock code={safeStringify(value)} language="json" showLineNumbers maxHeight={360}>
+          <CodeBlock code={safeStringify(value)} language="json" maxHeight={360}>
             <CodeBlockCopyButton type="button" />
           </CodeBlock>
         ) : (
