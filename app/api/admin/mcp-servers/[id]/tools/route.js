@@ -41,11 +41,11 @@ export async function GET(request, context) {
 export async function POST(request, context) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let server = null;
 
   try {
     const id = await getId(context);
     const body = await request.json().catch(() => ({}));
-    let server = null;
 
     if (id && id !== "new") server = await getMcpServer(id);
     if (!server) {
@@ -75,11 +75,13 @@ export async function POST(request, context) {
     return NextResponse.json({ tools });
   } catch (error) {
     const rawMessage = error?.message || "Failed to connect to MCP server";
-    const message = /invalid_client|invalid_grant/i.test(rawMessage)
+    const shouldSuggestPortalReconnect =
+      server?.auth_type === "oauth_authorization_code" && /invalid_client|invalid_grant/i.test(rawMessage);
+    const message = shouldSuggestPortalReconnect
       ? "OAuth session is expired or invalid. Reconnect Telnyx Portal for this MCP server, then refresh tools again."
       : rawMessage;
     return NextResponse.json(
-      { error: message, connectionError: true, oauthReconnectRequired: message !== rawMessage },
+      { error: message, connectionError: true, oauthReconnectRequired: shouldSuggestPortalReconnect },
       { status: 500 },
     );
   }
