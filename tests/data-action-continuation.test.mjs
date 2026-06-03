@@ -45,6 +45,23 @@ test("Data Action is treated as an immediate node in incoming webhook continuati
   });
 });
 
+test("MCP Tool is treated as an immediate node in incoming webhook continuations", async () => {
+  const source = await read(routePath);
+  const arrays = [];
+  let searchFrom = 0;
+  while (true) {
+    const markerIndex = source.indexOf("const logicalNodeTypes =", searchFrom);
+    if (markerIndex === -1) break;
+    arrays.push(extractArrayAfter(source.slice(markerIndex), "const logicalNodeTypes ="));
+    searchFrom = markerIndex + 1;
+  }
+
+  assert.equal(arrays.length, 3, "expected all incoming webhook continuation contexts to be covered");
+  arrays.forEach((arraySource, index) => {
+    assert.match(arraySource, /"mcp_tool"/, `logicalNodeTypes array ${index + 1} must include mcp_tool`);
+  });
+});
+
 test("Data Action execution returns explicit output indexes for success and error routing", async () => {
   const source = await read(enginePath);
   const start = source.indexOf("async function executeDataActionNode(");

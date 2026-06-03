@@ -873,6 +873,7 @@ export async function POST(request, { params }) {
             const logicalNodeTypes = [
               "http_request_action",
               "data_action",
+              "mcp_tool",
               "set_variable",
               "condition",
               "switch",
@@ -1305,6 +1306,7 @@ export async function POST(request, { params }) {
               const logicalNodeTypes = [
                 "http_request_action",
                 "data_action",
+                "mcp_tool",
                 "set_variable",
                 "condition",
                 "switch",
@@ -1562,6 +1564,7 @@ async function executeNodeChain(
     const logicalNodeTypes = [
       "http_request_action",
       "data_action",
+      "mcp_tool",
       "set_variable",
       "condition",
       "switch",

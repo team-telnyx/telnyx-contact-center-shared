@@ -142,6 +142,8 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(runner, /parsed\.protocol === "https:"/, "Telnyx URL guard should still require HTTPS for Telnyx-specific fallbacks");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
   assert.match(runner, /assertValidMcpToolArguments/, "runtime should validate args against schema before MCP call");
+  assert.match(runner, /addNodeExecutionEvent/, "runtime should add MCP Tool execution events to Call Monitor");
+  assert.match(runner, /node\.data\?\.label \|\| "MCP Tool"/, "MCP Tool monitor events should use the node label");
   assert.match(validator, /removeAdditional:\s*false/, "validator must respect additionalProperties instead of stripping unknown fields");
   assert.match(runner, /output:\s*0/, "runtime should route success through output 0");
   assert.match(runner, /output:\s*1/, "runtime should route MCP errors through output 1");
