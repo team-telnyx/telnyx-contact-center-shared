@@ -482,10 +482,6 @@
       "description": "SIM Cards operations"
     },
     {
-      "name": "SIP Registration Status",
-      "description": "Look up the live SIP registration status of a UAC connection."
-    },
-    {
       "name": "SIPREC Connectors",
       "description": "SIPREC connectors configuration."
     },
@@ -42156,11 +42152,11 @@
     },
     "/sip_registration_status": {
       "get": {
-        "summary": "Check SIP registration status",
+        "summary": "SIP Registration Status",
         "description": "Returns the live SIP registration state of a UAC connection: whether it is currently registered, when it last registered, and the last response Telnyx received from the registrar. Only `uac_external_credential` is supported today.",
         "operationId": "GetSipRegistrationStatus",
         "tags": [
-          "SIP Registration Status"
+          "UAC Connections"
         ],
         "parameters": [
           {
@@ -42184,16 +42180,6 @@
               "type": "string"
             },
             "example": "1234567890"
-          },
-          {
-            "name": "user_id",
-            "in": "query",
-            "required": true,
-            "description": "Owner of the connection. Used to authorize the lookup.",
-            "schema": {
-              "type": "string"
-            },
-            "example": "100"
           }
         ],
         "responses": {
@@ -42203,6 +42189,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SipRegistrationStatus"
+                },
+                "example": {
+                  "connection_id": "1234567890",
+                  "connection_name": "FreePBX UAC 1002",
+                  "credential_type": "uac_external_credential",
+                  "credential_username": "useralice12345",
+                  "registered": true,
+                  "sip_registration_status": "registered",
+                  "last_registration_response": "200 OK",
+                  "sip_registration_details": {
+                    "auth_retries": 0,
+                    "expires": 1780404431,
+                    "uptime": 1780401551699908,
+                    "next_action_at": 1780414482,
+                    "failures": 0,
+                    "sip_uri_user_host": "1002@192.0.2.10"
+                  }
                 }
               }
             }
@@ -42214,7 +42217,7 @@
             "description": "Missing or invalid API key"
           },
           "403": {
-            "description": "Connection exists but is not owned by user_id"
+            "description": "Connection exists but is not owned by the authenticated account"
           },
           "404": {
             "description": "No connection matches connection_id"
@@ -67233,7 +67236,7 @@
             "type": "string",
             "format": "date-time",
             "description": "ISO 8601 formatted date indicating when the change occurred.",
-            "example": "2026-01-02T00:00:00Z"
+            "example": "2026-01-03T00:00:00Z"
           }
         }
       },
@@ -90175,59 +90178,6 @@
         "default": "zoom",
         "example": "zoom"
       },
-      "ExternalUacSettings": {
-        "type": "object",
-        "description": "Outward-facing SIP settings used for registration. Password is redacted.",
-        "properties": {
-          "proxy": {
-            "type": "string"
-          },
-          "outbound_proxy": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "transport": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "TCP",
-              "UDP",
-              "TLS",
-              null
-            ]
-          },
-          "username": {
-            "type": "string"
-          },
-          "auth_username": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from_user": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "expiration_sec": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "password": {
-            "type": "string",
-            "description": "Always redacted.",
-            "example": "***"
-          }
-        }
-      },
       "ExternalVetting": {
         "title": "ExternalVetting",
         "type": "object",
@@ -96292,15 +96242,6 @@
         "description": "The current status of the interface deployment.",
         "readOnly": true,
         "example": "provisioned"
-      },
-      "InternalUacSettings": {
-        "type": "object",
-        "description": "Internal routing target the connection delivers calls to.",
-        "properties": {
-          "destination_uri": {
-            "type": "string"
-          }
-        }
       },
       "InterruptionSettings": {
         "type": "object",
@@ -116418,6 +116359,14 @@
       "SipRegistrationStatus": {
         "type": "object",
         "properties": {
+          "connection_id": {
+            "type": "string",
+            "description": "Identifier of the UAC connection."
+          },
+          "connection_name": {
+            "type": "string",
+            "description": "Human-readable connection name."
+          },
           "credential_type": {
             "type": "string",
             "description": "The credential type that was looked up.",
@@ -116425,56 +116374,61 @@
               "uac_external_credential"
             ]
           },
-          "connection_id": {
-            "type": "string",
-            "description": "Identifier of the UAC connection."
-          },
-          "user_id": {
-            "type": "string",
-            "description": "Owner of the connection."
-          },
-          "connection_name": {
-            "type": "string",
-            "description": "Human-readable connection name."
-          },
-          "username": {
+          "credential_username": {
             "type": "string",
             "description": "SIP username used for the registration."
-          },
-          "pair_state": {
-            "type": "string",
-            "description": "Internal pairing state, e.g. ACTIVE or INACTIVE.",
-            "example": "ACTIVE"
-          },
-          "external_state": {
-            "type": "string",
-            "description": "Registration state on the external (UAC / PBX) side, e.g. REGED.",
-            "example": "REGED"
           },
           "registered": {
             "type": "boolean",
             "description": "True if the endpoint is currently registered."
+          },
+          "sip_registration_status": {
+            "type": "string",
+            "description": "Human-readable registration status derived from the registrar state.",
+            "enum": [
+              "unregistering",
+              "connection_disabled",
+              "standby",
+              "failed",
+              "trying",
+              "registered",
+              "unknown"
+            ]
           },
           "last_registration_response": {
             "type": "string",
             "description": "SIP response from the last registration attempt.",
             "example": "200 OK"
           },
-          "external_uac_settings": {
-            "$ref": "#/components/schemas/ExternalUacSettings"
-          },
-          "internal_uac_settings": {
-            "$ref": "#/components/schemas/InternalUacSettings"
-          },
-          "b2bua_external": {
+          "sip_registration_details": {
             "type": "object",
-            "description": "Raw external-side registration block reported by the registrar.",
-            "additionalProperties": true
-          },
-          "b2bua_internal": {
-            "type": "object",
-            "description": "Raw internal-side block reported by the registrar.",
-            "additionalProperties": true
+            "description": "Detailed registration information reported by the registrar.",
+            "properties": {
+              "auth_retries": {
+                "type": "integer",
+                "description": "Number of authentication retries on the last attempt."
+              },
+              "expires": {
+                "type": "integer",
+                "description": "Unix timestamp when the current registration expires."
+              },
+              "uptime": {
+                "type": "integer",
+                "description": "Registration uptime reported by the registrar."
+              },
+              "next_action_at": {
+                "type": "integer",
+                "description": "Unix timestamp of the next scheduled registration action."
+              },
+              "failures": {
+                "type": "integer",
+                "description": "Count of consecutive registration failures."
+              },
+              "sip_uri_user_host": {
+                "type": "string",
+                "description": "SIP URI user@host of the registered contact."
+              }
+            }
           }
         }
       },
