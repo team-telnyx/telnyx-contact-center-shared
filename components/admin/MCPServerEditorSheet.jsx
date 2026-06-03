@@ -88,6 +88,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [saving, setSaving] = React.useState(false);
   const [toolsLoading, setToolsLoading] = React.useState(false);
   const [oauthConnecting, setOauthConnecting] = React.useState(false);
+  const [authDetecting, setAuthDetecting] = React.useState(false);
+  const [detectedAuth, setDetectedAuth] = React.useState(null);
   const [toolsError, setToolsError] = React.useState(null);
   const activeOauthStatus = oauthStatus && oauthStatus.serverId === id ? oauthStatus : null;
   const oauthSessionIssue = authType === "oauth_authorization_code" && /OAuth session|invalid_client|invalid_grant/i.test(String(toolsError || ""));
@@ -110,6 +112,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     setAvailableTools([]);
     setExpandedTools(new Set());
     setToolsError(null);
+    setDetectedAuth(null);
     if (isNew) {
       setLoading(false);
       return () => {
@@ -222,9 +225,39 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
     }
   }
 
-  async function connectTelnyxOAuth() {
+  async function detectAuthentication() {
+    if (!type || !url) {
+      setToolsError("Type and URL are required before authentication detection.");
+      return;
+    }
+    setAuthDetecting(true);
+    setToolsError(null);
+    setDetectedAuth(null);
+    try {
+      const r = await fetch("/api/admin/mcp-servers/auth/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, url }),
+        cache: "no-store",
+      });
+      const d = await r.json();
+      if (!r.ok || !d?.ok) throw new Error(d?.error || "Failed to detect authentication");
+      const discovery = d.discovery || null;
+      setDetectedAuth(discovery);
+      if (discovery?.detected && discovery.authType) {
+        setAuthType(discovery.authType);
+        if (discovery.resource) setAuthScheme(discovery.resource);
+      }
+    } catch (error) {
+      setToolsError(error?.message || "Failed to detect authentication");
+    } finally {
+      setAuthDetecting(false);
+    }
+  }
+
+  async function connectOAuth() {
     if (isNew) {
-      setToolsError("Save the MCP server before starting Telnyx OAuth.");
+      setToolsError("Save the MCP server before starting OAuth.");
       return;
     }
     setOauthConnecting(true);
@@ -287,7 +320,12 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                     </div>
                     <div className="min-w-0 space-y-2">
                       <label className="text-sm font-medium">URL</label>
-                      <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/mcp" />
+                      <div className="flex gap-2">
+                        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mcp.example.com/mcp" />
+                        <Button type="button" variant="outline" onClick={detectAuthentication} disabled={authDetecting || type !== "http" || !url} className="shrink-0">
+                          {authDetecting ? "Detecting…" : "Detect Authentication"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -298,7 +336,7 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                         <SelectContent>
                           <SelectItem value="none">None</SelectItem>
                           <SelectItem value="bearer">Bearer token</SelectItem>
-                          <SelectItem value="oauth_authorization_code">OAuth via Telnyx Portal</SelectItem>
+                          <SelectItem value="oauth_authorization_code">OAuth Authorization Code (PKCE)</SelectItem>
                           <SelectItem value="oauth_client_credentials">OAuth Client Credentials</SelectItem>
                           <SelectItem value="api_key">API key header</SelectItem>
                           <SelectItem value="custom_header">Custom header</SelectItem>
@@ -325,8 +363,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                                 <IconShieldCheck className="h-5 w-5" />
                               </span>
                               <div>
-                                <label className="text-sm font-semibold">Telnyx Portal OAuth</label>
-                                <p className="text-xs text-muted-foreground">Authorization Code + PKCE for Telnyx Remote MCP.</p>
+                                <label className="text-sm font-semibold">OAuth Authorization</label>
+                                <p className="text-xs text-muted-foreground">Authorization Code + PKCE for OAuth-protected remote MCP servers.</p>
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -352,18 +390,30 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                                 </Badge>
                               )}
                               {authSecretName && <Badge variant="outline" className="max-w-full truncate">Session: {authSecretName}</Badge>}
+                              {detectedAuth?.detected && (
+                                <Badge className="border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-300">
+                                  OAuth auto-detected
+                                </Badge>
+                              )}
                             </div>
                             {activeOauthStatus?.message && (
                               <p className={activeOauthStatus.status === "error" ? "text-xs text-red-600 dark:text-red-300" : "text-xs text-emerald-700 dark:text-emerald-300"}>
                                 {activeOauthStatus.message}
                               </p>
                             )}
+                            {detectedAuth?.detected && (
+                              <div className="rounded-lg border bg-background/60 p-3 text-xs text-muted-foreground space-y-1">
+                                <div><span className="font-medium text-foreground">Resource:</span> {detectedAuth.resourceName || detectedAuth.resource || "OAuth protected MCP resource"}</div>
+                                {detectedAuth.authorizationServer && <div><span className="font-medium text-foreground">Authorization server:</span> {detectedAuth.authorizationServer}</div>}
+                                {detectedAuth.scope && <div><span className="font-medium text-foreground">Scope:</span> {detectedAuth.scope}</div>}
+                              </div>
+                            )}
                             <p className="text-xs text-muted-foreground">
-                              Save the server first, then connect and authorize access in Telnyx Portal. After callback, this sheet reopens and shows the authentication result.
+                              Use Detect Authentication to discover OAuth metadata from any compliant remote MCP server. Save the server first, then connect and authorize access. After callback, this sheet reopens and shows the authentication result.
                             </p>
                           </div>
-                          <Button type="button" variant="outline" onClick={connectTelnyxOAuth} disabled={isNew || oauthConnecting} className="shrink-0">
-                            {oauthConnecting ? "Connecting…" : isOAuthConnected ? "Reconnect Telnyx Portal" : "Connect Telnyx Portal"}
+                          <Button type="button" variant="outline" onClick={connectOAuth} disabled={isNew || oauthConnecting} className="shrink-0">
+                            {oauthConnecting ? "Connecting…" : isOAuthConnected ? "Reconnect OAuth" : "Connect OAuth"}
                           </Button>
                         </div>
                       </div>

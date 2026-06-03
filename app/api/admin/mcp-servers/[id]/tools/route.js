@@ -75,13 +75,13 @@ export async function POST(request, context) {
     return NextResponse.json({ tools });
   } catch (error) {
     const rawMessage = error?.message || "Failed to connect to MCP server";
-    const shouldSuggestPortalReconnect =
+    const shouldSuggestOauthReconnect =
       server?.auth_type === "oauth_authorization_code" && /invalid_client|invalid_grant/i.test(rawMessage);
-    const message = shouldSuggestPortalReconnect
-      ? "OAuth session is expired or invalid. Reconnect Telnyx Portal for this MCP server, then refresh tools again."
+    const message = shouldSuggestOauthReconnect
+      ? "OAuth session is expired or invalid. Reconnect OAuth for this MCP server, then refresh tools again."
       : rawMessage;
     return NextResponse.json(
-      { error: message, connectionError: true, oauthReconnectRequired: shouldSuggestPortalReconnect },
+      { error: message, connectionError: true, oauthReconnectRequired: shouldSuggestOauthReconnect },
       { status: 500 },
     );
   }

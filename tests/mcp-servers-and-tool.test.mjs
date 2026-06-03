@@ -14,6 +14,10 @@ async function loadMcpSchemaValidatorForUnitTests() {
   return import(new URL("lib/mcp/mcp-schema-validator.js", root));
 }
 
+async function loadMcpAuthDiscoveryForUnitTests() {
+  return import(new URL("lib/mcp/mcp-auth-discovery.js", root));
+}
+
 test("Admin menu exposes MCP Servers for admin users", async () => {
   const menu = await read("config/menu.jsx");
 
@@ -46,6 +50,51 @@ test("Admin MCP Server routes use local Postgres registry and never proxy Telnyx
   assert.match(toolsRoute, /upsertMcpServerTools/, "tools route should cache discovered tool schemas locally");
 });
 
+test("MCP auth discovery detects OAuth protected remote servers generically", async () => {
+  const {
+    buildOAuthProtectedResourceMetadataCandidates,
+    parseWwwAuthenticateResourceMetadata,
+    summarizeOAuthDiscovery,
+  } = await loadMcpAuthDiscoveryForUnitTests();
+
+  assert.equal(
+    parseWwwAuthenticateResourceMetadata('Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp"'),
+    "https://api.example.com/.well-known/oauth-protected-resource/mcp",
+  );
+  assert.deepEqual(
+    buildOAuthProtectedResourceMetadataCandidates("https://api.telnyx.com/v2/mcp").slice(0, 2),
+    [
+      "https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp",
+      "https://api.telnyx.com/.well-known/oauth-protected-resource",
+    ],
+  );
+  const summary = summarizeOAuthDiscovery({
+    resourceMetadata: {
+      resource: "https://api.example.com/mcp",
+      resource_name: "Example MCP",
+      authorization_servers: ["https://auth.example.com"],
+    },
+    authorizationServerMetadata: {
+      issuer: "https://auth.example.com",
+      authorization_endpoint: "https://auth.example.com/authorize",
+      token_endpoint: "https://auth.example.com/token",
+      registration_endpoint: "https://auth.example.com/register",
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      scopes_supported: ["admin"],
+      code_challenge_methods_supported: ["S256"],
+    },
+  });
+  assert.equal(summary.authType, "oauth_authorization_code");
+  assert.equal(summary.resource, "https://api.example.com/mcp");
+  assert.equal(summary.resourceName, "Example MCP");
+  assert.equal(summary.authorizationServer, "https://auth.example.com");
+  assert.equal(summary.authorizationEndpoint, "https://auth.example.com/authorize");
+  assert.equal(summary.tokenEndpoint, "https://auth.example.com/token");
+  assert.equal(summary.registrationEndpoint, "https://auth.example.com/register");
+  assert.equal(summary.pkce, true);
+  assert.equal(summary.scope, "admin");
+});
+
 test("MCP runtime resolves local Contact Center secrets and validates calls against persisted input schemas", async () => {
   const runner = await read("lib/mcp/mcp-tool-runner.js");
   const secrets = await read("lib/secrets.js");
@@ -53,6 +102,8 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   const oauth = await read("lib/mcp/mcp-oauth.js");
   const beginRoute = await read("app/api/admin/mcp-servers/[id]/oauth/begin/route.js");
   const callbackRoute = await read("app/api/admin/mcp-servers/oauth/callback/route.js");
+  const discovery = await read("lib/mcp/mcp-auth-discovery.js");
+  const discoverRoute = await read("app/api/admin/mcp-servers/auth/discover/route.js");
 
   assert.match(runner, /SSEClientTransport/, "runtime should support SSE MCP transport");
   assert.match(runner, /StreamableHTTPClientTransport/, "runtime should support streamable HTTP MCP transport");
@@ -72,9 +123,9 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(runner, /authType !== "oauth_client_credentials"/, "Telnyx MCP OAuth session fallback should not override explicit client credentials");
   assert.match(oauth, /serverUpdate\.rowCount < 1/, "OAuth callback should fail if the MCP server row was not updated");
   assert.match(oauth, /was not found while saving OAuth session/, "OAuth callback should expose DB/server mismatch instead of pretending success");
-  assert.match(runner, /Telnyx Portal OAuth can only be used with the Telnyx MCP URL/, "runtime should not send Telnyx Portal OAuth tokens to arbitrary MCP URLs");
-  assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should recognize Telnyx MCP as an OAuth protected resource");
-  assert.match(runner, /parsed\.protocol === "https:"/, "runtime should only send Telnyx Portal OAuth tokens to HTTPS Telnyx MCP URLs");
+  assert.doesNotMatch(runner, /Telnyx Portal OAuth can only be used/, "interactive OAuth should not be hardcoded to Telnyx URLs");
+  assert.match(runner, /https:\/\/api\.telnyx\.com\/v2\/mcp/, "runtime should still explain Telnyx MCP API-key pitfalls");
+  assert.match(runner, /parsed\.protocol === "https:"/, "Telnyx URL guard should still require HTTPS for Telnyx-specific fallbacks");
   assert.match(runner, /A Telnyx API key in Bearer auth can list tools but fails tool execution/, "runtime should explain Telnyx MCP API-key auth failures");
   assert.match(runner, /assertValidMcpToolArguments/, "runtime should validate args against schema before MCP call");
   assert.match(validator, /removeAdditional:\s*false/, "validator must respect additionalProperties instead of stripping unknown fields");
@@ -84,13 +135,19 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(oauth, /hostname === "0\.0\.0\.0"/, "OAuth should detect 0.0.0.0 origins");
   assert.match(oauth, /baseUrl\.hostname\.replace/, "OAuth should normalize bracketed IPv6 bind origins");
   assert.match(oauth, /baseUrl\.hostname = "localhost"/, "OAuth should redirect browsers to localhost instead of 0.0.0.0");
-  assert.match(oauth, /code_challenge_method", "S256"/, "Telnyx Portal OAuth should use PKCE S256");
-  assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/authorize/, "OAuth should use Telnyx authorization endpoint");
-  assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/register/, "OAuth should support dynamic client registration");
+  assert.match(oauth, /code_challenge_method", "S256"/, "OAuth should use PKCE S256");
+  assert.match(oauth, /discoverMcpServerAuth/, "OAuth begin should use generic MCP auth discovery metadata");
+  assert.match(oauth, /registrationEndpoint/, "OAuth should support dynamic client registration from provider metadata");
   assert.match(oauth, /refresh_token/, "OAuth sessions should refresh tokens");
   assert.match(oauth, /grantType === "refresh_token" && authMethod === "none"/, "public PKCE refresh must not send client authentication to Telnyx");
   assert.match(oauth, /Telnyx returns invalid_client/, "OAuth helper should document the Telnyx invalid_client refresh pitfall");
-  assert.match(beginRoute, /NextResponse\.redirect\(authorizationUrl\)/, "begin route should redirect admins to Telnyx Portal");
+  assert.match(discovery, /WWW-Authenticate/i, "auth discovery should inspect WWW-Authenticate bearer challenges");
+  assert.match(discovery, /oauth-protected-resource/, "auth discovery should probe OAuth protected resource metadata");
+  assert.match(discovery, /oauth-authorization-server/, "auth discovery should probe OAuth authorization server metadata");
+  assert.match(discovery, /registration_endpoint/, "auth discovery should support dynamic client registration metadata");
+  assert.match(discoverRoute, /discoverMcpServerAuth/, "admin route should expose generic MCP auth discovery");
+  assert.match(beginRoute, /NextResponse\.redirect\(authorizationUrl\)/, "begin route should redirect admins to the discovered authorization server");
+  assert.doesNotMatch(beginRoute, /isTelnyxMcpUrl|Telnyx Portal OAuth/, "OAuth begin route should not be hardcoded to Telnyx MCP URLs");
   assert.match(callbackRoute, /finishTelnyxMcpOAuth/, "callback route should exchange the authorization code");
   assert.match(callbackRoute, /getPendingTelnyxMcpOAuthServerId/, "callback route should preserve the initiating server id on OAuth errors");
   assert.match(callbackRoute, /server_id: serverId/, "callback redirect should include the initiating MCP server id");
@@ -110,16 +167,20 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /auth_secret_name/, "sheet should save local auth secret names");
   assert.match(sheet, /oauth_client_credentials/, "sheet should allow OAuth client credentials for protected MCP resources");
   assert.match(sheet, /OAuth Resource URL/, "sheet should expose the resource URL required by non-Telnyx OAuth client credentials servers");
-  assert.match(sheet, /oauth_authorization_code/, "sheet should allow Claude-style Telnyx Portal OAuth");
-  assert.match(sheet, /Connect Telnyx Portal/, "sheet should expose a Telnyx Portal connect button");
+  assert.match(sheet, /oauth_authorization_code/, "sheet should allow Claude-style OAuth Authorization Code");
+  assert.match(sheet, /Detect Authentication/, "sheet should expose generic MCP auth detection");
+  assert.match(sheet, /detectedAuth/, "sheet should store detected MCP auth metadata");
+  assert.match(sheet, /OAuth auto-detected/, "sheet should show an OAuth auto-detected badge");
+  assert.match(sheet, /Connect OAuth/, "sheet should expose a generic OAuth connect button");
   assert.match(sheet, /Authentication connected/, "sheet should show a clear colored connected OAuth badge");
   assert.match(sheet, /Authentication failed/, "sheet should show a clear colored failed OAuth badge");
   assert.match(sheet, /Reconnect required/, "sheet should stop presenting expired OAuth sessions as connected");
   assert.match(sheet, /oauthSessionIssue/, "sheet should derive OAuth health from tool-loading errors");
   assert.match(toolsRoute, /oauthReconnectRequired/, "tools route should flag invalid OAuth refresh sessions");
-  assert.match(toolsRoute, /Reconnect Telnyx Portal/, "tools route should tell admins how to recover invalid OAuth sessions");
+  assert.match(toolsRoute, /Reconnect OAuth/, "tools route should tell admins how to recover invalid OAuth sessions generically");
   assert.match(sheet, /bg-gradient-to-br/, "OAuth section should use a polished highlighted card design");
   assert.match(sheet, /Authorization Code \+ PKCE/, "sheet should describe the interactive OAuth flow");
+  assert.doesNotMatch(sheet, /OAuth via Telnyx Portal/, "OAuth auth label should not be hardcoded to Telnyx Portal");
   assert.match(sheet, /client_id.*client_secret/s, "sheet should explain OAuth credential secret format");
   assert.match(sheet, /\/api\/admin\/secrets/, "sheet should list local Contact Center secrets for runtime auth");
   assert.doesNotMatch(sheet, /\/api\/integration-secrets|Telnyx integration secrets|APIKeyRefCombobox/, "MCP auth picker must not use Telnyx integration secrets");
