@@ -232,11 +232,12 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.doesNotMatch(toolDetailsSheet, /showLineNumbers/, "MCP tool details code viewers should not show line numbers");
 });
 
-test("MCP Tool editor and test sheet are schema-first and expose variable assignment to tool arguments", async () => {
+test("MCP Tool editor, test sheet, and monitor expose normalized response payloads", async () => {
   const editor = await read("components/voice-flow/McpToolNodeEditor.jsx");
   const sheet = await read("components/voice-flow/McpToolTestSheet.jsx");
   const route = await read("app/api/voice/flows/test-mcp-tool/route.js");
   const nodes = await read("config/voice-flow-nodes.js");
+  const callFlowPage = await read("app/(portal)/admin/call-flows/[id]/page.jsx");
 
   assert.match(nodes, /toolInputSchema/, "MCP node config should persist selected tool schema");
   assert.doesNotMatch(nodes, /Plain-language instruction|list all Polish numbers/, "MCP node config should no longer depend on NLP instruction mapping");
@@ -269,6 +270,10 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(sheet, /CodeBlockCopyButton/);
   assert.match(sheet, /Response Text[\s\S]*CodeBlock code=\{formatJsonLikeCode\(testResult\.text\)\}[\s\S]*maxHeight=\{320\}[\s\S]*className="max-h-80 overflow-auto"/, "response text should render pretty-printed JSON strings in the same scrollable code preview pattern as schema previews");
   assert.doesNotMatch(sheet, /Response Text[\s\S]*whitespace-pre-wrap/, "response text should not render as an unbounded plain text block");
+  assert.match(callFlowPage, /if \(nodeType === "mcp_tool"\)/, "Call Monitor should have a dedicated MCP Tool renderer instead of falling back to raw JSON");
+  assert.match(callFlowPage, /Request Payload[\s\S]*Response Payload/s, "MCP Tool monitor details should split request and response payload code views");
+  assert.match(callFlowPage, /getMcpResponseVariablePayload/, "MCP Tool monitor should render the same response payload assigned to the response variable");
+  assert.doesNotMatch(callFlowPage, /mcp_tool[\s\S]{0,1200}JSON\.stringify\(details, null, 2\)/, "MCP Tool monitor must not render request and response as one combined raw JSON object");
   assert.match(sheet, /onTestSuccess/);
 
   assert.match(route, /callMcpTool/);
@@ -276,6 +281,34 @@ test("MCP Tool editor and test sheet are schema-first and expose variable assign
   assert.match(route, /request\.headers\.get\("cookie"\)/);
   assert.match(route, /request\.headers\.get\("authorization"\)/);
   assert.match(route, /NextResponse\.json/);
+});
+
+test("MCP response variable value unwraps JSON payloads from MCP text content", async () => {
+  const { getMcpResponseVariablePayload, normalizeMcpToolResponse } = await loadMcpArgumentBuilderForUnitTests();
+  const projectPayload = {
+    id: "d44f8fc6-2a7e-4bcd-84e5-27cc293557b5",
+    name: "Burjeel Holdings",
+    summary: "AI outbound calling for marketing lead-gen",
+  };
+  const normalized = normalizeMcpToolResponse({
+    content: [{ type: "text", text: JSON.stringify(projectPayload) }],
+  });
+
+  assert.deepEqual(
+    getMcpResponseVariablePayload(normalized),
+    projectPayload,
+    "response variable should receive the parsed JSON payload from content[].text, not the raw MCP envelope",
+  );
+  assert.deepEqual(
+    getMcpResponseVariablePayload({ structuredContent: { rows: [{ id: 1 }] }, content: [] }),
+    { rows: [{ id: 1 }] },
+    "structuredContent should remain the response variable payload when MCP supplies structured output directly",
+  );
+  assert.equal(
+    getMcpResponseVariablePayload({ text: "plain answer", content: [{ type: "text", text: "plain answer" }] }),
+    "plain answer",
+    "plain text MCP output should be assigned as plain text when it is not JSON",
+  );
 });
 
 test("MCP description Args enrich sparse request schemas for form-based argument mapping", async () => {

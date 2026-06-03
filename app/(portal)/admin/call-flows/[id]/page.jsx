@@ -131,6 +131,7 @@ import {
   IconLoader2,
   IconSettings,
   IconList,
+  IconTools,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -171,6 +172,7 @@ import {
   getAllVariableNames,
   checkDuplicateVariableName,
 } from "@/lib/variable-utils";
+import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 import { cn } from "@/lib/utils";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tool, ToolContent, ToolHeader } from "@/components/ai-elements/tool";
@@ -281,6 +283,9 @@ const getNodeExecutionIcon = (nodeType) => {
   }
   if (type === "data_action") {
     return <IconDatabase className="size-4 text-teal-500" />;
+  }
+  if (type === "mcp_tool") {
+    return <IconTools className="size-4 text-emerald-500" />;
   }
   if (type === "condition") {
     return <IconGitBranch className="size-4 text-yellow-500" />;
@@ -474,6 +479,27 @@ function formatInlineValue(value) {
   return JSON.stringify(value);
 }
 
+function formatJsonCodeValue(value) {
+  if (typeof value === "string") {
+    const jsonPreview = getJsonObjectPreview(value);
+    return jsonPreview || value;
+  }
+  return JSON.stringify(value ?? null, null, 2);
+}
+
+function JsonCodeView({ value, className = "mt-1", maxHeight }) {
+  return (
+    <CodeBlock
+      code={formatJsonCodeValue(value)}
+      language="json"
+      className={className}
+      maxHeight={maxHeight}
+    >
+      <CodeBlockCopyButton />
+    </CodeBlock>
+  );
+}
+
 // Render node execution details based on node type
 function renderNodeExecutionDetails(nodeType, details, success) {
   if (!details) {
@@ -525,6 +551,58 @@ function renderNodeExecutionDetails(nodeType, details, success) {
           <div className="text-destructive border-t pt-3">
             <span className="font-semibold">Error:</span>
             <span className="ml-2">{details.error}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // MCP Tool Node
+  if (nodeType === "mcp_tool") {
+    const responsePayload = details.response_payload !== undefined
+      ? details.response_payload
+      : getMcpResponseVariablePayload(details.response);
+
+    return (
+      <div className="p-3 space-y-3 text-sm">
+        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Server</div>
+            <code className="break-all">{details.server_id || "—"}</code>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tool</div>
+            <code className="break-all">{details.tool_name || "—"}</code>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="font-semibold text-xs uppercase text-muted-foreground">
+            Request Payload
+          </div>
+          <JsonCodeView value={details.request || {}} maxHeight={280} className="mt-1 max-h-72 overflow-auto" />
+        </div>
+
+        {success ? (
+          <div className="space-y-1 border-t pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold text-xs uppercase text-muted-foreground">
+                Response Payload
+              </div>
+              {details.response_variable && (
+                <Badge variant="outline" className="text-[10px]">
+                  → {details.response_variable}
+                </Badge>
+              )}
+            </div>
+            <JsonCodeView value={responsePayload} maxHeight={360} className="mt-1 max-h-96 overflow-auto" />
+          </div>
+        ) : (
+          <div className="space-y-1 border-t pt-3">
+            <div className="font-semibold text-xs uppercase text-muted-foreground">
+              Response Payload
+            </div>
+            <JsonCodeView value={responsePayload || details.error || {}} maxHeight={360} className="mt-1 max-h-96 overflow-auto" />
           </div>
         )}
       </div>
