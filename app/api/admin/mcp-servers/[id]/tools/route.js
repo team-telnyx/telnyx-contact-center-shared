@@ -74,8 +74,12 @@ export async function POST(request, context) {
     }
     return NextResponse.json({ tools });
   } catch (error) {
+    const rawMessage = error?.message || "Failed to connect to MCP server";
+    const message = /invalid_client|invalid_grant/i.test(rawMessage)
+      ? "OAuth session is expired or invalid. Reconnect Telnyx Portal for this MCP server, then refresh tools again."
+      : rawMessage;
     return NextResponse.json(
-      { error: error?.message || "Failed to connect to MCP server", connectionError: true },
+      { error: message, connectionError: true, oauthReconnectRequired: message !== rawMessage },
       { status: 500 },
     );
   }

@@ -88,6 +88,8 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
   assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/authorize/, "OAuth should use Telnyx authorization endpoint");
   assert.match(oauth, /https:\/\/api\.telnyx\.com\/v2\/oauth\/register/, "OAuth should support dynamic client registration");
   assert.match(oauth, /refresh_token/, "OAuth sessions should refresh tokens");
+  assert.match(oauth, /grantType === "refresh_token" && authMethod === "none"/, "public PKCE refresh must not send client authentication to Telnyx");
+  assert.match(oauth, /Telnyx returns invalid_client/, "OAuth helper should document the Telnyx invalid_client refresh pitfall");
   assert.match(beginRoute, /NextResponse\.redirect\(authorizationUrl\)/, "begin route should redirect admins to Telnyx Portal");
   assert.match(callbackRoute, /finishTelnyxMcpOAuth/, "callback route should exchange the authorization code");
   assert.match(callbackRoute, /getPendingTelnyxMcpOAuthServerId/, "callback route should preserve the initiating server id on OAuth errors");
@@ -98,6 +100,7 @@ test("MCP runtime resolves local Contact Center secrets and validates calls agai
 test("MCP Server admin page uses local Contact Center secrets and persists discovered schemas", async () => {
   const adminPage = await read("app/(portal)/admin/mcp-servers/page.jsx");
   const sheet = await read("components/admin/MCPServerEditorSheet.jsx");
+  const toolsRoute = await read("app/api/admin/mcp-servers/[id]/tools/route.js");
 
   assert.match(adminPage, /MCPServerEditorSheet/, "admin page should use the MCP server sheet");
   assert.match(adminPage, /mcp_oauth/, "admin page should read OAuth callback status from query params");
@@ -111,6 +114,10 @@ test("MCP Server admin page uses local Contact Center secrets and persists disco
   assert.match(sheet, /Connect Telnyx Portal/, "sheet should expose a Telnyx Portal connect button");
   assert.match(sheet, /Authentication connected/, "sheet should show a clear colored connected OAuth badge");
   assert.match(sheet, /Authentication failed/, "sheet should show a clear colored failed OAuth badge");
+  assert.match(sheet, /Reconnect required/, "sheet should stop presenting expired OAuth sessions as connected");
+  assert.match(sheet, /oauthSessionIssue/, "sheet should derive OAuth health from tool-loading errors");
+  assert.match(toolsRoute, /oauthReconnectRequired/, "tools route should flag invalid OAuth refresh sessions");
+  assert.match(toolsRoute, /Reconnect Telnyx Portal/, "tools route should tell admins how to recover invalid OAuth sessions");
   assert.match(sheet, /bg-gradient-to-br/, "OAuth section should use a polished highlighted card design");
   assert.match(sheet, /Authorization Code \+ PKCE/, "sheet should describe the interactive OAuth flow");
   assert.match(sheet, /client_id.*client_secret/s, "sheet should explain OAuth credential secret format");

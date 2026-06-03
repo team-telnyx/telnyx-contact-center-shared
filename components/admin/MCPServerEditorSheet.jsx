@@ -90,7 +90,8 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
   const [oauthConnecting, setOauthConnecting] = React.useState(false);
   const [toolsError, setToolsError] = React.useState(null);
   const activeOauthStatus = oauthStatus && oauthStatus.serverId === id ? oauthStatus : null;
-  const isOAuthConnected = Boolean(authSecretName);
+  const oauthSessionIssue = authType === "oauth_authorization_code" && /OAuth session|invalid_client|invalid_grant/i.test(String(toolsError || ""));
+  const isOAuthConnected = Boolean(authSecretName) && !oauthSessionIssue;
   const latestContextRef = React.useRef({});
   latestContextRef.current = { open, id, isNew, type, url, authType, authHeaderName, authScheme, authSecretName };
 
@@ -329,7 +330,11 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                               </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                              {activeOauthStatus?.status === "connected" ? (
+                              {oauthSessionIssue ? (
+                                <Badge className="border-transparent bg-red-500/15 text-red-700 dark:text-red-300">
+                                  <IconAlertTriangle className="mr-1 h-3.5 w-3.5" /> Reconnect required
+                                </Badge>
+                              ) : activeOauthStatus?.status === "connected" ? (
                                 <Badge className="border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
                                   <IconCheck className="mr-1 h-3.5 w-3.5" /> Authentication connected
                                 </Badge>
