@@ -247,7 +247,6 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       await loadTools();
       return;
     }
-    setOauthConnecting(true);
     setAuthDetecting(true);
     setToolsError(null);
     setDetectedAuth(null);
@@ -267,27 +266,42 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
       if (nextAuthType) setAuthType(nextAuthType);
       if (nextAuthScheme) setAuthScheme(nextAuthScheme);
 
-      if (nextAuthType === "oauth_authorization_code") {
-        const saved = await persistServer({
-          closeAfterSave: false,
-          overrides: {
-            auth_type: nextAuthType,
-            auth_scheme: nextAuthScheme,
-          },
-        });
-        const savedId = saved?.id || id;
-        if (!savedId || savedId === "new") throw new Error("MCP server was saved without an id; cannot start OAuth.");
-        window.location.href = `/api/admin/mcp-servers/${encodeURIComponent(savedId)}/oauth/begin`;
-        return;
+      if (nextAuthType !== "oauth_authorization_code") {
+        await loadTools();
       }
-
-      await loadTools();
-      setOauthConnecting(false);
-      setAuthDetecting(false);
     } catch (error) {
       setToolsError(error?.message || "Failed to connect MCP server");
-      setOauthConnecting(false);
+    } finally {
       setAuthDetecting(false);
+    }
+  }
+
+  async function authenticateOAuth() {
+    if (!name || !type || !url) {
+      setToolsError("Name, type, and URL are required before starting OAuth.");
+      return;
+    }
+    setOauthConnecting(true);
+    setToolsError(null);
+    try {
+      const nextAuthType = authType === "oauth_authorization_code" ? authType : detectedAuth?.authType;
+      const nextAuthScheme = detectedAuth?.resource || authScheme;
+      if (nextAuthType !== "oauth_authorization_code") {
+        throw new Error("Run Connect first so Contact Center can detect the OAuth authorization method.");
+      }
+      const saved = await persistServer({
+        closeAfterSave: false,
+        overrides: {
+          auth_type: nextAuthType,
+          auth_scheme: nextAuthScheme,
+        },
+      });
+      const savedId = saved?.id || id;
+      if (!savedId || savedId === "new") throw new Error("MCP server was saved without an id; cannot start OAuth.");
+      window.location.href = `/api/admin/mcp-servers/${encodeURIComponent(savedId)}/oauth/begin`;
+    } catch (error) {
+      setToolsError(error?.message || "Failed to start OAuth authentication");
+      setOauthConnecting(false);
     }
   }
 
@@ -435,9 +449,17 @@ export default function MCPServerEditorSheet({ open, serverId, onOpenChange, onS
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Click Connect to detect the MCP server authentication method. For OAuth-protected servers, Contact Center saves this draft automatically and starts Authorization Code + PKCE; after callback this sheet reopens so you can review tools and save the final configuration.
+                              Click Connect to detect the MCP server authentication method. For OAuth-protected servers, review the detected resource details here, then click Authenticate to start Authorization Code + PKCE. After callback this sheet reopens so you can review tools and save the final configuration.
                             </p>
                           </div>
+                          <Button
+                            type="button"
+                            onClick={authenticateOAuth}
+                            disabled={oauthConnecting || !name || !type || !url || authType !== "oauth_authorization_code"}
+                            className="shrink-0 bg-telnyx-green text-black hover:bg-telnyx-green/90"
+                          >
+                            {oauthConnecting ? "Authenticating…" : isOAuthConnected ? "Re-authenticate" : "Authenticate"}
+                          </Button>
                         </div>
                       </div>
                     )}
