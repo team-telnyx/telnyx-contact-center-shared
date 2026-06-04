@@ -30,10 +30,13 @@ function assertTelnyxSttUi(editorSource, editorName) {
 }
 
 test("Streaming Start UI has provider/model split and interim results toggle for Telnyx STT", async () => {
-  assertTelnyxSttUi(
-    await source("../components/voice-flow/StreamingStartNodeEditor.jsx"),
-    "StreamingStartNodeEditor",
-  );
+  const editorSource = await source("../components/voice-flow/StreamingStartNodeEditor.jsx");
+  assertTelnyxSttUi(editorSource, "StreamingStartNodeEditor");
+  assert.match(editorSource, /\{isCustom && \(/);
+  assert.match(editorSource, /<Label className="flex items-center gap-2">\s*Stream URL/);
+  assert.match(editorSource, /onChange=\{\(e\) => handleFieldChange\("stream_url", e\.target\.value\)\}/);
+  assert.match(editorSource, /renderSelect\("stream_track", "Stream Track", STREAM_TRACK_OPTIONS/);
+  assert.match(editorSource, /renderSelect\("stream_codec", "Stream Codec", CODEC_OPTIONS/);
 });
 
 test("Answer UI has the same Telnyx STT streaming implementation as Streaming Start", async () => {

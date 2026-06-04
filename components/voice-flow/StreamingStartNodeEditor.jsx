@@ -677,6 +677,78 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         </div>
       )}
 
+      {/* ====== Custom: Telnyx Streaming Parameters ====== */}
+      {isCustom && (
+        <div className="space-y-4 pt-2 border-t">
+          <div className="flex items-center gap-2">
+            <IconSettings className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Telnyx Streaming Parameters</span>
+          </div>
+
+          <div>
+            <Label className="flex items-center gap-2">
+              Stream URL <span className="text-red-500">*</span>
+              {streamUrlError && (
+                <IconAlertTriangle className="h-4 w-4 text-destructive" />
+              )}
+            </Label>
+            <Input
+              type="text"
+              value={config.stream_url || ""}
+              onChange={(e) => handleFieldChange("stream_url", e.target.value)}
+              placeholder="wss://www.example.com/websocket"
+              className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
+            />
+            {streamUrlError && (
+              <p className="text-xs text-destructive mt-1">{streamUrlError}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              The destination WebSocket address.
+            </p>
+          </div>
+
+          {renderSelect("stream_track", "Stream Track", STREAM_TRACK_OPTIONS, "inbound_track", {
+            description: "Specifies which track should be streamed.",
+          })}
+
+          {renderSelect("stream_codec", "Stream Codec", CODEC_OPTIONS, "default", {
+            description: "Codec to be used for the streamed audio.",
+          })}
+
+          {renderSelect(
+            "stream_bidirectional_mode",
+            "Bidirectional Stream Mode",
+            BIDIRECTIONAL_MODE_OPTIONS,
+            "mp3",
+            { description: "Method of bidirectional streaming." }
+          )}
+
+          {renderSelect(
+            "stream_bidirectional_codec",
+            "Bidirectional Stream Codec",
+            CODEC_OPTIONS.filter((opt) => opt.value !== "default"),
+            "PCMU",
+            { description: "Codec for bidirectional RTP streaming." }
+          )}
+
+          {renderSelect(
+            "stream_bidirectional_target_legs",
+            "Bidirectional Stream Target Legs",
+            TARGET_LEGS_OPTIONS,
+            "opposite",
+            { description: "Call legs to receive the bidirectional stream audio." }
+          )}
+
+          {renderSelect(
+            "stream_bidirectional_sampling_rate",
+            "Bidirectional Stream Sampling Rate",
+            SAMPLING_RATE_OPTIONS.map((opt) => ({ ...opt, value: String(opt.value) })),
+            "8000",
+            { description: "Audio sampling rate in Hz." }
+          )}
+        </div>
+      )}
+
       {/* Show stream URL (read-only) for AI + Telnyx STT providers */}
       {(isAI || isTelnyxStt) && (
         <div className="space-y-4 pt-2 border-t">

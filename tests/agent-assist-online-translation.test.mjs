@@ -9,16 +9,20 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), "u
 test("online translation is implemented with Telnyx chat completions and workflow model", () => {
   const translationService = read("lib/agent-assist/translation-service.js");
   const router = read("lib/agent-assist-transcription-router.mjs");
+  const webhookHandler = read("lib/contact-center/webhook-handler.js");
 
   assert.match(translationService, /\/ai\/chat\/completions/);
   assert.match(translationService, /model:\s*model \|\| DEFAULT_TRANSLATION_MODEL/);
-  assert.match(translationService, /response_format\s*:\s*\{\s*type:\s*["']json_object["']/);
-  assert.doesNotMatch(translationService, /GOOGLE_TRANSLATE|translation\.googleapis|detectLanguage/);
+  assert.match(translationService, /response_format\s*:\s*responseFormat \|\| \{\s*type:\s*["']json_object["']/);
+  assert.match(translationService, /export async function detectLanguage/);
+  assert.doesNotMatch(translationService, /GOOGLE_TRANSLATE|translation\.googleapis/);
 
   assert.match(router, /resolveAgentAssistAnalysisModel\(assistConfig\)/);
   assert.match(router, /const translationModel = await resolveAgentAssistAnalysisModel\(assistConfig\)/);
   assert.match(router, /translateText\(\{[\s\S]*model:\s*translationModel/);
   assert.doesNotMatch(router, /detectLanguage|Google Translate/);
+  assert.match(webhookHandler, /detectLanguage/);
+  assert.doesNotMatch(webhookHandler, /Google Translate/);
   assert.match(router, /const callerLanguage = interaction\.metadata\?\.caller_language \|\| null/);
 });
 
