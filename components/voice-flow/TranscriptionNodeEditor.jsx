@@ -12,11 +12,8 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { IconKey } from "@tabler/icons-react";
-
 import {
   TRANSCRIPTION_PROVIDERS as VOICE_TRANSCRIPTION_PROVIDERS,
-  AZURE_REGIONS,
   getDefaultTranscriptionLanguage,
 } from "@/config/voice";
 
@@ -142,7 +139,6 @@ function getLanguageLabel(code) {
 const TRANSCRIPTION_PROVIDERS = [
   { value: "Telnyx", label: "Telnyx / OpenAI / Distil-Whisper" },
   { value: "Deepgram", label: "Deepgram" },
-  { value: "Azure", label: "Azure" },
   { value: "AssemblyAI", label: "AssemblyAI" },
   { value: "Speechmatics", label: "Speechmatics" },
   { value: "Soniox", label: "Soniox" },
@@ -258,8 +254,6 @@ function getEngineForModel(modelName) {
   switch (provider?.provider) {
     case "deepgram":
       return "Deepgram";
-    case "azure":
-      return "Azure";
     case "assemblyai":
       return "AssemblyAI";
     case "speechmatics":
@@ -375,47 +369,8 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     engineConfig.use_enhanced ?? config.use_enhanced ?? false
   );
 
-  // Azure-specific parameters
-  const [azureRegion, setAzureRegion] = useState(
-    engineConfig.region || config.region || "eastus"
-  );
-  const [azureApiKeyRef, setAzureApiKeyRef] = useState(
-    engineConfig.api_key_ref || config.api_key_ref || ""
-  );
-  const [azureSecrets, setAzureSecrets] = useState([]);
-  const [loadingAzureSecrets, setLoadingAzureSecrets] = useState(false);
-
   // Ref to track the last config we processed to avoid unnecessary updates
   const lastConfigRef = useRef(JSON.stringify(config));
-
-  // Load secrets for Azure
-  useEffect(() => {
-    if (provider === "Azure") {
-      async function loadSecrets() {
-        try {
-          setLoadingAzureSecrets(true);
-          const res = await fetch("/api/integration-secrets", {
-            cache: "no-store",
-          });
-          const data = await res.json();
-          if (res.ok && data?.ok) {
-            const secretsList = (data.secrets || []).map((s) => ({
-              id: s.identifier,
-              name: s.identifier,
-            }));
-            setAzureSecrets(secretsList);
-          }
-        } catch (err) {
-          console.error("Failed to load secrets:", err);
-        } finally {
-          setLoadingAzureSecrets(false);
-        }
-      }
-      loadSecrets();
-    } else {
-      setAzureSecrets([]);
-    }
-  }, [provider]);
 
   // Get available models for current provider
   const availableModels = useMemo(() => {
@@ -450,7 +405,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const engineConfig = config.transcription_engine_config || {};
     const currentProvider = config.transcription_engine;
     const isGoogle = currentProvider === "Google";
-    const isAzure = currentProvider === "Azure";
 
     if (currentProvider && currentProvider !== provider) {
       setProvider(currentProvider);
@@ -518,13 +472,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       }
     }
 
-    // Azure-specific parameters
-    if (isAzure) {
-      const newRegion = engineConfig.region || config.region || "eastus";
-      setAzureRegion(newRegion);
-      const newApiKeyRef = engineConfig.api_key_ref || config.api_key_ref || "";
-      setAzureApiKeyRef(newApiKeyRef);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
@@ -548,8 +495,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const currentProfanityFilter =
       overrides.profanity_filter ?? profanityFilter;
     const currentUseEnhanced = overrides.use_enhanced ?? useEnhanced;
-    const currentAzureRegion = overrides.azureRegion ?? azureRegion;
-    const currentAzureApiKeyRef = overrides.azureApiKeyRef ?? azureApiKeyRef;
     const configuredEngineConfig = config.transcription_engine_config || {};
     const configProvider =
       config.transcription_engine || configuredEngineConfig.transcription_engine;
@@ -597,17 +542,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       delete newConfig.max_speaker_count;
       delete newConfig.profanity_filter;
       delete newConfig.use_enhanced;
-    } else if (currentProvider === "Azure") {
-      newConfig.transcription_engine_config = {
-        transcription_engine: "Azure",
-        region: currentAzureRegion,
-        ...(shouldIncludeLanguage && { language: currentLanguage }),
-        ...(currentAzureApiKeyRef && { api_key_ref: currentAzureApiKeyRef }),
-      };
-      // Remove flat params from top level
-      delete newConfig.language;
-      delete newConfig.region;
-      delete newConfig.api_key_ref;
     } else {
       // Telnyx, Deepgram, AssemblyAI, Speechmatics, Soniox and xAI share the transcription_model shape.
       newConfig.transcription_engine_config = {
@@ -635,9 +569,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const models = getModelsForProvider(newProvider);
     const newModel = models.length > 0 ? models[0].value : "";
 
-    // Reset Azure region to default when switching to Azure
-    const newAzureRegion =
-      newProvider === "Azure" && azureRegion === "" ? "eastus" : azureRegion;
 
     // Reset language to default if not available in new provider
     const langs = getLanguagesForProviderModel(newProvider, newModel);
@@ -653,9 +584,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     // Update state
     setProvider(newProvider);
     setModel(newModel);
-    if (newProvider === "Azure" && azureRegion === "") {
-      setAzureRegion("eastus");
-    }
     setLanguage(newLanguage);
     if (shouldSetProviderInterimDefault) {
       // Keep provider defaults scoped to the provider switch. Do not mark the
@@ -670,7 +598,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
         provider: newProvider,
         model: newModel,
         language: newLanguage,
-        azureRegion: newAzureRegion,
         ...(shouldSetProviderInterimDefault && {
           interim_results: newInterimResults,
         }),
@@ -976,90 +903,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
           </div>
         </>
       )}
-
-      {/* Azure-specific parameters */}
-      {provider === "Azure" && (
-        <>
-          <div className="space-y-4 pt-2 border-t">
-            <h4 className="text-sm font-medium">Azure Settings</h4>
-
-            {/* Region Selection */}
-            <div>
-              <Label>
-                Region <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={azureRegion}
-                onValueChange={(value) => {
-                  setAzureRegion(value);
-                  onChange?.(buildConfig({ azureRegion: value }));
-                }}
-              >
-                <SelectTrigger className="w-full mt-1">
-                  <SelectValue placeholder="Select region" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AZURE_REGIONS.map((region) => (
-                    <SelectItem key={region.value} value={region.value}>
-                      {region.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Azure region to use for speech recognition
-              </p>
-            </div>
-
-            {/* API Key Reference */}
-            <div>
-              <Label>API Key Reference</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  value={azureApiKeyRef}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    setAzureApiKeyRef(newValue);
-                    onChange?.(buildConfig({ azureApiKeyRef: newValue }));
-                  }}
-                  placeholder="Optional: Reference to API key for authentication"
-                  className="flex-1"
-                />
-                {azureSecrets.length > 0 && (
-                  <Select
-                    onValueChange={(secretName) => {
-                      setAzureApiKeyRef(secretName);
-                      onChange?.(buildConfig({ azureApiKeyRef: secretName }));
-                    }}
-                  >
-                    <SelectTrigger className="h-10 w-10 p-0 border-0 bg-transparent [&>svg]:hidden">
-                      <div className="h-10 w-10 p-0 flex items-center justify-center">
-                        <IconKey className="h-4 w-4 text-telnyx-green" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {azureSecrets.map((secret) => (
-                        <SelectItem key={secret.id} value={secret.name}>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-sm">
-                              {secret.name}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Reference to the API key for authentication. See integration
-                secrets documentation for details. Optional as defaults are
-                available for some regions.
-              </p>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+  </div>
   );
 }

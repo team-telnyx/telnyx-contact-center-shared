@@ -1829,7 +1829,6 @@ export const VOICE_FLOW_NODES = {
           { value: "Google", label: "Google" },
           { value: "Telnyx", label: "Telnyx" },
           { value: "Deepgram", label: "Deepgram" },
-          { value: "Azure", label: "Azure" },
           { value: "Speechmatics", label: "Speechmatics" },
           { value: "Soniox", label: "Soniox" },
         ],
@@ -1897,24 +1896,9 @@ export const VOICE_FLOW_NODES = {
           { value: "custom", label: "Custom" },
           { value: "google-gemini", label: "Google Gemini Live" },
           { value: "openai-realtime", label: "OpenAI Realtime" },
-          { value: "azure-transcription", label: "Azure Transcription + Translation" },
         ],
         description:
           "Select an AI provider for automatic configuration, or choose Custom for manual settings",
-      },
-      azure_translation_enabled: {
-        type: "boolean",
-        label: "Enable Translation",
-        required: false,
-        default: false,
-        description: "Translate transcriptions in real-time using Azure Speech Translation",
-      },
-      azure_target_language: {
-        type: "string",
-        label: "Target Language",
-        required: false,
-        placeholder: "en",
-        description: "Target language code for translation (e.g. en, pl, de, fr, es)",
       },
       stream_url: {
         type: "string",

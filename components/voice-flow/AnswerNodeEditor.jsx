@@ -32,7 +32,7 @@ import { AI_STREAMING_PROVIDERS } from "@/config/ai-streaming-providers";
 const SIP_HEADER_NAMES = ["User-to-User", "Diversion"];
 const TELNYX_STT_PROVIDER_OPTION = { value: "telnyx-stt", label: "Telnyx Standalone STT" };
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
-const EXPERIMENTAL_PROVIDERS = ["azure-transcription"];
+const EXPERIMENTAL_PROVIDERS = [];
 
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
@@ -50,14 +50,12 @@ const STREAMING_PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
   { value: "openai-realtime", label: "OpenAI Realtime" },
-  { value: "azure-transcription", label: "Azure Transcription + Translation" },
   TELNYX_STT_PROVIDER_OPTION,
 ];
 
 function getStreamingProviderPath(provider) {
   if (provider === "google-gemini") return "google";
   if (provider === "openai-realtime") return "openai";
-  if (provider === "azure-transcription") return "azure";
   if (provider === "telnyx-stt") return "telnyx-stt";
   return null;
 }

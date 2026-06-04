@@ -76,11 +76,6 @@ test("Voice API transcription language lists match Telnyx OpenAPI enums", async 
     "Deepgram Nova 3 languages",
   );
   assertSameList(
-    providerLanguages("azure/fast"),
-    schemas.AzureTranscriptionLanguage.enum,
-    "Azure Fast languages",
-  );
-  assertSameList(
     providerLanguages("speechmatics/standard"),
     schemas.SpeechmaticsTranscriptionLanguage.enum,
     "Speechmatics languages",

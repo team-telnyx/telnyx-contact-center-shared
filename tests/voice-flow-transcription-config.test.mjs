@@ -56,56 +56,6 @@ test("answer transcription keeps nested Deepgram model and language", async () =
   assert.equal("language" in body, false);
 });
 
-test("answer transcription strips Azure model fields and preserves Voice API language", async () => {
-  const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
-
-  const body = transformTranscriptionOptions({
-    transcription_engine: "Azure",
-    transcription_tracks: "both",
-    transcription_model: "azure/fast",
-    transcription_engine_config: {
-      transcription_engine: "Azure",
-      transcription_model: "azure/fast",
-      region: "westus2",
-      language: "en",
-    },
-  });
-
-  assert.deepEqual(plain(body.transcription_config), {
-    transcription_engine: "Azure",
-    transcription_engine_config: {
-      transcription_engine: "Azure",
-      region: "westus2",
-      language: "en",
-    },
-    transcription_tracks: "both",
-  });
-  assert.equal("transcription_model" in body, false);
-});
-
-test("answer transcription drops invalid Azure locale values", async () => {
-  const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
-
-  const body = transformTranscriptionOptions({
-    transcription_engine: "Azure",
-    transcription_tracks: "both",
-    transcription_engine_config: {
-      transcription_engine: "Azure",
-      region: "eastus",
-      language: "en-US",
-    },
-  });
-
-  assert.deepEqual(plain(body.transcription_config), {
-    transcription_engine: "Azure",
-    transcription_engine_config: {
-      transcription_engine: "Azure",
-      region: "eastus",
-    },
-    transcription_tracks: "both",
-  });
-});
-
 test("answer transcription replaces Deepgram Flux with a Voice API model", async () => {
   const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
 
@@ -179,33 +129,6 @@ test("answer transcription keeps Google transcription inline", async () => {
         transcription_engine: "Google",
         model: "phone_call",
         interim_results: true,
-        language: "en",
-      },
-      transcription_tracks: "both",
-    },
-  });
-});
-
-test("answer keeps Azure transcription inline", async () => {
-  const { transformTranscriptionOptions } = await loadTranscriptionHelpers();
-
-  const body = transformTranscriptionOptions({
-    transcription_engine: "Azure",
-    transcription_tracks: "both",
-    transcription_engine_config: {
-      transcription_engine: "Azure",
-      region: "eastus",
-      language: "en",
-    },
-  });
-
-  assert.deepEqual(plain(body), {
-    transcription: true,
-    transcription_config: {
-      transcription_engine: "Azure",
-      transcription_engine_config: {
-        transcription_engine: "Azure",
-        region: "eastus",
         language: "en",
       },
       transcription_tracks: "both",

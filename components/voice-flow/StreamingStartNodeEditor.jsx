@@ -67,7 +67,6 @@ const PROVIDER_OPTIONS = [
   { value: "custom", label: "Custom" },
   { value: "google-gemini", label: "Google Gemini Live" },
   { value: "openai-realtime", label: "OpenAI Realtime" },
-  { value: "azure-transcription", label: "Azure Transcription + Translation" },
   TELNYX_STT_PROVIDER_OPTION,
 ];
 
@@ -155,7 +154,7 @@ const GEMINI_MODEL_OPTIONS = [
 ];
 
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
-const EXPERIMENTAL_PROVIDERS = ["azure-transcription"];
+const EXPERIMENTAL_PROVIDERS = [];
 
 export default function StreamingStartNodeEditor({ config = {}, onChange, currentUserEmail }) {
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
@@ -178,7 +177,6 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
   const isCustom = provider === "custom";
   const isOpenAI = provider === "openai-realtime";
   const isGemini = provider === "google-gemini";
-  const isAzure = provider === "azure-transcription";
   const providerConfig =
     provider === "telnyx-stt"
       ? AI_STREAMING_PROVIDERS[telnyxSttModel]
@@ -244,17 +242,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         : AI_STREAMING_PROVIDERS[provider];
     if (!selectedProviderConfig) return;
 
-    if (isAzure) {
-      const streamUrl = getWebSocketUrl("azure");
-      const newConfig = {
-        ...config,
-        ai_streaming_provider: provider,
-        stream_url: streamUrl,
-        ...selectedProviderConfig.telnyx,
-      };
-      setStreamUrlError(null);
-      onChange?.(newConfig);
-    } else if (isTelnyxStt) {
+    if (isTelnyxStt) {
       const streamUrl = getWebSocketUrl("telnyx-stt");
       const validation = validateWebSocketUrl(streamUrl);
       const newConfig = {
@@ -408,7 +396,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       </div>
 
       {/* Auto-configuration notice for AI providers */}
-      {isLocked && !isAzure && !isTelnyxStt && (
+      {isLocked && !isTelnyxStt && (
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
           <IconInfoCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-xs text-blue-700 dark:text-blue-300">
@@ -638,102 +626,32 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         </div>
       )}
 
-      {/* ====== Azure Transcription + Translation ====== */}
-      {isAzure && (
-        <div className="space-y-4">
-          <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-950 rounded-md border border-blue-200 dark:border-blue-800">
-            <IconMicrophone className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-blue-700 dark:text-blue-300">
-              <strong>Azure Cognitive Services Speech</strong>
-              <p className="mt-1">
-                Real-time transcription for both call legs (caller + agent).
-                Transcription starts when the agent answers the call.
-              </p>
-            </div>
-          </div>
 
-          {/* Enable Translation toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>Enable Translation</Label>
-              <p className="text-xs text-muted-foreground">
-                Translate transcriptions in real-time using Azure Speech Translation
-              </p>
-            </div>
-            <Switch
-              checked={config.azure_translation_enabled === true}
-              onCheckedChange={(checked) =>
-                handleFieldChange("azure_translation_enabled", checked)
-              }
-            />
-          </div>
-
-          {/* Source Language */}
-          <div>
-            <Label>
-              Source Language{" "}
-              <span className="text-muted-foreground font-normal">(required for transcription)</span>
-            </Label>
-            <Input
-              type="text"
-              value={config.azure_source_language || ""}
-              onChange={(e) =>
-                handleFieldChange("azure_source_language", e.target.value)
-              }
-              placeholder="e.g. en-US, pl-PL, de-DE, fr-FR"
-              className="mt-1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Language spoken by the caller. Use BCP-47 format (e.g. en-US, pl-PL). Default: en-US.
-            </p>
-          </div>
-
-          {/* Target Language (shown when translation enabled) */}
-          {config.azure_translation_enabled === true && (
-            <div>
-              <Label>
-                Target Language{" "}
-                <span className="text-muted-foreground font-normal">(translation target)</span>
-              </Label>
-              <Input
-                type="text"
-                value={config.azure_target_language || ""}
-                onChange={(e) =>
-                  handleFieldChange("azure_target_language", e.target.value)
-                }
-                placeholder="e.g. en, pl, de, fr"
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Language to translate into.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ====== Telnyx Standalone STT WebSocket ====== */}
       {isTelnyxStt && (
-        <div className="space-y-4">
-          <div className="flex items-start gap-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
-            <IconMicrophone className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
-            <div className="text-xs text-emerald-700 dark:text-emerald-300">
-              <strong>{providerConfig?.label}</strong>
-              <p className="mt-1">
-                Native telco transcription via Telnyx Speech-to-Text WebSocket.
-                Each selected call leg gets its own Telnyx media stream and STT WebSocket using raw PCMU/mulaw @ 8 kHz.
-              </p>
-              <p className="mt-1 font-mono">
-                {providerConfig?.telnyxStt?.transcription_engine} / {providerConfig?.telnyxStt?.model}
-              </p>
-            </div>
+        <div className="space-y-4 pt-2 border-t">
+          <div className="flex items-center gap-2">
+            <IconMicrophone className="w-4 h-4 text-teal-500" />
+            <span className="text-sm font-medium">Telnyx STT Configuration</span>
           </div>
-
           <div>
             <Label>Model</Label>
-            <Select value={telnyxSttModel} onValueChange={handleTelnyxSttModelChange}>
+            <Select
+              value={telnyxSttModel}
+              onValueChange={(value) => {
+                setTelnyxSttModel(value);
+                const selectedProviderConfig = AI_STREAMING_PROVIDERS[value];
+                onChange?.({
+                  ...config,
+                  ai_streaming_provider: "telnyx-stt",
+                  telnyx_stt_model: value,
+                  telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+                  stream_url: getWebSocketUrl("telnyx-stt"),
+                  ...(selectedProviderConfig?.telnyx || {}),
+                });
+              }}
+            >
               <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="Select model" />
+                <SelectValue placeholder="Select STT model" />
               </SelectTrigger>
               <SelectContent>
                 {TELNYX_STT_MODEL_OPTIONS.map((opt) => (
@@ -743,114 +661,24 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Telnyx STT engine/model routed through the Standalone WebSocket interface.
-            </p>
           </div>
-
-          {renderSelect(
-            "telnyx_stt_tracks",
-            "Transcription Channels",
-            TELNYX_STT_TRACK_OPTIONS,
-            providerConfig?.telnyxStt?.transcription_tracks || "both",
-            {
-              description:
-                "Inbound starts the customer-leg stream. Outbound starts the agent-leg stream after the agent answers. Both starts one stream per leg.",
-            }
-          )}
-
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
               <Label>Interim Results</Label>
               <p className="text-xs text-muted-foreground">
-                Stream partial transcript deltas to Agent Desktop. Turn off to wait for final transcripts only.
+                Emit partial transcripts while speech is still in progress.
               </p>
             </div>
             <Switch
               checked={config.telnyx_stt_interim_results !== false}
-              onCheckedChange={(checked) =>
-                handleFieldChange("telnyx_stt_interim_results", checked)
-              }
+              onCheckedChange={(checked) => handleFieldChange("telnyx_stt_interim_results", checked)}
             />
           </div>
         </div>
       )}
 
-      {/* ====== Custom: Telnyx Streaming Parameters ====== */}
-      {isCustom && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 pt-2 border-t">
-            <IconSettings className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Telnyx Streaming Parameters</span>
-          </div>
-
-          {/* Stream URL */}
-          <div>
-            <Label className="flex items-center gap-2">
-              Stream URL <span className="text-red-500">*</span>
-              {streamUrlError && (
-                <IconAlertTriangle className="h-4 w-4 text-destructive" />
-              )}
-            </Label>
-            <Input
-              type="text"
-              value={config.stream_url || ""}
-              onChange={(e) => handleFieldChange("stream_url", e.target.value)}
-              placeholder="wss://www.example.com/websocket"
-              className={`mt-1 ${streamUrlError ? "border-destructive" : ""}`}
-            />
-            {streamUrlError && (
-              <p className="text-xs text-destructive mt-1">{streamUrlError}</p>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              The destination WebSocket address
-            </p>
-          </div>
-
-          {renderSelect("stream_track", "Stream Track", STREAM_TRACK_OPTIONS, "inbound_track", {
-            description: "Specifies which track should be streamed",
-          })}
-
-          {renderSelect("stream_codec", "Stream Codec", CODEC_OPTIONS, "default", {
-            description: "Codec to be used for the streamed audio",
-          })}
-
-          {renderSelect(
-            "stream_bidirectional_mode",
-            "Bidirectional Stream Mode",
-            BIDIRECTIONAL_MODE_OPTIONS,
-            "mp3",
-            { description: "Method of bidirectional streaming" }
-          )}
-
-          {renderSelect(
-            "stream_bidirectional_codec",
-            "Bidirectional Stream Codec",
-            CODEC_OPTIONS.filter((opt) => opt.value !== "default"),
-            "PCMU",
-            { description: "Codec for bidirectional RTP streaming" }
-          )}
-
-          {renderSelect(
-            "stream_bidirectional_target_legs",
-            "Bidirectional Stream Target Legs",
-            TARGET_LEGS_OPTIONS,
-            "opposite",
-            { description: "Call legs to receive the bidirectional stream audio" }
-          )}
-
-          {renderSelect(
-            "stream_bidirectional_sampling_rate",
-            "Bidirectional Stream Sampling Rate",
-            SAMPLING_RATE_OPTIONS.map((o) => ({ ...o, value: String(o.value) })),
-            "8000",
-            { description: "Audio sampling rate in Hz" }
-          )}
-        </div>
-      )}
-
-      {/* Show stream URL (read-only) for AI + Azure + Telnyx STT providers */}
-      {(isAI || isAzure || isTelnyxStt) && (
+      {/* Show stream URL (read-only) for AI + Telnyx STT providers */}
+      {(isAI || isTelnyxStt) && (
         <div className="space-y-4 pt-2 border-t">
           <div>
             <Label className="flex items-center gap-2">
@@ -865,7 +693,7 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
             />
             <p className="text-xs text-muted-foreground mt-1">
               Auto-configured WebSocket URL for{" "}
-              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : isAzure ? "Azure" : "Telnyx STT"} streaming
+              {isOpenAI ? "OpenAI" : isGemini ? "Gemini" : "Telnyx STT"} streaming
             </p>
           </div>
         </div>

@@ -86,7 +86,7 @@ export async function GET(request) {
           models: [],
         });
       }
-      // Use "default" for empty model IDs (e.g., Azure)
+      // Use "default" for empty model IDs.
       const modelId = model || "default";
       const modelName = model || "Default";
       providersMap.get(prov).models.push({ id: modelId, name: modelName, voices: list });

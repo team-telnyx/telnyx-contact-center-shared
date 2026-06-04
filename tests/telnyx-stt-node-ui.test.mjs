@@ -55,7 +55,6 @@ test("Answer streaming provider selector matches Streaming Start providers", asy
     ["custom", "Custom"],
     ["google-gemini", "Google Gemini Live"],
     ["openai-realtime", "OpenAI Realtime"],
-    ["azure-transcription", "Azure Transcription + Translation"],
     ["telnyx-stt", "Telnyx Standalone STT"],
   ]) {
     assert.ok(
@@ -73,10 +72,9 @@ test("Answer streaming provider selector matches Streaming Start providers", asy
   assert.match(
     answerSource,
     /getStreamingProviderPath\(value\)/,
-    "Answer node should auto-configure stream URLs for Google, OpenAI, and Azure providers",
+    "Answer node should auto-configure stream URLs for Google and OpenAI providers",
   );
-  assert.match(answerSource, /EXPERIMENTAL_PROVIDERS = \["azure-transcription"\]/);
-  assert.match(answerSource, /!EXPERIMENTAL_PROVIDERS\.includes\(option\.value\) \|\|[\s\S]*isExperimentalUser/);
+  assert.doesNotMatch(answerSource, /azure-transcription|Azure Transcription/);
   assert.match(pageSource, /<AnswerNodeEditor[\s\S]*currentUserEmail=\{userEmail\}/);
 });
 

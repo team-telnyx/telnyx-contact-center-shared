@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,6 +33,21 @@ import {
   uploadProfilePictureAction,
   getProfileAction,
 } from "@/app/actions/user";
+import { languages as baseLanguageOptions } from "@/lib/languages";
+
+const PROFILE_LANGUAGE_OVERRIDES = [
+  { code: "en-US", name: "English (United States)", flag: "🇺🇸" },
+  { code: "en-GB", name: "English (United Kingdom)", flag: "🇬🇧" },
+  { code: "pl-PL", name: "Polish (Poland)", flag: "🇵🇱" },
+];
+
+const languageOptions = [
+  ...PROFILE_LANGUAGE_OVERRIDES,
+  ...baseLanguageOptions.filter(
+    (language) => !["auto", "multi"].includes(language.code) &&
+      !PROFILE_LANGUAGE_OVERRIDES.some((override) => override.code === language.code)
+  ),
+];
 
 export default function ProfilePage() {
   const { theme } = useTheme();
@@ -33,6 +55,7 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     nick: "",
+    language: "en-US",
     mobile: "",
     voiceNumber: "",
   });
@@ -152,6 +175,7 @@ export default function ProfilePage() {
       // Prepare FormData - only nick and mobile can be changed by user
       const fd = new FormData();
       fd.set("nick", (form.nick || "").trim());
+      fd.set("language", form.language || "en-US");
       fd.set("mobile", (form.mobile || "").trim());
 
       const result = await updateProfileAction(fd);
@@ -369,6 +393,24 @@ export default function ProfilePage() {
                           value={form.nick}
                           onChange={(e) => setField("nick", e.target.value)}
                         />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="language">Language</Label>
+                        <Select
+                          value={form.language || "en-US"}
+                          onValueChange={(value) => setField("language", value)}
+                        >
+                          <SelectTrigger id="language">
+                            <SelectValue placeholder="Select language" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {languageOptions.map((language) => (
+                              <SelectItem key={language.code} value={language.code}>
+                                {language.flag} {language.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

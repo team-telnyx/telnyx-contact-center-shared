@@ -52,7 +52,6 @@ import {
 } from "@tabler/icons-react";
 import {
   TRANSCRIPTION_PROVIDERS,
-  AZURE_REGIONS,
   NOISE_SUPPRESSION_PROVIDERS,
   getDefaultTranscriptionLanguage,
   getNoiseSuppressionConfigDefaults,
@@ -199,7 +198,6 @@ export default function CreateAgentSheet({
   const [sttLanguage, setSttLanguage] = useState("auto");
   const [sttLanguageSearch, setSttLanguageSearch] = useState("");
   const [sttLanguagePopoverOpen, setSttLanguagePopoverOpen] = useState(false);
-  const [sttAzureRegion, setSttAzureRegion] = useState("westeurope");
   
   // Noise suppression
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
@@ -222,9 +220,6 @@ export default function CreateAgentSheet({
   // Check if ElevenLabs is selected
   const isElevenLabs = ttsProvider?.toLowerCase() === "elevenlabs";
   
-  // Check if selected STT model requires Azure region
-  const selectedSttProvider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
-  const sttRequiresRegion = selectedSttProvider?.requiresRegion === true;
   const assistantNoiseSuppressionProviders = NOISE_SUPPRESSION_PROVIDERS.filter((engine) =>
     ["krisp", "deepfilternet"].includes(engine.value)
   );
@@ -242,7 +237,6 @@ export default function CreateAgentSheet({
       setTtsLanguageFilter("");
       setSttModel("deepgram/flux");
       setSttLanguage(getDefaultTranscriptionLanguage("deepgram/flux"));
-      setSttAzureRegion("westeurope");
       setNoiseSuppressionEngine("krisp");
       setSelectedCallFlowId("");
       setCreationSteps([
@@ -653,11 +647,7 @@ export default function CreateAgentSheet({
         model: sttModel,
         language: sttLanguage,
       };
-      
-      // Add region for Azure
-      if (sttRequiresRegion && sttAzureRegion) {
-        transcriptionConfig.region = sttAzureRegion;
-      }
+
 
       const noiseSuppressionConfig = noiseSuppressionEnabled
         ? getNoiseSuppressionConfigDefaults(noiseSuppressionEngine)
@@ -1184,8 +1174,7 @@ export default function CreateAgentSheet({
                     </div>
                     
                     <div className="space-y-3">
-                      {/* Row 1: Model + Region (if Azure) */}
-                      <div className={`grid gap-3 ${sttRequiresRegion ? "grid-cols-2" : "grid-cols-1"}`}>
+                      <div className="grid gap-3 grid-cols-1">
                         <div className="space-y-2">
                           <Label>Model</Label>
                           <Select 
@@ -1207,25 +1196,6 @@ export default function CreateAgentSheet({
                             </SelectContent>
                           </Select>
                         </div>
-                        
-                        {/* Azure Region selector */}
-                        {sttRequiresRegion && (
-                          <div className="space-y-2">
-                            <Label>Azure Region</Label>
-                            <Select value={sttAzureRegion} onValueChange={setSttAzureRegion}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {AZURE_REGIONS.map((region) => (
-                                  <SelectItem key={region.value} value={region.value}>
-                                    {region.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
                       </div>
                       
                       {/* Row 2: Language (with searchable popover like TTS) */}
