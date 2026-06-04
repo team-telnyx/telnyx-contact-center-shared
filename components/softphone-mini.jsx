@@ -76,9 +76,6 @@ export default function SoftphoneMini() {
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
   const activeCallDirection = useActiveCallStore((state) => state.direction);
-  const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
-  );
 
   // Zustand stores - dial state
   const { toNumber, setToNumber: setDialToNumber } = useDialStore();
@@ -146,66 +143,6 @@ export default function SoftphoneMini() {
 
   const fromRef = useRef("");
   const audioRef = useRef(null);
-  const autoStatusRef = useRef({
-    lastSent: null,
-    forcedBusy: false,
-  });
-
-  const updateUserStatus = async (nextStatus) => {
-    if (autoStatusRef.current.lastSent === nextStatus) return;
-    autoStatusRef.current.lastSent = nextStatus;
-    try {
-      await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, system: true }),
-      });
-    } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
-  };
-
-  // Auto-set agent status based on call activity
-  useEffect(() => {
-    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
-    if (hasActiveCall) {
-      const isCampaignOutboundCall = Array.isArray(activeCall?.options?.customHeaders)
-        && activeCall.options.customHeaders.some((header) => header?.name === "X-Outbound-Attempt-Id");
-      autoStatusRef.current.forcedBusy = true;
-      if (!isCampaignOutboundCall) {
-        updateUserStatus("Busy");
-      }
-      return;
-    }
-    let wrapupOpen = false;
-    try {
-      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
-    } catch (_) {}
-    if (wrapupOpen) {
-      return;
-    }
-    if (autoStatusRef.current.forcedBusy) {
-      autoStatusRef.current.forcedBusy = false;
-
-      // CRITICAL: Don't auto-revert to "Available" if status is "Agent Not Answering"
-      // Agent must manually change their status after not answering a call
-      let currentStatus = null;
-      try {
-        currentStatus = localStorage.getItem("user.status");
-      } catch (_) {}
-
-      if (currentStatus === "Agent Not Answering") {
-        console.log(
-          "[SoftphoneMini] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
-        );
-        return;
-      }
-
-      updateUserStatus("Available");
-    }
-  }, [activeCall, activeCallsCount]);
-
   // Fetch interaction when call is active
   // This works for BOTH contact center calls AND by looking up any incoming call
   // Track the last interaction we fetched to prevent repeated API calls

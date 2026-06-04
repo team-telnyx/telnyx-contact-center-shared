@@ -6,11 +6,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import {
-  updateAgentStatus,
-  updateAgentQueues,
-} from "@/lib/contact-center/state-manager";
+import { updateAgentQueues } from "@/lib/contact-center/state-manager";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
+import { setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
 export async function POST(request) {
@@ -80,25 +78,12 @@ export async function POST(request) {
         );
       }
 
-      // Update in database
-      await pool.query(
-        `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
-        [status, userId],
-      );
-
-      // Update in state manager
-      await updateAgentStatus(userId, status, username);
-
-      // Update agent state table
-      await pool.query(
-        `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity)
-         VALUES ($1, $2, $3, NOW(), NOW())
-         ON CONFLICT (user_id) DO UPDATE SET
-           agent_status = EXCLUDED.agent_status,
-           last_status_change = NOW(),
-           last_activity = NOW()`,
-        [userId, username, status],
-      );
+      await setUserStatus({
+        userId,
+        username,
+        status,
+        previousStatus: user.agent_status || "Unknown",
+      });
     }
 
     // Update queue assignments if provided

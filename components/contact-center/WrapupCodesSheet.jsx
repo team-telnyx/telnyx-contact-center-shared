@@ -98,10 +98,6 @@ async function updateAgentStatus(nextStatus) {
       }, 200);
     }
 
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
-
     return response.ok;
   } catch (err) {
     console.warn("[WrapupCodesSheet] Failed to update agent status:", err);

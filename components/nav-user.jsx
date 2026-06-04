@@ -104,18 +104,7 @@ export function NavUser({ user, hideExtras }) {
     } catch (_) {}
   }
 
-  const [status, setStatus] = useState(
-    (typeof window !== "undefined" && localStorage.getItem("user.status")) ||
-      DEFAULT_USER_STATUS
-  );
-
-  useEffect(() => {
-    try {
-      const ls = localStorage.getItem("user.status");
-      if (ls && ls !== status) setStatus(ls);
-    } catch (_) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [status, setStatus] = useState(DEFAULT_USER_STATUS);
 
   // Subscribe to SSE stream for real-time status updates
   useEffect(() => {
@@ -140,9 +129,6 @@ export function NavUser({ user, hideExtras }) {
                 data.status
               );
               setStatus(data.status);
-              try {
-                localStorage.setItem("user.status", data.status);
-              } catch (_) {}
             }
           } catch (error) {
             console.error("[Status] Error parsing SSE data:", error);
@@ -200,9 +186,6 @@ export function NavUser({ user, hideExtras }) {
         body: JSON.stringify({ status: nextStatus }),
       });
     } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
   }
 
   async function handleLogout() {
@@ -230,7 +213,6 @@ export function NavUser({ user, hideExtras }) {
       try {
         localStorage.removeItem("nav-main.selected");
         localStorage.removeItem("webrtc.token.cache");
-        localStorage.removeItem("user.status");
       } catch (_) {}
 
       // Try to call logout API to clear server-side session and refresh tokens

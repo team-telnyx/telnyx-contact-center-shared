@@ -94,9 +94,6 @@ export function Softphone() {
   const activeCallDirection = useActiveCallStore((state) => state.direction);
   const activeCallFromNumber = useActiveCallStore((state) => state.fromNumber);
   const activeCallFromName = useActiveCallStore((state) => state.fromName);
-  const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
-  );
 
   // Zustand stores - dial state
   const {
@@ -234,61 +231,6 @@ export function Softphone() {
       cancelled = true;
     };
   }, []);
-  const autoStatusRef = useRef({
-    lastSent: null,
-    forcedBusy: false,
-  });
-
-  const updateUserStatus = async (nextStatus) => {
-    if (autoStatusRef.current.lastSent === nextStatus) return;
-    autoStatusRef.current.lastSent = nextStatus;
-    try {
-      await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, system: true }),
-      });
-    } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
-  };
-
-  // Auto-set agent status based on call activity
-  useEffect(() => {
-    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
-    if (hasActiveCall) {
-      autoStatusRef.current.forcedBusy = true;
-      updateUserStatus("Busy");
-      return;
-    }
-    let wrapupOpen = false;
-    try {
-      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
-    } catch (_) {}
-    if (wrapupOpen) {
-      return;
-    }
-    if (autoStatusRef.current.forcedBusy) {
-      autoStatusRef.current.forcedBusy = false;
-
-      // CRITICAL: Don't auto-revert to "Available" if status is "Agent Not Answering"
-      // Agent must manually change their status after not answering a call
-      let currentStatus = null;
-      try {
-        currentStatus = localStorage.getItem("user.status");
-      } catch (_) {}
-
-      if (currentStatus === "Agent Not Answering") {
-        console.log(
-          "[Softphone] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
-        );
-        return;
-      }
-
-      updateUserStatus("Available");
-    }
-  }, [activeCall, activeCallsCount]);
   const applyContactCenterMetadata = (interaction) => {
     if (!interaction?.id) return;
     useActiveCallStore.getState().setContactCenterMetadata({

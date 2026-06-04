@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { applyCampaignDispositionToLedger } from "@/lib/outbound-dialer/campaign-dispositions";
+import { setUserStatus } from "@/lib/contact-center/user-status";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
@@ -10,21 +11,15 @@ function usernameFor(user) {
 async function restoreAgentAfterCampaignDisposition(pool, agentUsername, ledgerMetadata = {}) {
   const previous = ledgerMetadata.previous_agent_status;
   const nextStatus = previous && !["On Outbound Call", "On Campaign Call", "Agent Not Answering"].includes(previous) ? previous : "Available";
-  const { rows } = await pool.query(`SELECT id FROM users WHERE email = $1 OR username = $1 LIMIT 1`, [agentUsername]);
+  const { rows } = await pool.query(`SELECT id, agent_status FROM users WHERE email = $1 OR username = $1 LIMIT 1`, [agentUsername]);
   const user = rows[0];
   if (!user?.id) return nextStatus;
-  await pool.query(`UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`, [nextStatus, user.id]);
-  await pool.query(
-    `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity, available_since)
-     VALUES ($1, $2, $3, NOW(), NOW(), CASE WHEN $3 = 'Available' THEN NOW() ELSE NULL END)
-     ON CONFLICT (user_id) DO UPDATE SET
-       username = EXCLUDED.username,
-       agent_status = EXCLUDED.agent_status,
-       last_status_change = NOW(),
-       last_activity = NOW(),
-       available_since = CASE WHEN EXCLUDED.agent_status = 'Available' THEN COALESCE(cc_agent_state.available_since, NOW()) ELSE NULL END`,
-    [String(user.id), agentUsername, nextStatus],
-  );
+  await setUserStatus({
+    userId: String(user.id),
+    username: agentUsername,
+    status: nextStatus,
+    previousStatus: user.agent_status || "Unknown",
+  });
   return nextStatus;
 }
 

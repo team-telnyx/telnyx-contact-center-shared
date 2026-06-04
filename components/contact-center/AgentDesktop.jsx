@@ -660,9 +660,6 @@ export function AgentDesktop() {
             setAgentStatus(data.status);
 
             // Persist status to localStorage so softphone can check it
-            try {
-              localStorage.setItem("user.status", data.status);
-            } catch (_) {}
 
             // CRITICAL: When status changes to "Agent Not Answering", clear active call stores immediately
             // This ensures the UI is cleared even if WebRTC client hasn't received hangup event yet
