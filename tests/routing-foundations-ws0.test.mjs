@@ -52,7 +52,7 @@ test("WS0 schema adds routing foundation tables and columns idempotently", async
   assert.match(source, /ADD COLUMN IF NOT EXISTS active_channel/);
 });
 
-test("reserveAgent uses one guarded INSERT SELECT for status and capacity", async () => {
+test("reserveAgent uses one row-locked guarded INSERT SELECT for status and capacity", async () => {
   const { reserveAgent } = await import(reservationManagerPath);
   const pool = createFakePool();
 
@@ -69,10 +69,12 @@ test("reserveAgent uses one guarded INSERT SELECT for status and capacity", asyn
     /INSERT INTO cc_agent_reservations/i.test(call.sql),
   );
   assert.ok(insertCall, "reserveAgent must insert into cc_agent_reservations");
+  assert.match(insertCall.sql, /WITH locked_agent AS/i);
   assert.match(insertCall.sql, /JOIN cc_agent_state/i);
   assert.match(insertCall.sql, /s\.agent_status\s*=\s*'Available'/i);
   assert.match(insertCall.sql, /s\.is_available_for_routing\s*=\s*true/i);
-  assert.match(insertCall.sql, /COUNT\(\*\)[\s\S]*<\s*u\.max_concurrent_calls/i);
+  assert.match(insertCall.sql, /FOR UPDATE OF u/i);
+  assert.match(insertCall.sql, /COUNT\(\*\)[\s\S]*<\s*locked_agent\.max_concurrent_calls/i);
   assert.match(insertCall.sql, /RETURNING id/i);
 });
 
