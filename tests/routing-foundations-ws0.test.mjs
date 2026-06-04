@@ -15,6 +15,9 @@ function createFakeClient() {
     calls,
     async query(sql, params = []) {
       calls.push({ sql: String(sql), params });
+      if (/FOR UPDATE OF u/i.test(sql)) {
+        return { rows: [{ id: params[0], max_concurrent_calls: 1 }] };
+      }
       if (/INSERT INTO cc_agent_reservations/i.test(sql)) {
         return { rows: [{ id: params[0] }] };
       }
@@ -52,7 +55,7 @@ test("WS0 schema adds routing foundation tables and columns idempotently", async
   assert.match(source, /ADD COLUMN IF NOT EXISTS active_channel/);
 });
 
-test("reserveAgent uses one row-locked guarded INSERT SELECT for status and capacity", async () => {
+test("reserveAgent locks the agent before capacity is checked in a fresh insert statement", async () => {
   const { reserveAgent } = await import(reservationManagerPath);
   const pool = createFakePool();
 
@@ -69,12 +72,19 @@ test("reserveAgent uses one row-locked guarded INSERT SELECT for status and capa
     /INSERT INTO cc_agent_reservations/i.test(call.sql),
   );
   assert.ok(insertCall, "reserveAgent must insert into cc_agent_reservations");
-  assert.match(insertCall.sql, /WITH locked_agent AS/i);
-  assert.match(insertCall.sql, /JOIN cc_agent_state/i);
-  assert.match(insertCall.sql, /s\.agent_status\s*=\s*'Available'/i);
-  assert.match(insertCall.sql, /s\.is_available_for_routing\s*=\s*true/i);
-  assert.match(insertCall.sql, /FOR UPDATE OF u/i);
-  assert.match(insertCall.sql, /COUNT\(\*\)[\s\S]*<\s*locked_agent\.max_concurrent_calls/i);
+  const lockCall = pool.client.calls.find((call) => /FOR UPDATE OF u/i.test(call.sql));
+  assert.ok(lockCall, "reserveAgent must lock the agent row before inserting");
+  assert.match(lockCall.sql, /JOIN cc_agent_state/i);
+  assert.match(lockCall.sql, /s\.agent_status\s*=\s*'Available'/i);
+  assert.match(lockCall.sql, /s\.is_available_for_routing\s*=\s*true/i);
+  assert.ok(
+    pool.client.calls.indexOf(lockCall) < pool.client.calls.indexOf(insertCall),
+    "capacity insert should run after the row lock statement",
+  );
+  assert.doesNotMatch(insertCall.sql, /FOR UPDATE OF u/i);
+  assert.match(insertCall.sql, /COUNT\(\*\)[\s\S]*<\s*\$9/i);
+  assert.match(insertCall.sql, /r\.state\s*=\s*'active'/i);
+  assert.match(insertCall.sql, /r\.lease_expires_at\s*>\s*now\(\)/i);
   assert.match(insertCall.sql, /RETURNING id/i);
 });
 
@@ -83,6 +93,9 @@ test("reserveAgent returns null when the guarded insert loses the race", async (
   const client = createFakeClient();
   client.query = async (sql, params = []) => {
     client.calls.push({ sql: String(sql), params });
+    if (/FOR UPDATE OF u/i.test(sql)) {
+      return { rows: [{ id: params[0], max_concurrent_calls: 1 }] };
+    }
     if (/INSERT INTO cc_agent_reservations/i.test(sql)) {
       return { rows: [] };
     }
