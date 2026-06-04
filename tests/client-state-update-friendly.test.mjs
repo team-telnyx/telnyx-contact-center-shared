@@ -14,7 +14,7 @@ async function loadClientStateHelpers() {
   assert.ok(start > -1, "client-state helper block should exist");
   assert.ok(end > start, "client-state helper block should be bounded");
   return vm.runInNewContext(
-    `${engineSource.slice(start, end)}; ({ decodeClientStateObject, buildClientStatePatch, buildMergedClientStateBase64 });`,
+    `${engineSource.slice(start, end)}; ({ decodeClientStateObject, buildClientStatePatch, buildMergedClientStateBase64, resolveClientStateUpdateBase });`,
     { Buffer, console },
   );
 }
@@ -76,6 +76,41 @@ test("Update Client State supports custom text values and raw JSON patches", asy
     customer_tier: "gold",
     workflow_data: { case_id: "C-123" },
     vip: true,
+  });
+});
+
+test("Update Client State preserves route-injected flow tracking over stale webhook state", async () => {
+  const { buildMergedClientStateBase64, resolveClientStateUpdateBase } =
+    await loadClientStateHelpers();
+
+  const injectedState = encode({ flowId: "flow-1", currentNodeId: "node-2" });
+  const staleWebhookState = encode({ flowId: "flow-1", currentNodeId: "node-1" });
+
+  const existingClientStateBase64 = resolveClientStateUpdateBase({
+    config: {
+      client_state: injectedState,
+      update_mode: "predefined",
+      predefined_key: "caller_language",
+      caller_language: "pl-PL",
+    },
+    event: { data: { payload: { client_state: staleWebhookState } } },
+    executionState: { client_state: encode({ flowId: "flow-1", currentNodeId: "fallback" }) },
+  });
+
+  const encoded = buildMergedClientStateBase64({
+    existingClientStateBase64,
+    config: {
+      client_state: injectedState,
+      update_mode: "predefined",
+      predefined_key: "caller_language",
+      caller_language: "pl-PL",
+    },
+  });
+
+  assert.deepEqual(decode(encoded), {
+    flowId: "flow-1",
+    currentNodeId: "node-2",
+    caller_language: "pl-PL",
   });
 });
 
