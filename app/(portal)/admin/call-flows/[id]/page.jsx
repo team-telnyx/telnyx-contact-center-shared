@@ -161,6 +161,7 @@ import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
 import AgentAssistNodeEditor from "@/components/voice-flow/AgentAssistNodeEditor";
+import ClientStateUpdateNodeEditor from "@/components/voice-flow/ClientStateUpdateNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
@@ -3477,6 +3478,34 @@ export default function FlowBuilderPage() {
                               edges={edges}
                               globalVariables={globalVariables}
                               selectedNodeId={selectedNode?.id}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "ClientStateUpdateNodeEditor" ? (
+                            <ClientStateUpdateNodeEditor
+                              config={nodeConfig}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
+                                  );
+                                }
+                              }}
                             />
                           ) : selectedNodeDef.customEditor ===
                             "ReferNodeEditor" ? (
