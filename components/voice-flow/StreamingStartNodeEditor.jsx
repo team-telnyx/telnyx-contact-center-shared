@@ -101,6 +101,23 @@ function getDefaultTelnyxSttLanguage(provider) {
   return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en-US";
 }
 
+function getSupportedTelnyxSttLanguage(language, provider) {
+  const options = getTelnyxSttLanguageOptions(provider);
+  const supportedCodes = options.map((option) => option.value);
+  const defaultLanguage = getDefaultTelnyxSttLanguage(provider);
+  if (!language) return defaultLanguage;
+  if (supportedCodes.includes(language)) return language;
+  const baseLanguage = String(language).split("-")[0];
+  return supportedCodes.includes(baseLanguage) ? baseLanguage : defaultLanguage;
+}
+
+function getTelnyxSttLanguageForConfig(config, provider) {
+  if (config.telnyx_stt_language_source === "variable") {
+    return config.telnyx_stt_language || "";
+  }
+  return getSupportedTelnyxSttLanguage(config.telnyx_stt_language, provider);
+}
+
 const CODEC_OPTIONS = [
   { value: "PCMU", label: "PCMU (G.711 μ-law)" },
   { value: "PCMA", label: "PCMA (G.711 A-law)" },
@@ -208,7 +225,7 @@ export default function StreamingStartNodeEditor({
       : AI_STREAMING_PROVIDERS[provider];
   const isTelnyxStt = provider === "telnyx-stt";
   const telnyxSttLanguageOptions = getTelnyxSttLanguageOptions(providerConfig);
-  const telnyxSttLanguage = config.telnyx_stt_language || getDefaultTelnyxSttLanguage(providerConfig);
+  const telnyxSttLanguage = getSupportedTelnyxSttLanguage(config.telnyx_stt_language, providerConfig);
   const useCallerLanguage = hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true;
   const isAI = isOpenAI || isGemini; // AI providers with session config
   const isLocked = !isCustom;
@@ -278,7 +295,7 @@ export default function StreamingStartNodeEditor({
         ai_streaming_provider: "telnyx-stt",
         telnyx_stt_model: telnyxSttModel,
         telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
-        telnyx_stt_language: config.telnyx_stt_language || getDefaultTelnyxSttLanguage(selectedProviderConfig),
+        telnyx_stt_language: getTelnyxSttLanguageForConfig(config, selectedProviderConfig),
         telnyx_stt_language_source: config.telnyx_stt_language_source || "static",
         telnyx_stt_use_caller_language: hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true,
         stream_url: streamUrl,
@@ -341,7 +358,7 @@ export default function StreamingStartNodeEditor({
         ai_streaming_provider: "telnyx-stt",
         telnyx_stt_model: telnyxSttModel,
         telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
-        telnyx_stt_language: config.telnyx_stt_language || getDefaultTelnyxSttLanguage(selectedProviderConfig),
+        telnyx_stt_language: getTelnyxSttLanguageForConfig(config, selectedProviderConfig),
         telnyx_stt_language_source: config.telnyx_stt_language_source || "static",
         telnyx_stt_use_caller_language: hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true,
         stream_url: getWebSocketUrl("telnyx-stt"),
@@ -359,6 +376,7 @@ export default function StreamingStartNodeEditor({
       ai_streaming_provider: "telnyx-stt",
       telnyx_stt_model: newModel,
       telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+      telnyx_stt_language: getTelnyxSttLanguageForConfig(config, selectedProviderConfig),
       stream_url: getWebSocketUrl("telnyx-stt"),
       ...(selectedProviderConfig?.telnyx || {}),
     });

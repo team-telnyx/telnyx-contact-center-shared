@@ -84,6 +84,16 @@ function getDefaultTelnyxSttLanguage(provider) {
   return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en-US";
 }
 
+function getSupportedTelnyxSttLanguage(language, provider) {
+  const options = getTelnyxSttLanguageOptions(provider);
+  const supportedCodes = options.map((option) => option.value);
+  const defaultLanguage = getDefaultTelnyxSttLanguage(provider);
+  if (!language) return defaultLanguage;
+  if (supportedCodes.includes(language)) return language;
+  const baseLanguage = String(language).split("-")[0];
+  return supportedCodes.includes(baseLanguage) ? baseLanguage : defaultLanguage;
+}
+
 
 // Validate WebSocket URL format (ws:// or wss://)
 function validateWebSocketUrl(url) {
@@ -212,7 +222,7 @@ export default function AnswerNodeEditor({
   const [wsBaseUrl, setWsBaseUrl] = useState(null);
   const selectedTelnyxSttProvider = AI_STREAMING_PROVIDERS[telnyxSttModel];
   const telnyxSttLanguageOptions = getTelnyxSttLanguageOptions(selectedTelnyxSttProvider);
-  const telnyxSttLanguage = telnyxSttLanguageValue || getDefaultTelnyxSttLanguage(selectedTelnyxSttProvider);
+  const telnyxSttLanguage = getSupportedTelnyxSttLanguage(telnyxSttLanguageValue, selectedTelnyxSttProvider);
   const useCallerLanguage = hasCallerLanguageParameterBefore && telnyxSttUseCallerLanguage === true;
   const selectedStreamingProvider =
     streamingProvider === "telnyx-stt"
@@ -421,7 +431,7 @@ export default function AnswerNodeEditor({
         ? telnyxSttInterimResults
         : undefined,
       telnyx_stt_language: isTelnyxSttStreaming
-        ? telnyxSttLanguageValue || getDefaultTelnyxSttLanguage(selectedTelnyxSttProvider)
+        ? (telnyxSttLanguageSource === "variable" ? telnyxSttLanguageValue : telnyxSttLanguage)
         : undefined,
       telnyx_stt_language_source: isTelnyxSttStreaming
         ? telnyxSttLanguageSource || "static"
@@ -1217,7 +1227,18 @@ export default function AnswerNodeEditor({
 
               <div>
                 <Label>Model</Label>
-                <Select value={telnyxSttModel} onValueChange={setTelnyxSttModel}>
+                <Select
+                  value={telnyxSttModel}
+                  onValueChange={(value) => {
+                    setTelnyxSttModel(value);
+                    setTelnyxSttLanguageValue(
+                      getSupportedTelnyxSttLanguage(
+                        telnyxSttLanguageValue,
+                        AI_STREAMING_PROVIDERS[value]
+                      )
+                    );
+                  }}
+                >
                   <SelectTrigger className="mt-1">
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
