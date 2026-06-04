@@ -7,8 +7,6 @@ async function source(path) {
 }
 
 function assertEditorLanguageUi(editorSource, editorName) {
-  assert.match(editorSource, /TELNYX_STT_LANGUAGE_OPTIONS/,
-    `${editorName} should define model-aware Telnyx STT language options`);
   assert.match(editorSource, /telnyx_stt_language_source/,
     `${editorName} should support static vs variable STT language source`);
   assert.match(editorSource, /telnyx_stt_use_caller_language/,
@@ -18,6 +16,23 @@ function assertEditorLanguageUi(editorSource, editorName) {
   assert.match(editorSource, /<VariableInput[\s\S]*(telnyx_stt_language|setTelnyxSttLanguageValue)/,
     `${editorName} should allow STT language to be entered as a variable`);
 }
+
+test("Standalone STT language options are sourced per exact model from TRANSCRIPTION_PROVIDERS", async () => {
+  const providerSource = await source("../config/ai-streaming-providers.js");
+
+  assert.match(providerSource, /import \{ TRANSCRIPTION_PROVIDERS \} from "\.\/voice"/);
+  assert.match(providerSource, /standaloneSttLanguagesForModel\(model\)/);
+  assert.match(providerSource, /entry\.model_name === normalizedModel/);
+  assert.match(providerSource, /provider\?\.languages/);
+  assert.doesNotMatch(providerSource, /telnyxSttLanguagesForEngine/,
+    "Do not use broad provider-level language lists; standalone STT languages differ per model");
+
+  assert.match(providerSource, /model: "deepgram\/nova-2"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/nova-2"\)/);
+  assert.match(providerSource, /model: "deepgram\/nova-3"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/nova-3"\)/);
+  assert.match(providerSource, /model: "deepgram\/flux"[\s\S]*language: "auto"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("deepgram\/flux"\)/);
+  assert.match(providerSource, /model: "xai\/grok-stt"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("xai\/grok-stt"\)/);
+  assert.match(providerSource, /model: "speechmatics\/standard"[\s\S]*supported_languages: telnyxSttLanguagesForModel\("speechmatics\/standard"\)/);
+});
 
 test("Answer and Streaming Start expose Telnyx STT language selector with caller_language support", async () => {
   assertEditorLanguageUi(await source("../components/voice-flow/AnswerNodeEditor.jsx"), "AnswerNodeEditor");

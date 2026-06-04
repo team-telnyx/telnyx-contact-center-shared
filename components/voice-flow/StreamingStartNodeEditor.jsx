@@ -83,18 +83,14 @@ const TELNYX_STT_TRACK_OPTIONS = [
   { value: "both", label: "Both — customer + agent legs" },
 ];
 
-const FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS = [
-  { value: "en-US", label: "🇺🇸 English (US)" },
-  { value: "pl-PL", label: "🇵🇱 Polish" },
-  { value: "de-DE", label: "🇩🇪 German" },
-  { value: "fr-FR", label: "🇫🇷 French" },
-  { value: "es-ES", label: "🇪🇸 Spanish" },
-];
-
 function getTelnyxSttLanguageOptions(provider) {
-  return provider?.telnyxStt?.supported_languages?.length
-    ? provider.telnyxStt.supported_languages
-    : FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS;
+  if (provider?.telnyxStt?.supported_languages?.length) {
+    return provider.telnyxStt.supported_languages;
+  }
+  const fallbackLanguage = provider?.telnyxStt?.language;
+  return fallbackLanguage
+    ? [{ value: fallbackLanguage, label: `🌐 ${fallbackLanguage}` }]
+    : [];
 }
 
 function getDefaultTelnyxSttLanguage(provider) {

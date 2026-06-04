@@ -4,61 +4,43 @@
  */
 
 
-export const TELNYX_STT_LANGUAGE_OPTIONS = {
-  google: [
-    { value: "en-US", label: "🇺🇸 English (US)" },
-    { value: "en-GB", label: "🇬🇧 English (UK)" },
-    { value: "pl-PL", label: "🇵🇱 Polish" },
-    { value: "de-DE", label: "🇩🇪 German" },
-    { value: "fr-FR", label: "🇫🇷 French" },
-    { value: "es-ES", label: "🇪🇸 Spanish" },
-    { value: "it-IT", label: "🇮🇹 Italian" },
-    { value: "nl-NL", label: "🇳🇱 Dutch" },
-    { value: "pt-PT", label: "🇵🇹 Portuguese" },
-    { value: "pt-BR", label: "🇧🇷 Portuguese (Brazil)" },
-    { value: "uk-UA", label: "🇺🇦 Ukrainian" },
-    { value: "ar-AE", label: "🇦🇪 Arabic" },
-  ],
-  xai: [
-    { value: "en", label: "🇺🇸 English" },
-    { value: "pl", label: "🇵🇱 Polish" },
-    { value: "de", label: "🇩🇪 German" },
-    { value: "fr", label: "🇫🇷 French" },
-    { value: "es", label: "🇪🇸 Spanish" },
-    { value: "it", label: "🇮🇹 Italian" },
-    { value: "pt", label: "🇵🇹 Portuguese" },
-  ],
-  deepgram: [
-    { value: "en-US", label: "🇺🇸 English (US)" },
-    { value: "en-GB", label: "🇬🇧 English (UK)" },
-    { value: "pl", label: "🇵🇱 Polish" },
-    { value: "de", label: "🇩🇪 German" },
-    { value: "fr", label: "🇫🇷 French" },
-    { value: "es", label: "🇪🇸 Spanish" },
-    { value: "it", label: "🇮🇹 Italian" },
-    { value: "nl", label: "🇳🇱 Dutch" },
-    { value: "pt", label: "🇵🇹 Portuguese" },
-    { value: "uk", label: "🇺🇦 Ukrainian" },
-  ],
-  speechmatics: [
-    { value: "en", label: "🇺🇸 English" },
-    { value: "pl", label: "🇵🇱 Polish" },
-    { value: "de", label: "🇩🇪 German" },
-    { value: "fr", label: "🇫🇷 French" },
-    { value: "es", label: "🇪🇸 Spanish" },
-    { value: "it", label: "🇮🇹 Italian" },
-    { value: "nl", label: "🇳🇱 Dutch" },
-    { value: "pt", label: "🇵🇹 Portuguese" },
-  ],
-};
+import { TRANSCRIPTION_PROVIDERS } from "./voice";
+import { getLanguageByCode } from "@/lib/languages";
 
-function telnyxSttLanguagesForEngine(engine) {
-  const key = String(engine || "").toLowerCase();
-  if (key.includes("google")) return TELNYX_STT_LANGUAGE_OPTIONS.google;
-  if (key.includes("xai")) return TELNYX_STT_LANGUAGE_OPTIONS.xai;
-  if (key.includes("deepgram")) return TELNYX_STT_LANGUAGE_OPTIONS.deepgram;
-  if (key.includes("speechmatics")) return TELNYX_STT_LANGUAGE_OPTIONS.speechmatics;
-  return TELNYX_STT_LANGUAGE_OPTIONS.google;
+function toLanguageOption(code) {
+  const language = getLanguageByCode(code);
+  return {
+    value: code,
+    label: `${language.flag} ${language.name} (${code})`,
+  };
+}
+
+function normalizeStandaloneSttModel(model) {
+  if (!model) return "";
+  const value = String(model);
+  if (value === "nova-2") return "deepgram/nova-2";
+  if (value === "nova-3") return "deepgram/nova-3";
+  if (value === "flux") return "deepgram/flux";
+  return value;
+}
+
+function standaloneSttLanguagesForModel(model) {
+  const normalizedModel = normalizeStandaloneSttModel(model);
+  const provider = TRANSCRIPTION_PROVIDERS.find(
+    (entry) => entry.model_name === normalizedModel,
+  );
+  return (provider?.languages || []).map(toLanguageOption);
+}
+
+export const TELNYX_STT_LANGUAGE_OPTIONS_BY_MODEL = Object.fromEntries(
+  TRANSCRIPTION_PROVIDERS.map((provider) => [
+    provider.model_name,
+    standaloneSttLanguagesForModel(provider.model_name),
+  ]),
+);
+
+function telnyxSttLanguagesForModel(model) {
+  return standaloneSttLanguagesForModel(model);
 }
 
 export const AI_STREAMING_PROVIDERS = {
@@ -171,7 +153,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Google"),
+      supported_languages: telnyxSttLanguagesForModel("phone_call"),
     },
   },
 
@@ -194,7 +176,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Google"),
+      supported_languages: telnyxSttLanguagesForModel("latest_long"),
     },
   },
 
@@ -217,7 +199,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Google"),
+      supported_languages: telnyxSttLanguagesForModel("default"),
     },
   },
 
@@ -240,7 +222,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("xAI"),
+      supported_languages: telnyxSttLanguagesForModel("xai/grok-stt"),
     },
   },
 
@@ -258,12 +240,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       enabled: true,
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
-      model: "nova-2",
+      model: "deepgram/nova-2",
       language: "en-US",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
+      supported_languages: telnyxSttLanguagesForModel("deepgram/nova-2"),
     },
   },
 
@@ -281,12 +263,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       enabled: true,
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
-      model: "nova-3",
+      model: "deepgram/nova-3",
       language: "en-US",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
+      supported_languages: telnyxSttLanguagesForModel("deepgram/nova-3"),
     },
   },
 
@@ -304,12 +286,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       enabled: true,
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
-      model: "flux",
-      language: "en-US",
+      model: "deepgram/flux",
+      language: "auto",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
-      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
+      supported_languages: telnyxSttLanguagesForModel("deepgram/flux"),
     },
   },
 
@@ -333,7 +315,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       sample_rate: 8000,
       interim_results: true,
       endpointing: 300,
-      supported_languages: telnyxSttLanguagesForEngine("Speechmatics"),
+      supported_languages: telnyxSttLanguagesForModel("speechmatics/standard"),
     },
   },
 };
