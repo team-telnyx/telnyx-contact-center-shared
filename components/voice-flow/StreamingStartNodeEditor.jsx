@@ -684,18 +684,7 @@ export default function StreamingStartNodeEditor({
             <Label>Model</Label>
             <Select
               value={telnyxSttModel}
-              onValueChange={(value) => {
-                setTelnyxSttModel(value);
-                const selectedProviderConfig = AI_STREAMING_PROVIDERS[value];
-                onChange?.({
-                  ...config,
-                  ai_streaming_provider: "telnyx-stt",
-                  telnyx_stt_model: value,
-                  telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
-                  stream_url: getWebSocketUrl("telnyx-stt"),
-                  ...(selectedProviderConfig?.telnyx || {}),
-                });
-              }}
+              onValueChange={handleTelnyxSttModelChange}
             >
               <SelectTrigger className="w-full mt-1">
                 <SelectValue placeholder="Select STT model" />

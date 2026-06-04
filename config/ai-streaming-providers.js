@@ -7,6 +7,21 @@
 import { TRANSCRIPTION_PROVIDERS } from "./voice";
 import { getLanguageByCode } from "@/lib/languages";
 
+const GOOGLE_STANDALONE_STT_LANGUAGE_CODES = [
+  "en-US",
+  "en-GB",
+  "pl-PL",
+  "de-DE",
+  "fr-FR",
+  "es-ES",
+  "it-IT",
+  "nl-NL",
+  "pt-PT",
+  "pt-BR",
+  "uk-UA",
+  "ar-AE",
+];
+
 function toLanguageOption(code) {
   const language = getLanguageByCode(code);
   return {
@@ -26,6 +41,9 @@ function normalizeStandaloneSttModel(model) {
 
 function standaloneSttLanguagesForModel(model) {
   const normalizedModel = normalizeStandaloneSttModel(model);
+  if (["phone_call", "latest_long", "default"].includes(normalizedModel)) {
+    return GOOGLE_STANDALONE_STT_LANGUAGE_CODES.map(toLanguageOption);
+  }
   const provider = TRANSCRIPTION_PROVIDERS.find(
     (entry) => entry.model_name === normalizedModel,
   );

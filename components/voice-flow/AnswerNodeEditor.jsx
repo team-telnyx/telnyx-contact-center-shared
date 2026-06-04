@@ -86,7 +86,8 @@ function getSupportedTelnyxSttLanguage(language, provider) {
   if (!language) return defaultLanguage;
   if (supportedCodes.includes(language)) return language;
   const baseLanguage = String(language).split("-")[0];
-  return supportedCodes.includes(baseLanguage) ? baseLanguage : defaultLanguage;
+  if (supportedCodes.includes(baseLanguage)) return baseLanguage;
+  return supportedCodes.find((code) => String(code).split("-")[0] === baseLanguage) || defaultLanguage;
 }
 
 
@@ -1226,12 +1227,14 @@ export default function AnswerNodeEditor({
                   value={telnyxSttModel}
                   onValueChange={(value) => {
                     setTelnyxSttModel(value);
-                    setTelnyxSttLanguageValue(
-                      getSupportedTelnyxSttLanguage(
-                        telnyxSttLanguageValue,
-                        AI_STREAMING_PROVIDERS[value]
-                      )
-                    );
+                    if ((telnyxSttLanguageSource || "static") !== "variable") {
+                      setTelnyxSttLanguageValue(
+                        getSupportedTelnyxSttLanguage(
+                          telnyxSttLanguageValue,
+                          AI_STREAMING_PROVIDERS[value]
+                        )
+                      );
+                    }
                   }}
                 >
                   <SelectTrigger className="mt-1">
