@@ -53,6 +53,24 @@ test("WS2 reservation guard preserves zero-call agent capacity", async () => {
   );
 });
 
+test("WS2 reservation helpers do not reconnect an already-connected pg client", async () => {
+  const src = await source(
+    new URL("../lib/contact-center/reservation-manager.js", import.meta.url),
+  );
+
+  assert.match(src, /function isConnectedPgClient/);
+  assert.match(src, /typeof value\.release === "function"/);
+  assert.match(src, /value\.constructor\?\.name === "Client"/);
+  assert.match(src, /if \(isConnectedPgClient\(poolOrClient\)\) \{/);
+
+  const reconnectGuardIndex = src.indexOf("if (isConnectedPgClient(poolOrClient)) {");
+  const poolConnectIndex = src.indexOf("await pool.connect()");
+  assert.ok(
+    reconnectGuardIndex > -1 && reconnectGuardIndex < poolConnectIndex,
+    "already-connected pg clients must be used directly before falling back to pool.connect()",
+  );
+});
+
 test("WS2 waiting reason re-evaluation uses routeCall in read-only mode", async () => {
   const src = await source(
     new URL("../lib/contact-center/waiting-reason-re-evaluator.js", import.meta.url),

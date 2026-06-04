@@ -115,15 +115,19 @@ test("reserveAgent returns null when the guarded insert loses the race", async (
 test("release helpers fall back to the default pool when no explicit pool/client is passed", async () => {
   const source = await readFile(reservationManagerPath, "utf8");
 
+  const clientGuardBlock = source.slice(
+    source.indexOf("function isConnectedPgClient"),
+    source.indexOf("async function withClient"),
+  );
   const withClientBlock = source.slice(
     source.indexOf("async function withClient"),
     source.indexOf("export async function reserveAgent"),
   );
 
   assert.match(
-    withClientBlock,
-    /poolOrClient\s*&&[\s\S]*typeof poolOrClient\.query === "function"/,
-    "withClient must guard optional poolOrClient before reading .query",
+    clientGuardBlock,
+    /value\s*&&[\s\S]*typeof value\.query === "function"/,
+    "withClient must guard optional poolOrClient before reading .query through the connected-client helper",
   );
   assert.match(
     withClientBlock,
