@@ -42337,7 +42337,7 @@
     "/speech-to-text/providers": {
       "get": {
         "summary": "List supported STT providers",
-        "description": "Retrieve the canonical list of supported speech-to-text providers, models, accepted language codes, and the service types each model supports.\n\nService types:\n  * `streaming` \u2014 standalone WebSocket transcription via `/speech-to-text/transcription`.\n  * `file_transcription` \u2014 file-based transcription via `/ai/audio/transcriptions`.\n  * `in_call_transcription` \u2014 live call transcription via Call Control `transcription_start`.\n\nUse this endpoint to discover which (provider, model) combinations are available for the surface you need, and which language codes each accepts. `auto` in a `languages` array indicates the provider performs language detection.",
+        "description": "Retrieve the canonical list of supported speech-to-text providers, models, accepted language codes, and the service types each model supports.\n\nService types:\n  * `streaming` \u2014 standalone WebSocket transcription via `/speech-to-text/transcription`.\n  * `file_based` \u2014 file-based transcription via `/ai/audio/transcriptions`.\n  * `in_call` \u2014 live call transcription via Call Control `transcription_start`.\n  * `ai_assistant` \u2014 STT configured on a Call Control AI Assistant via voice-assistant `TranscriptionConfig` (covers both live-streaming and non-streaming/batch models).\n\nUse this endpoint to discover which (provider, model) combinations are available for the surface you need, and which language codes each accepts. `auto` in a `languages` array indicates the provider performs language detection.",
         "operationId": "listSttProviders",
         "servers": [
           {
@@ -42353,7 +42353,7 @@
             "name": "service_type",
             "in": "query",
             "required": false,
-            "description": "Filter to entries that support the given service type.",
+            "description": "Filter to entries that support the given service type. For backward compatibility with the values that briefly shipped before the product-aligned rename, the legacy aliases `file_transcription`, `in_call_transcription`, and `ai_assistant_transcription` are silently accepted and normalized to `file_based`, `in_call`, and `ai_assistant` respectively. The response always emits the canonical (post-rename) values.",
             "schema": {
               "$ref": "#/components/schemas/STTServiceType"
             }
@@ -66348,6 +66348,126 @@
         "description": "A user-assigned name to help manage the application.",
         "example": "call-router"
       },
+      "ArithmeticExpression": {
+        "description": "Numeric expression: applies an arithmetic operator to two sub-expressions.\n\nUseful for derived numeric checks, e.g. `cart_total + shipping > 50`.\nBoth operands should resolve to numbers at runtime.",
+        "example": {
+          "left": {
+            "name": "cart_total",
+            "type": "variable"
+          },
+          "op": "+",
+          "right": {
+            "name": "shipping_cost",
+            "type": "variable"
+          },
+          "type": "arithmetic"
+        },
+        "properties": {
+          "left": {
+            "description": "Left-hand operand sub-expression.",
+            "discriminator": {
+              "mapping": {
+                "arithmetic": "#/components/schemas/ArithmeticExpression",
+                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                "bool_op": "#/components/schemas/BooleanOpExpression",
+                "comparison": "#/components/schemas/ComparisonExpression",
+                "number_literal": "#/components/schemas/NumberLiteralExpression",
+                "string_literal": "#/components/schemas/StringLiteralExpression",
+                "variable": "#/components/schemas/DynamicVariableExpression"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanOpExpression"
+              },
+              {
+                "$ref": "#/components/schemas/ArithmeticExpression"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicVariableExpression"
+              },
+              {
+                "$ref": "#/components/schemas/StringLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/NumberLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanLiteralExpression"
+              }
+            ],
+            "title": "Left"
+          },
+          "op": {
+            "description": "Arithmetic operator applied to `left` and `right`.",
+            "enum": [
+              "+",
+              "-",
+              "*",
+              "/",
+              "%"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "right": {
+            "description": "Right-hand operand sub-expression.",
+            "discriminator": {
+              "mapping": {
+                "arithmetic": "#/components/schemas/ArithmeticExpression",
+                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                "bool_op": "#/components/schemas/BooleanOpExpression",
+                "comparison": "#/components/schemas/ComparisonExpression",
+                "number_literal": "#/components/schemas/NumberLiteralExpression",
+                "string_literal": "#/components/schemas/StringLiteralExpression",
+                "variable": "#/components/schemas/DynamicVariableExpression"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanOpExpression"
+              },
+              {
+                "$ref": "#/components/schemas/ArithmeticExpression"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicVariableExpression"
+              },
+              {
+                "$ref": "#/components/schemas/StringLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/NumberLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanLiteralExpression"
+              }
+            ],
+            "title": "Right"
+          },
+          "type": {
+            "const": "arithmetic",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "op",
+          "left",
+          "right"
+        ],
+        "title": "ArithmeticExpression",
+        "type": "object"
+      },
       "AssignProfileToCampaignRequest": {
         "title": "AssignProfileToCampaignRequest",
         "required": [
@@ -66734,6 +66854,46 @@
         },
         "type": "object",
         "title": "AssistantSmsChatResponse"
+      },
+      "AssistantTarget": {
+        "description": "Edge target referencing a different assistant.\n\nWhen the edge fires, the conversation hands off to `assistant_id`: the\nactive assistant on the conversation row is rewritten and the new\nassistant's flow starts at its own `start_node_id`. The current turn's\nLLM response is delivered to the user as-is; subsequent turns route\nto the new assistant.",
+        "properties": {
+          "assistant_id": {
+            "description": "ID of the assistant the conversation transitions to.",
+            "example": "assistant-billing",
+            "title": "Assistant Id",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "description": "Optional canvas coordinates for rendering the target assistant as a node in authoring UIs. Pure presentation \u2014 the runtime ignores it; round-trips so frontends can persist graph layout across reloads. When multiple edges target the same assistant, each edge's `position` is independent (frontends typically use the first non-null one).",
+            "example": {
+              "x": 600,
+              "y": 80
+            }
+          },
+          "type": {
+            "const": "assistant",
+            "title": "Type",
+            "type": "string"
+          },
+          "voice_mode": {
+            "default": "unified",
+            "description": "Voice behavior when handing off to the target assistant, mirroring the handoff tool's `voice_mode`. `unified` (default) keeps the current voice across the handoff; `distinct` lets the target assistant speak with its own configured voice. Only applies to assistant targets \u2014 node targets override voice via the node's own `voice_settings`.",
+            "enum": [
+              "unified",
+              "distinct"
+            ],
+            "title": "Voice Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "assistant_id"
+        ],
+        "title": "AssistantTarget",
+        "type": "object"
       },
       "AssistantTestResponse": {
         "properties": {
@@ -68603,6 +68763,122 @@
           "api_key_ref"
         ],
         "title": "BookAppointmentToolParams"
+      },
+      "BooleanLiteralExpression": {
+        "description": "Constant boolean value. Useful for unconditional ('always') edges.",
+        "example": {
+          "type": "bool_literal",
+          "value": true
+        },
+        "properties": {
+          "type": {
+            "const": "bool_literal",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "Literal boolean value.",
+            "title": "Value",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "BooleanLiteralExpression",
+        "type": "object"
+      },
+      "BooleanOpExpression": {
+        "description": "Combine sub-expressions with a logical operator (`and` / `or` / `not`).\n\n`and` and `or` accept two or more operands; `not` accepts exactly one.",
+        "example": {
+          "op": "and",
+          "operands": [
+            {
+              "name": "is_premium",
+              "type": "variable"
+            },
+            {
+              "left": {
+                "name": "user_age",
+                "type": "variable"
+              },
+              "op": ">=",
+              "right": {
+                "type": "number_literal",
+                "value": 18
+              },
+              "type": "comparison"
+            }
+          ],
+          "type": "bool_op"
+        },
+        "properties": {
+          "op": {
+            "description": "Logical operator. `not` is unary; `and`/`or` are n-ary (>=2).",
+            "enum": [
+              "and",
+              "or",
+              "not"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "operands": {
+            "description": "Operand sub-expressions. Length must be exactly 1 for `not` and >= 2 for `and`/`or`.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "arithmetic": "#/components/schemas/ArithmeticExpression",
+                  "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                  "bool_op": "#/components/schemas/BooleanOpExpression",
+                  "comparison": "#/components/schemas/ComparisonExpression",
+                  "number_literal": "#/components/schemas/NumberLiteralExpression",
+                  "string_literal": "#/components/schemas/StringLiteralExpression",
+                  "variable": "#/components/schemas/DynamicVariableExpression"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ComparisonExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/BooleanOpExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/ArithmeticExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/DynamicVariableExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/StringLiteralExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberLiteralExpression"
+                },
+                {
+                  "$ref": "#/components/schemas/BooleanLiteralExpression"
+                }
+              ]
+            },
+            "title": "Operands",
+            "type": "array"
+          },
+          "type": {
+            "const": "bool_op",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "op",
+          "operands"
+        ],
+        "title": "BooleanOpExpression",
+        "type": "object"
       },
       "BrandBasic": {
         "title": "ListedBrand",
@@ -77562,6 +77838,129 @@
           "existing_this_month"
         ]
       },
+      "ComparisonExpression": {
+        "description": "Compare two sub-expressions with a relational or membership operator.\n\nEvaluates to a boolean. Used in edge conditions to gate transitions on\nruntime values, e.g. `user_age >= 18` or `tier == \"gold\"`.",
+        "example": {
+          "left": {
+            "name": "user_age",
+            "type": "variable"
+          },
+          "op": ">=",
+          "right": {
+            "type": "number_literal",
+            "value": 18
+          },
+          "type": "comparison"
+        },
+        "properties": {
+          "left": {
+            "description": "Left-hand operand sub-expression.",
+            "discriminator": {
+              "mapping": {
+                "arithmetic": "#/components/schemas/ArithmeticExpression",
+                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                "bool_op": "#/components/schemas/BooleanOpExpression",
+                "comparison": "#/components/schemas/ComparisonExpression",
+                "number_literal": "#/components/schemas/NumberLiteralExpression",
+                "string_literal": "#/components/schemas/StringLiteralExpression",
+                "variable": "#/components/schemas/DynamicVariableExpression"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanOpExpression"
+              },
+              {
+                "$ref": "#/components/schemas/ArithmeticExpression"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicVariableExpression"
+              },
+              {
+                "$ref": "#/components/schemas/StringLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/NumberLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanLiteralExpression"
+              }
+            ],
+            "title": "Left"
+          },
+          "op": {
+            "description": "Relational/membership operator. `contains` / `not_contains` apply to strings (substring) and arrays (membership).",
+            "enum": [
+              "==",
+              "!=",
+              "<",
+              "<=",
+              ">",
+              ">=",
+              "contains",
+              "not_contains"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "right": {
+            "description": "Right-hand operand sub-expression.",
+            "discriminator": {
+              "mapping": {
+                "arithmetic": "#/components/schemas/ArithmeticExpression",
+                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                "bool_op": "#/components/schemas/BooleanOpExpression",
+                "comparison": "#/components/schemas/ComparisonExpression",
+                "number_literal": "#/components/schemas/NumberLiteralExpression",
+                "string_literal": "#/components/schemas/StringLiteralExpression",
+                "variable": "#/components/schemas/DynamicVariableExpression"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanOpExpression"
+              },
+              {
+                "$ref": "#/components/schemas/ArithmeticExpression"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicVariableExpression"
+              },
+              {
+                "$ref": "#/components/schemas/StringLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/NumberLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanLiteralExpression"
+              }
+            ],
+            "title": "Right"
+          },
+          "type": {
+            "const": "comparison",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "op",
+          "left",
+          "right"
+        ],
+        "title": "ComparisonExpression",
+        "type": "object"
+      },
       "CompleteOTAUpdate": {
         "type": "object",
         "title": "OTAUpdate",
@@ -80554,6 +80953,229 @@
         ],
         "title": "ConversationChannelType"
       },
+      "ConversationFlow": {
+        "description": "Conversation flow as returned by the API.",
+        "example": {
+          "edges": [
+            {
+              "condition": {
+                "prompt": "The caller is asking about a bill or charge.",
+                "type": "llm"
+              },
+              "id": "e_intake_to_billing",
+              "start_node_id": "n_intake",
+              "target": {
+                "node_id": "n_billing",
+                "type": "node"
+              }
+            },
+            {
+              "condition": {
+                "prompt": "The caller has explicitly asked for a human.",
+                "type": "llm"
+              },
+              "id": "e_intake_to_escalation_assistant",
+              "start_node_id": "n_intake",
+              "target": {
+                "assistant_id": "assistant-human-handoff",
+                "position": {
+                  "x": 600,
+                  "y": 80
+                },
+                "type": "assistant",
+                "voice_mode": "distinct"
+              }
+            }
+          ],
+          "nodes": [
+            {
+              "type": "prompt",
+              "id": "n_intake",
+              "instructions": "Greet the caller and ask what they're calling about.",
+              "name": "Intake",
+              "position": {
+                "x": 120,
+                "y": 80
+              },
+              "shared_tool_ids": [
+                "tool-faq-kb"
+              ]
+            },
+            {
+              "type": "prompt",
+              "id": "n_billing",
+              "instructions": "Focus on billing questions. Look up the caller's latest invoice with the billing tool before answering.",
+              "instructions_mode": "append",
+              "model": "moonshotai/Kimi-K2.6",
+              "name": "Billing",
+              "position": {
+                "x": 420,
+                "y": 80
+              },
+              "shared_tool_ids": [
+                "tool-billing-lookup"
+              ],
+              "tools_mode": "append"
+            }
+          ],
+          "start_node_id": "n_intake"
+        },
+        "properties": {
+          "edges": {
+            "description": "Directed transitions between nodes.",
+            "items": {
+              "$ref": "#/components/schemas/FlowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "description": "All nodes in the flow.",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "prompt": "#/components/schemas/FlowNode",
+                  "tool": "#/components/schemas/ToolNode"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/FlowNode"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolNode"
+                }
+              ]
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "start_node_id": {
+            "description": "ID of the node where the conversation begins.",
+            "title": "Start Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_node_id",
+          "nodes"
+        ],
+        "title": "ConversationFlow",
+        "type": "object"
+      },
+      "ConversationFlowReq": {
+        "description": "Conversation flow as supplied by API clients (create / update).\n\nA directed graph of `FlowNodeReq` connected by `FlowEdge`s. Validation\nenforces unique node/edge IDs, that `start_node_id` references a real\nnode, and that every edge's endpoints reference real nodes.",
+        "example": {
+          "edges": [
+            {
+              "condition": {
+                "prompt": "The caller is asking about a bill or charge.",
+                "type": "llm"
+              },
+              "id": "e_intake_to_billing",
+              "start_node_id": "n_intake",
+              "target": {
+                "node_id": "n_billing",
+                "type": "node"
+              }
+            },
+            {
+              "condition": {
+                "prompt": "The caller has explicitly asked for a human.",
+                "type": "llm"
+              },
+              "id": "e_intake_to_escalation_assistant",
+              "start_node_id": "n_intake",
+              "target": {
+                "assistant_id": "assistant-human-handoff",
+                "position": {
+                  "x": 600,
+                  "y": 80
+                },
+                "type": "assistant",
+                "voice_mode": "distinct"
+              }
+            }
+          ],
+          "nodes": [
+            {
+              "type": "prompt",
+              "id": "n_intake",
+              "instructions": "Greet the caller and ask what they're calling about.",
+              "name": "Intake",
+              "position": {
+                "x": 120,
+                "y": 80
+              },
+              "shared_tool_ids": [
+                "tool-faq-kb"
+              ]
+            },
+            {
+              "type": "prompt",
+              "id": "n_billing",
+              "instructions": "Focus on billing questions. Look up the caller's latest invoice with the billing tool before answering.",
+              "instructions_mode": "append",
+              "model": "moonshotai/Kimi-K2.6",
+              "name": "Billing",
+              "position": {
+                "x": 420,
+                "y": 80
+              },
+              "shared_tool_ids": [
+                "tool-billing-lookup"
+              ],
+              "tools_mode": "append"
+            }
+          ],
+          "start_node_id": "n_intake"
+        },
+        "properties": {
+          "edges": {
+            "description": "Directed transitions between nodes. May be empty for a single-node flow.",
+            "items": {
+              "$ref": "#/components/schemas/FlowEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          },
+          "nodes": {
+            "description": "All nodes in the flow. Must contain `start_node_id`. Each node is a prompt node (`type: prompt`) or a tool node (`type: tool`).",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "prompt": "#/components/schemas/FlowNodeReq",
+                  "tool": "#/components/schemas/ToolNodeReq"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/FlowNodeReq"
+                },
+                {
+                  "$ref": "#/components/schemas/ToolNodeReq"
+                }
+              ]
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "start_node_id": {
+            "description": "ID of the node where the conversation begins.",
+            "example": "n_intake",
+            "title": "Start Node Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_node_id",
+          "nodes"
+        ],
+        "title": "ConversationFlowReq",
+        "type": "object"
+      },
       "ConversationInsight": {
         "type": "object",
         "required": [
@@ -81796,6 +82418,9 @@
           },
           "post_conversation_settings": {
             "$ref": "#/components/schemas/PostConversationSettingsReq"
+          },
+          "conversation_flow": {
+            "$ref": "#/components/schemas/ConversationFlowReq"
           }
         },
         "type": "object",
@@ -88335,6 +88960,32 @@
           "caller_name"
         ]
       },
+      "DynamicVariableExpression": {
+        "description": "Reference a dynamic variable by name.\n\nResolved at runtime from the assistant's dynamic-variables context (see\n`Assistant.dynamic_variables` and the dynamic-variables webhook).",
+        "example": {
+          "name": "user_age",
+          "type": "variable"
+        },
+        "properties": {
+          "name": {
+            "description": "Variable name to look up in the runtime context.",
+            "example": "user_age",
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "variable",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ],
+        "title": "DynamicVariableExpression",
+        "type": "object"
+      },
       "ESimPurchase": {
         "title": "SIMCardRegistration",
         "type": "object",
@@ -89918,6 +90569,76 @@
           }
         }
       },
+      "ExpressionCondition": {
+        "description": "Edge condition evaluated as a deterministic expression AST.\n\nThe expression is computed against runtime dynamic variables and must\nevaluate to a boolean. Prefer this over `LLMCondition` when the rule is\na clean function of known variables \u2014 it's cheaper and predictable.",
+        "example": {
+          "expression": {
+            "left": {
+              "name": "user_age",
+              "type": "variable"
+            },
+            "op": ">=",
+            "right": {
+              "type": "number_literal",
+              "value": 18
+            },
+            "type": "comparison"
+          },
+          "type": "expression"
+        },
+        "properties": {
+          "expression": {
+            "description": "Root of the expression AST. Must evaluate to a boolean.",
+            "discriminator": {
+              "mapping": {
+                "arithmetic": "#/components/schemas/ArithmeticExpression",
+                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+                "bool_op": "#/components/schemas/BooleanOpExpression",
+                "comparison": "#/components/schemas/ComparisonExpression",
+                "number_literal": "#/components/schemas/NumberLiteralExpression",
+                "string_literal": "#/components/schemas/StringLiteralExpression",
+                "variable": "#/components/schemas/DynamicVariableExpression"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanOpExpression"
+              },
+              {
+                "$ref": "#/components/schemas/ArithmeticExpression"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicVariableExpression"
+              },
+              {
+                "$ref": "#/components/schemas/StringLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/NumberLiteralExpression"
+              },
+              {
+                "$ref": "#/components/schemas/BooleanLiteralExpression"
+              }
+            ],
+            "title": "Expression"
+          },
+          "type": {
+            "const": "expression",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "expression"
+        ],
+        "title": "ExpressionCondition",
+        "type": "object"
+      },
       "ExternalConnection": {
         "type": "object",
         "title": "External Connection",
@@ -91388,6 +92109,276 @@
         "description": "Specifies how many seconds to wait before timing out a dial command.",
         "default": 30,
         "example": 10
+      },
+      "FlowEdge": {
+        "description": "Directed transition from one node to a target, gated by a condition.\n\nThe target is either another node in the same flow (`NodeTarget`) or a\ndifferent assistant (`AssistantTarget`). Multiple edges may share a\n`start_node_id`; the runtime evaluates them in the order they're\ndeclared and takes the first whose condition is true.",
+        "properties": {
+          "condition": {
+            "description": "Condition that gates the transition. Discriminated by `type`: `llm`, `expression`.",
+            "discriminator": {
+              "mapping": {
+                "expression": "#/components/schemas/ExpressionCondition",
+                "llm": "#/components/schemas/LLMCondition"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LLMCondition"
+              },
+              {
+                "$ref": "#/components/schemas/ExpressionCondition"
+              }
+            ],
+            "title": "Condition"
+          },
+          "id": {
+            "description": "Caller-supplied unique identifier for this edge within the flow.",
+            "example": "e_age_gate",
+            "title": "Id",
+            "type": "string"
+          },
+          "start_node_id": {
+            "description": "ID of the node this edge transitions away from.",
+            "title": "Start Node Id",
+            "type": "string"
+          },
+          "target": {
+            "description": "Destination of the transition. Discriminated by `type`: `node` (jump to another node in this flow) or `assistant` (hand off to a different assistant).",
+            "discriminator": {
+              "mapping": {
+                "assistant": "#/components/schemas/AssistantTarget",
+                "node": "#/components/schemas/NodeTarget"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NodeTarget"
+              },
+              {
+                "$ref": "#/components/schemas/AssistantTarget"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "id",
+          "start_node_id",
+          "target",
+          "condition"
+        ],
+        "title": "FlowEdge",
+        "type": "object"
+      },
+      "FlowNode": {
+        "description": "One step in a conversation flow, as returned by the API.",
+        "properties": {
+          "external_llm": {
+            "$ref": "#/components/schemas/ExternalLLM",
+            "description": "Override for `Assistant.external_llm` while this node is active. Use this to route a node's turns to a different external LLM (different `model`, `base_url`, credentials). Part of the LLM bundle \u2014 see `model` for cascade semantics. Mutually exclusive with `model` on the node (a single LLM identity per node)."
+          },
+          "id": {
+            "description": "Caller-supplied unique identifier for this node within the flow.",
+            "title": "Id",
+            "type": "string"
+          },
+          "instructions": {
+            "description": "Prompt that drives the LLM while this node is active. Required.",
+            "title": "Instructions",
+            "type": "string"
+          },
+          "instructions_mode": {
+            "default": "replace",
+            "description": "How `instructions` combine with the assistant-level instructions. `replace` (default): the node's instructions are used alone. `append`: the node's instructions are concatenated after the assistant's instructions.",
+            "enum": [
+              "replace",
+              "append"
+            ],
+            "title": "Instructions Mode",
+            "type": "string"
+          },
+          "llm_api_key_ref": {
+            "description": "Override for `Assistant.llm_api_key_ref` while this node is active. Part of the LLM bundle \u2014 see `model` for cascade semantics.",
+            "title": "Llm Api Key Ref",
+            "type": "string"
+          },
+          "model": {
+            "description": "Override for `Assistant.model` while this node is active. Part of the LLM bundle (`model` + `llm_api_key_ref` + `external_llm`): when any of the three is set on the node, all three are taken from the node and the assistant-level LLM identity is not consulted. When none of the three is set, the assistant's bundle cascades unchanged.",
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "description": "Optional human-readable label, displayed in authoring UIs.",
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "description": "Optional canvas coordinates used by authoring UIs to lay out the graph. Ignored by the runtime; round-trips so frontends can persist graph layout across reloads."
+          },
+          "shared_tool_ids": {
+            "description": "IDs of shared (org-level) tools available at this node. Knowledge bases are attached the same way \u2014 via a shared retrieval tool. Tools not listed here are not callable while this node is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Shared Tool Ids",
+            "type": "array"
+          },
+          "tools": {
+            "description": "Full tool definitions for this node, resolved from `shared_tool_ids` server-side. Populated on responses so clients can render the flow without a follow-up fetch per shared tool. Ignored on input \u2014 set `shared_tool_ids` to configure a node's tools.",
+            "items": {
+              "$ref": "#/components/schemas/AssistantTools"
+            },
+            "title": "Tools",
+            "type": "array"
+          },
+          "tools_mode": {
+            "default": "replace",
+            "description": "How `shared_tool_ids` combine with the assistant-level tool set. `replace` (default): only the node's tools are callable. `append`: the node's tools are added to the assistant's tools. Ignored when `shared_tool_ids` is null.",
+            "enum": [
+              "replace",
+              "append"
+            ],
+            "title": "Tools Mode",
+            "type": "string"
+          },
+          "transcription": {
+            "$ref": "#/components/schemas/TranscriptionSettings",
+            "description": "Per-node transcription override (response form)."
+          },
+          "type": {
+            "const": "prompt",
+            "default": "prompt",
+            "description": "Node kind discriminator. `prompt` is an LLM-driven step.",
+            "title": "Type",
+            "type": "string"
+          },
+          "voice_settings": {
+            "$ref": "#/components/schemas/VoiceSettings",
+            "description": "Per-node voice override (response form)."
+          }
+        },
+        "required": [
+          "id",
+          "instructions"
+        ],
+        "title": "FlowNode",
+        "type": "object"
+      },
+      "FlowNodeReq": {
+        "description": "One step in a conversation flow, as supplied by API clients.\n\nEach node carries the prompt, tool scope, and optional overrides for\nmodel/voice/transcription. Unset overrides cascade from the assistant.",
+        "example": {
+          "id": "n_intake",
+          "instructions": "Greet the caller and ask what they're calling about.",
+          "name": "Intake",
+          "position": {
+            "x": 120,
+            "y": 80
+          },
+          "shared_tool_ids": [
+            "tool-faq-kb"
+          ],
+          "type": "prompt"
+        },
+        "properties": {
+          "external_llm": {
+            "$ref": "#/components/schemas/ExternalLLMReq",
+            "description": "Override for `Assistant.external_llm` while this node is active. Use this to route a node's turns to a different external LLM (different `model`, `base_url`, credentials). Part of the LLM bundle \u2014 see `model` for cascade semantics. Mutually exclusive with `model` on the node (a single LLM identity per node)."
+          },
+          "id": {
+            "description": "Caller-supplied unique identifier for this node within the flow.",
+            "example": "n_intake",
+            "title": "Id",
+            "type": "string"
+          },
+          "instructions": {
+            "description": "Prompt that drives the LLM while this node is active. Required.",
+            "example": "Greet the caller and ask what they're calling about.",
+            "title": "Instructions",
+            "type": "string"
+          },
+          "instructions_mode": {
+            "default": "replace",
+            "description": "How `instructions` combine with the assistant-level instructions. `replace` (default): the node's instructions are used alone. `append`: the node's instructions are concatenated after the assistant's instructions.",
+            "enum": [
+              "replace",
+              "append"
+            ],
+            "title": "Instructions Mode",
+            "type": "string"
+          },
+          "llm_api_key_ref": {
+            "description": "Override for `Assistant.llm_api_key_ref` while this node is active. Part of the LLM bundle \u2014 see `model` for cascade semantics.",
+            "example": "my-key-ref",
+            "title": "Llm Api Key Ref",
+            "type": "string"
+          },
+          "model": {
+            "description": "Override for `Assistant.model` while this node is active. Part of the LLM bundle (`model` + `llm_api_key_ref` + `external_llm`): when any of the three is set on the node, all three are taken from the node and the assistant-level LLM identity is not consulted. When none of the three is set, the assistant's bundle cascades unchanged.",
+            "example": "moonshotai/Kimi-K2.6",
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "description": "Optional human-readable label, displayed in authoring UIs.",
+            "example": "Intake",
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "description": "Optional canvas coordinates used by authoring UIs to lay out the graph. Ignored by the runtime; round-trips so frontends can persist graph layout across reloads.",
+            "example": {
+              "x": 120,
+              "y": 80
+            }
+          },
+          "shared_tool_ids": {
+            "description": "IDs of shared (org-level) tools available at this node. Knowledge bases are attached the same way \u2014 via a shared retrieval tool. Tools not listed here are not callable while this node is active.",
+            "example": [
+              "tool-faq-kb",
+              "tool-billing-lookup"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Shared Tool Ids",
+            "type": "array"
+          },
+          "tools_mode": {
+            "default": "replace",
+            "description": "How `shared_tool_ids` combine with the assistant-level tool set. `replace` (default): only the node's tools are callable. `append`: the node's tools are added to the assistant's tools. Ignored when `shared_tool_ids` is null.",
+            "enum": [
+              "replace",
+              "append"
+            ],
+            "title": "Tools Mode",
+            "type": "string"
+          },
+          "transcription": {
+            "$ref": "#/components/schemas/TranscriptionSettings",
+            "description": "Per-node transcription override (model/language/region). Unset fields cascade from the assistant-level transcription."
+          },
+          "type": {
+            "const": "prompt",
+            "default": "prompt",
+            "description": "Node kind discriminator. `prompt` (default) is an LLM-driven step; `tool` is a standalone tool execution (see `ToolNodeReq`).",
+            "title": "Type",
+            "type": "string"
+          },
+          "voice_settings": {
+            "$ref": "#/components/schemas/VoiceSettings",
+            "description": "Per-node voice override. Only fields set here override the assistant-level voice settings; unset fields cascade."
+          }
+        },
+        "required": [
+          "id",
+          "instructions"
+        ],
+        "title": "FlowNodeReq",
+        "type": "object"
       },
       "ForbiddenError": {
         "allOf": [
@@ -97008,6 +97999,32 @@
           "beep_enabled": "always"
         }
       },
+      "LLMCondition": {
+        "description": "Edge condition evaluated by the LLM from a natural-language prompt.\n\nThe model is asked to judge the prompt against conversation context and\nreturns true/false. Use this for fuzzy intents that aren't expressible as\na deterministic expression (e.g. 'user wants to escalate to a human').",
+        "example": {
+          "prompt": "The user has confirmed their booking details.",
+          "type": "llm"
+        },
+        "properties": {
+          "prompt": {
+            "description": "Natural-language criterion the LLM judges as true/false.",
+            "example": "The user has confirmed their booking details.",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "type": {
+            "const": "llm",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "prompt"
+        ],
+        "title": "LLMCondition",
+        "type": "object"
+      },
       "LeaveConferenceRequest": {
         "required": [
           "call_control_id"
@@ -101064,6 +102081,49 @@
           }
         }
       },
+      "NodePosition": {
+        "description": "2D coordinates for a node, used by authoring UIs to lay out the graph.\n\nPurely a presentation aid. The runtime ignores `position`; it round-trips\nthrough the API so frontends can persist the graph layout customers\narrange in the editor.",
+        "properties": {
+          "x": {
+            "description": "Horizontal coordinate in the authoring canvas.",
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "description": "Vertical coordinate in the authoring canvas.",
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "NodePosition",
+        "type": "object"
+      },
+      "NodeTarget": {
+        "description": "Edge target referencing another node within the same flow.\n\nThe runtime transitions the active node to `node_id` and continues\nprocessing within the current assistant's flow.",
+        "properties": {
+          "node_id": {
+            "description": "ID of the node this edge transitions into.",
+            "example": "n_billing",
+            "title": "Node Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "node",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "node_id"
+        ],
+        "title": "NodeTarget",
+        "type": "object"
+      },
       "NoiseSuppressionDirection": {
         "type": "string",
         "title": "Noise Suppression Direction",
@@ -101695,6 +102755,32 @@
           "success_ratio": 2,
           "spam_ratio": 10
         }
+      },
+      "NumberLiteralExpression": {
+        "description": "Constant numeric value (float; integers are accepted and stored as float).",
+        "example": {
+          "type": "number_literal",
+          "value": 18
+        },
+        "properties": {
+          "type": {
+            "const": "number_literal",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "Literal numeric value.",
+            "example": 18,
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "NumberLiteralExpression",
+        "type": "object"
       },
       "NumberLookupRecord": {
         "type": "object",
@@ -114890,7 +115976,7 @@
       },
       "STTProvider": {
         "type": "object",
-        "description": "A (provider, model) tuple along with its supported service types and languages.",
+        "description": "A (provider, model) tuple along with the service surfaces it supports. Each entry in `service_types` describes one surface and the languages accepted on it.",
         "properties": {
           "provider": {
             "type": "string",
@@ -114900,18 +115986,32 @@
           "model": {
             "type": "string",
             "description": "Provider-scoped model name.",
-            "example": "nova-3"
+            "example": "deepgram/nova-3"
           },
           "service_types": {
             "type": "array",
-            "description": "Service surfaces this (provider, model) supports.",
+            "description": "Service surfaces this (provider, model) supports. When the request filters by `service_type`, only the matching nested entry is returned for each matching model.",
             "items": {
-              "$ref": "#/components/schemas/STTServiceType"
+              "$ref": "#/components/schemas/STTProviderServiceType"
             }
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "service_types"
+        ]
+      },
+      "STTProviderServiceType": {
+        "type": "object",
+        "description": "A supported service surface for a given (provider, model), along with the language codes accepted on that surface. Language support can differ per surface \u2014 for example, a model may accept a narrower language set for streaming than for file transcription.",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/STTServiceType"
           },
           "languages": {
             "type": "array",
-            "description": "Languages this (provider, model) accepts, in the provider's native code format. `auto` indicates the provider performs language detection.",
+            "description": "Languages accepted on this service surface, in the provider's native code format. `auto` indicates the provider performs language detection.",
             "items": {
               "type": "string"
             },
@@ -114923,9 +116023,7 @@
           }
         },
         "required": [
-          "provider",
-          "model",
-          "service_types",
+          "type",
           "languages"
         ]
       },
@@ -114963,11 +116061,12 @@
       },
       "STTServiceType": {
         "type": "string",
-        "description": "Service surface a model is available on.",
+        "description": "Service surface a model is available on. `ai_assistant` is the STT surface configured via Call Control voice-assistant transcription; it covers both live-streaming and non-streaming/batch models (matching the `TranscriptionConfig.model` enum on `call-control` voice assistants).",
         "enum": [
           "streaming",
-          "file_transcription",
-          "in_call_transcription"
+          "file_based",
+          "in_call",
+          "ai_assistant"
         ]
       },
       "ScheduledEventResponse": {
@@ -117749,6 +118848,32 @@
           "outbound_track",
           "both_tracks"
         ]
+      },
+      "StringLiteralExpression": {
+        "description": "Constant string value.",
+        "example": {
+          "type": "string_literal",
+          "value": "gold"
+        },
+        "properties": {
+          "type": {
+            "const": "string_literal",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "Literal string value.",
+            "example": "gold",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "StringLiteralExpression",
+        "type": "object"
       },
       "SttClientEvent": {
         "type": "string",
@@ -122320,6 +123445,101 @@
           "tool_call_id": "call_123"
         }
       },
+      "ToolNode": {
+        "description": "A standalone tool step in a conversation flow, as returned by the API.",
+        "properties": {
+          "id": {
+            "description": "Caller-supplied unique identifier for this node within the flow.",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Optional human-readable label, displayed in authoring UIs.",
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "description": "Optional canvas coordinates used by authoring UIs to lay out the graph. Ignored by the runtime; round-trips so frontends can persist graph layout across reloads."
+          },
+          "shared_tool_id": {
+            "description": "ID of the single shared (org-level) tool this node executes. When the flow reaches this node the tool runs as a deliberate step (no LLM turn); its outgoing `tool_result` edges then route on the outcome. Arguments are filled from the conversation's dynamic variables by name \u2014 a dynamic variable whose name matches one of the tool's parameters supplies that argument. Cross-validated against the org's shared tools on write.",
+            "title": "Shared Tool Id",
+            "type": "string"
+          },
+          "tool": {
+            "$ref": "#/components/schemas/AssistantTools",
+            "description": "Full tool definition resolved from `shared_tool_id` server-side. Populated on responses so clients can render the node without a follow-up fetch. Ignored on input \u2014 set `shared_tool_id`."
+          },
+          "type": {
+            "const": "tool",
+            "default": "tool",
+            "description": "Node kind discriminator. Always `tool` for a tool node.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shared_tool_id"
+        ],
+        "title": "ToolNode",
+        "type": "object"
+      },
+      "ToolNodeReq": {
+        "description": "A standalone tool step in a conversation flow, as supplied by clients.\n\nUnlike a prompt node, a tool node has no instructions or model \u2014 it\nisn't an LLM turn. Reaching it deterministically runs one shared tool\n(arguments filled from matching dynamic variables by name), then routes\non the result via outgoing `tool_result` edges.",
+        "example": {
+          "id": "n_charge",
+          "name": "Charge card",
+          "position": {
+            "x": 300,
+            "y": 200
+          },
+          "shared_tool_id": "tool-charge-card",
+          "type": "tool"
+        },
+        "properties": {
+          "id": {
+            "description": "Caller-supplied unique identifier for this node within the flow.",
+            "example": "n_charge",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "description": "Optional human-readable label, displayed in authoring UIs.",
+            "example": "Charge card",
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/NodePosition",
+            "description": "Optional canvas coordinates used by authoring UIs to lay out the graph. Ignored by the runtime; round-trips so frontends can persist graph layout across reloads.",
+            "example": {
+              "x": 300,
+              "y": 200
+            }
+          },
+          "shared_tool_id": {
+            "description": "ID of the single shared (org-level) tool this node executes. When the flow reaches this node the tool runs as a deliberate step (no LLM turn); its outgoing `tool_result` edges then route on the outcome. Arguments are filled from the conversation's dynamic variables by name \u2014 a dynamic variable whose name matches one of the tool's parameters supplies that argument. Cross-validated against the org's shared tools on write.",
+            "example": "tool-charge-card",
+            "title": "Shared Tool Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool",
+            "default": "tool",
+            "description": "Node kind discriminator. Always `tool` for a tool node.",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shared_tool_id"
+        ],
+        "title": "ToolNodeReq",
+        "type": "object"
+      },
       "TotalSummary": {
         "type": "object",
         "properties": {
@@ -125180,6 +126400,9 @@
           },
           "post_conversation_settings": {
             "$ref": "#/components/schemas/PostConversationSettingsReq"
+          },
+          "conversation_flow": {
+            "$ref": "#/components/schemas/ConversationFlowReq"
           }
         },
         "type": "object",
@@ -136421,6 +137644,9 @@
           },
           "post_conversation_settings": {
             "$ref": "#/components/schemas/PostConversationSettings"
+          },
+          "conversation_flow": {
+            "$ref": "#/components/schemas/ConversationFlow"
           }
         },
         "type": "object",
