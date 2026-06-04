@@ -69,3 +69,21 @@ test("WS2 queued-call-router reserves inside assignment and releases reservation
   assert.match(src, /await releaseReservation\(reservationId/);
   assert.match(src, /reason:\s*"bridge_failed"/);
 });
+
+test("WS4 queued-call-router offer path uses DB-backed queued call and capacity lookups", async () => {
+  const src = await source(queuedRouterPath);
+
+  assert.match(src, /getQueuedInteractionsForQueuesFromDatabase/);
+  assert.doesNotMatch(
+    src,
+    /getQueuedInteractionsForQueues[,\s}]/,
+    "offer path must not depend on process-local queued interaction cache",
+  );
+  assert.doesNotMatch(
+    src,
+    /getRealtimeAgentMetrics/,
+    "agent capacity in offer path must not depend on process-local interaction cache",
+  );
+  assert.match(src, /FROM cc_agent_reservations/);
+  assert.match(src, /lease_expires_at > now\(\)/);
+});
