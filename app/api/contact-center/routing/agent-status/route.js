@@ -32,7 +32,10 @@ export async function POST(request) {
 
     // Get user identity and Contact Center authoritative status
     const userResult = await pool.query(
-      `SELECT u.username, s.agent_status AS current_agent_status
+      `SELECT
+          u.username,
+          s.agent_status AS current_agent_status,
+          s.active_queue_ids
          FROM users u
          LEFT JOIN cc_agent_state s ON s.user_id = u.id
         WHERE u.id = $1`,
@@ -94,6 +97,14 @@ export async function POST(request) {
     if (queueIds !== undefined && Array.isArray(queueIds)) {
       updateAgentQueues(userId, queueIds, isActive !== false);
 
+      const currentActiveQueueIds = Array.isArray(user.active_queue_ids)
+        ? user.active_queue_ids
+        : [];
+      const updatedActiveQueueIds =
+        isActive === false
+          ? currentActiveQueueIds.filter((id) => !queueIds.includes(id))
+          : [...new Set([...currentActiveQueueIds, ...queueIds])];
+
       // Update agent state table, creating the default Available row for
       // agents who activate queues before changing status explicitly.
       await pool.query(
@@ -121,7 +132,7 @@ export async function POST(request) {
            active_queue_ids = EXCLUDED.active_queue_ids,
            available_since = COALESCE(cc_agent_state.available_since, EXCLUDED.available_since),
            last_activity = NOW()`,
-        [userId, username, effectiveStatus, queueIds],
+        [userId, username, effectiveStatus, updatedActiveQueueIds],
       );
     }
 
