@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
-import { verifyAccessToken } from "./lib/jwt";
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
@@ -90,22 +89,6 @@ export async function proxy(request) {
 
   if (isAsset || isNext || isFavicon) {
     return NextResponse.next();
-  }
-
-  // Local credentials logins use the app auth endpoint, which issues the
-  // httpOnly `session` cookie consumed by /api/auth/me. Accept that same
-  // cookie for route protection before falling back to NextAuth, otherwise
-  // a successful custom login is immediately redirected back to /signin.
-  const customSessionCookie = request.cookies.get("session");
-  if (customSessionCookie?.value) {
-    try {
-      const customSessionPayload = await verifyAccessToken(customSessionCookie?.value);
-      if (customSessionPayload?.sub) {
-        return NextResponse.next();
-      }
-    } catch (_) {
-      // Invalid custom session cookies fall through to the existing NextAuth guard.
-    }
   }
 
   // Use withAuth to protect routes

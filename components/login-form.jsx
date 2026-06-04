@@ -56,22 +56,18 @@ export function LoginForm({ className, ...props }) {
       const form = new FormData(e.currentTarget);
       const username = (form.get("username") || "").toString();
       const password = (form.get("password") || "").toString();
-      const response = await fetch("/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ username, password }),
+      const res = await signIn("credentials", {
+        username,
+        password,
+        callbackUrl: "/",
+        redirect: false,
       });
-      const res = await response.json().catch(() => null);
-      console.log("[LOGIN] Response:", {
-        ok: response.ok,
-        status: response.status,
-      });
-      if (!response.ok || res?.error) {
+      console.log("[LOGIN] Response:", res);
+      if (res?.error) {
         handledRef.current = false;
-        console.log("[LOGIN] Error:", res?.error || response.statusText);
-        setError(res?.error || "Invalid credentials");
-      } else {
+        console.log("[LOGIN] Error:", res.error);
+        setError(res.error || "Invalid credentials");
+      } else if (res?.ok) {
         handledRef.current = true;
         notify({
           title: "Authentication successful",
@@ -85,9 +81,11 @@ export function LoginForm({ className, ...props }) {
         try {
           refresh?.();
         } catch (_) {}
-        const target = "/";
+        const target = res?.url || "/";
         console.log("[LOGIN] Navigating to:", target);
         router.replace(target);
+      } else {
+        setError("Invalid credentials");
       }
     } catch (err) {
       console.error("[LOGIN] Exception:", err);
