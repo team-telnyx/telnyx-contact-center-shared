@@ -24,6 +24,12 @@ test("Standalone STT language options are sourced per exact model from TRANSCRIP
   assert.match(providerSource, /standaloneSttLanguagesForModel\(model\)/);
   assert.match(providerSource, /entry\.model_name === normalizedModel/);
   assert.match(providerSource, /provider\?\.languages/);
+  assert.match(providerSource, /label: `\$\{language\.flag\} \$\{language\.name\}`/);
+  assert.doesNotMatch(
+    providerSource,
+    /label: `\$\{language\.flag\} \$\{language\.name\} \(\$\{code\}\)`/,
+    "Language labels should not append language codes in parentheses",
+  );
   assert.doesNotMatch(providerSource, /telnyxSttLanguagesForEngine/,
     "Do not use broad provider-level language lists; standalone STT languages differ per model");
 

@@ -14,8 +14,8 @@ function assertTelnyxSttUi(editorSource, editorName) {
   );
   assert.match(
     editorSource,
-    /TELNYX_STT_MODEL_OPTIONS[\s\S]*const modelLabel = `\$\{engine\}\/\$\{model\}`/,
-    `${editorName} should derive model labels like google/phone_call and deepgram/nova-2`,
+    /TELNYX_STT_MODEL_OPTIONS[\s\S]*const modelLabel = model/,
+    `${editorName} should derive model labels from the exact model only, e.g. deepgram/flux`,
   );
   assert.match(
     editorSource,

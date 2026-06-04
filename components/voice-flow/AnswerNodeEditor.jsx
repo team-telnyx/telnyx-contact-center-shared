@@ -37,9 +37,8 @@ const EXPERIMENTAL_PROVIDERS = [];
 const TELNYX_STT_MODEL_OPTIONS = Object.values(AI_STREAMING_PROVIDERS)
   .filter((provider) => provider.type === "telnyx-stt")
   .map((provider) => {
-    const engine = String(provider.telnyxStt?.transcription_engine || "").toLowerCase();
     const model = provider.telnyxStt?.model || provider.id;
-    const modelLabel = `${engine}/${model}`;
+    const modelLabel = model;
     return { value: provider.id, label: modelLabel, provider };
   });
 

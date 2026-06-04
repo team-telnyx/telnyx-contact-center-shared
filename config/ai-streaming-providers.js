@@ -11,7 +11,7 @@ function toLanguageOption(code) {
   const language = getLanguageByCode(code);
   return {
     value: code,
-    label: `${language.flag} ${language.name} (${code})`,
+    label: `${language.flag} ${language.name}`,
   };
 }
 
