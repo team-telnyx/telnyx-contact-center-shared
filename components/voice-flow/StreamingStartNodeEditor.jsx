@@ -103,7 +103,8 @@ function getSupportedTelnyxSttLanguage(language, provider) {
   if (!language) return defaultLanguage;
   if (supportedCodes.includes(language)) return language;
   const baseLanguage = String(language).split("-")[0];
-  return supportedCodes.includes(baseLanguage) ? baseLanguage : defaultLanguage;
+  if (supportedCodes.includes(baseLanguage)) return baseLanguage;
+  return supportedCodes.find((code) => String(code).split("-")[0] === baseLanguage) || defaultLanguage;
 }
 
 function getTelnyxSttLanguageForConfig(config, provider) {
