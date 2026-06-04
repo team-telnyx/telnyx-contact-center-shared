@@ -29,8 +29,9 @@ test("agent leg hangup before answer re-enqueues instead of hanging up caller", 
     "pre-answer agent-leg disconnect must requeue even if interaction state is stale/racy",
   );
   assert.match(noAnswerBlock, /!latestInteraction\.answered_at/);
-  assert.match(noAnswerBlock, /handleAgentLegNoAnswerDisconnect\(latestInteraction\)/);
-  assert.match(noAnswerBlock, /return;/);
+  assert.match(noAnswerBlock, /const wasReEnqueued = await handleAgentLegNoAnswerDisconnect/);
+  assert.match(noAnswerBlock, /if \(wasReEnqueued\) \{/);
+  assert.match(noAnswerBlock, /continuing with normal hangup cleanup/);
 
   const originalHangupIndex = webhookSrc.indexOf("Hanging up original call leg");
   const noAnswerIndex = webhookSrc.indexOf("const isAgentLegNoAnswerDisconnect");
@@ -46,6 +47,8 @@ test("agent-answer-timeout exports immediate no-answer handler", async () => {
   );
 
   assert.match(timeoutSrc, /export async function handleAgentLegNoAnswerDisconnect/);
-  assert.match(timeoutSrc, /handleTimeoutForInteraction\(hydratedInteraction\)/);
+  assert.match(timeoutSrc, /return handleTimeoutForInteraction\(hydratedInteraction\)/);
+  assert.match(timeoutSrc, /return false/);
+  assert.match(timeoutSrc, /return true/);
   assert.match(timeoutSrc, /agent_answer_timeout_secs/);
 });

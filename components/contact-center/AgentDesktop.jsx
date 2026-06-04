@@ -1141,11 +1141,9 @@ export function AgentDesktop() {
             .openWrapup(interactionId, transcriptions || []);
         }
       } else {
-        if (wasAnswered !== true) {
-          return;
-        }
-
-        // If interaction not found, only show wrapup when the event confirms it was answered
+        // If interaction has not hydrated locally yet, preserve the normal
+        // answered-call fallback. Explicit pre-answer disconnects are filtered
+        // above by rejectedBeforeAnswer/wasAnswered === false.
         lastWrapupInteractionRef.current = interactionId;
         // Use global wrapup sheet store
         const { default: useWrapupSheetStore } = await import(

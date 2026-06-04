@@ -83,7 +83,8 @@ test("agent desktop ignores pre-answer reject disconnects instead of opening wra
   assert.match(src, /rejectedBeforeAnswer\s*=\s*false/);
   assert.match(src, /wasAnswered/);
   assert.match(src, /if \(rejectedBeforeAnswer \|\| wasAnswered === false\) \{/);
-  assert.match(src, /wasAnswered !== true/);
+  assert.doesNotMatch(src, /wasAnswered !== true/);
+  assert.match(src, /preserve the normal\s+\/\/ answered-call fallback/);
 });
 
 test("state-manager only marks failed ringing as Agent Not Answering", async () => {
