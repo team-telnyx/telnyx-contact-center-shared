@@ -141,11 +141,19 @@ export async function POST(request) {
       // Assign call to agent
       const assignedAt = new Date();
 
+      const metadataUpdates = routingResult.reservationId
+        ? { reservationId: routingResult.reservationId }
+        : {};
+
       await pool.query(
-        `UPDATE cc_interactions 
-         SET agent_username = $1, state = 'ringing', assigned_at = $2, updated_at = NOW()
-         WHERE id = $3`,
-        [routingResult.agent.username, assignedAt, interactionId]
+        `UPDATE cc_interactions
+         SET agent_username = $1,
+             state = 'ringing',
+             assigned_at = $2,
+             metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+             updated_at = NOW()
+         WHERE id = $4`,
+        [routingResult.agent.username, assignedAt, JSON.stringify(metadataUpdates), interactionId]
       );
 
       if (routingResult.reservationId) {
