@@ -1372,8 +1372,19 @@ export default function SoftphoneMini() {
       }
 
       activeCall.hangup?.();
+      clearActiveCall();
+      if (callControlId) {
+        useCallsStore.getState().removeCall(callControlId);
+      }
+      if (interactionId) {
+        useCallsStore.getState().removeCall(interactionId);
+      }
+      window.dispatchEvent(
+        new CustomEvent("contact-center:refresh-interactions")
+      );
     } catch (err) {
       // Error rejecting call
+      clearActiveCall();
     }
   }
 

@@ -23,7 +23,11 @@ test("agent leg hangup before answer re-enqueues instead of hanging up caller", 
   );
 
   assert.match(noAnswerBlock, /isAgentLegHangup/);
-  assert.match(noAnswerBlock, /latestInteraction\.state === "ringing"/);
+  assert.doesNotMatch(
+    noAnswerBlock,
+    /latestInteraction\.state === "ringing"/,
+    "pre-answer agent-leg disconnect must requeue even if interaction state is stale/racy",
+  );
   assert.match(noAnswerBlock, /!latestInteraction\.answered_at/);
   assert.match(noAnswerBlock, /handleAgentLegNoAnswerDisconnect\(latestInteraction\)/);
   assert.match(noAnswerBlock, /return;/);
