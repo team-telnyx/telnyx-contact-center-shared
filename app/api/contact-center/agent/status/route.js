@@ -106,7 +106,7 @@ export async function PUT(request) {
 
     const targetUser = targetUserRes.rows[0];
     const previousStatus =
-      targetUser.status || targetUser.agent_status || "Unknown";
+      targetUser.agent_status || targetUser.status || "Unknown";
 
     // Update status using the setUserStatus function which handles all the necessary updates
     const statusUpdateStartedAt = Date.now();
