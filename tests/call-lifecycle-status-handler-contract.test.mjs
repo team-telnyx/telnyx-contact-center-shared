@@ -1,0 +1,109 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+async function source(path) {
+  return readFile(new URL(path, import.meta.url), "utf8");
+}
+
+test("call answered/connected lifecycle keeps agent Busy and never resets to Available", async () => {
+  const webhookSource = await source("../lib/contact-center/webhook-handler.js");
+
+  assert.match(
+    webhookSource,
+    /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']connected["']/,
+    "call.answered must delegate connected lifecycle status to the central handler",
+  );
+  assert.doesNotMatch(
+    webhookSource,
+    /resetAgentNotAnsweringStatus\(/,
+    "answered/connected must not reset Agent Not Answering to Available",
+  );
+});
+
+test("status stream is read-only presence transport and never writes routing status", async () => {
+  const statusStreamSource = await source("../app/api/user/status-stream/route.js");
+  const agentStreamSource = await source("../app/api/contact-center/agent/stream/route.js");
+
+  assert.doesNotMatch(
+    statusStreamSource,
+    /setUserStatus\(/,
+    "SSE connect/disconnect must not persist agent routing status",
+  );
+  assert.doesNotMatch(
+    statusStreamSource,
+    /status:\s*["']Offline["']/,
+    "Presence disconnect must not overwrite Contact Center agent status",
+  );
+  assert.doesNotMatch(
+    agentStreamSource,
+    /setUserStatus\(/,
+    "Agent SSE connect/disconnect must not persist agent routing status",
+  );
+  assert.doesNotMatch(
+    agentStreamSource,
+    /status:\s*["']Offline["']/,
+    "Agent SSE disconnect must not overwrite Contact Center agent status",
+  );
+});
+
+test("profile GET exposes Contact Center agent_status as the UI status", async () => {
+  const profileSource = await source("../app/api/user/profile/route.js");
+
+  assert.match(
+    profileSource,
+    /status:\s*user\.agent_status\s*\|\|\s*user\.status/,
+    "Agent Desktop/header profile status must prefer users.agent_status over generic users.status",
+  );
+});
+
+test("single backend call lifecycle status handler owns call-state transitions", async () => {
+  const handlerSource = await source("../lib/contact-center/agent-call-lifecycle-status.js");
+
+  assert.match(handlerSource, /export async function handleAgentCallLifecycleStatus/);
+  assert.match(handlerSource, /case\s+["']ringing["'][\s\S]*markAgentBusyForRinging/);
+  assert.match(handlerSource, /case\s+["']connected["'][\s\S]*markAgentBusyForRinging/);
+  assert.match(handlerSource, /case\s+["']disconnected["'][\s\S]*status:\s*["']Wrapup["']/);
+  assert.match(handlerSource, /case\s+["']rejected["'][\s\S]*status:\s*["']Agent Not Answering["']/);
+  assert.match(handlerSource, /case\s+["']no-answer["'][\s\S]*status:\s*["']Agent Not Answering["']/);
+  assert.match(handlerSource, /case\s+["']wrapup-ended["'][\s\S]*status:\s*["']Available["']/);
+});
+
+test("call lifecycle transition callers delegate to the central handler", async () => {
+  const skillsSource = await source("../lib/contact-center/skills-re-evaluator.js");
+  const timeoutSource = await source("../lib/contact-center/agent-answer-timeout.js");
+  const reservationSource = await source("../lib/contact-center/reservation-manager.js");
+  const queuedRouterSource = await source("../lib/contact-center/queued-call-router.js");
+  const routeCallSource = await source("../app/api/contact-center/routing/route-call/route.js");
+  const wrapupRouteSource = await source("../app/api/contact-center/interactions/[id]/wrapup/route.js");
+  const wrapupSheetSource = await source("../components/contact-center/WrapupCodesSheet.jsx");
+
+  assert.match(skillsSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']ringing["']/);
+  assert.doesNotMatch(skillsSource, /markAgentBusyForRinging\(/);
+
+  assert.match(timeoutSource, /handleAgentCallLifecycleStatus\([\s\S]*event,\s*userId/);
+  assert.doesNotMatch(timeoutSource, /setUserStatus\(/);
+  assert.doesNotMatch(
+    timeoutSource,
+    /updateAgentStatus\(userId,\s*["']Available["']\)/,
+    "no-answer timeout code must not auto-reset Agent Not Answering back to Available",
+  );
+
+  assert.match(reservationSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']no-answer["']/);
+  assert.doesNotMatch(reservationSource, /restoreAgentAvailableAfterFailedRinging\(/);
+
+  assert.match(queuedRouterSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']ringing["']/);
+  assert.match(queuedRouterSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']no-answer["']/);
+  assert.doesNotMatch(queuedRouterSource, /markAgentBusyForRinging\(/);
+  assert.doesNotMatch(queuedRouterSource, /restoreAgentAvailableAfterFailedRinging\(/);
+
+  assert.match(routeCallSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']ringing["']/);
+  assert.doesNotMatch(routeCallSource, /markAgentBusyForRinging\(/);
+
+  assert.match(wrapupRouteSource, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*action\s*===\s*["']start["']\s*\?\s*["']disconnected["']\s*:\s*["']wrapup-ended["']/);
+  assert.doesNotMatch(wrapupRouteSource, /setUserStatus\(/);
+
+  assert.doesNotMatch(wrapupSheetSource, /function\s+updateAgentStatus/);
+  assert.doesNotMatch(wrapupSheetSource, /fetch\(["']\/api\/user\/profile["'][\s\S]*method:\s*["']PUT["']/);
+  assert.doesNotMatch(wrapupSheetSource, /updateAgentStatus\(["'](?:Wrapup|Available)["']\)/);
+});

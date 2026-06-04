@@ -13,11 +13,10 @@ async function source(url) {
 test("queued-call router marks the agent Busy after assignment commit and before WebRTC bridge", async () => {
   const src = await source(queuedRouterPath);
 
-  assert.match(src, /markAgentBusyForRinging/);
-  assert.match(src, /restoreAgentAvailableAfterFailedRinging/);
+  assert.match(src, /handleAgentCallLifecycleStatus/);
 
   const commitIndex = src.indexOf('await client.query("COMMIT")');
-  const busyIndex = src.indexOf("await markAgentBusyForRinging");
+  const busyIndex = src.indexOf('event: "ringing"');
   const bridgeIndex = src.indexOf("await bridgeCallToAgent");
 
   assert.ok(commitIndex > -1, "assignment transaction should commit before external side effects");
@@ -28,14 +27,15 @@ test("queued-call router marks the agent Busy after assignment commit and before
 
   const bridgeFailedBlock = src.slice(src.indexOf("} catch (error) {", bridgeIndex), src.indexOf("routingDiagError(\"bridge failed; interaction re-queued\""));
   assert.match(bridgeFailedBlock, /await releaseReservation/);
-  assert.match(bridgeFailedBlock, /await restoreAgentAvailableAfterFailedRinging/);
+  assert.match(bridgeFailedBlock, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*"no-answer"/);
+  assert.doesNotMatch(bridgeFailedBlock, /restoreAgentAvailableAfterFailedRinging/);
 });
 
 test("legacy skills re-evaluator also marks agent Busy before direct WebRTC bridge", async () => {
   const src = await source(skillsReEvaluatorPath);
 
-  assert.match(src, /markAgentBusyForRinging/);
-  const busyIndex = src.indexOf("await markAgentBusyForRinging");
+  assert.match(src, /handleAgentCallLifecycleStatus/);
+  const busyIndex = src.indexOf('event: "ringing"');
   const bridgeIndex = src.indexOf("await bridgeCallToAgent");
   assert.ok(busyIndex > -1, "legacy evaluator must mark Busy");
   assert.ok(bridgeIndex > -1, "legacy evaluator still bridges");

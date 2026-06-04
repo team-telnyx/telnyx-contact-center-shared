@@ -6,7 +6,7 @@ import {
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { setUserStatus } from "@/lib/contact-center/user-status";
+import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status";
 
 async function getUsernameForUserId(userId) {
   const pool = getPostgresPool();
@@ -157,21 +157,12 @@ export async function POST(request, { params }) {
     await PgDb.updateInteractionById(id, updates);
 
     if (interaction.agent_username) {
-      if (action === "start") {
-        await setUserStatus({
-          userId: user.id,
-          username: interaction.agent_username,
-          status: "Wrapup",
-          previousStatus: user.agent_status,
-        });
-      } else {
-        await setUserStatus({
-          userId: user.id,
-          username: interaction.agent_username,
-          status: "Available",
-          previousStatus: user.agent_status,
-        });
-      }
+      await handleAgentCallLifecycleStatus({
+        event: action === "start" ? "disconnected" : "wrapup-ended",
+        userId: user.id,
+        username: interaction.agent_username,
+        interaction,
+      });
     }
 
     return NextResponse.json({ ok: true });

@@ -16,7 +16,7 @@ import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomUUID } from "crypto";
 import { promoteReservation } from "@/lib/contact-center/reservation-manager.js";
-import { markAgentBusyForRinging } from "@/lib/contact-center/agent-status-transition.js";
+import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status.js";
 
 export async function POST(request) {
   try {
@@ -160,9 +160,11 @@ export async function POST(request) {
         await promoteReservation(routingResult.reservationId, "ringing");
       }
 
-      await markAgentBusyForRinging({
+      await handleAgentCallLifecycleStatus({
+        event: "ringing",
         userId: routingResult.agent.id,
         username: routingResult.agent.username,
+        interaction: { id: interactionId, agent_username: routingResult.agent.username },
       });
 
       assignCallToAgent(

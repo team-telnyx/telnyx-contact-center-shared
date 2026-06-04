@@ -73,7 +73,7 @@ export async function GET(request) {
       telephony_user_name: user.telephony_user_name,
       roles: user.roles || ["agent"],
       theme: user.theme,
-      status: user.status,
+      status: user.agent_status || user.status,
       language: user.language,
       profile_picture_uri: user.profile_picture_uri,
       setup_completed: user.setup_completed,

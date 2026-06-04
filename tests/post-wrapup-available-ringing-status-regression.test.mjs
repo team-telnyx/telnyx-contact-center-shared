@@ -57,7 +57,6 @@ test("ringing Busy transition is forced for assigned ringing interactions, not s
   const src = await source(statusTransitionPath);
   const busyHelper = src.slice(
     src.indexOf("export async function markAgentBusyForRinging"),
-    src.indexOf("export async function restoreAgentAvailableAfterFailedRinging"),
   );
 
   assert.doesNotMatch(

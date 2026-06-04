@@ -136,15 +136,15 @@ test("release helpers fall back to the default pool when no explicit pool/client
   );
 });
 
-test("expired reservation sweep restores auto-busy agents when capacity is clear", async () => {
+test("expired reservation sweep delegates no-answer lifecycle when capacity is clear", async () => {
   const source = await readFile(reservationManagerPath, "utf8");
   const sweepBlock = source.slice(source.indexOf("export async function sweepExpiredReservations"));
 
-  assert.match(source, /restoreAgentAvailableAfterFailedRinging/);
-  assert.match(source, /await import\("\.\/agent-status-transition\.js"\)/);
+  assert.match(source, /handleAgentCallLifecycleStatus/);
+  assert.match(source, /await import\([\s\S]*"\.\/agent-call-lifecycle-status\.js"[\s\S]*\)/);
   assert.match(sweepBlock, /const activeReservations = await refreshAgentReservationCount\(agentId, \{ client: db \}\)/);
   assert.match(sweepBlock, /if \(activeReservations === 0\)/);
-  assert.match(sweepBlock, /await restoreAgentAfterExpiredReservation\(agentId\)/);
+  assert.match(sweepBlock, /await restoreAgentAfterExpiredReservation\(agentId, \{ client: db \}\)/);
 });
 
 test("alreadyProcessed is concurrency-safe via INSERT ON CONFLICT DO NOTHING RETURNING", async () => {

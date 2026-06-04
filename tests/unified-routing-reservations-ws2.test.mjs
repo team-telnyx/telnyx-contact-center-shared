@@ -71,18 +71,14 @@ test("WS2 reservation helpers do not reconnect an already-connected pg client", 
   );
 });
 
-test("WS2 expired reservation restore reuses the sweep database connection", async () => {
+test("WS2 expired reservation restore delegates lifecycle status through the central handler", async () => {
   const reservationSrc = await source(
     new URL("../lib/contact-center/reservation-manager.js", import.meta.url),
   );
-  const transitionSrc = await source(
-    new URL("../lib/contact-center/agent-status-transition.js", import.meta.url),
-  );
 
   assert.match(reservationSrc, /restoreAgentAfterExpiredReservation\(agentId, \{ client: db \}\)/);
-  assert.match(reservationSrc, /restoreAgentAvailableAfterFailedRinging\(\{ userId: agentId, pool, client \}\)/);
-  assert.match(transitionSrc, /pool: providedPool = null/);
-  assert.match(transitionSrc, /const pool = client \|\| providedPool \|\| getPostgresPool\(\)/);
+  assert.match(reservationSrc, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*"no-answer"/);
+  assert.doesNotMatch(reservationSrc, /restoreAgentAvailableAfterFailedRinging/);
 });
 
 test("WS2 waiting reason re-evaluation uses routeCall in read-only mode", async () => {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
+import { addSseClient, removeSseClient } from "@/lib/sse";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -60,7 +60,10 @@ export async function GET(request) {
       let pingInterval = null;
       let disconnectHandled = false;
 
-      // Handle client disconnect - set status to offline only if no other connections exist
+      // Handle client disconnect. SSE is a read-only presence transport for the
+      // header/queue widgets; it must never persist Contact Center routing
+      // status. Call lifecycle status is owned by backend call-state handlers,
+      // and manual status changes are owned by the dropdown/profile API.
       const handleDisconnect = async () => {
         // Prevent multiple calls
         if (disconnectHandled) {
@@ -77,46 +80,7 @@ export async function GET(request) {
           await writer.close();
         } catch (_) {}
 
-        // Wait a bit to see if connection reconnects or if other connections exist
-        // This prevents setting offline during temporary reconnects
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
-
-        // Check if there are still active connections for this user
-        const { hasActiveClients } = await import("@/lib/sse");
-        const stillHasStatusConnection = hasActiveClients(statusKey);
-        const stillHasQueueConnection = hasActiveClients(queueKey);
-
-        // Also check contact center agent stream
-        const agentStreamKey = `contact-center:agent:${user.username}`;
-        const stillHasAgentConnection = hasActiveClients(agentStreamKey);
-
-        // Only set to offline if no active connections remain
-        if (
-          !stillHasStatusConnection &&
-          !stillHasQueueConnection &&
-          !stillHasAgentConnection
-        ) {
-          try {
-            const { PgDb } = await import("@/lib/pgdb");
-            const { setUserStatus } = await import(
-              "@/lib/contact-center/user-status"
-            );
-            const currentUser = await PgDb.findUserById(userId);
-            if (currentUser && currentUser.status !== "Offline") {
-              await setUserStatus({
-                userId,
-                username: user.username,
-                status: "Offline",
-                previousStatus: currentUser.status,
-              });
-            }
-          } catch (error) {
-            console.error(
-              "[SSE] Failed to set status to offline on disconnect:",
-              error
-            );
-          }
-        }
+        // Do not write agent status here.
       };
 
       // Send periodic ping to keep connection alive

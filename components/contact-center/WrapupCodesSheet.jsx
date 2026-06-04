@@ -59,52 +59,6 @@ function getIntentMatches(codes, intents) {
   return matched;
 }
 
-async function updateAgentStatus(nextStatus) {
-  try {
-    const response = await fetch("/api/user/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: nextStatus,
-        system: true,
-      }),
-    });
-
-    if (response.ok && nextStatus === "Available") {
-      // After status update to Available, ensure routing is triggered
-      // The /api/user/profile endpoint already calls offerQueuedCallForAgent,
-      // but we add a small delay to ensure state is fully updated
-      setTimeout(async () => {
-        try {
-          // Get current user ID to trigger routing
-          const userRes = await fetch("/api/user/profile");
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            if (userData?.data?.id) {
-              // Explicitly trigger routing check
-              await fetch("/api/contact-center/routing/agent-status", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: userData.data.id }),
-              }).catch(() => {
-                // Ignore errors, routing already triggered by status update
-              });
-            }
-          }
-        } catch (err) {
-          // Ignore errors, status update will trigger routing
-          console.warn("[WrapupCodesSheet] Failed to trigger routing:", err);
-        }
-      }, 200);
-    }
-
-    return response.ok;
-  } catch (err) {
-    console.warn("[WrapupCodesSheet] Failed to update agent status:", err);
-    return false;
-  }
-}
-
 export default function WrapupCodesSheet({
   open,
   onOpenChange,
@@ -226,80 +180,25 @@ export default function WrapupCodesSheet({
   }, [open, interactionId, onOpenChange]);
 
   useEffect(() => {
-    // Don't update status if this is a timeout scenario or if sheet is not actually open
-    if (!open || interactionMetadata?.timeout_re_enqueued === true) {
-      if (interactionMetadata?.timeout_re_enqueued === true) {
-        console.log(
-          `[WrapupCodesSheet] Skipping status update - interaction ${interactionId} was timeout re-enqueued`,
-        );
-      }
+    if (open && interactionMetadata?.timeout_re_enqueued === true) {
+      console.log(
+        `[WrapupCodesSheet] Skipping wrapup lifecycle marker - interaction ${interactionId} was timeout re-enqueued`,
+      );
       return;
     }
 
-    // Check if agent is in "Agent Not Answering" status - don't override it
-    // This prevents wrapup sheet from changing status when agent didn't answer
-    const checkCurrentStatus = async () => {
+    if (open) {
       try {
-        const res = await fetch("/api/user/profile");
-        const data = await res.json();
-        const currentStatus = data?.user?.agent_status;
-
-        // Only set to Wrapup if not already "Agent Not Answering"
-        if (currentStatus !== "Agent Not Answering") {
-          updateAgentStatus("Wrapup");
-        } else {
-          console.log(
-            `[WrapupCodesSheet] Skipping Wrapup status - agent is already in "Agent Not Answering" status`,
-          );
-        }
-      } catch (err) {
-        // If check fails, don't set to Wrapup to avoid overriding "Agent Not Answering"
-        console.warn(
-          "[WrapupCodesSheet] Failed to check status, skipping Wrapup update:",
-          err,
-        );
-      }
-    };
-
-    checkCurrentStatus();
-    try {
-      localStorage.setItem("cc.wrapup.open", "true");
-    } catch (_) {}
-
-    prevOpenRef.current = open;
-  }, [open, interactionMetadata, interactionId]);
-
-  // Handle closing the sheet
-  useEffect(() => {
-    if (!open && prevOpenRef.current) {
-      // When wrapup modal closes, check current status before updating
-      // If status is "Agent Not Answering", don't change it to Available
-      const checkAndUpdateStatus = async () => {
-        try {
-          const res = await fetch("/api/user/profile");
-          const data = await res.json();
-          const currentStatus = data?.user?.agent_status;
-
-          // Only set to Available if not "Agent Not Answering"
-          if (currentStatus !== "Agent Not Answering") {
-            updateAgentStatus("Available");
-          }
-        } catch (err) {
-          // If check fails, don't change status to avoid overriding "Agent Not Answering"
-          console.warn(
-            "[WrapupCodesSheet] Failed to check status on close, skipping Available update:",
-            err,
-          );
-        }
-      };
-
-      checkAndUpdateStatus();
+        localStorage.setItem("cc.wrapup.open", "true");
+      } catch (_) {}
+    } else if (prevOpenRef.current) {
       try {
         localStorage.removeItem("cc.wrapup.open");
       } catch (_) {}
     }
+
     prevOpenRef.current = open;
-  }, [open]);
+  }, [open, interactionMetadata, interactionId]);
 
   useEffect(() => {
     if (interactionId && lastInteractionIdRef.current !== interactionId) {

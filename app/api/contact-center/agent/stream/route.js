@@ -42,36 +42,9 @@ export async function GET(request) {
             controller.close?.();
           } catch (_) {}
 
-          // Wait a bit to see if connection reconnects
-          // This prevents setting offline during temporary reconnects
-          await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
-
-          // Check if the agent stream reconnected
-          const { hasActiveClients } = await import("@/lib/sse");
-          const stillHasConnection = hasActiveClients(sseKey);
-
-          // Set to offline if agent stream didn't reconnect
-          // The contact center agent stream is the primary indicator of active contact center usage
-          // Even if status/queue connections exist, if agent stream is lost, user should be offline
-          if (!stillHasConnection) {
-            try {
-              const { PgDb } = await import("@/lib/pgdb");
-              const { setUserStatus } = await import(
-                "@/lib/contact-center/user-status"
-              );
-              const currentUser = await PgDb.findUserById(String(user.id));
-              if (currentUser && currentUser.status !== "Offline") {
-                await setUserStatus({
-                  userId: String(user.id),
-                  username: user.username,
-                  status: "Offline",
-                  previousStatus: currentUser.status,
-                });
-              }
-            } catch (error) {
-              // Failed to set status to offline on disconnect
-            }
-          }
+          // Agent SSE is a read/presence transport only. Do not persist routing
+          // status from connect/disconnect lifecycle; DB-authoritative call
+          // lifecycle status is owned by agent-call-lifecycle-status.js.
         };
 
         let writeFailures = 0;

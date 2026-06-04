@@ -32,7 +32,7 @@ test("ringing Busy transition upserts cc_agent_state inside the same transaction
   const helper = between(
     src,
     "export async function markAgentBusyForRinging",
-    "export async function restoreAgentAvailableAfterFailedRinging",
+    "return { changed: true, status: \"Busy\", previousStatus, username: resolvedUsername };",
   );
 
   assert.match(helper, /await client\.query\("BEGIN"\)/);
