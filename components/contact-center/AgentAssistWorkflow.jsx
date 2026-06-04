@@ -51,6 +51,7 @@ import {
   Languages,
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
+import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
 
 /**
  * AgentAssistWorkflow Component
@@ -110,8 +111,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const translationEnabled =
     assistConfig.assist_type === "workflows" &&
     assistConfig.enable_translation === true;
-  const callerLanguage = interaction?.metadata?.caller_language || null;
-  const agentLanguage = interaction?.metadata?.agent_language || null;
+  const interactionMetadata = interaction?.metadata || activeCall?.metadata || activeCall?.contactCenter?.metadata || {};
+  const callerLanguage = normalizeBaseLanguageCode(interactionMetadata.caller_language, { fallback: null });
+  const agentLanguage = normalizeBaseLanguageCode(interactionMetadata.agent_language, { fallback: null });
 
   const translationLanguages = useMemo(() => {
     if (!Array.isArray(transcriptions)) return null;
@@ -606,8 +608,29 @@ function getLanguageFlag(language) {
 
 function formatLanguageLabel(language) {
   if (!language) return "Detecting";
-  if (language === "auto") return "AUTO";
-  return String(language).toUpperCase();
+  const normalized = normalizeLanguageCode(language);
+  if (normalized === "auto") return "Auto-detect";
+  const baseLanguage = normalized?.replace("_", "-").split("-")[0];
+  if (!baseLanguage) return "Detecting";
+
+  const languageNames = {
+    en: "English",
+    pl: "Polish",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    uk: "Ukrainian",
+    ru: "Russian",
+    ja: "Japanese",
+    zh: "Chinese",
+    ko: "Korean",
+    ar: "Arabic",
+    hi: "Hindi",
+  };
+
+  return languageNames[baseLanguage] || baseLanguage.toUpperCase();
 }
 
 function TranslationIndicator({ sourceLanguage, targetLanguage }) {
@@ -623,15 +646,15 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
             Transcription + TTS
           </Badge>
         </div>
-        <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-          <span className="flex items-center gap-1">
+        <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 min-w-0">
+          <span className="flex items-center gap-1 min-w-0">
             {getLanguageFlag(sourceLanguage)}
-            <span>{formatLanguageLabel(sourceLanguage)}</span>
+            <span className="truncate">{formatLanguageLabel(sourceLanguage)}</span>
           </span>
-          <span>↔</span>
-          <span className="flex items-center gap-1">
+          <span className="shrink-0">-</span>
+          <span className="flex items-center gap-1 min-w-0">
             {getLanguageFlag(targetLanguage)}
-            <span>{formatLanguageLabel(targetLanguage)}</span>
+            <span className="truncate">{formatLanguageLabel(targetLanguage)}</span>
           </span>
         </div>
       </div>
@@ -1658,10 +1681,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       onClick={() => handleCopy(suggestion)}
                     >
                       {/* Context badge */}
-                      <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 min-w-0 overflow-hidden">
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] max-w-full truncate ${
+                          className={`text-[10px] max-w-[45%] shrink-0 truncate ${
                             isLatest 
                               ? "bg-purple-500/10 text-purple-500 border-purple-500/50"
                               : "bg-muted text-muted-foreground"
@@ -1669,10 +1692,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                         >
                           {suggestion.stageName}
                         </Badge>
-                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                        <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] max-w-full truncate ${
+                          className={`text-[10px] min-w-0 flex-1 truncate ${
                             isLatest
                               ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
                               : "bg-muted text-muted-foreground"
@@ -1681,7 +1704,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           {suggestion.itemLabel}
                         </Badge>
                         {isLatest && (
-                          <Badge className="text-[10px] bg-amber-500 text-white ml-auto">
+                          <Badge className="text-[10px] bg-amber-500 text-white ml-auto shrink-0">
                             Current
                           </Badge>
                         )}

@@ -6,6 +6,7 @@
 
 import { TRANSCRIPTION_PROVIDERS } from "./voice";
 import { getLanguageByCode } from "@/lib/languages";
+import { normalizeLanguageCode } from "@/lib/language-code-utils";
 
 const GOOGLE_STANDALONE_STT_LANGUAGE_CODES = [
   "en-US",
@@ -23,9 +24,10 @@ const GOOGLE_STANDALONE_STT_LANGUAGE_CODES = [
 ];
 
 function toLanguageOption(code) {
-  const language = getLanguageByCode(code);
+  const normalizedCode = normalizeLanguageCode(code, { fallback: code });
+  const language = getLanguageByCode(normalizedCode);
   return {
-    value: code,
+    value: normalizedCode,
     label: `${language.flag} ${language.name}`,
   };
 }
@@ -47,7 +49,14 @@ function standaloneSttLanguagesForModel(model) {
   const provider = TRANSCRIPTION_PROVIDERS.find(
     (entry) => entry.model_name === normalizedModel,
   );
-  return (provider?.languages || []).map(toLanguageOption);
+  const seen = new Set();
+  return (provider?.languages || [])
+    .map(toLanguageOption)
+    .filter((option) => {
+      if (!option.value || seen.has(option.value)) return false;
+      seen.add(option.value);
+      return true;
+    });
 }
 
 export const TELNYX_STT_LANGUAGE_OPTIONS_BY_MODEL = Object.fromEntries(
@@ -167,7 +176,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Google",
       model: "phone_call",
-      language: "en-US",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
@@ -190,7 +199,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Google",
       model: "latest_long",
-      language: "en-US",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
@@ -213,7 +222,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Google",
       model: "default",
-      language: "en-US",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
@@ -259,7 +268,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
       model: "deepgram/nova-2",
-      language: "en-US",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
@@ -282,7 +291,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_tracks: "both",
       transcription_engine: "Deepgram",
       model: "deepgram/nova-3",
-      language: "en-US",
+      language: "en",
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,

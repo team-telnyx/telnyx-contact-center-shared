@@ -76,7 +76,7 @@ function getTelnyxSttLanguageOptions(provider) {
 }
 
 function getDefaultTelnyxSttLanguage(provider) {
-  return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en-US";
+  return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en";
 }
 
 function getSupportedTelnyxSttLanguage(language, provider) {

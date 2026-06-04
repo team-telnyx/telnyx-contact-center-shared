@@ -24,6 +24,9 @@ test("Standalone STT language options are sourced per exact model from TRANSCRIP
   assert.match(providerSource, /standaloneSttLanguagesForModel\(model\)/);
   assert.match(providerSource, /entry\.model_name === normalizedModel/);
   assert.match(providerSource, /provider\?\.languages/);
+  assert.match(providerSource, /normalizeLanguageCode\(code/);
+  assert.match(providerSource, /value: normalizedCode/);
+  assert.match(providerSource, /const seen = new Set\(\)/);
   assert.match(providerSource, /label: `\$\{language\.flag\} \$\{language\.name\}`/);
   assert.doesNotMatch(
     providerSource,
@@ -41,8 +44,23 @@ test("Standalone STT language options are sourced per exact model from TRANSCRIP
 });
 
 test("Answer and Streaming Start expose Telnyx STT language selector with caller_language support", async () => {
-  assertEditorLanguageUi(await source("../components/voice-flow/AnswerNodeEditor.jsx"), "AnswerNodeEditor");
-  assertEditorLanguageUi(await source("../components/voice-flow/StreamingStartNodeEditor.jsx"), "StreamingStartNodeEditor");
+  const answerEditor = await source("../components/voice-flow/AnswerNodeEditor.jsx");
+  const streamingEditor = await source("../components/voice-flow/StreamingStartNodeEditor.jsx");
+
+  assertEditorLanguageUi(answerEditor, "AnswerNodeEditor");
+  assertEditorLanguageUi(streamingEditor, "StreamingStartNodeEditor");
+  assert.match(answerEditor, /const model = provider\.telnyxStt\?\.model \|\| provider\.id;[\s\S]*const modelLabel = model;/,
+    "AnswerNodeEditor model dropdown should show only the model, not provider/model with duplicated provider prefix");
+  assert.match(streamingEditor, /const model = provider\.telnyxStt\?\.model \|\| provider\.id;[\s\S]*const modelLabel = model;/,
+    "StreamingStartNodeEditor model dropdown should show only the model, not provider/model with duplicated provider prefix");
+  assert.match(answerEditor, /\|\| "en";/,
+    "AnswerNodeEditor STT fallback language should be a base code");
+  assert.match(streamingEditor, /\|\| "en";/,
+    "StreamingStartNodeEditor STT fallback language should be a base code");
+  assert.doesNotMatch(answerEditor, /\|\| "en-US";/,
+    "AnswerNodeEditor STT fallback language should not be regional en-US");
+  assert.doesNotMatch(streamingEditor, /\|\| "en-US";/,
+    "StreamingStartNodeEditor STT fallback language should not be regional en-US");
 });
 
 test("call flow page passes upstream caller_language availability to STT-capable editors", async () => {
@@ -55,6 +73,7 @@ test("call flow page passes upstream caller_language availability to STT-capable
 test("voice-flow engine resolves Telnyx STT language from static, variable, or caller_language", async () => {
   const engineSource = await source("../lib/voice-flow-engine.js");
   assert.match(engineSource, /resolveTelnyxSttLanguage\(/);
+  assert.match(engineSource, /normalizeSttLanguageCode/);
   assert.match(engineSource, /telnyx_stt_use_caller_language[\s\S]*caller_language/);
   assert.match(engineSource, /telnyx_stt_language_source === "variable"[\s\S]*resolveFormDataVariable/);
   assert.match(engineSource, /const\s+telnyxSttLanguage\s*=\s*resolveTelnyxSttLanguage/);
@@ -67,6 +86,52 @@ test("voice-flow engine resolves Telnyx STT language from static, variable, or c
 test("agent-leg Telnyx STT uses the assigned user's profile language", async () => {
   const webhookSource = await source("../lib/contact-center/webhook-handler.js");
   assert.match(webhookSource, /findUserByUsername\(agentUsername\)/);
-  assert.match(webhookSource, /agentLanguage[\s\S]*agent\?\.language/);
+  assert.match(webhookSource, /agentLanguage[\s\S]*normalizeLanguageCode\(agent\?\.language/);
   assert.match(webhookSource, /outboundConfig = \{[\s\S]*language: agentLanguage/);
+  assert.doesNotMatch(webhookSource, /agent\?\.language \|\| sttConfig\.language \|\| "en-US"/);
+});
+
+test("language codes are normalized to STT-safe base codes", async () => {
+  const { normalizeLanguageCode, normalizeSttLanguageCode } = await import("../lib/language-code-utils.js");
+
+  assert.equal(normalizeLanguageCode("pl-PL"), "pl");
+  assert.equal(normalizeLanguageCode("en-US"), "en");
+  assert.equal(normalizeSttLanguageCode("pl-PL", { supportedCodes: ["en", "pl"] }), "pl");
+  assert.equal(normalizeSttLanguageCode("en-US", { supportedCodes: ["en", "pl"] }), "en");
+  assert.equal(normalizeSttLanguageCode("fr-FR", { supportedCodes: ["en", "pl"] }), "en");
+});
+
+test("queued interaction metadata is pre-populated with normalized agent language", async () => {
+  const routerSource = await source("../lib/contact-center/queued-call-router.js");
+
+  assert.match(routerSource, /u\.language/);
+  assert.match(routerSource, /agent_language: agentLanguage/);
+  assert.match(routerSource, /metadata: assignedMetadata \|\| interaction\.metadata/);
+});
+
+test("translation header and suggestions use bounded layout with language names", async () => {
+  const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
+
+  assert.match(workflowSource, /normalizeBaseLanguageCode\(interactionMetadata\.caller_language/);
+  assert.match(workflowSource, /normalizeBaseLanguageCode\(interactionMetadata\.agent_language/);
+  assert.match(workflowSource, /en: "English"/);
+  assert.match(workflowSource, /pl: "Polish"/);
+  assert.doesNotMatch(workflowSource, /return String\(language\)\.toUpperCase\(\)/,
+    "Translation header should show language names instead of raw PL-PL/EN-US codes");
+  assert.match(workflowSource, /<span className="shrink-0">-<\/span>/);
+  assert.match(workflowSource, /flex items-center gap-2 mb-2 min-w-0 overflow-hidden/);
+  assert.match(workflowSource, /min-w-0 flex-1 truncate/);
+});
+
+test("Agent Assist transcription router accumulates provider-final STT deltas before translation", async () => {
+  const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
+
+  assert.match(routerSource, /__agentAssistActiveTranscriptionSegments/);
+  assert.match(routerSource, /function buildDisplayTranscript/);
+  assert.match(routerSource, /isProviderFinal[\s\S]*activeTranscriptionSegments\.set/,
+    "Provider-final chunks before speech_final should be accumulated for the open bubble");
+  assert.match(routerSource, /transcript: displayTranscript \|\| transcriptionData\.transcript/,
+    "Broadcasts and translation processing should use accumulated transcript text");
+  assert.match(routerSource, /normalizeLanguageCode\(agent\?\.language, \{ fallback: "en" \}\)/,
+    "Translation source/target languages should use normalized base language codes");
 });
