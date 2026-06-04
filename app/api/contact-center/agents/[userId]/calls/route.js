@@ -93,11 +93,12 @@ export async function GET(request, { params }) {
       FROM cc_interactions i
       LEFT JOIN cc_queues q ON i.queue_id = q.id
       LEFT JOIN users agent_user ON agent_user.username = i.agent_username
+      LEFT JOIN cc_agent_state agent_state ON agent_state.user_id = agent_user.id
       WHERE i.agent_username = $1
         AND i.completed_at IS NULL
         AND i.abandoned_at IS NULL
         AND i.state != 'queued'
-        AND agent_user.agent_status <> 'Agent Not Answering'
+        AND COALESCE(agent_state.agent_status, '') <> 'Agent Not Answering'
         AND COALESCE(i.metadata->>'timeout_re_enqueued', '') != 'true'
         AND COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'
         AND i.assigned_at IS NOT NULL

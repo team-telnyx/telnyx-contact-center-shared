@@ -11,14 +11,21 @@ function usernameFor(user) {
 async function restoreAgentAfterCampaignDisposition(pool, agentUsername, ledgerMetadata = {}) {
   const previous = ledgerMetadata.previous_agent_status;
   const nextStatus = previous && !["On Outbound Call", "On Campaign Call", "Agent Not Answering"].includes(previous) ? previous : "Available";
-  const { rows } = await pool.query(`SELECT id, agent_status FROM users WHERE email = $1 OR username = $1 LIMIT 1`, [agentUsername]);
+  const { rows } = await pool.query(
+    `SELECT u.id, s.agent_status AS current_agent_status
+       FROM users u
+       LEFT JOIN cc_agent_state s ON s.user_id = u.id
+      WHERE u.email = $1 OR u.username = $1
+      LIMIT 1`,
+    [agentUsername],
+  );
   const user = rows[0];
   if (!user?.id) return nextStatus;
   await setUserStatus({
     userId: String(user.id),
     username: agentUsername,
     status: nextStatus,
-    previousStatus: user.agent_status || "Unknown",
+    previousStatus: user.current_agent_status || "Unknown",
   });
   return nextStatus;
 }

@@ -91,9 +91,12 @@ export async function PUT(request) {
       );
     }
 
-    // Get target user info
+    // Get target user info and Contact Center authoritative status
     const targetUserRes = await pool.query(
-      `SELECT id, username, status, agent_status FROM users WHERE id = $1`,
+      `SELECT u.id, u.username, s.agent_status AS current_agent_status
+         FROM users u
+         LEFT JOIN cc_agent_state s ON s.user_id = u.id
+        WHERE u.id = $1`,
       [targetUserIdFinal],
     );
 
@@ -105,8 +108,7 @@ export async function PUT(request) {
     }
 
     const targetUser = targetUserRes.rows[0];
-    const previousStatus =
-      targetUser.agent_status || targetUser.status || "Unknown";
+    const previousStatus = targetUser.current_agent_status || "Unknown";
 
     // Update status using the setUserStatus function which handles all the necessary updates
     const statusUpdateStartedAt = Date.now();

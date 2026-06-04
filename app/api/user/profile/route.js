@@ -38,6 +38,20 @@ async function getStatusMetaByName(statusName) {
   }
 }
 
+async function getCurrentAgentStatus(userId) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool || !userId) return "Unknown";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Unknown";
+  } catch (error) {
+    return "Unknown";
+  }
+}
+
 /**
  * GET /api/user/profile
  * Get current user profile data
@@ -58,6 +72,8 @@ export async function GET(request) {
       );
     }
 
+    const agentStatus = await getCurrentAgentStatus(user.id);
+
     // Return relevant user data (exclude sensitive fields like hash, salt)
     // Use original Next.js format - snake_case for database fields
     const userData = {
@@ -73,7 +89,7 @@ export async function GET(request) {
       telephony_user_name: user.telephony_user_name,
       roles: user.roles || ["agent"],
       theme: user.theme,
-      status: user.agent_status || user.status,
+      status: agentStatus,
       language: user.language,
       profile_picture_uri: user.profile_picture_uri,
       setup_completed: user.setup_completed,
@@ -176,11 +192,12 @@ export async function PUT(request) {
     }
 
     if (requestedStatus) {
+      const previousStatus = await getCurrentAgentStatus(userId);
       await setUserStatus({
         userId,
         username: user.username,
         status: requestedStatus,
-        previousStatus: user.agent_status || user.status || "Unknown",
+        previousStatus,
       });
     }
 
@@ -249,11 +266,12 @@ export async function POST(request) {
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
+    const previousStatus = await getCurrentAgentStatus(user.id);
     await setUserStatus({
       userId: String(user.id),
       username: user.username,
       status: requestedStatus,
-      previousStatus: user.agent_status || user.status || "Unknown",
+      previousStatus,
     });
 
     return NextResponse.json({ ok: true }, { status: 200 });

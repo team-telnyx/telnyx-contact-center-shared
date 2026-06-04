@@ -42,11 +42,11 @@ test("legacy skills re-evaluator also marks agent Busy before direct WebRTC brid
   assert.ok(busyIndex < bridgeIndex, "Busy status must be visible before direct bridge rings");
 });
 
-test("agent status transition helper updates both authoritative stores and broadcasts status_changed", async () => {
+test("agent status transition helper updates only cc_agent_state and broadcasts status_changed", async () => {
   const src = await source(statusTransitionPath);
 
   assert.match(src, /export async function markAgentBusyForRinging/);
-  assert.match(src, /UPDATE users\s+SET agent_status = 'Busy'/s);
+  assert.doesNotMatch(src, /UPDATE\s+users[\s\S]*(?:status\s*=|agent_status\s*=)/i);
   assert.match(src, /INSERT INTO cc_agent_state[\s\S]*'Busy'/s);
   assert.match(src, /ON CONFLICT \(user_id\) DO UPDATE SET[\s\S]*agent_status = EXCLUDED\.agent_status/s);
   assert.match(src, /current_calls_count = GREATEST\(cc_agent_state\.current_calls_count, 1\)/);

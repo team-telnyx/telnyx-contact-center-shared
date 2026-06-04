@@ -30,9 +30,12 @@ export async function POST(request) {
       );
     }
 
-    // Get user info
+    // Get user identity and Contact Center authoritative status
     const userResult = await pool.query(
-      `SELECT username, agent_status FROM users WHERE id = $1`,
+      `SELECT u.username, s.agent_status AS current_agent_status
+         FROM users u
+         LEFT JOIN cc_agent_state s ON s.user_id = u.id
+        WHERE u.id = $1`,
       [userId],
     );
 
@@ -44,7 +47,7 @@ export async function POST(request) {
     const username = user.username;
 
     // Update agent status if provided
-    const effectiveStatus = status || user.agent_status;
+    const effectiveStatus = status || user.current_agent_status;
     if (status) {
       // Validate status
       // Get valid statuses from database
@@ -82,7 +85,7 @@ export async function POST(request) {
         userId,
         username,
         status,
-        previousStatus: user.agent_status || "Unknown",
+        previousStatus: user.current_agent_status || "Unknown",
       });
     }
 
@@ -120,7 +123,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       userId,
-      status: status || user.agent_status,
+      status: status || user.current_agent_status,
       queueIds: queueIds || [],
     });
   } catch (error) {

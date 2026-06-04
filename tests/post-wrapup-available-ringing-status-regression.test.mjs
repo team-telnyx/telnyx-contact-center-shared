@@ -19,18 +19,18 @@ async function source(path) {
   return readFile(path, "utf8");
 }
 
-test("agent status endpoint treats agent_status as authoritative over users.status", async () => {
+test("agent status endpoint reads previous status from cc_agent_state, never users.status", async () => {
   const src = await source(agentStatusRoutePath);
 
   assert.doesNotMatch(
     src,
-    /targetUser\.status\s*\|\|\s*targetUser\.agent_status/,
-    "post-wrapup Available can leave users.status stale/optimistic; agent_status must be preferred",
+    /targetUser\.status|targetUser\.agent_status|users\.status|users\.agent_status/,
+    "Contact Center status must not depend on legacy users.status/users.agent_status",
   );
   assert.match(
     src,
-    /targetUser\.agent_status\s*\|\|\s*targetUser\.status\s*\|\|\s*"Unknown"/,
-    "agent status transitions must compare against the Contact Center authoritative user agent_status",
+    /s\.agent_status AS current_agent_status[\s\S]*targetUser\.current_agent_status\s*\|\|\s*"Unknown"/,
+    "agent status transitions must compare against cc_agent_state.agent_status",
   );
 });
 
@@ -44,7 +44,7 @@ test("unchanged Available requests reconcile Contact Center status stores before
   assert.match(
     unchangedStatusBlock,
     /reconcileAgentStatusStores\([\s\S]*status[\s\S]*\)/,
-    "unchanged Available must still force users.agent_status and cc_agent_state into the requested DB-authoritative status before routing",
+    "unchanged Available must still force cc_agent_state into the requested DB-authoritative status before routing",
   );
   assert.ok(
     unchangedStatusBlock.indexOf("reconcileAgentStatusStores") <

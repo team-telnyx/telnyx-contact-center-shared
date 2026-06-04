@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+
+async function getCurrentAgentStatus(userId) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool || !userId) return "Unknown";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Unknown";
+  } catch (_) {
+    return "Unknown";
+  }
+}
 
 export async function POST(request) {
   const res = NextResponse.json({ ok: true });
@@ -33,11 +48,12 @@ export async function POST(request) {
       // Set user status to Offline on logout
       if (user) {
         try {
+          const previousStatus = await getCurrentAgentStatus(userId);
           await setUserStatus({
             userId: String(userId),
             username: user.username,
             status: "Offline",
-            previousStatus: user.status,
+            previousStatus,
           });
         } catch (_) {}
       }

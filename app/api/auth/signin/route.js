@@ -98,6 +98,13 @@ export async function POST(request) {
       [refreshTokensJson, new Date().toISOString(), String(user.id || user._id)]
     );
 
+    const agentStatusResult = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(user.id || user._id)],
+    );
+    const currentAgentStatus =
+      agentStatusResult.rows?.[0]?.agent_status || "Available";
+
     // Prepare user data for response
     const nameParts = [
       user.first_name || user.firstName,
@@ -125,7 +132,7 @@ export async function POST(request) {
         user.profile_picture_uri || user.profilePictureUri || null,
       smsNumber: user.sms_number || user.smsNumber || "Telnyx",
       voiceNumber: user.voice_number || user.voiceNumber || "",
-      status: user.status || "Available - ACD",
+      status: currentAgentStatus,
       token: accessToken,
       refreshToken: refreshToken,
     };

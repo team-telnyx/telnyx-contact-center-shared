@@ -143,9 +143,12 @@ export async function POST(request) {
       try {
         const { updateAgentQueues, updateAgentStatus } =
           await import("@/lib/contact-center/state-manager");
-        // Get target user info for state manager
+        // Get target user identity and Contact Center authoritative status for state manager
         const targetUserRes = await pool.query(
-          `SELECT id, username, agent_status FROM users WHERE id = $1`,
+          `SELECT u.id, u.username, s.agent_status AS current_agent_status
+             FROM users u
+             LEFT JOIN cc_agent_state s ON s.user_id = u.id
+            WHERE u.id = $1`,
           [targetUserIdFinal],
         );
         const targetUser = targetUserRes.rows[0];
@@ -154,17 +157,17 @@ export async function POST(request) {
           updateAgentQueues(targetUserIdFinal, activated, true);
           // Ensure agent status is set if not already
           if (
-            targetUser.agent_status &&
-            targetUser.agent_status !== "Offline"
+            targetUser.current_agent_status &&
+            targetUser.current_agent_status !== "Offline"
           ) {
             await updateAgentStatus(
               targetUserIdFinal,
-              targetUser.agent_status,
+              targetUser.current_agent_status,
               targetUser.username,
             );
           }
 
-          if (targetUser.agent_status === "Available") {
+          if (targetUser.current_agent_status === "Available") {
             try {
               await offerQueuedCallForAgent({
                 userId: targetUserIdFinal,

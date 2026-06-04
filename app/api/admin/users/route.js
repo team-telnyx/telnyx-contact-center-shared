@@ -44,38 +44,39 @@ export async function GET(request) {
 
   if (q) {
     where.push(
-      `(username ILIKE $${i} OR first_name ILIKE $${i} OR last_name ILIKE $${i} OR nick ILIKE $${i} OR mobile ILIKE $${i})`
+      `(u.username ILIKE $${i} OR u.first_name ILIKE $${i} OR u.last_name ILIKE $${i} OR u.nick ILIKE $${i} OR u.mobile ILIKE $${i})`
     );
     vals.push(`%${q}%`);
     i += 1;
   }
   if (username) {
-    where.push(`username ILIKE $${i}`);
+    where.push(`u.username ILIKE $${i}`);
     vals.push(`%${username}%`);
     i += 1;
   }
   if (role && role !== "all") {
     // Check roles array only
-    where.push(`$${i} = ANY(roles)`);
+    where.push(`$${i} = ANY(u.roles)`);
     vals.push(role);
     i += 1;
   }
   if (status) {
-    where.push(`status=$${i}`);
+    where.push(`s.agent_status=$${i}`);
     vals.push(status);
     i += 1;
   }
   if (verified === "true" || verified === "false") {
-    where.push(`verified=$${i}`);
+    where.push(`u.verified=$${i}`);
     vals.push(verified === "true");
     i += 1;
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const rowsSql = `SELECT id, username, first_name, last_name, nick, mobile, roles, verified, status, skills, created_at, updated_at FROM users ${whereSql} ORDER BY created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
+  const fromSql = `FROM users u LEFT JOIN cc_agent_state s ON s.user_id = u.id`;
+  const rowsSql = `SELECT u.id, u.username, u.first_name, u.last_name, u.nick, u.mobile, u.roles, u.verified, s.agent_status AS status, u.skills, u.created_at, u.updated_at ${fromSql} ${whereSql} ORDER BY u.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`;
   const [rowsRes, countRes] = await Promise.all([
     pool.query(rowsSql, vals),
-    pool.query(`SELECT COUNT(*) AS c FROM users ${whereSql}`, vals),
+    pool.query(`SELECT COUNT(*) AS c ${fromSql} ${whereSql}`, vals),
   ]);
   return NextResponse.json({
     rows: rowsRes.rows || [],

@@ -47,13 +47,18 @@ test("status stream is read-only presence transport and never writes routing sta
   );
 });
 
-test("profile GET exposes Contact Center agent_status as the UI status", async () => {
+test("profile GET exposes Contact Center agent status from cc_agent_state", async () => {
   const profileSource = await source("../app/api/user/profile/route.js");
 
   assert.match(
     profileSource,
+    /cc_agent_state[\s\S]*agent_status/,
+    "Agent Desktop/header profile status must read Contact Center status from cc_agent_state",
+  );
+  assert.doesNotMatch(
+    profileSource,
     /status:\s*user\.agent_status\s*\|\|\s*user\.status/,
-    "Agent Desktop/header profile status must prefer users.agent_status over generic users.status",
+    "Agent Desktop/header profile status must not read legacy users status columns",
   );
 });
 
@@ -106,4 +111,56 @@ test("call lifecycle transition callers delegate to the central handler", async 
   assert.doesNotMatch(wrapupSheetSource, /function\s+updateAgentStatus/);
   assert.doesNotMatch(wrapupSheetSource, /fetch\(["']\/api\/user\/profile["'][\s\S]*method:\s*["']PUT["']/);
   assert.doesNotMatch(wrapupSheetSource, /updateAgentStatus\(["'](?:Wrapup|Available)["']\)/);
+});
+
+test("Contact Center agent status never depends on legacy users status columns", async () => {
+  const userStatusSource = await source("../lib/contact-center/user-status.js");
+  const transitionSource = await source("../lib/contact-center/agent-status-transition.js");
+  const lifecycleSource = await source("../lib/contact-center/agent-call-lifecycle-status.js");
+  const profileSource = await source("../app/api/user/profile/route.js");
+  const agentStatusRouteSource = await source("../app/api/contact-center/agent/status/route.js");
+  const routingAgentStatusSource = await source("../app/api/contact-center/routing/agent-status/route.js");
+  const outboundCampaignsSource = await source("../lib/outbound-dialer/agent-campaigns.js");
+  const campaignDispositionSource = await source("../app/api/contact-center/agent/campaigns/disposition/route.js");
+  const authMeSource = await source("../app/api/auth/me/route.js");
+  const authSigninSource = await source("../app/api/auth/signin/route.js");
+  const authLogoutSource = await source("../app/api/auth/logout/route.js");
+  const adminUsersSource = await source("../app/api/admin/users/route.js");
+  const userActionsSource = await source("../app/actions/user.js");
+
+  for (const [label, src] of [
+    ["user-status", userStatusSource],
+    ["agent-status-transition", transitionSource],
+    ["agent-call-lifecycle-status", lifecycleSource],
+    ["profile route", profileSource],
+    ["agent status route", agentStatusRouteSource],
+    ["routing agent status route", routingAgentStatusSource],
+    ["outbound campaigns", outboundCampaignsSource],
+    ["campaign disposition route", campaignDispositionSource],
+    ["auth me route", authMeSource],
+    ["auth signin route", authSigninSource],
+    ["auth logout route", authLogoutSource],
+    ["admin users route", adminUsersSource],
+    ["user actions", userActionsSource],
+  ]) {
+    assert.doesNotMatch(
+      src,
+      /\busers\.status\b|\buser\.status\b|\btargetUser\.status\b|UPDATE\s+users\s+SET\s+status\s*=|UPDATE\s+users[\s\S]{0,160}\bagent_status\s*=|SELECT[^`\n]*(?:\bstatus\b|\bagent_status\b)[^`\n]*FROM\s+users/i,
+      `${label} must not read or write legacy users.status/users.agent_status for Contact Center agent status`,
+    );
+    assert.doesNotMatch(
+      src,
+      /\busers\.agent_status\b|\buser\.agent_status\b|\btargetUser\.agent_status\b/,
+      `${label} must not read legacy users.agent_status for Contact Center agent status`,
+    );
+  }
+
+  assert.match(userStatusSource, /INSERT INTO cc_agent_state[\s\S]*agent_status/);
+  assert.match(transitionSource, /INSERT INTO cc_agent_state[\s\S]*agent_status/);
+  assert.match(profileSource, /cc_agent_state[\s\S]*agent_status/);
+  assert.match(agentStatusRouteSource, /cc_agent_state[\s\S]*agent_status/);
+  assert.match(routingAgentStatusSource, /cc_agent_state[\s\S]*agent_status/);
+  assert.match(authMeSource, /cc_agent_state[\s\S]*agent_status/);
+  assert.match(authSigninSource, /cc_agent_state[\s\S]*agent_status/);
+  assert.match(adminUsersSource, /cc_agent_state[\s\S]*agent_status/);
 });

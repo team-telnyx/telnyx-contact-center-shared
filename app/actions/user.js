@@ -3,7 +3,23 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { revalidatePath } from "next/cache";
+
+async function getCurrentAgentStatus(userId) {
+  if (!userId) return "Available";
+  try {
+    const pool = getPostgresPool();
+    if (!pool) return "Available";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Available";
+  } catch (_) {
+    return "Available";
+  }
+}
 
 export async function getProfileAction() {
   try {
@@ -20,13 +36,14 @@ export async function getProfileAction() {
       user = await PgDb.findUserByUsername(email);
     }
     if (!user) return { ok: false, error: "Not found" };
+    const status = await getCurrentAgentStatus(user.id);
     const sanitized = {
       id: String(user.id),
       firstName: user.first_name || user.firstName || "",
       lastName: user.last_name || user.lastName || "",
       nick: user.nick || "",
       language: user.language || "en-US",
-      status: user.status || "Available - ACD",
+      status,
       mobile: user.mobile || "",
       smsNumber: user.sms_number || user.smsNumber || "",
       voiceNumber: user.voice_number || user.voiceNumber || "",

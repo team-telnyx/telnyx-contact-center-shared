@@ -27,7 +27,7 @@ function between(src, startNeedle, endNeedle) {
   return src.slice(start, end);
 }
 
-test("ringing Busy transition upserts cc_agent_state inside the same transaction as users", async () => {
+test("ringing Busy transition upserts only cc_agent_state inside one transaction", async () => {
   const src = await source(statusTransitionPath);
   const helper = between(
     src,
@@ -36,19 +36,15 @@ test("ringing Busy transition upserts cc_agent_state inside the same transaction
   );
 
   assert.match(helper, /await client\.query\("BEGIN"\)/);
-  assert.match(helper, /UPDATE users[\s\S]*agent_status = 'Busy'[\s\S]*status = 'Busy'/);
+  assert.doesNotMatch(helper, /UPDATE\s+users[\s\S]*(?:status\s*=|agent_status\s*=)/i);
   assert.match(helper, /INSERT INTO cc_agent_state[\s\S]*agent_status[\s\S]*'Busy'/);
   assert.match(helper, /ON CONFLICT \(user_id\) DO UPDATE SET[\s\S]*agent_status = EXCLUDED\.agent_status/);
   assert.match(helper, /current_calls_count = GREATEST\(cc_agent_state\.current_calls_count, 1\)/);
   assert.match(helper, /await client\.query\("COMMIT"\)/);
   assert.match(helper, /await client\.query\("ROLLBACK"\)/);
   assert.ok(
-    helper.indexOf('await client.query("BEGIN")') < helper.indexOf("UPDATE users"),
-    "users update should be inside the transaction",
-  );
-  assert.ok(
-    helper.indexOf("UPDATE users") < helper.indexOf("INSERT INTO cc_agent_state"),
-    "cc_agent_state upsert should be part of the same transaction after users update",
+    helper.indexOf('await client.query("BEGIN")') < helper.indexOf("INSERT INTO cc_agent_state"),
+    "cc_agent_state upsert should be inside the transaction",
   );
 });
 

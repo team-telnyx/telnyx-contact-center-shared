@@ -116,8 +116,13 @@ test("all server-side Contact Center status transitions go through the centraliz
   );
   assert.match(
     userStatusSrc,
-    /BEGIN[\s\S]*UPDATE users[\s\S]*INSERT INTO cc_agent_state[\s\S]*COMMIT[\s\S]*ROLLBACK/,
-    "centralized status writer must update users and cc_agent_state atomically in one DB transaction",
+    /BEGIN[\s\S]*INSERT INTO cc_agent_state[\s\S]*COMMIT[\s\S]*ROLLBACK/,
+    "centralized status writer must update cc_agent_state atomically in one DB transaction",
+  );
+  assert.doesNotMatch(
+    userStatusSrc,
+    /UPDATE\s+users[\s\S]*(?:status\s*=|agent_status\s*=)|SELECT[^`\n]*(?:status|agent_status)[^`\n]*FROM\s+users/i,
+    "centralized status writer must not read or write legacy users.status/users.agent_status",
   );
 
   const files = [
