@@ -40,6 +40,19 @@ test("WS2 routeCall reserves the selected agent before returning a routable assi
   assert.match(src, /callData\.reserve\s*!==\s*false/);
 });
 
+test("WS2 reservation guard preserves zero-call agent capacity", async () => {
+  const src = await source(
+    new URL("../lib/contact-center/reservation-manager.js", import.meta.url),
+  );
+
+  assert.match(src, /max_concurrent_calls\s*\?\?\s*1/);
+  assert.doesNotMatch(
+    src,
+    /Number\(lockedAgent\.max_concurrent_calls\)\s*\|\|\s*1/,
+    "reservation capacity must not coerce max_concurrent_calls=0 to 1",
+  );
+});
+
 test("WS2 waiting reason re-evaluation uses routeCall in read-only mode", async () => {
   const src = await source(
     new URL("../lib/contact-center/waiting-reason-re-evaluator.js", import.meta.url),
