@@ -922,36 +922,12 @@ export function AgentDesktop() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, check timeout again before defaulting
+        // If still no interaction found after retry, skip wrapup. Wrapup requires
+        // positive evidence that the interaction was answered/connected.
         if (!interaction) {
-          try {
-            const timeoutCheckRes = await fetch(
-              `/api/contact-center/interactions/${encodeURIComponent(
-                interactionId,
-              )}/timeout-check`,
-              { cache: "no-store" },
-            );
-            if (timeoutCheckRes.ok) {
-              const timeoutData = await timeoutCheckRes.json();
-              if (timeoutData.timeoutReEnqueued === true) {
-                console.log(
-                  `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (no interaction found)`,
-                );
-                return;
-              }
-            }
-          } catch (timeoutCheckErr) {
-            // Continue if check fails
-          }
-
-          // Default to opening wrapup sheet only if not timeout
-          lastWrapupInteractionRef.current = interactionId;
-          // Use global wrapup sheet store
-          import("@/lib/stores/wrapup-sheet-store").then((module) => {
-            module.default
-              .getState()
-              .openWrapup(interactionId, lastTranscriptionsRef.current || []);
-          });
+          console.log(
+            `[AgentDesktop] No interaction evidence; not opening wrapup for ${interactionId}`,
+          );
           return;
         }
 

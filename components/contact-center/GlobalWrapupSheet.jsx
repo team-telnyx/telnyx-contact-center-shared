@@ -163,7 +163,7 @@ export function GlobalWrapupSheet() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, check timeout again before defaulting
+        // If still no interaction found after retry, check timeout once more, then skip wrapup
         if (!interaction) {
           try {
             const timeoutCheckRes = await fetch(
@@ -183,11 +183,11 @@ export function GlobalWrapupSheet() {
             // Continue if check fails
           }
 
-          // Default to opening wrapup sheet only if not timeout
-          lastWrapupInteractionRef.current = interactionId;
-          useWrapupSheetStore
-            .getState()
-            .openWrapup(interactionId, callTranscriptions || []);
+          // No interaction evidence; not opening wrapup. Wrapup requires positive
+          // evidence that the interaction was answered/connected.
+          console.log(
+            `[GlobalWrapupSheet] No interaction evidence; not opening wrapup for ${interactionId}`,
+          );
           return;
         }
 
@@ -225,6 +225,13 @@ export function GlobalWrapupSheet() {
         // - Timeout re-enqueued (agent didn't answer)
         // - Abandoned and never answered
         // - Still queued when ended
+        if (!wasAnswered) {
+          console.log(
+            `[GlobalWrapupSheet] Skipping wrapup for interaction ${interactionId} - call was never answered`,
+          );
+          return;
+        }
+
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
@@ -327,8 +334,16 @@ export function GlobalWrapupSheet() {
       const {
         interactionId: eventInteractionId,
         transcriptions: eventTranscriptions,
+        rejectedBeforeAnswer,
+        wasAnswered: eventWasAnswered,
       } = event.detail || {};
       if (!eventInteractionId) return;
+      if (rejectedBeforeAnswer === true || eventWasAnswered === false) {
+        console.log(
+          `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - disconnected before answer`,
+        );
+        return;
+      }
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === eventInteractionId) {
@@ -393,6 +408,13 @@ export function GlobalWrapupSheet() {
         // - Abandoned and never answered
         // - Still queued when ended
         // - Consult call (consultant call leg, not the parked call)
+        if (!wasAnswered) {
+          console.log(
+            `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - call was never answered`,
+          );
+          return;
+        }
+
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
@@ -406,30 +428,12 @@ export function GlobalWrapupSheet() {
             .openWrapup(eventInteractionId, eventTranscriptions);
         }
       } else {
-        // If interaction not found, check timeout again before defaulting
-        try {
-          const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(eventInteractionId)}/timeout-check`,
-            { cache: "no-store" },
-          );
-          if (timeoutCheckRes.ok) {
-            const timeoutData = await timeoutCheckRes.json();
-            if (timeoutData.timeoutReEnqueued === true) {
-              console.log(
-                `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - timeout re-enqueued (no interaction found)`,
-              );
-              return;
-            }
-          }
-        } catch (timeoutCheckErr) {
-          // Continue if check fails
-        }
-
-        // Default to opening wrapup sheet only if not timeout
-        lastWrapupInteractionRef.current = eventInteractionId;
-        useWrapupSheetStore
-          .getState()
-          .openWrapup(eventInteractionId, eventTranscriptions);
+        // No interaction evidence; not opening wrapup. Wrapup requires positive
+        // evidence that the interaction was answered/connected.
+        console.log(
+          `[GlobalWrapupSheet] No interaction evidence; not opening wrapup for ${eventInteractionId}`,
+        );
+        return;
       }
     };
 

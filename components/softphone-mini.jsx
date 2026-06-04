@@ -1346,55 +1346,32 @@ export default function SoftphoneMini() {
         return;
       }
 
-      // Get the original call control ID from the active call store
-      // This was extracted from X-Original-Call-Control-Id header when the call was set
-      const originalCallControlId =
-        useActiveCallStore.getState().originalCallControlId;
+      const storeState = useActiveCallStore.getState();
+      const interactionId = storeState?.contactCenter?.interactionId;
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
 
-      // If we have the original call control ID, use it for hangup
-      if (originalCallControlId) {
-        try {
-          // Hangup the original call leg using Telnyx API
-          const response = await fetch(`/api/voice/call-action`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "hangup",
-              callControlId: originalCallControlId,
-            }),
-          });
-
-          const result = await response.json();
-          if (!response.ok) {
-            // Failed to hangup original call leg
-          }
-        } catch (err) {
-          // Error calling hangup API
-        }
-      } else if (interaction?.id) {
-        // Fallback: If we have an interaction, hangup via API
-        try {
-          const response = await fetch(
-            `/api/contact-center/interactions/${interaction.id}/hangup`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-            }
-          );
-
-          const result = await response.json();
-          if (!response.ok) {
-            // Failed to hangup original call leg
-          }
-        } catch (err) {
-          // Error calling hangup API
-        }
+      // Queue inbound reject is a pre-answer agent no-answer signal.
+      // Never hang up the original caller leg from the browser: the backend webhook
+      // must see the agent leg hangup and requeue the caller.
+      if (interactionId || callControlId) {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              callControlId,
+              transcriptions: storeState.transcriptions || [],
+              rejectedBeforeAnswer: true,
+              wasAnswered: false,
+            },
+          })
+        );
       }
 
-      // Hangup the WebRTC leg
       activeCall.hangup?.();
-
-      // handleCallEnd will be called by the hangup event
     } catch (err) {
       // Error rejecting call
     }

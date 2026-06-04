@@ -66,6 +66,14 @@ export async function POST(request, { params }) {
       );
     }
 
+    const wasAnswered = Boolean(interaction.answered_at);
+    if (action === "start" && !wasAnswered) {
+      return NextResponse.json(
+        { ok: false, error: "Wrapup requires an answered call" },
+        { status: 409 },
+      );
+    }
+
     const updates = {};
     const metadata = {
       ...(interaction.metadata || {}),
