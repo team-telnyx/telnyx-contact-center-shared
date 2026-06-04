@@ -880,6 +880,7 @@ export async function POST(request, { params }) {
               "logic_gate",
               "flow_end",
               "set_queue_options",
+              "client_state_update",
               "agent_assist",
               "transcription_start",
             ];
@@ -896,7 +897,7 @@ export async function POST(request, { params }) {
             if (isLogical) {
               // Logical nodes execute and immediately continue to next node
               // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
-              if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
+              if (["set_queue_options", "client_state_update", "agent_assist"].includes(nodeType)) {
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Update body payload with the new client_state from the result
@@ -1313,6 +1314,7 @@ export async function POST(request, { params }) {
                 "logic_gate",
                 "flow_end",
                 "set_queue_options",
+                "client_state_update",
                 "agent_assist",
                 "transcription_start",
               ];
@@ -1330,7 +1332,7 @@ export async function POST(request, { params }) {
                 // Logical nodes execute and immediately continue to next node
                 // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
                 // and update body with the new client_state
-                if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
+                if (["set_queue_options", "client_state_update", "agent_assist"].includes(nodeType)) {
                   await new Promise((resolve) => setTimeout(resolve, 500));
 
                   // Update body payload with the new client_state from the result
@@ -1571,6 +1573,7 @@ async function executeNodeChain(
       "logic_gate",
       "flow_end",
       "set_queue_options",
+      "client_state_update",
       "agent_assist",
       "transcription_start",
     ];
@@ -1584,7 +1587,7 @@ async function executeNodeChain(
     if (shouldContinueChain && isLogicalNode) {
       // Logical node - continue chain immediately after execution
       // For nodes that update client_state, add a small delay and update body with new client_state
-      if (nextNodeType === "set_queue_options" || nextNodeType === "agent_assist") {
+      if (["set_queue_options", "client_state_update", "agent_assist"].includes(nextNodeType)) {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Update body payload with the new client_state from the result

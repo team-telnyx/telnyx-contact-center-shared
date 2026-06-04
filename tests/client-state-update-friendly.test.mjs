@@ -133,3 +133,11 @@ test("Update Client State UI is a friendly JSON builder with predefined caller l
   assert.match(pageSource, /import ClientStateUpdateNodeEditor/);
   assert.match(pageSource, /<ClientStateUpdateNodeEditor[\s\S]*availableVariables=\{getAllVariableNames/);
 });
+
+test("Update Client State is treated as an immediate logical node and forwards updated state", async () => {
+  const routeSource = await source("../app/api/voice/webhook/incoming/[flowId]/route.js");
+
+  assert.match(routeSource, /"client_state_update"/);
+  assert.match(routeSource, /includes\(nodeType\)/);
+  assert.match(routeSource, /includes\(nextNodeType\)/);
+});
