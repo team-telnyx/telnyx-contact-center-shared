@@ -5,23 +5,15 @@ import test from "node:test";
 const routerSource = readFileSync("lib/agent-assist-transcription-router.mjs", "utf8");
 const webhookHandlerSource = readFileSync("lib/contact-center/webhook-handler.js", "utf8");
 
-test("agent assist router ignores stale finals after another speaker interrupted the bubble", () => {
-  assert.match(routerSource, /function isStaleInterruptedTranscriptionFinal/);
-  assert.match(routerSource, /current\.track === track/);
-  assert.match(routerSource, /!activeTranscriptionMessages\.has\(liveKey\)/);
-  assert.match(routerSource, /reason: "stale_interrupted_final"/);
-  assert.ok(
-    routerSource.indexOf("isStaleInterruptedTranscriptionFinal({ interaction, callControlId, track, isMessageFinal })") <
-      routerSource.indexOf("await closeInterruptedTranscription({ interaction, callControlId, track })"),
-  );
-});
-
-test("contact center webhook handler applies the same stale-final guard before closing interrupted bubbles", () => {
-  assert.match(webhookHandlerSource, /function isStaleInterruptedTranscriptionFinal/);
-  assert.match(webhookHandlerSource, /current\.track === track/);
-  assert.match(webhookHandlerSource, /!activeTranscriptionMessages\.has\(liveKey\)/);
-  assert.ok(
-    webhookHandlerSource.lastIndexOf("isStaleInterruptedTranscriptionFinal({ interaction, callControlId, track, isMessageFinal })") <
-      webhookHandlerSource.lastIndexOf("await closeInterruptedTranscription({ interaction, callControlId, track })"),
-  );
-});
+for (const [name, source] of [
+  ["agent assist router", routerSource],
+  ["contact center webhook handler", webhookHandlerSource],
+]) {
+  test(`${name} does not infer transcript finality from speaker/call-leg switching`, () => {
+    assert.doesNotMatch(source, /activeConversationTracks/);
+    assert.doesNotMatch(source, /closeInterruptedTranscription/);
+    assert.doesNotMatch(source, /isStaleInterruptedTranscriptionFinal/);
+    assert.doesNotMatch(source, /markConversationTranscriptionClosed/);
+    assert.match(source, /const isMessageFinal = hasSpeechFinal[\s\S]*\? transcriptionData\.speech_final === true[\s\S]*: isProviderFinal/);
+  });
+}
