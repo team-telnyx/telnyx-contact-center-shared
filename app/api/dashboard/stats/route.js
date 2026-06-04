@@ -5,22 +5,15 @@
  */
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAgentStatistics } from "@/lib/contact-center/stats-aggregator";
-import { PgDb } from "@/lib/pgdb";
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
+    const user = await getAuthenticatedUser();
+    if (!user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await PgDb.findUserById(session.user.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const pool = getPostgresPool();
@@ -125,7 +118,7 @@ export async function GET(request) {
     const stats = statsResult.rows[0] || {};
 
     // Get user's agent statistics for real-time data
-    const agentStats = await getAgentStatistics(session.user.id);
+    const agentStats = await getAgentStatistics(user.id);
 
     // Get performance distribution (completed vs abandoned)
     const performanceDistribution = [

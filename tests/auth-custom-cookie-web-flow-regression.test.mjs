@@ -5,6 +5,9 @@ import { readFile } from "node:fs/promises";
 const authServerPath = new URL("../lib/auth-server.js", import.meta.url);
 const loginFormPath = new URL("../components/login-form.jsx", import.meta.url);
 const proxyPath = new URL("../proxy.js", import.meta.url);
+const dashboardStatsPath = new URL("../app/api/dashboard/stats/route.js", import.meta.url);
+const ccStatsAgentsPath = new URL("../app/api/contact-center/stats/agents/route.js", import.meta.url);
+const ccStatsQueuesPath = new URL("../app/api/contact-center/stats/queues/route.js", import.meta.url);
 
 test("getAuthenticatedUser accepts the custom session cookie used by /api/auth/signin", async () => {
   const src = await readFile(authServerPath, "utf8");
@@ -39,4 +42,13 @@ test("route proxy accepts custom session cookie before falling back to NextAuth"
     customSessionCheckIndex < nextAuthFallbackIndex,
     "custom session cookie must be accepted before NextAuth redirects protected routes"
   );
+});
+
+test("dashboard and contact-center stats APIs use the shared custom-cookie auth bridge", async () => {
+  for (const routePath of [dashboardStatsPath, ccStatsAgentsPath, ccStatsQueuesPath]) {
+    const src = await readFile(routePath, "utf8");
+
+    assert.match(src, /getAuthenticatedUser/);
+    assert.doesNotMatch(src, /getServerSession\(authOptions\)/);
+  }
 });
