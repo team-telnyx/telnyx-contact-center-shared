@@ -99,6 +99,26 @@ test("reserveAgent returns null when the guarded insert loses the race", async (
   assert.equal(reservationId, null);
 });
 
+test("release helpers fall back to the default pool when no explicit pool/client is passed", async () => {
+  const source = await readFile(reservationManagerPath, "utf8");
+
+  const withClientBlock = source.slice(
+    source.indexOf("async function withClient"),
+    source.indexOf("export async function reserveAgent"),
+  );
+
+  assert.match(
+    withClientBlock,
+    /poolOrClient\s*&&[\s\S]*typeof poolOrClient\.query === "function"/,
+    "withClient must guard optional poolOrClient before reading .query",
+  );
+  assert.match(
+    withClientBlock,
+    /const pool = resolvePool\(poolOrClient\)/,
+    "withClient should resolve the default Postgres pool when no explicit pool/client is provided",
+  );
+});
+
 test("alreadyProcessed is concurrency-safe via INSERT ON CONFLICT DO NOTHING RETURNING", async () => {
   const { alreadyProcessed } = await import(idempotencyPath);
   const pool = createFakePool();
