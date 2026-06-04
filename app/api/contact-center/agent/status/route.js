@@ -21,6 +21,13 @@ export async function PUT(request) {
 
     const body = await request.json();
     const { status, userId: targetUserId } = body;
+    console.log("[AgentStatus][RoutingDiagnostics] PUT received", {
+      requesterUserId: String(user.id),
+      requesterUsername: user.username || user.email || null,
+      requestedStatus: status || null,
+      requestedTargetUserId: targetUserId ? String(targetUserId) : null,
+      timestamp: new Date().toISOString(),
+    });
 
     if (!status || typeof status !== "string") {
       return NextResponse.json(
@@ -102,11 +109,20 @@ export async function PUT(request) {
       targetUser.status || targetUser.agent_status || "Unknown";
 
     // Update status using the setUserStatus function which handles all the necessary updates
+    const statusUpdateStartedAt = Date.now();
     await setUserStatus({
       userId: String(targetUserIdFinal),
       username: targetUser.username,
       status,
       previousStatus,
+    });
+    console.log("[AgentStatus][RoutingDiagnostics] setUserStatus completed", {
+      targetUserId: String(targetUserIdFinal),
+      targetUsername: targetUser.username,
+      status,
+      previousStatus,
+      durationMs: Date.now() - statusUpdateStartedAt,
+      timestamp: new Date().toISOString(),
     });
 
     // Log activity for supervisor/admin actions
