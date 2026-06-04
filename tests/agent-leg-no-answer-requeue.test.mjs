@@ -31,6 +31,16 @@ test("agent leg hangup before answer re-enqueues instead of hanging up caller", 
   assert.match(noAnswerBlock, /!latestInteraction\.answered_at/);
   assert.match(noAnswerBlock, /const wasReEnqueued = await handleAgentLegNoAnswerDisconnect/);
   assert.match(noAnswerBlock, /if \(wasReEnqueued\) \{/);
+  assert.match(
+    noAnswerBlock,
+    /findInteractionById\(\s*latestInteraction\.id,?\s*\)/,
+    "stale agent-leg hangups must re-check interaction state before normal cleanup",
+  );
+  assert.match(
+    noAnswerBlock,
+    /latestInteraction\.state !== "ringing"/,
+    "stale agent-leg hangups for already requeued callers must not abandon the interaction",
+  );
   assert.match(noAnswerBlock, /continuing with normal hangup cleanup/);
 
   const originalHangupIndex = webhookSrc.indexOf("Hanging up original call leg");
