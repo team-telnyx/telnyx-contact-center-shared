@@ -46,8 +46,9 @@ export async function POST(request) {
     const user = userResult.rows[0];
     const username = user.username;
 
-    // Update agent status if provided
-    const effectiveStatus = status || user.current_agent_status;
+    // Update agent status if provided. If no cc_agent_state row exists yet,
+    // mirror the users table default so queue-only activation can route calls.
+    const effectiveStatus = status || user.current_agent_status || "Available";
     if (status) {
       // Validate status
       // Get valid statuses from database
@@ -93,12 +94,34 @@ export async function POST(request) {
     if (queueIds !== undefined && Array.isArray(queueIds)) {
       updateAgentQueues(userId, queueIds, isActive !== false);
 
-      // Update agent state table
+      // Update agent state table, creating the default Available row for
+      // agents who activate queues before changing status explicitly.
       await pool.query(
-        `UPDATE cc_agent_state 
-         SET active_queue_ids = $1, last_activity = NOW()
-         WHERE user_id = $2`,
-        [queueIds, userId],
+        `INSERT INTO cc_agent_state (
+           user_id,
+           username,
+           agent_status,
+           active_queue_ids,
+           last_status_change,
+           last_activity,
+           available_since
+         )
+         VALUES (
+           $1,
+           $2,
+           $3,
+           $4,
+           NOW(),
+           NOW(),
+           CASE WHEN $3 = 'Available' THEN NOW() ELSE NULL END
+         )
+         ON CONFLICT (user_id) DO UPDATE SET
+           username = COALESCE(EXCLUDED.username, cc_agent_state.username),
+           agent_status = COALESCE(cc_agent_state.agent_status, EXCLUDED.agent_status),
+           active_queue_ids = EXCLUDED.active_queue_ids,
+           available_since = COALESCE(cc_agent_state.available_since, EXCLUDED.available_since),
+           last_activity = NOW()`,
+        [userId, username, effectiveStatus, queueIds],
       );
     }
 
@@ -123,7 +146,7 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       userId,
-      status: status || user.current_agent_status,
+      status: effectiveStatus,
       queueIds: queueIds || [],
     });
   } catch (error) {
