@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { VariableInput } from "./VariableInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -82,6 +83,24 @@ const TELNYX_STT_TRACK_OPTIONS = [
   { value: "both", label: "Both — customer + agent legs" },
 ];
 
+const FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS = [
+  { value: "en-US", label: "🇺🇸 English (US)" },
+  { value: "pl-PL", label: "🇵🇱 Polish" },
+  { value: "de-DE", label: "🇩🇪 German" },
+  { value: "fr-FR", label: "🇫🇷 French" },
+  { value: "es-ES", label: "🇪🇸 Spanish" },
+];
+
+function getTelnyxSttLanguageOptions(provider) {
+  return provider?.telnyxStt?.supported_languages?.length
+    ? provider.telnyxStt.supported_languages
+    : FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS;
+}
+
+function getDefaultTelnyxSttLanguage(provider) {
+  return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en-US";
+}
+
 const CODEC_OPTIONS = [
   { value: "PCMU", label: "PCMU (G.711 μ-law)" },
   { value: "PCMA", label: "PCMA (G.711 A-law)" },
@@ -156,7 +175,13 @@ const GEMINI_MODEL_OPTIONS = [
 const EXPERIMENTAL_USER = "leszek@telnyx.com";
 const EXPERIMENTAL_PROVIDERS = [];
 
-export default function StreamingStartNodeEditor({ config = {}, onChange, currentUserEmail }) {
+export default function StreamingStartNodeEditor({
+  config = {},
+  onChange,
+  currentUserEmail,
+  availableVariables = [],
+  hasCallerLanguageParameterBefore = false,
+}) {
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   const initialProvider =
     config.ai_streaming_provider === "telnyx-stt" ||
@@ -182,6 +207,9 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
       ? AI_STREAMING_PROVIDERS[telnyxSttModel]
       : AI_STREAMING_PROVIDERS[provider];
   const isTelnyxStt = provider === "telnyx-stt";
+  const telnyxSttLanguageOptions = getTelnyxSttLanguageOptions(providerConfig);
+  const telnyxSttLanguage = config.telnyx_stt_language || getDefaultTelnyxSttLanguage(providerConfig);
+  const useCallerLanguage = hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true;
   const isAI = isOpenAI || isGemini; // AI providers with session config
   const isLocked = !isCustom;
 
@@ -250,6 +278,9 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         ai_streaming_provider: "telnyx-stt",
         telnyx_stt_model: telnyxSttModel,
         telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+        telnyx_stt_language: config.telnyx_stt_language || getDefaultTelnyxSttLanguage(selectedProviderConfig),
+        telnyx_stt_language_source: config.telnyx_stt_language_source || "static",
+        telnyx_stt_use_caller_language: hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true,
         stream_url: streamUrl,
         ...selectedProviderConfig.telnyx,
       };
@@ -310,6 +341,9 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
         ai_streaming_provider: "telnyx-stt",
         telnyx_stt_model: telnyxSttModel,
         telnyx_stt_interim_results: config.telnyx_stt_interim_results !== false,
+        telnyx_stt_language: config.telnyx_stt_language || getDefaultTelnyxSttLanguage(selectedProviderConfig),
+        telnyx_stt_language_source: config.telnyx_stt_language_source || "static",
+        telnyx_stt_use_caller_language: hasCallerLanguageParameterBefore && config.telnyx_stt_use_caller_language === true,
         stream_url: getWebSocketUrl("telnyx-stt"),
         ...(selectedProviderConfig?.telnyx || {}),
       });
@@ -662,6 +696,71 @@ export default function StreamingStartNodeEditor({ config = {}, onChange, curren
               </SelectContent>
             </Select>
           </div>
+
+          {hasCallerLanguageParameterBefore && (
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-0.5">
+                <Label>Use Caller Language</Label>
+                <p className="text-xs text-muted-foreground">
+                  Use client_state.caller_language set by an upstream Update Client State node.
+                </p>
+              </div>
+              <Switch
+                checked={useCallerLanguage}
+                onCheckedChange={(checked) => handleFieldChange("telnyx_stt_use_caller_language", checked)}
+              />
+            </div>
+          )}
+
+          {!useCallerLanguage && (
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Language</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Choose a supported language for the selected STT model or provide it dynamically.
+                  </p>
+                </div>
+                <Select
+                  value={config.telnyx_stt_language_source || "static"}
+                  onValueChange={(value) => handleFieldChange("telnyx_stt_language_source", value)}
+                >
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="static">Static</SelectItem>
+                    <SelectItem value="variable">Variable</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(config.telnyx_stt_language_source || "static") === "variable" ? (
+                <VariableInput
+                  value={config.telnyx_stt_language || ""}
+                  onChange={(value) => handleFieldChange("telnyx_stt_language", value)}
+                  availableVariables={availableVariables}
+                  placeholder="{{caller_language}}"
+                />
+              ) : (
+                <Select
+                  value={telnyxSttLanguage}
+                  onValueChange={(value) => handleFieldChange("telnyx_stt_language", value)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {telnyxSttLanguageOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between rounded-md border p-3">
             <div className="space-y-0.5">
               <Label>Interim Results</Label>

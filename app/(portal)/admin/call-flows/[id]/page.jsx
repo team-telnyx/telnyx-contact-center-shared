@@ -1465,6 +1465,45 @@ export default function FlowBuilderPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  const hasCallerLanguageParameterBeforeNode = useCallback(
+    (nodeId) => {
+      if (!nodeId) return false;
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const incomingByTarget = new Map();
+      for (const edge of edges) {
+        if (!incomingByTarget.has(edge.target)) incomingByTarget.set(edge.target, []);
+        incomingByTarget.get(edge.target).push(edge.source);
+      }
+
+      const visited = new Set();
+      const stack = [...(incomingByTarget.get(nodeId) || [])];
+      while (stack.length > 0) {
+        const currentId = stack.pop();
+        if (!currentId || visited.has(currentId)) continue;
+        visited.add(currentId);
+        const current = byId.get(currentId);
+        const nodeType = current?.data?.nodeType || current?.type;
+        const config = current?.data?.config || {};
+        if (nodeType === "client_state_update") {
+          const updateMode = config.update_mode || "predefined";
+          if (updateMode === "predefined" && (config.predefined_key || "caller_language") === "caller_language") {
+            return true;
+          }
+          if (updateMode === "custom" && config.custom_key === "caller_language") {
+            return true;
+          }
+          if (updateMode === "raw_json" && /"caller_language"\s*:/.test(config.raw_json || "")) {
+            return true;
+          }
+        }
+        stack.push(...(incomingByTarget.get(currentId) || []));
+      }
+      return false;
+    },
+    [nodes, edges],
+  );
+
+
   const reactFlowWrapper = useRef(null);
   const contextMenuRef = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -3223,6 +3262,12 @@ export default function FlowBuilderPage() {
                             <StreamingStartNodeEditor
                               config={nodeConfig}
                               currentUserEmail={userEmail}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                              hasCallerLanguageParameterBefore={hasCallerLanguageParameterBeforeNode(selectedNode.id)}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
@@ -3612,6 +3657,7 @@ export default function FlowBuilderPage() {
                             <AnswerNodeEditor
                               config={nodeConfig}
                               currentUserEmail={userEmail}
+                              hasCallerLanguageParameterBefore={hasCallerLanguageParameterBeforeNode(selectedNode.id)}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {

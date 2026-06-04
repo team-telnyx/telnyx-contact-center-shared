@@ -66,6 +66,24 @@ const TELNYX_STT_TRACK_OPTIONS = [
   { value: "both", label: "Both — customer + agent legs" },
 ];
 
+const FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS = [
+  { value: "en-US", label: "🇺🇸 English (US)" },
+  { value: "pl-PL", label: "🇵🇱 Polish" },
+  { value: "de-DE", label: "🇩🇪 German" },
+  { value: "fr-FR", label: "🇫🇷 French" },
+  { value: "es-ES", label: "🇪🇸 Spanish" },
+];
+
+function getTelnyxSttLanguageOptions(provider) {
+  return provider?.telnyxStt?.supported_languages?.length
+    ? provider.telnyxStt.supported_languages
+    : FALLBACK_TELNYX_STT_LANGUAGE_OPTIONS;
+}
+
+function getDefaultTelnyxSttLanguage(provider) {
+  return provider?.telnyxStt?.language || getTelnyxSttLanguageOptions(provider)[0]?.value || "en-US";
+}
+
 
 // Validate WebSocket URL format (ws:// or wss://)
 function validateWebSocketUrl(url) {
@@ -100,6 +118,7 @@ export default function AnswerNodeEditor({
   availableVariables = [],
   onOutputsChange,
   currentUserEmail,
+  hasCallerLanguageParameterBefore = false,
 }) {
   const isExperimentalUser = currentUserEmail === EXPERIMENTAL_USER;
   // Basic fields
@@ -181,8 +200,20 @@ export default function AnswerNodeEditor({
   const [telnyxSttInterimResults, setTelnyxSttInterimResults] = useState(
     config.telnyx_stt_interim_results !== false
   );
+  const [telnyxSttLanguageValue, setTelnyxSttLanguageValue] = useState(
+    config.telnyx_stt_language || ""
+  );
+  const [telnyxSttLanguageSource, setTelnyxSttLanguageSource] = useState(
+    config.telnyx_stt_language_source || "static"
+  );
+  const [telnyxSttUseCallerLanguage, setTelnyxSttUseCallerLanguage] = useState(
+    config.telnyx_stt_use_caller_language === true
+  );
   const [wsBaseUrl, setWsBaseUrl] = useState(null);
   const selectedTelnyxSttProvider = AI_STREAMING_PROVIDERS[telnyxSttModel];
+  const telnyxSttLanguageOptions = getTelnyxSttLanguageOptions(selectedTelnyxSttProvider);
+  const telnyxSttLanguage = telnyxSttLanguageValue || getDefaultTelnyxSttLanguage(selectedTelnyxSttProvider);
+  const useCallerLanguage = hasCallerLanguageParameterBefore && telnyxSttUseCallerLanguage === true;
   const selectedStreamingProvider =
     streamingProvider === "telnyx-stt"
       ? selectedTelnyxSttProvider
@@ -332,6 +363,9 @@ export default function AnswerNodeEditor({
     if (config.telnyx_stt_tracks !== undefined) setTelnyxSttTracks(config.telnyx_stt_tracks);
     if (config.telnyx_stt_interim_results !== undefined)
       setTelnyxSttInterimResults(config.telnyx_stt_interim_results !== false);
+    if (config.telnyx_stt_language !== undefined) setTelnyxSttLanguageValue(config.telnyx_stt_language);
+    if (config.telnyx_stt_language_source !== undefined) setTelnyxSttLanguageSource(config.telnyx_stt_language_source);
+    if (config.telnyx_stt_use_caller_language !== undefined) setTelnyxSttUseCallerLanguage(config.telnyx_stt_use_caller_language === true);
     if (config.transcription_engine !== undefined) {
       setTranscriptionEnabled(!!config.transcription_engine);
       setTranscriptionEngine(config.transcription_engine);
@@ -385,6 +419,15 @@ export default function AnswerNodeEditor({
       telnyx_stt_tracks: isTelnyxSttStreaming ? telnyxSttTracks : undefined,
       telnyx_stt_interim_results: isTelnyxSttStreaming
         ? telnyxSttInterimResults
+        : undefined,
+      telnyx_stt_language: isTelnyxSttStreaming
+        ? telnyxSttLanguageValue || getDefaultTelnyxSttLanguage(selectedTelnyxSttProvider)
+        : undefined,
+      telnyx_stt_language_source: isTelnyxSttStreaming
+        ? telnyxSttLanguageSource || "static"
+        : undefined,
+      telnyx_stt_use_caller_language: isTelnyxSttStreaming
+        ? hasCallerLanguageParameterBefore && telnyxSttUseCallerLanguage === true
         : undefined,
       stream_track: streamUrl ? streamTrack : undefined,
       stream_codec: streamUrl && streamCodec ? streamCodec : undefined,
@@ -659,6 +702,9 @@ export default function AnswerNodeEditor({
     telnyxSttModel,
     telnyxSttTracks,
     telnyxSttInterimResults,
+    telnyxSttLanguageValue,
+    telnyxSttLanguageSource,
+    telnyxSttUseCallerLanguage,
     transcriptionEnabled,
     transcriptionEngine,
     transcriptionEngineConfig,
@@ -1187,6 +1233,71 @@ export default function AnswerNodeEditor({
                   Telnyx STT model in provider/model format.
                 </p>
               </div>
+
+
+              {hasCallerLanguageParameterBefore && (
+                <div className="flex items-center justify-between rounded-md border p-3">
+                  <div className="space-y-0.5">
+                    <Label>Use Caller Language</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Use client_state.caller_language set by an upstream Update Client State node.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={useCallerLanguage}
+                    onCheckedChange={(checked) => setTelnyxSttUseCallerLanguage(checked)}
+                  />
+                </div>
+              )}
+
+              {!useCallerLanguage && (
+                <div className="space-y-3 rounded-md border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label>Language</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Choose a supported language for the selected STT model or provide it dynamically.
+                      </p>
+                    </div>
+                    <Select
+                      value={telnyxSttLanguageSource || "static"}
+                      onValueChange={setTelnyxSttLanguageSource}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="static">Static</SelectItem>
+                        <SelectItem value="variable">Variable</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {(telnyxSttLanguageSource || "static") === "variable" ? (
+                    <VariableInput
+                      value={telnyxSttLanguageValue || ""}
+                      onChange={setTelnyxSttLanguageValue}
+                      availableVariables={availableVariables}
+                      placeholder="{{caller_language}}"
+                    />
+                  ) : (
+                    <Select
+                      value={telnyxSttLanguage}
+                      onValueChange={setTelnyxSttLanguageValue}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select language" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {telnyxSttLanguageOptions.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
 
               <div>
                 <Label>Transcription Channels</Label>

@@ -3,6 +3,64 @@
  * Configuration for Google Gemini Live and OpenAI Realtime streaming
  */
 
+
+export const TELNYX_STT_LANGUAGE_OPTIONS = {
+  google: [
+    { value: "en-US", label: "🇺🇸 English (US)" },
+    { value: "en-GB", label: "🇬🇧 English (UK)" },
+    { value: "pl-PL", label: "🇵🇱 Polish" },
+    { value: "de-DE", label: "🇩🇪 German" },
+    { value: "fr-FR", label: "🇫🇷 French" },
+    { value: "es-ES", label: "🇪🇸 Spanish" },
+    { value: "it-IT", label: "🇮🇹 Italian" },
+    { value: "nl-NL", label: "🇳🇱 Dutch" },
+    { value: "pt-PT", label: "🇵🇹 Portuguese" },
+    { value: "pt-BR", label: "🇧🇷 Portuguese (Brazil)" },
+    { value: "uk-UA", label: "🇺🇦 Ukrainian" },
+    { value: "ar-AE", label: "🇦🇪 Arabic" },
+  ],
+  xai: [
+    { value: "en", label: "🇺🇸 English" },
+    { value: "pl", label: "🇵🇱 Polish" },
+    { value: "de", label: "🇩🇪 German" },
+    { value: "fr", label: "🇫🇷 French" },
+    { value: "es", label: "🇪🇸 Spanish" },
+    { value: "it", label: "🇮🇹 Italian" },
+    { value: "pt", label: "🇵🇹 Portuguese" },
+  ],
+  deepgram: [
+    { value: "en-US", label: "🇺🇸 English (US)" },
+    { value: "en-GB", label: "🇬🇧 English (UK)" },
+    { value: "pl", label: "🇵🇱 Polish" },
+    { value: "de", label: "🇩🇪 German" },
+    { value: "fr", label: "🇫🇷 French" },
+    { value: "es", label: "🇪🇸 Spanish" },
+    { value: "it", label: "🇮🇹 Italian" },
+    { value: "nl", label: "🇳🇱 Dutch" },
+    { value: "pt", label: "🇵🇹 Portuguese" },
+    { value: "uk", label: "🇺🇦 Ukrainian" },
+  ],
+  speechmatics: [
+    { value: "en", label: "🇺🇸 English" },
+    { value: "pl", label: "🇵🇱 Polish" },
+    { value: "de", label: "🇩🇪 German" },
+    { value: "fr", label: "🇫🇷 French" },
+    { value: "es", label: "🇪🇸 Spanish" },
+    { value: "it", label: "🇮🇹 Italian" },
+    { value: "nl", label: "🇳🇱 Dutch" },
+    { value: "pt", label: "🇵🇹 Portuguese" },
+  ],
+};
+
+function telnyxSttLanguagesForEngine(engine) {
+  const key = String(engine || "").toLowerCase();
+  if (key.includes("google")) return TELNYX_STT_LANGUAGE_OPTIONS.google;
+  if (key.includes("xai")) return TELNYX_STT_LANGUAGE_OPTIONS.xai;
+  if (key.includes("deepgram")) return TELNYX_STT_LANGUAGE_OPTIONS.deepgram;
+  if (key.includes("speechmatics")) return TELNYX_STT_LANGUAGE_OPTIONS.speechmatics;
+  return TELNYX_STT_LANGUAGE_OPTIONS.google;
+}
+
 export const AI_STREAMING_PROVIDERS = {
   "google-gemini": {
     id: "google-gemini",
@@ -113,6 +171,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Google"),
     },
   },
 
@@ -135,6 +194,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Google"),
     },
   },
 
@@ -157,6 +217,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Google"),
     },
   },
 
@@ -179,6 +240,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("xAI"),
     },
   },
 
@@ -201,6 +263,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
     },
   },
 
@@ -223,6 +286,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
     },
   },
 
@@ -245,6 +309,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       input_format: "mulaw",
       sample_rate: 8000,
       interim_results: true,
+      supported_languages: telnyxSttLanguagesForEngine("Deepgram"),
     },
   },
 
@@ -268,6 +333,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       sample_rate: 8000,
       interim_results: true,
       endpointing: 300,
+      supported_languages: telnyxSttLanguagesForEngine("Speechmatics"),
     },
   },
 };
