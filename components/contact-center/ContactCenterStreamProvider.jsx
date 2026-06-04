@@ -135,7 +135,15 @@ export function ContactCenterStreamProvider({ children }) {
                       data.updates.metadata?.ai_call_control_id ||
                       callData.aiCallControlId ||
                       null,
+                    metadata: data.updates.metadata || callData.metadata || {},
                   });
+                }
+              }
+              if (data.updates?.metadata) {
+                const activeState = useActiveCallStore.getState();
+                const activeInteractionId = activeState.contactCenter?.interactionId;
+                if (!data.interactionId || !activeInteractionId || data.interactionId === activeInteractionId) {
+                  activeState.setContactCenterMetadata?.({ metadata: data.updates.metadata });
                 }
               }
               // Dispatch event to trigger interaction list refresh

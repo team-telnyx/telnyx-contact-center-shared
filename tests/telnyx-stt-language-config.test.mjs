@@ -112,21 +112,25 @@ test("queued interaction metadata is pre-populated with normalized agent languag
 test("translation header and suggestions use bounded layout with language names", async () => {
   const workflowSource = await source("../components/contact-center/AgentAssistWorkflow.jsx");
 
+  assert.match(workflowSource, /contactCenter\?\.metadata/);
   assert.match(workflowSource, /normalizeBaseLanguageCode\(interactionMetadata\.caller_language/);
   assert.match(workflowSource, /normalizeBaseLanguageCode\(interactionMetadata\.agent_language/);
+  assert.match(workflowSource, /\.\.\.\(interaction\?\.metadata \|\| \{\}\)[\s\S]*\.\.\.\(contactCenter\?\.metadata \|\| \{\}\)/,
+    "Live active-call metadata should override stale interaction metadata so agent_language updates are reflected in the header");
   assert.match(workflowSource, /en: "English"/);
   assert.match(workflowSource, /pl: "Polish"/);
   assert.doesNotMatch(workflowSource, /return String\(language\)\.toUpperCase\(\)/,
     "Translation header should show language names instead of raw PL-PL/EN-US codes");
   assert.match(workflowSource, /<span className="shrink-0">-<\/span>/);
-  assert.match(workflowSource, /flex items-center gap-2 mb-2 min-w-0 overflow-hidden/);
-  assert.match(workflowSource, /min-w-0 flex-1 truncate/);
+  assert.match(workflowSource, /flex flex-wrap items-center gap-1\.5 mb-2 min-w-0 max-w-full overflow-hidden/);
+  assert.match(workflowSource, /max-w-full min-w-0 overflow-hidden truncate/);
 });
 
 test("Agent Assist transcription router accumulates provider-final STT deltas before translation", async () => {
   const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
 
   assert.match(routerSource, /__agentAssistActiveTranscriptionSegments/);
+  assert.match(routerSource, /__agentAssistActiveConversationTracks/);
   assert.match(routerSource, /function buildDisplayTranscript/);
   assert.match(routerSource, /isProviderFinal[\s\S]*activeTranscriptionSegments\.set/,
     "Provider-final chunks before speech_final should be accumulated for the open bubble");

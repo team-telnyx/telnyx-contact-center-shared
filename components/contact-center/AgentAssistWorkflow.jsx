@@ -88,6 +88,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const transcriptions = useActiveCallStore((state) => state.transcriptions);
   const callState = useActiveCallStore((state) => state.call?.state);
   const activeCall = useActiveCallStore((state) => state.call);
+  const contactCenter = useActiveCallStore((state) => state.contactCenter);
 
   // AI Handoff polling timeout ref
   const aiPollTimeoutRef = useRef(null);
@@ -101,9 +102,9 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     return interaction?.metadata?.ai_call_control_id || 
            interaction?.ai_call_control_id || 
            activeCall?.aiCallControlId ||
-           activeCall?.contactCenter?.aiCallControlId ||
+           contactCenter?.aiCallControlId ||
            null;
-  }, [interaction, activeCall]);
+  }, [interaction, activeCall, contactCenter]);
 
   const assistConfig = interaction?.metadata?.agent_assist_config || {};
   const showSttConfidence = assistConfig.enable_stt_confidence !== false;
@@ -111,7 +112,11 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   const translationEnabled =
     assistConfig.assist_type === "workflows" &&
     assistConfig.enable_translation === true;
-  const interactionMetadata = interaction?.metadata || activeCall?.metadata || activeCall?.contactCenter?.metadata || {};
+  const interactionMetadata = {
+    ...(interaction?.metadata || {}),
+    ...(activeCall?.metadata || {}),
+    ...(contactCenter?.metadata || {}),
+  };
   const callerLanguage = normalizeBaseLanguageCode(interactionMetadata.caller_language, { fallback: null });
   const agentLanguage = normalizeBaseLanguageCode(interactionMetadata.agent_language, { fallback: null });
 
@@ -1650,7 +1655,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       </CardHeader>
       <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
         <ScrollArea className="h-full overflow-x-hidden" ref={scrollRef}>
-          <div className="px-4 py-4 space-y-3 max-w-full overflow-x-hidden">
+          <div className="px-3 py-3 space-y-3 max-w-full min-w-0 overflow-x-hidden">
             {/* Fix 3: Show waiting state while AI data loads on AI-assisted calls */}
             {suggestions.length === 0 && isAiAssisted && aiDataLoading ? (
               <div className="text-center text-muted-foreground py-8">
@@ -1673,7 +1678,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                   return (
                     <div
                       key={suggestion.id}
-                      className={`group w-full max-w-full overflow-hidden p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                      className={`group w-full max-w-full min-w-0 box-border overflow-hidden p-3 rounded-lg border-2 transition-all cursor-pointer ${
                         isLatest
                           ? "border-amber-500/50 bg-amber-500/5 hover:border-amber-500/80 hover:bg-amber-500/10"
                           : "border-border/50 bg-muted/30 hover:border-border hover:bg-muted/50"
@@ -1681,30 +1686,30 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       onClick={() => handleCopy(suggestion)}
                     >
                       {/* Context badge */}
-                      <div className="flex items-center gap-2 mb-2 min-w-0 overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2 min-w-0 max-w-full overflow-hidden">
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] max-w-[45%] shrink-0 truncate ${
+                          className={`text-[10px] max-w-full min-w-0 overflow-hidden truncate ${
                             isLatest 
                               ? "bg-purple-500/10 text-purple-500 border-purple-500/50"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {suggestion.stageName}
+                          <span className="truncate">{suggestion.stageName}</span>
                         </Badge>
                         <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <Badge 
                           variant="outline" 
-                          className={`text-[10px] min-w-0 flex-1 truncate ${
+                          className={`text-[10px] max-w-full min-w-0 overflow-hidden truncate ${
                             isLatest
                               ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {suggestion.itemLabel}
+                          <span className="truncate">{suggestion.itemLabel}</span>
                         </Badge>
                         {isLatest && (
-                          <Badge className="text-[10px] bg-amber-500 text-white ml-auto shrink-0">
+                          <Badge className="text-[10px] bg-amber-500 text-white shrink-0">
                             Current
                           </Badge>
                         )}

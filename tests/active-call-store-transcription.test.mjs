@@ -129,3 +129,59 @@ test("invalid or missing transcription confidence does not create a misleading z
   assert.equal(transcriptions.length, 1);
   assert.equal(transcriptions[0].confidence, undefined);
 });
+
+test("an interrupted open transcription bubble can be closed by transcription_update", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "agent-leg",
+    transcription_track: "outbound",
+    transcription_key: "agent-utterance-1",
+    transcript: "Good morning, this is Leszek",
+    is_final: false,
+  });
+
+  store.updateTranscriptionAnalysis("agent-utterance-1", { isFinal: true });
+
+  store.addTranscription({
+    call_control_id: "customer-leg",
+    transcription_track: "inbound",
+    transcription_key: "customer-utterance-1",
+    transcript: "Hello, I need transport",
+    is_final: true,
+  });
+
+  store.addTranscription({
+    call_control_id: "agent-leg",
+    transcription_track: "outbound",
+    transcription_key: "agent-utterance-2",
+    transcript: "Can I have the patient name?",
+    is_final: false,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 3);
+  assert.equal(transcriptions[0].transcriptionKey, "agent-utterance-1");
+  assert.equal(transcriptions[0].isFinal, true);
+  assert.equal(transcriptions[2].transcriptionKey, "agent-utterance-2");
+  assert.equal(transcriptions[2].transcript, "Can I have the patient name?");
+});
+
+test("contact center metadata updates keep agent assist language metadata live", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.setContactCenterMetadata({
+    metadata: {
+      caller_language: "en",
+      agent_language: "pl",
+    },
+  });
+
+  const { contactCenter } = useActiveCallStore.getState();
+  assert.deepEqual(contactCenter.metadata, {
+    caller_language: "en",
+    agent_language: "pl",
+  });
+});
