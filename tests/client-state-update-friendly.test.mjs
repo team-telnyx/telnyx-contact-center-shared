@@ -125,6 +125,11 @@ test("Update Client State UI is a friendly JSON builder with predefined caller l
   assert.match(editorSource, /Raw JSON/);
   assert.match(editorSource, /Base64 preview/);
   assert.match(editorSource, /caller_language/);
+  assert.match(editorSource, /import \{ VariableInput \}/);
+  assert.match(editorSource, /<VariableInput[\s\S]*availableVariables=\{availableVariables\}/);
+  assert.doesNotMatch(editorSource, /Friendly client_state builder/);
+  assert.doesNotMatch(editorSource, /Configure text or JSON values here/);
+  assert.doesNotMatch(editorSource, /import \{ Badge \}/);
   assert.match(pageSource, /import ClientStateUpdateNodeEditor/);
   assert.match(pageSource, /<ClientStateUpdateNodeEditor[\s\S]*availableVariables=\{getAllVariableNames/);
 });

@@ -11,8 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { languages as baseLanguageOptions } from "@/lib/languages";
+import { VariableInput } from "./VariableInput";
 
 const PREDEFINED_PARAMETERS = [
   {
@@ -84,17 +84,6 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">Friendly client_state builder</span>
-          <Badge variant="outline">auto Base64</Badge>
-          <Badge variant="outline">merge-safe</Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Configure text or JSON values here. The node merges them into the existing call client_state and encodes the final JSON to Base64 for Telnyx.
-        </p>
-      </div>
-
       <div className="grid gap-2">
         <Label>Update mode</Label>
         <Select value={mode} onValueChange={(value) => update("update_mode", value)}>
@@ -149,9 +138,10 @@ export default function ClientStateUpdateNodeEditor({ config = {}, onChange, ava
           {valueSource === "variable" ? (
             <div className="grid gap-2">
               <Label>Variable value</Label>
-              <Input
+              <VariableInput
                 value={config.variable_value || ""}
-                onChange={(event) => update("variable_value", event.target.value)}
+                onChange={(value) => update("variable_value", value)}
+                availableVariables={availableVariables}
                 placeholder="{{customer_language}}"
               />
               {availableVariables.length > 0 && (
