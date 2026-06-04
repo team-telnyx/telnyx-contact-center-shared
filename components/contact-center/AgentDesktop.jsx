@@ -1092,8 +1092,17 @@ export function AgentDesktop() {
   // Listen for manual disconnect events and open global wrapup sheet
   useEffect(() => {
     const handleCallDisconnected = async (event) => {
-      const { interactionId, transcriptions } = event.detail || {};
+      const {
+        interactionId,
+        transcriptions,
+        rejectedBeforeAnswer = false,
+        wasAnswered,
+      } = event.detail || {};
       if (!interactionId) return;
+
+      if (rejectedBeforeAnswer || wasAnswered === false) {
+        return;
+      }
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === interactionId) {
@@ -1132,7 +1141,11 @@ export function AgentDesktop() {
             .openWrapup(interactionId, transcriptions || []);
         }
       } else {
-        // If interaction not found, assume it was answered and show wrapup
+        if (wasAnswered !== true) {
+          return;
+        }
+
+        // If interaction not found, only show wrapup when the event confirms it was answered
         lastWrapupInteractionRef.current = interactionId;
         // Use global wrapup sheet store
         const { default: useWrapupSheetStore } = await import(

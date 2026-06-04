@@ -7,7 +7,9 @@ const softphonePath = new URL("../components/softphone.jsx", import.meta.url);
 const timeoutPath = new URL("../lib/contact-center/agent-answer-timeout.js", import.meta.url);
 const wrapupRoutePath = new URL("../app/api/contact-center/interactions/[id]/wrapup/route.js", import.meta.url);
 const globalWrapupPath = new URL("../components/contact-center/GlobalWrapupSheet.jsx", import.meta.url);
+const agentDesktopPath = new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url);
 const stateManagerPath = new URL("../lib/contact-center/state-manager.js", import.meta.url);
+const webhookHandlerPath = new URL("../lib/contact-center/webhook-handler.js", import.meta.url);
 
 async function source(url) {
   return readFile(url, "utf8");
@@ -75,10 +77,32 @@ test("global wrapup UI defaults to no wrapup unless answered evidence exists", a
   assert.match(src, /if \(!wasAnswered\) \{/);
 });
 
-test("state-manager does not auto-Available abandoned pre-answer calls", async () => {
-  const src = await source(stateManagerPath);
-  const completeCall = extractFunction(src, "completeCall");
+test("agent desktop ignores pre-answer reject disconnects instead of opening wrapup", async () => {
+  const src = await source(agentDesktopPath);
 
-  assert.match(completeCall, /Agent Not Answering/);
-  assert.doesNotMatch(completeCall, /agentState\.agentStatus\s*=\s*"Available";\s*\/\/ Set available_since when agent becomes fully available/s);
+  assert.match(src, /rejectedBeforeAnswer\s*=\s*false/);
+  assert.match(src, /wasAnswered/);
+  assert.match(src, /if \(rejectedBeforeAnswer \|\| wasAnswered === false\) \{/);
+  assert.match(src, /wasAnswered !== true/);
+});
+
+test("state-manager only marks failed ringing as Agent Not Answering", async () => {
+  const src = await source(stateManagerPath);
+
+  assert.match(src, /options = \{\}/);
+  assert.match(src, /const failedRinging = Boolean\(options\.failedRinging\)/);
+  assert.match(src, /else if \(failedRinging\)/);
+  assert.match(src, /Agent Not Answering/);
+  assert.match(src, /agentState\.agentStatus\s*=\s*"Available"/);
+});
+
+test("webhook passes failed-ringing context only for reject or no-answer hangups", async () => {
+  const src = await source(webhookHandlerPath);
+
+  assert.match(src, /const failedRinging =/);
+  assert.match(src, /hangup_cause === "CALL_REJECTED"/);
+  assert.match(src, /hangup_cause === "NO_ANSWER"/);
+  assert.match(src, /payload\?\.hangup_cause === "CALL_REJECTED"/);
+  assert.match(src, /payload\?\.hangup_cause === "NO_ANSWER"/);
+  assert.match(src, /completeCall\(interaction\.id, completedAt, wasAbandoned, \{ failedRinging \}\)/);
 });
