@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "NODE_ENV=production next start --hostname 0.0.0.0 --port 3000",
     "lint": "eslint",
+    "test": "node --test tests/*.test.mjs",
     "ensure:pg": "node scripts/ensure-pg.mjs"
   },
   "dependencies": {

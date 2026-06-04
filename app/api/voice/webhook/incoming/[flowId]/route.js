@@ -211,6 +211,7 @@ export async function POST(request, { params }) {
     // Parse the body
     const body = JSON.parse(rawBody || "{}");
     const event = body?.data?.event_type;
+    const webhookEventId = body?.data?.id || null;
 
     // Log call event to database
     try {
@@ -621,7 +622,7 @@ export async function POST(request, { params }) {
       try {
         const { handleContactCenterEvent } =
           await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload);
+        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
       } catch (err) {
         // Don't fail the webhook, just log the error
       }
@@ -1079,7 +1080,7 @@ export async function POST(request, { params }) {
       try {
         const { handleContactCenterEvent } =
           await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload);
+        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
       } catch (err) {
         // Error handling call.recording.saved
       }

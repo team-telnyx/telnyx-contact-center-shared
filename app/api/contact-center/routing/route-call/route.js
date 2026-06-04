@@ -15,6 +15,7 @@ import {
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomUUID } from "crypto";
+import { promoteReservation } from "@/lib/contact-center/reservation-manager.js";
 
 export async function POST(request) {
   try {
@@ -130,6 +131,7 @@ export async function POST(request) {
     const routingResult = await routeCall(queueId, {
       required_skills: requiredSkills || queue.skill_requirements || {},
       priority: priority || queue.priority || 0,
+      interactionId,
       callControlId,
       callSessionId,
     });
@@ -144,6 +146,10 @@ export async function POST(request) {
          WHERE id = $3`,
         [routingResult.agent.username, assignedAt, interactionId]
       );
+
+      if (routingResult.reservationId) {
+        await promoteReservation(routingResult.reservationId, "ringing");
+      }
 
       assignCallToAgent(
         queueId,
