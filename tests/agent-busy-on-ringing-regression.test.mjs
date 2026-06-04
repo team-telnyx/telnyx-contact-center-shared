@@ -47,8 +47,9 @@ test("agent status transition helper updates both authoritative stores and broad
 
   assert.match(src, /export async function markAgentBusyForRinging/);
   assert.match(src, /UPDATE users\s+SET agent_status = 'Busy'/s);
-  assert.match(src, /UPDATE cc_agent_state\s+SET agent_status = 'Busy'/s);
-  assert.match(src, /current_calls_count = GREATEST\(current_calls_count, 1\)/);
+  assert.match(src, /INSERT INTO cc_agent_state[\s\S]*'Busy'/s);
+  assert.match(src, /ON CONFLICT \(user_id\) DO UPDATE SET[\s\S]*agent_status = EXCLUDED\.agent_status/s);
+  assert.match(src, /current_calls_count = GREATEST\(cc_agent_state\.current_calls_count, 1\)/);
   assert.match(src, /broadcastAgentStatusChanged/);
   assert.match(src, /`user:status:\$\{userId\}`/);
   assert.match(src, /`contact-center:agent:\$\{username\}`/);

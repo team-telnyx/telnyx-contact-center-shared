@@ -87,14 +87,20 @@ test("agent desktop ignores pre-answer reject disconnects instead of opening wra
   assert.match(src, /preserve the normal\s+\/\/ answered-call fallback/);
 });
 
-test("state-manager only marks failed ringing as Agent Not Answering", async () => {
+test("state-manager does not locally derive Agent Not Answering from generic call completion", async () => {
   const src = await source(stateManagerPath);
+  const completeCall = src.slice(
+    src.indexOf("function completeCall"),
+    src.indexOf("/**\n * Update agent status"),
+  );
 
   assert.match(src, /options = \{\}/);
   assert.match(src, /const failedRinging = Boolean\(options\.failedRinging\)/);
-  assert.match(src, /else if \(failedRinging\)/);
-  assert.match(src, /Agent Not Answering/);
-  assert.match(src, /agentState\.agentStatus\s*=\s*"Available"/);
+  assert.doesNotMatch(
+    completeCall,
+    /agentState\.agentStatus\s*=\s*"Available"|agentState\.agentStatus\s*=\s*"Agent Not Answering"/,
+    "completeCall is read-model/statistics only; authoritative status transitions happen through DB writers",
+  );
 });
 
 test("webhook passes failed-ringing context only for reject or no-answer hangups", async () => {

@@ -72,7 +72,7 @@ test("ringing Busy transition is forced for assigned ringing interactions, not s
   );
   assert.match(
     busyHelper,
-    /WHERE user_id = \$1/,
-    "cc_agent_state should still update the targeted agent row only",
+    /ON CONFLICT \(user_id\) DO UPDATE SET/,
+    "cc_agent_state should still update/upsert the targeted agent row only",
   );
 });

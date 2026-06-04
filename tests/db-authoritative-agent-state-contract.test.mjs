@@ -81,7 +81,6 @@ test("state-manager call lifecycle helpers do not mutate cached agentStatus as s
     ["export function assignCallToAgent", "/**\n * Remove call assignment"],
     ["export function removeCallFromAgent", "/**\n * Update state when a call is answered"],
     ["export function completeCall", "/**\n * Update agent status"],
-    ["export async function updateAgentStatus", "/**\n * Update agent queue activation"],
   ]) {
     const block = functionBlock(src, startNeedle, endNeedle);
     assert.doesNotMatch(
@@ -90,6 +89,22 @@ test("state-manager call lifecycle helpers do not mutate cached agentStatus as s
       `${startNeedle} must not assign lifecycle status in node-local stateCache`,
     );
   }
+
+  const updateStatusBlock = functionBlock(
+    src,
+    "export async function updateAgentStatus",
+    "/**\n * Update agent queue activation",
+  );
+  assert.match(
+    updateStatusBlock,
+    /agentState\.agentStatus\s*=\s*status/,
+    "explicit DB-authoritative status updates must refresh the node-local read model",
+  );
+  assert.doesNotMatch(
+    updateStatusBlock,
+    /UPDATE\s+cc_agent_state|INSERT INTO cc_agent_state|UPDATE\s+users/i,
+    "read-model status refresh must not write status back to DB",
+  );
 });
 
 test("all server-side Contact Center status transitions go through the centralized DB status writer", async () => {

@@ -28,19 +28,19 @@ function extractFunction(source, name) {
   throw new Error(`Could not extract ${name}`);
 }
 
-test("completeCall moves answered calls into Wrapup instead of exposing Available", async () => {
+test("completeCall no longer exposes Available or locally sets Wrapup in DB-authoritative mode", async () => {
   const source = await readSource(stateManagerPath);
   const completeCall = extractFunction(source, "completeCall");
 
-  assert.match(
+  assert.doesNotMatch(
     completeCall,
-    /agentState\.agentStatus\s*=\s*"Wrapup"/,
-    "completed answered calls should enter Wrapup server-side before the UI opens",
+    /agentState\.agentStatus\s*=/,
+    "completeCall should not be a lifecycle status writer; server-side Wrapup is written before this read-model mutation",
   );
-  assert.match(
+  assert.doesNotMatch(
     completeCall,
-    /!wasAbandoned\s*&&\s*interaction\.answeredAt/,
-    "only completed answered calls should force Wrapup",
+    /"Available"|"Wrapup"/,
+    "completeCall must not expose Available or locally force Wrapup",
   );
 });
 
