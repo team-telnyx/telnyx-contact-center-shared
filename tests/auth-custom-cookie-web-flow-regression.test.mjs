@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const authServerPath = new URL("../lib/auth-server.js", import.meta.url);
 const loginFormPath = new URL("../components/login-form.jsx", import.meta.url);
+const proxyPath = new URL("../proxy.js", import.meta.url);
 
 test("getAuthenticatedUser accepts the custom session cookie used by /api/auth/signin", async () => {
   const src = await readFile(authServerPath, "utf8");
@@ -20,4 +21,22 @@ test("credentials login form uses the custom app auth endpoint that issues compa
   assert.match(src, /fetch\("\/api\/auth\/signin"/);
   assert.doesNotMatch(src, /signIn\("credentials"/);
   assert.match(src, /credentials:\s*"include"/);
+});
+
+test("route proxy accepts custom session cookie before falling back to NextAuth", async () => {
+  const src = await readFile(proxyPath, "utf8");
+
+  assert.match(src, /import\s+\{\s*verifyAccessToken\s*\}\s+from\s+"\.\/lib\/jwt"/);
+  assert.match(src, /request\.cookies\.get\("session"\)/);
+  assert.match(src, /verifyAccessToken\(customSessionCookie\?\.value\)/);
+  assert.match(src, /if\s*\(customSessionPayload\?\.sub\)\s*\{\s*return\s+NextResponse\.next\(\);\s*\}/s);
+
+  const customSessionCheckIndex = src.indexOf('request.cookies.get("session")');
+  const nextAuthFallbackIndex = src.indexOf("return withAuth(");
+  assert.ok(customSessionCheckIndex >= 0, "custom session cookie check must exist");
+  assert.ok(nextAuthFallbackIndex >= 0, "NextAuth fallback must still exist");
+  assert.ok(
+    customSessionCheckIndex < nextAuthFallbackIndex,
+    "custom session cookie must be accepted before NextAuth redirects protected routes"
+  );
 });
