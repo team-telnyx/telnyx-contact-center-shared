@@ -128,9 +128,17 @@ test("translation header and suggestions use bounded layout with language names"
 
 test("Agent Assist transcription router accumulates provider-final STT deltas before translation", async () => {
   const routerSource = await source("../lib/agent-assist-transcription-router.mjs");
+  const webhookSource = await source("../lib/contact-center/webhook-handler.js");
 
   assert.match(routerSource, /__agentAssistActiveTranscriptionSegments/);
-  assert.match(routerSource, /__agentAssistActiveConversationTracks/);
+  assert.doesNotMatch(routerSource, /__agentAssistActiveConversationTracks/,
+    "Do not close bubbles by speaker/track switching; each call leg must rely on STT finality markers");
+  assert.doesNotMatch(webhookSource, /activeConversationTracks|closeInterruptedTranscription|markConversationTranscriptionClosed/,
+    "Webhook transcription grouping must not infer utterance boundaries from the other call leg changing speaker");
+  assert.match(routerSource, /const isMessageFinal = hasSpeechFinal[\s\S]*\? transcriptionData\.speech_final === true[\s\S]*: isProviderFinal/,
+    "speech_final=true should close a bubble; is_final=true alone is only a fallback when speech_final is absent");
+  assert.match(webhookSource, /const isMessageFinal = hasSpeechFinal[\s\S]*\? transcriptionData\.speech_final === true[\s\S]*: isProviderFinal/,
+    "Webhook path should use speech_final as the utterance boundary when present");
   assert.match(routerSource, /function buildDisplayTranscript/);
   assert.match(routerSource, /isProviderFinal[\s\S]*activeTranscriptionSegments\.set/,
     "Provider-final chunks before speech_final should be accumulated for the open bubble");
