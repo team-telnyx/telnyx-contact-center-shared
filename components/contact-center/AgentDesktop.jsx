@@ -44,11 +44,15 @@ const END_STATUSES = new Set(["ended", "hangup", "completed", "terminated", "des
 
 async function updateAgentStatus(nextStatus) {
   try {
-    await fetch("/api/contact-center/agent/status", {
-      method: "POST",
+    const res = await fetch("/api/contact-center/agent/status", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update agent status");
+    }
   } catch (_) {}
 }
 
