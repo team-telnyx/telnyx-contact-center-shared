@@ -46,6 +46,7 @@ export async function POST(request) {
       targetMode,
       conversationContext,
       blockedItem,
+      itemStatus,
     } = body;
 
     if (!itemLabel) {
@@ -90,6 +91,8 @@ export async function POST(request) {
       targetMode,
       conversationContext,
       blockedItem,
+      prefilledSlots,
+      itemStatus,
     });
     if (deterministicSuggestion) {
       return NextResponse.json({
@@ -119,6 +122,8 @@ export async function POST(request) {
       targetMode,
       conversationContext,
       blockedItem,
+      prefilledSlots,
+      itemStatus,
     });
 
     // Call Telnyx AI
@@ -174,6 +179,8 @@ export async function POST(request) {
         targetMode,
         conversationContext,
         blockedItem,
+        prefilledSlots,
+        itemStatus,
         allowGeneric: true,
       });
       if (fallbackSuggestion) {
@@ -251,6 +258,7 @@ function buildSuggestionUserPrompt({
   targetMode,
   conversationContext,
   blockedItem,
+  itemStatus,
 }) {
   let prompt = `Generate only the exact sentence(s) the agent should say next.
 
@@ -271,7 +279,7 @@ Workflow item:
   }
 
   if (targetMode === "confirm_slot") {
-    const value = prefilledSlots?.[conversationContext?.targetSlotName] || null;
+    const value = capturedSlotValue({ itemStatus, prefilledSlots, conversationContext });
     prompt += `\nInstruction: Ask the agent to confirm the captured slot value with the customer before treating it as completed.`;
     if (value) prompt += ` Captured value: ${value}.`;
   }
@@ -352,6 +360,19 @@ function buildDefaultHandoffGreeting({ agentName, prefilledSlots }) {
   return `${intro} ${context} Would you like us to continue from there?`;
 }
 
+function hasMeaningfulValue(value) {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function capturedSlotValue({ itemStatus, prefilledSlots, conversationContext }) {
+  const statusValue = itemStatus?.extracted_value ?? itemStatus?.value;
+  if (hasMeaningfulValue(statusValue)) return statusValue;
+
+  const slotName = conversationContext?.targetSlotName;
+  const prefilledValue = slotName ? prefilledSlots?.[slotName] : null;
+  return hasMeaningfulValue(prefilledValue) ? prefilledValue : null;
+}
+
 function buildDeterministicSuggestion({
   itemType,
   itemLabel,
@@ -362,6 +383,8 @@ function buildDeterministicSuggestion({
   targetMode,
   conversationContext,
   blockedItem,
+  prefilledSlots,
+  itemStatus,
   allowGeneric = false,
 }) {
   const label = String(itemLabel || "").trim();
@@ -374,6 +397,10 @@ function buildDeterministicSuggestion({
   const brand = brandName || extractBrandFromIntro(label) || extractBrandFromOpening(promptHint) || "the company";
 
   if (targetMode === "confirm_slot") {
+    const value = capturedSlotValue({ itemStatus, prefilledSlots, conversationContext });
+    if (value) {
+      return `I captured ${labelLower} as ${value}. Could you please confirm that this is correct?`;
+    }
     return `I captured ${labelLower}. Could you please confirm that this is correct?`;
   }
 

@@ -22,6 +22,9 @@ test("generate suggestion endpoint accepts target mode and workflow context for 
   assert.match(source, /targetMode/);
   assert.match(source, /conversationContext/);
   assert.match(source, /blockedItem/);
+  assert.match(source, /itemStatus/);
+  assert.match(source, /capturedSlotValue/);
+  assert.match(source, /Captured value/);
   assert.match(source, /collect_prerequisite/);
   assert.match(source, /confirm_slot/);
   assert.match(source, /Do not jump back to the first pending workflow item/);

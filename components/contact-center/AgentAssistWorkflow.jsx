@@ -1508,7 +1508,7 @@ function formatSttConfidencePercent(confidence) {
 /**
  * Generate a dynamic suggestion using LLM
  */
-async function generateSuggestion(stage, item, session, transcriptions, { isAiAssisted = false, slotsFilled = {}, isFirstItem = false, targetMode = null, conversationContext = null, blockedItem = null } = {}) {
+async function generateSuggestion(stage, item, session, transcriptions, { isAiAssisted = false, slotsFilled = {}, isFirstItem = false, targetMode = null, conversationContext = null, blockedItem = null, itemStatus = null } = {}) {
   try {
     // Prepare conversation context (last 5 messages)
     const previousConversation = transcriptions
@@ -1540,6 +1540,13 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
         prefilledSlots: slotsFilled,
         targetMode,
         conversationContext,
+        itemStatus: itemStatus ? {
+          status: itemStatus.status,
+          extracted_value: itemStatus.extracted_value ?? itemStatus.value ?? null,
+          value: itemStatus.value ?? itemStatus.extracted_value ?? null,
+          confidence_score: itemStatus.confidence_score ?? null,
+          confidence_threshold: itemStatus.confidence_threshold ?? null,
+        } : null,
         blockedItem: blockedItem ? {
           id: blockedItem.id,
           label: blockedItem.label,
@@ -1716,13 +1723,14 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     // Fix 3: Wait for AI context before generating first suggestion on AI-assisted calls
     if (isAiAssisted && aiDataLoading) return;
     
-    const { stage, item, targetMode, conversationContext, blockedItem } = currentSlot;
+    const { stage, item, targetMode, conversationContext, blockedItem, itemStatus } = currentSlot;
     const targetKey = [
       item.id,
       targetMode || "default",
       blockedItem?.id || "none",
       conversationContext?.matchedItemId || "none",
       conversationContext?.reason || "none",
+      itemStatus?.extracted_value ?? itemStatus?.value ?? "none",
     ].join(":");
     
     // Only add suggestion if this is a new item/target mode/context
@@ -1742,6 +1750,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         targetMode,
         conversationContext,
         blockedItem,
+        itemStatus,
       })
         .then((newSuggestion) => {
           setSuggestions((prev) => {

@@ -93,8 +93,32 @@ test("prioritizes a suggested low-confidence slot in the active stage for agent 
 
   assert.equal(result.stage.id, "stage-3");
   assert.equal(result.item.id, "patient-name");
+  assert.equal(result.itemStatus.extracted_value, "Jane Doe");
   assert.equal(result.mode, "confirm_slot");
   assert.equal(result.reason, "slot_confirmation_required");
+});
+
+test("tries another matched stage before falling back to the first open workflow item", () => {
+  const result = resolveSuggestedResponseTarget({
+    stages,
+    itemStatuses: {
+      greet: { status: "completed" },
+      "ask-help": { status: "completed" },
+      permission: { status: "completed" },
+      "account-number": { status: "completed", extracted_value: "123456" },
+      "confirm-account": { status: "completed" },
+      "patient-name": { status: "completed", extracted_value: "Jane Doe" },
+    },
+    slotsFilled: { account_number: "123456", patient_name: "Jane Doe" },
+    transcriptions: finalConversation(
+      "The account is verified. For the patient information, her name is Jane Doe and the date of birth is next."
+    ),
+  });
+
+  assert.equal(result.stage.id, "stage-3");
+  assert.equal(result.item.id, "dob");
+  assert.equal(result.mode, "collect_missing_slot");
+  assert.equal(result.reason, "conversation_stage_match");
 });
 
 test("falls back to first open workflow item when conversation does not match any later stage", () => {
