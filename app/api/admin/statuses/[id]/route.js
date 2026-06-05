@@ -135,9 +135,13 @@ export async function DELETE(request, { params }) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   try {
-    // Check if status is in use
+    // Check if status is in use. Runtime agent status is stored in cc_agent_state;
+    // users.agent_status is a removed legacy column.
     const usageRes = await pool.query(
-      `SELECT COUNT(*) as count FROM users WHERE agent_status = (SELECT name FROM cc_user_statuses WHERE id = $1)`,
+      `SELECT COUNT(*) as count
+       FROM cc_agent_state ast
+       JOIN cc_user_statuses status ON status.name = ast.agent_status
+       WHERE status.id = $1`,
       [id]
     );
     const usageCount = parseInt(usageRes.rows[0]?.count || "0", 10);
