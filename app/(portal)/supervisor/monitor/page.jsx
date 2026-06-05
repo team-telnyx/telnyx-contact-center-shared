@@ -605,13 +605,30 @@ export default function MonitorPage() {
   function invalidateExpandedAgentCalls(userId) {
     if (!userId) return;
     const normalizedUserId = String(userId);
-    if (String(expandedAgentIdRef.current || "") === normalizedUserId) {
-      setTimeout(() => {
-        if (isPageVisibleRef.current && loadAgentCallsRef.current) {
-          loadAgentCallsRef.current(String(userId), { force: true, silent: true });
-        }
-      }, 100);
+    const isExpandedAgent =
+      String(expandedAgentIdRef.current || "") === normalizedUserId;
+
+    if (!isExpandedAgent) {
+      setAgentCallsMap((prev) => {
+        if (!prev[normalizedUserId]) return prev;
+        const next = { ...prev };
+        delete next[normalizedUserId];
+        return next;
+      });
+      setAgentActiveCallsMap((prev) => {
+        if (!prev[normalizedUserId]) return prev;
+        const next = { ...prev };
+        delete next[normalizedUserId];
+        return next;
+      });
+      return;
     }
+
+    setTimeout(() => {
+      if (isPageVisibleRef.current && loadAgentCallsRef.current) {
+        loadAgentCallsRef.current(normalizedUserId, { force: true, silent: true });
+      }
+    }, 100);
   }
 
   // Handle page visibility to prevent excessive requests when page wakes up
