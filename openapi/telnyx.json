@@ -42355,7 +42355,7 @@
             "required": false,
             "description": "Filter to entries that support the given service type. For backward compatibility with the values that briefly shipped before the product-aligned rename, the legacy aliases `file_transcription`, `in_call_transcription`, and `ai_assistant_transcription` are silently accepted and normalized to `file_based`, `in_call`, and `ai_assistant` respectively. The response always emits the canonical (post-rename) values.",
             "schema": {
-              "$ref": "#/components/schemas/STTServiceType"
+              "$ref": "#/components/schemas/STTServiceTypeQuery"
             }
           },
           {
@@ -90430,6 +90430,33 @@
           "propertyName": "type"
         }
       },
+      "BooleanExpression": {
+        "title": "BooleanExpression",
+        "description": "Expression variants that are valid at roots requiring a boolean result, such as flow edge expression conditions.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ComparisonExpression"
+          },
+          {
+            "$ref": "#/components/schemas/BooleanOpExpression"
+          },
+          {
+            "$ref": "#/components/schemas/DynamicVariableExpression"
+          },
+          {
+            "$ref": "#/components/schemas/BooleanLiteralExpression"
+          }
+        ],
+        "discriminator": {
+          "mapping": {
+            "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+            "bool_op": "#/components/schemas/BooleanOpExpression",
+            "comparison": "#/components/schemas/ComparisonExpression",
+            "variable": "#/components/schemas/DynamicVariableExpression"
+          },
+          "propertyName": "type"
+        }
+      },
       "ExpressionCondition": {
         "description": "Edge condition evaluated as a deterministic expression AST.\n\nThe expression is computed against runtime dynamic variables and must\nevaluate to a boolean. Prefer this over `LLMCondition` when the rule is\na clean function of known variables \u2014 it's cheaper and predictable.",
         "example": {
@@ -90449,7 +90476,7 @@
         },
         "properties": {
           "expression": {
-            "$ref": "#/components/schemas/Expression"
+            "$ref": "#/components/schemas/BooleanExpression"
           },
           "type": {
             "const": "expression",
@@ -115897,6 +115924,19 @@
           "file_based",
           "in_call",
           "ai_assistant"
+        ]
+      },
+      "STTServiceTypeQuery": {
+        "type": "string",
+        "description": "Service type query filter. Accepts canonical service types plus legacy aliases that are normalized by the API for backward compatibility.",
+        "enum": [
+          "streaming",
+          "file_based",
+          "in_call",
+          "ai_assistant",
+          "file_transcription",
+          "in_call_transcription",
+          "ai_assistant_transcription"
         ]
       },
       "ScheduledEventResponse": {
