@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
+import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
 
 /**
  * AgentAssistWorkflow Component
@@ -413,24 +414,14 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
   // MUST be before any conditional returns to maintain hook order
   const slotsFilled = useSlotsFilled();
 
-  const currentSlotNeedingFill = useMemo(() => {
-    if (!stages || stages.length === 0) return null;
-    for (const stage of stages) {
-      for (const item of stage.items || []) {
-        const status = itemStatuses[item.id];
-        if (status?.status === "completed" || status?.status === "skipped") continue;
-        // Skip slot items whose value was already collected (e.g. by AI assistant)
-        // Skip slot items already collected — but only when value is non-empty
-        // (null/empty values from AI handoff placeholders should not block suggestions)
-        if (item.type === "slot" && item.slot_name) {
-          const v = slotsFilled[item.slot_name];
-          if (v !== undefined && v !== null && v !== "") continue;
-        }
-        return { stage, item };
-      }
-    }
-    return null;
-  }, [stages, itemStatuses, slotsFilled]);
+  const currentSuggestionTarget = useMemo(() => {
+    return resolveSuggestedResponseTarget({
+      stages,
+      itemStatuses,
+      slotsFilled,
+      transcriptions,
+    });
+  }, [stages, itemStatuses, slotsFilled, transcriptions]);
 
   // Loading state
   if (isLoading && !session) {
@@ -525,7 +516,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
 
         {/* Right: Suggested Response (single) */}
         <SuggestedResponseCard 
-          currentSlot={currentSlotNeedingFill} 
+          currentSlot={currentSuggestionTarget} 
           onSuggestionsChange={handleSuggestionsChange}
           isAiAssisted={aiHandoff.isAiAssisted}
           aiDataReceived={aiHandoff.aiDataReceived}
@@ -1517,7 +1508,7 @@ function formatSttConfidencePercent(confidence) {
 /**
  * Generate a dynamic suggestion using LLM
  */
-async function generateSuggestion(stage, item, session, transcriptions, { isAiAssisted = false, slotsFilled = {}, isFirstItem = false } = {}) {
+async function generateSuggestion(stage, item, session, transcriptions, { isAiAssisted = false, slotsFilled = {}, isFirstItem = false, targetMode = null, conversationContext = null, blockedItem = null } = {}) {
   try {
     // Prepare conversation context (last 5 messages)
     const previousConversation = transcriptions
@@ -1547,6 +1538,14 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
         isAiAssisted,
         isFirstItem,
         prefilledSlots: slotsFilled,
+        targetMode,
+        conversationContext,
+        blockedItem: blockedItem ? {
+          id: blockedItem.id,
+          label: blockedItem.label,
+          type: blockedItem.type,
+          slotName: blockedItem.slot_name || null,
+        } : null,
       }),
     });
 
@@ -1573,6 +1572,9 @@ async function generateSuggestion(stage, item, session, transcriptions, { isAiAs
       slotOptions: slotOptions.length > 0 ? slotOptions : null,
       timestamp: new Date(),
       model: data.model,
+      targetMode,
+      reason: conversationContext?.reason || null,
+      blockedItemLabel: blockedItem?.label || null,
     };
   } catch (error) {
     console.error("[generateSuggestion] Error:", error);
@@ -1714,11 +1716,18 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     // Fix 3: Wait for AI context before generating first suggestion on AI-assisted calls
     if (isAiAssisted && aiDataLoading) return;
     
-    const { stage, item } = currentSlot;
+    const { stage, item, targetMode, conversationContext, blockedItem } = currentSlot;
+    const targetKey = [
+      item.id,
+      targetMode || "default",
+      blockedItem?.id || "none",
+      conversationContext?.matchedItemId || "none",
+      conversationContext?.reason || "none",
+    ].join(":");
     
-    // Only add suggestion if this is a new item
-    if (lastItemIdRef.current !== item.id) {
-      lastItemIdRef.current = item.id;
+    // Only add suggestion if this is a new item/target mode/context
+    if (lastItemIdRef.current !== targetKey) {
+      lastItemIdRef.current = targetKey;
       
       // Generate suggestion asynchronously
       // Mark handoff greeting as sent immediately (before async) to prevent
@@ -1730,6 +1739,9 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         isAiAssisted,
         slotsFilled,
         isFirstItem,
+        targetMode,
+        conversationContext,
+        blockedItem,
       })
         .then((newSuggestion) => {
           setSuggestions((prev) => {

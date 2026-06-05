@@ -43,6 +43,9 @@ export async function POST(request) {
       isAiAssisted,
       isFirstItem,
       prefilledSlots,
+      targetMode,
+      conversationContext,
+      blockedItem,
     } = body;
 
     if (!itemLabel) {
@@ -84,6 +87,9 @@ export async function POST(request) {
       itemHints,
       agentName,
       brandName,
+      targetMode,
+      conversationContext,
+      blockedItem,
     });
     if (deterministicSuggestion) {
       return NextResponse.json({
@@ -99,6 +105,7 @@ export async function POST(request) {
       agentName,
       brandName,
       isAiAssisted,
+      targetMode,
     });
 
     const userPrompt = buildSuggestionUserPrompt({
@@ -109,6 +116,9 @@ export async function POST(request) {
       slotOptions,
       previousConversation,
       prefilledSlots,
+      targetMode,
+      conversationContext,
+      blockedItem,
     });
 
     // Call Telnyx AI
@@ -161,6 +171,9 @@ export async function POST(request) {
         itemHints,
         agentName,
         brandName,
+        targetMode,
+        conversationContext,
+        blockedItem,
         allowGeneric: true,
       });
       if (fallbackSuggestion) {
@@ -193,7 +206,7 @@ export async function POST(request) {
 /**
  * Build system prompt for suggestion generation
  */
-function buildSuggestionSystemPrompt({ itemType, agentName, brandName, isAiAssisted }) {
+function buildSuggestionSystemPrompt({ itemType, agentName, brandName, isAiAssisted, targetMode }) {
   const agentIdentity = agentName || "an agent";
   const brand = brandName || "the company";
 
@@ -208,6 +221,8 @@ Hard rules:
 - Do not include internal workflow names, item ids, analysis, or recap sections.
 - If the item is a greeting or introduction, introduce the agent by name when known.
 - If the call was transferred from an AI assistant, acknowledge that briefly only when it helps the first handoff.
+- Do not jump back to the first pending workflow item when the conversation clearly moved to another workflow stage.
+- Follow the provided target mode exactly: collect the selected slot, confirm a low-confidence slot, or collect a prerequisite for a blocked item.
 
 Match the item type:
    - **action**: Suggest what the agent should say while performing the action
@@ -219,6 +234,7 @@ Context:
 - Agent: ${agentIdentity}
 - Brand: ${brand}
 - Item type: ${itemType || "workflow item"}
+- Target mode: ${targetMode || "continue_workflow"}
 - AI-assisted call: ${isAiAssisted ? "yes" : "no"}`;
 }
 
@@ -232,12 +248,38 @@ function buildSuggestionUserPrompt({
   slotOptions,
   previousConversation,
   prefilledSlots,
+  targetMode,
+  conversationContext,
+  blockedItem,
 }) {
   let prompt = `Generate only the exact sentence(s) the agent should say next.
 
 Workflow item:
 - Type: ${itemType || "unknown"}
 - Label: ${itemLabel}`;
+
+  if (targetMode) {
+    prompt += `\nTarget mode: ${targetMode}`;
+  }
+
+  if (conversationContext?.activeStageName) {
+    prompt += `\nDetected conversation stage: ${conversationContext.activeStageName}`;
+  }
+
+  if (conversationContext?.reason) {
+    prompt += `\nTarget selection reason: ${conversationContext.reason}`;
+  }
+
+  if (targetMode === "confirm_slot") {
+    const value = prefilledSlots?.[conversationContext?.targetSlotName] || null;
+    prompt += `\nInstruction: Ask the agent to confirm the captured slot value with the customer before treating it as completed.`;
+    if (value) prompt += ` Captured value: ${value}.`;
+  }
+
+  if (targetMode === "collect_prerequisite" && blockedItem?.label) {
+    prompt += `\nBlocked later item: ${blockedItem.label}`;
+    prompt += `\nInstruction: Do not suggest the blocked item yet. Ask only for the missing prerequisite represented by the selected workflow item.`;
+  }
 
   if (itemDescription) {
     prompt += `\n**Context**: ${itemDescription}`;
@@ -317,6 +359,9 @@ function buildDeterministicSuggestion({
   itemHints,
   agentName,
   brandName,
+  targetMode,
+  conversationContext,
+  blockedItem,
   allowGeneric = false,
 }) {
   const label = String(itemLabel || "").trim();
@@ -327,6 +372,18 @@ function buildDeterministicSuggestion({
   const labelLower = label.toLowerCase();
   const finalAgentName = agentName && agentName !== "the agent" ? agentName : null;
   const brand = brandName || extractBrandFromIntro(label) || extractBrandFromOpening(promptHint) || "the company";
+
+  if (targetMode === "confirm_slot") {
+    return `I captured ${labelLower}. Could you please confirm that this is correct?`;
+  }
+
+  if (targetMode === "collect_prerequisite" && blockedItem?.label) {
+    return `Before I ${blockedItem.label.toLowerCase()}, could you please provide your ${labelLower}?`;
+  }
+
+  if (conversationContext?.reason === "conversation_stage_match" && itemType === "slot") {
+    return `Could you please provide your ${labelLower}?`;
+  }
 
   const introduceMatch = label.match(/introduce (?:yourself|your self)(?: as)?\s+(.+?)$/i);
   if (introduceMatch) {
