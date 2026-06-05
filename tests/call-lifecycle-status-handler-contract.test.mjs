@@ -114,6 +114,26 @@ test("profile GET exposes Contact Center agent status from cc_agent_state", asyn
   );
 });
 
+test("site header periodically reconciles status from profile snapshot in case status SSE is missed", async () => {
+  const siteHeaderSource = await source("../components/site-header.jsx");
+
+  assert.match(
+    siteHeaderSource,
+    /const loadStatusRef = useRef\(null\)/,
+    "header must keep a stable profile status loader for polling fallback",
+  );
+  assert.match(
+    siteHeaderSource,
+    /loadStatusRef\.current = loadStatus/,
+    "header status loader should be reachable outside the setup closure",
+  );
+  assert.match(
+    siteHeaderSource,
+    /setInterval\([\s\S]*loadStatusRef\.current\(\)[\s\S]*5000/,
+    "header should periodically reload /api/user/profile so Busy cannot remain stale Available after missed SSE",
+  );
+});
+
 test("single backend call lifecycle status handler owns call-state transitions", async () => {
   const handlerSource = await source("../lib/contact-center/agent-call-lifecycle-status.js");
 

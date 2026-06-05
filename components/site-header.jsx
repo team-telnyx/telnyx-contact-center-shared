@@ -18,6 +18,7 @@ export function SiteHeader() {
   const hasAgentRole = userRoles.includes("agent");
   const loadQueuesRef = useRef(null);
   const loadCampaignsRef = useRef(null);
+  const loadStatusRef = useRef(null);
 
   // Load user roles and status/queues if agent
   useEffect(() => {
@@ -47,7 +48,7 @@ export function SiteHeader() {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-        const res = await fetch("/api/user/profile");
+        const res = await fetch("/api/user/profile", { cache: "no-store" });
         const data = await res.json();
         if (data.ok && data.data?.status) {
           setStatus(data.data.status);
@@ -84,6 +85,7 @@ export function SiteHeader() {
     };
 
     // Store loaders in refs so they can be used in event listeners
+    loadStatusRef.current = loadStatus;
     loadQueuesRef.current = loadQueues;
     loadCampaignsRef.current = loadCampaigns;
 
@@ -95,6 +97,7 @@ export function SiteHeader() {
 
     // Set up SSE connection for real-time status updates
     let statusEventSource = null;
+    let statusRefreshInterval = null;
     const connectStatusStream = () => {
       try {
         if (statusEventSource) {
@@ -187,12 +190,21 @@ export function SiteHeader() {
 
     if (hasAgentRole) {
       connectStatusStream();
+      statusRefreshInterval = setInterval(() => {
+        if (loadStatusRef.current) {
+          loadStatusRef.current();
+        }
+      }, 5000);
     }
 
     return () => {
       if (statusEventSource) {
         statusEventSource.close();
         statusEventSource = null;
+      }
+      if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
       }
     };
   }, [hasAgentRole]);

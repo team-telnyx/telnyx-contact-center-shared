@@ -1361,6 +1361,21 @@ export default function MonitorPage() {
     loadAgentCallsRef.current = loadAgentCalls;
   });
 
+  // Periodically refresh the expanded agent's active calls, matching the queue
+  // calls safety net. Interaction SSE is still the primary path, but a missed
+  // or incomplete event must not leave the expanded row stuck at ringing.
+  useEffect(() => {
+    if (!expandedAgentId) return;
+
+    const interval = setInterval(() => {
+      if (isPageVisibleRef.current && loadAgentCallsRef.current) {
+        loadAgentCallsRef.current(expandedAgentId, { force: true, silent: true });
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [expandedAgentId]);
+
   async function toggleQueueActivation(queueId, currentlyActivated) {
     try {
       if (!selectedAgent) {

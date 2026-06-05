@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 const userStatusPath = new URL("../lib/contact-center/user-status.js", import.meta.url);
 const timeoutPath = new URL("../lib/contact-center/agent-answer-timeout.js", import.meta.url);
 const monitorPagePath = new URL("../app/(portal)/supervisor/monitor/page.jsx", import.meta.url);
+const webhookHandlerPath = new URL("../lib/contact-center/webhook-handler.js", import.meta.url);
 
 async function source(url) {
   return readFile(url, "utf8");
@@ -91,5 +92,65 @@ test("supervisor monitor invalidates expanded agent active-call cache on status 
     pageSource,
     /interaction_updated[\s\S]*previousAgentUserId[\s\S]*invalidateExpandedAgentCalls\(update\.previousAgentUserId/,
     "interaction requeue/removal updates must remove stale calls from the previous expanded agent",
+  );
+  assert.match(
+    pageSource,
+    /if \(!expandedAgentId\) return;[\s\S]*setInterval\([\s\S]*loadAgentCallsRef\.current\(expandedAgentId, \{ force: true, silent: true \}\)[\s\S]*5000/,
+    "expanded agent call rows need the same periodic no-store refresh safety net as queue call rows",
+  );
+});
+
+test("answered and bridged monitor interaction updates identify the assigned agent for expanded-row refresh", async () => {
+  const webhookSource = await source(webhookHandlerPath);
+
+  const answeredLookupBlock = webhookSource.slice(
+    webhookSource.indexOf("// Find interaction by call_control_id"),
+    webhookSource.indexOf("const interaction = result.rows[0];"),
+  );
+  assert.match(
+    answeredLookupBlock,
+    /u\.id\s+AS\s+agent_user_id/i,
+    "handleCallAnswered must resolve the agent user id for supervisor expanded-row invalidation",
+  );
+  assert.match(
+    answeredLookupBlock,
+    /i\.queue_id/,
+    "handleCallAnswered must select queue_id so the queue calls view also refreshes deterministically",
+  );
+
+  const answeredBroadcastStart = webhookSource.indexOf(
+    "// Broadcast to monitor streams so supervisors see the update immediately",
+  );
+  const answeredBroadcastBlock = webhookSource.slice(
+    answeredBroadcastStart,
+    webhookSource.indexOf("} catch (monitorError)", answeredBroadcastStart),
+  );
+  assert.match(
+    answeredBroadcastBlock,
+    /agentUserId:\s*interaction\.agent_user_id/,
+    "answered monitor broadcasts must carry agentUserId so expanded agent calls are refetched",
+  );
+  assert.match(
+    answeredBroadcastBlock,
+    /agentUsername:\s*interaction\.agent_username/,
+    "answered monitor broadcasts should also carry agentUsername as a fallback identity",
+  );
+
+  const genericMonitorStart = webhookSource.indexOf(
+    "// Broadcast to monitor streams for state changes",
+  );
+  const genericMonitorBlock = webhookSource.slice(
+    genericMonitorStart,
+    webhookSource.indexOf("} catch (monitorError)", genericMonitorStart),
+  );
+  assert.match(
+    genericMonitorBlock,
+    /agentUserId:\s*interaction\.agent_user_id/,
+    "generic answer/bridge/hangup monitor broadcasts must carry agentUserId for expanded agent rows",
+  );
+  assert.match(
+    genericMonitorBlock,
+    /agentUsername:\s*interaction\.agent_username/,
+    "generic monitor broadcasts should carry agentUsername for fallback invalidation/debugging",
   );
 });
