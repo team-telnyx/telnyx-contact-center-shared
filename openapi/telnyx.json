@@ -42355,16 +42355,7 @@
             "required": false,
             "description": "Filter to entries that support the given service type. For backward compatibility with the values that briefly shipped before the product-aligned rename, the legacy aliases `file_transcription`, `in_call_transcription`, and `ai_assistant_transcription` are silently accepted and normalized to `file_based`, `in_call`, and `ai_assistant` respectively. The response always emits the canonical (post-rename) values.",
             "schema": {
-              "type": "string",
-              "enum": [
-                "streaming",
-                "file_based",
-                "in_call",
-                "ai_assistant",
-                "file_transcription",
-                "in_call_transcription",
-                "ai_assistant_transcription"
-              ]
+              "$ref": "#/components/schemas/STTServiceType"
             }
           },
           {
@@ -66373,43 +66364,7 @@
         },
         "properties": {
           "left": {
-            "description": "Left-hand operand sub-expression.",
-            "discriminator": {
-              "mapping": {
-                "arithmetic": "#/components/schemas/ArithmeticExpression",
-                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                "bool_op": "#/components/schemas/BooleanOpExpression",
-                "comparison": "#/components/schemas/ComparisonExpression",
-                "number_literal": "#/components/schemas/NumberLiteralExpression",
-                "string_literal": "#/components/schemas/StringLiteralExpression",
-                "variable": "#/components/schemas/DynamicVariableExpression"
-              },
-              "propertyName": "type"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComparisonExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanOpExpression"
-              },
-              {
-                "$ref": "#/components/schemas/ArithmeticExpression"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicVariableExpression"
-              },
-              {
-                "$ref": "#/components/schemas/StringLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/NumberLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanLiteralExpression"
-              }
-            ],
-            "title": "Left"
+            "$ref": "#/components/schemas/Expression"
           },
           "op": {
             "description": "Arithmetic operator applied to `left` and `right`.",
@@ -66424,43 +66379,7 @@
             "type": "string"
           },
           "right": {
-            "description": "Right-hand operand sub-expression.",
-            "discriminator": {
-              "mapping": {
-                "arithmetic": "#/components/schemas/ArithmeticExpression",
-                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                "bool_op": "#/components/schemas/BooleanOpExpression",
-                "comparison": "#/components/schemas/ComparisonExpression",
-                "number_literal": "#/components/schemas/NumberLiteralExpression",
-                "string_literal": "#/components/schemas/StringLiteralExpression",
-                "variable": "#/components/schemas/DynamicVariableExpression"
-              },
-              "propertyName": "type"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComparisonExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanOpExpression"
-              },
-              {
-                "$ref": "#/components/schemas/ArithmeticExpression"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicVariableExpression"
-              },
-              {
-                "$ref": "#/components/schemas/StringLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/NumberLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanLiteralExpression"
-              }
-            ],
-            "title": "Right"
+            "$ref": "#/components/schemas/Expression"
           },
           "type": {
             "const": "arithmetic",
@@ -68836,41 +68755,7 @@
           "operands": {
             "description": "Operand sub-expressions. Length must be exactly 1 for `not` and >= 2 for `and`/`or`.",
             "items": {
-              "discriminator": {
-                "mapping": {
-                  "arithmetic": "#/components/schemas/ArithmeticExpression",
-                  "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                  "bool_op": "#/components/schemas/BooleanOpExpression",
-                  "comparison": "#/components/schemas/ComparisonExpression",
-                  "number_literal": "#/components/schemas/NumberLiteralExpression",
-                  "string_literal": "#/components/schemas/StringLiteralExpression",
-                  "variable": "#/components/schemas/DynamicVariableExpression"
-                },
-                "propertyName": "type"
-              },
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/ComparisonExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/BooleanOpExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/ArithmeticExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/DynamicVariableExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/StringLiteralExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/NumberLiteralExpression"
-                },
-                {
-                  "$ref": "#/components/schemas/BooleanLiteralExpression"
-                }
-              ]
+              "$ref": "#/components/schemas/Expression"
             },
             "title": "Operands",
             "type": "array"
@@ -77863,43 +77748,7 @@
         },
         "properties": {
           "left": {
-            "description": "Left-hand operand sub-expression.",
-            "discriminator": {
-              "mapping": {
-                "arithmetic": "#/components/schemas/ArithmeticExpression",
-                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                "bool_op": "#/components/schemas/BooleanOpExpression",
-                "comparison": "#/components/schemas/ComparisonExpression",
-                "number_literal": "#/components/schemas/NumberLiteralExpression",
-                "string_literal": "#/components/schemas/StringLiteralExpression",
-                "variable": "#/components/schemas/DynamicVariableExpression"
-              },
-              "propertyName": "type"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComparisonExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanOpExpression"
-              },
-              {
-                "$ref": "#/components/schemas/ArithmeticExpression"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicVariableExpression"
-              },
-              {
-                "$ref": "#/components/schemas/StringLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/NumberLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanLiteralExpression"
-              }
-            ],
-            "title": "Left"
+            "$ref": "#/components/schemas/Expression"
           },
           "op": {
             "description": "Relational/membership operator. `contains` / `not_contains` apply to strings (substring) and arrays (membership).",
@@ -77917,43 +77766,7 @@
             "type": "string"
           },
           "right": {
-            "description": "Right-hand operand sub-expression.",
-            "discriminator": {
-              "mapping": {
-                "arithmetic": "#/components/schemas/ArithmeticExpression",
-                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                "bool_op": "#/components/schemas/BooleanOpExpression",
-                "comparison": "#/components/schemas/ComparisonExpression",
-                "number_literal": "#/components/schemas/NumberLiteralExpression",
-                "string_literal": "#/components/schemas/StringLiteralExpression",
-                "variable": "#/components/schemas/DynamicVariableExpression"
-              },
-              "propertyName": "type"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComparisonExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanOpExpression"
-              },
-              {
-                "$ref": "#/components/schemas/ArithmeticExpression"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicVariableExpression"
-              },
-              {
-                "$ref": "#/components/schemas/StringLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/NumberLiteralExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanLiteralExpression"
-              }
-            ],
-            "title": "Right"
+            "$ref": "#/components/schemas/Expression"
           },
           "type": {
             "const": "comparison",
@@ -90578,6 +90391,45 @@
           }
         }
       },
+      "Expression": {
+        "title": "Expression",
+        "description": "A node in a deterministic expression AST. Exactly one variant is selected by the `type` discriminator. Terminal variants (`number_literal`, `string_literal`, `bool_literal`, `variable`) bottom out the recursion; `arithmetic`, `bool_op`, and `comparison` nest further sub-expressions.\n\nExtracted into a single named schema so the recursive union is defined once (was previously inlined at every operand site).",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ComparisonExpression"
+          },
+          {
+            "$ref": "#/components/schemas/BooleanOpExpression"
+          },
+          {
+            "$ref": "#/components/schemas/ArithmeticExpression"
+          },
+          {
+            "$ref": "#/components/schemas/DynamicVariableExpression"
+          },
+          {
+            "$ref": "#/components/schemas/StringLiteralExpression"
+          },
+          {
+            "$ref": "#/components/schemas/NumberLiteralExpression"
+          },
+          {
+            "$ref": "#/components/schemas/BooleanLiteralExpression"
+          }
+        ],
+        "discriminator": {
+          "mapping": {
+            "arithmetic": "#/components/schemas/ArithmeticExpression",
+            "bool_literal": "#/components/schemas/BooleanLiteralExpression",
+            "bool_op": "#/components/schemas/BooleanOpExpression",
+            "comparison": "#/components/schemas/ComparisonExpression",
+            "number_literal": "#/components/schemas/NumberLiteralExpression",
+            "string_literal": "#/components/schemas/StringLiteralExpression",
+            "variable": "#/components/schemas/DynamicVariableExpression"
+          },
+          "propertyName": "type"
+        }
+      },
       "ExpressionCondition": {
         "description": "Edge condition evaluated as a deterministic expression AST.\n\nThe expression is computed against runtime dynamic variables and must\nevaluate to a boolean. Prefer this over `LLMCondition` when the rule is\na clean function of known variables \u2014 it's cheaper and predictable.",
         "example": {
@@ -90597,31 +90449,7 @@
         },
         "properties": {
           "expression": {
-            "description": "Root of the expression AST. Must evaluate to a boolean.",
-            "discriminator": {
-              "mapping": {
-                "bool_literal": "#/components/schemas/BooleanLiteralExpression",
-                "bool_op": "#/components/schemas/BooleanOpExpression",
-                "comparison": "#/components/schemas/ComparisonExpression",
-                "variable": "#/components/schemas/DynamicVariableExpression"
-              },
-              "propertyName": "type"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ComparisonExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanOpExpression"
-              },
-              {
-                "$ref": "#/components/schemas/DynamicVariableExpression"
-              },
-              {
-                "$ref": "#/components/schemas/BooleanLiteralExpression"
-              }
-            ],
-            "title": "Expression"
+            "$ref": "#/components/schemas/Expression"
           },
           "type": {
             "const": "expression",
@@ -95857,6 +95685,11 @@
             "type": "string",
             "example": "Briefly greet the transfer recipient and provide any relevant information from the call. Let them know you will bridge the call right after.",
             "description": "Natural language instructions for your agent for how to provide context for the transfer recipient."
+          },
+          "description": {
+            "type": "string",
+            "description": "A description of the transfer tool. By default, Telnyx generates this automatically based on the configured targets. Typically only set when importing an assistant from another provider that allowed a custom description; in that case the provided value is preserved. Most users should leave this empty and let Telnyx manage it.",
+            "example": "Transfer the call to a human agent."
           },
           "warm_message_delay_ms": {
             "type": [
@@ -128139,6 +127972,14 @@
             "description": "Enables automatic character encoding optimization for SMS messages. When enabled, the system automatically selects the most efficient encoding (GSM-7 or UCS-2) based on message content to maximize character limits and minimize costs.",
             "type": "boolean",
             "default": false
+          },
+          "ai_assistant_id": {
+            "description": "The ID of the AI assistant associated with this messaging profile.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "ai_assistant-a80a9d4a-728c-4593-852c-2e93ad890000"
           }
         },
         "example": {
