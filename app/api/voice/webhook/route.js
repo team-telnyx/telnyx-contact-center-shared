@@ -745,6 +745,7 @@ export async function POST(request) {
     }
 
 
+    console.error("[voice-webhook] Server error:", err);
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
