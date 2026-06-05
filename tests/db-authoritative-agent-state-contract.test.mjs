@@ -125,7 +125,7 @@ test("state-manager call lifecycle helpers do not mutate cached agentStatus as s
   );
 });
 
-test("users.status is removed from the schema and queue lookups use cc_agent_state", async () => {
+test("users legacy status columns are removed from the schema and queue lookups use cc_agent_state", async () => {
   const schemaSrc = await source(postgresSchemaPath);
   const usersTableStart = schemaSrc.indexOf("CREATE TABLE IF NOT EXISTS users");
   assert.notEqual(usersTableStart, -1, "users table schema must exist");
@@ -138,15 +138,30 @@ test("users.status is removed from the schema and queue lookups use cc_agent_sta
     /\n\s*status\s+TEXT\s+DEFAULT/i,
     "new users table schema must not create legacy users.status",
   );
+  assert.doesNotMatch(
+    usersTableBlock,
+    /\n\s*agent_status\s+TEXT\s+DEFAULT/i,
+    "new users table schema must not create legacy users.agent_status",
+  );
   assert.match(
     schemaSrc,
     /DROP INDEX IF EXISTS idx_users_status[\s\S]*ALTER TABLE users DROP COLUMN status/,
     "ensurePostgresSchema must drop the legacy users.status column idempotently",
   );
+  assert.match(
+    schemaSrc,
+    /DROP INDEX IF EXISTS idx_users_agent_status[\s\S]*ALTER TABLE users DROP COLUMN agent_status/,
+    "ensurePostgresSchema must drop the legacy users.agent_status column idempotently",
+  );
   assert.doesNotMatch(
     schemaSrc,
     /CREATE INDEX IF NOT EXISTS idx_users_status\b/,
     "schema must not recreate an index on the removed users.status column",
+  );
+  assert.doesNotMatch(
+    schemaSrc,
+    /CREATE INDEX IF NOT EXISTS idx_users_agent_status\b/,
+    "schema must not recreate an index on the removed users.agent_status column",
   );
 
   const pgdbSrc = await source(pgdbPath);

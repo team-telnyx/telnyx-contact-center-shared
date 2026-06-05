@@ -20,13 +20,13 @@ test("direct route-call assignment marks ringing agent Busy before UI broadcast"
     "if (routingResult.success && routingResult.agent) {",
     "// Broadcast routing event via SSE",
   );
-  assert.match(assignmentBlock, /markAgentBusyForRinging/);
+  assert.match(assignmentBlock, /handleAgentCallLifecycleStatus\([\s\S]*event:\s*"ringing"/);
   assert.ok(
-    assignmentBlock.indexOf("await promoteReservation") < assignmentBlock.indexOf("await markAgentBusyForRinging"),
+    assignmentBlock.indexOf("await promoteReservation") < assignmentBlock.indexOf("await handleAgentCallLifecycleStatus"),
     "reservation should be promoted before Busy transition",
   );
   assert.ok(
-    assignmentBlock.indexOf("await markAgentBusyForRinging") < assignmentBlock.indexOf("assignCallToAgent"),
+    assignmentBlock.indexOf("await handleAgentCallLifecycleStatus") < assignmentBlock.indexOf("assignCallToAgent"),
     "server-authoritative Busy must happen before local cache/UI broadcast",
   );
 });
@@ -57,8 +57,10 @@ test("agent-leg disconnect may hang up original caller leg only after answered_a
 
 test("agent active-calls API hides pre-answer ghosts while agent is Agent Not Answering", async () => {
   const src = await source("app/api/contact-center/agents/[userId]/calls/route.js");
-  assert.match(src, /LEFT JOIN users agent_user ON agent_user\.username = i\.agent_username/);
-  assert.match(src, /agent_user\.agent_status <> 'Agent Not Answering'/);
+  assert.match(src, /LEFT JOIN cc_agent_state ast ON ast\.user_id = u\.id/);
+  assert.match(src, /LEFT JOIN cc_agent_state agent_state ON agent_state\.user_id = agent_user\.id/);
+  assert.match(src, /COALESCE\(agent_state\.agent_status, ''\) <> 'Agent Not Answering'/);
+  assert.doesNotMatch(src, /agent_user\.agent_status|\bagent_status, max_concurrent_calls\s+FROM users/i);
 });
 
 test("softphone reject immediately clears local call state and refreshes desktop", async () => {

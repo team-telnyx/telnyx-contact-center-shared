@@ -43,8 +43,16 @@ export async function GET(request, { params }) {
 
     // Get agent info
     const agentResult = await pool.query(
-      `SELECT id, username, first_name, last_name, agent_status, max_concurrent_calls 
-       FROM users WHERE id = $1`,
+      `SELECT
+         u.id,
+         u.username,
+         u.first_name,
+         u.last_name,
+         ast.agent_status,
+         u.max_concurrent_calls
+       FROM users u
+       LEFT JOIN cc_agent_state ast ON ast.user_id = u.id
+       WHERE u.id = $1`,
       [userId],
     );
 
