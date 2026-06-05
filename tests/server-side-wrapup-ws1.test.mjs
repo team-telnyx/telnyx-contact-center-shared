@@ -54,8 +54,8 @@ test("webhook hangup starts server-side Wrapup before completing the in-memory c
   );
   assert.match(
     source,
-    /setUserStatus\(\{[\s\S]*status:\s*"Wrapup"/,
-    "server-side Wrapup should update the authoritative agent status tables",
+    /handleAgentCallLifecycleStatus\(\{[\s\S]*event:\s*"disconnected"/,
+    "server-side Wrapup should update the authoritative agent status tables through the single lifecycle status writer",
   );
 
   const directHangupPath = extractFunction(source, "handleCallEnded");
@@ -74,10 +74,14 @@ test("wrapup route ends server-authoritative Wrapup by returning the agent to Av
   const source = await readSource(wrapupRoutePath);
   const routeBody = extractFunction(source, "POST");
 
-  assert.match(routeBody, /setUserStatus\(/, "wrapup route should update authoritative status");
   assert.match(
     routeBody,
-    /status:\s*"Available"/,
-    "wrapup end should explicitly transition the agent back to Available",
+    /handleAgentCallLifecycleStatus\(/,
+    "wrapup route should update authoritative status through the single lifecycle status writer",
+  );
+  assert.match(
+    routeBody,
+    /event:\s*action\s*===\s*"start"\s*\?\s*"disconnected"\s*:\s*"wrapup-ended"/,
+    "wrapup end should explicitly transition through wrapup-ended so the agent returns to Available",
   );
 });
