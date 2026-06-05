@@ -365,12 +365,12 @@ function hasMeaningfulValue(value) {
 }
 
 function capturedSlotValue({ itemStatus, prefilledSlots, conversationContext }) {
-  const statusValue = itemStatus?.extracted_value ?? itemStatus?.value;
-  if (hasMeaningfulValue(statusValue)) return statusValue;
-
   const slotName = conversationContext?.targetSlotName;
   const prefilledValue = slotName ? prefilledSlots?.[slotName] : null;
-  return hasMeaningfulValue(prefilledValue) ? prefilledValue : null;
+  if (hasMeaningfulValue(prefilledValue)) return prefilledValue;
+
+  const statusValue = itemStatus?.extracted_value ?? itemStatus?.value;
+  return hasMeaningfulValue(statusValue) ? statusValue : null;
 }
 
 function buildDeterministicSuggestion({
@@ -398,7 +398,7 @@ function buildDeterministicSuggestion({
 
   if (targetMode === "confirm_slot") {
     const value = capturedSlotValue({ itemStatus, prefilledSlots, conversationContext });
-    if (value) {
+    if (hasMeaningfulValue(value)) {
       return `I captured ${labelLower} as ${value}. Could you please confirm that this is correct?`;
     }
     return `I captured ${labelLower}. Could you please confirm that this is correct?`;

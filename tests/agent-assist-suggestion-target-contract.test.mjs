@@ -29,3 +29,12 @@ test("generate suggestion endpoint accepts target mode and workflow context for 
   assert.match(source, /confirm_slot/);
   assert.match(source, /Do not jump back to the first pending workflow item/);
 });
+
+test("confirm slot suggestions prefer corrected filled slot values over stale suggested captures", async () => {
+  const source = await route();
+
+  assert.match(
+    source,
+    /const prefilledValue = slotName \? prefilledSlots\?\.\[slotName\] : null;[\s\S]*?if \(hasMeaningfulValue\(prefilledValue\)\) return prefilledValue;[\s\S]*?const statusValue = itemStatus\?\.extracted_value \?\? itemStatus\?\.value;/
+  );
+});
