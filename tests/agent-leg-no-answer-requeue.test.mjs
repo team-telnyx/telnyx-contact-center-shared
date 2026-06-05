@@ -19,7 +19,7 @@ test("agent leg hangup before answer re-enqueues instead of hanging up caller", 
 
   const noAnswerBlock = webhookSrc.slice(
     webhookSrc.indexOf("const isAgentLegNoAnswerDisconnect"),
-    webhookSrc.indexOf("if (\n        isAgentLegHangup &&"),
+    webhookSrc.indexOf("if (\n        isOriginalCustomerLegHangup"),
   );
 
   assert.match(noAnswerBlock, /isAgentLegHangup/);

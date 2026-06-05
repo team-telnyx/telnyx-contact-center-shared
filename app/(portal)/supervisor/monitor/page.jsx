@@ -570,8 +570,10 @@ export default function MonitorPage() {
   const [selectedCallForSupervision, setSelectedCallForSupervision] =
     useState(null);
   const selectedQueueRef = useRef(null);
+  const expandedAgentIdRef = useRef(null);
   const monitorUiStateHydratedRef = useRef(false);
   const loadQueueCallsRef = useRef(null);
+  const loadAgentCallsRef = useRef(null);
   const isLoadingDashboardRef = useRef(false);
   const isPageVisibleRef = useRef(true);
   const pollIntervalRef = useRef(null);
@@ -595,6 +597,33 @@ export default function MonitorPage() {
   useEffect(() => {
     selectedQueueRef.current = selectedQueue;
   }, [selectedQueue]);
+
+  useEffect(() => {
+    expandedAgentIdRef.current = expandedAgentId;
+  }, [expandedAgentId]);
+
+  function invalidateExpandedAgentCalls(userId) {
+    if (!userId) return;
+    const normalizedUserId = String(userId);
+    setAgentCallsMap((prev) => {
+      if (!(normalizedUserId in prev)) return prev;
+      const next = { ...prev };
+      delete next[normalizedUserId];
+      return next;
+    });
+    setAgentActiveCallsMap((prev) => ({
+      ...prev,
+      [normalizedUserId]: [],
+    }));
+
+    if (String(expandedAgentIdRef.current || "") === normalizedUserId) {
+      setTimeout(() => {
+        if (isPageVisibleRef.current && loadAgentCallsRef.current) {
+          loadAgentCallsRef.current(String(userId), { force: true, silent: true });
+        }
+      }, 100);
+    }
+  }
 
   // Handle page visibility to prevent excessive requests when page wakes up
   useEffect(() => {
@@ -831,6 +860,7 @@ export default function MonitorPage() {
         // Update only the specific agent's status
         if (update.userId && update.status) {
           updateAgentStatus(update.userId, update.status);
+          invalidateExpandedAgentCalls(update.userId);
         }
       } catch (error) {
         console.error("[Monitor] Error handling status change:", error);
@@ -896,6 +926,12 @@ export default function MonitorPage() {
 
       try {
         const update = JSON.parse(event.data);
+        if (update.previousAgentUserId) {
+          invalidateExpandedAgentCalls(update.previousAgentUserId);
+        }
+        if (update.agentUserId) {
+          invalidateExpandedAgentCalls(update.agentUserId);
+        }
         // If we have a selected queue and the interaction belongs to it, refresh queue calls
         const selectedQueue = selectedQueueRef.current;
         if (
@@ -1272,14 +1308,16 @@ export default function MonitorPage() {
     return () => clearInterval(interval);
   }, [selectedQueue?.id]);
 
-  async function loadAgentCalls(userId) {
-    // Don't reload if already loaded
-    if (agentCallsMap[userId]) {
+  async function loadAgentCalls(userId, { force = false, silent = false } = {}) {
+    // Don't reload if already loaded unless a live update invalidates the cached call list
+    if (!force && agentCallsMap[userId]) {
       return;
     }
 
     try {
-      setLoadingAgentCalls((prev) => new Set(prev).add(userId));
+      if (!silent) {
+        setLoadingAgentCalls((prev) => new Set(prev).add(userId));
+      }
       const res = await fetch(`/api/contact-center/agents/${userId}/calls`, {
         cache: "no-store",
       });
@@ -1301,19 +1339,27 @@ export default function MonitorPage() {
       }
     } catch (error) {
       console.error("[Monitor] Error loading agent calls:", error);
-      notify({
-        title: "Failed to load agent calls",
-        description: error.message,
-        variant: "error",
-      });
+      if (!silent) {
+        notify({
+          title: "Failed to load agent calls",
+          description: error.message,
+          variant: "error",
+        });
+      }
     } finally {
-      setLoadingAgentCalls((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
+      if (!silent) {
+        setLoadingAgentCalls((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }
     }
   }
+
+  useEffect(() => {
+    loadAgentCallsRef.current = loadAgentCalls;
+  });
 
   async function toggleQueueActivation(queueId, currentlyActivated) {
     try {
