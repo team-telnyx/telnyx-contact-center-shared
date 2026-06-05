@@ -626,7 +626,7 @@ export default function MonitorPage() {
 
     setTimeout(() => {
       if (isPageVisibleRef.current && loadAgentCallsRef.current) {
-        loadAgentCallsRef.current(normalizedUserId, { force: true, silent: true });
+        loadAgentCallsRef.current(String(userId), { force: true, silent: true });
       }
     }, 100);
   }
