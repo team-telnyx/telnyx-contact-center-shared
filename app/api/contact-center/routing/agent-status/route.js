@@ -8,7 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { updateAgentQueues } from "@/lib/contact-center/state-manager";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
-import { setUserStatus } from "@/lib/contact-center/user-status";
+import { ensureAgentStatusState, setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
 export async function POST(request) {
@@ -89,7 +89,7 @@ export async function POST(request) {
         userId,
         username,
         status,
-        previousStatus: user.current_agent_status || "Unknown",
+        previousStatus: user.current_agent_status || null,
       });
     }
 
@@ -105,35 +105,14 @@ export async function POST(request) {
           ? currentActiveQueueIds.filter((id) => !queueIds.includes(id))
           : [...new Set([...currentActiveQueueIds, ...queueIds])];
 
-      // Update agent state table, creating the default Available row for
-      // agents who activate queues before changing status explicitly.
-      await pool.query(
-        `INSERT INTO cc_agent_state (
-           user_id,
-           username,
-           agent_status,
-           active_queue_ids,
-           last_status_change,
-           last_activity,
-           available_since
-         )
-         VALUES (
-           $1,
-           $2,
-           $3,
-           $4,
-           NOW(),
-           NOW(),
-           CASE WHEN $3 = 'Available' THEN NOW() ELSE NULL END
-         )
-         ON CONFLICT (user_id) DO UPDATE SET
-           username = COALESCE(EXCLUDED.username, cc_agent_state.username),
-           agent_status = COALESCE(cc_agent_state.agent_status, EXCLUDED.agent_status),
-           active_queue_ids = EXCLUDED.active_queue_ids,
-           available_since = COALESCE(cc_agent_state.available_since, EXCLUDED.available_since),
-           last_activity = NOW()`,
-        [userId, username, effectiveStatus, updatedActiveQueueIds],
-      );
+      // Ensure agent state exists and update active queues without changing an
+      // existing Contact Center status.
+      await ensureAgentStatusState({
+        userId,
+        username,
+        status: effectiveStatus,
+        activeQueueIds: updatedActiveQueueIds,
+      });
     }
 
     const shouldOfferQueuedCalls =

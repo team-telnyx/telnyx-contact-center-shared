@@ -10,6 +10,8 @@ const userStatusPath = new URL(
   "../lib/contact-center/user-status.js",
   import.meta.url,
 );
+const postgresSchemaPath = new URL("../lib/postgres-schema.mjs", import.meta.url);
+const pgdbPath = new URL("../lib/pgdb.js", import.meta.url);
 const profileRoutePath = new URL(
   "../app/api/user/profile/route.js",
   import.meta.url,
@@ -104,6 +106,74 @@ test("state-manager call lifecycle helpers do not mutate cached agentStatus as s
     updateStatusBlock,
     /UPDATE\s+cc_agent_state|INSERT INTO cc_agent_state|UPDATE\s+users/i,
     "read-model status refresh must not write status back to DB",
+  );
+});
+
+test("users.status is removed from the schema and queue lookups use cc_agent_state", async () => {
+  const schemaSrc = await source(postgresSchemaPath);
+  const usersTableStart = schemaSrc.indexOf("CREATE TABLE IF NOT EXISTS users");
+  assert.notEqual(usersTableStart, -1, "users table schema must exist");
+  const usersTableEnd = schemaSrc.indexOf(");", usersTableStart);
+  assert.notEqual(usersTableEnd, -1, "users table schema block must be parseable");
+  const usersTableBlock = schemaSrc.slice(usersTableStart, usersTableEnd);
+
+  assert.doesNotMatch(
+    usersTableBlock,
+    /\n\s*status\s+TEXT\s+DEFAULT/i,
+    "new users table schema must not create legacy users.status",
+  );
+  assert.match(
+    schemaSrc,
+    /DROP INDEX IF EXISTS idx_users_status[\s\S]*ALTER TABLE users DROP COLUMN status/,
+    "ensurePostgresSchema must drop the legacy users.status column idempotently",
+  );
+  assert.doesNotMatch(
+    schemaSrc,
+    /CREATE INDEX IF NOT EXISTS idx_users_status\b/,
+    "schema must not recreate an index on the removed users.status column",
+  );
+
+  const pgdbSrc = await source(pgdbPath);
+  const findAgentsBlock = functionBlock(
+    pgdbSrc,
+    "async findAgentsInQueue",
+    "async insertInteraction",
+  );
+  assert.match(
+    findAgentsBlock,
+    /JOIN\s+cc_agent_state|LEFT JOIN\s+cc_agent_state/i,
+    "queue agent lookup must join cc_agent_state for status filtering",
+  );
+  assert.doesNotMatch(
+    findAgentsBlock,
+    /\bu\.status\b|\busers\.status\b/i,
+    "queue agent lookup must not filter on legacy users.status",
+  );
+});
+
+test("status reporting records immutable transitions and aggregates time spent in the previous status", async () => {
+  const schemaSrc = await source(postgresSchemaPath);
+  assert.match(
+    schemaSrc,
+    /CREATE TABLE IF NOT EXISTS cc_agent_status_history[\s\S]*duration_seconds INTEGER/,
+    "schema must include an immutable status history table with per-transition duration",
+  );
+
+  const userStatusSrc = await source(userStatusPath);
+  assert.match(
+    userStatusSrc,
+    /SELECT agent_status, last_status_change[\s\S]*FROM cc_agent_state[\s\S]*FOR UPDATE/,
+    "status writer must lock/read previous cc_agent_state status before overwriting it",
+  );
+  assert.match(
+    userStatusSrc,
+    /PgDb\.insertAgentStatusHistory\([\s\S]*previousStatus: effectivePreviousStatus[\s\S]*durationSeconds/,
+    "status writer must persist a transition ledger row with previous status and duration",
+  );
+  assert.match(
+    userStatusSrc,
+    /activityType: "status_change"[\s\S]*activityValue: effectivePreviousStatus \|\| status[\s\S]*durationSeconds/,
+    "hourly time-tracking aggregate must attribute elapsed duration to the previous status segment",
   );
 });
 
