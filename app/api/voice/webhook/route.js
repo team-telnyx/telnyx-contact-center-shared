@@ -36,9 +36,7 @@ async function dialAndBridge({
   // Valid value per Telnyx OpenAPI spec: "self" (parks current leg after unbridge)
   if (isConsultCall) {
     body.park_after_unbridge = "self";
-    console.log(
-      "[voice-webhook] 📞 dialAndBridge for consult call - adding park_after_unbridge=self"
-    );
+
   }
 
   const resp = await fetch(url, {
@@ -51,7 +49,7 @@ async function dialAndBridge({
   });
   if (!resp.ok) {
     const t = await resp.text();
-    console.error("[voice-webhook] dial failed", resp.status, t);
+
     return null;
   }
   const result = await resp.json();
@@ -91,16 +89,11 @@ async function createOutboundInteraction({
           );
           if (result.rows?.[0]?.username) {
             agentUsername = result.rows[0].username;
-            console.log(
-              `[voice-webhook] Found username from WebRTC connection: ${agentUsername}`
-            );
+
           }
         }
       } catch (err) {
-        console.warn(
-          "[voice-webhook] Could not lookup user by connection ID:",
-          err
-        );
+
       }
     }
 
@@ -128,9 +121,7 @@ async function createOutboundInteraction({
         },
       });
 
-      console.log(
-        `[voice-webhook] ✅ Created outbound interaction: ${interactionId}`
-      );
+
       return interactionId;
     } else {
       // Update existing interaction with PSTN leg info if available
@@ -140,14 +131,12 @@ async function createOutboundInteraction({
         await PgDb.updateInteractionById(interaction.id, {
           metadata,
         });
-        console.log(
-          `[voice-webhook] ✅ Updated interaction ${interaction.id} with PSTN leg`
-        );
+
       }
       return interaction.id;
     }
   } catch (err) {
-    console.error("[voice-webhook] Error creating outbound interaction:", err);
+
     return null;
   }
 }
@@ -158,7 +147,7 @@ export async function POST(request) {
     const ok = await verifyTelnyxSignature(request, raw);
     const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!ok) {
-      console.warn("[voice-webhook] Invalid Telnyx signature", { enforceSignature });
+
       if (enforceSignature) {
         return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
       }
@@ -221,18 +210,7 @@ export async function POST(request) {
       }
     }
 
-    console.log("[voice-webhook] 📞 Webhook received:", {
-      eventType,
-      callControlId,
-      direction,
-      state,
-      hasRtcCallId: !!rtcCallId,
-      rtcCallId,
-      callSessionId: payload?.call_session_id,
-      to,
-      from,
-      username,
-    });
+
 
     // Handle first leg (WebRTC leg) call.initiated webhook
     // This leg has X-RTC-CALLID header - we need to initiate dialAndBridge
@@ -244,17 +222,7 @@ export async function POST(request) {
     ) {
       try {
         const callSessionId = payload?.call_session_id;
-        console.log(
-          "[voice-webhook] 🔵 First leg (WebRTC) call.initiated detected:",
-          {
-            rtcCallId,
-            callControlId,
-            callSessionId,
-            to,
-            from,
-            username,
-          }
-        );
+
 
         // Check if this is a consult call by looking for pending consult
         // Try multiple lookup methods: username, consultantTarget (SIP URI), or telephonyUserName
@@ -270,9 +238,7 @@ export async function POST(request) {
               ? toValue.split("@")[0]
               : toValue;
 
-            console.log(
-              `[voice-webhook] 🔍 Looking for pending consult. username=${username}, to=${toValue}, toSipUser=${toSipUser}`
-            );
+
 
             // Try lookup by username first (if available)
             if (username) {
@@ -286,9 +252,7 @@ export async function POST(request) {
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(
-                  `[voice-webhook] 🔍 Found pending consult by username: ${username}`
-                );
+
               }
             }
 
@@ -308,9 +272,7 @@ export async function POST(request) {
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(
-                  `[voice-webhook] 🔍 Found pending consult by consultantTarget: ${toValue}`
-                );
+
               }
             }
 
@@ -326,9 +288,7 @@ export async function POST(request) {
               );
               if (result.rows?.[0]) {
                 consultInteraction = result.rows[0];
-                console.log(
-                  `[voice-webhook] 🔍 Found pending consult by connectionId: ${payloadConnectionId}`
-                );
+
               }
             }
 
@@ -352,20 +312,13 @@ export async function POST(request) {
               };
               const consultantTarget =
                 consultInteraction.metadata?.consult_state?.consultantTarget;
-              console.log(
-                `[voice-webhook] 🔵 Consult call detected for interaction ${consultInteraction.id} (consultantTarget: ${consultantTarget}, webhook to: ${toValue})`
-              );
+
             } else {
-              console.log(
-                `[voice-webhook] 🔍 No pending consult found for this call`
-              );
+
             }
           }
         } catch (consultCheckErr) {
-          console.error(
-            "[voice-webhook] Error checking for consult call:",
-            consultCheckErr
-          );
+
         }
 
         // Get user's phone number and display name for the PSTN leg
@@ -373,12 +326,7 @@ export async function POST(request) {
         let effectiveFromNumber = from;
         let fromDisplayName = null;
 
-        console.log("[voice-webhook] 🔍 Looking up user for from number:", {
-          username,
-          payloadConnectionId,
-          originalFrom: from,
-          isSipUri: from?.includes("@sip.") || false,
-        });
+
 
         if (username || payloadConnectionId) {
           try {
@@ -392,25 +340,16 @@ export async function POST(request) {
                 userQuery =
                   "SELECT voice_number, first_name, last_name FROM users WHERE username = $1 LIMIT 1";
                 userParams = [username];
-                console.log(
-                  "[voice-webhook] 🔍 Looking up user by username:",
-                  username
-                );
+
               } else {
                 userQuery =
                   "SELECT voice_number, first_name, last_name FROM users WHERE telephony_credentials_id = $1 LIMIT 1";
                 userParams = [payloadConnectionId];
-                console.log(
-                  "[voice-webhook] 🔍 Looking up user by telephony_credentials_id:",
-                  payloadConnectionId
-                );
+
               }
 
               const userResult = await pool.query(userQuery, userParams);
-              console.log("[voice-webhook] 🔍 User lookup result:", {
-                found: !!userResult.rows?.[0],
-                rowCount: userResult.rows?.length || 0,
-              });
+
 
               if (userResult.rows?.[0]) {
                 const user = userResult.rows[0];
@@ -428,28 +367,13 @@ export async function POST(request) {
                   fromDisplayName = nameParts.join(" ");
                 }
 
-                console.log(
-                  "[voice-webhook] 📞 Using user profile for PSTN leg:",
-                  {
-                    username,
-                    userVoiceNumber: user.voice_number,
-                    mainFromNumber: process.env.TELNYX_MAIN_FROM_NUMBER,
-                    effectiveFromNumber,
-                    fromDisplayName,
-                    originalFrom: from,
-                  }
-                );
+
               } else {
-                console.log(
-                  "[voice-webhook] ⚠️ User not found in database, will use fallback"
-                );
+
               }
             }
           } catch (userLookupErr) {
-            console.error(
-              "[voice-webhook] ❌ Error looking up user:",
-              userLookupErr
-            );
+
           }
         }
 
@@ -465,19 +389,10 @@ export async function POST(request) {
         ) {
           const mainFromNumber = process.env.TELNYX_MAIN_FROM_NUMBER;
           if (mainFromNumber) {
-            console.log(
-              "[voice-webhook] 🔄 Using TELNYX_MAIN_FROM_NUMBER as fallback:",
-              {
-                previousFrom: effectiveFromNumber,
-                newFrom: mainFromNumber,
-              }
-            );
+
             effectiveFromNumber = mainFromNumber;
           } else {
-            console.warn(
-              "[voice-webhook] ⚠️ TELNYX_MAIN_FROM_NUMBER not set, keeping original from:",
-              effectiveFromNumber
-            );
+
           }
         }
 
@@ -519,15 +434,7 @@ export async function POST(request) {
 
         // Initiate dialAndBridge to create second leg
         // For consult calls, pass isConsultCall=true to enable park_after_unbridge
-        console.log(
-          "[voice-webhook] 📞 Calling dialAndBridge to create second leg...",
-          consultInteraction ? "(consult call)" : "(regular outbound)",
-          {
-            to,
-            from: effectiveFromNumber,
-            fromDisplayName,
-          }
-        );
+
         const pstnCallControlId = await dialAndBridge({
           to,
           from: effectiveFromNumber,
@@ -537,17 +444,12 @@ export async function POST(request) {
           fromDisplayName,
         });
 
-        console.log("[voice-webhook] 📞 dialAndBridge response:", {
-          pstnCallControlId,
-          webrtcCallControlId: callControlId,
-        });
+
 
         // If this is a consult call, update the original interaction's consult_state
         // Update even if pstnCallControlId is null - we still need to save agentCallControlId
         if (consultInteraction) {
-          console.log(
-            `[voice-webhook] 🔵 Updating consult_state for interaction ${consultInteraction.id} with agentCallControlId=${callControlId}, pstnCallControlId=${pstnCallControlId}`
-          );
+
           try {
             const { PgDb } = await import("@/lib/pgdb.js");
             const { addTimelineEvent, TimelineEventTypes } = await import(
@@ -582,14 +484,9 @@ export async function POST(request) {
               metadata: updatedMetadata,
               routingMetadata: updatedRoutingMetadata,
             });
-            console.log(
-              `[voice-webhook] ✅ Updated consult interaction ${consultInteraction.id} with active consult state`
-            );
+
           } catch (consultUpdateErr) {
-            console.error(
-              "[voice-webhook] Error updating consult interaction:",
-              consultUpdateErr
-            );
+
           }
         }
 
@@ -605,13 +502,7 @@ export async function POST(request) {
             username,
             connectionId: payloadConnectionId,
           });
-          console.log(
-            "[voice-webhook] ✅ Updated mapping with PSTN leg from dial response:",
-            {
-              rtcCallId,
-              pstnCallControlId,
-            }
-          );
+
 
           // Update interaction with PSTN leg
           await createOutboundInteraction({
@@ -626,7 +517,7 @@ export async function POST(request) {
           });
         }
       } catch (err) {
-        console.error("[voice-webhook] ❌ Error in dialAndBridge:", err);
+
       }
     }
 
@@ -640,15 +531,7 @@ export async function POST(request) {
       payload?.call_session_id
     ) {
       const callSessionId = payload?.call_session_id;
-      console.log(
-        "[voice-webhook] 🟢 Second leg (PSTN) call.initiated detected:",
-        {
-          callControlId,
-          callSessionId,
-          to,
-          from,
-        }
-      );
+
 
       // Try to find the WebRTC leg by call_session_id
       const mapping = getWebrtcCallLegMappingBySessionId(callSessionId);
@@ -658,15 +541,7 @@ export async function POST(request) {
           ...mapping,
           pstnCallControlId: callControlId,
         });
-        console.log(
-          "[voice-webhook] ✅ Updated mapping with PSTN leg call_control_id:",
-          {
-            rtcCallId: mapping.rtcCallId,
-            webrtcCallControlId: mapping.webrtcCallControlId,
-            pstnCallControlId: callControlId,
-            callSessionId,
-          }
-        );
+
 
         // Update interaction with PSTN leg info
         await createOutboundInteraction({
@@ -680,10 +555,7 @@ export async function POST(request) {
           connectionId: payloadConnectionId || mapping.connectionId, // User's WebRTC connection ID
         });
       } else {
-        console.warn(
-          "[voice-webhook] ⚠️ Second leg received but no mapping found for call_session_id:",
-          callSessionId
-        );
+
         // Still create interaction for PSTN leg if mapping not found
         await createOutboundInteraction({
           callControlId,
@@ -734,16 +606,11 @@ export async function POST(request) {
             metadata: updatedMetadata,
           });
           if (recordingUrl) {
-            console.log(
-              `[voice-webhook] ✅ Stored recording URL for outbound interaction ${interaction.id}: ${recordingUrl}`
-            );
+
           }
         }
       } catch (err) {
-        console.error(
-          "[voice-webhook] Error handling call.recording.saved:",
-          err
-        );
+
       }
     }
 
@@ -785,10 +652,7 @@ export async function POST(request) {
 
           if (Object.keys(updates).length > 0) {
             await PgDb.updateInteractionById(interaction.id, updates);
-            console.log(
-              `[voice-webhook] ✅ Updated outbound interaction ${interaction.id}:`,
-              updates
-            );
+
           }
         }
 
@@ -845,38 +709,22 @@ export async function POST(request) {
                       ],
                     );
                   }
-                  console.log("[voice-webhook] ✅ Started Agentless AI assistant for outbound call", {
-                    callControlId,
-                    assistantId: outboundHandlerRef,
-                    ledgerId: finalizedLedger?.id || null,
-                  });
+
                 } else {
-                  console.error("[voice-webhook] Failed to start Agentless AI assistant for outbound call", {
-                    callControlId,
-                    assistantId: outboundHandlerRef,
-                    ledgerId: finalizedLedger?.id || null,
-                    reason: assistantStart.reason,
-                    status: assistantStart.status || null,
-                    error: assistantStart.error || null,
-                  });
+
                 }
               } catch (assistErr) {
-                console.error("[voice-webhook] Failed to start Agentless AI assistant for outbound call:", assistErr);
+
               }
             }
           }
 
           if (finalizedLedger) {
-            console.log(
-              `[voice-webhook] ✅ Updated outbound attempt ledger ${finalizedLedger.id} from ${eventType}`,
-            );
+
           }
         }
       } catch (err) {
-        console.error(
-          "[voice-webhook] Error updating outbound interaction:",
-          err
-        );
+
       }
     }
 
@@ -884,7 +732,7 @@ export async function POST(request) {
   } catch (err) {
     // Check if it's a missing environment variable error
     if (err.code === "MISSING_CALL_CONTROL_ID") {
-      console.error("[voice-webhook] MISSING_CALL_CONTROL_ID:", err.message);
+
       return NextResponse.json(
         {
           error: "Configuration Error",
@@ -896,7 +744,7 @@ export async function POST(request) {
       );
     }
 
-    console.error("[voice-webhook] Server error:", err);
+
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
