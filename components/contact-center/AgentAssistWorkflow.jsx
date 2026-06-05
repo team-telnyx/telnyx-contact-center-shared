@@ -512,6 +512,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           aiSlotsDetails={aiHandoff.slotsDetails}
           slotsFilled={slotsFilled}
           showLlmConfidence={showLlmConfidence}
+          showExpandedStages={assistConfig.show_expanded_stages === true}
         />
 
         {/* Center: Live Transcription */}
@@ -813,12 +814,57 @@ function AiSummaryPanel({ summary, sentiment }) {
   );
 }
 
+function getItemStatusSnapshot(item, itemStatuses, slotsFilled) {
+  const status = itemStatuses[item.id] || { status: "pending" };
+  const slotValue = status.value || status.extracted_value || (item.slot_name ? slotsFilled[item.slot_name] : null);
+  const confidenceScore = status.confidence_score;
+  const confidenceThreshold = status.confidence_threshold ?? 0.95;
+  const isSuggested = status.status === "suggested";
+  const isCompleted = status.status === "completed" || isSlotFilledFromWorkflowState(item, slotsFilled);
+  const needsConfirmation =
+    isSuggested &&
+    Boolean(slotValue) &&
+    confidenceScore !== null &&
+    confidenceScore !== undefined &&
+    confidenceScore < confidenceThreshold;
+
+  return { status, slotValue, isSuggested, isCompleted, needsConfirmation };
+}
+
+function getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds = new Set(), slotsFilled = {}) {
+  const hasItemNeedingConfirmation = stage.items?.some((item) => (
+    getItemStatusSnapshot(item, itemStatuses, slotsFilled).needsConfirmation
+  ));
+
+  if (hasItemNeedingConfirmation) {
+    return {
+      type: "needs-confirmation",
+      label: "Needs review",
+      className: "border-red-500/70 bg-red-500/10 ring-2 ring-red-500/60 animate-pulse",
+    };
+  }
+
+  if (completedBlinkStageIds.has(stage.id)) {
+    return {
+      type: "completed-recently",
+      label: "Updated",
+      className: "border-green-500/70 bg-green-500/10 animate-[stageBlink_0.6s_ease-in-out_2]",
+    };
+  }
+
+  return null;
+}
+
 /**
  * Workflow Stages Card with Accordions
  */
-function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true }) {
+function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true, showExpandedStages = false }) {
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
+  const [expandedStages, setExpandedStages] = useState([]);
+  const [completedBlinkStageIds, setCompletedBlinkStageIds] = useState(new Set());
+  const previousItemSnapshotsRef = useRef(new Map());
+  const itemRefs = useRef({});
 
   // Find currently active stage (first stage with incomplete items)
   const activeStageId = useMemo(() => {
@@ -833,12 +879,17 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     return stages[stages.length - 1]?.id; // All complete - show last
   }, [stages, itemStatuses, slotsFilled]);
 
-  // Auto-expand next section when current section completes
+  // Auto-expand next section when current section completes, or all stages when configured
   useEffect(() => {
+    if (showExpandedStages) {
+      setExpandedStages(stages.map((stage) => stage.id));
+      return;
+    }
+
     if (!expandedStage || expandedStage === activeStageId) {
       setExpandedStage(activeStageId);
     }
-  }, [activeStageId]);
+  }, [activeStageId, expandedStage, showExpandedStages, stages]);
 
   // Track editing state for slot values
   const [editingItemId, setEditingItemId] = useState(null);
@@ -854,6 +905,66 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
       return () => clearTimeout(timer);
     }
   }, [highlightedItemId]);
+
+  useEffect(() => {
+    const previousSnapshots = previousItemSnapshotsRef.current;
+    const nextSnapshots = new Map();
+    let changedItemId = null;
+    let changedStageId = null;
+    let changedItemCompleted = false;
+
+    for (const stage of stages) {
+      for (const item of stage.items || []) {
+        const snapshot = getItemStatusSnapshot(item, itemStatuses, slotsFilled);
+        const compactSnapshot = {
+          status: snapshot.status.status || "pending",
+          value: snapshot.slotValue || "",
+          needsConfirmation: snapshot.needsConfirmation,
+          isCompleted: snapshot.isCompleted,
+        };
+        const previousSnapshot = previousSnapshots.get(item.id);
+
+        if (previousSnapshot) {
+          const valueChanged = compactSnapshot.value && compactSnapshot.value !== previousSnapshot.value;
+          const statusChanged = compactSnapshot.status !== previousSnapshot.status;
+          const becameConfirmation = compactSnapshot.needsConfirmation && !previousSnapshot.needsConfirmation;
+          const becameCompleted = compactSnapshot.isCompleted && !previousSnapshot.isCompleted;
+
+          if (valueChanged || statusChanged || becameConfirmation || becameCompleted) {
+            changedItemId = item.id;
+            changedStageId = stage.id;
+            changedItemCompleted = becameCompleted;
+          }
+        }
+
+        nextSnapshots.set(item.id, compactSnapshot);
+      }
+    }
+
+    previousItemSnapshotsRef.current = nextSnapshots;
+
+    if (!changedItemId) return;
+
+    setHighlightedItemId(changedItemId);
+
+    if (showExpandedStages || changedStageId === expandedStage) {
+      window.requestAnimationFrame(() => {
+        itemRefs.current[changedItemId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+
+    if (changedItemCompleted && changedStageId) {
+      setCompletedBlinkStageIds((current) => new Set([...current, changedStageId]));
+      const timer = setTimeout(() => {
+        setCompletedBlinkStageIds((current) => {
+          const next = new Set(current);
+          next.delete(changedStageId);
+          return next;
+        });
+      }, 1400);
+      return () => clearTimeout(timer);
+    }
+  }, [itemStatuses, slotsFilled, stages, showExpandedStages, expandedStage]);
 
   const handleStartEdit = (item, currentValue) => {
     setEditingItemId(item.id);
@@ -899,22 +1010,25 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
         <ScrollArea className="h-full">
           <div className="p-4">
             <Accordion
-              type="single"
+              type={showExpandedStages ? "multiple" : "single"}
               collapsible
-              value={expandedStage}
-              onValueChange={setExpandedStage}
+              value={showExpandedStages ? expandedStages : expandedStage}
+              onValueChange={showExpandedStages ? setExpandedStages : setExpandedStage}
               className="w-full"
             >
               {stages.map((stage, stageIndex) => {
                 const stageCompletion = getStageCompletion(stage, itemStatuses, slotsFilled);
                 const isActive = stage.id === activeStageId;
+                const stageAlert = getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds);
 
                 return (
                   <AccordionItem
                     key={stage.id}
                     value={stage.id}
                     className={`border-b-0 mb-2 rounded-lg border ${
-                      isActive
+                      stageAlert?.className
+                        ? stageAlert.className
+                        : isActive
                         ? "border-purple-500/50 bg-purple-500/5"
                         : stageCompletion.isComplete
                         ? "border-green-500/50 bg-green-500/5"
@@ -937,6 +1051,20 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           )}
                         </span>
                         <span className="font-medium text-sm">{stage.name}</span>
+                        {stageAlert && (
+                          <Badge
+                            variant="outline"
+                            className={`text-xs ${
+                              stageAlert.type === "needs-confirmation"
+                                ? "bg-red-500/10 text-red-500 border-red-500/50 animate-pulse"
+                                : stageAlert.type === "completed-recently"
+                                ? "bg-green-500/10 text-green-500 border-green-500/50 animate-[stageBlink_0.6s_ease-in-out_2]"
+                                : "bg-muted"
+                            }`}
+                          >
+                            {stageAlert.label}
+                          </Badge>
+                        )}
                         <Badge
                           variant="outline"
                           className={`ml-auto text-xs ${
@@ -971,6 +1099,14 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           return (
                             <div
                               key={item.id}
+                              ref={(node) => {
+                                if (node) {
+                                  itemRefs.current[item.id] = node;
+                                } else {
+                                  delete itemRefs.current[item.id];
+                                }
+                              }}
+                              data-workflow-item-id={item.id}
                               className={`flex items-start gap-2 p-2 rounded-md transition-all ${
                                 isLowConfidence
                                   ? "bg-red-500/10 ring-2 ring-red-500 border border-red-500 animate-pulse"

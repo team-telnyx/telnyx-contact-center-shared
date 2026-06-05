@@ -189,6 +189,16 @@
   }
 }
 
+@keyframes stageBlink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 0 3px oklch(0.696 0.17 162.48 / 65%);
+  }
+}
+
 /* React Flow controls should inherit the app theme instead of the library's light defaults. */
 .call-flow-controls {
   background: var(--card) !important;

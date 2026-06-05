@@ -2365,6 +2365,14 @@ export const VOICE_FLOW_NODES = {
         description: "Show AI-powered suggestions to agents during the call",
         showWhen: { assist_type: "workflows" },
       },
+      show_expanded_stages: {
+        type: "boolean",
+        label: "Show expanded stages",
+        required: false,
+        default: false,
+        description: "Open all workflow stages in Agent Assist so agents can see every item at once",
+        showWhen: { assist_type: "workflows" },
+      },
       auto_detect_completion: {
         type: "boolean",
         label: "Auto-detect Item Completion",

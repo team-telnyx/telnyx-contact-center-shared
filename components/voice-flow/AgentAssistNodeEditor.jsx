@@ -805,6 +805,20 @@ export default function AgentAssistNodeEditor({
             />
           </div>
 
+          {/* Show expanded stages */}
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Show expanded stages</Label>
+              <p className="text-xs text-muted-foreground">
+                Open all workflow stages in Agent Assist and scroll to items as they update
+              </p>
+            </div>
+            <Switch
+              checked={config.show_expanded_stages === true}
+              onCheckedChange={(checked) => handleChange("show_expanded_stages", checked)}
+            />
+          </div>
+
           {/* Auto-detect Completion */}
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
