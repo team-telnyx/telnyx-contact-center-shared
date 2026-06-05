@@ -44,7 +44,7 @@ test("Available status refresh still offers queued calls even when status is unc
 
   assert.match(
     unchangedStatusBlock,
-    /if \(status === "Available"\)[\s\S]*offerQueuedCallForAgent\(\{ userId: String\(userId\) \}\)[\s\S]*return;/,
+    /if \(status === "Available"\)[\s\S]*offerQueuedCallForAgent\(\{ userId: String\(userId\) \}\)[\s\S]*return \(await getPersistedAgentStatus\(String\(userId\)\)\) \|\| status;/,
     "unchanged Available status must still retry queued-call offering before returning",
   );
 });

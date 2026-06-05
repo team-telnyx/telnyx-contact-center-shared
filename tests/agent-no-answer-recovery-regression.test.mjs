@@ -40,6 +40,31 @@ test("manual Available auto-offer broadcasts final persisted Busy instead of sta
   );
 });
 
+test("agent no-answer timeout releases capacity for already-requeued callers and fences stale agent-leg webhooks", async () => {
+  const timeoutSource = await source(timeoutPath);
+
+  assert.match(
+    timeoutSource,
+    /\["ringing", "queued"\]\.includes\(currentState\)/,
+    "timeout cleanup must continue when webhook ordering already moved the caller back to queued",
+  );
+  assert.match(
+    timeoutSource,
+    /state IN \('ringing', 'queued'\)[\s\S]*answered_at IS NULL[\s\S]*completed_at IS NULL[\s\S]*abandoned_at IS NULL/,
+    "requeue update must be safe for ringing and already-queued pre-answer rows only",
+  );
+  assert.match(
+    timeoutSource,
+    /delete sanitizedMetadata\.agent_call_control_id[\s\S]*delete sanitizedMetadata\.agentCallControlId[\s\S]*delete sanitizedMetadata\.reservationId/s,
+    "requeued callers must clear stale agent-leg and reservation metadata so old WebRTC webhooks cannot mutate the queued row",
+  );
+  assert.match(
+    timeoutSource,
+    /await releaseByInteraction\(interactionId, \{ pool \}\)/,
+    "capacity must be released even when the caller was already returned to queued before cleanup ran",
+  );
+});
+
 test("agent no-answer timeout broadcasts agent-call removal for supervisor expanded rows", async () => {
   const timeoutSource = await source(timeoutPath);
 
