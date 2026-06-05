@@ -47,7 +47,7 @@ test("status stream marks agent Offline only after all session streams disconnec
   );
 });
 
-test("client logout and unload send system Offline status", async () => {
+test("client logout and network disconnect send system Offline status", async () => {
   const sessionMonitorSource = await source("../lib/session-monitor.js");
   const navUserSource = await source("../components/nav-user.jsx");
   const profileSource = await source("../app/api/user/profile/route.js");
@@ -55,7 +55,17 @@ test("client logout and unload send system Offline status", async () => {
   assert.match(
     sessionMonitorSource,
     /JSON\.stringify\(\{\s*status:\s*["']Offline["'],\s*system:\s*true/s,
-    "sendBeacon unload/offline payload must mark Offline as a system status",
+    "client-initiated offline payload must mark Offline as a system status",
+  );
+  assert.doesNotMatch(
+    sessionMonitorSource,
+    /addEventListener\(["']beforeunload["'][\s\S]*setOfflineStatus/,
+    "page unload must not force Offline and bypass the SSE reconnect grace timer",
+  );
+  assert.doesNotMatch(
+    sessionMonitorSource,
+    /removeEventListener\(["']beforeunload["']/,
+    "session monitor should not own unload-time Offline transitions",
   );
   assert.doesNotMatch(
     sessionMonitorSource,
