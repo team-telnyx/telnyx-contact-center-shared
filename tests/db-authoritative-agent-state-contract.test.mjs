@@ -12,6 +12,22 @@ const userStatusPath = new URL(
 );
 const postgresSchemaPath = new URL("../lib/postgres-schema.mjs", import.meta.url);
 const pgdbPath = new URL("../lib/pgdb.js", import.meta.url);
+const queuedCallRouterPath = new URL(
+  "../lib/contact-center/queued-call-router.js",
+  import.meta.url,
+);
+const statsAggregatorPath = new URL(
+  "../lib/contact-center/stats-aggregator.js",
+  import.meta.url,
+);
+const routingEnginePath = new URL(
+  "../lib/contact-center/routing-engine.js",
+  import.meta.url,
+);
+const queueAgentsRoutePath = new URL(
+  "../app/api/contact-center/queues/[queueId]/agents/route.js",
+  import.meta.url,
+);
 const profileRoutePath = new URL(
   "../app/api/user/profile/route.js",
   import.meta.url,
@@ -148,6 +164,95 @@ test("users.status is removed from the schema and queue lookups use cc_agent_sta
     findAgentsBlock,
     /\bu\.status\b|\busers\.status\b/i,
     "queue agent lookup must not filter on legacy users.status",
+  );
+});
+
+test("queued-call router availability uses cc_agent_state status, not stale users.agent_status", async () => {
+  const routerSrc = await source(queuedCallRouterPath);
+  const availabilityBlock = functionBlock(
+    routerSrc,
+    "async function getAgentAvailability",
+    "function agentHasCapacity",
+  );
+
+  assert.match(
+    availabilityBlock,
+    /JOIN\s+cc_agent_state|LEFT JOIN\s+cc_agent_state/i,
+    "queued-call router must join cc_agent_state for authoritative availability",
+  );
+  assert.match(
+    availabilityBlock,
+    /ast\.agent_status\s+AS\s+agent_status/i,
+    "queued-call router must project cc_agent_state.agent_status as the availability status",
+  );
+  assert.doesNotMatch(
+    availabilityBlock,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "queued-call router must not gate offers on stale users.agent_status",
+  );
+});
+
+test("supervisor and routing availability read models use cc_agent_state status", async () => {
+  const stateManagerSrc = await source(stateManagerPath);
+  const stateLoadBlock = functionBlock(
+    stateManagerSrc,
+    "// Load agent states",
+    "// Load active interactions into cache",
+  );
+  assert.match(stateLoadBlock, /FROM cc_agent_state ast/);
+  assert.doesNotMatch(
+    stateLoadBlock,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "state-manager DB load must not exclude/rewrite agents based on stale users.agent_status",
+  );
+
+  const statsSrc = await source(statsAggregatorPath);
+  const agentStatsBlock = functionBlock(
+    statsSrc,
+    "export async function getAgentStatistics",
+    "/**\n * Get overall contact center statistics",
+  );
+  assert.match(agentStatsBlock, /LEFT JOIN cc_agent_state ast[\s\S]*ast\.agent_status/);
+  assert.doesNotMatch(
+    agentStatsBlock,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "supervisor Agents stats must display cc_agent_state.agent_status, not stale users.agent_status",
+  );
+
+  const overallStatsBlock = functionBlock(
+    statsSrc,
+    "export async function getOverallStatistics",
+    "/**\n * Aggregate statistics for a time period",
+  );
+  assert.match(overallStatsBlock, /LEFT JOIN cc_agent_state ast/);
+  assert.match(overallStatsBlock, /ast\.agent_status/);
+  assert.doesNotMatch(
+    overallStatsBlock,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "overall stats must count Contact Center statuses from cc_agent_state",
+  );
+
+  const routingSrc = await source(routingEnginePath);
+  const availableAgentsBlock = functionBlock(
+    routingSrc,
+    "async function getAvailableAgentsForQueue",
+    "/**\n * FIFO Routing",
+  );
+  assert.match(availableAgentsBlock, /LEFT JOIN cc_agent_state ast/);
+  assert.match(availableAgentsBlock, /ast\.agent_status AS agent_status/);
+  assert.doesNotMatch(
+    availableAgentsBlock,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "routing engine must not select/order/filter by stale users.agent_status",
+  );
+
+  const queueAgentsSrc = await source(queueAgentsRoutePath);
+  assert.match(queueAgentsSrc, /LEFT JOIN cc_agent_state ast/);
+  assert.match(queueAgentsSrc, /ast\.agent_status AS agent_status/);
+  assert.doesNotMatch(
+    queueAgentsSrc,
+    /\bu\.agent_status\b|\busers\.agent_status\b/i,
+    "queue agents API must not report availability from stale users.agent_status",
   );
 });
 

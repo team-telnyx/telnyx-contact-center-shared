@@ -49,7 +49,7 @@ export async function GET(request, { params }) {
         u.username,
         u.first_name,
         u.last_name,
-        u.agent_status,
+        ast.agent_status AS agent_status,
         u.skills,
         u.max_concurrent_calls,
         u.available_for_routing,
@@ -64,10 +64,10 @@ export async function GET(request, { params }) {
       WHERE qa.queue_id = $1
         AND qa.enabled = true
         AND (qa.activated_at IS NOT NULL AND qa.deactivated_at IS NULL)
-      GROUP BY u.id, u.username, u.first_name, u.last_name, u.agent_status, u.skills, u.max_concurrent_calls, 
+      GROUP BY u.id, u.username, u.first_name, u.last_name, ast.agent_status, u.skills, u.max_concurrent_calls,
                u.available_for_routing, ast.is_available_for_routing, qa.priority, 
                qa.enabled, qa.activated_at, qa.deactivated_at
-      ORDER BY qa.priority DESC, u.agent_status ASC
+      ORDER BY qa.priority DESC, ast.agent_status ASC
     `;
 
     const result = await pool.query(query, [queueId]);
