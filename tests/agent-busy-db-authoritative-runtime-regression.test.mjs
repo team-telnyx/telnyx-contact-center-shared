@@ -39,7 +39,8 @@ test("ringing Busy transition upserts only cc_agent_state inside one transaction
   assert.doesNotMatch(helper, /UPDATE\s+users[\s\S]*(?:status\s*=|agent_status\s*=)/i);
   assert.match(helper, /INSERT INTO cc_agent_state[\s\S]*agent_status[\s\S]*'Busy'/);
   assert.match(helper, /ON CONFLICT \(user_id\) DO UPDATE SET[\s\S]*agent_status = EXCLUDED\.agent_status/);
-  assert.match(helper, /current_calls_count = GREATEST\(cc_agent_state\.current_calls_count, 1\)/);
+  assert.match(helper, /current_calls_count = EXCLUDED\.current_calls_count/);
+  assert.doesNotMatch(helper, /GREATEST\(cc_agent_state\.current_calls_count, 1\)/);
   assert.match(helper, /await client\.query\("COMMIT"\)/);
   assert.match(helper, /await client\.query\("ROLLBACK"\)/);
   assert.ok(

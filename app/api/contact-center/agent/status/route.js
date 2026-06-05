@@ -112,7 +112,7 @@ export async function PUT(request) {
 
     // Update status using the setUserStatus function which handles all the necessary updates
     const statusUpdateStartedAt = Date.now();
-    await setUserStatus({
+    const effectiveStatus = await setUserStatus({
       userId: String(targetUserIdFinal),
       username: targetUser.username,
       status,
@@ -121,7 +121,8 @@ export async function PUT(request) {
     console.log("[AgentStatus][RoutingDiagnostics] setUserStatus completed", {
       targetUserId: String(targetUserIdFinal),
       targetUsername: targetUser.username,
-      status,
+      requestedStatus: status,
+      effectiveStatus: effectiveStatus || status,
       previousStatus,
       durationMs: Date.now() - statusUpdateStartedAt,
       timestamp: new Date().toISOString(),
@@ -155,7 +156,8 @@ export async function PUT(request) {
 
     return NextResponse.json({
       ok: true,
-      status,
+      status: effectiveStatus || status,
+      requestedStatus: status,
       userId: String(targetUserIdFinal),
       previousStatus,
     });

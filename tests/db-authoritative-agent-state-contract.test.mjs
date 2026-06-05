@@ -332,6 +332,46 @@ test("all server-side Contact Center status transitions go through the centraliz
   }
 });
 
+test("supervisor agent current-calls read model is DB-authoritative and not node-local cache", async () => {
+  const statsSrc = await source(statsAggregatorPath);
+  const agentStatsBlock = functionBlock(
+    statsSrc,
+    "export async function getAgentStatistics",
+    "/**\n * Get overall contact center statistics",
+  );
+
+  assert.match(
+    agentStatsBlock,
+    /FROM cc_interactions i[\s\S]*i\.state IN \('ringing', 'answered', 'connected', 'active'\)[\s\S]*timeout_re_enqueued/,
+    "Supervisor currentCalls must use the same DB-active interaction semantics as expanded agent rows",
+  );
+  assert.doesNotMatch(
+    agentStatsBlock,
+    /getRealtimeAgentMetrics\(/,
+    "Supervisor must not combine DB status with node-local stateCache activeCalls, which creates Available + 1\/1 ghosts",
+  );
+});
+
+test("agent status route returns effective post-routing status, not stale requested status", async () => {
+  const routeSrc = await source(new URL("../app/api/contact-center/agent/status/route.js", import.meta.url));
+
+  assert.match(
+    routeSrc,
+    /const effectiveStatus = await setUserStatus\(/,
+    "status route must capture the effective status after auto-offer/routing",
+  );
+  assert.match(
+    routeSrc,
+    /status:\s*effectiveStatus \|\| status/,
+    "status route JSON must return effective status so UI does not optimistically show requested Available",
+  );
+  assert.match(
+    routeSrc,
+    /requestedStatus:\s*status/,
+    "status route should keep requestedStatus separately for diagnostics",
+  );
+});
+
 test("frontend does not persist user.status in localStorage or derive lifecycle writes from it", async () => {
   const files = [
     agentDesktopPath,
