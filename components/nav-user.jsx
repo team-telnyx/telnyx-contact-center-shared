@@ -183,7 +183,10 @@ export function NavUser({ user, hideExtras }) {
       await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({
+          status: nextStatus,
+          system: nextStatus === "Offline",
+        }),
       });
     } catch (_) {}
   }
@@ -199,7 +202,7 @@ export function NavUser({ user, hideExtras }) {
 
     try {
       try {
-        updateStatusOnServer("Offline");
+        await updateStatusOnServer("Offline");
       } catch (_) {}
 
       try {

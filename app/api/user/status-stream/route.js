@@ -1,6 +1,54 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { addSseClient, removeSseClient } from "@/lib/sse";
+import { addSseClient, hasActiveClients, removeSseClient } from "@/lib/sse";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { setUserStatus } from "@/lib/contact-center/user-status";
+
+const globalAny = globalThis;
+if (!globalAny.__session_presence_offline_timers) {
+  globalAny.__session_presence_offline_timers = new Map();
+}
+const presenceOfflineTimers = globalAny.__session_presence_offline_timers;
+const PRESENCE_OFFLINE_GRACE_MS = 30000;
+
+async function getCurrentAgentStatus(userId) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool || !userId) return null;
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearPresenceOfflineTimer(userId) {
+  const existing = presenceOfflineTimers.get(String(userId));
+  if (existing) {
+    clearTimeout(existing);
+    presenceOfflineTimers.delete(String(userId));
+  }
+}
+
+function schedulePresenceOffline({ userId, username, statusKey }) {
+  clearPresenceOfflineTimer(userId);
+  const timer = setTimeout(async function markOfflineAfterDisconnect() {
+    presenceOfflineTimers.delete(String(userId));
+    if (hasActiveClients(statusKey)) return;
+    const previousStatus = await getCurrentAgentStatus(userId);
+    if (previousStatus === "Offline") return;
+    await setUserStatus({
+      userId: String(userId),
+      username,
+      status: "Offline",
+      previousStatus,
+    });
+  }, PRESENCE_OFFLINE_GRACE_MS);
+  presenceOfflineTimers.set(String(userId), timer);
+}
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -15,6 +63,7 @@ export async function GET(request) {
   const userId = String(user.id);
   const statusKey = `user:status:${userId}`;
   const queueKey = `user:queues:${userId}`;
+  clearPresenceOfflineTimer(userId);
 
   // Create a readable stream for SSE
   const encoder = new TextEncoder();
@@ -60,10 +109,9 @@ export async function GET(request) {
       let pingInterval = null;
       let disconnectHandled = false;
 
-      // Handle client disconnect. SSE is a read-only presence transport for the
-      // header/queue widgets; it must never persist Contact Center routing
-      // status. Call lifecycle status is owned by backend call-state handlers,
-      // and manual status changes are owned by the dropdown/profile API.
+      // Handle client disconnect. This user session stream is the server-side
+      // presence signal: when all streams for the user are gone for the grace
+      // period, the agent is no longer connected and must be marked Offline.
       const handleDisconnect = async () => {
         // Prevent multiple calls
         if (disconnectHandled) {
@@ -79,8 +127,11 @@ export async function GET(request) {
         try {
           await writer.close();
         } catch (_) {}
-
-        // Do not write agent status here.
+        schedulePresenceOffline({
+          userId,
+          username: user.username,
+          statusKey,
+        });
       };
 
       // Send periodic ping to keep connection alive

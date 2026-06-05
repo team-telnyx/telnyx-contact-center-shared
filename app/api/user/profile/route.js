@@ -256,9 +256,15 @@ export async function POST(request) {
     let requestedStatus = null;
     if (typeof payload.status === "string" && payload.status.trim()) {
       const trimmedStatus = payload.status.trim();
+      const allowSystemStatus = payload.system === true;
       const allowedStatuses = await getAllowedStatuses();
       if (allowedStatuses.includes(trimmedStatus)) {
         requestedStatus = trimmedStatus;
+      } else if (allowSystemStatus) {
+        const meta = await getStatusMetaByName(trimmedStatus);
+        if (meta?.name) {
+          requestedStatus = trimmedStatus;
+        }
       }
     }
 

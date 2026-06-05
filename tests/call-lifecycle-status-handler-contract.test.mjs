@@ -21,29 +21,61 @@ test("call answered/connected lifecycle keeps agent Busy and never resets to Ava
   );
 });
 
-test("status stream is read-only presence transport and never writes routing status", async () => {
+test("status stream marks agent Offline only after all session streams disconnect", async () => {
   const statusStreamSource = await source("../app/api/user/status-stream/route.js");
   const agentStreamSource = await source("../app/api/contact-center/agent/stream/route.js");
 
-  assert.doesNotMatch(
+  assert.match(
     statusStreamSource,
-    /setUserStatus\(/,
-    "SSE connect/disconnect must not persist agent routing status",
+    /setUserStatus\([\s\S]*status:\s*["']Offline["']/,
+    "session stream disconnect should mark Contact Center agent status Offline",
   );
-  assert.doesNotMatch(
+  assert.match(
     statusStreamSource,
-    /status:\s*["']Offline["']/,
-    "Presence disconnect must not overwrite Contact Center agent status",
+    /hasActiveClients\(statusKey\)/,
+    "disconnect handler must not mark Offline while another tab/session stream is still connected",
+  );
+  assert.match(
+    statusStreamSource,
+    /setTimeout\([\s\S]*markOfflineAfterDisconnect/,
+    "disconnect Offline transition must be delayed to avoid reload/transient disconnect false positives",
   );
   assert.doesNotMatch(
     agentStreamSource,
-    /setUserStatus\(/,
-    "Agent SSE connect/disconnect must not persist agent routing status",
+    /status:\s*["']Offline["']/,
+    "Agent call stream disconnect must not own Offline status; session presence stream owns it",
+  );
+});
+
+test("client logout and unload send system Offline status", async () => {
+  const sessionMonitorSource = await source("../lib/session-monitor.js");
+  const navUserSource = await source("../components/nav-user.jsx");
+  const profileSource = await source("../app/api/user/profile/route.js");
+
+  assert.match(
+    sessionMonitorSource,
+    /JSON\.stringify\(\{\s*status:\s*["']Offline["'],\s*system:\s*true/s,
+    "sendBeacon unload/offline payload must mark Offline as a system status",
   );
   assert.doesNotMatch(
-    agentStreamSource,
-    /status:\s*["']Offline["']/,
-    "Agent SSE disconnect must not overwrite Contact Center agent status",
+    sessionMonitorSource,
+    /if \(isLoggingOut\) return;/,
+    "logout must not suppress the automatic Offline transition",
+  );
+  assert.match(
+    navUserSource,
+    /body:\s*JSON\.stringify\(\{\s*status:\s*nextStatus,\s*system:\s*nextStatus\s*===\s*["']Offline["']/s,
+    "manual logout status update must be allowed to set system Offline",
+  );
+  assert.match(
+    navUserSource,
+    /await updateStatusOnServer\(["']Offline["']\)/,
+    "logout should await the explicit Offline update before clearing the session",
+  );
+  assert.match(
+    profileSource,
+    /payload\.system\s*===\s*true[\s\S]*getStatusMetaByName/,
+    "profile POST/sendBeacon handler must accept system statuses such as Offline",
   );
 });
 
