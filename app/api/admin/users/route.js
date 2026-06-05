@@ -165,13 +165,13 @@ export async function POST(request) {
     await pool.query(
       `INSERT INTO users (
         id, username, first_name, last_name, nick, mobile, roles,
-        active, verified, auth_strategy, status, language, theme,
+        active, verified, auth_strategy, language, theme,
         invite_token, invite_token_expires, invite_sent_at, invite_status,
         skills, agent_groups, preferred_languages,
         created_at, updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
-        false, false, 'local', 'Available', 'en-US', 'system',
+        false, false, 'local', 'en-US', 'system',
         $8, $9, $10, $11,
         '{}', '{}', ARRAY['en-US']::TEXT[],
         NOW(), NOW()
@@ -182,6 +182,15 @@ export async function POST(request) {
         inviteToken, inviteExpires, inviteSentAt, inviteStatus,
       ]
     );
+
+    const { ensureAgentStatusState } = await import(
+      "@/lib/contact-center/user-status"
+    );
+    await ensureAgentStatusState({
+      userId: id,
+      username,
+      status: "Available",
+    });
 
     // Send invite email if requested
     if (sendInvite && inviteToken) {
