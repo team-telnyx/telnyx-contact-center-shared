@@ -102,6 +102,18 @@ export async function GET(request) {
 
       // Send connected event
       await sendEvent("connected", { timestamp: new Date().toISOString() });
+      const currentStatus = await getCurrentAgentStatus(userId);
+      if (currentStatus) {
+        await sendEvent("status_changed", {
+          type: "status_changed",
+          status: currentStatus,
+          previousStatus: null,
+          userId,
+          username: user.username,
+          snapshot: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // Track last successful ping to detect stale connections
       let lastPingSuccess = Date.now();

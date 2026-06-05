@@ -40,6 +40,16 @@ test("status stream marks agent Offline only after all session streams disconnec
     /setTimeout\([\s\S]*markOfflineAfterDisconnect/,
     "disconnect Offline transition must be delayed to avoid reload/transient disconnect false positives",
   );
+  assert.match(
+    statusStreamSource,
+    /sendEvent\(["']connected["'][\s\S]{0,700}getCurrentAgentStatus\(userId\)[\s\S]{0,700}sendEvent\(["']status_changed["']/,
+    "status stream must replay the current cc_agent_state status on connect/reconnect so the header cannot stay stale",
+  );
+  assert.match(
+    statusStreamSource,
+    /snapshot:\s*true/,
+    "status stream replay payload should be identifiable as a snapshot",
+  );
   assert.doesNotMatch(
     agentStreamSource,
     /status:\s*["']Offline["']/,

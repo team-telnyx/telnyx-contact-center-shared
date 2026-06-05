@@ -26,6 +26,41 @@ test("agent leg call.initiated is treated as ringing and marks agent Busy", asyn
   );
 });
 
+test("initial inbound routing paths mark the selected agent Busy before WebRTC bridge", async () => {
+  const webhookSource = await source("../lib/contact-center/webhook-handler.js");
+
+  const incomingCallSelectedAgentBlock = webhookSource.slice(
+    webhookSource.indexOf("if (routingResult.success && routingResult.agent)"),
+    webhookSource.indexOf("// Broadcast routing event"),
+  );
+  assert.match(
+    incomingCallSelectedAgentBlock,
+    /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']ringing["']/,
+    "handleIncomingCall direct assignment must mark the selected agent Busy when the interaction becomes ringing",
+  );
+  assert.ok(
+    incomingCallSelectedAgentBlock.indexOf("handleAgentCallLifecycleStatus") <
+      incomingCallSelectedAgentBlock.indexOf("assignCallToAgent"),
+    "direct assignment must persist Busy before updating/broadcasting in-memory assignment state",
+  );
+
+  const enqueueSelectedAgentStart = webhookSource.indexOf("if (selectedAgent)");
+  const enqueueSelectedAgentBlock = webhookSource.slice(
+    enqueueSelectedAgentStart,
+    webhookSource.indexOf("const { bridgeCallToAgent }", enqueueSelectedAgentStart),
+  );
+  assert.match(
+    enqueueSelectedAgentBlock,
+    /handleAgentCallLifecycleStatus\([\s\S]*event:\s*["']ringing["']/,
+    "handleContactCenterEnqueue selected-agent branch must mark the selected agent Busy when the interaction becomes ringing",
+  );
+  assert.ok(
+    enqueueSelectedAgentBlock.indexOf("handleAgentCallLifecycleStatus") <
+      enqueueSelectedAgentBlock.indexOf("// Automatically transfer call to agent's WebRTC client"),
+    "enqueue assignment must persist Busy before the WebRTC bridge attempts to ring the softphone",
+  );
+});
+
 test("call hangup status outcome is based on which leg ended and answer evidence", async () => {
   const webhookSource = await source("../lib/contact-center/webhook-handler.js");
 
