@@ -319,7 +319,7 @@ export function AgentDesktop() {
           matchKeys.delete(null);
           matchKeys.delete("");
 
-          return !filteredDbInteractions.some((interaction) => {
+          const hasDbMatch = filteredDbInteractions.some((interaction) => {
             const metadata = interaction.metadata || {};
             const interactionKeys = new Set([
               interaction.id,
@@ -333,6 +333,37 @@ export function AgentDesktop() {
             }
             return false;
           });
+
+          if (hasDbMatch) return false;
+
+          // Guard against client-side orphan calls: if the DB has no active
+          // interaction for this call and the authoritative agent status is not
+          // call-engaged, do not synthesize a store-only interaction forever.
+          // This covers missed WebRTC hangup/disconnect events after the DB has
+          // already completed the call and returned the agent to Available.
+          const nonCallStatuses = new Set([
+            "Available",
+            "Away",
+            "Offline",
+            "Agent Not Answering",
+          ]);
+          const startedAt = call.callStartTime || call.createdAt || call.startedAt;
+          const startedMs = startedAt ? new Date(startedAt).getTime() : 0;
+          const isRecentlyCreated = startedMs && Date.now() - startedMs < 5000;
+          if (
+            currentAgentStatus &&
+            nonCallStatuses.has(currentAgentStatus) &&
+            !isRecentlyCreated
+          ) {
+            console.log(
+              `[AgentDesktop] Suppressing stale store-only call ${
+                call.callControlId || call.interactionId || call.callSessionId
+              } because agent status is ${currentAgentStatus} and DB has no active interaction`,
+            );
+            return false;
+          }
+
+          return true;
         })
         .map((call) => ({
           id: call.interactionId || `temp-${call.callControlId}`,

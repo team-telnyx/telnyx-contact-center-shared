@@ -218,7 +218,16 @@ export function SiteHeader() {
       });
       const data = await res.json();
       if (data.ok) {
-        setStatus(newStatus);
+        // Do not optimistically force the requested value into the header.
+        // Changing from "Agent Not Answering" to "Available" can immediately
+        // offer a queued call and persist/broadcast "Busy" before this PUT
+        // resolves. If we set newStatus here, the selector briefly flashes
+        // Available after the DB has already moved the agent back to Busy.
+        if (data.status) {
+          setStatus(data.status);
+        } else if (loadStatusRef.current) {
+          await loadStatusRef.current();
+        }
       } else {
         alert(data.error || "Failed to update status");
       }

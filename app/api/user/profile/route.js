@@ -191,9 +191,10 @@ export async function PUT(request) {
       await PgDb.updateUserById(userId, update);
     }
 
+    let effectiveStatus = null;
     if (requestedStatus) {
       const previousStatus = await getCurrentAgentStatus(userId);
-      await setUserStatus({
+      effectiveStatus = await setUserStatus({
         userId,
         username: user.username,
         status: requestedStatus,
@@ -204,6 +205,9 @@ export async function PUT(request) {
     return NextResponse.json({
       ok: true,
       message: "User profile updated successfully",
+      status:
+        effectiveStatus ||
+        (requestedStatus ? await getCurrentAgentStatus(userId) : undefined),
     });
   } catch (err) {
     console.error("[USER] Profile PUT error", err);

@@ -605,17 +605,6 @@ export default function MonitorPage() {
   function invalidateExpandedAgentCalls(userId) {
     if (!userId) return;
     const normalizedUserId = String(userId);
-    setAgentCallsMap((prev) => {
-      if (!(normalizedUserId in prev)) return prev;
-      const next = { ...prev };
-      delete next[normalizedUserId];
-      return next;
-    });
-    setAgentActiveCallsMap((prev) => ({
-      ...prev,
-      [normalizedUserId]: [],
-    }));
-
     if (String(expandedAgentIdRef.current || "") === normalizedUserId) {
       setTimeout(() => {
         if (isPageVisibleRef.current && loadAgentCallsRef.current) {

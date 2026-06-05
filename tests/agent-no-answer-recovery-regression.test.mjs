@@ -80,8 +80,17 @@ test("supervisor monitor invalidates expanded agent active-call cache on status 
   );
   assert.match(
     pageSource,
-    /function invalidateExpandedAgentCalls\([\s\S]*setAgentActiveCallsMap[\s\S]*loadAgentCallsRef\.current\(String\(userId\), \{ force: true, silent: true \}\)/,
-    "monitor should clear and force-refetch expanded calls for affected agents",
+    /function invalidateExpandedAgentCalls\([\s\S]*loadAgentCallsRef\.current\(String\(userId\), \{ force: true, silent: true \}\)/,
+    "monitor should force-refetch expanded calls for affected agents",
+  );
+  const invalidationBlock = pageSource.slice(
+    pageSource.indexOf("function invalidateExpandedAgentCalls"),
+    pageSource.indexOf("// Handle page visibility"),
+  );
+  assert.doesNotMatch(
+    invalidationBlock,
+    /setAgentActiveCallsMap\([\s\S]*\[normalizedUserId\]: \[\]/,
+    "expanded rows should not blink by clearing active calls before the no-store refresh returns",
   );
   assert.match(
     pageSource,

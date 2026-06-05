@@ -134,6 +134,53 @@ test("site header periodically reconciles status from profile snapshot in case s
   );
 });
 
+test("manual status change uses DB-effective status returned by profile API", async () => {
+  const siteHeaderSource = await source("../components/site-header.jsx");
+  const profileSource = await source("../app/api/user/profile/route.js");
+  const userStatusSource = await source("../lib/contact-center/user-status.js");
+
+  const handleStart = siteHeaderSource.indexOf("const handleStatusChange");
+  const handleStatusBlock = siteHeaderSource.slice(
+    handleStart,
+    siteHeaderSource.indexOf("return (", handleStart),
+  );
+  assert.doesNotMatch(
+    handleStatusBlock,
+    /setStatus\(newStatus\)/,
+    "header must not flash the requested status after routing already persisted Busy",
+  );
+  assert.match(
+    handleStatusBlock,
+    /data\.status[\s\S]*setStatus\(data\.status\)/,
+    "header should render the effective DB status returned by PUT /api/user/profile",
+  );
+  assert.match(
+    profileSource,
+    /effectiveStatus\s*=\s*await setUserStatus[\s\S]*status:\s*effectiveStatus/,
+    "profile PUT should return the status that setUserStatus observed after auto-offer routing",
+  );
+  assert.match(
+    userStatusSource,
+    /return broadcastStatus/,
+    "setUserStatus should return the final broadcast/effective status to the API caller",
+  );
+});
+
+test("agent desktop suppresses stale store-only calls when DB has no active interaction", async () => {
+  const agentDesktopSource = await source("../components/contact-center/AgentDesktop.jsx");
+
+  assert.match(
+    agentDesktopSource,
+    /Suppressing stale store-only call/,
+    "Agent Desktop should not keep rendering a WebRTC store-only orphan after DB completion",
+  );
+  assert.match(
+    agentDesktopSource,
+    /nonCallStatuses\.has\(currentAgentStatus\)[\s\S]*!isRecentlyCreated/,
+    "stale store-only calls should be hidden once cc_agent_state is Available/Away/Offline/Agent Not Answering",
+  );
+});
+
 test("single backend call lifecycle status handler owns call-state transitions", async () => {
   const handlerSource = await source("../lib/contact-center/agent-call-lifecycle-status.js");
 
