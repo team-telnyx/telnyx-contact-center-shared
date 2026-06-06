@@ -257,13 +257,14 @@ export default function AdminLoggingPage() {
       } catch (_) {}
     });
     source.addEventListener("log", (event) => {
+      setLiveConnected(true);
       try {
         const entry = JSON.parse(event.data || "{}");
         setLogEntries((prev) => [entry, ...prev].slice(0, Number(logFilters.limit || 100)));
       } catch (_) {}
     });
     source.onerror = () => {
-      setLiveConnected(false);
+      setLiveConnected(source.readyState === EventSource.OPEN);
     };
     return () => {
       setLiveConnected(false);
