@@ -73,6 +73,37 @@ test("createLogger emits pino JSON with topic, runId, and redacted sensitive fie
   assert.equal(entry.media.payload, "[redacted:string:20]");
 });
 
+test("createLogger computes default timestamps for each emitted entry", async () => {
+  const lines = [];
+  const { createLogger } = await freshLoggerModule();
+  const logger = createLogger({
+    topic: "app",
+    config: { globalLevel: "debug", consoleEnabled: true, fileEnabled: false },
+    stdout: (line) => lines.push(line),
+  });
+
+  logger.info({}, "first_entry");
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  logger.info({}, "second_entry");
+
+  assert.equal(lines.length, 2);
+  assert.notEqual(JSON.parse(lines[0]).time, JSON.parse(lines[1]).time);
+});
+
+test("createLogger redacts bearer-keyed credentials", async () => {
+  const lines = [];
+  const { createLogger } = await freshLoggerModule();
+  const logger = createLogger({
+    topic: "app",
+    config: { globalLevel: "debug", consoleEnabled: true, fileEnabled: false },
+    stdout: (line) => lines.push(line),
+  });
+
+  logger.info({ bearer: "short-lived-secret" }, "bearer_redaction");
+
+  assert.equal(JSON.parse(lines[0]).bearer, "[redacted:string:18]");
+});
+
 test("sanitizeDiagnosticUrl redacts query, fragments, and URL userinfo", async () => {
   const { sanitizeDiagnosticUrl } = await freshLoggerModule();
   const sanitized = sanitizeDiagnosticUrl("https://user:pass123@example.com/callback?foo=bar#access_token=secret123&state=visible");
@@ -182,6 +213,38 @@ test("createLogger can write JSONL to a daily file sink", async () => {
     assert.equal(entry.topic, "app");
     assert.equal(entry.runId, "run-file");
     assert.equal(entry.msg, "file_sink_test");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("createLogger rotates daily file sinks after midnight", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-daily-rotation-"));
+  const { createLogger, buildLogFilePath } = await freshLoggerModule();
+  let currentTime = new Date("2026-06-06T23:59:59.900Z");
+  const logger = createLogger({
+    topic: "app",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: false,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+    },
+    now: () => currentTime,
+    runId: "daily-run",
+  });
+
+  try {
+    logger.info({}, "before_midnight");
+    currentTime = new Date("2026-06-07T00:00:00.100Z");
+    logger.info({}, "after_midnight");
+    await logger.flush?.();
+
+    const firstPath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now: new Date("2026-06-06T23:59:59.900Z"), runId: "daily-run" });
+    const secondPath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now: new Date("2026-06-07T00:00:00.100Z"), runId: "daily-run" });
+    assert.match(await readFile(firstPath, "utf8"), /before_midnight/);
+    assert.match(await readFile(secondPath, "utf8"), /after_midnight/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
