@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { consultLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 
 /**
  * DELETE /api/contact-center/interactions/by-call-control-id/consult
@@ -72,9 +73,7 @@ export async function DELETE(request) {
     const metadata = interaction.metadata || {};
     const consultState = metadata.consult_state;
 
-    console.log(
-      `[Consult] DELETE - Cleaning up consult state for interaction ${interaction.id}, hangupParked=${hangupParked}, consultState=${JSON.stringify(consultState)}`,
-    );
+    consultLogger.debug("consult_diagnostic_0", {});
 
     // Clear consult_state from metadata
     delete metadata.consult_state;
@@ -83,9 +82,7 @@ export async function DELETE(request) {
       metadata,
     });
 
-    console.log(
-      `[Consult] Cleared consult_state from interaction ${interaction.id} metadata`,
-    );
+    consultLogger.debug("consult_diagnostic_1", {});
 
     // Optionally hangup the parked call (customer leg)
     if (hangupParked && consultState?.parkedCallControlId) {
@@ -96,9 +93,7 @@ export async function DELETE(request) {
             `/calls/${encodeURIComponent(consultState.parkedCallControlId)}/actions/hangup`,
           );
           
-          console.log(
-            `[Consult] Hanging up parked call ${consultState.parkedCallControlId}`,
-          );
+          consultLogger.debug("consult_diagnostic_2", {});
           
           const hangupResponse = await fetch(hangupUrl, {
             method: "POST",
@@ -111,19 +106,12 @@ export async function DELETE(request) {
 
           if (!hangupResponse.ok) {
             const errorText = await hangupResponse.text();
-            console.error(
-              `[Consult] Failed to hangup parked call: ${errorText}`,
-            );
+            consultLogger.error("consult_error_3", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
           } else {
-            console.log(
-              `[Consult] Successfully hung up parked call ${consultState.parkedCallControlId}`,
-            );
+            consultLogger.debug("consult_diagnostic_4", {});
           }
         } catch (hangupError) {
-          console.error(
-            `[Consult] Error hanging up parked call:`,
-            hangupError,
-          );
+          consultLogger.error("consult_error_5", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
         }
       }
     }
@@ -134,7 +122,7 @@ export async function DELETE(request) {
       clearedState: consultState || null,
     });
   } catch (err) {
-    console.error("[Consult] DELETE Error:", err);
+    consultLogger.error("consult_error_6", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 },
@@ -217,9 +205,7 @@ export async function POST(request) {
     }
     
     if (!interaction) {
-      console.error(
-        `[Consult] Interaction not found for agent_call_control_id: ${callControlId}. Searched ONLY in metadata->>'agent_call_control_id'`,
-      );
+      consultLogger.error("consult_error_7", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       return NextResponse.json(
         {
           ok: false,
@@ -242,9 +228,7 @@ export async function POST(request) {
       interaction.metadata?.original_call_control_id ||
       interaction.call_control_id;
 
-    console.log(
-      `[Consult] Found interaction ${interaction.id} by agent_call_control_id=${callControlId}. Agent call control ID: ${agentCallControlId} (from body: ${bodyAgentCallControlId}, from metadata: ${interaction.metadata?.agent_call_control_id}, from query: ${callControlId}), Parked: ${parkedCallControlId}`,
-    );
+    consultLogger.debug("consult_diagnostic_8", {});
 
     if (!agentCallControlId) {
       return NextResponse.json(
@@ -275,13 +259,9 @@ export async function POST(request) {
     // Step 1: Initiate new call to consultant and bridge to agent's WebRTC connection
     // Get agent's WebRTC connection ID
     const agent = await PgDb.findUserByUsername(user.username);
-    console.log(
-      `[Consult] Agent lookup for ${user.username}: found=${!!agent}, telephony_credentials_id=${agent?.telephony_credentials_id}, telephony_user_name=${agent?.telephony_user_name || agent?.telephonyUserName}`,
-    );
+    consultLogger.debug("consult_diagnostic_9", {});
     if (!agent || !agent.telephony_credentials_id) {
-      console.error(
-        `[Consult] Agent ${user.username} does not have WebRTC connection configured. telephony_credentials_id: ${agent?.telephony_credentials_id}, agent object keys: ${agent ? Object.keys(agent).join(", ") : "null"}`,
-      );
+      consultLogger.error("consult_error_10", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       return NextResponse.json(
         { ok: false, error: "Agent does not have WebRTC connection configured" },
         { status: 400 },
@@ -294,9 +274,7 @@ export async function POST(request) {
       agent.telephonyUserName ||
       user.username.split("@")[0];
 
-    console.log(
-      `[Consult] Agent ${user.username}: connection_id=${connectionId}, telephony_user_name=${telephonyUserName}, agent_call_control_id=${agentCallControlId}`,
-    );
+    consultLogger.debug("consult_diagnostic_11", {});
 
     // Step 1: Set consult_state FIRST (before hangup) to prevent webhook handler from hanging up original leg
     // This tells the webhook handler that we're in a consult process
@@ -316,9 +294,7 @@ export async function POST(request) {
       metadata,
     });
 
-    console.log(
-      `[Consult] Set consult_state in metadata BEFORE hangup to prevent original leg disconnect.`,
-    );
+    consultLogger.debug("consult_diagnostic_12", {});
 
     // Step 2: Hangup the agent's call leg
     // This will park the caller due to park_after_unbridge setting
@@ -327,14 +303,7 @@ export async function POST(request) {
     );
     const hangupBody = {};
 
-    console.log(
-      `[Consult] Step 2: Hanging up agent's call leg: ${JSON.stringify({
-        url: hangupUrl,
-        method: "POST",
-        callControlId: agentCallControlId,
-        body: hangupBody,
-      })}`,
-    );
+    consultLogger.debug("consult_diagnostic_13", {});
 
     const hangupResponse = await fetch(hangupUrl, {
       method: "POST",
@@ -347,9 +316,7 @@ export async function POST(request) {
 
     if (!hangupResponse.ok) {
       const errorText = await hangupResponse.text();
-      console.error(
-        `[Consult] Failed to hangup agent's call leg: ${errorText}`,
-      );
+      consultLogger.error("consult_error_14", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       // Rollback consult_state on error
       delete metadata.consult_state;
       await PgDb.updateInteractionById(interaction.id, {
@@ -365,17 +332,13 @@ export async function POST(request) {
     }
 
     const hangupData = await hangupResponse.json();
-    console.log(
-      `[Consult] Hangup response: ${JSON.stringify(hangupData)}`,
-    );
+    consultLogger.debug("consult_diagnostic_15", {});
 
     await PgDb.updateInteractionById(interaction.id, {
       metadata,
     });
 
-    console.log(
-      `[Consult] Set consult_state in metadata. Waiting for hangup webhook to initiate consult call.`,
-    );
+    consultLogger.debug("consult_diagnostic_16", {});
 
     // Return success - the frontend will initiate the WebRTC call
     return NextResponse.json({
@@ -386,7 +349,7 @@ export async function POST(request) {
       consultantTarget: target.trim(), // Return target for frontend to use
     });
   } catch (err) {
-    console.error("[Consult] Error:", err);
+    consultLogger.error("consult_error_17", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 },

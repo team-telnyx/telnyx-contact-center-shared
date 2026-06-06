@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { broadcastToKey } from "@/lib/sse";
+import { transferLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -41,19 +42,13 @@ export async function POST(request) {
       );
     }
 
-    console.log(
-      `[Transfer] Looking up interaction for callControlId: ${callControlId}`,
-    );
+    transferLogger.debug("transfer_diagnostic_0", {});
 
     // Find interaction by call_control_id using the same logic as GET endpoint
     // Note: This may find the interaction even if callControlId is the WebRTC leg
     // (because webrtc-bridge.js updates interaction.call_control_id to the agent's WebRTC leg)
     let interaction = await PgDb.findInteractionByCallControlId(callControlId);
-    console.log(
-      `[Transfer] Direct lookup by callControlId: ${
-        interaction ? "found" : "not found"
-      }`,
-    );
+    transferLogger.debug("transfer_diagnostic_1", {});
 
     // If not found, check incoming call store and calls store
     if (!interaction) {
@@ -64,36 +59,24 @@ export async function POST(request) {
         const callData = getIncomingCallData(callControlId);
 
         if (callData?.originalCallControlId) {
-          console.log(
-            `[Transfer] Found originalCallControlId in incoming call store: ${callData.originalCallControlId}`,
-          );
+          transferLogger.debug("transfer_diagnostic_2", {});
           interaction = await PgDb.findInteractionByCallControlId(
             callData.originalCallControlId,
           );
-          console.log(
-            `[Transfer] Lookup by originalCallControlId: ${
-              interaction ? "found" : "not found"
-            }`,
-          );
+          transferLogger.debug("transfer_diagnostic_3", {});
         }
 
         if (!interaction && callData?.interactionId) {
-          console.log(
-            `[Transfer] Found interactionId in incoming call store: ${callData.interactionId}`,
-          );
+          transferLogger.debug("transfer_diagnostic_4", {});
           interaction = await PgDb.findInteractionById(callData.interactionId);
-          console.log(
-            `[Transfer] Lookup by interactionId: ${
-              interaction ? "found" : "not found"
-            }`,
-          );
+          transferLogger.debug("transfer_diagnostic_5", {});
         }
 
         // Also check calls store (client-side store, but we can check if callControlId matches)
         // The calls store is client-side only, so we can't directly access it here
         // But we can try looking up by the originalCallControlId if we find it in metadata
       } catch (err) {
-        console.warn("[Transfer] Error checking incoming call store:", err);
+        transferLogger.warn("transfer_warning_6", {});
       }
     }
 
@@ -164,16 +147,11 @@ export async function POST(request) {
               tags: safeParse(row.tags),
               metadata: safeParse(row.metadata),
             };
-            console.log(
-              `[Transfer] Found interaction by metadata.agent_call_control_id or call_session_id`,
-            );
+            transferLogger.debug("transfer_diagnostic_7", {});
           }
         }
       } catch (err) {
-        console.warn(
-          "[Transfer] Error looking up by metadata or call_session_id:",
-          err,
-        );
+        transferLogger.warn("transfer_warning_8", {});
       }
     }
 
@@ -197,33 +175,17 @@ export async function POST(request) {
     // This is stored in webrtc-bridge.js when the call is transferred to the agent
     if (interaction.metadata?.original_call_control_id) {
       transferCallControlId = interaction.metadata.original_call_control_id;
-      console.log(
-        `[Transfer] ✅ Using original_call_control_id from metadata: ${transferCallControlId} (interaction.call_control_id is WebRTC leg: ${interaction.call_control_id})`,
-      );
+      transferLogger.debug("transfer_diagnostic_9", {});
     } else if (!isInbound && interaction.metadata?.pstn_call_control_id) {
       // Priority 2: Outbound call - use PSTN leg from metadata
       transferCallControlId = interaction.metadata.pstn_call_control_id;
-      console.log(
-        `[Transfer] ✅ Outbound call - Using PSTN leg call_control_id: ${transferCallControlId}`,
-      );
+      transferLogger.debug("transfer_diagnostic_10", {});
     } else {
       // Fallback: Use interaction.call_control_id (should only happen if call wasn't transferred to agent)
-      console.warn(
-        `[Transfer] ⚠️ No original_call_control_id in metadata, using interaction.call_control_id: ${transferCallControlId}. This may fail if call was transferred to agent.`,
-      );
+      transferLogger.warn("transfer_warning_11", {});
     }
 
-    console.log(`[Transfer] Transfer call leg selection:`, {
-      receivedCallControlId: callControlId,
-      interactionCallControlId: interaction.call_control_id,
-      metadataOriginalCallControlId:
-        interaction.metadata?.original_call_control_id,
-      metadataAgentCallControlId: interaction.metadata?.agent_call_control_id,
-      metadataPstnCallControlId: interaction.metadata?.pstn_call_control_id,
-      finalTransferCallControlId: transferCallControlId,
-      direction: interaction.direction,
-      isInbound,
-    });
+    transferLogger.debug("transfer_diagnostic_12", {});
 
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -332,10 +294,7 @@ export async function POST(request) {
 
           if (!clientStateResponse.ok) {
             const errorText = await clientStateResponse.text();
-            console.error(
-              "[Transfer] Failed to update client_state:",
-              errorText,
-            );
+            transferLogger.error("transfer_error_13", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
             return NextResponse.json(
               {
                 ok: false,
@@ -385,7 +344,7 @@ export async function POST(request) {
               transferHistory = [];
             }
           } catch (e) {
-            console.warn("[Transfer] Failed to parse transfer_history:", e);
+            transferLogger.warn("transfer_warning_14", {});
             transferHistory = [];
           }
         }
@@ -465,7 +424,7 @@ export async function POST(request) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[Transfer] Telnyx API error:", errorText);
+      transferLogger.error("transfer_error_15", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       return NextResponse.json(
         { ok: false, error: errorText },
         { status: response.status },
@@ -485,7 +444,7 @@ export async function POST(request) {
             transferHistory = [];
           }
         } catch (e) {
-          console.warn("[Transfer] Failed to parse transfer_history:", e);
+          transferLogger.warn("transfer_warning_16", {});
           transferHistory = [];
         }
       }
@@ -529,7 +488,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[TransferByCallControlId] Error:", err);
+    transferLogger.error("transfer_error_17", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },

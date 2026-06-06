@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { wrapupLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -167,7 +168,7 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Wrapup] POST error:", err);
+    wrapupLogger.error("wrapup_error_0", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Failed to update wrapup status" },
       { status: 500 },
