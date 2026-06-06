@@ -262,7 +262,10 @@ export default function AdminLoggingPage() {
         setLogEntries((prev) => [entry, ...prev].slice(0, Number(logFilters.limit || 100)));
       } catch (_) {}
     });
-    source.onerror = () => setLiveConnected(false);
+    source.onerror = () => {
+      setLiveConnected(false);
+      source.close();
+    };
     return () => {
       setLiveConnected(false);
       source.close();

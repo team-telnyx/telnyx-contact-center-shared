@@ -54,6 +54,14 @@ test("Admin logging settings expose Friendly console directly under Pretty conso
   assert.ok(page.indexOf('ToggleRow label="Pretty console"') < page.indexOf('ToggleRow label="Friendly console"'));
 });
 
+test("Admin logging Live SSE closes EventSource on errors and when leaving Live", async () => {
+  const page = await source();
+
+  assert.match(page, /const source = new EventSource\(`\/api\/admin\/logging\/stream\?\$\{params\.toString\(\)\}`\);/);
+  assert.match(page, /source\.onerror = \(\) => \{[\s\S]*setLiveConnected\(false\);[\s\S]*source\.close\(\);[\s\S]*\};/);
+  assert.match(page, /return \(\) => \{[\s\S]*setLiveConnected\(false\);[\s\S]*source\.close\(\);[\s\S]*\};/);
+});
+
 test("Admin logging entries stay compact and expand anywhere into CodeBlock JSON", async () => {
   const page = await source();
   assert.match(page, /import \{ CodeBlock, CodeBlockCopyButton \} from "@\/components\/ai-elements\/code-block"/);
