@@ -72,6 +72,8 @@ test("auth logger lazily loads runtime logging config before emitting when worke
   assert.match(src, /tryLoadRuntimeLoggingConfigEarly/, "auth logger should bootstrap runtime config before first auth event in cold Next workers");
   assert.match(src, /ensureRuntimeLoggingConfig/, "auth logger should centralize the lazy runtime-config bootstrap");
   assert.match(src, /return ensureRuntimeLoggingConfig\(\)\.then/, "logAuthEvent should return the bootstrap promise so terminal auth events can await file/console emission");
+  assert.match(src, /RUNTIME_CONFIG_BOOTSTRAP_RETRY_MS/, "failed bootstrap attempts should be negative-cached briefly");
+  assert.match(src, /runtimeConfigLoadRetryAfterMs/, "auth logger should avoid opening a new bootstrap pool for every auth event when config is unavailable");
 });
 
 test("NextAuth credentials logs failed signin for invalid credentials before returning null", async () => {
