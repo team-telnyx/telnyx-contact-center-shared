@@ -56,6 +56,7 @@ test("Admin logging entries stay compact and expand anywhere into CodeBlock JSON
   assert.match(page, /role="button"/);
   assert.match(page, /onClick=\{\(\) => setExpanded\(\(open\) => !open\)\}/);
   assert.match(page, /onKeyDown=\{\(event\) => \{/);
+  assert.match(page, /isInteractiveTarget\(event\.target\)/);
   assert.match(page, /aria-expanded=\{expanded\}/);
   assert.match(page, /line-clamp-1/);
   assert.match(page, /maxCompactMetaItems/);

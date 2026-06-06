@@ -37,7 +37,7 @@ test("Postgres module logs pool lifecycle through pino instead of direct console
   assert.match(src, /from "\.\/logger\/index\.mjs"/);
   assert.match(src, /getCachedRuntimeLoggingConfig/);
   assert.match(src, /getDbRuntimeLoggingConfig/);
-  assert.match(src, /db: process\.env\.LOG_DB_LEVEL \|\| "info"/);
+  assert.match(src, /db: process\.env\.LOG_DB_LEVEL \|\| runtimeConfig\.topicLevels\?\.db \|\| "info"/);
   assert.match(src, /getConfig: getDbRuntimeLoggingConfig/);
   assert.match(src, /topic: "db"/);
   assert.match(src, /postgres_pool_created/);

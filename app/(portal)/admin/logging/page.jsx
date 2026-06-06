@@ -503,6 +503,7 @@ function LogEntryCard({ entry }) {
   const compactMeta = meta.slice(0, maxCompactMetaItems);
   const hiddenMetaCount = Math.max(0, meta.length - compactMeta.length);
   const formatMetaValue = (value) => (typeof value === "object" ? safeJsonStringify(value).replace(/\s+/g, " ") : String(value));
+  const isInteractiveTarget = (target) => target?.closest?.("button, a, input, textarea, select, [role='button']");
 
   return (
     <div
@@ -511,6 +512,7 @@ function LogEntryCard({ entry }) {
       aria-expanded={expanded}
       onClick={() => setExpanded((open) => !open)}
       onKeyDown={(event) => {
+        if (isInteractiveTarget(event.target) && event.target !== event.currentTarget) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           setExpanded((open) => !open);
