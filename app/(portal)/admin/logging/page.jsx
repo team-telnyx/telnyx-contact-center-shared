@@ -18,6 +18,16 @@ import {
 } from "@tabler/icons-react";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -134,6 +144,7 @@ export default function AdminLoggingPage() {
   const [logMeta, setLogMeta] = React.useState({ skippedInvalid: 0, truncated: false });
   const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topic: "", runId: "", search: "", from: "", to: "", limit: "100" });
   const [newTopic, setNewTopic] = React.useState("");
+  const [confirmation, setConfirmation] = React.useState(null);
 
   const activeMeta = NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0];
   const topics = React.useMemo(() => topicNames(config), [config]);
@@ -221,13 +232,33 @@ export default function AdminLoggingPage() {
     setNewTopic("");
   }
 
-  async function save() {
+  function closeConfirmation() {
+    setConfirmation(null);
+  }
+
+  function confirmAction(options) {
+    setConfirmation(options);
+  }
+
+  function runConfirmedAction() {
+    const action = confirmation?.action;
+    setConfirmation(null);
+    action?.();
+  }
+
+  async function save(options = {}) {
     if (!config) return;
+    if (config.fileEnabled && options.confirmedFileLogging !== true) {
+      confirmAction({
+        title: "Enable JSONL file logging?",
+        description: "Logs are redacted, but may still contain operational call metadata. Continue only when you want the file sink active.",
+        confirmLabel: "Enable file logging",
+        action: () => save({ confirmedFileLogging: true }),
+      });
+      return;
+    }
     setSaving(true);
     try {
-      if (config.fileEnabled && !window.confirm("Enable JSONL file logging? Logs are redacted, but may still contain operational call metadata. Continue?")) {
-        return;
-      }
       const response = await fetch("/api/admin/logging/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -244,12 +275,19 @@ export default function AdminLoggingPage() {
     }
   }
 
-  async function applyPreset(preset, ttlMinutes) {
+  async function applyPreset(preset, ttlMinutes, options = {}) {
+    if (preset !== "normal-production" && options.confirmedTroubleshooting !== true) {
+      const presetLabel = PRESETS.find((item) => item.id === preset)?.label || title(preset);
+      confirmAction({
+        title: "Apply troubleshooting preset?",
+        description: `${presetLabel} may increase log volume and file retention for the preset TTL. Use it only while actively troubleshooting.`,
+        confirmLabel: "Apply preset",
+        action: () => applyPreset(preset, ttlMinutes, { confirmedTroubleshooting: true }),
+      });
+      return;
+    }
     setSaving(true);
     try {
-      if (preset !== "normal-production" && !window.confirm("Apply a troubleshooting logging preset? This may increase log volume and file retention for the preset TTL.")) {
-        return;
-      }
       const body = { preset };
       if (ttlMinutes) body.ttlMinutes = Number(ttlMinutes);
       const response = await fetch("/api/admin/logging/presets", {
@@ -283,6 +321,7 @@ export default function AdminLoggingPage() {
   return (
     <AdminPageShell>
       <AdminPageHeader title="Logging" actions={headerActions} />
+      <LoggingConfirmationDialog confirmation={confirmation} onCancel={closeConfirmation} onConfirm={runConfirmedAction} saving={saving} />
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
         <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Logging sections" />
         <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
@@ -313,6 +352,30 @@ export default function AdminLoggingPage() {
         </aside>
       </main>
     </AdminPageShell>
+  );
+}
+
+function LoggingConfirmationDialog({ confirmation, onCancel, onConfirm, saving }) {
+  return (
+    <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <div className="mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/12 text-amber-600 dark:text-amber-300">
+            <IconAlertTriangle className="h-5 w-5" />
+          </div>
+          <AlertDialogTitle>{confirmation?.title || "Confirm logging change"}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {confirmation?.description || "This logging change may affect operational visibility or log volume."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel} disabled={saving}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm} disabled={saving} className="bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200">
+            {confirmation?.confirmLabel || "Continue"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

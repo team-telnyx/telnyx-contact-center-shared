@@ -36,3 +36,13 @@ test("Admin logging file selection refreshes Live entries for the selected file"
   assert.match(page, /const effectiveFilters = \{ \.\.\.logFilters, \.\.\.filterOverrides \}/);
   assert.match(page, /onSelect=\{\(file\) => \{ updateLogFilter\("file", file\); setActive\("live"\); loadLogs\(\{ file \}\); \}\}/);
 });
+
+test("Admin logging confirmations use the custom AlertDialog instead of browser confirms", async () => {
+  const page = await source();
+  assert.match(page, /from "@\/components\/ui\/alert-dialog"/);
+  assert.match(page, /function LoggingConfirmationDialog\(/);
+  assert.match(page, /<AlertDialog open=\{Boolean\(confirmation\)\}/);
+  assert.match(page, /Apply troubleshooting preset\?/);
+  assert.match(page, /Enable JSONL file logging\?/);
+  assert.doesNotMatch(page, /window\.confirm|window\.alert|window\.prompt/);
+});
