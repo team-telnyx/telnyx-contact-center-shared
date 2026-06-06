@@ -17,7 +17,7 @@ The existing logging migration introduced the right pino/JSONL foundation, but t
 Current relevant facts from the codebase:
 
 - `lib/logger/index.mjs` already supports hierarchical inheritance for `topicLevels` and `topicEnabled` by walking parent dot-prefixes.
-  - Example: `contact-center.core.routing` can inherit from `contact-center.core` or `contact-center` if no exact level is configured.
+  - Example: `contact-center.routing` can inherit from `contact-center` if no exact level is configured.
 - `app/(portal)/admin/logging/page.jsx` currently renders topics as a flat list in Settings.
 - `TopicMultiSelect` currently renders topics as a flat checkbox list in Live/Files Filters.
 - `lib/logger/runtime-config.mjs` has flat `DEFAULT_TOPIC_LEVELS` and `DEFAULT_TOPIC_ENABLED`.
@@ -30,22 +30,22 @@ The target is **not** to create one topic per file or class. The target is a com
 ## 2. Design Principles
 
 1. **Max ~50 topics total**
-   - Target: around 50 leaf topics, with each primary UI group capped at about five topics.
+   - Target: around 50 leaf topics. Most groups should stay around five topics, but a broad product area such as Contact Center may have more when that keeps topic IDs two-level and easier to operate.
    - Hard guardrail: do not exceed 50 leaf topics without explicit product decision.
 
 2. **Around 10 groups**
-   - Each group should contain about 3-5 topics.
+   - Most groups should contain about 3-5 topics; broader product domains may have more when that avoids artificial third-level topic names.
    - A group maps to a business/operational domain, not a source folder.
 
 3. **Group inheritance first, topic override second**
    - Group level controls broad noise.
    - Topic-level override handles a focused incident.
-   - Example: keep `contact-center.core = info`, temporarily set `contact-center.core.timeout = debug`.
+   - Example: keep `contact-center = info`, temporarily set `contact-center.timeout = debug`.
 
 4. **Topics are stable API, event names carry detail**
    - Avoid topic explosion like `contact-center.routing.agent.no-answer.timeout.requeue`.
    - Put detail in `msg` and structured fields instead:
-     - topic: `contact-center.core.timeout`
+     - topic: `contact-center.timeout`
      - msg: `agent_answer_timeout_requeue_completed`
      - fields: `interactionId`, `callControlId`, `agentUserId`, `queueId`, `reason`
 
@@ -68,14 +68,13 @@ The target is **not** to create one topic per file or class. The target is a com
 
 - Groups: **10**
 - Leaf topics: **50**
-- Optional group parent topics: stored in config for level inheritance and UI controls, but not typically emitted directly except where useful.
+- Group parent topics are stored in config for level inheritance and UI controls. Emitted leaf topics should remain two-level: `group.topic`.
 
 Primary group or namespace parent topics should be valid config keys:
 
 - `platform`
 - `security`
-- `contact-center.core`
-- `contact-center.calls`
+- `contact-center`
 - `voice`
 - `telnyx`
 - `agent-assist`
@@ -133,57 +132,43 @@ Default levels:
 - group `security`: `info`
 - `security.credentials`: `warn`
 
-### Group 3: Contact Center Core
+### Group 3: Contact Center
 
-Purpose: agent status, queue membership, routing, reservations, no-answer/requeue behavior.
-
-Leaf topics:
-
-1. `contact-center.core.status`
-2. `contact-center.core.queues`
-3. `contact-center.core.routing`
-4. `contact-center.core.reservations`
-5. `contact-center.core.timeout`
-
-Migration mapping:
-
-- `lib/contact-center/routing-engine.js` -> `contact-center.core.routing`
-- `lib/contact-center/agent-answer-timeout.js` -> `contact-center.core.timeout`
-- queue activation/deactivation/list/calls routes -> `contact-center.core.queues`
-- reservation manager -> `contact-center.core.reservations`
-- agent status routes -> `contact-center.core.status`
-
-Default level:
-
-- group `contact-center.core`: `info`
-
-### Group 4: Contact Center Calls
-
-Purpose: lifecycle of live calls and interactions: answer, wrap-up, transfer, consult, supervision.
+Purpose: Contact Center runtime: agent status, queue membership, routing, reservations, no-answer/requeue behavior, live interaction lifecycle, wrap-up, transfer, consult, and supervision.
 
 Leaf topics:
 
-1. `contact-center.calls.interactions`
-2. `contact-center.calls.wrapup`
-3. `contact-center.calls.transfer`
-4. `contact-center.calls.consult`
-5. `contact-center.calls.supervision`
+1. `contact-center.status`
+2. `contact-center.queues`
+3. `contact-center.routing`
+4. `contact-center.reservations`
+5. `contact-center.timeout`
+6. `contact-center.interactions`
+7. `contact-center.wrapup`
+8. `contact-center.transfer`
+9. `contact-center.consult`
+10. `contact-center.supervision`
 
 Migration mapping:
 
-- answer/history/by-call-control-id/transcription routes -> `contact-center.calls.interactions`
-- wrapup/wrapup-codes routes -> `contact-center.calls.wrapup`
-- transfer routes -> `contact-center.calls.transfer`
-- consult routes -> `contact-center.calls.consult`
-- supervise/switch-supervisor-role routes -> `contact-center.calls.supervision`
+- `lib/contact-center/routing-engine.js` -> `contact-center.routing`
+- `lib/contact-center/agent-answer-timeout.js` -> `contact-center.timeout`
+- queue activation/deactivation/list/calls routes -> `contact-center.queues`
+- reservation manager -> `contact-center.reservations`
+- agent status routes -> `contact-center.status`
+- answer/history/by-call-control-id/transcription routes -> `contact-center.interactions`
+- wrapup/wrapup-codes routes -> `contact-center.wrapup`
+- transfer routes -> `contact-center.transfer`
+- consult routes -> `contact-center.consult`
+- supervise/switch-supervisor-role routes -> `contact-center.supervision`
 
 Default level:
 
-- group `contact-center.calls`: `info`
+- group `contact-center`: `info`
 
-Note: Both groups keep a shared `contact-center` prefix. Operators can still add an advanced parent override on `contact-center`, but the primary UI should expose two smaller groups: Core and Calls.
+Note: Contact Center intentionally has more than five topics because it is the richest operational domain in the application. Keeping it as two-level `contact-center.topic` is more important than forcing artificial subgroups such as `contact-center.calls.transfer`.
 
-### Group 5: Voice & Call Flow
+### Group 4: Voice & Call Flow
 
 Purpose: Voice API webhook handling, flow execution, call-control actions, recordings, monitor streams.
 
@@ -207,7 +192,7 @@ Default level:
 
 - group `voice`: `info`
 
-### Group 6: Telnyx Media & Provider Integrations
+### Group 5: Telnyx Media & Provider Integrations
 
 Purpose: Telnyx STT/media streaming/WebSocket/provider calls. Keep this separate from business Contact Center decisions.
 
@@ -232,7 +217,7 @@ Default levels:
 - group `telnyx`: `info`
 - `telnyx.media`: `warn` because raw media frame logging is noisy
 
-### Group 7: Agent Assist & AI
+### Group 6: Agent Assist & AI
 
 Purpose: Agent Assist workflow analysis, suggestions, translation, handoff, LLM/provider interactions.
 
@@ -257,7 +242,7 @@ Default levels:
 - group `agent-assist`: `info`
 - `agent-assist.llm`: `warn` by default unless actively debugging AI behavior
 
-### Group 8: Outbound Dialer
+### Group 7: Outbound Dialer
 
 Purpose: outbound runner, campaign execution, agent campaigns, imports, live calls.
 
@@ -281,7 +266,7 @@ Default level:
 
 - group `outbound`: `info`
 
-### Group 9: Supervisor & Reporting
+### Group 8: Supervisor & Reporting
 
 Purpose: supervisor monitor, dashboards, stats, metrics, call summaries, insights.
 
@@ -304,30 +289,43 @@ Default level:
 
 - group `supervisor`: `info`
 
-### Group 10: Notifications & Browser Client
+### Group 9: Notifications
 
-Purpose: email/push notifications and optional client-side telemetry. Keep browser UI noise separate from backend runtime logs.
+Purpose: email and push notification delivery.
 
 Leaf topics:
 
 1. `notifications.email`
 2. `notifications.push`
-3. `frontend.agent-desktop`
-4. `frontend.supervisor`
-5. `frontend.admin`
 
 Migration mapping:
 
 - `lib/email-notifications.js` -> `notifications.email`
 - `lib/push-notifications.js` -> `notifications.push`
+
+Default level:
+
+- group `notifications`: `info`
+
+### Group 10: Browser Client
+
+Purpose: optional client-side telemetry. Keep browser UI noise separate from backend runtime logs.
+
+Leaf topics:
+
+1. `frontend.agent-desktop`
+2. `frontend.supervisor`
+3. `frontend.admin`
+
+Migration mapping:
+
 - `components/contact-center/AgentDesktop.jsx` -> `frontend.agent-desktop` only if client telemetry endpoint is added
 - `components/contact-center/SupervisionModal.jsx` and supervisor pages -> `frontend.supervisor`
 - Admin call-flow editor debug telemetry -> `frontend.admin`
 
-Default levels:
+Default level:
 
-- `notifications`: `info`
-- `frontend`: `warn`
+- group `frontend`: `warn`
 
 Important: Do not blindly replace browser `console.log` with server pino. Either remove noisy dev logs, gate them behind a debug flag, or send selected operational client events through a dedicated client telemetry endpoint.
 
@@ -337,7 +335,7 @@ Important: Do not blindly replace browser `console.log` with server pino. Either
 
 Current behavior in `lib/logger/index.mjs` already walks dot parents:
 
-1. exact topic level, e.g. `contact-center.calls.transfer`
+1. exact topic level, e.g. `contact-center.transfer`
 2. parent topic level, e.g. `contact-center`
 3. global level
 
@@ -346,8 +344,8 @@ Keep this behavior. The UI should make it visible.
 Required operator model:
 
 - Global level: default fallback for everything.
-- Group level: e.g. `contact-center.core = info`.
-- Topic override: e.g. `contact-center.calls.transfer = debug`.
+- Group level: e.g. `contact-center = info`.
+- Topic override: e.g. `contact-center.transfer = debug`.
 - Topic enabled: exact override wins; otherwise parent group enabled/disabled wins.
 
 Example runtime config:
@@ -357,7 +355,7 @@ Example runtime config:
   "globalLevel": "warn",
   "topicLevels": {
     "contact-center": "info",
-    "contact-center.calls.transfer": "debug",
+    "contact-center.transfer": "debug",
     "telnyx.media": "warn"
   },
   "topicEnabled": {
@@ -369,7 +367,7 @@ Example runtime config:
 
 Effective behavior:
 
-- All Contact Center Core topics emit `info+`; Contact Center Calls inherit from global unless separately configured.
+- All Contact Center topics emit `info+` because they inherit from `contact-center`.
 - Transfer emits `debug+`.
 - Frontend is disabled by default.
 - Agent Desktop frontend telemetry is re-enabled as an explicit exception.
@@ -394,11 +392,16 @@ export const LOGGING_TOPIC_GROUPS = [
     description: "Routing, queues, status, interactions and live call control.",
     defaultLevel: "info",
     topics: [
-      { id: "contact-center.core.status", label: "Agent status", defaultLevel: "info" },
-      { id: "contact-center.core.queues", label: "Queues", defaultLevel: "info" },
-      { id: "contact-center.core.routing", label: "Routing", defaultLevel: "info" },
-      { id: "contact-center.core.reservations", label: "Reservations", defaultLevel: "info" },
-      { id: "contact-center.core.timeout", label: "No-answer timeouts", defaultLevel: "info" }
+      { id: "contact-center.status", label: "Agent status", defaultLevel: "info" },
+      { id: "contact-center.queues", label: "Queues", defaultLevel: "info" },
+      { id: "contact-center.routing", label: "Routing", defaultLevel: "info" },
+      { id: "contact-center.reservations", label: "Reservations", defaultLevel: "info" },
+      { id: "contact-center.timeout", label: "No-answer timeouts", defaultLevel: "info" },
+      { id: "contact-center.interactions", label: "Interactions", defaultLevel: "info" },
+      { id: "contact-center.wrapup", label: "Wrap-up", defaultLevel: "info" },
+      { id: "contact-center.transfer", label: "Transfer", defaultLevel: "info" },
+      { id: "contact-center.consult", label: "Consult", defaultLevel: "info" },
+      { id: "contact-center.supervision", label: "Supervision", defaultLevel: "info" }
     ]
   }
 ];
@@ -424,7 +427,7 @@ Keep backward compatibility aliases during migration:
 - `app` may remain accepted but UI should prefer `platform.app`.
 - `db` may remain accepted but UI should prefer `platform.db`.
 - `auth` may remain accepted but UI should prefer `security.auth`.
-- `telnyx.stt.media` may remain accepted but UI should prefer `telnyx.media`.
+- historical `telnyx.stt.media` may remain accepted as a legacy alias, but new emitted topics and UI should prefer two-level `telnyx.media`.
 - `outbound-dialer` may remain accepted but UI should prefer `outbound.*`.
 
 Recommended alias handling:
@@ -453,7 +456,7 @@ Do not delete legacy topic support in the first PR. The log files may contain hi
 Current issue:
 
 - `SettingsView` renders a flat list of topic cards.
-- This will not scale to 45 topics plus aliases.
+- This will not scale to 50 topics plus aliases.
 
 Target UI:
 
@@ -674,10 +677,10 @@ export function agentPayload({ agentUserId, agentUsername, extension }) {}
 
 Topic usage:
 
-- routing decisions -> `contact-center.core.routing`
-- no-answer and requeue -> `contact-center.core.timeout`
-- reservations -> `contact-center.core.reservations`
-- agent status changes -> `contact-center.core.status`
+- routing decisions -> `contact-center.routing`
+- no-answer and requeue -> `contact-center.timeout`
+- reservations -> `contact-center.reservations`
+- agent status changes -> `contact-center.status`
 
 Acceptance criteria:
 
@@ -703,11 +706,11 @@ Files:
 
 Topic usage:
 
-- interaction lifecycle -> `contact-center.calls.interactions`
-- wrap-up -> `contact-center.calls.wrapup`
-- transfer -> `contact-center.calls.transfer`
-- consult -> `contact-center.calls.consult`
-- supervision -> `contact-center.calls.supervision`
+- interaction lifecycle -> `contact-center.interactions`
+- wrap-up -> `contact-center.wrapup`
+- transfer -> `contact-center.transfer`
+- consult -> `contact-center.consult`
+- supervision -> `contact-center.supervision`
 
 ### Phase D: Voice and Telnyx media
 
@@ -795,7 +798,7 @@ Assertions:
 
 - exactly or at most 10 groups unless test is intentionally updated
 - at most 50 leaf topics
-- every group has 1-5 topics
+- every group has at least one topic; most groups should have about 3-5 topics, but `contact-center` may have more because it is a broad product domain
 - every topic id starts with its group id
 - topic IDs are unique
 - labels/descriptions exist
@@ -810,8 +813,8 @@ Modify:
 
 Assertions:
 
-- parent `contact-center.core = debug` allows `contact-center.core.routing` debug events
-- exact `contact-center.core.routing = error` overrides parent `contact-center.core = debug`
+- parent `contact-center = debug` allows `contact-center.routing` debug events
+- exact `contact-center.routing = error` overrides parent `contact-center = debug`
 - parent `frontend = false` disables `frontend.agent-desktop`
 - exact `frontend.agent-desktop = true` can override parent disabled state if that is the desired behavior
 
@@ -857,7 +860,7 @@ Recommended PR sequence:
 
 2. **PR 2: Contact Center core logging helper + routing/status/timeout**
    - Highest operational value.
-   - Uses `contact-center.core.status`, `contact-center.core.routing`, `contact-center.core.timeout`, `contact-center.core.reservations`.
+   - Uses `contact-center.status`, `contact-center.routing`, `contact-center.timeout`, `contact-center.reservations`.
 
 3. **PR 3: Interactions/transfer/consult/supervision**
    - Most useful during live call incidents.
@@ -880,8 +883,8 @@ Do not deploy/restart production automatically after these PRs unless explicitly
 
 ## 12. Open Decisions
 
-1. Should an advanced umbrella parent `contact-center` be exposed in addition to `contact-center.core` and `contact-center.calls`?
-   - Recommendation: keep the two primary UI groups and hide the umbrella parent under Advanced only if needed.
+1. Should any group be split when it grows beyond five topics?
+   - Recommendation: only split if the resulting topic IDs remain two-level and the split reflects a real operator mental model. Do not create third-level IDs just to keep every group at five topics.
 
 2. Should group selection in Filters be represented only as expanded child topics, or should APIs accept `topicGroups`?
    - Recommendation: start with expanded child topics to avoid backend/API churn.
