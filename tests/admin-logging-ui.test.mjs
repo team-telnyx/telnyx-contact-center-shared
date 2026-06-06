@@ -33,9 +33,9 @@ test("Admin logging topics use toggles and level tabs instead of JSON editors", 
 test("Admin logging file selection renders selected file entries in Files view", async () => {
   const page = await source();
   assert.match(page, /function FileLogView\(/);
-  assert.match(page, /onSelectFile=\{\(file\) => updateLogFilter\("file", file\)\}/);
-  assert.match(page, /Select a JSONL file to render its events below/);
+  assert.match(page, /fileSize=\{currentFile\?\.size\}/);
   assert.match(page, /loadLogs\(\{ file: logFilters\.file \|\| currentFile\?\.name \|\| "" \}\)/);
+  assert.doesNotMatch(page, /Select a JSONL file to render its events below/);
   assert.doesNotMatch(page, /setActive\("live"\); loadLogs\(\{ file \}\)/);
 });
 

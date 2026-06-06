@@ -41,8 +41,30 @@ test("Admin Logging Files renders selected file events with the same log entry v
 
   assert.match(source, /function FileLogView\(/);
   assert.match(source, /<FileLogView entries=\{logEntries\}/);
-  assert.match(source, /sourceLabel=\{logFilters\.file \|\| currentFile\?\.name \|\| "No file selected"\}/);
+  assert.match(source, /fileSize=\{currentFile\?\.size\}/);
   assert.match(source, /loadLogs\(\{ file: logFilters\.file \|\| currentFile\?\.name \|\| "" \}\)/);
   assert.doesNotMatch(source, /active === "files" \? \(\s*<FilesView/);
   assert.doesNotMatch(source, /setActive\("live"\); loadLogs\(\{ file \}\)/);
+});
+
+test("Admin logging log metrics stay static while only the log list scrolls", async () => {
+  const source = await readFile(pagePath, "utf8");
+
+  assert.match(source, /<div className="flex-1 min-h-0 overflow-hidden p-5">/);
+  assert.match(source, /function LogEntriesView\(\{ entries, loading, meta, fileSize/);
+  assert.match(source, /<div className="flex h-full min-h-0 flex-col gap-4">/);
+  assert.match(source, /<div className="grid shrink-0 gap-3 md:grid-cols-4">/);
+  assert.match(source, /<div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">/);
+  assert.match(source, /MiniStat label="File Size" value=\{formatBytes\(fileSize\)\}/);
+  assert.doesNotMatch(source, /MiniStat label="Source"/);
+});
+
+test("Admin logging Files view has no top log files card and Live filters show only filters", async () => {
+  const source = await readFile(pagePath, "utf8");
+
+  assert.doesNotMatch(source, /<h3 className="text-sm font-semibold">Log files<\/h3>/);
+  assert.doesNotMatch(source, /Select a JSONL file to render its events below/);
+  assert.doesNotMatch(source, /MiniStat label="Known files"/);
+  assert.doesNotMatch(source, /MiniStat label="Current size"/);
+  assert.match(source, /function LogFiltersPanel\([\s\S]*<SettingCard icon=\{IconFilter\} title="Filters"/);
 });
