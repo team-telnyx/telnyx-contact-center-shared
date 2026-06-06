@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ToastNotify";
 
 const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
+const LOG_FILTER_LEVELS = ["", ...LEVELS];
 const ROTATION_MODES = ["daily", "startup"];
 const PRESETS = [
   { id: "normal-production", label: "Normal production", ttl: "" },
@@ -42,6 +43,11 @@ export default function AdminLoggingPage() {
   const [config, setConfig] = React.useState(null);
   const [topicLevelsText, setTopicLevelsText] = React.useState("{}");
   const [topicEnabledText, setTopicEnabledText] = React.useState("{}");
+  const [logsLoading, setLogsLoading] = React.useState(false);
+  const [logFiles, setLogFiles] = React.useState([]);
+  const [logEntries, setLogEntries] = React.useState([]);
+  const [logMeta, setLogMeta] = React.useState({ skippedInvalid: 0, truncated: false });
+  const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topic: "", runId: "", search: "", from: "", to: "", limit: "100" });
 
   async function load() {
     setLoading(true);
@@ -62,6 +68,40 @@ export default function AdminLoggingPage() {
   React.useEffect(() => {
     load();
   }, []);
+
+  async function loadLogs() {
+    setLogsLoading(true);
+    try {
+      const fileParams = new URLSearchParams({ mode: "files", limit: "30" });
+      const filesResponse = await fetch(`/api/admin/logging/logs?${fileParams.toString()}`, { cache: "no-store" });
+      const filesData = await filesResponse.json().catch(() => ({}));
+      if (!filesResponse.ok || !filesData?.ok) throw new Error(filesData?.error || "Failed to list log files");
+      setLogFiles(Array.isArray(filesData.files) ? filesData.files : []);
+
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(logFilters)) {
+        if (value) params.set(key, value);
+      }
+      const entriesResponse = await fetch(`/api/admin/logging/logs?${params.toString()}`, { cache: "no-store" });
+      const entriesData = await entriesResponse.json().catch(() => ({}));
+      if (!entriesResponse.ok || !entriesData?.ok) throw new Error(entriesData?.error || "Failed to load log entries");
+      setLogEntries(Array.isArray(entriesData.entries) ? entriesData.entries : []);
+      setLogMeta({ skippedInvalid: entriesData.skippedInvalid || 0, truncated: entriesData.truncated === true });
+    } catch (error) {
+      notify({ title: "Log load failed", description: String(error.message || error), variant: "error" });
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    loadLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateLogFilter(key, value) {
+    setLogFilters((prev) => ({ ...prev, [key]: value }));
+  }
 
   function updateConfig(key, value) {
     setConfig((prev) => ({ ...(prev || {}), [key]: value }));
@@ -160,6 +200,78 @@ export default function AdminLoggingPage() {
             <Card>
               <CardContent className="p-4 text-sm text-muted-foreground">
                 Runtime log levels and sinks can be changed without restarting the application. Redaction is always enforced by the backend; the Admin UI cannot disable it. Use debug presets with a TTL and return to Normal production after troubleshooting.
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">Log Viewer</h2>
+                    <p className="text-sm text-muted-foreground">Read-only JSONL log inspection. Results are newest-first and capped server-side.</p>
+                  </div>
+                  <Button variant="outline" onClick={loadLogs} disabled={logsLoading}>{logsLoading ? "Loading…" : "Refresh logs"}</Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-6">
+                  <label className="space-y-1 text-sm md:col-span-2">
+                    <span className="font-medium">File</span>
+                    <select className="w-full rounded-md border bg-background px-3 py-2" value={logFilters.file} onChange={(e) => updateLogFilter("file", e.target.value)}>
+                      <option value="">Latest files</option>
+                      {logFiles.map((file) => <option key={file.name} value={file.name}>{file.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Level</span>
+                    <select className="w-full rounded-md border bg-background px-3 py-2" value={logFilters.level} onChange={(e) => updateLogFilter("level", e.target.value)}>
+                      {LOG_FILTER_LEVELS.map((level) => <option key={level || "all"} value={level}>{level || "all"}</option>)}
+                    </select>
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Topic</span>
+                    <input className="w-full rounded-md border bg-background px-3 py-2" placeholder="telnyx.stt" value={logFilters.topic} onChange={(e) => updateLogFilter("topic", e.target.value)} />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Run ID</span>
+                    <input className="w-full rounded-md border bg-background px-3 py-2" placeholder="runId" value={logFilters.runId} onChange={(e) => updateLogFilter("runId", e.target.value)} />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">Limit</span>
+                    <input className="w-full rounded-md border bg-background px-3 py-2" type="number" min="1" max="500" value={logFilters.limit} onChange={(e) => updateLogFilter("limit", e.target.value)} />
+                  </label>
+                </div>
+                <div className="flex gap-3">
+                  <input className="flex-1 rounded-md border bg-background px-3 py-2 text-sm" placeholder="Search message, call ID, interaction ID…" value={logFilters.search} onChange={(e) => updateLogFilter("search", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") loadLogs(); }} />
+                  <Button onClick={loadLogs} disabled={logsLoading}>Apply filters</Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">From</span>
+                    <input className="w-full rounded-md border bg-background px-3 py-2" type="datetime-local" value={logFilters.from} onChange={(e) => updateLogFilter("from", e.target.value)} />
+                  </label>
+                  <label className="space-y-1 text-sm">
+                    <span className="font-medium">To</span>
+                    <input className="w-full rounded-md border bg-background px-3 py-2" type="datetime-local" value={logFilters.to} onChange={(e) => updateLogFilter("to", e.target.value)} />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>{logEntries.length} entries</span>
+                  {logMeta.truncated ? <Badge variant="secondary">truncated</Badge> : null}
+                  {logMeta.skippedInvalid ? <Badge variant="outline">skipped invalid: {logMeta.skippedInvalid}</Badge> : null}
+                </div>
+                <div className="max-h-[36rem] overflow-auto rounded-md border">
+                  <div className="min-w-[64rem] divide-y text-sm">
+                    {logEntries.length === 0 ? (
+                      <div className="p-4 text-muted-foreground">No log entries match the current filters.</div>
+                    ) : logEntries.map((entry, index) => (
+                      <div key={`${entry.time || entry.ts || index}-${index}`} className="grid grid-cols-[13rem_5rem_10rem_10rem_1fr] gap-3 p-3">
+                        <div className="font-mono text-xs text-muted-foreground">{entry.time || entry.ts || "-"}</div>
+                        <div><Badge variant={entry.level === "error" || entry.level === "fatal" ? "destructive" : "outline"}>{entry.level || "info"}</Badge></div>
+                        <div className="truncate font-mono text-xs">{entry.topic || entry.scope || "app"}</div>
+                        <div className="truncate font-mono text-xs text-muted-foreground">{entry.runId || "-"}</div>
+                        <pre className="whitespace-pre-wrap break-words font-mono text-xs">{JSON.stringify(entry, null, 2)}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </CardContent>
             </Card>
             <Card>
