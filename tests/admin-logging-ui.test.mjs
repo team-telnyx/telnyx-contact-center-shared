@@ -49,6 +49,14 @@ test("Admin logging confirmations use the custom AlertDialog instead of browser 
   assert.doesNotMatch(page, /window\.confirm|window\.alert|window\.prompt/);
 });
 
+test("Admin logging settings expose Friendly console directly under Pretty console", async () => {
+  const page = await source();
+  assert.match(page, /consoleFriendly: config\.consoleFriendly === true/);
+  assert.match(page, /ToggleRow label="Pretty console"/);
+  assert.match(page, /ToggleRow label="Friendly console"[\s\S]*config\.consoleFriendly === true[\s\S]*updateConfig\(\{ consoleFriendly: checked \}\)/);
+  assert.ok(page.indexOf('ToggleRow label="Pretty console"') < page.indexOf('ToggleRow label="Friendly console"'));
+});
+
 test("Admin logging entries stay compact and expand anywhere into CodeBlock JSON", async () => {
   const page = await source();
   assert.match(page, /import \{ CodeBlock, CodeBlockCopyButton \} from "@\/components\/ai-elements\/code-block"/);

@@ -390,6 +390,46 @@ test("diagnostic logger keeps daily rotation tied to live adapter time", async (
   }
 });
 
+test("createLogger can use simplified friendly pino-pretty console output while keeping file JSONL", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-friendly-"));
+  const lines = [];
+  const { createLogger, buildLogFilePath } = await freshLoggerModule();
+  const now = new Date("2026-06-06T09:32:41.157Z");
+  const logger = createLogger({
+    topic: "app",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: true,
+      consolePretty: true,
+      consoleFriendly: true,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+    },
+    stdout: (line) => lines.push(line),
+    now,
+    runId: "friendly-run",
+  });
+
+  try {
+    logger.info({ safe: "ok", interactionId: "ix-1" }, "friendly_console_test");
+    await logger.flush?.();
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /\[.*\] INFO \(friendly-run\): friendly_console_test/);
+    assert.doesNotMatch(lines[0], /\{"level"/);
+    assert.doesNotMatch(lines[0], /"interactionId"/);
+    assert.throws(() => JSON.parse(lines[0]), /Unexpected|JSON/);
+
+    const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "friendly-run" });
+    const contents = await readFile(filePath, "utf8");
+    const entry = JSON.parse(contents.trim());
+    assert.equal(entry.msg, "friendly_console_test");
+    assert.equal(entry.interactionId, "ix-1");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createLogger uses pino-pretty for console output while keeping file JSONL", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-pretty-"));
   const lines = [];

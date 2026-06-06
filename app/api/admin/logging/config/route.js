@@ -56,6 +56,7 @@ export async function PUT(request) {
       "globalLevel",
       "consoleEnabled",
       "consolePretty",
+      "consoleFriendly",
       "fileEnabled",
       "rotationMode",
       "retentionDays",

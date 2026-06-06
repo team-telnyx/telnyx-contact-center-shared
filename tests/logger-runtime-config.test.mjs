@@ -40,6 +40,7 @@ test("getRuntimeLoggingConfig seeds schema and returns safe defaults when no row
   assert.equal(config.globalLevel, "info");
   assert.equal(config.consoleEnabled, true);
   assert.equal(config.consolePretty, false);
+  assert.equal(config.consoleFriendly, false);
   assert.equal(config.fileEnabled, true);
   assert.match(config.logDir, /\/logs$/);
   assert.equal(config.rotationMode, "daily");
@@ -59,6 +60,7 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
     global_level: "verbose",
     console_enabled: true,
     console_pretty: true,
+    console_friendly: true,
     file_enabled: true,
     log_dir: "/var/log/cc",
     rotation_mode: "startup",
@@ -89,9 +91,11 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
 test("environment overrides win over persisted runtime sink and console settings", async () => {
   const previousLogDir = process.env.LOG_DIR;
   const previousPretty = process.env.LOG_CONSOLE_PRETTY;
+  const previousFriendly = process.env.LOG_CONSOLE_FRIENDLY;
   const previousFile = process.env.LOG_FILE_ENABLED;
   process.env.LOG_DIR = "/tmp/contact-center-dev-logs";
   process.env.LOG_CONSOLE_PRETTY = "1";
+  process.env.LOG_CONSOLE_FRIENDLY = "1";
   process.env.LOG_FILE_ENABLED = "1";
   try {
     const { getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
@@ -101,6 +105,7 @@ test("environment overrides win over persisted runtime sink and console settings
     const config = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:00Z") });
 
     assert.equal(config.consolePretty, true);
+    assert.equal(config.consoleFriendly, true);
     assert.equal(config.fileEnabled, true);
     assert.equal(config.logDir, "/tmp/contact-center-dev-logs");
   } finally {
@@ -108,6 +113,8 @@ test("environment overrides win over persisted runtime sink and console settings
     else process.env.LOG_DIR = previousLogDir;
     if (previousPretty === undefined) delete process.env.LOG_CONSOLE_PRETTY;
     else process.env.LOG_CONSOLE_PRETTY = previousPretty;
+    if (previousFriendly === undefined) delete process.env.LOG_CONSOLE_FRIENDLY;
+    else process.env.LOG_CONSOLE_FRIENDLY = previousFriendly;
     if (previousFile === undefined) delete process.env.LOG_FILE_ENABLED;
     else process.env.LOG_FILE_ENABLED = previousFile;
   }
@@ -125,6 +132,7 @@ test("saveRuntimeLoggingConfig validates input, upserts config, writes audit, an
     config: {
       globalLevel: "debug",
       consolePretty: true,
+      consoleFriendly: true,
       fileEnabled: true,
       logDir: "/app/logs",
       rotationMode: "daily",
@@ -136,6 +144,7 @@ test("saveRuntimeLoggingConfig validates input, upserts config, writes audit, an
 
   assert.equal(saved.globalLevel, "debug");
   assert.equal(saved.consolePretty, true);
+  assert.equal(saved.consoleFriendly, true);
   assert.equal(saved.fileEnabled, true);
   assert.equal(saved.topicLevels["telnyx.stt"], "trace");
   assert.ok(pool.queries.some((q) => /INSERT INTO app_logging_config/i.test(q.text) && /ON CONFLICT/i.test(q.text)));
