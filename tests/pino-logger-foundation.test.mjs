@@ -58,6 +58,7 @@ test("createLogger emits pino JSON with topic, runId, and redacted sensitive fie
 
   logger.debug({
     authorization: "test-auth-value",
+    plainBearer: `Bearer ${"A".repeat(30)}`,
     url: "https://example.com/callback?foo=bar&client_state=abc123",
     media: { payload: "base64-audio-payload" },
   }, "provider_socket_open");
@@ -69,6 +70,7 @@ test("createLogger emits pino JSON with topic, runId, and redacted sensitive fie
   assert.equal(entry.level, "debug");
   assert.equal(entry.msg, "provider_socket_open");
   assert.equal(entry.authorization, "[redacted:string:15]");
+  assert.equal(entry.plainBearer, "[redacted:string:37]");
   assert.doesNotMatch(entry.url, /bar|abc123/);
   assert.equal(entry.media.payload, "[redacted:string:20]");
 });
@@ -188,6 +190,72 @@ test("createLogger suppresses disabled topics and respects per-topic level", asy
 
   assert.equal(lines.length, 1);
   assert.equal(JSON.parse(lines[0]).msg, "warn_emitted");
+});
+
+test("createLogger can apply runtime topic config without recreating logger", async () => {
+  const lines = [];
+  const { createLogger } = await freshLoggerModule();
+  let runtimeConfig = {
+    globalLevel: "info",
+    consoleEnabled: true,
+    fileEnabled: false,
+    topicLevels: { "telnyx.stt": "warn" },
+    topicEnabled: { "telnyx.stt": true },
+  };
+  const logger = createLogger({
+    topic: "telnyx.stt",
+    config: { consoleEnabled: true, fileEnabled: false },
+    getConfig: () => runtimeConfig,
+    stdout: (line) => lines.push(line),
+  });
+
+  logger.debug({}, "debug_ignored_before_runtime_update");
+  runtimeConfig = {
+    ...runtimeConfig,
+    topicLevels: { "telnyx.stt": "debug" },
+  };
+  logger.debug({}, "debug_emitted_after_runtime_update");
+  runtimeConfig = {
+    ...runtimeConfig,
+    topicEnabled: { "telnyx.stt": false },
+  };
+  logger.error({}, "error_ignored_after_topic_disabled");
+
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).msg, "debug_emitted_after_runtime_update");
+});
+
+test("createLogger can apply runtime file sink config without recreating logger", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-runtime-file-"));
+  const { createLogger, buildLogFilePath } = await freshLoggerModule();
+  const now = new Date("2026-06-06T09:32:41.157Z");
+  let runtimeConfig = {
+    globalLevel: "debug",
+    consoleEnabled: false,
+    fileEnabled: false,
+    logDir: dir,
+    rotationMode: "daily",
+  };
+  const logger = createLogger({
+    topic: "app",
+    config: { consoleEnabled: false, fileEnabled: false },
+    getConfig: () => runtimeConfig,
+    now,
+    runId: "runtime-file",
+  });
+
+  try {
+    logger.info({}, "not_written_before_file_enabled");
+    runtimeConfig = { ...runtimeConfig, fileEnabled: true };
+    logger.info({}, "written_after_file_enabled");
+    await logger.flush?.();
+    const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "runtime-file" });
+    const contents = await readFile(filePath, "utf8");
+    assert.doesNotMatch(contents, /not_written_before_file_enabled/);
+    assert.match(contents, /written_after_file_enabled/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("createLogger can write JSONL to a daily file sink", async () => {
