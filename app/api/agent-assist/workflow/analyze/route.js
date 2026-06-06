@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Agent Assist Workflow - Analyze API
  * POST - Analyze transcript for workflow item completion and slot extraction

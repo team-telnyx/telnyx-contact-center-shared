@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Update AI Assistant - Sync assistant instructions with current workflow
  * POST /api/admin/workflows/[id]/update-assistant

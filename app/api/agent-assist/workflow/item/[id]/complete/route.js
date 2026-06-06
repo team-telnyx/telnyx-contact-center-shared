@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Agent Assist Workflow - Manual Item Complete API
  * PUT - Manually mark an item as completed

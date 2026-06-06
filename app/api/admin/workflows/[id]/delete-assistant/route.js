@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Delete AI Assistant and associated Insights
  * DELETE /api/admin/workflows/[id]/delete-assistant

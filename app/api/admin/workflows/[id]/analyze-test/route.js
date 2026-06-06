@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Workflow Test - Analyze API
  * POST - Analyze transcript for workflow item completion using the same LLM

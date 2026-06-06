@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Agent Assist Workflow - Slot Update API
  * PUT - Manually update a slot value

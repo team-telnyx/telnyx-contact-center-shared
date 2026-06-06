@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Admin Workflow Stage Items API
  * POST - Add an item to a stage

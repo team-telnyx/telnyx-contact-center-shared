@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Agent Assist Workflow - Start Session API
  * POST - Start a new workflow session for an interaction

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Generate test scenario via LLM
  * POST - Create test scenario with varied, realistic responses based on scenario type

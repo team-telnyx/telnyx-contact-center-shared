@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint to get supervisor number configuration
  * GET /api/config/supervisor-number

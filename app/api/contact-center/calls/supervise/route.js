@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint to initiate supervisor call
  * POST /api/contact-center/calls/supervise
