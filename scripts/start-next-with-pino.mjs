@@ -1,14 +1,20 @@
 #!/usr/bin/env node
 
-import "dotenv/config";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import nextEnv from "@next/env";
 import { createDiagnosticLogger } from "../lib/diagnostic-logger.mjs";
+
+const { loadEnvConfig } = nextEnv;
+const originalEnv = { ...process.env };
+const nodeEnv = originalEnv.NODE_ENV || "production";
+process.env.NODE_ENV = nodeEnv;
+loadEnvConfig(process.cwd(), nodeEnv !== "production");
 
 const logger = createDiagnosticLogger("app", {
   config: {
     fileEnabled: process.env.LOG_FILE_ENABLED !== "0",
-    logDir: process.env.LOG_DIR || process.env.LOG_FILE_DIR || (process.env.NODE_ENV === "production" ? "/app/logs" : "logs"),
+    logDir: process.env.LOG_DIR || process.env.LOG_FILE_DIR || (nodeEnv === "production" ? "/app/logs" : "logs"),
   },
 });
 
@@ -25,7 +31,7 @@ logger.info("web_server_starting", {
 });
 
 const child = spawn("yarn", args, {
-  env: { ...process.env, NODE_ENV: process.env.NODE_ENV || "production" },
+  env: { ...originalEnv, NODE_ENV: nodeEnv },
   stdio: ["inherit", "pipe", "pipe"],
 });
 
