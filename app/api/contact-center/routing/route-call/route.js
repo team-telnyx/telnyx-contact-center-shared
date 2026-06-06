@@ -17,6 +17,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomUUID } from "crypto";
 import { promoteReservation } from "@/lib/contact-center/reservation-manager.js";
 import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status.js";
+import { agentPayload, callPayload, contactCenterErrorPayload, queuePayload, routingLogger } from "@/lib/contact-center/logging.mjs";
 
 export async function POST(request) {
   try {
@@ -192,7 +193,15 @@ export async function POST(request) {
           "call_routed"
         );
       } catch (sseError) {
-        console.error("[Routing] Failed to broadcast routing event:", sseError);
+        routingLogger.error("routing_event_broadcast_failed", {
+          ...callPayload({ interactionId, callControlId, callSessionId }),
+          ...queuePayload({ queueId, queueName: queue.name }),
+          ...agentPayload({
+            agentUserId: routingResult.agent.id,
+            agentUsername: routingResult.agent.username,
+          }),
+          ...contactCenterErrorPayload(sseError),
+        });
       }
 
       return NextResponse.json({
@@ -212,7 +221,7 @@ export async function POST(request) {
       });
     }
   } catch (error) {
-    console.error("[Routing] Error routing call:", error);
+    routingLogger.error("route_call_request_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
       {
         error: "Internal server error",

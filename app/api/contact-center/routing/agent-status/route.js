@@ -10,6 +10,7 @@ import { updateAgentQueues } from "@/lib/contact-center/state-manager";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
 import { ensureAgentStatusState, setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
 
 export async function POST(request) {
   try {
@@ -70,7 +71,7 @@ export async function POST(request) {
             validStatuses = statusResult.rows.map((row) => row.name);
           }
         } catch (error) {
-          console.error("[AgentStatus] Error fetching statuses:", error);
+          statusLogger.error("status_catalog_fetch_failed", contactCenterErrorPayload(error));
           // Use fallback statuses
         }
       }
@@ -126,10 +127,11 @@ export async function POST(request) {
           queueIds: status ? null : queueIds,
         });
       } catch (error) {
-        console.error(
-          "[AgentStatus] Failed to offer queued calls after status change:",
-          error,
-        );
+        statusLogger.error("queued_call_offer_after_status_change_failed", {
+          ...agentPayload({ agentUserId: userId, agentUsername: username }),
+          queueCount: Array.isArray(queueIds) ? queueIds.length : undefined,
+          ...contactCenterErrorPayload(error),
+        });
       }
     }
 
@@ -140,7 +142,7 @@ export async function POST(request) {
       queueIds: queueIds || [],
     });
   } catch (error) {
-    console.error("[Routing] Error updating agent status:", error);
+    statusLogger.error("agent_status_route_update_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
       {
         error: "Internal server error",

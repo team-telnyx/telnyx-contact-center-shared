@@ -53,7 +53,7 @@ test("no-answer requeue must never fall back to hanging up the original caller l
   assert.match(hangupAgentLeg, /agentCallControlId/);
   assert.doesNotMatch(hangupAgentLeg, /originalCallControlId/);
   assert.doesNotMatch(hangupAgentLeg, /metadata, call_control_id: originalCallControlId/);
-  assert.match(hangupAgentLeg, /No agent leg call control ID/);
+  assert.match(hangupAgentLeg, /agent_leg_call_control_id_missing_for_timeout_hangup/);
 });
 
 test("wrapup can only start for interactions that were actually answered", async () => {

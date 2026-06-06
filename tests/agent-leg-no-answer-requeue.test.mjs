@@ -41,9 +41,9 @@ test("agent leg hangup before answer re-enqueues instead of hanging up caller", 
     /latestInteraction\.state !== "ringing"/,
     "stale agent-leg hangups for already requeued callers must not abandon the interaction",
   );
-  assert.match(noAnswerBlock, /continuing with normal hangup cleanup/);
+  assert.match(noAnswerBlock, /return;/);
 
-  const originalHangupIndex = webhookSrc.indexOf("Hanging up original call leg");
+  const originalHangupIndex = webhookSrc.indexOf("const originalCallControlId");
   const noAnswerIndex = webhookSrc.indexOf("const isAgentLegNoAnswerDisconnect");
   assert.ok(
     noAnswerIndex > -1 && originalHangupIndex > -1 && noAnswerIndex < originalHangupIndex,

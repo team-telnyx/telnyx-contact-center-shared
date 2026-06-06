@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * PUT /api/contact-center/agent/status
@@ -21,12 +22,11 @@ export async function PUT(request) {
 
     const body = await request.json();
     const { status, userId: targetUserId } = body;
-    console.log("[AgentStatus][RoutingDiagnostics] PUT received", {
+    statusLogger.debug("status_update_requested", {
       requesterUserId: String(user.id),
       requesterUsername: user.username || user.email || null,
       requestedStatus: status || null,
-      requestedTargetUserId: targetUserId ? String(targetUserId) : null,
-      timestamp: new Date().toISOString(),
+      targetUserId: targetUserId ? String(targetUserId) : null,
     });
 
     if (!status || typeof status !== "string") {
@@ -77,7 +77,7 @@ export async function PUT(request) {
         validStatuses = statusResult.rows.map((row) => row.name);
       }
     } catch (error) {
-      console.error("[AgentStatus] Error fetching statuses:", error);
+      statusLogger.error("status_catalog_fetch_failed", contactCenterErrorPayload(error));
       // Use fallback statuses (Offline is not user-selectable)
     }
 
@@ -118,14 +118,13 @@ export async function PUT(request) {
       status,
       previousStatus,
     });
-    console.log("[AgentStatus][RoutingDiagnostics] setUserStatus completed", {
-      targetUserId: String(targetUserIdFinal),
-      targetUsername: targetUser.username,
+    statusLogger.info("status_update_completed", {
+      ...agentPayload({ agentUserId: targetUserIdFinal, agentUsername: targetUser.username }),
       requestedStatus: status,
       effectiveStatus: effectiveStatus || status,
       previousStatus,
       durationMs: Date.now() - statusUpdateStartedAt,
-      timestamp: new Date().toISOString(),
+      reason: targetUserIdFinal !== user.id ? "supervisor_action" : "self_update",
     });
 
     // Log activity for supervisor/admin actions
@@ -146,10 +145,11 @@ export async function PUT(request) {
           },
         });
       } catch (activityError) {
-        console.error(
-          "[AgentStatus] Failed to log supervisor activity:",
-          activityError,
-        );
+        statusLogger.error("supervisor_activity_log_failed", {
+          ...agentPayload({ agentUserId: targetUserIdFinal, agentUsername: targetUser.username }),
+          ...contactCenterErrorPayload(activityError),
+          reason: "supervisor_status_change",
+        });
         // Don't fail the request if activity logging fails
       }
     }

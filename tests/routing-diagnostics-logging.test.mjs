@@ -27,16 +27,16 @@ test("backend routing diagnostics log each status-to-offer boundary", async () =
   const routeSrc = await source(agentStatusRoutePath);
   const userStatusSrc = await source(userStatusPath);
 
-  assert.match(routeSrc, /\[AgentStatus\]\[RoutingDiagnostics\] PUT received/);
-  assert.match(routeSrc, /\[AgentStatus\]\[RoutingDiagnostics\] setUserStatus completed/);
-  assert.match(userStatusSrc, /\[UserStatus\]\[RoutingDiagnostics\] status request/);
-  assert.match(userStatusSrc, /\[UserStatus\]\[RoutingDiagnostics\] offerQueuedCallForAgent result/);
+  assert.match(routeSrc, /statusLogger\.debug\("status_update_requested"/);
+  assert.match(routeSrc, /statusLogger\.info\("status_update_completed"/);
+  assert.match(userStatusSrc, /statusLogger\.debug\("user_status_request"/);
+  assert.match(userStatusSrc, /statusLogger\.debug\("user_status_offer_queued_call_result"/);
 });
 
 test("queued-call router diagnostics expose decision reasons and bridge failures", async () => {
   const src = await source(queuedRouterPath);
 
-  assert.match(src, /ROUTING_DIAG_PREFIX\s*=\s*"\[QueuedCallRouter\]\[RoutingDiagnostics\]"/);
+  assert.match(src, /routingLogger\.debug\(diagnosticEventName\(label\), fields\)/);
   assert.match(src, /routingDiag\("offer start"/);
   assert.match(src, /routingDiag\("active queues loaded"/);
   assert.match(src, /routingDiag\("queued interactions loaded"/);
@@ -50,7 +50,7 @@ test("queued-call router diagnostics expose decision reasons and bridge failures
 test("periodic routing re-evaluation diagnostics expose eligible agent discovery", async () => {
   const src = await source(stateManagerPath);
 
-  assert.match(src, /\[StateManager\]\[RoutingDiagnostics\] periodic re-eval tick/);
-  assert.match(src, /\[StateManager\]\[RoutingDiagnostics\] eligible agents loaded/);
-  assert.match(src, /\[StateManager\]\[RoutingDiagnostics\] agent offer result/);
+  assert.match(src, /routingLogger\.debug\("state_manager_periodic_reeval_tick"/);
+  assert.match(src, /routingLogger\.debug\("state_manager_periodic_reeval_eligible_agents_loaded"/);
+  assert.match(src, /routingLogger\.debug\("state_manager_periodic_reeval_agent_offer_result"/);
 });
