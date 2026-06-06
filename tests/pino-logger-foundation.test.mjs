@@ -391,6 +391,8 @@ test("diagnostic logger keeps daily rotation tied to live adapter time", async (
 });
 
 test("createLogger can use simplified friendly pino-pretty console output while keeping file JSONL", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "UTC";
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-friendly-"));
   const lines = [];
   const { createLogger, buildLogFilePath } = await freshLoggerModule();
@@ -426,11 +428,15 @@ test("createLogger can use simplified friendly pino-pretty console output while 
     assert.equal(entry.msg, "friendly_console_test");
     assert.equal(entry.interactionId, "ix-1");
   } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
     await rm(dir, { recursive: true, force: true });
   }
 });
 
 test("friendly console works without pretty mode as plain one-line output", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "UTC";
   const lines = [];
   const { createLogger } = await freshLoggerModule();
   const logger = createLogger({
@@ -447,18 +453,49 @@ test("friendly console works without pretty mode as plain one-line output", asyn
     runId: "plain-friendly-run",
   });
 
-  logger.info("ghost_call_cleanup_completed");
+  try {
+    logger.info("ghost_call_cleanup_completed");
 
-  assert.deepEqual(lines, ["[14:00:38.407] INFO: Ghost call cleanup completed"]);
-  assert.doesNotMatch(lines[0], /plain-friendly-run|\{"level"/);
+    assert.deepEqual(lines, ["[14:00:38.407] INFO: Ghost call cleanup completed"]);
+    assert.doesNotMatch(lines[0], /plain-friendly-run|\{"level"/);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
+});
+
+test("friendly console timestamps use the local process timezone", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "Europe/Warsaw";
+  const { buildFriendlyConsoleLine } = await freshLoggerModule();
+
+  try {
+    const line = buildFriendlyConsoleLine({
+      time: "2026-06-06T14:00:38.407Z",
+      level: "info",
+      msg: "local_console_time",
+    });
+
+    assert.equal(line, "[16:00:38.407] INFO: Local console time");
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
 });
 
 test("friendly console pretty mode colorizes the user-friendly line", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "UTC";
   const { buildFriendlyConsoleLine } = await freshLoggerModule();
-  const line = buildFriendlyConsoleLine({ time: "2026-06-06T14:00:38.407Z", level: "info", msg: "streaming_ws_routes_ready" }, { colorize: true });
+  try {
+    const line = buildFriendlyConsoleLine({ time: "2026-06-06T14:00:38.407Z", level: "info", msg: "streaming_ws_routes_ready" }, { colorize: true });
 
-  assert.match(line, /^\[14:00:38\.407\] \u001b\[[0-9;]+mINFO\u001b\[[0-9;]+m: Streaming WS routes ready$/);
-  assert.doesNotMatch(line, /runId|streaming_ws_routes_ready/);
+    assert.match(line, /^\[14:00:38\.407\] \u001b\[[0-9;]+mINFO\u001b\[[0-9;]+m: Streaming WS routes ready$/);
+    assert.doesNotMatch(line, /runId|streaming_ws_routes_ready/);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
 });
 
 test("createLogger uses pino-pretty for console output while keeping file JSONL", async () => {
