@@ -204,9 +204,11 @@ Limitations:
 
 Use the transition ledger plus current state:
 
-- `cc_agent_status_history` — immutable completed status intervals.
+- `cc_agent_status_history` — transition records written by the current status-change implementation; not yet a completed-interval source until the hardening below adds explicit interval fields and clarified semantics.
 - `cc_user_activity_log` — currently logs `status_change` with `started_at`, `ended_at`, and `duration_seconds`.
 - `cc_agent_state` — current open interval via `agent_status` and `last_status_change`.
+
+Until `cc_agent_status_history` stores explicit completed intervals, exact reports should derive closed intervals from `cc_user_activity_log` and use `cc_agent_state` only for the current open interval.
 
 The exact-report query pattern should be:
 
