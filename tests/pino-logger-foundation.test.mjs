@@ -318,7 +318,7 @@ test("createLogger can write JSONL to a daily file sink", async () => {
     const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "run-file" });
     const contents = await readFile(filePath, "utf8");
     const entry = JSON.parse(contents.trim());
-    assert.equal(entry.topic, "app");
+    assert.equal(entry.topic, "platform.app");
     assert.equal(entry.runId, "run-file");
     assert.equal(entry.msg, "file_sink_test");
   } finally {
@@ -578,7 +578,7 @@ test("createLogger protects metadata fields in payloads and child bindings", asy
 
   assert.equal(lines.length, 1);
   const entry = JSON.parse(lines[0]);
-  assert.equal(entry.topic, "app");
+  assert.equal(entry.topic, "platform.app");
   assert.equal(entry.runId, "safe-run");
   assert.equal(entry.level, "info");
   assert.equal(entry.msg, "safe_message");
@@ -598,7 +598,7 @@ test("createLogger protects metadata fields even when redaction is disabled", as
   logger.info({ topic: "payload", runId: "payload", time: "payload", level: "error", msg: "payload" }, "safe_message");
 
   const entry = JSON.parse(lines[0]);
-  assert.equal(entry.topic, "app");
+  assert.equal(entry.topic, "platform.app");
   assert.equal(entry.runId, "safe-run");
   assert.equal(entry.level, "info");
   assert.equal(entry.msg, "safe_message");

@@ -23,8 +23,34 @@ test("Admin logging page follows SectionRail three-pane workspace layout", async
 test("Admin logging Settings keeps the topic levels list independently scrollable", async () => {
   const page = await source();
 
-  assert.match(page, /data-testid="logging-topic-levels-list"/);
-  assert.match(page, /data-testid="logging-topic-levels-list"[\s\S]*max-h-\[min\(52vh,620px\)\][\s\S]*overflow-y-auto/);
+  assert.match(page, /data-testid="logging-topic-groups-list"/);
+  assert.match(page, /data-testid="logging-topic-groups-list"[\s\S]*max-h-\[min\(52vh,620px\)\][\s\S]*overflow-y-auto/);
+});
+
+test("Admin logging Settings renders grouped topic controls from the catalog", async () => {
+  const page = await source();
+
+  assert.match(page, /import \{ LOGGING_TOPIC_GROUPS/);
+  assert.match(page, /function groupedTopicsForSettings\(/);
+  assert.match(page, /<SettingsView config=\{config\} topicGroups=\{topicGroups\}/);
+  assert.match(page, /data-testid="logging-topic-groups-list"/);
+  assert.match(page, /data-testid=\{`logging-topic-group-\$\{group\.id\}`\}/);
+  assert.match(page, /Group level/);
+  assert.match(page, /Inherit group/);
+  assert.match(page, /Inherit enabled/);
+  assert.doesNotMatch(page, /<SettingsView config=\{config\} topics=\{topics\}/);
+});
+
+test("Admin logging Filters render grouped topic multi-select", async () => {
+  const page = await source();
+
+  assert.match(page, /<LogFiltersPanel[\s\S]*topicGroups=\{topicGroups\}/);
+  assert.match(page, /function TopicMultiSelect\(\{ label, topicGroups, selectedTopics, onChange \}\)/);
+  assert.match(page, /data-testid="logging-topic-filter-groups"/);
+  assert.match(page, /data-testid=\{`logging-topic-filter-group-\$\{group\.id\}`\}/);
+  assert.match(page, /Select group/);
+  assert.match(page, /Clear group/);
+  assert.doesNotMatch(page, /\{topics\.map\(\(topic\) => \(/);
 });
 
 test("Admin logging file selection renders selected file entries in Files view", async () => {

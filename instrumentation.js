@@ -22,8 +22,8 @@ export async function register() {
     };
 
     let runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly();
-    const appLogger = createDiagnosticLogger("app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
-    const dbLogger = createDiagnosticLogger("db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const appLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const dbLogger = createDiagnosticLogger("platform.db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
     const streamingLogger = createDiagnosticLogger("telnyx.streaming", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
 
     appLogger.info("application_starting", {
@@ -52,7 +52,7 @@ export async function register() {
 
       try {
         runtimeLoggingConfig = await getRuntimeLoggingConfig({ forceRefresh: true });
-        const runtimeLogger = createDiagnosticLogger("app", { config: runtimeLoggingConfig });
+        const runtimeLogger = createDiagnosticLogger("platform.app", { config: runtimeLoggingConfig });
         runtimeLogger.info("runtime_logging_config_loaded", {
           consoleEnabled: runtimeLoggingConfig.consoleEnabled,
           consolePretty: runtimeLoggingConfig.consolePretty,
@@ -69,7 +69,7 @@ export async function register() {
 
       try {
         const status = await checkPostgresStatus();
-        const runtimeDbLogger = createDiagnosticLogger("db", runtimeLoggingConfig ? { config: runtimeLoggingConfig } : {});
+        const runtimeDbLogger = createDiagnosticLogger("platform.db", runtimeLoggingConfig ? { config: runtimeLoggingConfig } : {});
         runtimeDbLogger[status.ready ? "info" : "error"]("postgres_startup_status", status);
       } catch (statusError) {
         dbLogger.error("postgres_startup_status_failed", {

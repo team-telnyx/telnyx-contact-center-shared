@@ -19,9 +19,9 @@ test("startup instrumentation emits application, Postgres, and streaming events 
   assert.match(src, /getRuntimeLoggingConfig\(\{ forceRefresh: true \}\)/);
   assert.match(src, /loadRuntimeLoggingConfigEarly/);
   assert.match(src, /runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly\(\)/);
-  assert.match(src, /createDiagnosticLogger\("app", \{ config: bootstrapLoggingConfig, getConfig: \(\) => runtimeLoggingConfig \}\)/);
-  assert.match(src, /createDiagnosticLogger\("app"/);
-  assert.match(src, /createDiagnosticLogger\("db"/);
+  assert.match(src, /createDiagnosticLogger\("platform\.app", \{ config: bootstrapLoggingConfig, getConfig: \(\) => runtimeLoggingConfig \}\)/);
+  assert.match(src, /createDiagnosticLogger\("platform\.app"/);
+  assert.match(src, /createDiagnosticLogger\("platform\.db"/);
   assert.match(src, /createDiagnosticLogger\("telnyx\.streaming"/);
   assert.match(src, /application_starting/);
   assert.match(src, /runtime_logging_config_loaded/);
@@ -37,9 +37,9 @@ test("Postgres module logs pool lifecycle through pino instead of direct console
   assert.match(src, /from "\.\/logger\/index\.mjs"/);
   assert.match(src, /getCachedRuntimeLoggingConfig/);
   assert.match(src, /getDbRuntimeLoggingConfig/);
-  assert.match(src, /db: process\.env\.LOG_DB_LEVEL \|\| runtimeConfig\.topicLevels\?\.db \|\| "info"/);
+  assert.match(src, /"platform\.db": process\.env\.LOG_DB_LEVEL \|\| runtimeConfig\.topicLevels\?\.\["platform\.db"\] \|\| runtimeConfig\.topicLevels\?\.db \|\| "info"/);
   assert.match(src, /getConfig: getDbRuntimeLoggingConfig/);
-  assert.match(src, /topic: "db"/);
+  assert.match(src, /topic: "platform\.db"/);
   assert.match(src, /postgres_pool_created/);
   assert.match(src, /postgres_connected/);
   assert.match(src, /postgres_status_check_ok/);

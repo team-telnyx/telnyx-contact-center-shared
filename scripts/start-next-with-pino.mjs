@@ -14,7 +14,7 @@ const nodeEnv = originalEnv.NODE_ENV || "production";
 process.env.NODE_ENV = nodeEnv;
 loadEnvConfig(process.cwd(), nodeEnv !== "production");
 
-const logger = createDiagnosticLogger("app", {
+const logger = createDiagnosticLogger("platform.app", {
   config: {
     fileEnabled: process.env.LOG_FILE_ENABLED !== "0",
     logDir: process.env.LOG_DIR || process.env.LOG_FILE_DIR || (nodeEnv === "production" ? "/app/logs" : "logs"),

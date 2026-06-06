@@ -40,6 +40,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { notify } from "@/components/ToastNotify";
+import { LOGGING_TOPIC_GROUPS, canonicalTopicFor } from "@/lib/logger/topic-catalog.mjs";
 
 const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 const LOG_FILTER_LEVELS = ["", ...LEVELS];
@@ -53,20 +54,6 @@ const NAV_ITEMS = [
   { id: "live", label: "Live", icon: IconActivity, description: "Log Viewer" },
   { id: "files", label: "Files", icon: IconFileText, description: "JSONL log files" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Runtime logging controls" },
-];
-const DEFAULT_TOPICS = [
-  "app",
-  "api",
-  "auth",
-  "contact-center",
-  "routing",
-  "state-manager",
-  "telnyx",
-  "telnyx.stt",
-  "voice-webhook",
-  "flow-engine",
-  "agent-assist",
-  "outbound-dialer",
 ];
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 const badgeTone = {
@@ -137,12 +124,34 @@ function appendLogFilterParams(params, filters) {
   }
 }
 
-function topicNames(config) {
-  return Array.from(new Set([
-    ...DEFAULT_TOPICS,
+function groupedTopicsForSettings(config) {
+  const known = new Set();
+  const groups = LOGGING_TOPIC_GROUPS.map((group) => {
+    known.add(group.id);
+    group.topics.forEach((topic) => known.add(topic.id));
+    return {
+      ...group,
+      topics: group.topics.map((topic) => ({ ...topic, groupId: group.id })),
+    };
+  });
+  const customTopics = Array.from(new Set([
     ...Object.keys(config?.topicLevels || {}),
     ...Object.keys(config?.topicEnabled || {}),
-  ])).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  ]))
+    .map((topic) => canonicalTopicFor(topic))
+    .filter((topic) => topic && !known.has(topic))
+    .sort((a, b) => a.localeCompare(b))
+    .map((topic) => ({ id: topic, label: title(topic), description: "Custom or historical topic discovered in runtime config.", defaultLevel: config?.globalLevel || "info", groupId: "custom" }));
+  if (customTopics.length) {
+    groups.push({
+      id: "custom",
+      label: "Custom & Legacy",
+      description: "Custom or historical topics kept for backward-compatible filtering and runtime control.",
+      defaultLevel: config?.globalLevel || "info",
+      topics: customTopics,
+    });
+  }
+  return groups;
 }
 
 function mutableConfigPayload(config) {
@@ -183,7 +192,7 @@ export default function AdminLoggingPage() {
   const [confirmation, setConfirmation] = React.useState(null);
 
   const activeMeta = NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0];
-  const topics = React.useMemo(() => topicNames(config), [config]);
+  const topicGroups = React.useMemo(() => groupedTopicsForSettings(config), [config]);
   const currentFile = logFiles.find((file) => file.name === logFilters.file) || logFiles[0] || null;
   const liveFile = logFiles.find((file) => file.name === liveSourceFile) || logFiles[0] || null;
 
@@ -286,13 +295,20 @@ export default function AdminLoggingPage() {
   }
 
   function updateTopic(topic, patch) {
+    const canonicalTopic = canonicalTopicFor(topic);
     setConfig((prev) => {
       const next = { ...(prev || {}) };
       if (Object.prototype.hasOwnProperty.call(patch, "enabled")) {
-        next.topicEnabled = { ...(next.topicEnabled || {}), [topic]: patch.enabled === true };
+        const topicEnabled = { ...(next.topicEnabled || {}) };
+        if (patch.enabled === null) delete topicEnabled[canonicalTopic];
+        else topicEnabled[canonicalTopic] = patch.enabled === true;
+        next.topicEnabled = topicEnabled;
       }
-      if (patch.level) {
-        next.topicLevels = { ...(next.topicLevels || {}), [topic]: patch.level };
+      if (Object.prototype.hasOwnProperty.call(patch, "level")) {
+        const topicLevels = { ...(next.topicLevels || {}) };
+        if (!patch.level) delete topicLevels[canonicalTopic];
+        else topicLevels[canonicalTopic] = patch.level;
+        next.topicLevels = topicLevels;
       }
       return next;
     });
@@ -305,7 +321,7 @@ export default function AdminLoggingPage() {
       notify({ title: "Invalid topic", description: "Use letters, numbers, dots, dashes, underscores or colons. Max 80 characters.", variant: "error" });
       return;
     }
-    updateTopic(topic, { enabled: true, level: config?.globalLevel || "info" });
+    updateTopic(canonicalTopicFor(topic), { enabled: true, level: config?.globalLevel || "info" });
     setNewTopic("");
   }
 
@@ -412,7 +428,7 @@ export default function AdminLoggingPage() {
           </div>
           <div className="flex-1 min-h-0 overflow-hidden p-5">
             {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
-              <SettingsView config={config} topics={topics} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
+              <SettingsView config={config} topicGroups={topicGroups} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
               <FileLogView entries={logEntries} loading={logsLoading} meta={logMeta} fileSize={currentFile?.size} files={logFiles} />
             ) : (
@@ -425,7 +441,7 @@ export default function AdminLoggingPage() {
             title={active === "settings" ? "Runtime controls" : active === "files" ? "File filters" : "Live filters"}
             description={active === "settings" ? "Sinks, presets and topic policy" : active === "files" ? "Choose a JSONL source" : "Filter the active preview"}
           />
-          {active === "settings" ? <SettingsContext config={config} updateConfig={updateConfig} applyPreset={applyPreset} saving={saving} /> : <LogFiltersPanel files={logFiles} filters={logFilters} currentFile={currentFile} topics={topics} update={updateLogFilter} onApply={loadLogs} loading={logsLoading} />}
+          {active === "settings" ? <SettingsContext config={config} updateConfig={updateConfig} applyPreset={applyPreset} saving={saving} /> : <LogFiltersPanel files={logFiles} filters={logFilters} currentFile={currentFile} topicGroups={topicGroups} update={updateLogFilter} onApply={loadLogs} loading={logsLoading} />}
         </aside>
       </main>
     </AdminPageShell>
@@ -495,27 +511,142 @@ function LevelTabs({ value, onChange, compact = false }) {
   return <div className={`grid gap-1 rounded-xl bg-muted/45 p-1 ${compact ? "grid-cols-3" : "grid-cols-6"}`}>{LEVELS.map((level) => <button key={level} type="button" onClick={() => onChange(level)} className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition ${value === level ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{level}</button>)}</div>;
 }
 
-function SettingsView({ config, topics, updateConfig, updateTopic, newTopic, setNewTopic, addTopic, applyPreset, saving }) {
+function effectiveTopicLevel(topicId, groupId, config) {
+  const topicLevels = config.topicLevels || {};
+  return topicLevels[topicId] || topicLevels[groupId] || config.globalLevel || "info";
+}
+
+function effectiveTopicEnabled(topicId, groupId, config) {
+  const topicEnabled = config.topicEnabled || {};
+  if (Object.prototype.hasOwnProperty.call(topicEnabled, topicId)) return topicEnabled[topicId] !== false;
+  if (Object.prototype.hasOwnProperty.call(topicEnabled, groupId)) return topicEnabled[groupId] !== false;
+  return true;
+}
+
+function SettingsView({ config, topicGroups, updateConfig, updateTopic, newTopic, setNewTopic, addTopic, applyPreset, saving }) {
   const topicLevels = config.topicLevels || {};
   const topicEnabled = config.topicEnabled || {};
-  return <div className="space-y-5"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><MiniStat label="Global level" value={String(config.globalLevel || "info").toUpperCase()} icon={IconBug} tone="sky" /><MiniStat label="File sink" value={config.fileEnabled ? "On" : "Off"} icon={IconFileText} tone={config.fileEnabled ? "emerald" : "amber"} /><MiniStat label="Console" value={config.consoleEnabled !== false ? "On" : "Off"} icon={IconActivity} tone="violet" /><MiniStat label="Retention" value={`${config.retentionDays || 14}d`} icon={IconClockHour4} tone="amber" /></div><SettingCard icon={IconShieldCheck} title="Runtime safety" subtitle="Backend-owned guardrails remain enforced"><div className="grid gap-3 md:grid-cols-2"><ToggleRow label="Logging enabled" checked={config.enabled === true} onCheckedChange={(checked) => updateConfig({ enabled: checked })} /><ToggleRow label="Redaction enforced" description="Secrets are always masked. The UI cannot disable this." checked disabled /></div></SettingCard><SettingCard icon={IconAdjustmentsHorizontal} title="Topic levels" subtitle="Use toggles and level tabs instead of JSON configuration"><div className="mb-4 flex gap-2"><Input placeholder="Add topic, e.g. telnyx.media" value={newTopic} onChange={(event) => setNewTopic(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTopic(); }} /><Button type="button" variant="outline" onClick={addTopic}>Add topic</Button></div><div data-testid="logging-topic-levels-list" className="max-h-[min(52vh,620px)] space-y-3 overflow-y-auto pr-1">{topics.map((topic) => { const enabled = topicEnabled[topic] !== false; const level = topicLevels[topic] || config.globalLevel || "info"; return <div key={topic} className="rounded-2xl border bg-card/70 p-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><div className="font-mono text-sm font-semibold">{topic}</div><div className="mt-1 text-xs text-muted-foreground">{enabled ? "Enabled" : "Muted"} · effective level {level}</div></div><Switch checked={enabled} onCheckedChange={(checked) => updateTopic(topic, { enabled: checked })} /></div><LevelTabs value={level} onChange={(nextLevel) => updateTopic(topic, { level: nextLevel })} /></div>; })}</div></SettingCard><SettingCard icon={IconAlertTriangle} title="Troubleshooting presets" subtitle="Use TTL presets for noisy debug modes"><div className="grid gap-3 md:grid-cols-3">{PRESETS.map((preset) => <button key={preset.id} type="button" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)} className="rounded-2xl border bg-card p-4 text-left transition hover:border-foreground/25 hover:bg-muted/50"><div className="font-semibold">{preset.label}</div><div className="mt-1 text-xs text-muted-foreground">{preset.description}</div>{preset.ttl ? <Badge variant="outline" className="mt-3 bg-background">TTL {preset.ttl}m</Badge> : <Badge variant="outline" className="mt-3 bg-background">safe default</Badge>}</button>)}</div></SettingCard></div>;
+  const [expandedGroups, setExpandedGroups] = React.useState(() => new Set(["platform", "security", "contact-center", "voice", "telnyx"]));
+  const toggleExpanded = (groupId) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MiniStat label="Global level" value={String(config.globalLevel || "info").toUpperCase()} icon={IconBug} tone="sky" />
+        <MiniStat label="File sink" value={config.fileEnabled ? "On" : "Off"} icon={IconFileText} tone={config.fileEnabled ? "emerald" : "amber"} />
+        <MiniStat label="Console" value={config.consoleEnabled !== false ? "On" : "Off"} icon={IconActivity} tone="violet" />
+        <MiniStat label="Topic groups" value={topicGroups.length} icon={IconAdjustmentsHorizontal} tone="amber" />
+      </div>
+      <SettingCard icon={IconShieldCheck} title="Runtime safety" subtitle="Backend-owned guardrails remain enforced">
+        <div className="grid gap-3 md:grid-cols-2">
+          <ToggleRow label="Logging enabled" checked={config.enabled === true} onCheckedChange={(checked) => updateConfig({ enabled: checked })} />
+          <ToggleRow label="Redaction enforced" description="Secrets are always masked. The UI cannot disable this." checked disabled />
+        </div>
+      </SettingCard>
+      <SettingCard icon={IconAdjustmentsHorizontal} title="Topic groups" subtitle="Group-level policy with child topic overrides">
+        <div className="mb-4 flex gap-2">
+          <Input placeholder="Add topic, e.g. telnyx.provider-api" value={newTopic} onChange={(event) => setNewTopic(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTopic(); }} />
+          <Button type="button" variant="outline" onClick={addTopic}>Add topic</Button>
+        </div>
+        <div data-testid="logging-topic-groups-list" data-legacy-testid="logging-topic-levels-list" className="max-h-[min(52vh,620px)] space-y-3 overflow-y-auto pr-1">
+          {topicGroups.map((group) => {
+            const expanded = expandedGroups.has(group.id);
+            const groupLevel = topicLevels[group.id] || group.defaultLevel || config.globalLevel || "info";
+            const groupEnabled = topicEnabled[group.id] !== false;
+            const overrideCount = group.topics.filter((topic) => Object.prototype.hasOwnProperty.call(topicLevels, topic.id) || Object.prototype.hasOwnProperty.call(topicEnabled, topic.id)).length;
+            const disabledCount = group.topics.filter((topic) => !effectiveTopicEnabled(topic.id, group.id, config)).length;
+            return (
+              <div key={group.id} data-testid={`logging-topic-group-${group.id}`} className="rounded-2xl border bg-card/70 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-semibold">{group.label}</h4>
+                      <Badge variant="outline" className="font-mono text-[11px]">{group.id}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                      <Badge variant="outline" className="bg-background">{group.topics.length} topics</Badge>
+                      <Badge variant="outline" className="bg-background">{overrideCount} overrides</Badge>
+                      <Badge variant="outline" className="bg-background">{disabledCount} disabled</Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Switch checked={groupEnabled} onCheckedChange={(checked) => updateTopic(group.id, { enabled: checked })} disabled={saving} />
+                    <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.id)}>{expanded ? "Collapse" : "Expand"}</Button>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground">Group level</Label>
+                  <LevelTabs value={groupLevel} onChange={(level) => updateTopic(group.id, { level })} />
+                </div>
+                {expanded ? (
+                  <div className="mt-4 space-y-2 border-t pt-4">
+                    {group.topics.map((topic) => {
+                      const hasLevelOverride = Object.prototype.hasOwnProperty.call(topicLevels, topic.id);
+                      const hasEnabledOverride = Object.prototype.hasOwnProperty.call(topicEnabled, topic.id);
+                      const enabled = effectiveTopicEnabled(topic.id, group.id, config);
+                      const level = effectiveTopicLevel(topic.id, group.id, config);
+                      return (
+                        <div key={topic.id} className="rounded-xl border bg-background/70 p-3">
+                          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-mono text-sm font-semibold">{topic.id}</div>
+                              <div className="mt-0.5 text-xs text-muted-foreground">{topic.label} · {topic.description}</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>Effective {level}</Badge>
+                              <Switch checked={enabled} onCheckedChange={(checked) => updateTopic(topic.id, { enabled: checked })} disabled={saving} />
+                            </div>
+                          </div>
+                          <LevelTabs value={level} onChange={(nextLevel) => updateTopic(topic.id, { level: nextLevel })} />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button type="button" variant="ghost" size="sm" disabled={!hasLevelOverride || saving} onClick={() => updateTopic(topic.id, { level: null })}>Inherit group</Button>
+                            <Button type="button" variant="ghost" size="sm" disabled={!hasEnabledOverride || saving} onClick={() => updateTopic(topic.id, { enabled: null })}>Inherit enabled</Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </SettingCard>
+    </div>
+  );
 }
 
 function SettingsContext({ config, updateConfig, applyPreset, saving }) {
   return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSettings} title="Global logging" subtitle="Runtime level and sinks"><div className="space-y-4"><div><Label className="mb-2 block text-sm font-medium">Global level</Label><LevelTabs value={config.globalLevel || "info"} onChange={(level) => updateConfig({ globalLevel: level })} compact /></div><ToggleRow label="Console logging" checked={config.consoleEnabled !== false} onCheckedChange={(checked) => updateConfig({ consoleEnabled: checked })} /><ToggleRow label="Pretty console" description="Keep pino-pretty for local operator readability." checked={config.consolePretty === true} onCheckedChange={(checked) => updateConfig({ consolePretty: checked })} /><ToggleRow label="Friendly console" description="Show one-line user-friendly console messages instead of expanded JSON object fields." checked={config.consoleFriendly === true} onCheckedChange={(checked) => updateConfig({ consoleFriendly: checked })} /><ToggleRow label="JSONL file logging" checked={config.fileEnabled === true} onCheckedChange={(checked) => updateConfig({ fileEnabled: checked })} /><ConfigSelect label="Rotation" value={config.rotationMode || "daily"} options={ROTATION_MODES.map((mode) => ({ value: mode, label: title(mode) }))} onChange={(rotationMode) => updateConfig({ rotationMode })} /><label className="space-y-2 text-sm"><span className="font-medium">Retention days</span><Input type="number" min="1" max="365" value={config.retentionDays || 14} onChange={(event) => updateConfig({ retentionDays: event.target.value })} /></label></div></SettingCard><SettingCard icon={IconAlertTriangle} title="Quick presets" subtitle="Debug presets ask for confirmation"><div className="space-y-2">{PRESETS.map((preset) => <Button key={preset.id} type="button" variant="outline" className="w-full justify-start" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)}>{preset.label}{preset.ttl ? <span className="ml-auto text-xs text-muted-foreground">{preset.ttl}m</span> : null}</Button>)}</div></SettingCard><SettingCard icon={IconShieldCheck} title="Read-only policy" subtitle="Backend-controlled values"><div className="space-y-2 text-xs text-muted-foreground"><div className="rounded-lg border bg-muted/20 p-3">Log directory/path are intentionally not editable from the browser.</div><div className="rounded-lg border bg-muted/20 p-3">Redaction is fail-closed and re-applied when reading historical log files.</div></div></SettingCard></div>;
 }
 
-function LogFiltersPanel({ files, filters, currentFile, topics, update, onApply, loading }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topics={topics} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button className={`w-full ${neutralActionClass}`} onClick={onApply} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconFilter className="mr-2 h-4 w-4" />}Apply filters</Button></div></SettingCard></div>;
+function LogFiltersPanel({ files, filters, currentFile, topicGroups, update, onApply, loading }) {
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topicGroups={topicGroups} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button type="button" className="w-full" onClick={() => onApply()} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Apply filters</Button></div></SettingCard>{currentFile ? <SettingCard icon={IconFileText} title="Current source" subtitle={currentFile.name}><div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Size</span><span>{formatBytes(currentFile.size)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Modified</span><span>{formatLogTime(currentFile.mtime || currentFile.modifiedAt)}</span></div></div></SettingCard> : null}</div>;
 }
 
-function TopicMultiSelect({ label, topics, selectedTopics, onChange }) {
+function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
   const selectedSet = React.useMemo(() => new Set(selectedTopics || []), [selectedTopics]);
   const summary = selectedSet.size ? `${selectedSet.size} selected` : "All topics";
   const toggleTopic = (topic) => {
     const next = new Set(selectedSet);
     if (next.has(topic)) next.delete(topic);
     else next.add(topic);
+    onChange(Array.from(next));
+  };
+  const setGroup = (group, selected) => {
+    const next = new Set(selectedSet);
+    for (const topic of group.topics) {
+      if (selected) next.add(topic.id);
+      else next.delete(topic.id);
+    }
     onChange(Array.from(next));
   };
 
@@ -530,16 +661,32 @@ function TopicMultiSelect({ label, topics, selectedTopics, onChange }) {
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-2">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={() => onChange([])}>
               All topics
             </Button>
-            <div className="max-h-72 overflow-y-auto pr-1">
-              {topics.map((topic) => (
-                <label key={topic} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">
-                  <Checkbox checked={selectedSet.has(topic)} onCheckedChange={() => toggleTopic(topic)} />
-                  <span className="font-mono text-xs">{topic}</span>
-                </label>
+            <div data-testid="logging-topic-filter-groups" className="max-h-80 space-y-3 overflow-y-auto pr-1">
+              {topicGroups.map((group) => (
+                <div key={group.id} data-testid={`logging-topic-filter-group-${group.id}`} className="rounded-xl border bg-background/70 p-2">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-semibold">{group.label}</div>
+                      <div className="font-mono text-[10px] text-muted-foreground">{group.id}</div>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setGroup(group, true)}>Select group</Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setGroup(group, false)}>Clear group</Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {group.topics.map((topic) => (
+                      <label key={topic.id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted">
+                        <Checkbox checked={selectedSet.has(topic.id)} onCheckedChange={() => toggleTopic(topic.id)} />
+                        <span className="min-w-0 truncate font-mono text-xs">{topic.id}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

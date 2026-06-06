@@ -55,10 +55,10 @@ test("auth flows emit structured pino auth events instead of direct console outp
   }
 });
 
-test("auth logger helper preserves the auth topic and never exposes raw credentials or tokens", async () => {
+test("auth logger helper preserves the canonical security auth topic and never exposes raw credentials or tokens", async () => {
   const src = await source("lib/auth-logging.mjs");
 
-  assert.match(src, /createDiagnosticLogger\("auth"\)/);
+  assert.match(src, /createDiagnosticLogger\("security\.auth"\)/);
   assert.match(src, /sanitizeDiagnosticPayload/);
   assert.match(src, /\[REDACTED\]/);
   assert.doesNotMatch(src, /password\s*[,}]/, "raw password fields must not be forwarded");

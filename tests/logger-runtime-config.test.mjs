@@ -80,7 +80,8 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
   assert.equal(first.rotationMode, "startup");
   assert.equal(first.retentionDays, 14);
   assert.equal(first.topicLevels["telnyx.stt"], "debug");
-  assert.equal(first.topicLevels.db, "trace");
+  assert.equal(first.topicLevels["platform.db"], "trace");
+  assert.equal(first.topicEnabled["platform.db"], false);
   assert.equal(first.topicLevels.bad, undefined);
   assert.deepEqual(second, first);
   const selectCount = pool.queries.filter((q) => /SELECT \* FROM app_logging_config/i.test(q.text)).length;
@@ -188,7 +189,7 @@ test("applyLoggingPreset supports time-limited STT debug and normal production p
 
   assert.equal(debug.globalLevel, "debug");
   assert.equal(debug.topicLevels["telnyx.stt"], "trace");
-  assert.equal(debug.topicEnabled["telnyx.stt.media"], true);
+  assert.equal(debug.topicEnabled["telnyx.media"], true);
   assert.equal(debug.expiresAt, "2026-06-06T10:30:00.000Z");
 
   const normal = await applyLoggingPreset({
