@@ -71,4 +71,20 @@ test("auth logger lazily loads runtime logging config before emitting when worke
   assert.match(src, /getCachedRuntimeLoggingConfig/, "auth logger should check whether this worker already has runtime logging config cached");
   assert.match(src, /tryLoadRuntimeLoggingConfigEarly/, "auth logger should bootstrap runtime config before first auth event in cold Next workers");
   assert.match(src, /ensureRuntimeLoggingConfig/, "auth logger should centralize the lazy runtime-config bootstrap");
+  assert.match(src, /return ensureRuntimeLoggingConfig\(\)\.then/, "logAuthEvent should return the bootstrap promise so terminal auth events can await file/console emission");
+});
+
+test("NextAuth credentials logs failed signin for invalid credentials before returning null", async () => {
+  const src = await source("app/api/auth/[...nextauth]/route.js");
+
+  assert.match(src, /reason: "invalid_credentials"/, "bad username/password should produce signin_failed, not only signin_attempt");
+  assert.match(src, /await logAuthEvent\("warn", "signin_failed", \{ method: "nextauth_credentials"[\s\S]*reason: "invalid_credentials"[\s\S]*return null;/);
+});
+
+test("logout emits a terminal auth event for every successful request, even without a token to revoke", async () => {
+  const src = await source("app/api/auth/logout/route.js");
+
+  assert.match(src, /let revokedRefreshToken = false;/);
+  assert.match(src, /await logAuthEvent\("info", "logout_success", \{[\s\S]*hasRefreshToken: Boolean\(refreshToRevoke\)[\s\S]*revokedRefreshToken[\s\S]*\}\);/);
+  assert.ok(src.indexOf('await logAuthEvent("info", "logout_success"') > src.indexOf('if (userId && refreshToRevoke)'), "logout_success should be emitted after optional revoke flow, not only inside it");
 });

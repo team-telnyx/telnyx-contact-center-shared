@@ -38,16 +38,16 @@ export const authOptions = {
       async authorize(creds) {
         const username = normalizeAuthEmail(creds?.username);
         const password = (creds?.password || "").toString();
-        logAuthEvent("info", "signin_attempt", { method: "nextauth_credentials", email: username, source: "nextauth" });
+        await logAuthEvent("info", "signin_attempt", { method: "nextauth_credentials", email: username, source: "nextauth" });
         if (!username || !password) {
-          logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", email: username, source: "nextauth", reason: "missing_required_fields" });
+          await logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", email: username, source: "nextauth", reason: "missing_required_fields" });
           return null;
         }
         const user = await PgDb.findUserByUsername(username);
         if (user && verifyUserPassword(user, password)) {
           // Check if account is verified
           if (!user.verified && user.auth_strategy === "local") {
-            logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", source: "nextauth", reason: "account_not_verified", ...authUserPayload(user, username) });
+            await logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", source: "nextauth", reason: "account_not_verified", ...authUserPayload(user, username) });
             throw new Error(
               "Please verify your email address before signing in"
             );
@@ -77,7 +77,7 @@ export const authOptions = {
             }
           }
 
-          logAuthEvent("info", "signin_success", { method: "nextauth_credentials", source: "nextauth", ...authUserPayload(user, username) });
+          await logAuthEvent("info", "signin_success", { method: "nextauth_credentials", source: "nextauth", ...authUserPayload(user, username) });
           return {
             id: String(user.id),
             email: user.username,
@@ -90,6 +90,7 @@ export const authOptions = {
                 .join(" ") || user.username,
           };
         }
+        await logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", email: username, source: "nextauth", reason: "invalid_credentials" });
         return null;
       },
     }),

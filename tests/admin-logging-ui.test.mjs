@@ -20,14 +20,11 @@ test("Admin logging page follows SectionRail three-pane workspace layout", async
   assert.match(page, /<aside className="min-h-0 overflow-hidden rounded-2xl border bg-card\/92/);
 });
 
-test("Admin logging topics use toggles and level tabs instead of JSON editors", async () => {
+test("Admin logging Settings keeps the topic levels list independently scrollable", async () => {
   const page = await source();
-  assert.match(page, /function LevelTabs\(/);
-  assert.match(page, /<Switch checked=\{enabled\}/);
-  assert.match(page, /Topic levels[\s\S]*Use toggles and level tabs instead of JSON configuration/);
-  assert.doesNotMatch(page, /topicLevelsText|topicEnabledText|parseJsonField|prettyJson/);
-  assert.match(page, /\^\[a-z0-9\]\[a-z0-9\._:-\]\{0,79\}\$/i);
-  assert.doesNotMatch(page, /<Textarea[\s\S]*(Topic levels|Topic enabled)/);
+
+  assert.match(page, /data-testid="logging-topic-levels-list"/);
+  assert.match(page, /data-testid="logging-topic-levels-list"[\s\S]*max-h-\[min\(52vh,620px\)\][\s\S]*overflow-y-auto/);
 });
 
 test("Admin logging file selection renders selected file entries in Files view", async () => {

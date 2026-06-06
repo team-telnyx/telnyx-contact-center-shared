@@ -37,7 +37,8 @@ export async function POST(request) {
       if (p2?.sub) userId = p2.sub;
     }
     const refreshToRevoke = refreshCookie || headerMatch?.[1] || null;
-    logAuthEvent("info", "logout_attempt", {
+    let revokedRefreshToken = false;
+    await logAuthEvent("info", "logout_attempt", {
       userId: userId ? String(userId) : undefined,
       hasRefreshToken: Boolean(refreshToRevoke),
       source: "api",
@@ -50,6 +51,7 @@ export async function POST(request) {
       const hashed = await hashToken(refreshToRevoke);
       const newList = list.filter((t) => t?.refreshToken !== hashed);
       await PgDb.updateUserById(String(userId), { refresh_tokens: newList });
+      revokedRefreshToken = newList.length !== list.length;
 
       // Set user status to Offline on logout
       if (user) {
@@ -125,13 +127,18 @@ export async function POST(request) {
           }
         }
       } catch (activityError) {
-        logAuthEvent("warn", "logout_activity_failed", { userId: String(userId), source: "api", ...authErrorPayload(activityError) });
+        await logAuthEvent("warn", "logout_activity_failed", { userId: String(userId), source: "api", ...authErrorPayload(activityError) });
         // Don't fail logout if activity logging fails
       }
-      logAuthEvent("info", "logout_success", { userId: String(userId), source: "api", revokedRefreshToken: newList.length !== list.length });
     }
+    await logAuthEvent("info", "logout_success", {
+      userId: userId ? String(userId) : undefined,
+      source: "api",
+      hasRefreshToken: Boolean(refreshToRevoke),
+      revokedRefreshToken,
+    });
   } catch (error) {
-    logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
+    await logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
   }
 
   res.cookies.set({
