@@ -64,3 +64,11 @@ test("auth logger helper preserves the auth topic and never exposes raw credenti
   assert.doesNotMatch(src, /password\s*[,}]/, "raw password fields must not be forwarded");
   assert.doesNotMatch(src, /token\s*[,}]/, "raw token fields must not be forwarded");
 });
+
+test("auth logger lazily loads runtime logging config before emitting when worker cache is cold", async () => {
+  const src = await source("lib/auth-logging.mjs");
+
+  assert.match(src, /getCachedRuntimeLoggingConfig/, "auth logger should check whether this worker already has runtime logging config cached");
+  assert.match(src, /tryLoadRuntimeLoggingConfigEarly/, "auth logger should bootstrap runtime config before first auth event in cold Next workers");
+  assert.match(src, /ensureRuntimeLoggingConfig/, "auth logger should centralize the lazy runtime-config bootstrap");
+});
