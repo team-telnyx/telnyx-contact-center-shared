@@ -311,9 +311,9 @@ export async function forgotPasswordAction(formData) {
         emailError: emailResult.error,
       });
       // Still return success to not disclose if email sending failed
+    } else {
+      logAuthEvent("info", "password_reset_email_sent", { ...authUserPayload(user, username), source: "server_action" });
     }
-
-    logAuthEvent("info", "password_reset_email_sent", { ...authUserPayload(user, username), source: "server_action" });
     return { ok: true };
   } catch (err) {
     logAuthEvent("error", "password_reset_request_failed", { reason: "server_error", source: "server_action", ...authErrorPayload(err) });
