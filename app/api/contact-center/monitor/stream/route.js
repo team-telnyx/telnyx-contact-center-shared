@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * SSE endpoint for real-time monitoring updates
  * GET /api/contact-center/monitor/stream
@@ -9,8 +11,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
 import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
-
-export const dynamic = "force-dynamic";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)

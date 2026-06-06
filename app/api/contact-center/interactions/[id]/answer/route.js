@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { bridgeCallToAgent } from "@/lib/contact-center/webrtc-bridge";
 import { broadcastToKey } from "@/lib/sse";
-
-export const dynamic = "force-dynamic";
 
 /**
  * POST /api/contact-center/interactions/:id/answer

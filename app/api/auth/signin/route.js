@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth";
 import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
-
-export const dynamic = "force-dynamic";
 
 export async function POST(request) {
   try {

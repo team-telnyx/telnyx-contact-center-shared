@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { setUserStatus } from "@/lib/contact-center/user-status";
-
-export const dynamic = "force-dynamic";
 
 /**
  * PUT /api/contact-center/agent/status

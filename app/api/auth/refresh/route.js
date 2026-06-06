@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import {
 export const dynamic = "force-dynamic";
 
+import { NextResponse } from "next/server";
+import {
   verifyRefreshToken,
   signAccessToken,
   signRefreshToken,

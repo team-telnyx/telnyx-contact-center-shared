@@ -1,8 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
-
-export const dynamic = "force-dynamic";
 
 /**
  * GET /api/contact-center/agent/interactions

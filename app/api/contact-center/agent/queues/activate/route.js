@@ -1,11 +1,11 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
-
-export const dynamic = "force-dynamic";
 
 /**
  * POST /api/contact-center/agent/queues/activate

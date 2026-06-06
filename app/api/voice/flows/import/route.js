@@ -1,11 +1,11 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { validateFlow } from "@/lib/voice-flow-validator";
 import { randomUUID } from "crypto";
-
-export const dynamic = "force-dynamic";
 
 function getBaseUrl(request) {
   if (process.env.NEXT_PUBLIC_BASE_URL) return process.env.NEXT_PUBLIC_BASE_URL;

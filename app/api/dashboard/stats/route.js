@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint for user dashboard statistics
  * GET /api/dashboard/stats
@@ -10,8 +12,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAgentStatistics } from "@/lib/contact-center/stats-aggregator";
 import { PgDb } from "@/lib/pgdb";
-
-export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {

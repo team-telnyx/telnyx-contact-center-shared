@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint for supervisory console dashboard
  * GET /api/contact-center/monitor/dashboard
@@ -8,8 +10,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import {
-export const dynamic = "force-dynamic";
-
   getQueueStatistics,
   getAgentStatistics,
   getOverallStatistics,

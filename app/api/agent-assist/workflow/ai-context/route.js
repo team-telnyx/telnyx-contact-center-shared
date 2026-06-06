@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * Agent Assist Workflow - AI Context API
  * GET /api/agent-assist/workflow/ai-context?interactionId=xxx
@@ -10,8 +12,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAiContextForInteraction } from "@/lib/agent-assist/ai-handoff-processor";
-
-export const dynamic = "force-dynamic";
 
 /**
  * GET /api/agent-assist/workflow/ai-context

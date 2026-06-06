@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
@@ -8,8 +10,6 @@ import { PgDb } from "@/lib/pgdb";
 import { verifyUserPassword } from "@/lib/auth";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
-
-export const dynamic = "force-dynamic";
 
 export const authOptions = {
   adapter: PostgresNextAuthAdapter(),

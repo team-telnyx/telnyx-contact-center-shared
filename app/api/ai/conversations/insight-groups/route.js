@@ -1,8 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-
-export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint for agent statistics
  * GET /api/contact-center/stats/agents?userId=xxx
@@ -9,8 +11,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAgentStatistics } from "@/lib/contact-center/stats-aggregator";
 import { isAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
-
-export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {

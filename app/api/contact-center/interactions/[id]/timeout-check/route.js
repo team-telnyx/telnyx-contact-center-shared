@@ -1,8 +1,8 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-
-export const dynamic = "force-dynamic";
 
 /**
  * GET /api/contact-center/interactions/[id]/timeout-check

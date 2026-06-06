@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -6,8 +8,6 @@ import { isAdmin } from "@/lib/role-utils";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getFormTemplates } from "@/lib/forms/form-templates";
 import { normalizeFormDefinition } from "@/lib/forms/form-schema";
-
-export const dynamic = "force-dynamic";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;

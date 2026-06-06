@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -6,8 +8,6 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
 import { mkdir, readdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
-
-export const dynamic = "force-dynamic";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";

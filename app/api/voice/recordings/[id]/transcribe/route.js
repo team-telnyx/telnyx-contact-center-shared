@@ -1,9 +1,9 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { PgDb } from "@/lib/pgdb";
 import { generateCallSummary } from "@/lib/contact-center/call-summary.js";
-
-export const dynamic = "force-dynamic";
 
 function getApiKey() {
   const apiKey = process.env.TELNYX_API_KEY;

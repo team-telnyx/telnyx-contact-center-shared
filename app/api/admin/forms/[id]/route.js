@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -5,8 +7,6 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeFormDefinition, validateFormDefinition } from "@/lib/forms/form-schema";
-export const dynamic = "force-dynamic";
-
 async function requireAdmin() { const s = await getServerSession(authOptions); const id = s?.user?.id || null; const email = s?.user?.email || null; if (!id && !email) return null; let u = id ? await PgDb.findUserById(id) : null; if (!u && email) u = await PgDb.findUserByUsername(email); return u && isAdmin(u) ? u : null; }
 function mapRow(row) { return row ? { ...row, queue_ids: row.queue_ids || [], queue_names: row.queue_names || [] } : null; }
 export async function GET(request, context) { const user = await requireAdmin(); if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const { id } = await context.params; const pool = getPostgresPool(); if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 }); const { rows } = await pool.query(`SELECT * FROM form_definitions WHERE id = $1`, [id]); if (!rows[0]) return NextResponse.json({ error: "Not found" }, { status: 404 }); return NextResponse.json({ ok: true, form: mapRow(rows[0]) }); }

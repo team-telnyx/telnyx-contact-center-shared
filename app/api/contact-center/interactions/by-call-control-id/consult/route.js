@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-
-export const dynamic = "force-dynamic";
 
 /**
  * DELETE /api/contact-center/interactions/by-call-control-id/consult

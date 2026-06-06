@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint for routing calls to agents
  * POST /api/contact-center/routing/route-call
@@ -8,8 +10,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { routeCall } from "@/lib/contact-center/routing-engine";
 import {
-export const dynamic = "force-dynamic";
-
   enqueueCall,
   assignCallToAgent,
   refreshQueueState,

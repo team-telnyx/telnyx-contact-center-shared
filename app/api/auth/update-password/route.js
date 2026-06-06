@@ -1,11 +1,11 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { verifyUserPassword } from "@/lib/auth";
 import { randomBytes, pbkdf2Sync } from "crypto";
-
-export const dynamic = "force-dynamic";
 
 export async function POST(request) {
   try {

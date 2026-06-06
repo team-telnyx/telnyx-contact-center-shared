@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/voice/flows/[id]/monitor/clear
  * Clear monitoring data for a specific flow or all flows
@@ -11,8 +13,6 @@ import {
   clearAllEvents,
   clearFlowExecutionEvents,
 } from "@/lib/call-monitor-store";
-
-export const dynamic = "force-dynamic";
 
 export async function POST(request, { params }) {
   try {

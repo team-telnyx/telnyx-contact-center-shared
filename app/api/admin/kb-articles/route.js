@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -6,8 +8,6 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
-
-export const dynamic = "force-dynamic";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);

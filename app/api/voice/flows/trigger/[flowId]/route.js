@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows.js";
 import {
-export const dynamic = "force-dynamic";
-
   determineNextNodes,
   executeFlowNode,
 } from "@/lib/voice-flow-engine.js";

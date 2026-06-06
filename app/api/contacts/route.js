@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -7,8 +9,6 @@ import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
-
-export const dynamic = "force-dynamic";
 
 // Support both admin session and API key authentication
 async function requireAuth(request) {

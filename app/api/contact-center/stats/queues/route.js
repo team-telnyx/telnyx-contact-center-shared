@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 /**
  * API endpoint for queue statistics
  * GET /api/contact-center/stats/queues?queueId=xxx
@@ -9,8 +11,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getQueueStatistics } from "@/lib/contact-center/stats-aggregator";
 import { isAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
-
-export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {

@@ -1,10 +1,10 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
 import { setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-
-export const dynamic = "force-dynamic";
 
 async function getCurrentAgentStatus(userId) {
   try {
