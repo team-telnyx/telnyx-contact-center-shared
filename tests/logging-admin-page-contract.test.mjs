@@ -16,6 +16,9 @@ test("Admin Logging page includes read-only log viewer wired to backend-owned lo
   assert.match(source, /runId/);
   assert.match(source, /search/);
   assert.match(source, /type="datetime-local"/);
+  assert.match(source, /localDateTimeToIso/);
+  assert.match(source, /toISOString\(\)/);
+  assert.match(source, /key === "from" \|\| key === "to"/);
   assert.match(source, /from/);
   assert.match(source, /to/);
   assert.doesNotMatch(source, /logDir.*setLogFilters/);

@@ -37,6 +37,12 @@ function parseJsonField(label, text) {
   }
 }
 
+function localDateTimeToIso(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
 export default function AdminLoggingPage() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -80,7 +86,8 @@ export default function AdminLoggingPage() {
 
       const params = new URLSearchParams();
       for (const [key, value] of Object.entries(logFilters)) {
-        if (value) params.set(key, value);
+        if (!value) continue;
+        params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
       }
       const entriesResponse = await fetch(`/api/admin/logging/logs?${params.toString()}`, { cache: "no-store" });
       const entriesData = await entriesResponse.json().catch(() => ({}));

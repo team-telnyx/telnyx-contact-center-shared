@@ -120,3 +120,17 @@ test("queryLogEntries accepts epoch filters and keeps only a bounded newest wind
   assert.deepEqual(result.entries.map((entry) => entry.msg), ["two", "one"]);
   assert.equal(result.truncated, true);
 });
+
+test("queryLogEntries tails oversized files instead of rejecting the viewer request", async () => {
+  const { queryLogEntries } = await freshModule();
+  const dir = await makeLogDir();
+  const largePadding = "x".repeat(10 * 1024 * 1024 + 1024);
+  await writeFile(path.join(dir, "app-2026-06-08.jsonl"), [
+    JSON.stringify({ time: "2026-06-08T10:00:00.000Z", level: "info", topic: "app", msg: largePadding }),
+    JSON.stringify({ time: "2026-06-08T10:01:00.000Z", level: "info", topic: "app", msg: "latest" }),
+  ].join("\n"));
+
+  const result = await queryLogEntries({ logDir: dir, file: "app-2026-06-08.jsonl", limit: 10 });
+  assert.deepEqual(result.entries.map((entry) => entry.msg), ["latest"]);
+  assert.equal(result.truncated, false);
+});
