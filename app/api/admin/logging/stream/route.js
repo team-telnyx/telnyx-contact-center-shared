@@ -26,6 +26,10 @@ function queryParam(request, key) {
   return new URL(request.url).searchParams.get(key) || undefined;
 }
 
+function queryParams(request, key) {
+  return new URL(request.url).searchParams.getAll(key).filter(Boolean);
+}
+
 function entryKey(entry) {
   return JSON.stringify({
     time: entry?.time || entry?.ts || entry?.timestamp || "",
@@ -79,6 +83,7 @@ export async function GET(request) {
               file: latestFile.name,
               level: queryParam(request, "level"),
               topic: queryParam(request, "topic"),
+              topics: queryParams(request, "topics"),
               runId: queryParam(request, "runId"),
               search: queryParam(request, "search"),
               from: queryParam(request, "from"),
@@ -95,6 +100,7 @@ export async function GET(request) {
             file: latestFile.name,
             level: queryParam(request, "level"),
             topic: queryParam(request, "topic"),
+            topics: queryParams(request, "topics"),
             runId: queryParam(request, "runId"),
             search: queryParam(request, "search"),
             from: queryParam(request, "from"),

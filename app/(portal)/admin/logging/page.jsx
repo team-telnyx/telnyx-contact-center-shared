@@ -19,6 +19,7 @@ import {
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -113,6 +115,28 @@ function localDateTimeToIso(value) {
   return Number.isNaN(date.getTime()) ? value : date.toISOString();
 }
 
+function selectedTopics(filters) {
+  if (Array.isArray(filters?.topics)) return filters.topics.filter(Boolean);
+  return filters?.topic ? [filters.topic] : [];
+}
+
+function appendLogFilterParams(params, filters) {
+  for (const [key, value] of Object.entries(filters)) {
+    if (key === "topic") continue;
+    if (key === "topics") {
+      selectedTopics({ topics: value }).forEach((topic) => params.append("topics", topic));
+      continue;
+    }
+    if (Array.isArray(value)) {
+      if (!value.length) continue;
+      value.forEach((item) => params.append(key, item));
+      continue;
+    }
+    if (!value) continue;
+    params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
+  }
+}
+
 function topicNames(config) {
   return Array.from(new Set([
     ...DEFAULT_TOPICS,
@@ -154,7 +178,7 @@ export default function AdminLoggingPage() {
   const [logMeta, setLogMeta] = React.useState({ skippedInvalid: 0, truncated: false });
   const [liveConnected, setLiveConnected] = React.useState(false);
   const [liveSourceFile, setLiveSourceFile] = React.useState("");
-  const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topic: "", runId: "", search: "", from: "", to: "", limit: "100" });
+  const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topics: [], runId: "", search: "", from: "", to: "", limit: "100" });
   const [newTopic, setNewTopic] = React.useState("");
   const [confirmation, setConfirmation] = React.useState(null);
 
@@ -190,10 +214,7 @@ export default function AdminLoggingPage() {
       const effectiveFilters = { ...logFilters, ...filterOverrides };
       const params = new URLSearchParams();
       if (active === "live" && !effectiveFilters.file) params.set("latest", "1");
-      for (const [key, value] of Object.entries(effectiveFilters)) {
-        if (!value) continue;
-        params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
-      }
+      appendLogFilterParams(params, effectiveFilters);
       const entriesResponse = await fetch(`/api/admin/logging/logs?${params.toString()}`, { cache: "no-store" });
       const entriesData = await entriesResponse.json().catch(() => ({}));
       if (!entriesResponse.ok || !entriesData?.ok) throw new Error(entriesData?.error || "Failed to load log entries");
@@ -217,11 +238,14 @@ export default function AdminLoggingPage() {
   React.useEffect(() => {
     if (active !== "live") return undefined;
     const params = new URLSearchParams({ latest: "1", limit: logFilters.limit || "100" });
-    for (const key of ["level", "topic", "runId", "search", "from", "to"]) {
-      const value = logFilters[key];
-      if (!value) continue;
-      params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
-    }
+    appendLogFilterParams(params, {
+      level: logFilters.level,
+      topics: selectedTopics(logFilters),
+      runId: logFilters.runId,
+      search: logFilters.search,
+      from: logFilters.from,
+      to: logFilters.to,
+    });
     const source = new EventSource(`/api/admin/logging/stream?${params.toString()}`);
     source.onopen = () => setLiveConnected(true);
     source.addEventListener("ready", (event) => {
@@ -243,7 +267,7 @@ export default function AdminLoggingPage() {
       setLiveConnected(false);
       source.close();
     };
-  }, [active, logFilters.level, logFilters.topic, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
+  }, [active, logFilters.level, logFilters.topics, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
 
   React.useEffect(() => {
     if (active !== "files") return;
@@ -383,7 +407,7 @@ export default function AdminLoggingPage() {
             {active === "live" ? <Badge variant="outline" className="bg-background/80">{liveConnected ? "Live SSE" : "Connecting"}</Badge> : null}
             {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFilters.file || currentFile?.name || "Select file"}</Badge> : null}
           </div>
-          <div className={`flex-1 min-h-0 p-5 ${active === "settings" ? "overflow-y-auto" : "overflow-hidden"}`}>
+          <div className="flex-1 min-h-0 overflow-hidden p-5">
             {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
               <SettingsView config={config} topics={topics} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
@@ -479,7 +503,47 @@ function SettingsContext({ config, updateConfig, applyPreset, saving }) {
 }
 
 function LogFiltersPanel({ files, filters, currentFile, topics, update, onApply, loading }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><ConfigSelect label="Topic" value={filters.topic || "__all__"} options={[{ value: "__all__", label: "All topics" }, ...topics.map((topic) => ({ value: topic, label: topic }))]} onChange={(value) => update("topic", value === "__all__" ? "" : value)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button className={`w-full ${neutralActionClass}`} onClick={onApply} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconFilter className="mr-2 h-4 w-4" />}Apply filters</Button></div></SettingCard></div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topics={topics} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button className={`w-full ${neutralActionClass}`} onClick={onApply} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconFilter className="mr-2 h-4 w-4" />}Apply filters</Button></div></SettingCard></div>;
+}
+
+function TopicMultiSelect({ label, topics, selectedTopics, onChange }) {
+  const selectedSet = React.useMemo(() => new Set(selectedTopics || []), [selectedTopics]);
+  const summary = selectedSet.size ? `${selectedSet.size} selected` : "All topics";
+  const toggleTopic = (topic) => {
+    const next = new Set(selectedSet);
+    if (next.has(topic)) next.delete(topic);
+    else next.add(topic);
+    onChange(Array.from(next));
+  };
+
+  return (
+    <div className="space-y-2 text-sm">
+      <Label className="block font-medium">{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" className="w-full justify-between font-normal">
+            <span>{summary}</span>
+            <span className="text-xs text-muted-foreground">{selectedSet.size ? "Multi" : "Any"}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-2">
+          <div className="space-y-1">
+            <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={() => onChange([])}>
+              All topics
+            </Button>
+            <div className="max-h-72 overflow-y-auto pr-1">
+              {topics.map((topic) => (
+                <label key={topic} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted">
+                  <Checkbox checked={selectedSet.has(topic)} onCheckedChange={() => toggleTopic(topic)} />
+                  <span className="font-mono text-xs">{topic}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 function LiveLogView({ entries, loading, meta, connected = false, fileSize }) {

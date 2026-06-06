@@ -20,14 +20,19 @@ async function source(file) {
   return readFile(file, "utf8");
 }
 
-test("Live logging topic filter is a configured-topic dropdown, not free text", async () => {
+test("Live logging topic filter is a configured-topic multi-select with checkboxes", async () => {
   const src = await source(files.page);
 
   assert.match(src, /<LogFiltersPanel[\s\S]*topics=\{topics\}/);
   assert.match(src, /function LogFiltersPanel\(\{ files, filters, currentFile, topics, update, onApply, loading \}\)/);
-  assert.match(src, /ConfigSelect label="Topic"/);
+  assert.match(src, /import \{ Checkbox \} from "@\/components\/ui\/checkbox";/);
+  assert.match(src, /function TopicMultiSelect\(/);
+  assert.match(src, /<TopicMultiSelect[\s\S]*label="Topic"/);
+  assert.match(src, /selectedTopics=\{filters\.topics \|\| \[\]\}/);
+  assert.match(src, /onChange=\{\(selected\) => update\("topics", selected\)\}/);
+  assert.match(src, /<Checkbox[\s\S]*checked=\{selectedSet\.has\(topic\)\}/);
   assert.match(src, /All topics/);
-  assert.match(src, /\.\.\.topics\.map\(\(topic\) => \(\{ value: topic, label: topic \}\)\)/);
+  assert.doesNotMatch(src, /ConfigSelect label="Topic"/);
   assert.doesNotMatch(src, /<Input placeholder="telnyx\.stt" value=\{filters\.topic\}/);
 });
 

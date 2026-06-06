@@ -31,6 +31,10 @@ function queryParam(request, key) {
   return new URL(request.url).searchParams.get(key) || undefined;
 }
 
+function queryParams(request, key) {
+  return new URL(request.url).searchParams.getAll(key).filter(Boolean);
+}
+
 export async function GET(request) {
   const user = await requireAdmin();
   if (!user) return noStore({ ok: false, error: "Forbidden" }, { status: 403 });
@@ -51,6 +55,7 @@ export async function GET(request) {
       file: queryParam(request, "file") || latestFile?.name,
       level: queryParam(request, "level"),
       topic: queryParam(request, "topic"),
+      topics: queryParams(request, "topics"),
       runId: queryParam(request, "runId"),
       search: queryParam(request, "search"),
       from: queryParam(request, "from"),

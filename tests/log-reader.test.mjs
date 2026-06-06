@@ -56,6 +56,26 @@ test("queryLogEntries filters JSONL logs by time, level, topic, runId, and searc
   assert.equal(result.truncated, false);
 });
 
+test("queryLogEntries accepts multiple selected topics", async () => {
+  const { queryLogEntries } = await freshModule();
+  const dir = await makeLogDir();
+  await writeFile(path.join(dir, "app-2026-06-09.jsonl"), [
+    JSON.stringify({ time: "2026-06-09T10:00:00.000Z", level: "info", topic: "app", msg: "boot" }),
+    JSON.stringify({ time: "2026-06-09T10:01:00.000Z", level: "info", topic: "routing", msg: "matched route" }),
+    JSON.stringify({ time: "2026-06-09T10:02:00.000Z", level: "info", topic: "telnyx.stt", msg: "transcript" }),
+    JSON.stringify({ time: "2026-06-09T10:03:00.000Z", level: "info", scope: "voice-webhook", msg: "webhook handled" }),
+  ].join("\n"));
+
+  const result = await queryLogEntries({
+    logDir: dir,
+    file: "app-2026-06-09.jsonl",
+    topics: ["routing", "telnyx.stt", "voice-webhook"],
+    limit: 20,
+  });
+
+  assert.deepEqual(result.entries.map((entry) => entry.msg), ["webhook handled", "transcript", "matched route"]);
+});
+
 test("queryLogEntries is newest-first, bounded, and never reads path traversal filenames", async () => {
   const { queryLogEntries } = await freshModule();
   const dir = await makeLogDir();
