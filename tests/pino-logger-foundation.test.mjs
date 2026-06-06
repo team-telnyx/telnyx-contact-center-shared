@@ -415,8 +415,8 @@ test("createLogger can use simplified friendly pino-pretty console output while 
     logger.info({ safe: "ok", interactionId: "ix-1" }, "friendly_console_test");
     await logger.flush?.();
     assert.equal(lines.length, 1);
-    assert.match(lines[0], /\[.*\] INFO \(friendly-run\): friendly_console_test/);
-    assert.doesNotMatch(lines[0], /\{"level"/);
+    assert.equal(lines[0], "[09:32:41.157] INFO: Friendly console test");
+    assert.doesNotMatch(lines[0], /friendly-run|pid\d+|\{"level"/);
     assert.doesNotMatch(lines[0], /"interactionId"/);
     assert.throws(() => JSON.parse(lines[0]), /Unexpected|JSON/);
 
@@ -428,6 +428,37 @@ test("createLogger can use simplified friendly pino-pretty console output while 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("friendly console works without pretty mode as plain one-line output", async () => {
+  const lines = [];
+  const { createLogger } = await freshLoggerModule();
+  const logger = createLogger({
+    topic: "app",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: true,
+      consolePretty: false,
+      consoleFriendly: true,
+      fileEnabled: false,
+    },
+    stdout: (line) => lines.push(line),
+    now: new Date("2026-06-06T14:00:38.407Z"),
+    runId: "plain-friendly-run",
+  });
+
+  logger.info("ghost_call_cleanup_completed");
+
+  assert.deepEqual(lines, ["[14:00:38.407] INFO: Ghost call cleanup completed"]);
+  assert.doesNotMatch(lines[0], /plain-friendly-run|\{"level"/);
+});
+
+test("friendly console pretty mode colorizes the user-friendly line", async () => {
+  const { buildFriendlyConsoleLine } = await freshLoggerModule();
+  const line = buildFriendlyConsoleLine({ time: "2026-06-06T14:00:38.407Z", level: "info", msg: "streaming_ws_routes_ready" }, { colorize: true });
+
+  assert.match(line, /^\[14:00:38\.407\] \u001b\[[0-9;]+mINFO\u001b\[[0-9;]+m: Streaming WS routes ready$/);
+  assert.doesNotMatch(line, /runId|streaming_ws_routes_ready/);
 });
 
 test("createLogger uses pino-pretty for console output while keeping file JSONL", async () => {
