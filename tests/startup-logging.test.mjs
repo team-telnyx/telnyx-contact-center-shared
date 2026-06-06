@@ -17,6 +17,9 @@ test("startup instrumentation emits application, Postgres, and streaming events 
   assert.match(src, /bootstrapLoggingConfig/);
   assert.match(src, /fileEnabled: bootstrapFileEnabled/);
   assert.match(src, /getRuntimeLoggingConfig\(\{ forceRefresh: true \}\)/);
+  assert.match(src, /loadRuntimeLoggingConfigEarly/);
+  assert.match(src, /runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly\(\)/);
+  assert.match(src, /createDiagnosticLogger\("app", \{ config: bootstrapLoggingConfig, getConfig: \(\) => runtimeLoggingConfig \}\)/);
   assert.match(src, /createDiagnosticLogger\("app"/);
   assert.match(src, /createDiagnosticLogger\("db"/);
   assert.match(src, /createDiagnosticLogger\("telnyx\.streaming"/);
@@ -32,6 +35,8 @@ test("Postgres module logs pool lifecycle through pino instead of direct console
   const src = await source(postgresPath);
 
   assert.match(src, /from "\.\/logger\/index\.mjs"/);
+  assert.match(src, /getCachedRuntimeLoggingConfig/);
+  assert.match(src, /getConfig: getCachedRuntimeLoggingConfig/);
   assert.match(src, /topic: "db"/);
   assert.match(src, /postgres_pool_created/);
   assert.match(src, /postgres_connected/);

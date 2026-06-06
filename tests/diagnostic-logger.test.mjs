@@ -147,3 +147,20 @@ test("diagnostic logger honors LOG_LEVEL ordering and protects metadata fields",
     else process.env.LOG_LEVEL = previous;
   }
 });
+
+
+test("diagnostic logger uses cached runtime consolePretty before first startup log", async () => {
+  const { createDiagnosticLogger } = await import("../lib/diagnostic-logger.mjs");
+  const { setCachedRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await import("../lib/logger/runtime-config.mjs");
+  resetRuntimeLoggingConfigCache();
+  const lines = [];
+  try {
+    setCachedRuntimeLoggingConfig({ consoleEnabled: true, consolePretty: true, fileEnabled: false });
+    const logger = createDiagnosticLogger("app", { stdout: (line) => lines.push(line) });
+    logger.info("cached_pretty_probe", { ok: true });
+    assert.match(lines.join("\n"), /INFO: cached_pretty_probe/);
+    assert.doesNotMatch(lines.join("\n"), /^\{"level":"info"/);
+  } finally {
+    resetRuntimeLoggingConfigCache();
+  }
+});

@@ -4,6 +4,9 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import nextEnv from "@next/env";
 import { createDiagnosticLogger } from "../lib/diagnostic-logger.mjs";
+import { tryLoadRuntimeLoggingConfigEarly } from "../lib/logger/runtime-config.mjs";
+
+const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
 
 const { loadEnvConfig } = nextEnv;
 const originalEnv = { ...process.env };
@@ -16,6 +19,7 @@ const logger = createDiagnosticLogger("app", {
     fileEnabled: process.env.LOG_FILE_ENABLED !== "0",
     logDir: process.env.LOG_DIR || process.env.LOG_FILE_DIR || (nodeEnv === "production" ? "/app/logs" : "logs"),
   },
+  getConfig: () => runtimeLoggingConfig,
 });
 
 const hostname = process.env.HOSTNAME || "0.0.0.0";

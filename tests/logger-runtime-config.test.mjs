@@ -85,6 +85,34 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
   assert.equal(selectCount, 1);
 });
 
+
+test("environment overrides win over persisted runtime sink and console settings", async () => {
+  const previousLogDir = process.env.LOG_DIR;
+  const previousPretty = process.env.LOG_CONSOLE_PRETTY;
+  const previousFile = process.env.LOG_FILE_ENABLED;
+  process.env.LOG_DIR = "/tmp/contact-center-dev-logs";
+  process.env.LOG_CONSOLE_PRETTY = "1";
+  process.env.LOG_FILE_ENABLED = "1";
+  try {
+    const { getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
+    resetRuntimeLoggingConfigCache();
+    const pool = createFakePool({ rows: [{ console_pretty: false, file_enabled: false, log_dir: "/app/logs" }] });
+
+    const config = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:00Z") });
+
+    assert.equal(config.consolePretty, true);
+    assert.equal(config.fileEnabled, true);
+    assert.equal(config.logDir, "/tmp/contact-center-dev-logs");
+  } finally {
+    if (previousLogDir === undefined) delete process.env.LOG_DIR;
+    else process.env.LOG_DIR = previousLogDir;
+    if (previousPretty === undefined) delete process.env.LOG_CONSOLE_PRETTY;
+    else process.env.LOG_CONSOLE_PRETTY = previousPretty;
+    if (previousFile === undefined) delete process.env.LOG_FILE_ENABLED;
+    else process.env.LOG_FILE_ENABLED = previousFile;
+  }
+});
+
 test("saveRuntimeLoggingConfig validates input, upserts config, writes audit, and resets cache", async () => {
   const { saveRuntimeLoggingConfig, getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
   resetRuntimeLoggingConfigCache();

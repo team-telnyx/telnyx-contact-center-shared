@@ -1,8 +1,12 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { createDiagnosticLogger } = await import("./lib/diagnostic-logger.mjs");
-    const { getRuntimeLoggingConfig } = await import("./lib/logger/runtime-config.mjs");
+    const {
+      getRuntimeLoggingConfig,
+      tryLoadRuntimeLoggingConfigEarly,
+    } = await import("./lib/logger/runtime-config.mjs");
     const { checkPostgresStatus } = await import("./lib/postgres.mjs");
+    const loadRuntimeLoggingConfigEarly = () => tryLoadRuntimeLoggingConfigEarly();
 
     const bootstrapFileEnabled = !["0", "false", "no", "off"].includes(
       String(process.env.LOG_FILE_ENABLED || "").toLowerCase(),
@@ -17,10 +21,10 @@ export async function register() {
       rotationMode: process.env.LOG_ROTATION_MODE || "daily",
     };
 
-    let runtimeLoggingConfig = null;
-    const appLogger = createDiagnosticLogger("app", { config: bootstrapLoggingConfig });
-    const dbLogger = createDiagnosticLogger("db", { config: bootstrapLoggingConfig });
-    const streamingLogger = createDiagnosticLogger("telnyx.streaming", { config: bootstrapLoggingConfig });
+    let runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly();
+    const appLogger = createDiagnosticLogger("app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const dbLogger = createDiagnosticLogger("db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const streamingLogger = createDiagnosticLogger("telnyx.streaming", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
 
     appLogger.info("application_starting", {
       nodeEnv: process.env.NODE_ENV || "development",

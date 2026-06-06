@@ -72,6 +72,9 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
     startWrapper.indexOf('import "dotenv/config";') < startWrapper.indexOf('import { createDiagnosticLogger }'),
     "start wrapper must load .env before creating the pino logger",
   );
+  assert.match(startWrapper, /tryLoadRuntimeLoggingConfigEarly/);
+  assert.match(startWrapper, /const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly\(\)/);
+  assert.match(startWrapper, /getConfig: \(\) => runtimeLoggingConfig/);
   assert.match(startWrapper, /web_server_starting/);
   assert.match(startWrapper, /web_server_ready/);
   assert.match(startWrapper, /web_server_next_runtime/);
