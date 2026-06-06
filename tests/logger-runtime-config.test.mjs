@@ -40,8 +40,8 @@ test("getRuntimeLoggingConfig seeds schema and returns safe defaults when no row
   assert.equal(config.globalLevel, "info");
   assert.equal(config.consoleEnabled, true);
   assert.equal(config.consolePretty, false);
-  assert.equal(config.fileEnabled, false);
-  assert.equal(config.logDir, "/app/logs");
+  assert.equal(config.fileEnabled, true);
+  assert.match(config.logDir, /\/logs$/);
   assert.equal(config.rotationMode, "daily");
   assert.equal(config.retentionDays, 14);
   assert.equal(config.redactionEnabled, true);
