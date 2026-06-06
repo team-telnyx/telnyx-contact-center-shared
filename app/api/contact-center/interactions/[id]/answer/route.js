@@ -4,6 +4,8 @@ import { PgDb } from "@/lib/pgdb";
 import { bridgeCallToAgent } from "@/lib/contact-center/webrtc-bridge";
 import { broadcastToKey } from "@/lib/sse";
 
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/contact-center/interactions/:id/answer
  * Answer an incoming interaction (bridge to agent's WebRTC client)

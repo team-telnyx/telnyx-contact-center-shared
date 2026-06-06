@@ -4,6 +4,8 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { setUserStatus } from "@/lib/contact-center/user-status";
 
+export const dynamic = "force-dynamic";
+
 /**
  * PUT /api/contact-center/agent/status
  * Update agent status

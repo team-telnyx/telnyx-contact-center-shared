@@ -4,6 +4,8 @@ import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { broadcastToKey } from "@/lib/sse";
 import {
+export const dynamic = "force-dynamic";
+
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker.js";

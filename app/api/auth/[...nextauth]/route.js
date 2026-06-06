@@ -9,6 +9,8 @@ import { verifyUserPassword } from "@/lib/auth";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 
+export const dynamic = "force-dynamic";
+
 export const authOptions = {
   adapter: PostgresNextAuthAdapter(),
   session: { strategy: "jwt" },

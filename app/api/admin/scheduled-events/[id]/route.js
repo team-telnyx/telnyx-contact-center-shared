@@ -5,6 +5,8 @@ import { PgDb } from "@/lib/pgdb";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+export const dynamic = "force-dynamic";
+
 async function requireSupervisorOrAdmin() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return null;

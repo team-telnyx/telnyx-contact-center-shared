@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import {
+export const dynamic = "force-dynamic";
+
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker.js";

@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

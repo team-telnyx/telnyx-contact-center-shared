@@ -5,6 +5,8 @@ import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
 
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/contact-center/agent/queues/activate
  * Activate agent in specified queues

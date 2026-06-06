@@ -4,6 +4,8 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/contact-center/agent/queues/deactivate
  * Deactivate agent from specified queues

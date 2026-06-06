@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/contact-center/interactions/[id]/timeout-check
  * Check if an interaction was timeout re-enqueued

@@ -4,6 +4,8 @@ import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
+export const dynamic = "force-dynamic";
+
 const client = new OAuth2Client(process.env.GOOGLE_ID);
 
 export async function POST(request) {

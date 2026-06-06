@@ -7,6 +7,8 @@ import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
 
+export const dynamic = "force-dynamic";
+
 const PEXELS_API = "https://api.pexels.com/v1";
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";

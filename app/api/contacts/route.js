@@ -8,6 +8,8 @@ import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
+export const dynamic = "force-dynamic";
+
 // Support both admin session and API key authentication
 async function requireAuth(request) {
   // Try API key authentication first

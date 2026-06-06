@@ -4,6 +4,8 @@ import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request) {
   try {
     const body = await request.json();

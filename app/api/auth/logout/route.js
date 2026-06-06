@@ -4,6 +4,8 @@ import { PgDb } from "@/lib/pgdb";
 import { setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
+export const dynamic = "force-dynamic";
+
 async function getCurrentAgentStatus(userId) {
   try {
     const pool = getPostgresPool();

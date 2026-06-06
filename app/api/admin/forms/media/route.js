@@ -7,6 +7,8 @@ import { isAdmin } from "@/lib/role-utils";
 import { mkdir, readdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
 
+export const dynamic = "force-dynamic";
+
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";
 const MAX_BYTES = 5 * 1024 * 1024;

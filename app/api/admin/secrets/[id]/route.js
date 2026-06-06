@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import {
+export const dynamic = "force-dynamic";
+
   getSecretById,
   updateSecret,
   deleteSecret,

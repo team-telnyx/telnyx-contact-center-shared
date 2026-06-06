@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks";
 import {
+export const dynamic = "force-dynamic";
+
   storeWebrtcCallLegMapping,
   getWebrtcCallLegMappingBySessionId,
 } from "@/lib/mobile-call-leg-store";

@@ -7,6 +7,8 @@ import { isAdmin } from "@/lib/role-utils";
 import { extractBundleMediaAssets, normalizeImportedForm } from "@/lib/forms/form-bundles";
 import { slugifyFormName } from "@/lib/forms/form-schema";
 
+export const dynamic = "force-dynamic";
+
 async function requireAdmin() {
   const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
   let user = id ? await PgDb.findUserById(id) : null; if (!user && email) user = await PgDb.findUserByUsername(email); return user && isAdmin(user) ? user : null;

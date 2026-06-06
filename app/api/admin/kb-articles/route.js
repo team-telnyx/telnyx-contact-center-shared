@@ -7,6 +7,8 @@ import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
+export const dynamic = "force-dynamic";
+
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;

@@ -11,6 +11,8 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAgentStatistics } from "@/lib/contact-center/stats-aggregator";
 import { PgDb } from "@/lib/pgdb";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);

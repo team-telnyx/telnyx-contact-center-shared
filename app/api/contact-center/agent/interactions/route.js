@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/contact-center/agent/interactions
  * List active interactions assigned to agent from cc_interactions table

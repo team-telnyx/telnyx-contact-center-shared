@@ -3,6 +3,8 @@ import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 
+export const dynamic = "force-dynamic";
+
 async function getUsernameForUserId(userId) {
   const pool = getPostgresPool();
   if (!pool) return null;

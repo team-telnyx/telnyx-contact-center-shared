@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows.js";
 import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks.js";
 import {
+export const dynamic = "force-dynamic";
+
   executeFlowNode,
   shouldContinueImmediately,
   determineNextNodes,

@@ -3,6 +3,8 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+export const dynamic = "force-dynamic";
+
 /**
  * DELETE /api/contact-center/interactions/[id]/consult
  * Cancel/cleanup consult state and optionally hangup parked call

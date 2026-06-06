@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import {
+export const dynamic = "force-dynamic";
+
   verifyRefreshToken,
   signAccessToken,
   signRefreshToken,

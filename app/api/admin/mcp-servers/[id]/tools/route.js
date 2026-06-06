@@ -6,6 +6,8 @@ import { isAdmin } from "@/lib/role-utils";
 import { discoverMcpToolsForServer } from "@/lib/mcp/mcp-tool-runner";
 import { getMcpServer, listMcpServerTools, upsertMcpServerTools } from "@/lib/mcp/mcp-server-registry";
 
+export const dynamic = "force-dynamic";
+
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;

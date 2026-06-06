@@ -4,6 +4,8 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { setUserStatus } from "@/lib/contact-center/user-status";
 
+export const dynamic = "force-dynamic";
+
 const ALLOWED_THEMES = ["light", "dark", "system"];
 
 // Get allowed statuses from database

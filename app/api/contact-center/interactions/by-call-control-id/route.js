@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/contact-center/interactions/by-call-control-id?callControlId=...
  * Find interaction by call_control_id

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request) {
   try {
     const { email } = await request.json();

@@ -5,6 +5,8 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 
+export const dynamic = "force-dynamic";
+
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
   const id = session?.user?.id || null;

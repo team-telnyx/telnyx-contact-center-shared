@@ -6,6 +6,8 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 
+export const dynamic = "force-dynamic";
+
 // Expected CSV headers (same as validation)
 const REQUIRED_HEADERS = [
   "first_name",

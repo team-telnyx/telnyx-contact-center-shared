@@ -5,6 +5,8 @@ import { PgDb } from "@/lib/pgdb";
 import { verifyUserPassword } from "@/lib/auth";
 import { randomBytes, pbkdf2Sync } from "crypto";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request) {
   try {
     // Get session

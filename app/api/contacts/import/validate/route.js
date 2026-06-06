@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 
+export const dynamic = "force-dynamic";
+
 // Expected CSV headers
 const REQUIRED_HEADERS = [
   "first_name",

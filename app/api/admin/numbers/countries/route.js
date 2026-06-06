@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
+export const dynamic = "force-dynamic";
+
 // Country code to name mapping
 const countryNames = {
   US: "United States",

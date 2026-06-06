@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { seedDefaultAppSettings } from "@/lib/seed-app-settings.mjs";
 
+export const dynamic = "force-dynamic";
+
 // GET app settings
 export async function GET() {
   try {
