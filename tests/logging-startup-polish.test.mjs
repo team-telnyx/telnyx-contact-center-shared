@@ -67,13 +67,14 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
   const dockerfile = await source(files.productionDockerfile);
 
   assert.equal(packageJson.scripts.start, "NODE_ENV=production node scripts/start-next-with-pino.mjs");
-  assert.match(startWrapper, /^import "dotenv\/config";/m);
+  assert.match(startWrapper, /^import nextEnv from "@next\/env";/m);
   assert.ok(
-    startWrapper.indexOf('import "dotenv/config";') < startWrapper.indexOf('import { createDiagnosticLogger }'),
-    "start wrapper must load .env before creating the pino logger",
+    startWrapper.indexOf('import nextEnv from "@next/env";') < startWrapper.indexOf('import { createDiagnosticLogger }'),
+    "start wrapper must import Next env support before creating the pino logger",
   );
   assert.match(startWrapper, /tryLoadRuntimeLoggingConfigEarly/);
   assert.match(startWrapper, /const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly\(\)/);
+  assert.match(startWrapper, /loadEnvConfig\(process\.cwd\(\), nodeEnv !== "production"\)/);
   assert.match(startWrapper, /getConfig: \(\) => runtimeLoggingConfig/);
   assert.match(startWrapper, /web_server_starting/);
   assert.match(startWrapper, /web_server_ready/);
