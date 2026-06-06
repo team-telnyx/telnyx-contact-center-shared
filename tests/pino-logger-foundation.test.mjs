@@ -326,6 +326,36 @@ test("createLogger can write JSONL to a daily file sink", async () => {
   }
 });
 
+test("createLogger writes human-readable message alongside technical msg in JSONL files", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-friendly-message-"));
+  const { createLogger, buildLogFilePath } = await freshLoggerModule();
+  const now = new Date("2026-06-06T09:32:41.157Z");
+  const logger = createLogger({
+    topic: "streaming.ws",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: false,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+    },
+    now,
+    runId: "friendly-message-run",
+  });
+
+  try {
+    logger.info({ message: "streaming_ws_routes_ready" }, "streaming_ws_routes_ready");
+    await logger.flush?.();
+    const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "friendly-message-run" });
+    const contents = await readFile(filePath, "utf8");
+    const entry = JSON.parse(contents.trim());
+    assert.equal(entry.msg, "streaming_ws_routes_ready");
+    assert.equal(entry.message, "Streaming WS routes ready");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createLogger rotates daily file sinks after midnight", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-daily-rotation-"));
   const { createLogger, buildLogFilePath } = await freshLoggerModule();
@@ -614,7 +644,7 @@ test("diagnostic logger adapter uses pino foundation while preserving ts/scope/m
   const entry = JSON.parse(lines[0]);
   assert.equal(entry.scope, "telnyx.stt");
   assert.equal(entry.topic, "telnyx.stt");
-  assert.equal(entry.message, "media_ws_connected");
+  assert.equal(entry.message, "Media WS connected");
   assert.equal(entry.msg, "media_ws_connected");
   assert.equal(entry.ts, "2026-06-06T09:32:41.157Z");
   assert.doesNotMatch(entry.url, /abc|value/);

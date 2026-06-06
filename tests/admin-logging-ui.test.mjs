@@ -67,6 +67,7 @@ test("Admin logging entries stay compact and expand anywhere into CodeBlock JSON
   assert.match(page, /isInteractiveTarget\(event\.target\)/);
   assert.match(page, /aria-expanded=\{expanded\}/);
   assert.match(page, /line-clamp-1/);
+  assert.match(page, /const message = entry\.message \|\| entry\.msg \|\| entry\.event \|\| "Log entry";/);
   assert.match(page, /maxCompactMetaItems/);
   assert.match(page, /compactMeta/);
   assert.match(page, /Full JSON entry/);

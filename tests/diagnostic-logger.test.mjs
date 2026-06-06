@@ -76,7 +76,8 @@ test("createDiagnosticLogger writes JSON lines to stdout and optional file sink"
     const stdoutEntry = JSON.parse(lines[0]);
     assert.equal(stdoutEntry.scope, "test.scope");
     assert.equal(stdoutEntry.level, "info");
-    assert.equal(stdoutEntry.message, "hello");
+    assert.equal(stdoutEntry.message, "Hello");
+    assert.equal(stdoutEntry.msg, "hello");
     assert.equal(stdoutEntry.count, 2);
     assert.equal(stdoutEntry.token, "[redacted:string:12]");
 
@@ -112,7 +113,8 @@ test("diagnostic logger honors LOG_FILE_ENABLED and LOG_DIR without LOG_FILE_PAT
     const file = await readFile(filePath, "utf8");
     const fileEntry = JSON.parse(file.trim());
     assert.equal(fileEntry.scope, "test.scope");
-    assert.equal(fileEntry.message, "hello_dir_sink");
+    assert.equal(fileEntry.message, "Hello dir sink");
+    assert.equal(fileEntry.msg, "hello_dir_sink");
     assert.equal(fileEntry.count, 3);
   } finally {
     if (previousEnabled === undefined) delete process.env.LOG_FILE_ENABLED;
@@ -140,7 +142,8 @@ test("diagnostic logger honors LOG_LEVEL ordering and protects metadata fields",
     assert.equal(lines.length, 1);
     const entry = JSON.parse(lines[0]);
     assert.equal(entry.level, "warn");
-    assert.equal(entry.message, "warn emitted");
+    assert.equal(entry.message, "Warn emitted");
+    assert.equal(entry.msg, "warn emitted");
     assert.equal(entry.scope, "test.level");
   } finally {
     if (previous === undefined) delete process.env.LOG_LEVEL;

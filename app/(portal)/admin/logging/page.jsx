@@ -562,7 +562,7 @@ function LogEntryCard({ entry }) {
   const [expanded, setExpanded] = React.useState(false);
   const level = String(entry.level || entry.severity || "info").toLowerCase();
   const topic = entry.topic || entry.scope || "app";
-  const message = entry.msg || entry.message || entry.event || "Log entry";
+  const message = entry.message || entry.msg || entry.event || "Log entry";
   const time = entry.time || entry.ts || entry.timestamp;
   const meta = Object.entries(entry).filter(([key]) => !["level", "severity", "topic", "scope", "msg", "message", "event", "time", "ts", "timestamp"].includes(key));
   const maxCompactMetaItems = 4;
