@@ -134,12 +134,25 @@ export async function POST(request) {
     }
 
     if (!response.ok) {
-      supervisionLogger.error("supervision_error_5", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
+      const telnyxError = data?.errors?.[0] || {};
+      const telnyxErrorMessage =
+        telnyxError.detail ||
+        telnyxError.message ||
+        data?.message ||
+        null;
+
+      supervisionLogger.error("supervision_error_5", {
+        telnyxStatus: response.status,
+        telnyxStatusText: response.statusText,
+        telnyxErrorCode: telnyxError.code,
+        telnyxErrorTitle: telnyxError.title,
+        telnyxErrorMessage,
+        superviseCallControlId: supervise_call_control_id,
+        supervisorRole: role,
+      });
 
       const errorMsg =
-        data?.errors?.[0]?.detail ||
-        data?.errors?.[0]?.message ||
-        data?.message ||
+        telnyxErrorMessage ||
         `HTTP ${response.status}: Failed to create supervisor call`;
       return NextResponse.json(
         { error: errorMsg },
