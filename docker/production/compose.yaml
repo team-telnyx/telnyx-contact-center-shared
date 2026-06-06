@@ -38,6 +38,12 @@ services:
       # NOTE: Create this directory on the host before first run:
       # mkdir -p /home/ubuntu/apps/media
       - /home/ubuntu/apps/media:/app/public/media
+      # Optional persistent diagnostic logs. Prefer Docker stdout for normal ops;
+      # set LOG_FILE_PATH=/app/logs/diagnostics.jsonl when you need JSONL files
+      # across container restarts (for example DEBUG_TELNYX_STT=true on GMR).
+      # NOTE: Create this directory on the host before first run:
+      # mkdir -p /home/ubuntu/apps/logs
+      - /home/ubuntu/apps/logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
