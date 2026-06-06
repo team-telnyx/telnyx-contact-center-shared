@@ -50,8 +50,25 @@ export async function PUT(request) {
 
   try {
     const body = await request.json().catch(() => ({}));
+    const requestedConfig = body?.config || body || {};
+    const allowedConfigKeys = [
+      "enabled",
+      "globalLevel",
+      "consoleEnabled",
+      "consolePretty",
+      "fileEnabled",
+      "rotationMode",
+      "retentionDays",
+      "topicLevels",
+      "topicEnabled",
+    ];
+    const safeConfig = {};
+    for (const key of allowedConfigKeys) {
+      if (Object.hasOwn(requestedConfig, key)) safeConfig[key] = requestedConfig[key];
+    }
+    safeConfig.redactionEnabled = true;
     const config = await saveRuntimeLoggingConfig({
-      config: body?.config || body || {},
+      config: safeConfig,
       updatedBy: user.id || user.email || user.username || "admin",
     });
     return noStore({ ok: true, config });

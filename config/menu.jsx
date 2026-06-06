@@ -23,6 +23,7 @@ import {
   IconForms,
   IconSpeakerphone,
   IconTools,
+  IconBug,
 } from "@tabler/icons-react";
 
 // Menu configuration for Contact Center
@@ -158,6 +159,12 @@ export const menuConfig = {
           title: "MCP Servers",
           url: "/admin/mcp-servers",
           icon: IconTools,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Logging",
+          url: "/admin/logging",
+          icon: IconBug,
           role_access: ["admin", "owner"],
         },
         {
