@@ -6,6 +6,21 @@ The app writes structured JSON diagnostic logs to stdout by default. Docker logs
 sudo docker logs -f telnyx-contact-center-app
 ```
 
+## Pino logging foundation
+
+Application diagnostics use Pino JSON logs as the source of truth. `pino-pretty` is supported for local/temporary console readability, while files remain JSONL for filtering and future Admin Log Viewer support.
+
+Bootstrap environment variables:
+
+```bash
+LOG_LEVEL=info                 # trace|debug|info|warn|error|fatal
+LOG_CONSOLE_PRETTY=false       # true is useful in local dev, false in production
+LOG_DIR=/app/logs              # daily/startup JSONL directory
+LOG_ROTATION_MODE=daily        # daily|startup
+```
+
+`LOG_FILE_PATH` remains supported for compatibility with targeted diagnostic sessions, but `LOG_DIR` + daily rotation is the preferred long-term production shape.
+
 ## Optional persistent JSONL log file
 
 For short-lived troubleshooting sessions, especially on GMR/STT, enable a file sink through environment variables and the `/app/logs` mount from `compose.yaml`.

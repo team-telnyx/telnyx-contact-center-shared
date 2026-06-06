@@ -90,6 +90,41 @@ test("createDiagnosticLogger writes JSON lines to stdout and optional file sink"
   }
 });
 
+test("diagnostic logger honors LOG_FILE_ENABLED and LOG_DIR without LOG_FILE_PATH", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-logs-dir-"));
+  const previousEnabled = process.env.LOG_FILE_ENABLED;
+  const previousDir = process.env.LOG_DIR;
+  const previousPath = process.env.LOG_FILE_PATH;
+  process.env.LOG_FILE_ENABLED = "true";
+  process.env.LOG_DIR = dir;
+  delete process.env.LOG_FILE_PATH;
+
+  const { createDiagnosticLogger } = await freshLogger();
+  const logger = createDiagnosticLogger("test.scope", {
+    stdout: () => {},
+    now: () => new Date("2026-06-06T00:00:00.000Z"),
+    runId: "test-run",
+  });
+
+  try {
+    logger.info("hello_dir_sink", { count: 3 });
+    const filePath = path.join(dir, "app-2026-06-06.jsonl");
+    const file = await readFile(filePath, "utf8");
+    const fileEntry = JSON.parse(file.trim());
+    assert.equal(fileEntry.scope, "test.scope");
+    assert.equal(fileEntry.message, "hello_dir_sink");
+    assert.equal(fileEntry.count, 3);
+  } finally {
+    if (previousEnabled === undefined) delete process.env.LOG_FILE_ENABLED;
+    else process.env.LOG_FILE_ENABLED = previousEnabled;
+    if (previousDir === undefined) delete process.env.LOG_DIR;
+    else process.env.LOG_DIR = previousDir;
+    if (previousPath === undefined) delete process.env.LOG_FILE_PATH;
+    else process.env.LOG_FILE_PATH = previousPath;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("diagnostic logger honors LOG_LEVEL ordering and protects metadata fields", async () => {
   const previous = process.env.LOG_LEVEL;
   process.env.LOG_LEVEL = "warn";
