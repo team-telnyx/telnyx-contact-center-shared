@@ -1,0 +1,86 @@
+name: Build GHCR production image
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Optional git ref/SHA to build. Defaults to the workflow ref."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-production-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and publish prebuilt production image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Compute image tags
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/team-telnyx/telnyx-contact-center"
+          SHA="$(git rev-parse HEAD)"
+          SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          TAGS="${IMAGE}:sha-${SHA}\n${IMAGE}:sha-${SHORT_SHA}"
+
+          if [[ "${GITHUB_REF}" == "refs/heads/master" && "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            TAGS="${TAGS}\n${IMAGE}:master\n${IMAGE}:latest"
+          fi
+
+          {
+            echo "image=${IMAGE}"
+            echo "sha=${SHA}"
+            echo "short_sha=${SHORT_SHA}"
+            echo "tags<<EOF"
+            printf '%b\n' "${TAGS}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Publishing tags:"
+          printf '%b\n' "${TAGS}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/ghcr-production/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.vars.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/team-telnyx/telnyx-contact-center
+            org.opencontainers.image.revision=${{ steps.vars.outputs.sha }}
+            org.opencontainers.image.title=Telnyx Contact Center
+
+      - name: Deployment hint
+        run: |
+          echo "Built image for commit ${{ steps.vars.outputs.sha }}"
+          echo "Deploy explicitly from EC2 with:"
+          echo "  cd docker/ghcr-production && ./deploy-ghcr.sh sha-${{ steps.vars.outputs.sha }}"
