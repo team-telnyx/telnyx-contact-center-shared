@@ -24,7 +24,6 @@ WORKDIR /app
 FROM base AS deps
 
 COPY package.json yarn.lock .yarnrc.yml ./
-COPY .yarn ./.yarn
 RUN yarn install --immutable
 
 FROM deps AS builder
