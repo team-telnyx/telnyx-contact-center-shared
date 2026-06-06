@@ -258,6 +258,46 @@ test("createLogger can apply runtime file sink config without recreating logger"
   }
 });
 
+
+
+test("runtime daily file sink ignores legacy LOG_FILE_PATH diagnostics override", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-runtime-daily-"));
+  const previous = process.env.LOG_FILE_PATH;
+  const diagnosticsPath = path.join(dir, "diagnostics.jsonl");
+  process.env.LOG_FILE_PATH = diagnosticsPath;
+
+  try {
+    const { createLogger, buildLogFilePath } = await freshLoggerModule();
+    const now = new Date("2026-06-06T10:11:12.000Z");
+    const runtimeConfig = {
+      globalLevel: "debug",
+      consoleEnabled: false,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+    };
+    const logger = createLogger({
+      topic: "app",
+      config: { consoleEnabled: false },
+      getConfig: () => runtimeConfig,
+      now,
+      runId: "runtime-daily-overrides-legacy-path",
+    });
+
+    logger.info({}, "runtime_daily_file_sink_entry");
+    await logger.flush?.();
+
+    const dailyPath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "runtime-daily-overrides-legacy-path" });
+    const contents = await readFile(dailyPath, "utf8");
+    assert.match(contents, /runtime_daily_file_sink_entry/);
+    await assert.rejects(readFile(diagnosticsPath, "utf8"), /ENOENT/);
+  } finally {
+    if (previous === undefined) delete process.env.LOG_FILE_PATH;
+    else process.env.LOG_FILE_PATH = previous;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createLogger can write JSONL to a daily file sink", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-logs-"));
   const { createLogger, buildLogFilePath } = await freshLoggerModule();
