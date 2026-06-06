@@ -95,6 +95,28 @@ export function GlobalWrapupSheet() {
     [isEligibleWrapupInteraction, loadInteractions],
   );
 
+  const loadAgentStatusForWrapupRecovery = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/profile", { cache: "no-store" });
+      const data = await res.json();
+      const profileStatus = data?.data?.status;
+      if (!profileStatus) return null;
+
+      setAgentStatus(profileStatus);
+      if (profileStatus === "Wrapup") {
+        const latestInteractions = await loadInteractions();
+        await recoverWrapupFromInteractions(latestInteractions);
+      }
+      return profileStatus;
+    } catch (err) {
+      console.error(
+        "[GlobalWrapupSheet] Failed to load profile status for wrapup recovery:",
+        err,
+      );
+      return null;
+    }
+  }, [loadInteractions, recoverWrapupFromInteractions]);
+
   useEffect(() => {
     latestTranscriptionsRef.current = callTranscriptions || [];
   }, [callTranscriptions]);
@@ -110,7 +132,7 @@ export function GlobalWrapupSheet() {
   }, [callInteractionId, callTranscriptions]);
 
   // Load interactions to check if call was answered. SSE/status events refresh,
-  // and Wrapup status has a polling safety net below.
+  // and Wrapup status has polling safety nets below.
   useEffect(() => {
     // Initial load on mount
     loadInteractions();
@@ -131,6 +153,17 @@ export function GlobalWrapupSheet() {
       );
     };
   }, [loadInteractions]);
+
+  // Mirror the header's DB-authoritative profile polling. If the page is
+  // mounted after the status_changed event already fired, or the SSE event is
+  // lost, this still sees Wrapup and recovers the disposition sheet.
+  useEffect(() => {
+    loadAgentStatusForWrapupRecovery();
+    const timer = setInterval(() => {
+      loadAgentStatusForWrapupRecovery();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [loadAgentStatusForWrapupRecovery]);
 
   // Customer-first hangups can leave the browser without a local WebRTC
   // disconnect event. The header still moves to the DB-authoritative Wrapup

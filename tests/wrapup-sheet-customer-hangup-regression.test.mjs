@@ -52,3 +52,28 @@ test("GlobalWrapupSheet has a polling safety net while agent is in Wrapup", asyn
     "lost SSE or browser WebRTC events must not permanently suppress the wrapup sheet",
   );
 });
+
+test("GlobalWrapupSheet polls the authoritative profile status so missed SSE still opens wrapup", async () => {
+  const src = await source();
+
+  assert.match(
+    src,
+    /fetch\(["']\/api\/user\/profile["'],\s*\{\s*cache:\s*["']no-store["']\s*\}\)/,
+    "the wrapup sheet must read the same DB-authoritative profile status as the header",
+  );
+  assert.match(
+    src,
+    /const\s+profileStatus\s*=\s*data\?\.data\?\.status/,
+    "profile polling must extract the current agent status from the profile response",
+  );
+  assert.match(
+    src,
+    /profileStatus\s*===\s*["']Wrapup["'][\s\S]{0,900}recoverWrapupFromInteractions\(/,
+    "if the current profile status is already Wrapup, recovery must run without waiting for a status_changed SSE event",
+  );
+  assert.match(
+    src,
+    /setInterval\([\s\S]{0,900}loadAgentStatusForWrapupRecovery\([\s\S]{0,300}5000/,
+    "while mounted, the sheet needs the same 5s status polling safety net as the header",
+  );
+});
