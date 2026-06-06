@@ -76,6 +76,13 @@ test("auth logger lazily loads runtime logging config before emitting when worke
   assert.match(src, /runtimeConfigLoadRetryAfterMs/, "auth logger should avoid opening a new bootstrap pool for every auth event when config is unavailable");
 });
 
+test("NextAuth credentials keeps non-terminal attempt logging off the sign-in critical path", async () => {
+  const src = await source("app/api/auth/[...nextauth]/route.js");
+
+  assert.match(src, /logAuthEvent\("info", "signin_attempt", \{ method: "nextauth_credentials"/);
+  assert.doesNotMatch(src, /await logAuthEvent\("info", "signin_attempt"/);
+});
+
 test("NextAuth credentials logs failed signin for invalid credentials before returning null", async () => {
   const src = await source("app/api/auth/[...nextauth]/route.js");
 

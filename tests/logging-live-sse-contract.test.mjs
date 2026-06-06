@@ -23,7 +23,7 @@ test("Admin logging exposes an SSE stream for newest live log file", async () =>
   assert.doesNotMatch(source, /queryParam\(request, "logDir"\)|searchParams\.get\("logDir"\)/);
 });
 
-test("Admin Logging Live uses EventSource subscription and closes it when leaving the view", async () => {
+test("Admin Logging Live uses EventSource subscription and closes it only when leaving the view", async () => {
   const source = await readFile(pagePath, "utf8");
 
   assert.match(source, /const \[liveConnected, setLiveConnected\] = React\.useState\(false\)/);
@@ -32,6 +32,7 @@ test("Admin Logging Live uses EventSource subscription and closes it when leavin
   assert.match(source, /if \(Array\.isArray\(data\.entries\)\) setLogEntries\(data\.entries\)/);
   assert.match(source, /setLogEntries\(\(prev\) => \[/);
   assert.match(source, /return \(\) => \{[\s\S]*source\.close\(\)[\s\S]*\}/);
+  assert.doesNotMatch(source, /source\.onerror = \(\) => \{[\s\S]*source\.close\(\)[\s\S]*\};[\s\S]*return \(\) =>/);
   assert.match(source, /if \(active !== "live"\) return undefined/);
   assert.match(source, /latest: "1"/);
 });

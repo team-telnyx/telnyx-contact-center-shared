@@ -38,7 +38,7 @@ export const authOptions = {
       async authorize(creds) {
         const username = normalizeAuthEmail(creds?.username);
         const password = (creds?.password || "").toString();
-        await logAuthEvent("info", "signin_attempt", { method: "nextauth_credentials", email: username, source: "nextauth" });
+        logAuthEvent("info", "signin_attempt", { method: "nextauth_credentials", email: username, source: "nextauth" });
         if (!username || !password) {
           await logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", email: username, source: "nextauth", reason: "missing_required_fields" });
           return null;

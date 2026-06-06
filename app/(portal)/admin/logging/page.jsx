@@ -264,7 +264,6 @@ export default function AdminLoggingPage() {
     });
     source.onerror = () => {
       setLiveConnected(false);
-      source.close();
     };
     return () => {
       setLiveConnected(false);
