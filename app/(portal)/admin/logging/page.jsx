@@ -383,7 +383,7 @@ export default function AdminLoggingPage() {
             {active === "live" ? <Badge variant="outline" className="bg-background/80">{liveConnected ? "Live SSE" : "Connecting"}</Badge> : null}
             {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFilters.file || currentFile?.name || "Select file"}</Badge> : null}
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden p-5">
+          <div className={`flex-1 min-h-0 p-5 ${active === "settings" ? "overflow-y-auto" : "overflow-hidden"}`}>
             {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
               <SettingsView config={config} topics={topics} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
