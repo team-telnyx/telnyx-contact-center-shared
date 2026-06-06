@@ -6,13 +6,16 @@ import {
   hashToken,
 } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export async function POST(request) {
   try {
     const authHeader = request.headers.get("authorization") || "";
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     const provided = match?.[1] || request.cookies.get("refresh_token")?.value;
+    logAuthEvent("info", "refresh_attempt", { source: "api", refreshToken: "[REDACTED]" });
     if (!provided) {
+      logAuthEvent("warn", "refresh_failed", { source: "api", reason: "missing_refresh_token", refreshToken: "[REDACTED]" });
       return NextResponse.json(
         { error: "Missing refresh token" },
         { status: 401 }
@@ -21,6 +24,7 @@ export async function POST(request) {
 
     const payload = await verifyRefreshToken(provided);
     if (!payload?.sub) {
+      logAuthEvent("warn", "refresh_failed", { source: "api", reason: "invalid_refresh_token", refreshToken: "[REDACTED]" });
       return NextResponse.json(
         { error: "Invalid refresh token" },
         { status: 401 }
@@ -31,6 +35,7 @@ export async function POST(request) {
     const user = await PgDb.findUserById(String(payload.sub));
 
     if (!user) {
+      logAuthEvent("warn", "refresh_failed", { source: "api", userId: String(payload.sub), reason: "user_not_found" });
       return NextResponse.json({ error: "User not found" }, { status: 401 });
     }
 
@@ -42,7 +47,7 @@ export async function POST(request) {
           ? JSON.parse(user.refresh_tokens)
           : user?.refresh_tokens;
     } catch (e) {
-      console.error("Error parsing refresh_tokens:", e);
+      logAuthEvent("warn", "refresh_token_parse_failed", { source: "api", userId: String(payload.sub), ...authErrorPayload(e) });
       refreshTokens = [];
     }
 
@@ -50,6 +55,7 @@ export async function POST(request) {
       ? refreshTokens.some((t) => t?.refreshToken === hashed)
       : false;
     if (!exists) {
+      logAuthEvent("warn", "refresh_failed", { source: "api", ...authUserPayload(user), reason: "unrecognized_refresh_token", refreshToken: "[REDACTED]" });
       return NextResponse.json(
         { error: "Refresh token not recognized" },
         { status: 401 }
@@ -75,6 +81,7 @@ export async function POST(request) {
     );
     newList.push({ refreshToken: await hashToken(newRefreshToken) });
     await PgDb.updateUserById(String(payload.sub), { refresh_tokens: newList });
+    logAuthEvent("info", "refresh_success", { source: "api", ...authUserPayload(user), rotatedRefreshToken: true });
 
     const res = NextResponse.json({
       ok: true,
@@ -104,7 +111,7 @@ export async function POST(request) {
     });
     return res;
   } catch (err) {
-    console.error("Error in /api/auth/refresh:", err);
+    logAuthEvent("error", "refresh_failed", { source: "api", reason: "server_error", ...authErrorPayload(err) });
     return NextResponse.json(
       { error: "Server error", details: err.message },
       { status: 500 }

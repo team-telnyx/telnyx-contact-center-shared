@@ -8,6 +8,7 @@ import { PgDb } from "@/lib/pgdb";
 import { verifyUserPassword } from "@/lib/auth";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export const authOptions = {
   adapter: PostgresNextAuthAdapter(),
@@ -35,13 +36,18 @@ export const authOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(creds) {
-        const username = (creds?.username || "").trim().toLowerCase();
+        const username = normalizeAuthEmail(creds?.username);
         const password = (creds?.password || "").toString();
-        if (!username || !password) return null;
+        logAuthEvent("info", "signin_attempt", { method: "nextauth_credentials", email: username, source: "nextauth" });
+        if (!username || !password) {
+          logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", email: username, source: "nextauth", reason: "missing_required_fields" });
+          return null;
+        }
         const user = await PgDb.findUserByUsername(username);
         if (user && verifyUserPassword(user, password)) {
           // Check if account is verified
           if (!user.verified && user.auth_strategy === "local") {
+            logAuthEvent("warn", "signin_failed", { method: "nextauth_credentials", source: "nextauth", reason: "account_not_verified", ...authUserPayload(user, username) });
             throw new Error(
               "Please verify your email address before signing in"
             );
@@ -63,21 +69,15 @@ export const authOptions = {
                   telephonyUserName:
                     credential.username || credential.sip_username,
                 });
-                console.log(
-                  "[NextAuth] Created missing telephony credentials for user:",
-                  username,
-                  credential.id
-                );
+                logAuthEvent("info", "auth_telephony_credentials_created", { ...authUserPayload(user, username), credentialId: credential.id, source: "nextauth_authorize" });
               }
             } catch (credErr) {
-              console.error(
-                "[NextAuth] Failed to create telephony credentials:",
-                credErr.message
-              );
+              logAuthEvent("warn", "auth_telephony_credentials_failed", { ...authUserPayload(user, username), source: "nextauth_authorize", ...authErrorPayload(credErr) });
               // Continue login even if credential creation fails
             }
           }
 
+          logAuthEvent("info", "signin_success", { method: "nextauth_credentials", source: "nextauth", ...authUserPayload(user, username) });
           return {
             id: String(user.id),
             email: user.username,
@@ -135,6 +135,7 @@ export const authOptions = {
         // We'll track it in the session callback instead
 
         if (account?.provider === "google") {
+          logAuthEvent("info", "signin_attempt", { method: "google", source: "nextauth" });
           const email = String(
             user?.email || profile?.email || ""
           ).toLowerCase();
@@ -162,6 +163,7 @@ export const authOptions = {
                   ).rows?.[0]
                 : null;
               if (!domainDoc) {
+                logAuthEvent("warn", "signup_failed", { method: "google", source: "nextauth", email, domain, reason: "domain_not_allowed" });
                 // Redirect back to signup with error
                 return "/signup?error=EmailDomainNotAllowed";
               }
@@ -183,6 +185,7 @@ export const authOptions = {
                   authStrategy: "google",
                 });
                 existing = await PgDb.findUserByUsername(email);
+                logAuthEvent("info", "signup_success", { method: "google", source: "nextauth", ...authUserPayload(existing, email) });
 
                 // Create Telnyx telephony credentials for the new user
                 if (existing) {
@@ -200,17 +203,10 @@ export const authOptions = {
                         telephonyUserName:
                           credential.username || credential.sip_username,
                       });
-                      console.log(
-                        "[NextAuth] Created telephony credentials for OAuth user:",
-                        email,
-                        credential.id
-                      );
+                      logAuthEvent("info", "auth_telephony_credentials_created", { ...authUserPayload(existing, email), credentialId: credential.id, source: "nextauth_oauth_signup" });
                     }
                   } catch (credErr) {
-                    console.error(
-                      "[NextAuth] Failed to create telephony credentials:",
-                      credErr.message
-                    );
+                    logAuthEvent("warn", "auth_telephony_credentials_failed", { ...authUserPayload(existing, email), source: "nextauth_oauth_signup", ...authErrorPayload(credErr) });
                     // Continue even if credential creation fails
                   }
                 }
@@ -237,13 +233,10 @@ export const authOptions = {
             token.email = existing.username || token.email;
             token.setupCompleted = existing.setup_completed ?? false;
             if (profile.picture) token.picture = profile.picture;
-            console.log(
-              "[NextAuth] Google OAuth - Using app user ID:",
-              token.id
-            );
+            logAuthEvent("info", "signin_success", { method: "google", source: "nextauth_jwt", ...authUserPayload(existing, profile.email) });
           }
         } catch (err) {
-          console.error("[NextAuth] Error finding user for Google OAuth:", err);
+          logAuthEvent("warn", "signin_failed", { method: "google", source: "nextauth_jwt", reason: "user_lookup_failed", ...authErrorPayload(err) });
         }
       } else if (user) {
         // For credentials auth, use the user.id from the authorize function
@@ -289,26 +282,16 @@ export const authOptions = {
                     telephonyUserName:
                       credential.username || credential.sip_username,
                   });
-                  console.log(
-                    "[NextAuth JWT] Created missing telephony credentials for user:",
-                    token.email,
-                    credential.id
-                  );
+                  logAuthEvent("info", "auth_telephony_credentials_created", { ...authUserPayload(dbUser, token.email), credentialId: credential.id, source: "nextauth_jwt" });
                 }
               } catch (credErr) {
-                console.error(
-                  "[NextAuth JWT] Failed to create telephony credentials:",
-                  credErr.message
-                );
+                logAuthEvent("warn", "auth_telephony_credentials_failed", { ...authUserPayload(dbUser, token.email), source: "nextauth_jwt", ...authErrorPayload(credErr) });
                 // Continue even if credential creation fails
               }
             }
           }
         } catch (err) {
-          console.error(
-            "[JWT] Error fetching user from database:",
-            err.message
-          );
+          logAuthEvent("warn", "nextauth_jwt_user_lookup_failed", { email: token.email, source: "nextauth_jwt", ...authErrorPayload(err) });
           // Keep existing token values on error
         }
       }
@@ -395,10 +378,7 @@ export const authOptions = {
                   }
                 }
               } catch (activityError) {
-                console.error(
-                  "[NextAuth] Failed to log login activity:",
-                  activityError
-                );
+                logAuthEvent("warn", "signin_activity_log_failed", { ...authUserPayload(user, token.email), source: "nextauth_session", ...authErrorPayload(activityError) });
                 // Don't fail session creation if activity logging fails
               }
             }
@@ -422,23 +402,16 @@ export const authOptions = {
                     telephonyUserName:
                       credential.username || credential.sip_username,
                   });
-                  console.log(
-                    "[NextAuth Session] Created missing telephony credentials for user:",
-                    token.email,
-                    credential.id
-                  );
+                  logAuthEvent("info", "auth_telephony_credentials_created", { ...authUserPayload(user, token.email), credentialId: credential.id, source: "nextauth_session" });
                 }
               } catch (credErr) {
-                console.error(
-                  "[NextAuth Session] Failed to create telephony credentials:",
-                  credErr.message
-                );
+                logAuthEvent("warn", "auth_telephony_credentials_failed", { ...authUserPayload(user, token.email), source: "nextauth_session", ...authErrorPayload(credErr) });
                 // Continue even if credential creation fails
               }
             }
           }
         } catch (error) {
-          console.error("[NextAuth] Session callback error:", error.message);
+          logAuthEvent("warn", "nextauth_session_failed", { email: token.email, source: "nextauth_session", ...authErrorPayload(error) });
           // Return session with existing token data on error
           // This prevents the entire session from failing
         }
@@ -461,10 +434,7 @@ export const authOptions = {
             session.user.setupCompleted = user.setup_completed || false;
           }
         } catch (error) {
-          console.error(
-            "[NextAuth] Session callback error (ID lookup):",
-            error.message
-          );
+          logAuthEvent("warn", "nextauth_session_failed", { userId: token?.id ? String(token.id) : undefined, source: "nextauth_session", ...authErrorPayload(error) });
         }
       }
 

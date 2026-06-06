@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { randomBytes, pbkdf2Sync } from "crypto";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const { token, password } = body;
+    logAuthEvent("info", "password_reset_attempt", { resetToken: "[REDACTED]", source: "api" });
 
     if (!token || !password) {
+      logAuthEvent("warn", "password_reset_failed", { reason: "missing_required_fields", resetToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
@@ -22,6 +25,7 @@ export async function POST(request) {
       password.length >= 8;
 
     if (!strong) {
+      logAuthEvent("warn", "password_reset_failed", { reason: "weak_password", resetToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         {
           success: false,
@@ -43,6 +47,7 @@ export async function POST(request) {
     const user = result.rows?.[0];
 
     if (!user) {
+      logAuthEvent("warn", "password_reset_failed", { reason: "invalid_or_expired_token", resetToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Invalid or expired reset token" },
         { status: 400 }
@@ -52,6 +57,7 @@ export async function POST(request) {
     // Check if token has expired
     const tokenExpires = new Date(user.reset_password_token_expires);
     if (tokenExpires < new Date()) {
+      logAuthEvent("warn", "password_reset_failed", { ...authUserPayload(user), reason: "expired_token", resetToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Reset token has expired" },
         { status: 400 }
@@ -73,12 +79,13 @@ export async function POST(request) {
       reset_password_token_expires: null,
     });
 
+    logAuthEvent("info", "password_reset_success", { ...authUserPayload(user), source: "api" });
     return NextResponse.json({
       success: true,
       message: "Password reset successful",
     });
   } catch (error) {
-    console.error("[Reset Password] Error:", error);
+    logAuthEvent("error", "password_reset_failed", { reason: "server_error", source: "api", ...authErrorPayload(error) });
     return NextResponse.json(
       { success: false, error: "Server error" },
       { status: 500 }

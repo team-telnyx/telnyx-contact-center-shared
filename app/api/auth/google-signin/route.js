@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 const client = new OAuth2Client(process.env.GOOGLE_ID);
 
@@ -10,8 +11,10 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const idToken = body.idToken;
+    logAuthEvent("info", "signin_attempt", { method: "google", source: "api", idToken: "[REDACTED]" });
 
     if (!idToken) {
+      logAuthEvent("warn", "signin_failed", { method: "google", source: "api", reason: "missing_id_token", idToken: "[REDACTED]" });
       return NextResponse.json(
         { error: "ID token is required!" },
         { status: 400 }
@@ -26,11 +29,13 @@ export async function POST(request) {
 
     const payload = ticket.getPayload();
     if (!payload) {
+      logAuthEvent("warn", "signin_failed", { method: "google", source: "api", reason: "invalid_id_token", idToken: "[REDACTED]" });
       return NextResponse.json({ error: "Invalid ID token!" }, { status: 401 });
     }
 
     const email = String(payload.email || "").toLowerCase();
     if (!email) {
+      logAuthEvent("warn", "signin_failed", { method: "google", source: "api", reason: "missing_email" });
       return NextResponse.json(
         { error: "Email not found in token!" },
         { status: 401 }
@@ -41,6 +46,7 @@ export async function POST(request) {
     const existing = await PgDb.findUserByUsername(email);
 
     if (!existing) {
+      logAuthEvent("warn", "signin_failed", { method: "google", source: "api", email, reason: "account_not_found" });
       return NextResponse.json(
         { error: "Account not found. Please sign up first." },
         { status: 404 }
@@ -116,6 +122,7 @@ export async function POST(request) {
       refreshToken: refreshToken,
     };
 
+    logAuthEvent("info", "signin_success", { method: "google", source: "api", ...authUserPayload(existing, email) });
     const response = NextResponse.json(userData, { status: 200 });
 
     // Optionally set cookies (for web compatibility)
@@ -141,7 +148,7 @@ export async function POST(request) {
 
     return response;
   } catch (err) {
-    console.error("[API /auth/google-signin] Error:", err);
+    logAuthEvent("error", "signin_failed", { method: "google", source: "api", reason: "server_error", ...authErrorPayload(err) });
     return NextResponse.json(
       { error: "Server error", message: err.message },
       { status: 500 }

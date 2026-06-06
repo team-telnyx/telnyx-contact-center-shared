@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { randomBytes, pbkdf2Sync } from "crypto";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export async function GET(request, { params }) {
   try {
     const resolvedParams = await params;
     const token = resolvedParams?.token;
+    logAuthEvent("info", "invite_lookup_attempt", { inviteToken: "[REDACTED]", source: "api" });
     if (!token) {
+      logAuthEvent("warn", "invite_lookup_failed", { reason: "missing_token", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json({ valid: false, reason: "not_found" });
     }
 
@@ -26,6 +29,7 @@ export async function GET(request, { params }) {
     const user = result.rows?.[0];
 
     if (!user) {
+      logAuthEvent("warn", "invite_lookup_failed", { reason: "not_found", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json({ valid: false, reason: "not_found" });
     }
 
@@ -40,6 +44,7 @@ export async function GET(request, { params }) {
       return NextResponse.json({ valid: false, reason: "expired" });
     }
 
+    logAuthEvent("info", "invite_lookup_success", { ...authUserPayload(user), source: "api" });
     return NextResponse.json({
       valid: true,
       user: {
@@ -49,7 +54,7 @@ export async function GET(request, { params }) {
       },
     });
   } catch (error) {
-    console.error("[Invite GET] Error:", error);
+    logAuthEvent("error", "invite_lookup_failed", { reason: "server_error", source: "api", ...authErrorPayload(error) });
     return NextResponse.json(
       { valid: false, reason: "server_error" },
       { status: 500 }
@@ -61,7 +66,9 @@ export async function POST(request, { params }) {
   try {
     const resolvedParams = await params;
     const token = resolvedParams?.token;
+    logAuthEvent("info", "invite_accept_attempt", { inviteToken: "[REDACTED]", source: "api" });
     if (!token) {
+      logAuthEvent("warn", "invite_accept_failed", { reason: "missing_token", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { ok: false, error: "Invalid token" },
         { status: 400 }
@@ -72,6 +79,7 @@ export async function POST(request, { params }) {
     const { password } = body;
 
     if (!password) {
+      logAuthEvent("warn", "invite_accept_failed", { reason: "missing_password", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { ok: false, error: "Password is required" },
         { status: 400 }
@@ -87,6 +95,7 @@ export async function POST(request, { params }) {
       /[^A-Za-z0-9]/.test(password);
 
     if (!strong) {
+      logAuthEvent("warn", "invite_accept_failed", { reason: "weak_password", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         {
           ok: false,
@@ -100,6 +109,7 @@ export async function POST(request, { params }) {
     const { getPostgresPool } = await import("@/lib/postgres.mjs");
     const pool = getPostgresPool();
     if (!pool) {
+      logAuthEvent("error", "invite_accept_failed", { reason: "server_not_ready", source: "api" });
       return NextResponse.json(
         { ok: false, error: "Server not ready" },
         { status: 500 }
@@ -114,6 +124,7 @@ export async function POST(request, { params }) {
     const user = result.rows?.[0];
 
     if (!user) {
+      logAuthEvent("warn", "invite_accept_failed", { reason: "invalid_or_expired", inviteToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { ok: false, error: "Invalid or expired invitation link" },
         { status: 400 }
@@ -160,9 +171,10 @@ export async function POST(request, { params }) {
       [hash, salt, 25000, user.id]
     );
 
+    logAuthEvent("info", "invite_accept_success", { userId: String(user.id), source: "api" });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[Invite POST] Error:", error);
+    logAuthEvent("error", "invite_accept_failed", { reason: "server_error", source: "api", ...authErrorPayload(error) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

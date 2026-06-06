@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authErrorPayload, authUserPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
 
 async function getCurrentAgentStatus(userId) {
   if (!userId) return "Available";
@@ -24,6 +25,7 @@ export async function GET(request) {
     const user = await getAuthenticatedUser();
 
     if (!user) {
+      logAuthEvent("debug", "auth_profile_missing", { source: "api" });
       return NextResponse.json({ isAuth: false });
     }
 
@@ -72,7 +74,7 @@ export async function GET(request) {
       },
     });
   } catch (err) {
-    console.error("[AUTH] /me error", err);
+    logAuthEvent("warn", "auth_profile_failed", { source: "api", ...authErrorPayload(err) });
     return NextResponse.json({ isAuth: false });
   }
 }

@@ -3,14 +3,17 @@ import { authenticateUser } from "@/lib/auth";
 import { PgDb } from "@/lib/pgdb";
 import { signAccessToken, signRefreshToken, hashToken } from "@/lib/jwt";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export async function POST(request) {
   try {
     const body = await request.json();
-    const username = (body.username || "").toString().trim().toLowerCase();
+    const username = normalizeAuthEmail(body.username);
     const password = (body.password || "").toString();
+    logAuthEvent("info", "signin_attempt", { method: "credentials", email: username, source: "api" });
 
     if (!username || !password) {
+      logAuthEvent("warn", "signin_failed", { method: "credentials", email: username, source: "api", reason: "missing_required_fields" });
       return NextResponse.json(
         { error: "Please fill all the fields!" },
         { status: 400 }
@@ -19,6 +22,7 @@ export async function POST(request) {
 
     const user = await authenticateUser(username, password);
     if (!user) {
+      logAuthEvent("warn", "signin_failed", { method: "credentials", email: username, source: "api", reason: "invalid_credentials" });
       return NextResponse.json(
         { error: "Invalid email or password!" },
         { status: 401 }
@@ -27,6 +31,7 @@ export async function POST(request) {
 
     // Check if account is verified
     if (!user.verified && user.auth_strategy === "local") {
+      logAuthEvent("warn", "signin_failed", { method: "credentials", source: "api", reason: "account_not_verified", ...authUserPayload(user, username) });
       return NextResponse.json(
         { error: "User account not verified yet!", verified: false },
         { status: 403 }
@@ -48,11 +53,11 @@ export async function POST(request) {
             telephonyCredentialsId: credential.id,
             telephonyUserName: credential.username || credential.sip_username,
           });
-          console.log(
-            "[Signin] Created missing telephony credentials for user:",
-            username,
-            credential.id
-          );
+          logAuthEvent("info", "auth_telephony_credentials_created", {
+            ...authUserPayload(user, username),
+            credentialId: credential.id,
+            source: "signin_api",
+          });
           // Refresh user object to include new credentials
           const updatedUser = await PgDb.findUserById(
             String(user.id || user._id)
@@ -62,10 +67,11 @@ export async function POST(request) {
           }
         }
       } catch (credErr) {
-        console.error(
-          "[Signin] Failed to create telephony credentials:",
-          credErr.message
-        );
+        logAuthEvent("warn", "auth_telephony_credentials_failed", {
+          ...authUserPayload(user, username),
+          source: "signin_api",
+          ...authErrorPayload(credErr),
+        });
         // Continue login even if credential creation fails
       }
     }
@@ -137,6 +143,7 @@ export async function POST(request) {
       refreshToken: refreshToken,
     };
 
+    logAuthEvent("info", "signin_success", { method: "credentials", source: "api", ...authUserPayload(user, username) });
     const response = NextResponse.json(userData, { status: 200 });
 
     // Optionally set cookies (for web compatibility)
@@ -162,7 +169,7 @@ export async function POST(request) {
 
     return response;
   } catch (err) {
-    console.error("[API /auth/signin] Error:", err);
+    logAuthEvent("error", "signin_failed", { source: "api", reason: "server_error", ...authErrorPayload(err) });
     return NextResponse.json(
       { error: "Server error", message: err.message },
       { status: 500 }

@@ -3,6 +3,7 @@ import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
 import { setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authErrorPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
 
 async function getCurrentAgentStatus(userId) {
   try {
@@ -36,6 +37,11 @@ export async function POST(request) {
       if (p2?.sub) userId = p2.sub;
     }
     const refreshToRevoke = refreshCookie || headerMatch?.[1] || null;
+    logAuthEvent("info", "logout_attempt", {
+      userId: userId ? String(userId) : undefined,
+      hasRefreshToken: Boolean(refreshToRevoke),
+      source: "api",
+    });
     if (userId && refreshToRevoke) {
       const user = await PgDb.findUserById(String(userId));
       const list = Array.isArray(user?.refresh_tokens)
@@ -119,11 +125,14 @@ export async function POST(request) {
           }
         }
       } catch (activityError) {
-        console.error("[Logout] Failed to log logout activity:", activityError);
+        logAuthEvent("warn", "logout_activity_failed", { userId: String(userId), source: "api", ...authErrorPayload(activityError) });
         // Don't fail logout if activity logging fails
       }
+      logAuthEvent("info", "logout_success", { userId: String(userId), source: "api", revokedRefreshToken: newList.length !== list.length });
     }
-  } catch (_) {}
+  } catch (error) {
+    logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
+  }
 
   res.cookies.set({
     name: "session",
