@@ -318,6 +318,38 @@ test("createLogger rotates daily file sinks after midnight", async () => {
   }
 });
 
+test("diagnostic logger keeps daily rotation tied to live adapter time", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-diagnostic-daily-rotation-"));
+  const { createDiagnosticLogger } = await freshDiagnosticModule();
+  let currentTime = new Date("2026-06-06T23:59:59.900Z");
+  const logger = createDiagnosticLogger("test.scope", {
+    stdout: () => {},
+    now: () => currentTime,
+    runId: "diagnostic-daily-run",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: false,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+      topicEnabled: { "test.scope": true },
+    },
+  });
+
+  try {
+    logger.info("before_midnight");
+    currentTime = new Date("2026-06-07T00:00:00.100Z");
+    logger.info("after_midnight");
+
+    const firstContents = await readFile(path.join(dir, "app-2026-06-06.jsonl"), "utf8");
+    const secondContents = await readFile(path.join(dir, "app-2026-06-07.jsonl"), "utf8");
+    assert.match(firstContents, /before_midnight/);
+    assert.match(secondContents, /after_midnight/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createLogger uses pino-pretty for console output while keeping file JSONL", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-pretty-"));
   const lines = [];

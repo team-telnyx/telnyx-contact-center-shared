@@ -182,3 +182,28 @@ test("expired preset automatically falls back to normal production config", asyn
   assert.equal(config.topicLevels["telnyx.stt"], "info");
   assert.equal(config.expiresAt, null);
 });
+
+test("synchronous runtime config getter revalidates cached preset expiry", async () => {
+  const {
+    getCachedRuntimeLoggingConfig,
+    resetRuntimeLoggingConfigCache,
+    setCachedRuntimeLoggingConfig,
+  } = await freshModule();
+  resetRuntimeLoggingConfigCache();
+
+  setCachedRuntimeLoggingConfig({
+    globalLevel: "debug",
+    topicLevels: { "telnyx.stt": "trace" },
+    topicEnabled: { "telnyx.stt": true, "telnyx.stt.media": true },
+    expiresAt: "2026-06-06T10:30:00.000Z",
+  }, { now: new Date("2026-06-06T10:00:00Z") });
+
+  const active = getCachedRuntimeLoggingConfig({ now: new Date("2026-06-06T10:29:59Z") });
+  const expired = getCachedRuntimeLoggingConfig({ now: new Date("2026-06-06T10:30:00Z") });
+
+  assert.equal(active.globalLevel, "debug");
+  assert.equal(active.topicLevels["telnyx.stt"], "trace");
+  assert.equal(expired.globalLevel, "info");
+  assert.equal(expired.topicLevels["telnyx.stt"], "info");
+  assert.equal(expired.expiresAt, null);
+});
