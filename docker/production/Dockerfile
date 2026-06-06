@@ -41,7 +41,6 @@ RUN echo '#!/bin/bash\n\
   echo "Building application with database connection available..."\n\
   yarn build\n\
   \n\
-  echo "Starting Next.js production server..."\n\
   exec yarn start\n\
   ' > /app/start-prod.sh && chmod +x /app/start-prod.sh
 
