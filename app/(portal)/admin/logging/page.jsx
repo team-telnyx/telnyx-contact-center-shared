@@ -37,7 +37,7 @@ const PRESETS = [
   { id: "errors-only", label: "Errors only", ttl: "60", description: "Reduce noise during incidents" },
 ];
 const NAV_ITEMS = [
-  { id: "live", label: "Live", icon: IconActivity, description: "Live logging preview" },
+  { id: "live", label: "Live", icon: IconActivity, description: "Log Viewer" },
   { id: "files", label: "Files", icon: IconFileText, description: "JSONL log files" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Runtime logging controls" },
 ];
@@ -379,7 +379,7 @@ function LogEntryCard({ entry }) {
   const message = entry.msg || entry.message || entry.event || "Log entry";
   const time = entry.time || entry.ts || entry.timestamp;
   const meta = Object.entries(entry).filter(([key]) => !["level", "severity", "topic", "scope", "msg", "message", "event", "time", "ts", "timestamp"].includes(key));
-  return <div className="rounded-2xl border bg-background/90 p-4 shadow-sm transition hover:border-foreground/25"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge><span className="font-mono text-xs text-muted-foreground">{topic}</span></div><div className="mt-2 break-words text-sm font-medium">{String(message)}</div></div><div className="shrink-0 text-xs text-muted-foreground">{formatLogTime(time)}</div></div>{meta.length ? <div className="mt-3 flex flex-wrap gap-1.5">{meta.slice(0, 8).map(([key, value]) => <Badge key={key} variant="outline" className="max-w-full bg-card font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span><span className="truncate">{typeof value === "object" ? JSON.stringify(value) : String(value)}</span></Badge>)}</div> : null}</div>;
+  return <div className="rounded-2xl border bg-background/90 p-4 shadow-sm transition hover:border-foreground/25"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge><span className="font-mono text-xs text-muted-foreground">{topic}</span></div><div className="mt-2 break-words text-sm font-medium">{String(message)}</div></div><div className="shrink-0 text-xs text-muted-foreground">{formatLogTime(time)}</div></div>{meta.length ? <div className="mt-3 flex flex-wrap gap-1.5">{meta.map(([key, value]) => <Badge key={key} variant="outline" className="max-w-full bg-card font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span><span className="truncate">{typeof value === "object" ? JSON.stringify(value) : String(value)}</span></Badge>)}</div> : null}<details className="mt-3 rounded-xl border bg-muted/20 px-3 py-2"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Full JSON entry</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">{JSON.stringify(entry, null, 2)}</pre></details></div>;
 }
 
 function FilesView({ files, selectedFile, onSelect, loading }) {
