@@ -22,5 +22,7 @@ test("Admin Logging page includes read-only log viewer wired to backend-owned lo
   assert.match(source, /from/);
   assert.match(source, /to/);
   assert.doesNotMatch(source, /logDir.*setLogFilters/);
-  assert.match(source, /JSON\.stringify\(entry, null, 2\)/);
+  assert.match(source, /safeJsonStringify\(entry\)/);
+  assert.match(source, /<CodeBlock code=\{safeJsonStringify\(entry\)\} language="json"/);
+  assert.doesNotMatch(source, /<pre|<details|<summary/);
 });

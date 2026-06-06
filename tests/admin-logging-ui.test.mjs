@@ -46,3 +46,20 @@ test("Admin logging confirmations use the custom AlertDialog instead of browser 
   assert.match(page, /Enable JSONL file logging\?/);
   assert.doesNotMatch(page, /window\.confirm|window\.alert|window\.prompt/);
 });
+
+test("Admin logging entries stay compact and expand anywhere into CodeBlock JSON", async () => {
+  const page = await source();
+  assert.match(page, /import \{ CodeBlock, CodeBlockCopyButton \} from "@\/components\/ai-elements\/code-block"/);
+  assert.match(page, /const \[expanded, setExpanded\] = React\.useState\(false\)/);
+  assert.match(page, /role="button"/);
+  assert.match(page, /onClick=\{\(\) => setExpanded\(\(open\) => !open\)\}/);
+  assert.match(page, /onKeyDown=\{\(event\) => \{/);
+  assert.match(page, /aria-expanded=\{expanded\}/);
+  assert.match(page, /line-clamp-1/);
+  assert.match(page, /maxCompactMetaItems/);
+  assert.match(page, /compactMeta/);
+  assert.match(page, /Full JSON entry/);
+  assert.match(page, /<CodeBlock code=\{safeJsonStringify\(entry\)\} language="json" maxHeight=\{420\}>/);
+  assert.match(page, /<CodeBlockCopyButton type="button"/);
+  assert.doesNotMatch(page, /<details|<summary|<pre/);
+});

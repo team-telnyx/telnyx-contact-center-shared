@@ -17,6 +17,7 @@ import {
   IconShieldCheck,
 } from "@tabler/icons-react";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -93,6 +94,14 @@ function formatLogTime(value) {
   if (!value) return "—";
   try {
     return new Date(value).toLocaleString();
+  } catch (_) {
+    return String(value);
+  }
+}
+
+function safeJsonStringify(value) {
+  try {
+    return JSON.stringify(value, null, 2);
   } catch (_) {
     return String(value);
   }
@@ -437,12 +446,64 @@ function LiveLogView({ entries, loading, meta }) {
 }
 
 function LogEntryCard({ entry }) {
+  const [expanded, setExpanded] = React.useState(false);
   const level = String(entry.level || entry.severity || "info").toLowerCase();
   const topic = entry.topic || entry.scope || "app";
   const message = entry.msg || entry.message || entry.event || "Log entry";
   const time = entry.time || entry.ts || entry.timestamp;
   const meta = Object.entries(entry).filter(([key]) => !["level", "severity", "topic", "scope", "msg", "message", "event", "time", "ts", "timestamp"].includes(key));
-  return <div className="rounded-2xl border bg-background/90 p-4 shadow-sm transition hover:border-foreground/25"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge><span className="font-mono text-xs text-muted-foreground">{topic}</span></div><div className="mt-2 break-words text-sm font-medium">{String(message)}</div></div><div className="shrink-0 text-xs text-muted-foreground">{formatLogTime(time)}</div></div>{meta.length ? <div className="mt-3 flex flex-wrap gap-1.5">{meta.map(([key, value]) => <Badge key={key} variant="outline" className="max-w-full bg-card font-mono text-[11px]"><span className="text-muted-foreground">{key}=</span><span className="truncate">{typeof value === "object" ? JSON.stringify(value) : String(value)}</span></Badge>)}</div> : null}<details className="mt-3 rounded-xl border bg-muted/20 px-3 py-2"><summary className="cursor-pointer text-xs font-medium text-muted-foreground">Full JSON entry</summary><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs text-muted-foreground">{JSON.stringify(entry, null, 2)}</pre></details></div>;
+  const maxCompactMetaItems = 4;
+  const compactMeta = meta.slice(0, maxCompactMetaItems);
+  const hiddenMetaCount = Math.max(0, meta.length - compactMeta.length);
+  const formatMetaValue = (value) => (typeof value === "object" ? safeJsonStringify(value).replace(/\s+/g, " ") : String(value));
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={() => setExpanded((open) => !open)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setExpanded((open) => !open);
+        }
+      }}
+      className="group cursor-pointer rounded-2xl border bg-background/90 px-4 py-3 shadow-sm transition hover:border-foreground/25 hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-ring/35"
+    >
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{topic}</span>
+          <span className="line-clamp-1 min-w-0 break-all text-sm font-medium">{String(message)}</span>
+        </div>
+        <div className="shrink-0 text-xs text-muted-foreground">{formatLogTime(time)}</div>
+      </div>
+      <div className="mt-2 flex min-w-0 items-center gap-1.5 overflow-hidden">
+        {compactMeta.length ? compactMeta.map(([key, value]) => (
+          <Badge key={key} variant="outline" className="min-w-0 max-w-[260px] shrink bg-card font-mono text-[11px]">
+            <span className="shrink-0 text-muted-foreground">{key}=</span>
+            <span className="truncate">{formatMetaValue(value)}</span>
+          </Badge>
+        )) : <span className="text-xs text-muted-foreground">Click to view full JSON entry</span>}
+        {hiddenMetaCount ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">+{hiddenMetaCount} more</Badge> : null}
+        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{expanded ? "Click to collapse" : "Click to expand"}</span>
+      </div>
+      {expanded ? (
+        <div className="mt-3 space-y-2 rounded-xl border bg-muted/15 p-3">
+          <div className="flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+            <span>Full JSON entry</span>
+            <span>JSON</span>
+          </div>
+          <CodeBlock code={safeJsonStringify(entry)} language="json" maxHeight={420}>
+            <span onClick={(event) => event.stopPropagation()}>
+              <CodeBlockCopyButton type="button" />
+            </span>
+          </CodeBlock>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function FilesView({ files, selectedFile, onSelect, loading }) {
