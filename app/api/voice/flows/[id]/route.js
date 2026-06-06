@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
@@ -13,6 +11,8 @@ import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { validateFlow } from "@/lib/voice-flow-validator";
+
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/voice/flows/[id]

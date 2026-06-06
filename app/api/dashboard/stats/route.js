@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint for user dashboard statistics
  * GET /api/dashboard/stats

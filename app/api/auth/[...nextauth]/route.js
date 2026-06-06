@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";

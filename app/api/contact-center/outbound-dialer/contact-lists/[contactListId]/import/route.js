@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getOutboundPool, isLikelyPhone, jsonError, normalizeFieldSchema, parseCsv, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CONTACT_FIELD_TYPES } from "@/lib/outbound-dialer/schema";

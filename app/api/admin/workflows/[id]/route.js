@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Admin Workflow [id] API
  * GET - Get workflow by ID with stages and items

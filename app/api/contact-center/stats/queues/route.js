@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint for queue statistics
  * GET /api/contact-center/stats/queues?queueId=xxx

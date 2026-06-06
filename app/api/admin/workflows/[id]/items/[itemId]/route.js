@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Admin Workflow Item [itemId] API
  * PUT - Update an item

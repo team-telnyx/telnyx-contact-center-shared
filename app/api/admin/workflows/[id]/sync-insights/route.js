@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Sync Workflow Insights API
  * POST /api/admin/workflows/[id]/sync-insights

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";

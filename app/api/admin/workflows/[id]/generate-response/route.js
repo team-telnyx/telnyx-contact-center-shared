@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Workflow Test - Generate Dynamic Response
  * POST - Generate a simulated customer response based on conversation context

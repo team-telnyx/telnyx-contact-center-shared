@@ -1,8 +1,8 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request) {
   try {

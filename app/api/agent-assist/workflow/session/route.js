@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Agent Assist Workflow - Session API
  * GET - Get current workflow session state

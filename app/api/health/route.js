@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { checkPostgresStatus } from "@/lib/postgres.mjs";
 

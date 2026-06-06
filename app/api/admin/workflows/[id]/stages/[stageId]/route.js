@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Admin Workflow Stage [stageId] API
  * PUT - Update a stage

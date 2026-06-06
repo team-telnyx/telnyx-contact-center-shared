@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getOutboundPool, loadOutboundContactLists, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundAttemptControl, mapOutboundFilter, mapOutboundSettings, mapOutboundTimeSet, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { buildTelnyxV2Url } from "@/lib/telnyx";

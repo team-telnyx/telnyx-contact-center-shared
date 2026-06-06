@@ -1,9 +1,8 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getOutboundPool, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { buildOutboundLiveCallsPayload, OUTBOUND_LIVE_CALLS_SQL } from "@/lib/outbound-dialer/live-calls";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 async function loadLiveCalls(pool) {

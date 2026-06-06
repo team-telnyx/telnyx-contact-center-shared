@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getOutboundPool, mapCampaign, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { loadExecutionDebugByCampaign } from "../route";

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint for updating agent status
  * POST /api/contact-center/routing/agent-status

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { readFile, stat } from "fs/promises";
 import path from "path";

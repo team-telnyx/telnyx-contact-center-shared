@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Agent Assist Workflow - Generate Suggestion API
  * POST - Generate dynamic suggestions using LLM

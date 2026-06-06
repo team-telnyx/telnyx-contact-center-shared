@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * AI Models API
  * GET - List available Telnyx AI models

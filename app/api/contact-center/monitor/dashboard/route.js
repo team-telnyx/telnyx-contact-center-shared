@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint for supervisory console dashboard
  * GET /api/contact-center/monitor/dashboard

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { addSseClient, hasActiveClients, removeSseClient } from "@/lib/sse";

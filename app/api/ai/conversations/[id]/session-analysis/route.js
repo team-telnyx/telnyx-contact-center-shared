@@ -1,7 +1,7 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+
+export const dynamic = "force-dynamic";
 
 const TELNYX_BASE = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
 

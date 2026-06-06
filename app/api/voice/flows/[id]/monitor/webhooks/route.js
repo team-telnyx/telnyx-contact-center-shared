@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * GET /api/voice/flows/[id]/monitor/webhooks
  * Get webhook events for a specific flow
@@ -9,6 +7,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 import { getFlowEvents } from "@/lib/call-monitor-store";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request, { params }) {
   try {

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";

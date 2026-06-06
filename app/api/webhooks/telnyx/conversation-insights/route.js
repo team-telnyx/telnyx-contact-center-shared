@@ -1,10 +1,10 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { broadcastToKey } from "@/lib/sse";
 import { findWorkflowByInsightGroup } from "@/lib/telnyx-insights";
+
+export const dynamic = "force-dynamic";
 
 const LOG_PREFIX = "[Insights Webhook]";
 

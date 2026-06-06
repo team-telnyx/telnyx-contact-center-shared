@@ -1,7 +1,7 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx.js";
+
+export const dynamic = "force-dynamic";
 
 const ELEVENLABS_API_KEY_REF = process.env.ELEVENLABS_API_KEY_REF;
 

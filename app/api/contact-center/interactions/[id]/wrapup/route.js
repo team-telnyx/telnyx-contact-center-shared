@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";

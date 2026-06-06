@@ -1,7 +1,7 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+
+export const dynamic = "force-dynamic";
 
 // GET single assistant
 export async function GET(request, { params }) {

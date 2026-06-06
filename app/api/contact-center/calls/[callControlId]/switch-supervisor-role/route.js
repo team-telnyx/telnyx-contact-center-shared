@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint to switch supervisor role
  * POST /api/contact-center/calls/[callControlId]/switch-supervisor-role

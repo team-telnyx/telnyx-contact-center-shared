@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Agent Assist Workflow - Save History API
  * POST - Save transcriptions and suggestions to workflow session for history viewing

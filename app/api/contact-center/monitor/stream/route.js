@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * SSE endpoint for real-time monitoring updates
  * GET /api/contact-center/monitor/stream

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * SSE endpoint for streaming real-time flow execution events
  * Streams node and edge activations for visual monitoring
@@ -9,6 +7,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 import { getFlowExecutionEvents } from "@/lib/call-monitor-store";
+
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/voice/flows/[id]/monitor-stream

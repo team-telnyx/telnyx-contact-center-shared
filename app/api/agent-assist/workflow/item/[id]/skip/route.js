@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Agent Assist Workflow - Skip Item API
  * PUT - Skip an item in the workflow

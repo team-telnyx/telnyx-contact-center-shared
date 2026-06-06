@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * Returns the WebSocket streaming server URL/port for the flow editor.
  * Used by StreamingStartNodeEditor to build correct ws:// URLs.

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 /**
  * API endpoint for routing calls to agents
  * POST /api/contact-center/routing/route-call

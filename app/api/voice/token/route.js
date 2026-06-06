@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic";
-
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getAuthenticatedUser } from "@/lib/auth-server";
