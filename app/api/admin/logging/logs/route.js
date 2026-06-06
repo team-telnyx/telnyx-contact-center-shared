@@ -44,9 +44,11 @@ export async function GET(request) {
       return noStore({ ok: true, files });
     }
 
+    const latestOnly = queryParam(request, "latest") === "1";
+    const [latestFile] = latestOnly && !queryParam(request, "file") ? await listLogFiles({ logDir, limit: 1 }) : [];
     const result = await queryLogEntries({
       logDir,
-      file: queryParam(request, "file"),
+      file: queryParam(request, "file") || latestFile?.name,
       level: queryParam(request, "level"),
       topic: queryParam(request, "topic"),
       runId: queryParam(request, "runId"),

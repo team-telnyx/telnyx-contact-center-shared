@@ -30,11 +30,13 @@ test("Admin logging topics use toggles and level tabs instead of JSON editors", 
   assert.doesNotMatch(page, /<Textarea[\s\S]*(Topic levels|Topic enabled)/);
 });
 
-test("Admin logging file selection refreshes Live entries for the selected file", async () => {
+test("Admin logging file selection renders selected file entries in Files view", async () => {
   const page = await source();
-  assert.match(page, /const loadLogs = React\.useCallback\(async \(filterOverrides = \{\}\) =>/);
-  assert.match(page, /const effectiveFilters = \{ \.\.\.logFilters, \.\.\.filterOverrides \}/);
-  assert.match(page, /onSelect=\{\(file\) => \{ updateLogFilter\("file", file\); setActive\("live"\); loadLogs\(\{ file \}\); \}\}/);
+  assert.match(page, /function FileLogView\(/);
+  assert.match(page, /onSelectFile=\{\(file\) => updateLogFilter\("file", file\)\}/);
+  assert.match(page, /Select a JSONL file to render its events below/);
+  assert.match(page, /loadLogs\(\{ file: logFilters\.file \|\| currentFile\?\.name \|\| "" \}\)/);
+  assert.doesNotMatch(page, /setActive\("live"\); loadLogs\(\{ file \}\)/);
 });
 
 test("Admin logging confirmations use the custom AlertDialog instead of browser confirms", async () => {

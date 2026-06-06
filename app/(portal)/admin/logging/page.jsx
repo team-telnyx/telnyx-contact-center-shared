@@ -151,6 +151,8 @@ export default function AdminLoggingPage() {
   const [logFiles, setLogFiles] = React.useState([]);
   const [logEntries, setLogEntries] = React.useState([]);
   const [logMeta, setLogMeta] = React.useState({ skippedInvalid: 0, truncated: false });
+  const [liveConnected, setLiveConnected] = React.useState(false);
+  const [liveSourceFile, setLiveSourceFile] = React.useState("");
   const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topic: "", runId: "", search: "", from: "", to: "", limit: "100" });
   const [newTopic, setNewTopic] = React.useState("");
   const [confirmation, setConfirmation] = React.useState(null);
@@ -185,6 +187,7 @@ export default function AdminLoggingPage() {
 
       const effectiveFilters = { ...logFilters, ...filterOverrides };
       const params = new URLSearchParams();
+      if (active === "live" && !effectiveFilters.file) params.set("latest", "1");
       for (const [key, value] of Object.entries(effectiveFilters)) {
         if (!value) continue;
         params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
@@ -199,7 +202,7 @@ export default function AdminLoggingPage() {
     } finally {
       setLogsLoading(false);
     }
-  }, [logFilters]);
+  }, [active, logFilters]);
 
   React.useEffect(() => {
     loadConfig();
@@ -208,6 +211,42 @@ export default function AdminLoggingPage() {
   React.useEffect(() => {
     loadLogs();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    if (active !== "live") return undefined;
+    const params = new URLSearchParams({ latest: "1", limit: logFilters.limit || "100" });
+    for (const key of ["level", "topic", "runId", "search", "from", "to"]) {
+      const value = logFilters[key];
+      if (!value) continue;
+      params.set(key, key === "from" || key === "to" ? localDateTimeToIso(value) : value);
+    }
+    const source = new EventSource(`/api/admin/logging/stream?${params.toString()}`);
+    source.onopen = () => setLiveConnected(true);
+    source.addEventListener("ready", (event) => {
+      setLiveConnected(true);
+      try {
+        const data = JSON.parse(event.data || "{}");
+        setLiveSourceFile(data.file || "");
+        if (Array.isArray(data.entries)) setLogEntries(data.entries);
+      } catch (_) {}
+    });
+    source.addEventListener("log", (event) => {
+      try {
+        const entry = JSON.parse(event.data || "{}");
+        setLogEntries((prev) => [entry, ...prev].slice(0, Number(logFilters.limit || 100)));
+      } catch (_) {}
+    });
+    source.onerror = () => setLiveConnected(false);
+    return () => {
+      setLiveConnected(false);
+      source.close();
+    };
+  }, [active, logFilters.level, logFilters.topic, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
+
+  React.useEffect(() => {
+    if (active !== "files") return;
+    loadLogs({ file: logFilters.file || currentFile?.name || "" });
+  }, [active, logFilters.file, currentFile?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateLogFilter(key, value) {
     setLogFilters((prev) => ({ ...prev, [key]: value }));
@@ -339,16 +378,16 @@ export default function AdminLoggingPage() {
               <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
               <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
             </div>
-            {active === "live" ? <Badge variant="outline" className="bg-background/80">{logEntries.length} entries</Badge> : null}
-            {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFiles.length} files</Badge> : null}
+            {active === "live" ? <Badge variant="outline" className="bg-background/80">{liveConnected ? "Live SSE" : "Connecting"}</Badge> : null}
+            {active === "files" ? <Badge variant="outline" className="bg-background/80">{logFilters.file || currentFile?.name || "Select file"}</Badge> : null}
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-5">
             {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
               <SettingsView config={config} topics={topics} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
-              <FilesView files={logFiles} selectedFile={logFilters.file} onSelect={(file) => { updateLogFilter("file", file); setActive("live"); loadLogs({ file }); }} loading={logsLoading} />
+              <FileLogView entries={logEntries} loading={logsLoading} meta={logMeta} sourceLabel={logFilters.file || currentFile?.name || "No file selected"} files={logFiles} selectedFile={logFilters.file || currentFile?.name || ""} onSelectFile={(file) => updateLogFilter("file", file)} />
             ) : (
-              <LiveLogView entries={logEntries} loading={logsLoading} meta={logMeta} />
+              <LiveLogView entries={logEntries} loading={logsLoading} meta={logMeta} connected={liveConnected} sourceLabel={liveSourceFile || currentFile?.name || "Latest file"} />
             )}
           </div>
         </section>
@@ -441,8 +480,16 @@ function LogFiltersPanel({ files, filters, currentFile, topics, update, onApply,
   return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><div className="grid grid-cols-2 gap-2"><MiniStat label="Known files" value={files.length} icon={IconFileText} tone="sky" /><MiniStat label="Current size" value={formatBytes(currentFile?.size)} icon={IconActivity} tone="violet" /></div><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><ConfigSelect label="Topic" value={filters.topic || "__all__"} options={[{ value: "__all__", label: "All topics" }, ...topics.map((topic) => ({ value: topic, label: topic }))]} onChange={(value) => update("topic", value === "__all__" ? "" : value)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button className={`w-full ${neutralActionClass}`} onClick={onApply} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconFilter className="mr-2 h-4 w-4" />}Apply filters</Button></div></SettingCard></div>;
 }
 
-function LiveLogView({ entries, loading, meta }) {
-  return <div className="space-y-4">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing log preview…</div> : null}<div className="grid gap-3 md:grid-cols-3"><MiniStat label="Visible entries" value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label="Skipped invalid" value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label="Server cap" value={meta.truncated ? "Truncated" : "OK"} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="space-y-2">{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${index}`} entry={entry} />) : <EmptyState title="No matching log entries" description="Adjust filters or enable JSONL logging to populate the live preview." />}</div></div>;
+function LiveLogView({ entries, loading, meta, connected = false, sourceLabel = "Latest file" }) {
+  return <LogEntriesView entries={entries} loading={loading} meta={meta} sourceLabel={sourceLabel} emptyTitle="No matching live log entries" emptyDescription="Live reads the newest JSONL file and appends matching events over SSE." connectionLabel={connected ? "SSE connected" : "SSE connecting"} />;
+}
+
+function FileLogView({ entries, loading, meta, sourceLabel, files, selectedFile, onSelectFile }) {
+  return <div className="space-y-4"><div className="rounded-2xl border bg-card/70 p-3"><div className="mb-2 flex items-center justify-between gap-2"><div><h3 className="text-sm font-semibold">Log files</h3><p className="text-xs text-muted-foreground">Select a JSONL file to render its events below.</p></div><Badge variant="outline">{files.length} files</Badge></div><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{files.length ? files.map((file) => <button key={file.name} type="button" onClick={() => onSelectFile(file.name)} className={`rounded-xl border px-3 py-2 text-left text-xs transition hover:border-primary/40 hover:bg-muted/50 ${selectedFile === file.name ? "border-primary/50 bg-primary/5" : "bg-background/70"}`}><span className="block truncate font-medium">{file.name}</span><span className="mt-1 block text-muted-foreground">{formatBytes(file.size)} · {formatLogTime(file.mtime)}</span></button>) : <p className="text-sm text-muted-foreground">No JSONL files found.</p>}</div></div><LogEntriesView entries={entries} loading={loading} meta={meta} sourceLabel={sourceLabel} emptyTitle="No matching file log entries" emptyDescription={files.length ? "Choose a file from the list or adjust filters to inspect historical events." : "Enable file logging or wait for JSONL files to appear."} connectionLabel="Static file snapshot" /></div>;
+}
+
+function LogEntriesView({ entries, loading, meta, sourceLabel, emptyTitle, emptyDescription, connectionLabel }) {
+  return <div className="space-y-4">{loading ? <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing log preview…</div> : null}<div className="grid gap-3 md:grid-cols-4"><MiniStat label="Visible entries" value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label="Source" value={sourceLabel || "—"} icon={IconFileText} tone="violet" /><MiniStat label="Skipped invalid" value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label={connectionLabel || "Server cap"} value={meta.truncated ? "Truncated" : "OK"} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="space-y-2">{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${entry.runId || ""}-${index}`} entry={entry} />) : <EmptyState title={emptyTitle} description={emptyDescription} />}</div></div>;
 }
 
 function LogEntryCard({ entry }) {
