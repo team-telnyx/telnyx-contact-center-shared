@@ -60,6 +60,12 @@ The target is **not** to create one topic per file or class. The target is a com
 7. **Security-sensitive payloads stay redacted**
    - Do not log raw passwords, API keys, tokens, bearer strings, ID tokens, refresh tokens, secrets, credentials, full client_state blobs, or provider raw responses.
 
+8. **Do not duplicate full Telnyx webhook payloads**
+   - Runtime pino logs must not include full Telnyx webhook payloads, even after redaction.
+   - Log only the operational fields needed for filtering and incident triage: `eventType`, `callControlId`, `callSessionId`, `interactionId`, `flowId`, `nodeId`, `direction`, `from`, `to`, `occurredAt`, `reason`, and compact error metadata.
+   - Prefer references over payload copies. Full webhook details are already available in Call Flow Monitor and in Session Details / Call History, so runtime logs should link or correlate to those records instead of duplicating them.
+   - This applies especially to `voice.webhooks`, `telnyx.webhooks`, `voice.flow`, and Contact Center interaction logs.
+
 ---
 
 ## 3. Proposed Topic Catalog
@@ -728,6 +734,12 @@ Topic usage:
 - flow/webhook/call-control -> `voice.*`
 - provider/STT/media/WebSocket -> `telnyx.*`
 
+Webhook payload rule:
+
+- Do not log full Telnyx webhook payloads in `voice.webhooks`, `telnyx.webhooks`, `voice.flow`, or downstream Contact Center logs.
+- Extract only the small correlation/triage fields needed by operators, then rely on Call Flow Monitor and Session Details / Call History for the full payload/body.
+- If a future incident needs deeper payload inspection, add a temporary targeted field allowlist rather than dumping the full webhook object.
+
 ### Phase E: Agent Assist
 
 Files:
@@ -803,8 +815,22 @@ Assertions:
 - topic IDs are unique
 - labels/descriptions exist
 - default levels are valid pino levels
+- all proposed emitted leaf topic IDs are two-level: `group.topic`
 
-### 10.2 Runtime config inheritance test
+### 10.2 Telnyx webhook payload logging contract test
+
+Create or extend:
+
+- `tests/telnyx-webhook-logging-contract.test.mjs`
+
+Assertions:
+
+- Voice/Telnyx webhook loggers do not pass raw webhook payload objects into pino.
+- Runtime logs never include fields named `payload`, `rawPayload`, `webhookPayload`, `eventPayload`, or full nested `data.payload` unless a test explicitly marks that field as a compact allowlisted summary.
+- Allowed webhook fields are compact correlation/triage fields such as `eventType`, `callControlId`, `callSessionId`, `interactionId`, `flowId`, `nodeId`, `direction`, `from`, `to`, `occurredAt`, and `reason`.
+- The test documents that full Telnyx webhook details live in Call Flow Monitor and Session Details / Call History, not in pino runtime logs.
+
+### 10.3 Runtime config inheritance test
 
 Modify:
 
@@ -820,7 +846,7 @@ Assertions:
 
 Note: current `isTopicEnabled()` returns parent setting if exact topic is absent, and exact topic wins. Preserve this.
 
-### 10.3 Settings UI group controls test
+### 10.4 Settings UI group controls test
 
 Modify:
 
@@ -834,7 +860,7 @@ Assertions:
 - topic rows have override/inherit controls
 - old independently scrollable behavior remains
 
-### 10.4 Filter UI grouped multi-select test
+### 10.5 Filter UI grouped multi-select test
 
 Modify:
 
