@@ -396,6 +396,36 @@ test("createLogger writes human-readable message alongside technical msg in JSON
   }
 });
 
+test("createLogger preserves explicit friendly messages in JSONL files", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-explicit-message-"));
+  const { createLogger, buildLogFilePath } = await freshLoggerModule();
+  const now = new Date("2026-06-06T09:32:41.157Z");
+  const logger = createLogger({
+    topic: "app",
+    config: {
+      globalLevel: "info",
+      consoleEnabled: false,
+      fileEnabled: true,
+      logDir: dir,
+      rotationMode: "daily",
+    },
+    now,
+    runId: "explicit-message-run",
+  });
+
+  try {
+    logger.info({ message: "Streaming WS starting on port 3001" }, "streaming_ws_starting");
+    await logger.flush?.();
+    const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "explicit-message-run" });
+    const contents = await readFile(filePath, "utf8");
+    const entry = JSON.parse(contents.trim());
+    assert.equal(entry.msg, "streaming_ws_starting");
+    assert.equal(entry.message, "Streaming WS starting on port 3001");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("createLogger rotates daily file sinks after midnight", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-daily-rotation-"));
   const { createLogger, buildLogFilePath } = await freshLoggerModule();

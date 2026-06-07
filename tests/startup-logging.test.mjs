@@ -22,11 +22,14 @@ test("startup instrumentation emits application, Postgres, and streaming events 
   assert.match(src, /createDiagnosticLogger\("platform\.app", \{ config: bootstrapLoggingConfig, getConfig: \(\) => runtimeLoggingConfig \}\)/);
   assert.match(src, /createDiagnosticLogger\("platform\.app"/);
   assert.match(src, /createDiagnosticLogger\("platform\.db"/);
-  assert.match(src, /createDiagnosticLogger\("telnyx\.streaming"/);
+  assert.doesNotMatch(src, /createDiagnosticLogger\("telnyx\.streaming"/);
   assert.match(src, /application_starting/);
+  assert.match(src, /Application starting on port/);
   assert.match(src, /runtime_logging_config_loaded/);
   assert.match(src, /postgres_startup_status/);
   assert.match(src, /streaming_ws_starting/);
+  assert.match(src, /Streaming WS starting on port/);
+  assert.match(src, /Streaming WS start requested on port/);
   assert.match(src, /application_startup_completed/);
   assert.doesNotMatch(src, /console\.(log|warn|error)\(/);
 });

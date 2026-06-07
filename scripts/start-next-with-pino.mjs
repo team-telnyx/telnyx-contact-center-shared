@@ -55,6 +55,7 @@ logger.info("web_server_starting", {
   port,
   nodeEnv: process.env.NODE_ENV || "production",
   pid: process.pid,
+  message: `Web server starting on port ${port}`,
 });
 
 const child = spawn("yarn", args, {
@@ -102,6 +103,7 @@ function forwardLine(line, stream) {
       port,
       readyIn: readyMatch[1],
       nextCliStartingLineSuppressed: startingSuppressed,
+      message: `Web server ready on port ${port}`,
     });
     return;
   }

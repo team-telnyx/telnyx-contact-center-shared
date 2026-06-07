@@ -24,13 +24,15 @@ export async function register() {
     let runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly();
     const appLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
     const dbLogger = createDiagnosticLogger("platform.db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
-    const streamingLogger = createDiagnosticLogger("telnyx.streaming", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const streamingLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
 
+    const appPort = process.env.PORT || "3000";
     appLogger.info("application_starting", {
       nodeEnv: process.env.NODE_ENV || "development",
       nextRuntime: process.env.NEXT_RUNTIME,
       pid: process.pid,
-      port: process.env.PORT || "3000",
+      port: appPort,
+      message: `Application starting on port ${appPort}`,
     });
 
     // Only run on server-side
@@ -104,10 +106,17 @@ export async function register() {
     try {
       const mainPort = parseInt(process.env.PORT || "3000", 10);
       const wsPort = parseInt(process.env.STREAMING_WS_PORT || String(mainPort + 1), 10);
-      streamingLogger.info("streaming_ws_starting", { port: wsPort, mainPort });
+      streamingLogger.info("streaming_ws_starting", {
+        port: wsPort,
+        mainPort,
+        message: `Streaming WS starting on port ${wsPort}`,
+      });
       const { initStreamingWSServer } = await import("./lib/streaming-ws-handler.mjs");
       initStreamingWSServer();
-      streamingLogger.info("streaming_ws_start_requested", { port: wsPort });
+      streamingLogger.info("streaming_ws_start_requested", {
+        port: wsPort,
+        message: `Streaming WS start requested on port ${wsPort}`,
+      });
     } catch (err) {
       streamingLogger.warn("streaming_ws_start_failed", {
         error: err?.message || String(err),

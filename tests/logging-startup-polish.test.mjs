@@ -61,8 +61,12 @@ test("startup modules expose structured pino event names for schema, seed, clean
   assert.match(seedOwner, /seed_owner_/);
   assert.match(seedWorkflows, /seed_workflows_complete/);
   assert.match(ghostCleanup, /ghost_call_cleanup_/);
+  assert.match(streaming, /createDiagnosticLogger\("platform\.app"\)/);
+  assert.doesNotMatch(streaming, /createDiagnosticLogger\("telnyx\.streaming"\)/);
   assert.match(streaming, /streaming_ws_listening/);
+  assert.match(streaming, /Streaming WS listening on port/);
   assert.match(streaming, /streaming_ws_routes_ready/);
+  assert.match(streaming, /Streaming WS routes ready on port/);
 });
 
 
@@ -95,7 +99,9 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
   assert.match(startWrapper, /if \(rendered !== undefined\)/);
   assert.match(startWrapper, /stream\.write\(`\$\{rendered\}\\n`\)/);
   assert.match(startWrapper, /web_server_starting/);
+  assert.match(startWrapper, /Web server starting on port/);
   assert.match(startWrapper, /web_server_ready/);
+  assert.match(startWrapper, /Web server ready on port/);
   assert.match(startWrapper, /web_server_next_runtime/);
   assert.match(startWrapper, /web_server_endpoint/);
   assert.match(startWrapper, /nextCliStartingLineSuppressed/);
