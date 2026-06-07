@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
@@ -21,5 +22,5 @@ export async function POST(request) {
       requireString(body.name, "Time set name"), optionalString(body.description), normalizeStatus(body.status), optionalString(body.timezone, 80) || "Europe/Warsaw", JSON.stringify(safeJson(body.windows, [])), JSON.stringify(safeJson(body.metadata, {})), username,
     ]);
     return NextResponse.json({ ok: true, timeSet: mapOutboundTimeSet(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] create time set error:", err); return jsonError(err.message || "Failed to create time set", 400); }
+  } catch (err) { campaignsLogger.error("time_set_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create time set", 400); }
 }

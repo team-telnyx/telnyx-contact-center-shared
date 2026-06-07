@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { buildOutboundLiveCallsPayload, OUTBOUND_LIVE_CALLS_SQL } from "@/lib/outbound-dialer/live-calls";
+import { liveCallsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -64,7 +65,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("[Outbound Live Calls Stream] failed:", error);
+    liveCallsLogger.error("live_calls_stream_failed", { ...outboundErrorPayload(error) });
     return NextResponse.json({ error: error?.message || "Failed to stream live calls" }, { status: 500 });
   }
 }

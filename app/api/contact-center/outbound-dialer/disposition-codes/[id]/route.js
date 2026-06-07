@@ -9,6 +9,7 @@ import {
   safeJson,
   usernameFor,
 } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const CLASSIFICATIONS = ["none", "right_party_contact", "number_uncallable", "contact_uncallable", "retry"];
 const BUSINESS_CATEGORIES = ["none", "success", "neutral", "failure"];
@@ -55,7 +56,7 @@ export async function PUT(request, { params }) {
     const enriched = await pool.query(`${SELECT_SQL} WHERE m.id = $1`, [rows[0].id]);
     return NextResponse.json({ ok: true, dispositionCode: mapOutboundDispositionCode(enriched.rows[0]) });
   } catch (err) {
-    console.error("[Outbound Dialer] update disposition code error:", err);
+    campaignsLogger.error("disposition_code_update_failed", { dispositionCodeId: params.id, ...outboundErrorPayload(err) });
     return jsonError(err.message || "Failed to update disposition code", 400);
   }
 }

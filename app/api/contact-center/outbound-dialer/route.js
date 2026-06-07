@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { getOutboundPool, loadOutboundContactLists, mapCampaign, mapContactList, mapDncList, mapForm, mapHandlerReference, mapOutboundAttemptControl, mapOutboundFilter, mapOutboundSettings, mapOutboundTimeSet, outboundSchemaPayload, requireOutboundSupervisor } from "@/lib/outbound-dialer/api";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getRunnerState } from "@/lib/outbound-dialer/runner";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 async function safeQuery(pool, sql, params = [], fallback = []) {
   try {
     const { rows } = await pool.query(sql, params);
     return rows || fallback;
   } catch (err) {
-    console.warn("[Outbound Dialer] optional query failed:", err?.message || err);
+    campaignsLogger.warn("optional_query_failed", { ...outboundErrorPayload(err) });
     return fallback;
   }
 }
@@ -24,7 +25,7 @@ async function loadAiAssistants() {
     const data = await res.json();
     return Array.isArray(data?.data) ? data.data.slice(0, 200).map((assistant) => mapHandlerReference({ id: assistant.id, name: assistant.name, status: assistant.status }, "ai_assistant")) : [];
   } catch (err) {
-    console.warn("[Outbound Dialer] assistants load failed:", err?.message || err);
+    campaignsLogger.warn("assistants_load_failed", { ...outboundErrorPayload(err) });
     return [];
   }
 }
@@ -69,7 +70,7 @@ async function loadInventoryNumbers() {
 
     return numbers;
   } catch (err) {
-    console.warn("[Outbound Dialer] inventory numbers load failed:", err?.message || err);
+    campaignsLogger.warn("inventory_numbers_load_failed", { ...outboundErrorPayload(err) });
     return [];
   }
 }
@@ -356,7 +357,7 @@ export async function GET() {
       executionDebugByCampaign,
     });
   } catch (err) {
-    console.error("[Outbound Dialer] GET error:", err);
+    campaignsLogger.error("outbound_overview_load_failed", { ...outboundErrorPayload(err) });
     return NextResponse.json({ error: "Failed to load outbound dialer data" }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeAttemptControlLimits, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const RESET_PERIODS = ["daily", "weekly", "monthly", "campaign", "lifetime"];
@@ -38,7 +39,7 @@ export async function PUT(request, context) {
     const { rows } = await pool.query(`UPDATE outbound_attempt_controls SET name=$1, description=$2, status=$3, reset_period=$4, timezone=$5, max_attempts_per_contact=$6, max_attempts_per_number=$7, recall_rules=$8, phone_type_rules=$9, metadata=$10, updated_by=$11, updated_at=NOW() WHERE id=$12 AND status <> 'archived' RETURNING *`, [body.name, body.description, body.status, body.reset_period, body.timezone, body.max_attempts_per_contact, body.max_attempts_per_number, JSON.stringify(body.recall_rules), JSON.stringify(body.phone_type_rules), JSON.stringify(body.metadata), usernameFor(user), attemptControlId]);
     if (!rows[0]) return jsonError("Attempt control not found", 404);
     return NextResponse.json({ ok: true, attemptControl: mapOutboundAttemptControl(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] update attempt control error:", err); return jsonError(err.message || "Failed to update attempt control", 400); }
+  } catch (err) { campaignsLogger.error("attempt_control_update_failed", { attemptControlId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update attempt control", 400); }
 }
 
 export async function DELETE(request, context) {

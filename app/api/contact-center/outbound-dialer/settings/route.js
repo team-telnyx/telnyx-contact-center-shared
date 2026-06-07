@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundSettings, requireOutboundSupervisor, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
 import { normalizeOutboundDialTimeoutSecs } from "@/lib/outbound-dialer/execution";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DEFAULT_CALLABLE_DAYS = ["mon", "tue", "wed", "thu", "fri"];
@@ -64,5 +65,5 @@ export async function PUT(request) {
     const username = usernameFor(user);
     const { rows } = await pool.query(`INSERT INTO outbound_settings (id, settings, created_by, updated_by) VALUES ('default', $1, $2, $2) ON CONFLICT (id) DO UPDATE SET settings=EXCLUDED.settings, updated_by=EXCLUDED.updated_by, updated_at=NOW() RETURNING *`, [JSON.stringify(settings), username]);
     return NextResponse.json({ ok: true, settings: mapOutboundSettings(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] save settings error:", err); return jsonError(err.message || "Failed to save settings", 400); }
+  } catch (err) { campaignsLogger.error("settings_save_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to save settings", 400); }
 }

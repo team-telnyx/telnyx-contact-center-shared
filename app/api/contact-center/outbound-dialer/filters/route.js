@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundFilter, optionalString, requireOutboundSupervisor, requireString, requireUuid, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
@@ -24,5 +25,5 @@ export async function POST(request) {
       requireString(body.name, "Filter name"), optionalString(body.description), status, contactListId, JSON.stringify(safeJson(body.conditions, [])), JSON.stringify(safeJson(body.metadata, {})), username,
     ]);
     return NextResponse.json({ ok: true, filter: mapOutboundFilter(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] create filter error:", err); return jsonError(err.message || "Failed to create filter", 400); }
+  } catch (err) { campaignsLogger.error("filter_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create filter", 400); }
 }

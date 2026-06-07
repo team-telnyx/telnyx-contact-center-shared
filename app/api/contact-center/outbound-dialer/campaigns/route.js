@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CAMPAIGN_MODES, OUTBOUND_CHANNELS, OUTBOUND_HANDLER_TYPES } from "@/lib/outbound-dialer/schema";
 import { normalizeCampaignMaxAttempts, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 async function loadGlobalMaxAttempts(pool) {
   const { rows } = await pool.query(`SELECT settings FROM outbound_settings WHERE id='default' LIMIT 1`);
@@ -47,5 +48,5 @@ export async function POST(request) {
       JSON.stringify(safeJson(body.pacing_config, { strategy: "per_available_agent", ratio: 1, supervisorApproval: true })), JSON.stringify(safeJson(body.concurrency_config, { maxConcurrent: 10, perAgentLimit: 1 })), JSON.stringify(safeJson(body.dialing_windows, [{ days: ["mon", "tue", "wed", "thu", "fri"], start: "09:00", end: "18:00", timezonePolicy: "contact" }])), JSON.stringify(normalizeRetryPolicy(body.retry_policy, globalMaxAttempts)), JSON.stringify(safeJson(body.amd_config, { enabled: true, humanConfidenceThreshold: 0.74, voicemailAction: "hangup" })), JSON.stringify(safeJson(body.form_variable_mapping, [])), JSON.stringify(normalizeCampaignMetadata(body.metadata)), body.attempt_control_id || null, username,
     ]);
     return NextResponse.json({ ok: true, campaign: mapCampaign(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] create campaign error:", err); return jsonError(err.message || "Failed to create campaign", 400); }
+  } catch (err) { campaignsLogger.error("campaign_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create campaign", 400); }
 }

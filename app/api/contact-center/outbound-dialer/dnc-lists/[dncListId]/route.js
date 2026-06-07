@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapDncList, optionalString, requireOutboundSupervisor, requireString, usernameFor } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const statuses = ["draft", "active", "paused"];
 const sourceTypes = ["csv", "api", "manual"];
@@ -14,7 +15,7 @@ export async function PUT(request, context) {
     const { rows } = await pool.query(`UPDATE outbound_dnc_lists SET name=$1, description=$2, status=$3, source_type=$4, match_strategy=$5, updated_by=$6, updated_at=NOW() WHERE id=$7 AND status <> 'archived' RETURNING *`, [requireString(body.name, "DNC list name"), optionalString(body.description), statuses.includes(body.status) ? body.status : "draft", sourceTypes.includes(body.source_type) ? body.source_type : "csv", matchStrategies.includes(body.match_strategy) ? body.match_strategy : "phone", usernameFor(user), dncListId]);
     if (!rows[0]) return jsonError("DNC list not found", 404);
     return NextResponse.json({ ok: true, dncList: mapDncList(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] update DNC list error:", err); return jsonError(err.message || "Failed to update DNC list", 400); }
+  } catch (err) { campaignsLogger.error("dnc_list_update_failed", { dncListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update DNC list", 400); }
 }
 
 export async function DELETE(request, context) {

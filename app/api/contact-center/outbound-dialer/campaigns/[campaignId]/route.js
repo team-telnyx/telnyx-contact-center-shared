@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { annotateCampaignDncScaffold, getOutboundPool, jsonError, mapCampaign, requireOutboundSupervisor, requireString, optionalString, ensureEnum, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { OUTBOUND_CAMPAIGN_MODES, OUTBOUND_CHANNELS, OUTBOUND_HANDLER_TYPES } from "@/lib/outbound-dialer/schema";
 import { normalizeCampaignMaxAttempts, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 async function loadGlobalMaxAttempts(pool) {
   const { rows } = await pool.query(`SELECT settings FROM outbound_settings WHERE id='default' LIMIT 1`);
@@ -116,7 +117,7 @@ export async function GET(request, context) {
       },
     });
   } catch (err) {
-    console.error("[Outbound Dialer] get campaign details error:", err);
+    campaignsLogger.error("campaign_details_load_failed", { campaignId, ...outboundErrorPayload(err) });
     return jsonError(err.message || "Failed to load campaign", 400);
   }
 }
@@ -142,7 +143,7 @@ export async function PUT(request, context) {
     }
     const campaignWithLookups = await loadCampaignWithLookups(pool, campaign.id);
     return NextResponse.json({ ok: true, campaign: mapCampaign(campaignWithLookups || campaign) });
-  } catch (err) { console.error("[Outbound Dialer] update campaign error:", err); return jsonError(err.message || "Failed to update campaign", 400); }
+  } catch (err) { campaignsLogger.error("campaign_update_failed", { campaignId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update campaign", 400); }
 }
 
 export async function DELETE(request, context) {

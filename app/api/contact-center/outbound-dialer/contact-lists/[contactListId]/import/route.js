@@ -3,6 +3,7 @@ import { getOutboundPool, isLikelyPhone, jsonError, normalizeFieldSchema, parseC
 import { OUTBOUND_CONTACT_FIELD_TYPES } from "@/lib/outbound-dialer/schema";
 import { applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
 const CONTACT_MAPPING_PREFIXES = ["number:", "email:", "whatsapp:"];
+import { importsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 const CALLABLE_MAPPING_PREFIXES = ["number:", "whatsapp:"];
 
 function isValidContactMapping(value) {
@@ -125,5 +126,5 @@ export async function POST(request, context) {
       return NextResponse.json({ ok: true, contactList: rows[0], preview: importRecords.slice(0, 10), headers, inferredSchema, validPhones, totalRows: importRecords.length, originalRows: records.length, duplicateRowsRejected: applied.duplicateRowsRejected, filteredRows: applied.filteredRows, truncated });
     } catch (err) { await client.query("ROLLBACK"); throw err; }
     finally { client.release(); }
-  } catch (err) { console.error("[Outbound Dialer] CSV import error:", err); return jsonError(err.message || "Failed to import CSV", 400); }
+  } catch (err) { importsLogger.error("contact_list_import_failed", { contactListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to import CSV", 400); }
 }

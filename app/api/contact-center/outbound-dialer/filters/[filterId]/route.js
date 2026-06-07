@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundFilter, optionalString, requireOutboundSupervisor, requireString, requireUuid, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
@@ -16,7 +17,7 @@ export async function PUT(request, context) {
     ]);
     if (!rows[0]) return jsonError("Filter not found", 404);
     return NextResponse.json({ ok: true, filter: mapOutboundFilter(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] update filter error:", err); return jsonError(err.message || "Failed to update filter", 400); }
+  } catch (err) { campaignsLogger.error("filter_update_failed", { filterId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update filter", 400); }
 }
 
 export async function DELETE(request, context) {

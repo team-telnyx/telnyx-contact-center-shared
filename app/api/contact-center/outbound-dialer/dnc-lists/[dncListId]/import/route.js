@@ -12,6 +12,7 @@ import {
   usernameFor,
 } from "@/lib/outbound-dialer/api";
 import { applyCsvImportRules, normalizeCsvImportRules } from "@/lib/outbound-dialer/csv-import-rules";
+import { importsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 function valueTypesForColumn(classification, strategy) {
   const allowed = allowedSuppressionTypesForStrategy(strategy);
@@ -109,5 +110,5 @@ export async function POST(request, context) {
       return NextResponse.json({ ok: true, totalRows: entries.length, originalRows: records.length, filteredRows: applied.filteredRows, duplicateRowsRejected: applied.duplicateRowsRejected, duplicateValuesRejected, valueTypeCounts, dncList: mapDncList(rows[0]) });
     } catch (err) { await client.query("ROLLBACK"); throw err; }
     finally { client.release(); }
-  } catch (err) { console.error("[Outbound Dialer] DNC CSV import error:", err); return jsonError(err.message || "Failed to import DNC CSV", 400); }
+  } catch (err) { importsLogger.error("dnc_import_failed", { dncListId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to import DNC CSV", 400); }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundAttemptControl, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
 import { normalizeAttemptControlLimits, normalizeGlobalMaxAttempts } from "@/lib/outbound-dialer/attempt-limits";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const RESET_PERIODS = ["daily", "weekly", "monthly", "campaign", "lifetime"];
@@ -45,5 +46,5 @@ export async function POST(request) {
     const username = usernameFor(user);
     const { rows } = await pool.query(`INSERT INTO outbound_attempt_controls (name, description, status, reset_period, timezone, max_attempts_per_contact, max_attempts_per_number, recall_rules, phone_type_rules, metadata, created_by, updated_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING *`, [body.name, body.description, body.status, body.reset_period, body.timezone, body.max_attempts_per_contact, body.max_attempts_per_number, JSON.stringify(body.recall_rules), JSON.stringify(body.phone_type_rules), JSON.stringify(body.metadata), username]);
     return NextResponse.json({ ok: true, attemptControl: mapOutboundAttemptControl(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] create attempt control error:", err); return jsonError(err.message || "Failed to create attempt control", 400); }
+  } catch (err) { campaignsLogger.error("attempt_control_create_failed", { ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to create attempt control", 400); }
 }

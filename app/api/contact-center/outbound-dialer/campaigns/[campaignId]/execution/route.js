@@ -17,6 +17,7 @@ import {
 import { completeCampaignIfExhausted } from "@/lib/outbound-dialer/completion";
 import { broadcastCampaignActivationChanged } from "@/lib/outbound-dialer/agent-campaigns";
 import { startAgentlessRunner, stopAgentlessRunner, getRunnerState } from "@/lib/outbound-dialer/runner";
+import { executionLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 function isAgentlessMode(mode) {
   return mode === "agentless_ai" || mode === "agentless_flow";
@@ -148,7 +149,7 @@ export async function POST(request, context) {
       execution,
     });
   } catch (err) {
-    console.error("[Outbound Dialer] execution action error:", err);
+    executionLogger.error("execution_action_failed", { campaignId, ...outboundErrorPayload(err) });
     return jsonError(err.message || "Execution action failed", 400);
   }
 }

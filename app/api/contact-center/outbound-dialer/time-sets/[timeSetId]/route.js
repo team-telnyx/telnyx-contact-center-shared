@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOutboundPool, jsonError, mapOutboundTimeSet, optionalString, requireOutboundSupervisor, requireString, safeJson, usernameFor } from "@/lib/outbound-dialer/api";
+import { campaignsLogger, outboundErrorPayload } from "@/lib/outbound-dialer/logging.mjs";
 
 const STATUSES = ["draft", "active", "paused"];
 const normalizeStatus = (value) => STATUSES.includes(value) ? value : "draft";
@@ -15,7 +16,7 @@ export async function PUT(request, context) {
     ]);
     if (!rows[0]) return jsonError("Time set not found", 404);
     return NextResponse.json({ ok: true, timeSet: mapOutboundTimeSet(rows[0]) });
-  } catch (err) { console.error("[Outbound Dialer] update time set error:", err); return jsonError(err.message || "Failed to update time set", 400); }
+  } catch (err) { campaignsLogger.error("time_set_update_failed", { timeSetId, ...outboundErrorPayload(err) }); return jsonError(err.message || "Failed to update time set", 400); }
 }
 
 export async function DELETE(request, context) {
