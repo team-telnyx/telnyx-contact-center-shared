@@ -171,13 +171,14 @@ test("diagnostic logger honors LOG_LEVEL ordering and protects metadata fields",
 
   logger.debug("debug ignored");
   logger.info("info ignored");
-  logger.warn("warn emitted", { level: "error", message: "payload override", scope: "payload" });
+  logger.warn("warn emitted", { level: "error", message: "payload metadata", friendlyMessage: "Payload friendly text", scope: "payload" });
 
   try {
     assert.equal(lines.length, 1);
     const entry = JSON.parse(lines[0]);
     assert.equal(entry.level, "warn");
-    assert.equal(entry.message, "Warn emitted");
+    assert.equal(entry.message, "payload metadata");
+    assert.equal(entry.friendlyMessage, "Payload friendly text");
     assert.equal(entry.msg, "warn emitted");
     assert.equal(entry.scope, "test.level");
   } finally {

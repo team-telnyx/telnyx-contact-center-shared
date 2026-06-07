@@ -5,6 +5,7 @@ import { test } from "node:test";
 const instrumentationPath = new URL("../instrumentation.js", import.meta.url);
 const postgresPath = new URL("../lib/postgres.mjs", import.meta.url);
 const runtimeConfigPath = new URL("../lib/logger/runtime-config.mjs", import.meta.url);
+const streamingHandlerPath = new URL("../lib/streaming-ws-handler.mjs", import.meta.url);
 
 async function source(path) {
   return readFile(path, "utf8");
@@ -32,6 +33,17 @@ test("startup instrumentation emits application, Postgres, and streaming events 
   assert.match(src, /Streaming WS start requested on port/);
   assert.match(src, /application_startup_completed/);
   assert.doesNotMatch(src, /console\.(log|warn|error)\(/);
+});
+
+test("streaming WebSocket handler keeps runtime lifecycle diagnostics on telnyx.streaming", async () => {
+  const src = await source(streamingHandlerPath);
+
+  assert.match(src, /const streamingLogger = createDiagnosticLogger\("telnyx\.streaming"\)/);
+  assert.match(src, /const platformLogger = createDiagnosticLogger\("platform\.app"\)/);
+  assert.match(src, /streamingLogger\.warn\("streaming_ws_connection_rejected"\)/);
+  assert.match(src, /streamingLogger\.error\("streaming_ws_ai_handler_load_failed"\)/);
+  assert.match(src, /platformLogger\.info\("streaming_ws_listening"/);
+  assert.match(src, /friendlyMessage: `Streaming WS listening on port/);
 });
 
 test("Postgres module logs pool lifecycle through pino instead of direct console calls", async () => {

@@ -62,7 +62,7 @@ test("startup modules expose structured pino event names for schema, seed, clean
   assert.match(seedWorkflows, /seed_workflows_complete/);
   assert.match(ghostCleanup, /ghost_call_cleanup_/);
   assert.match(streaming, /createDiagnosticLogger\("platform\.app"\)/);
-  assert.doesNotMatch(streaming, /createDiagnosticLogger\("telnyx\.streaming"\)/);
+  assert.match(streaming, /createDiagnosticLogger\("telnyx\.streaming"\)/);
   assert.match(streaming, /streaming_ws_listening/);
   assert.match(streaming, /Streaming WS listening on port/);
   assert.match(streaming, /streaming_ws_routes_ready/);

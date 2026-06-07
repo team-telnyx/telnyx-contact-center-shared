@@ -232,6 +232,29 @@ test("createLogger suppresses disabled topics and respects per-topic level", asy
   assert.equal(JSON.parse(lines[0]).msg, "warn_emitted");
 });
 
+test("renderStructuredLogLineForConsole maps numeric pino levels before filtering and friendly rendering", async () => {
+  const { renderStructuredLogLineForConsole } = await freshLoggerModule();
+  const line = JSON.stringify({
+    level: 50,
+    topic: "telnyx.streaming",
+    msg: "child_worker_error",
+    time: "2026-06-07T12:00:00.000Z",
+  });
+
+  const friendly = renderStructuredLogLineForConsole(line, {
+    globalLevel: "error",
+    consoleEnabled: true,
+    consoleFriendly: true,
+  });
+  assert.match(friendly, /ERROR: Child worker error/);
+
+  const filtered = renderStructuredLogLineForConsole(line, {
+    globalLevel: "fatal",
+    consoleEnabled: true,
+  });
+  assert.equal(filtered, null);
+});
+
 test("createLogger can apply runtime topic config without recreating logger", async () => {
   const lines = [];
   const { createLogger } = await freshLoggerModule();
@@ -384,7 +407,7 @@ test("createLogger writes human-readable message alongside technical msg in JSON
   });
 
   try {
-    logger.info({ message: "streaming_ws_routes_ready" }, "streaming_ws_routes_ready");
+    logger.info({}, "streaming_ws_routes_ready");
     await logger.flush?.();
     const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "friendly-message-run" });
     const contents = await readFile(filePath, "utf8");
@@ -396,7 +419,7 @@ test("createLogger writes human-readable message alongside technical msg in JSON
   }
 });
 
-test("createLogger preserves explicit friendly messages in JSONL files", async () => {
+test("createLogger preserves explicit friendly messages separately from metadata message", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "cc-pino-explicit-message-"));
   const { createLogger, buildLogFilePath } = await freshLoggerModule();
   const now = new Date("2026-06-06T09:32:41.157Z");
@@ -414,13 +437,14 @@ test("createLogger preserves explicit friendly messages in JSONL files", async (
   });
 
   try {
-    logger.info({ message: "Streaming WS starting on port 3001" }, "streaming_ws_starting");
+    logger.info({ message: "upstream payload body", friendlyMessage: "Streaming WS starting on port 3001" }, "streaming_ws_starting");
     await logger.flush?.();
     const filePath = buildLogFilePath({ logDir: dir, rotationMode: "daily", now, runId: "explicit-message-run" });
     const contents = await readFile(filePath, "utf8");
     const entry = JSON.parse(contents.trim());
     assert.equal(entry.msg, "streaming_ws_starting");
-    assert.equal(entry.message, "Streaming WS starting on port 3001");
+    assert.equal(entry.message, "upstream payload body");
+    assert.equal(entry.friendlyMessage, "Streaming WS starting on port 3001");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
