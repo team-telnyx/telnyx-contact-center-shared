@@ -33,13 +33,15 @@ function getInsightsWebhookUrl() {
  * Creates Insight Group and 3 Insight Templates (slots, summary, sentiment).
  */
 export async function POST(request, { params }) {
+  let workflowId;
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: workflowId } = await params;
+    ({ id: workflowId } = await params);
     
     const pool = getPostgresPool();
     if (!pool) {
