@@ -21,6 +21,7 @@ import {
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker.js";
+import { voiceRuntimePayload, voiceWebhookLogger } from "@/lib/voice/logging.mjs";
 
 // Track executed transitions to prevent duplicate execution
 // Key: `${call_control_id}:${from_node_id}:${to_node_id}`
@@ -199,7 +200,7 @@ export async function POST(request, { params }) {
     const isValid = await verifyTelnyxSignature(request, rawBody);
     const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!isValid) {
-      console.warn("[incoming-flow-webhook] Invalid Telnyx signature", { enforceSignature });
+      voiceWebhookLogger.warn("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       if (enforceSignature) {
         return NextResponse.json(
           { ok: false, error: "Invalid signature" },
@@ -217,7 +218,7 @@ export async function POST(request, { params }) {
     try {
       await logCallEvent(body);
     } catch (err) {
-      console.error("[incoming-flow-webhook] Error logging call:", err);
+      voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     }
 
     // Store webhook in memory for monitoring
@@ -245,7 +246,7 @@ export async function POST(request, { params }) {
           });
         }
       } catch (err) {
-        console.error("[incoming-flow-webhook] outbound finalize failed:", err);
+        voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     }
 
@@ -693,9 +694,7 @@ export async function POST(request, { params }) {
       receivedAppId &&
       configuredAppId !== receivedAppId
     ) {
-      console.warn(
-        `Voice application mismatch: expected ${configuredAppId}, received ${receivedAppId}`,
-      );
+      voiceWebhookLogger.warn("voice_application_mismatch_expected_configuredappid_received_receivedappid", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       // We'll still process it, but log the warning
     }
 
@@ -934,10 +933,7 @@ export async function POST(request, { params }) {
               execution_history: [],
             });
           } catch (error) {
-            console.error(
-              `[IncomingWebhook] Failed to store variables in database:`,
-              error,
-            );
+            voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
           }
 
           return NextResponse.json({
@@ -947,7 +943,7 @@ export async function POST(request, { params }) {
             results: results.map((r) => r.result),
           });
         } catch (error) {
-          console.error(`[Incoming Call] Error executing node:`, error);
+          voiceWebhookLogger.error("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
           return NextResponse.json(
             {
               ok: false,
@@ -958,7 +954,7 @@ export async function POST(request, { params }) {
           );
         }
       } else {
-        console.warn(`[Incoming Call] No next node configured after initiator`);
+        voiceWebhookLogger.warn("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
 
         // Store variables in database for persistence between webhook calls
         try {
@@ -973,10 +969,7 @@ export async function POST(request, { params }) {
             execution_history: [],
           });
         } catch (error) {
-          console.error(
-            `[IncomingWebhook] Failed to store variables in database:`,
-            error,
-          );
+          voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
         }
 
         return NextResponse.json({
@@ -1224,10 +1217,7 @@ export async function POST(request, { params }) {
                     // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
                     mergedClientState = { ...payloadClientState };
                   } catch (err) {
-                    console.warn(
-                      "[FlowWebhook] Failed to decode payload client_state:",
-                      err,
-                    );
+                    voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
                   }
                 }
 
@@ -1245,10 +1235,7 @@ export async function POST(request, { params }) {
                       ...configClientState,
                     };
                   } catch (err) {
-                    console.warn(
-                      "[FlowWebhook] Failed to decode config client_state:",
-                      err,
-                    );
+                    voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
                   }
                 }
 
@@ -1367,10 +1354,7 @@ export async function POST(request, { params }) {
                 execution_history: [],
               });
             } catch (error) {
-              console.error(
-                `[IncomingWebhook] Failed to store variables in database:`,
-                error,
-              );
+              voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
             }
 
             return NextResponse.json({
@@ -1380,7 +1364,7 @@ export async function POST(request, { params }) {
               results: results.map((r) => r.result),
             });
           } catch (error) {
-            console.error("[Incoming Call] Error executing nodes:", error);
+            voiceWebhookLogger.error("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
             return NextResponse.json(
               {
                 ok: false,
@@ -1427,7 +1411,7 @@ export async function POST(request, { params }) {
       });
     }
   } catch (error) {
-    console.error("Incoming call webhook error:", error);
+    voiceWebhookLogger.error("voice_webhook_incoming_call_webhook_error", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 },
@@ -1502,10 +1486,7 @@ async function executeNodeChain(
         // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
         mergedClientState = { ...payloadClientState };
       } catch (err) {
-        console.warn(
-          "[FlowWebhook] Failed to decode payload client_state:",
-          err,
-        );
+        voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     }
 
@@ -1520,10 +1501,7 @@ async function executeNodeChain(
         // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
         mergedClientState = { ...mergedClientState, ...configClientState };
       } catch (err) {
-        console.warn(
-          "[FlowWebhook] Failed to decode config client_state:",
-          err,
-        );
+        voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     }
 
@@ -1703,7 +1681,7 @@ async function handleRecordStartNode(
 
       return true; // Handled
     } catch (error) {
-      console.error("[IncomingWebhook] Error executing output 0 chain:", error);
+      voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return false;
     }
   }

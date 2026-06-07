@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { voiceRuntimePayload, callControlLogger } from "@/lib/voice/logging.mjs";
 
 /**
  * GET /api/voice/calls/[callControlId]/state
@@ -49,7 +50,7 @@ export async function GET(request, { params }) {
         data?.errors?.[0]?.detail ||
         data?.message ||
         "Failed to get call state";
-      console.error("[CallState] Telnyx API error:", errorMsg);
+      callControlLogger.error("callstate", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: errorMsg },
         { status: resp.status }
@@ -65,7 +66,7 @@ export async function GET(request, { params }) {
       callData,
     });
   } catch (err) {
-    console.error("[CallState] Error:", err);
+    callControlLogger.error("callstate", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }

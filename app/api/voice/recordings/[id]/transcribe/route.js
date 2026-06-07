@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { PgDb } from "@/lib/pgdb";
 import { generateCallSummary } from "@/lib/contact-center/call-summary.js";
+import { voiceRuntimePayload, recordingsLogger } from "@/lib/voice/logging.mjs";
 
 function getApiKey() {
   const apiKey = process.env.TELNYX_API_KEY;
@@ -58,7 +59,7 @@ export async function POST(request, { params }) {
 
     if (!recordingInfoResponse.ok) {
       const errorText = await recordingInfoResponse.text();
-      console.error("[TranscribeRecording] Failed to fetch recording info:", errorText);
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: "Failed to fetch recording information" },
         { status: recordingInfoResponse.status }
@@ -98,7 +99,7 @@ export async function POST(request, { params }) {
     const recordingResponse = await fetch(audioUrl);
     if (!recordingResponse.ok) {
       const errorText = await recordingResponse.text();
-      console.error("[TranscribeRecording] Failed to download recording:", errorText);
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: "Failed to download recording" },
         { status: 500 }
@@ -127,10 +128,7 @@ export async function POST(request, { params }) {
 
     if (!transcriptionResponse.ok) {
       const errorData = await transcriptionResponse.json().catch(() => ({}));
-      console.error(
-        "[TranscribeRecording] Telnyx API error:",
-        errorData
-      );
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         {
           ok: false,
@@ -159,15 +157,10 @@ export async function POST(request, { params }) {
     try {
       summary = await generateCallSummary(transcriptionText);
       if (summary) {
-        console.log(
-          `[TranscribeRecording] Generated call summary for interaction ${interactionId}`
-        );
+        recordingsLogger.debug("recording_transcribe_transcriberecording", voiceRuntimePayload({ eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     } catch (summaryError) {
-      console.error(
-        "[TranscribeRecording] Error generating call summary:",
-        summaryError
-      );
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       // Continue even if summary generation fails
     }
 
@@ -190,7 +183,7 @@ export async function POST(request, { params }) {
       transcription_summary: summary,
     });
   } catch (error) {
-    console.error("[TranscribeRecording] Error:", error);
+    recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 }
