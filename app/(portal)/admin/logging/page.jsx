@@ -41,7 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { notify } from "@/components/ToastNotify";
-import { LOGGING_TOPIC_GROUPS } from "@/lib/logger/topic-catalog.mjs";
+import { canonicalTopicFor, LOGGING_TOPIC_GROUPS } from "@/lib/logger/topic-catalog.mjs";
 
 const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 const LOG_FILTER_LEVELS = ["", ...LEVELS];
@@ -261,7 +261,10 @@ export default function AdminLoggingPage() {
   }, [active, logFilters.level, logFilters.topics, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
 
   React.useEffect(() => {
-    if (active !== "files") return;
+    if (active !== "files") {
+      lastFilesRefreshKeyRef.current = "";
+      return;
+    }
     const refreshKey = `${active}:${logFilters.file || "__latest__"}`;
     if (lastFilesRefreshKeyRef.current === refreshKey) return;
     lastFilesRefreshKeyRef.current = refreshKey;
