@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { convertTelnyxL16PayloadForLinear16 } from "../lib/telnyx-stt-handler.mjs";
+
 const providerSource = await readFile(new URL("../config/ai-streaming-providers.js", import.meta.url), "utf8");
 const handlerSource = await readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8");
 const engineSource = await readFile(new URL("../lib/voice-flow-engine.js", import.meta.url), "utf8");
@@ -44,4 +46,12 @@ test("Standalone STT streaming comments describe the L16 linear16 contract", () 
   assert.match(engineSource, /stream_codec=L16/);
   assert.match(engineSource, /input_format=linear16/);
   assert.doesNotMatch(engineSource, /stream_codec=PCMU remains the only audio format contract/);
+});
+
+test("Telnyx RTP L16 payloads are byte-swapped before linear16 STT forwarding", () => {
+  const telnyxRtpL16Payload = Buffer.from([0x12, 0x34, 0xab, 0xcd, 0xef]);
+  const linear16Payload = convertTelnyxL16PayloadForLinear16(telnyxRtpL16Payload);
+
+  assert.deepEqual([...linear16Payload], [0x34, 0x12, 0xcd, 0xab, 0xef]);
+  assert.deepEqual([...telnyxRtpL16Payload], [0x12, 0x34, 0xab, 0xcd, 0xef]);
 });
