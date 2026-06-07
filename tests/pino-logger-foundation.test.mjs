@@ -588,6 +588,33 @@ test("friendly console works without pretty mode as plain one-line output", asyn
   }
 });
 
+test("diagnostic friendly console keeps payload message as compatibility text", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "UTC";
+  const lines = [];
+  const { createDiagnosticLogger } = await freshDiagnosticModule();
+  const logger = createDiagnosticLogger("app", {
+    stdout: (line) => lines.push(line),
+    now: () => new Date("2026-06-06T14:00:38.407Z"),
+    config: {
+      globalLevel: "info",
+      consoleEnabled: true,
+      consoleFriendly: true,
+      fileEnabled: false,
+      topicEnabled: { app: true },
+    },
+  });
+
+  try {
+    logger.info("web_server_starting", { message: "Web server starting on port 3000" });
+
+    assert.deepEqual(lines, ["[14:00:38.407] INFO: Web server starting on port 3000"]);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
+});
+
 test("renderStructuredLogLineForConsole reformats child-process JSON logs using parent runtime config", async () => {
   const previousTz = process.env.TZ;
   process.env.TZ = "UTC";
