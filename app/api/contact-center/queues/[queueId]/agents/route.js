@@ -3,6 +3,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { getRealtimeAgentMetrics } from "@/lib/contact-center/state-manager.js";
+import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * GET /api/contact-center/queues/[queueId]/agents
@@ -142,7 +143,7 @@ export async function GET(request, { params }) {
       agents: availableAgents,
     });
   } catch (error) {
-    console.error("[QueueAgents] Error fetching queue agents:", error);
+    queuesLogger.error("queueagents", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch queue agents" },
       { status: 500 }
