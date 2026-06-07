@@ -14,6 +14,7 @@ const files = {
   slot: "app/api/agent-assist/workflow/slot/[name]/route.js",
   speakTranslation: "app/api/agent-assist/workflow/speak-translation/route.js",
   start: "app/api/agent-assist/workflow/start/route.js",
+  transcriptionRouter: "lib/agent-assist-transcription-router.mjs",
   handoffProcessor: "lib/agent-assist/ai-handoff-processor.js",
   scenarioGenerator: "lib/agent-assist/generate-test-scenario.js",
   translationService: "lib/agent-assist/translation-service.js",
@@ -56,6 +57,7 @@ test("Agent Assist workflow/runtime files use structured topic loggers", async (
     [files.slot, /workflowLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
     [files.speakTranslation, /translationLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
     [files.start, /(workflowLogger|handoffLogger)\.(debug|info|warn|error)\("[a-z0-9_]+"/],
+    [files.transcriptionRouter, /workflowLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
     [files.handoffProcessor, /handoffLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
     [files.scenarioGenerator, /llmLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
     [files.translationService, /translationLogger\.(debug|info|warn|error)\("[a-z0-9_]+"/],
@@ -80,4 +82,16 @@ test("Agent Assist logs keep compact correlation fields and avoid raw LLM/provid
   for (const field of ["sessionId", "interactionId", "workflowId", "itemId", "slotName", "language", "provider", "reason"]) {
     assert.match(combined, new RegExp(`\\b${field}\\b`), `expected safe field ${field} in Agent Assist logging slice`);
   }
+});
+
+test("Agent Assist successful workflow paths emit visible info logs", async () => {
+  const start = await source(files.start);
+  const analyze = await source(files.analyze);
+  const router = await source(files.transcriptionRouter);
+
+  assert.match(start, /workflowLogger\.info\("workflow_session_started"/);
+  assert.match(analyze, /workflowLogger\.info\("workflow_analysis_completed"/);
+  assert.match(analyze, /workflowLogger\.info\("workflow_analysis_skipped"/);
+  assert.match(router, /workflowLogger\.info\("workflow_transcription_routed"/);
+  assert.match(router, /workflowLogger\.info\("workflow_transcription_skipped"/);
 });

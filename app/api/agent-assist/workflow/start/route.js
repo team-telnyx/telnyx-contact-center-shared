@@ -11,7 +11,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { applyPendingAiHandoff, broadcastAiHandoffToAgent, recalculateCurrentStage } from "@/lib/agent-assist/ai-handoff-processor";
 import { buildWorkflowPrefillFromClientState } from "@/lib/agent-assist/workflow-prefill";
-import { agentAssistRuntimePayload, handoffLogger } from "@/lib/agent-assist/logging.mjs";
+import { agentAssistRuntimePayload, handoffLogger, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 // POST /api/agent-assist/workflow/start - Start workflow session
 export async function POST(request) {
@@ -214,6 +214,18 @@ export async function POST(request) {
       if (workflowPrefill.itemCompletions.length > 0) {
         await recalculateCurrentStage(workflowSession.id);
       }
+
+      workflowLogger.info("workflow_session_started", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId,
+        workflowId,
+        stageId: firstStage?.id || null,
+        username: session.user?.email || session.user?.username || null,
+        hasAiHandoff,
+        prefilledSlots: Object.keys(workflowPrefill.slotsFilled || {}).length,
+        prefilledItems: workflowPrefill.itemCompletions.length,
+        restartedCompletedSession: sessionWasCompleted,
+      }));
 
       // Check for pending AI handoff data and apply it
       let aiHandoffApplied = false;

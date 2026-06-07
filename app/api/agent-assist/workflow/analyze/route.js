@@ -73,6 +73,11 @@ export async function POST(request) {
     }
 
     if (!workflowSession) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId,
+        interactionId,
+        reason: "no_active_workflow_session",
+      }));
       return NextResponse.json({
         ok: true,
         message: "No active workflow session found",
@@ -90,6 +95,12 @@ export async function POST(request) {
     }
 
     if (assistConfig.auto_detect_completion === false) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        reason: "auto_detect_completion_disabled",
+      }));
       return NextResponse.json({
         ok: true,
         message: "Auto-detect completion is disabled",
@@ -134,6 +145,14 @@ export async function POST(request) {
       .slice(0, 12);
 
     if (relevantPendingItems.length === 0) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        reason: "no_relevant_pending_items",
+        pendingItems: pendingItems.length,
+        speaker: speaker || null,
+      }));
       return NextResponse.json({
         ok: true,
         message: "No pending items to analyze",
@@ -303,6 +322,17 @@ export async function POST(request) {
       }
 
       await client.query("COMMIT");
+
+      workflowLogger.info("workflow_analysis_completed", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        updates: updates.length,
+        completionPercentage,
+        speaker: speaker || null,
+        transcriptLength: transcript.length,
+        confidenceThreshold,
+      }));
 
       return NextResponse.json({
         ok: true,
