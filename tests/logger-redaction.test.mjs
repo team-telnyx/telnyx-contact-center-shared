@@ -24,3 +24,13 @@ test("safe debug identifier keys still sanitize nested non-string values", () =>
     },
   });
 });
+
+test("safe debug identifier array values do not bypass string redaction", () => {
+  const payload = sanitizeLogPayload({
+    flowId: ["Bearer supersecrettokenvalue1234567890", "018f0ef2-9a2c-7c6b-a5a6-8327b631d771"],
+  });
+
+  assert.deepEqual(payload, {
+    flowId: ["[redacted:string:38]", "[redacted:string:36]"],
+  });
+});

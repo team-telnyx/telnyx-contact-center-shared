@@ -190,6 +190,8 @@ export default function AdminLoggingPage() {
   const [confirmation, setConfirmation] = React.useState(null);
   const lastFilesRefreshKeyRef = React.useRef("");
   const savePreferencesTimeoutRef = React.useRef(null);
+  const pendingTopicPreferencesRef = React.useRef(null);
+  const topicPreferencesDirtyRef = React.useRef(false);
 
   const activeMeta = NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0];
   const topicGroups = React.useMemo(() => groupedTopicsForSettings(config), [config]);
@@ -210,6 +212,17 @@ export default function AdminLoggingPage() {
     }
   }, []);
 
+  const persistTopicPreferencesRemote = React.useCallback(async (next, options = {}) => {
+    const response = await fetch("/api/admin/logging/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filters: { topics: selectedTopics(next) } }),
+      keepalive: options.keepalive === true,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to save logging preferences");
+  }, []);
+
   const loadPreferences = React.useCallback(async () => {
     try {
       const response = await fetch("/api/admin/logging/preferences", { cache: "no-store" });
@@ -217,6 +230,7 @@ export default function AdminLoggingPage() {
       if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to load logging preferences");
       if (Array.isArray(data?.preferences?.filters?.topics)) {
         setLogFilters((prev) => {
+          if (topicPreferencesDirtyRef.current) return prev;
           const next = { ...prev, topics: data.preferences.filters.topics || [] };
           persistLogFilters(next);
           return next;
@@ -228,21 +242,18 @@ export default function AdminLoggingPage() {
   }, []);
 
   const saveTopicPreferences = React.useCallback((next) => {
+    pendingTopicPreferencesRef.current = next;
     if (savePreferencesTimeoutRef.current) clearTimeout(savePreferencesTimeoutRef.current);
     savePreferencesTimeoutRef.current = setTimeout(async () => {
       try {
-        const response = await fetch("/api/admin/logging/preferences", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filters: { topics: selectedTopics(next) } }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to save logging preferences");
+        savePreferencesTimeoutRef.current = null;
+        pendingTopicPreferencesRef.current = null;
+        await persistTopicPreferencesRemote(next);
       } catch (error) {
         notify({ title: "Preferences save failed", description: String(error.message || error), variant: "error" });
       }
     }, 350);
-  }, []);
+  }, [persistTopicPreferencesRemote]);
 
   const loadLogs = React.useCallback(async (filterOverrides = {}) => {
     setLogsLoading(true);
@@ -276,8 +287,13 @@ export default function AdminLoggingPage() {
   }, [loadConfig, loadPreferences]);
 
   React.useEffect(() => () => {
-    if (savePreferencesTimeoutRef.current) clearTimeout(savePreferencesTimeoutRef.current);
-  }, []);
+    if (!savePreferencesTimeoutRef.current) return;
+    clearTimeout(savePreferencesTimeoutRef.current);
+    savePreferencesTimeoutRef.current = null;
+    const pending = pendingTopicPreferencesRef.current;
+    pendingTopicPreferencesRef.current = null;
+    if (pending) void persistTopicPreferencesRemote(pending, { keepalive: true }).catch(() => {});
+  }, [persistTopicPreferencesRemote]);
 
   React.useEffect(() => {
     loadLogs();
@@ -335,7 +351,10 @@ export default function AdminLoggingPage() {
     setLogFilters((prev) => {
       const next = { ...prev, [key]: value };
       persistLogFilters(next);
-      if (key === "topics") saveTopicPreferences(next);
+      if (key === "topics") {
+        topicPreferencesDirtyRef.current = true;
+        saveTopicPreferences(next);
+      }
       return next;
     });
   }
