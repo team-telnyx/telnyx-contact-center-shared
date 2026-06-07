@@ -7,6 +7,31 @@ test("safe debug identifier keys only bypass token-shaped string redaction", () 
   assert.equal(sanitizeLogPayload({ flowId: safeString }).flowId, safeString);
 });
 
+test("agent assist and admin domain identifiers are preserved for debugging", () => {
+  const uuid = "018f0ef2-9a2c-7c6b-a5a6-8327b631d771";
+  const payload = sanitizeLogPayload({
+    sessionId: uuid,
+    workflowId: uuid,
+    stageId: uuid,
+    itemId: uuid,
+    groupId: uuid,
+    insightId: uuid,
+    appId: uuid,
+    eventId: uuid,
+    campaignId: uuid,
+    contactListId: uuid,
+    dncListId: uuid,
+    attemptControlId: uuid,
+    filterId: uuid,
+    timeSetId: uuid,
+    dispositionCodeId: uuid,
+  });
+
+  for (const [key, value] of Object.entries(payload)) {
+    assert.equal(value, uuid, `${key} should not be redacted`);
+  }
+});
+
 test("safe debug identifier keys still sanitize nested non-string values", () => {
   const payload = sanitizeLogPayload({
     flowId: {
