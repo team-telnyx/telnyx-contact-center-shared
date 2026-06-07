@@ -82,3 +82,11 @@ test("Telnyx STT transcript logs include the transcript text", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
   assert.match(source, /logSttInfo\("provider_socket_transcript", \{[\s\S]*transcript:\s*normalized\.transcript,[\s\S]*transcriptLength:\s*normalized\.transcript\.length/);
 });
+
+test("Telnyx STT logger messages use technical snake_case event names", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
+  assert.match(source, /logSttInfo\("started_telnyx_standalone_stt_sessions",/);
+  assert.match(source, /logSttInfo\("starting_telnyx_stt_media_stream",/);
+  assert.match(source, /logSttError\("telnyx_stt_media_streaming_start_failed",/);
+  assert.doesNotMatch(source, /logStt(?:Info|Warn|Error|Debug)\("[A-Z][^"]*"/);
+});

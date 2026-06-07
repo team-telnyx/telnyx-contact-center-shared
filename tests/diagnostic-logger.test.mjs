@@ -42,6 +42,10 @@ test("sanitizeDiagnosticPayload preserves safe call debug identifiers", async ()
     callControlId: "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w",
     queueId: "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912",
     agentUserId: "44df75d9-3333-45b1-91ea-08d3ab39f761",
+    flowId: "f7f0b84f-1111-4f6e-965a-95e14e9b53c6",
+    flow_id: "f7f0b84f-2222-4f6e-965a-95e14e9b53c6",
+    streamId: "stream-12345678901234567890",
+    commandId: "cmd-12345678901234567890",
     runId: "20260607T090159Z-pid123456789",
     nested: {
       authorization: "Bearer secret-token-value",
@@ -54,6 +58,10 @@ test("sanitizeDiagnosticPayload preserves safe call debug identifiers", async ()
   assert.equal(sanitized.callControlId, "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w");
   assert.equal(sanitized.queueId, "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912");
   assert.equal(sanitized.agentUserId, "44df75d9-3333-45b1-91ea-08d3ab39f761");
+  assert.equal(sanitized.flowId, "f7f0b84f-1111-4f6e-965a-95e14e9b53c6");
+  assert.equal(sanitized.flow_id, "f7f0b84f-2222-4f6e-965a-95e14e9b53c6");
+  assert.equal(sanitized.streamId, "stream-12345678901234567890");
+  assert.equal(sanitized.commandId, "cmd-12345678901234567890");
   assert.equal(sanitized.runId, "20260607T090159Z-pid123456789");
   assert.match(sanitized.nested.authorization, /^\[redacted:/);
   assert.match(sanitized.nested.clientState, /^\[redacted:/);
