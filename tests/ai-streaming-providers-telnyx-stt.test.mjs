@@ -37,22 +37,22 @@ test("Telnyx STT WebSocket presets include Deepgram Nova 2, Nova 3, and Flux", a
     source,
     "telnyx-stt-deepgram-nova-2",
     "Deepgram",
-    "nova-2",
-    "en-US",
+    "deepgram/nova-2",
+    "en",
   );
   assertTelnyxSttPreset(
     source,
     "telnyx-stt-deepgram-nova-3",
     "Deepgram",
-    "nova-3",
-    "en-US",
+    "deepgram/nova-3",
+    "en",
   );
   assertTelnyxSttPreset(
     source,
     "telnyx-stt-deepgram-flux",
     "Deepgram",
-    "flux",
-    "en-US",
+    "deepgram/flux",
+    "auto",
   );
 });
 
@@ -64,7 +64,7 @@ test("StreamingStartNodeEditor exposes one Telnyx STT provider and derives model
 
   assert.match(source, /TELNYX_STT_PROVIDER_OPTION\s*=\s*\{ value: "telnyx-stt", label: "Telnyx Standalone STT" \}/);
   assert.match(source, /TELNYX_STT_MODEL_OPTIONS[\s\S]*provider\.type === "telnyx-stt"/);
-  assert.match(source, /const modelLabel = `\$\{engine\}\/\$\{model\}`/);
+  assert.match(source, /const modelLabel = model/);
   assert.doesNotMatch(source, /\.\.\.TELNYX_STT_PROVIDER_OPTIONS/);
 });
 
