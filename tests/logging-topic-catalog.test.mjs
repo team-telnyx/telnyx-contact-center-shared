@@ -18,7 +18,7 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
     LEGACY_TOPIC_ALIASES,
   } = await freshCatalog();
 
-  assert.equal(LOGGING_TOPIC_GROUPS.length, 10);
+  assert.equal(LOGGING_TOPIC_GROUPS.length, 9);
   const groupIds = LOGGING_TOPIC_GROUPS.map((group) => group.id);
   assert.deepEqual(groupIds, [
     "platform",
@@ -30,11 +30,10 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
     "outbound",
     "supervisor",
     "notifications",
-    "frontend",
   ]);
 
   const topics = flattenLoggingTopics();
-  assert.equal(topics.length, 50);
+  assert.equal(topics.length, 47);
   assert.equal(new Set(topics.map((topic) => topic.id)).size, topics.length);
   for (const topic of topics) {
     assert.match(topic.id, /^[a-z0-9-]+\.[a-z0-9-]+$/);
@@ -50,9 +49,9 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
   assert.equal(levels["platform.db"], "warn");
   assert.equal(levels["telnyx.media"], "warn");
   assert.equal(levels["agent-assist.llm"], "warn");
-  assert.equal(levels["frontend"], "warn");
   assert.equal(enabled["contact-center.routing"], true);
-  assert.equal(enabled["frontend.agent-desktop"], true);
+  assert.equal(levels["frontend"], undefined);
+  assert.equal(enabled["frontend.agent-desktop"], undefined);
 
   assert.equal(LEGACY_TOPIC_ALIASES["telnyx.webhook"], "telnyx.webhooks");
   assert.equal(canonicalTopicFor("voice-flow"), "voice.flow");
