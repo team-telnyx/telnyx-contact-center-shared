@@ -6,6 +6,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { extractBundleMediaAssets, normalizeImportedForm } from "@/lib/forms/form-bundles";
 import { slugifyFormName } from "@/lib/forms/form-schema";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
@@ -84,7 +85,7 @@ export async function POST(request) {
       client.release();
     }
   } catch (err) {
-    console.error("[Admin Forms] import error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ error: err?.message || "Import failed" }, { status: 400 });
   }
 }

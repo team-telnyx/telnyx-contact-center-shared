@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * POST /api/messaging/send
@@ -84,7 +85,7 @@ export async function POST(request) {
         data?.errors?.[0]?.message ||
         data?.message ||
         "Failed to send message";
-      console.error("[Messaging] Telnyx API error:", errorMsg);
+      platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: errorMsg },
         { status: resp.status }
@@ -96,7 +97,7 @@ export async function POST(request) {
       data: data.data || data,
     });
   } catch (err) {
-    console.error("[Messaging] Error:", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }

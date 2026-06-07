@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -42,7 +43,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json(res.rows[0]);
   } catch (err) {
-    console.error("[WrapupCodes] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load wrapup code" },
       { status: 500 }
@@ -95,7 +96,7 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[WrapupCodes] PUT error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (err.code === "23505") {
       return NextResponse.json(
         { error: "A wrapup code with this name already exists" },
@@ -172,7 +173,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[WrapupCodes] DELETE error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to delete wrapup code" },
       { status: 500 }

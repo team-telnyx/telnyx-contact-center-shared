@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function GET(request) {
           );
           list = list.filter((a) => workflowAssistantIds.has(a.id));
         } catch (err) {
-          console.error("[Assistants] Error filtering by workflows:", err);
+          platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         }
       }
     }

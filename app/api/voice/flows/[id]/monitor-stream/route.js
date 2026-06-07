@@ -7,6 +7,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { NextResponse } from "next/server";
 import { getFlowExecutionEvents } from "@/lib/call-monitor-store";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export async function GET(request, { params }) {
         const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
         await writer.write(encoder.encode(message));
       } catch (error) {
-        console.error("[Monitor Stream] Error sending event:", error);
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     };
 
@@ -58,7 +59,7 @@ export async function GET(request, { params }) {
           await sendEvent("execution", { flowId, events });
         }
       } catch (error) {
-        console.error("[Monitor Stream] Error polling events:", error);
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }, 100);
 
@@ -67,13 +68,13 @@ export async function GET(request, { params }) {
       try {
         await sendEvent("heartbeat", { timestamp: new Date().toISOString() });
       } catch (error) {
-        console.error("[Monitor Stream] Error sending heartbeat:", error);
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }, 15000);
 
     // Cleanup on connection close
     request.signal.addEventListener("abort", () => {
-      console.log("[Monitor Stream] Client disconnected");
+      voiceRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       clearInterval(pollInterval);
       clearInterval(heartbeatInterval);
       writer.close();
@@ -81,7 +82,7 @@ export async function GET(request, { params }) {
 
     return response;
   } catch (error) {
-    console.error("[Monitor Stream] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to start monitor stream" },
       { status: 500 }

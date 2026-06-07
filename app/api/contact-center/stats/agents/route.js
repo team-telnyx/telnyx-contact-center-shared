@@ -9,6 +9,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAgentStatistics } from "@/lib/contact-center/stats-aggregator";
 import { isAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export async function GET(request) {
   try {
@@ -47,7 +48,7 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Stats] Error getting agent statistics:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       {
         error: "Internal server error",

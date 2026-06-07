@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID, randomBytes } from "crypto";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -203,7 +204,7 @@ export async function POST(request) {
           inviteUrl
         );
       } catch (emailError) {
-        console.error("[CreateUser] Failed to send invite email:", emailError);
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         // Don't fail - user was created
       }
     }

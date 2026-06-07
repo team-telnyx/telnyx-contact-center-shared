@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/contact-center/interactions/by-call-control-id?callControlId=...
@@ -74,10 +75,7 @@ export async function GET(request) {
           }
         }
       } catch (err) {
-        console.warn(
-          "[FindInteractionByCallControlId] Error looking up by call_session_id:",
-          err
-        );
+        contactCenterRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -97,10 +95,7 @@ export async function GET(request) {
           );
         }
       } catch (err) {
-        console.warn(
-          "[FindInteractionByCallControlId] Error checking incoming call store:",
-          err
-        );
+        contactCenterRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -147,10 +142,7 @@ export async function GET(request) {
           }
         }
       } catch (err) {
-        console.warn(
-          "[FindInteractionByCallControlId] Error looking up by metadata call_control_id:",
-          err
-        );
+        contactCenterRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -203,10 +195,7 @@ export async function GET(request) {
           }
         }
       } catch (err) {
-        console.warn(
-          "[FindInteractionByCallControlId] Error looking up by call_session_id:",
-          err
-        );
+        contactCenterRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -215,7 +204,7 @@ export async function GET(request) {
       interaction: interaction || null,
     });
   } catch (err) {
-    console.error("[FindInteractionByCallControlId] Error:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

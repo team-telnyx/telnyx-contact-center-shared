@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function safeParse(value) {
   if (!value) return null;
@@ -97,7 +98,7 @@ export async function GET(request, context) {
 
     return NextResponse.json({ ok: true, interaction });
   } catch (error) {
-    console.error("[InteractionDetail] Error:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch interaction" },
       { status: 500 }

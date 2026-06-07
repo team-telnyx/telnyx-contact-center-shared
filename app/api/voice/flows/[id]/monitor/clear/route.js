@@ -11,6 +11,7 @@ import {
   clearAllEvents,
   clearFlowExecutionEvents,
 } from "@/lib/call-monitor-store";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export async function POST(request, { params }) {
       message: "Monitoring data cleared",
     });
   } catch (error) {
-    console.error("[Monitor Clear] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to clear monitoring data" },
       { status: 500 }

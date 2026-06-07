@@ -6,6 +6,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const PEXELS_API = "https://api.pexels.com/v1";
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
@@ -111,7 +112,7 @@ export async function GET(request) {
     const data = await response.json();
     return NextResponse.json({ ok: true, photos: (data.photos || []).map(normalizePhoto), page: data.page, per_page: data.per_page, total_results: data.total_results, next_page: data.next_page || null });
   } catch (err) {
-    console.error("[forms/media/pexels] search error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: "Pexels search failed" }, { status: 500 });
   }
 }
@@ -166,7 +167,7 @@ export async function POST(request) {
     const media = { name: filename, filename, url, title, display_name: title, size: buffer.length, size_bytes: buffer.length, contentType, content_type: contentType, metadata: row?.metadata || metadata };
     return NextResponse.json({ ok: true, media, photo });
   } catch (err) {
-    console.error("[forms/media/pexels] download error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: "Pexels download failed" }, { status: 500 });
   }
 }

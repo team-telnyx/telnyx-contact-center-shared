@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -180,17 +181,11 @@ export async function PUT(request, { params }) {
         );
         // Run asynchronously - don't wait for it to complete
         reEvaluateWaitingInteractionsForUser(id).catch((error) => {
-          console.error(
-            "[UserUpdate] Error re-evaluating waiting interactions:",
-            error
-          );
+          adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         });
       } catch (reEvalError) {
         // Log but don't fail the user update
-        console.error(
-          "[UserUpdate] Failed to trigger re-evaluation:",
-          reEvalError
-        );
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
 
       // Also re-evaluate waiting reasons for queued calls
@@ -200,17 +195,11 @@ export async function PUT(request, { params }) {
         );
         // Run asynchronously - don't wait for it to complete
         reEvaluateWaitingReasonsForUserQueues(id).catch((error) => {
-          console.error(
-            "[UserUpdate] Error re-evaluating waiting reasons:",
-            error
-          );
+          adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         });
       } catch (reEvalError) {
         // Log but don't fail the user update
-        console.error(
-          "[UserUpdate] Failed to trigger waiting reason re-evaluation:",
-          reEvalError
-        );
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -233,20 +222,14 @@ export async function PUT(request, { params }) {
             // Run asynchronously - don't wait for it to complete
             reEvaluateWaitingReasonsForQueues(affectedQueueIds).catch(
               (error) => {
-                console.error(
-                  "[UserUpdate] Error re-evaluating waiting reasons for queues:",
-                  error
-                );
+                adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
               }
             );
           }
         }
       } catch (reEvalError) {
         // Log but don't fail the user update
-        console.error(
-          "[UserUpdate] Failed to trigger waiting reason re-evaluation for queues:",
-          reEvalError
-        );
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 

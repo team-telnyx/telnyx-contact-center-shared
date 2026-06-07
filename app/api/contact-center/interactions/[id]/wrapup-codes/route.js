@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function getUsernameForUserId(userId) {
   const pool = getPostgresPool();
@@ -119,7 +120,7 @@ export async function GET(request, { params }) {
       metadata: metadata,
     });
   } catch (err) {
-    console.error("[WrapupCodes] GET error:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to load wrapup codes" },
       { status: 500 },
@@ -194,7 +195,7 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({ ok: true, wrapupCodes: finalCodes });
   } catch (err) {
-    console.error("[WrapupCodes] POST error:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to save wrapup codes" },
       { status: 500 },

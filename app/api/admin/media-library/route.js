@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -66,7 +67,7 @@ export async function GET(request) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[Media Library] GET error:", errorText);
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         if (currentPage === 1) {
           return NextResponse.json(
             { error: "Failed to fetch media files" },
@@ -83,9 +84,7 @@ export async function GET(request) {
 
       // Log for debugging
       if (currentPage === 1) {
-        console.log(
-          `[Media Library] Fetched ${items.length} items from page ${currentPage}`
-        );
+        adminRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
 
       const meta = data.meta || {};
@@ -136,27 +135,16 @@ export async function GET(request) {
 
       // Log items that are being filtered out for debugging (first few items)
       if (!isAudio && allItems.length <= 10) {
-        console.log(
-          `[Media Library] Filtered out: ${item.media_name}, content_type: "${
-            item.content_type || "none"
-          }"`
-        );
+        adminRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
 
       return isAudio;
     });
 
     // Log filtering results for debugging
-    console.log(
-      `[Media Library] Total items: ${allItems.length}, Audio items: ${audioItems.length}`
-    );
+    adminRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (allItems.length > 0 && audioItems.length === 0) {
-      console.log(
-        `[Media Library] Warning: No audio items found. Sample content_types:`,
-        allItems
-          .slice(0, 3)
-          .map((item) => ({ name: item.media_name, type: item.content_type }))
-      );
+      adminRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     }
 
     // Apply pagination to filtered results
@@ -171,7 +159,7 @@ export async function GET(request) {
       pageSize,
     });
   } catch (err) {
-    console.error("[Media Library] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load media files" },
       { status: 500 }
@@ -289,7 +277,7 @@ export async function POST(request) {
         errorData?.errors?.[0]?.message ||
         errorData?.message ||
         "Failed to upload media file";
-      console.error("[Media Library] POST error:", errorMessage);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
 
       // Check if error is about duplicate media name
       const errorLower = errorMessage.toLowerCase();
@@ -316,7 +304,7 @@ export async function POST(request) {
     const data = await response.json();
     return NextResponse.json({ ok: true, data: data.data || data });
   } catch (err) {
-    console.error("[Media Library] POST error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to upload media file" },
       { status: 500 }

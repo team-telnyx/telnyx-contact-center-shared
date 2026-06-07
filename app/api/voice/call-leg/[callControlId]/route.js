@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/voice/call-leg/[callControlId]
@@ -60,7 +61,7 @@ export async function GET(request, { params }) {
         });
       }
     } catch (fetchErr) {
-      console.warn("[CallLeg API] Failed to fetch call from Telnyx:", fetchErr);
+      voiceRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     }
 
     // Fallback: return the call control ID as-is
@@ -72,7 +73,7 @@ export async function GET(request, { params }) {
       pstn_call_control_id: callControlId,
     });
   } catch (err) {
-    console.error("[CallLeg API] Error:", err);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }

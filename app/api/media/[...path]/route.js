@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFile, stat } from "fs/promises";
 import path from "path";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const CONTENT_TYPES = new Map([
@@ -40,7 +41,7 @@ async function serveMedia(paramsPromise) {
     });
   } catch (err) {
     if (err?.code === "ENOENT") return new NextResponse("Not Found", { status: 404 });
-    console.error("[media] failed to serve media file:", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

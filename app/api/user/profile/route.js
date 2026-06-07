@@ -3,6 +3,7 @@ import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const ALLOWED_THEMES = ["light", "dark", "system"];
 
@@ -97,7 +98,7 @@ export async function GET(request) {
 
     return NextResponse.json({ ok: true, data: userData });
   } catch (err) {
-    console.error("[USER] Profile GET error", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },
@@ -210,7 +211,7 @@ export async function PUT(request) {
         (requestedStatus ? await getCurrentAgentStatus(userId) : undefined),
     });
   } catch (err) {
-    console.error("[USER] Profile PUT error", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },
@@ -286,7 +287,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    console.error("[USER] Profile POST error", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },

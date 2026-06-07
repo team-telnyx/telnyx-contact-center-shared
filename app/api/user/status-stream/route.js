@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { addSseClient, hasActiveClients, removeSseClient } from "@/lib/sse";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const globalAny = globalThis;
 if (!globalAny.__session_presence_offline_timers) {
@@ -75,7 +76,7 @@ export async function GET(request) {
           try {
             controller.enqueue(data);
           } catch (error) {
-            console.error("[SSE] Failed to enqueue event:", error);
+            platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
             throw error;
           }
         },
@@ -96,7 +97,7 @@ export async function GET(request) {
         try {
           await writer.write(encoder.encode(message));
         } catch (error) {
-          console.error("[SSE] Failed to write event:", error);
+          platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         }
       };
 

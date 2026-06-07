@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomBytes } from "crypto";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -67,10 +68,10 @@ export async function POST(request, { params }) {
     const { sendUserInviteEmail } = await import("@/lib/email-notifications.js");
     const emailResult = await sendUserInviteEmail(targetUser, inviteUrl);
     if (!emailResult.success) {
-      console.warn("[Invite] Email send failed:", emailResult.error);
+      adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     }
   } catch (emailError) {
-    console.error("[Invite] Failed to send email:", emailError);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     // Don't fail the request if email fails - token is already set
   }
 

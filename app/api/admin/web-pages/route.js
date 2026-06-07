@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomUUID } from "crypto";
 import { resolveSimpleSecretReferences } from "@/lib/secrets";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/admin/web-pages
@@ -54,7 +55,7 @@ export async function GET(request) {
               const resolvedUrl = await resolveSimpleSecretReferences(page.url);
               return { ...page, url: resolvedUrl };
             } catch (err) {
-              console.error(`[WebPages] Error resolving secrets in URL for page ${page.id}:`, err);
+              adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
               return page; // Return original URL if resolution fails
             }
           }
@@ -66,7 +67,7 @@ export async function GET(request) {
 
     return NextResponse.json({ ok: true, pages });
   } catch (err) {
-    console.error("[WebPages] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: String(err.message || err) },
       { status: 500 },
@@ -141,7 +142,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, page: result.rows[0] });
   } catch (err) {
-    console.error("[WebPages] POST error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: String(err.message || err) },
       { status: 500 },

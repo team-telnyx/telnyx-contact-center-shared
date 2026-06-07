@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
@@ -18,7 +19,7 @@ export async function GET() {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[AI Models] API error:", response.status, errorText);
+      platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to fetch models" },
         { status: response.status }
@@ -56,7 +57,7 @@ export async function GET() {
       models: chatModels,
     });
   } catch (error) {
-    console.error("[AI Models] Error:", error);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to fetch models" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { applyCampaignDispositionToLedger } from "@/lib/outbound-dialer/campaign-dispositions";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
@@ -48,7 +49,7 @@ export async function GET(request) {
     );
     return NextResponse.json({ ok: true, dispositionCodes: rows });
   } catch (err) {
-    console.error("[Agent Campaigns] disposition codes failed:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
   }
 }
@@ -106,7 +107,7 @@ export async function POST(request) {
     const agent_status = await restoreAgentAfterCampaignDisposition(pool, agentUsername, attempt.metadata || {});
     return NextResponse.json({ ok: true, attemptId, status: update.status, agent_status });
   } catch (err) {
-    console.error("[Agent Campaigns] disposition submit failed:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
   }
 }

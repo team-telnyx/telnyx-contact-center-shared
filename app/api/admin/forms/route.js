@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { createDefaultForm, normalizeFormDefinition, slugifyFormName, validateFormDefinition } from "@/lib/forms/form-schema";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
@@ -34,6 +35,6 @@ export async function POST(request) {
     const { rows } = await pool.query(`INSERT INTO form_definitions (name, slug, description, category, status, version, schema, layout, theme, bindings, actions, queue_ids, queue_names, auto_open, created_by, updated_by, published_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$15, CASE WHEN $5 = 'published' THEN NOW() ELSE NULL END) RETURNING *`, [form.name, form.slug, form.description, form.category, form.status, form.version, JSON.stringify(form.schema), JSON.stringify(form.layout), JSON.stringify(form.theme), JSON.stringify(form.bindings), JSON.stringify(form.actions), form.queue_ids, form.queue_names, form.auto_open, username]);
     return NextResponse.json({ ok: true, form: mapRow(rows[0]) });
   } catch (err) {
-    console.error("[Admin Forms] POST error:", err); const msg = err.code === "23505" ? "A form with this slug already exists" : "Failed to create form"; return NextResponse.json({ error: msg }, { status: 400 });
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) }); const msg = err.code === "23505" ? "A form with this slug already exists" : "Failed to create form"; return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

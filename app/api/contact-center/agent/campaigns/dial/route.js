@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { loadAgentCampaignAttempt, markAgentCampaignAttemptDialing } from "@/lib/outbound-dialer/agent-campaigns";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
@@ -22,7 +23,7 @@ export async function POST(request) {
     const execution = await markAgentCampaignAttemptDialing(pool, attempt, agentUsername);
     return NextResponse.json({ ok: execution?.ok === true, execution });
   } catch (err) {
-    console.error("[Agent Campaigns] dial failed:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: 400 });
   }
 }

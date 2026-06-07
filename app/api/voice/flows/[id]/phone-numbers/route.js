@@ -8,6 +8,7 @@ import {
 } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export async function GET(request, { params }) {
       phone_numbers: phoneNumbers,
     });
   } catch (error) {
-    console.error("[API] Error listing phone numbers:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to list phone numbers" },
       { status: 500 }
@@ -123,7 +124,7 @@ export async function POST(request, { params }) {
     try {
       await assignPhoneNumberToApp(phone_number_id, flow.telnyx_voice_app_id);
     } catch (error) {
-      console.error("[API] Failed to assign phone number to app:", error);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         {
           ok: false,
@@ -147,7 +148,7 @@ export async function POST(request, { params }) {
       assignment,
     });
   } catch (error) {
-    console.error("[API] Error assigning phone number:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to assign phone number" },
       { status: 500 }

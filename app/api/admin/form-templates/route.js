@@ -6,6 +6,7 @@ import { isAdmin } from "@/lib/role-utils";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getFormTemplates } from "@/lib/forms/form-templates";
 import { normalizeFormDefinition } from "@/lib/forms/form-schema";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions); const id = session?.user?.id || null; const email = session?.user?.email || null; if (!id && !email) return null;
@@ -24,7 +25,7 @@ export async function GET() {
       const { rows } = await pool.query("SELECT * FROM form_templates WHERE active = true ORDER BY sort_order ASC, name ASC");
       if (rows.length) return NextResponse.json({ ok: true, templates: rows.map(mapTemplate), count: rows.length });
     } catch (err) {
-      console.warn("[Form Templates] Falling back to bundled templates:", err.message);
+      adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     }
   }
   const templates = getFormTemplates();

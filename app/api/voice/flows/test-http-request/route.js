@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveSecretReferences } from "@/lib/secrets.js";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function parseResponseBody(responseText, contentType = "") {
   if (!responseText.trim()) {
@@ -108,7 +109,7 @@ export async function POST(request) {
       throw error;
     }
   } catch (error) {
-    console.error("[test-http-request] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { success: false, error: error.message || "Failed to test HTTP request" },
       { status: 500 },

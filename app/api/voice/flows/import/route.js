@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { validateFlow } from "@/lib/voice-flow-validator";
 import { randomUUID } from "crypto";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -160,7 +161,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, flow: updatedFlow });
   } catch (error) {
-    console.error("[API] Error importing flow:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to import flow" },
       { status: 500 },

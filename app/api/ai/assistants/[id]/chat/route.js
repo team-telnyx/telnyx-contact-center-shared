@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +69,7 @@ export async function POST(request, context) {
 
     if (!chatRes.ok) {
       const text = await chatRes.text();
-      console.error("[AI Chat] Telnyx API error:", chatRes.status, text);
+      platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       
       return NextResponse.json(
         {
@@ -92,7 +93,7 @@ export async function POST(request, context) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
-    console.error("[AI Chat] Error:", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: err.message || "Internal server error" },
       { status: 500, headers: { "Cache-Control": "no-store" } }

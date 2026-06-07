@@ -5,6 +5,7 @@ import {
   getEntitySearchPath,
 } from "@/lib/data-sources-schema";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function parseDirectVariable(value) {
   if (typeof value !== "string") return null;
@@ -184,7 +185,7 @@ export async function POST(request) {
       },
     });
   } catch (error) {
-    console.error("[test-data-action] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { success: false, error: error.message || "Failed to test data action" },
       { status: 500 }

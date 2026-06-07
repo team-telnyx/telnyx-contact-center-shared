@@ -9,6 +9,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { PgDb } from "@/lib/pgdb";
 import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -68,7 +69,7 @@ export async function GET(request) {
             ) {
               cleanup();
             } else {
-              console.error("[MonitorStream] Error sending message:", error);
+              contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
             }
           }
         };
@@ -90,7 +91,7 @@ export async function GET(request) {
               ) {
                 cleanup();
               } else {
-                console.error("[MonitorStream] Error writing:", error);
+                contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
               }
             }
           },
@@ -148,7 +149,7 @@ export async function GET(request) {
             ) {
               cleanup();
             } else {
-              console.error("[MonitorStream] Error in update:", error);
+              contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
             }
           }
         };
@@ -172,7 +173,7 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("[MonitorStream] Error:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return new Response("Internal server error", { status: 500 });
   }
 }

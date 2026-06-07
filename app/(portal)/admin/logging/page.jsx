@@ -15,6 +15,7 @@ import {
   IconSearch,
   IconSettings,
   IconShieldCheck,
+  IconX,
 } from "@tabler/icons-react";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { CodeBlock, CodeBlockCopyButton } from "@/components/ai-elements/code-block";
@@ -40,7 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { notify } from "@/components/ToastNotify";
-import { LOGGING_TOPIC_GROUPS, canonicalTopicFor } from "@/lib/logger/topic-catalog.mjs";
+import { LOGGING_TOPIC_GROUPS } from "@/lib/logger/topic-catalog.mjs";
 
 const LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"];
 const LOG_FILTER_LEVELS = ["", ...LEVELS];
@@ -125,33 +126,11 @@ function appendLogFilterParams(params, filters) {
 }
 
 function groupedTopicsForSettings(config) {
-  const known = new Set();
-  const groups = LOGGING_TOPIC_GROUPS.map((group) => {
-    known.add(group.id);
-    group.topics.forEach((topic) => known.add(topic.id));
-    return {
-      ...group,
-      topics: group.topics.map((topic) => ({ ...topic, groupId: group.id })),
-    };
-  });
-  const customTopics = Array.from(new Set([
-    ...Object.keys(config?.topicLevels || {}),
-    ...Object.keys(config?.topicEnabled || {}),
-  ]))
-    .map((topic) => canonicalTopicFor(topic))
-    .filter((topic) => topic && !known.has(topic))
-    .sort((a, b) => a.localeCompare(b))
-    .map((topic) => ({ id: topic, label: title(topic), description: "Custom or historical topic discovered in runtime config.", defaultLevel: config?.globalLevel || "info", groupId: "custom" }));
-  if (customTopics.length) {
-    groups.push({
-      id: "custom",
-      label: "Custom & Legacy",
-      description: "Custom or historical topics kept for backward-compatible filtering and runtime control.",
-      defaultLevel: config?.globalLevel || "info",
-      topics: customTopics,
-    });
-  }
-  return groups;
+  return LOGGING_TOPIC_GROUPS.map((group) => ({
+    ...group,
+    topics: group.topics.map((topic) => ({ ...topic, groupId: group.id })),
+    defaultLevel: group.defaultLevel || config?.globalLevel || "info",
+  }));
 }
 
 function mutableConfigPayload(config) {
@@ -188,8 +167,8 @@ export default function AdminLoggingPage() {
   const [liveConnected, setLiveConnected] = React.useState(false);
   const [liveSourceFile, setLiveSourceFile] = React.useState("");
   const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topics: [], runId: "", search: "", from: "", to: "", limit: "100" });
-  const [newTopic, setNewTopic] = React.useState("");
   const [confirmation, setConfirmation] = React.useState(null);
+  const lastFilesRefreshKeyRef = React.useRef("");
 
   const activeMeta = NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0];
   const topicGroups = React.useMemo(() => groupedTopicsForSettings(config), [config]);
@@ -283,8 +262,11 @@ export default function AdminLoggingPage() {
 
   React.useEffect(() => {
     if (active !== "files") return;
-    loadLogs({ file: logFilters.file || currentFile?.name || "" });
-  }, [active, logFilters.file, currentFile?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+    const refreshKey = `${active}:${logFilters.file || "__latest__"}`;
+    if (lastFilesRefreshKeyRef.current === refreshKey) return;
+    lastFilesRefreshKeyRef.current = refreshKey;
+    loadLogs({ file: logFilters.file });
+  }, [active, logFilters.file, loadLogs]);
 
   function updateLogFilter(key, value) {
     setLogFilters((prev) => ({ ...prev, [key]: value }));
@@ -314,17 +296,6 @@ export default function AdminLoggingPage() {
     });
   }
 
-  function addTopic() {
-    const topic = newTopic.trim();
-    if (!topic) return;
-    if (!/^[a-z0-9][a-z0-9._:-]{0,79}$/i.test(topic)) {
-      notify({ title: "Invalid topic", description: "Use letters, numbers, dots, dashes, underscores or colons. Max 80 characters.", variant: "error" });
-      return;
-    }
-    updateTopic(canonicalTopicFor(topic), { enabled: true, level: config?.globalLevel || "info" });
-    setNewTopic("");
-  }
-
   function closeConfirmation() {
     setConfirmation(null);
   }
@@ -339,17 +310,8 @@ export default function AdminLoggingPage() {
     action?.();
   }
 
-  async function save(options = {}) {
+  async function save() {
     if (!config) return;
-    if (config.fileEnabled && options.confirmedFileLogging !== true) {
-      confirmAction({
-        title: "Enable JSONL file logging?",
-        description: "Logs are redacted, but may still contain operational call metadata. Continue only when you want the file sink active.",
-        confirmLabel: "Enable file logging",
-        action: () => save({ confirmedFileLogging: true }),
-      });
-      return;
-    }
     setSaving(true);
     try {
       const response = await fetch("/api/admin/logging/config", {
@@ -428,7 +390,7 @@ export default function AdminLoggingPage() {
           </div>
           <div className="flex-1 min-h-0 overflow-hidden p-5">
             {loading && !config ? <LoadingState /> : !config ? <EmptyState title="Logging unavailable" description="Runtime logging configuration could not be loaded." /> : active === "settings" ? (
-              <SettingsView config={config} topicGroups={topicGroups} updateConfig={updateConfig} updateTopic={updateTopic} newTopic={newTopic} setNewTopic={setNewTopic} addTopic={addTopic} applyPreset={applyPreset} saving={saving} />
+              <SettingsView config={config} topicGroups={topicGroups} updateConfig={updateConfig} updateTopic={updateTopic} applyPreset={applyPreset} saving={saving} />
             ) : active === "files" ? (
               <FileLogView entries={logEntries} loading={logsLoading} meta={logMeta} fileSize={currentFile?.size} files={logFiles} />
             ) : (
@@ -523,7 +485,7 @@ function effectiveTopicEnabled(topicId, groupId, config) {
   return true;
 }
 
-function SettingsView({ config, topicGroups, updateConfig, updateTopic, newTopic, setNewTopic, addTopic, applyPreset, saving }) {
+function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPreset, saving }) {
   const topicLevels = config.topicLevels || {};
   const topicEnabled = config.topicEnabled || {};
   const [expandedGroups, setExpandedGroups] = React.useState(() => new Set(["platform", "security", "contact-center", "voice", "telnyx"]));
@@ -535,6 +497,15 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, newTopic
       return next;
     });
   };
+
+  function updateTopicGroupEnabled(group, enabled) {
+    const topicEnabled = { ...(config.topicEnabled || {}) };
+    topicEnabled[group.id] = enabled === true;
+    for (const topic of group.topics) {
+      topicEnabled[topic.id] = enabled === true;
+    }
+    updateConfig({ topicEnabled });
+  }
 
   return (
     <div className="space-y-5">
@@ -551,10 +522,6 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, newTopic
         </div>
       </SettingCard>
       <SettingCard icon={IconAdjustmentsHorizontal} title="Topic groups" subtitle="Group-level policy with child topic overrides">
-        <div className="mb-4 flex gap-2">
-          <Input placeholder="Add topic, e.g. telnyx.provider-api" value={newTopic} onChange={(event) => setNewTopic(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") addTopic(); }} />
-          <Button type="button" variant="outline" onClick={addTopic}>Add topic</Button>
-        </div>
         <div data-testid="logging-topic-groups-list" data-legacy-testid="logging-topic-levels-list" className="max-h-[min(52vh,620px)] space-y-3 overflow-y-auto pr-1">
           {topicGroups.map((group) => {
             const expanded = expandedGroups.has(group.id);
@@ -578,7 +545,7 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, newTopic
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Switch checked={groupEnabled} onCheckedChange={(checked) => updateTopic(group.id, { enabled: checked })} disabled={saving} />
+                    <Switch checked={groupEnabled} onCheckedChange={(checked) => updateTopicGroupEnabled(group, checked)} disabled={saving} />
                     <Button type="button" variant="outline" size="sm" onClick={() => toggleExpanded(group.id)}>{expanded ? "Collapse" : "Expand"}</Button>
                   </div>
                 </div>
@@ -674,8 +641,8 @@ function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
                       <div className="font-mono text-[10px] text-muted-foreground">{group.id}</div>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setGroup(group, true)}>Select group</Button>
-                      <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setGroup(group, false)}>Clear group</Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Select ${group.label} topics`} title="Select group" onClick={() => setGroup(group, true)}><IconCheck className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={`Clear ${group.label} topics`} title="Clear group" onClick={() => setGroup(group, false)}><IconX className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -705,7 +672,7 @@ function FileLogView({ entries, loading, meta, fileSize, files }) {
 }
 
 function LogEntriesView({ entries, loading, meta, fileSize, emptyTitle, emptyDescription, connectionLabel }) {
-  return <div className="flex h-full min-h-0 flex-col gap-4">{loading ? <div className="shrink-0 rounded-xl border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">Refreshing log preview…</div> : null}<div className="grid shrink-0 gap-3 md:grid-cols-4"><MiniStat label="Visible entries" value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label="File Size" value={formatBytes(fileSize)} icon={IconFileText} tone="violet" /><MiniStat label="Skipped invalid" value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label={connectionLabel || "Server cap"} value={meta.truncated ? "Truncated" : "OK"} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${entry.runId || ""}-${index}`} entry={entry} />) : <EmptyState title={emptyTitle} description={emptyDescription} />}</div></div>;
+  return <div className="flex h-full min-h-0 flex-col gap-4"><div className="grid shrink-0 gap-3 md:grid-cols-4"><MiniStat label="Visible entries" value={entries.length} icon={IconActivity} tone="emerald" /><MiniStat label="File Size" value={formatBytes(fileSize)} icon={IconFileText} tone="violet" /><MiniStat label="Skipped invalid" value={meta.skippedInvalid || 0} icon={IconAlertTriangle} tone="amber" /><MiniStat label={connectionLabel || "Server cap"} value={meta.truncated ? "Truncated" : "OK"} icon={IconShieldCheck} tone={meta.truncated ? "rose" : "sky"} /></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{loading ? <div className="sticky top-0 z-10 rounded-xl border bg-card/95 px-4 py-3 text-sm text-muted-foreground shadow-sm backdrop-blur">Refreshing log list…</div> : null}{entries.length ? entries.map((entry, index) => <LogEntryCard key={`${entry.time || entry.ts || index}-${entry.runId || ""}-${index}`} entry={entry} />) : <EmptyState title={emptyTitle} description={emptyDescription} />}</div></div>;
 }
 
 function LogEntryCard({ entry }) {

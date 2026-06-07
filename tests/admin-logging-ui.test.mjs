@@ -38,7 +38,18 @@ test("Admin logging Settings renders grouped topic controls from the catalog", a
   assert.match(page, /Group level/);
   assert.match(page, /Inherit group/);
   assert.match(page, /Inherit enabled/);
+  assert.match(page, /updateTopicGroupEnabled\(group, checked\)/);
   assert.doesNotMatch(page, /<SettingsView config=\{config\} topics=\{topics\}/);
+  assert.doesNotMatch(page, /Custom & Legacy|Custom or historical|Add topic|newTopic|setNewTopic|addTopic/);
+});
+
+test("Admin logging group enable switch writes every child topic state", async () => {
+  const page = await source();
+
+  assert.match(page, /function updateTopicGroupEnabled\(group, enabled\)/);
+  assert.match(page, /for \(const topic of group\.topics\)/);
+  assert.match(page, /topicEnabled\[topic\.id\] = enabled === true/);
+  assert.match(page, /topicEnabled\[group\.id\] = enabled === true/);
 });
 
 test("Admin logging Filters render grouped topic multi-select", async () => {
@@ -48,8 +59,11 @@ test("Admin logging Filters render grouped topic multi-select", async () => {
   assert.match(page, /function TopicMultiSelect\(\{ label, topicGroups, selectedTopics, onChange \}\)/);
   assert.match(page, /data-testid="logging-topic-filter-groups"/);
   assert.match(page, /data-testid=\{`logging-topic-filter-group-\$\{group\.id\}`\}/);
-  assert.match(page, /Select group/);
-  assert.match(page, /Clear group/);
+  assert.match(page, /aria-label=\{`Select \$\{group\.label\} topics`\}/);
+  assert.match(page, /aria-label=\{`Clear \$\{group\.label\} topics`\}/);
+  assert.match(page, /<IconCheck className="h-3\.5 w-3\.5" \/>/);
+  assert.match(page, /<IconX className="h-3\.5 w-3\.5" \/>/);
+  assert.doesNotMatch(page, />Select group<|>Clear group</);
   assert.doesNotMatch(page, /\{topics\.map\(\(topic\) => \(/);
 });
 
@@ -57,7 +71,11 @@ test("Admin logging file selection renders selected file entries in Files view",
   const page = await source();
   assert.match(page, /function FileLogView\(/);
   assert.match(page, /fileSize=\{currentFile\?\.size\}/);
-  assert.match(page, /loadLogs\(\{ file: logFilters\.file \|\| currentFile\?\.name \|\| "" \}\)/);
+  assert.match(page, /lastFilesRefreshKeyRef/);
+  assert.match(page, /loadLogs\(\{ file: logFilters\.file \}\)/);
+  assert.match(page, /Refreshing log list…/);
+  assert.doesNotMatch(page, /\[active, logFilters\.file, currentFile\?\.name\]/);
+  assert.doesNotMatch(page, /Refreshing log preview…/);
   assert.doesNotMatch(page, /Select a JSONL file to render its events below/);
   assert.doesNotMatch(page, /setActive\("live"\); loadLogs\(\{ file \}\)/);
 });
@@ -68,7 +86,7 @@ test("Admin logging confirmations use the custom AlertDialog instead of browser 
   assert.match(page, /function LoggingConfirmationDialog\(/);
   assert.match(page, /<AlertDialog open=\{Boolean\(confirmation\)\}/);
   assert.match(page, /Apply troubleshooting preset\?/);
-  assert.match(page, /Enable JSONL file logging\?/);
+  assert.doesNotMatch(page, /Enable JSONL file logging\?|confirmedFileLogging|confirmLabel: "Enable file logging"/);
   assert.doesNotMatch(page, /window\.confirm|window\.alert|window\.prompt/);
 });
 

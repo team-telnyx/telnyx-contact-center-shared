@@ -6,6 +6,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
 import { mkdir, readdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";
@@ -69,7 +70,7 @@ async function readMetadataRows() {
     const { rows } = await pool.query("SELECT filename, url, title, display_name, content_type, size_bytes, metadata, created_at, updated_at FROM form_media_assets");
     return rows || [];
   } catch (err) {
-    console.warn("[forms/media] metadata unavailable:", err?.message || err);
+    adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return [];
   }
 }
@@ -140,7 +141,7 @@ export async function POST(request) {
   if (!fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
   await writeFile(fullPath, Buffer.from(await file.arrayBuffer()));
   const url = `${PUBLIC_PREFIX}/${filename}`;
-  await upsertMetadata({ filename, url, title: titleFromFilename(file.name), displayName: titleFromFilename(file.name), contentType: file.type, size: file.size }).catch((err) => console.warn("[forms/media] metadata write failed:", err?.message || err));
+  await upsertMetadata({ filename, url, title: titleFromFilename(file.name), displayName: titleFromFilename(file.name), contentType: file.type, size: file.size }).catch((err) => adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: err }) }));
   return NextResponse.json({ ok: true, media: { name: filename, filename, url, src: url, title: titleFromFilename(file.name), display_name: titleFromFilename(file.name), size: file.size, size_bytes: file.size, contentType: file.type, content_type: file.type }, mediaList: await listFiles() });
 }
 

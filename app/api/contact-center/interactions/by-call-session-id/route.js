@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/contact-center/interactions/by-call-session-id?callSessionId=...
@@ -40,10 +41,7 @@ export async function GET(request) {
       interaction,
     });
   } catch (err) {
-    console.error(
-      "[FindInteractionByCallSessionId] Error:",
-      err,
-    );
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },

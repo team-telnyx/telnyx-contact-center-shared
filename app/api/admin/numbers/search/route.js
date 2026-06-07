@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -120,7 +121,7 @@ export async function GET(request) {
     const basePath = process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
     const telnyxUrl = `${basePath}/v2/available_phone_numbers?${params.toString()}`;
 
-    console.log(telnyxUrl);
+    adminRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     const res = await fetch(telnyxUrl, {
       headers: {
         Authorization: `Bearer ${process.env.TELNYX_API_KEY}`,
@@ -130,7 +131,7 @@ export async function GET(request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[Numbers Search API] Telnyx error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to search phone numbers from Telnyx" },
         { status: res.status }
@@ -143,7 +144,7 @@ export async function GET(request) {
       data: data.data || [],
     });
   } catch (error) {
-    console.error("[Numbers Search API] Error:", error);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }

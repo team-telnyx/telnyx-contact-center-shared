@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -84,7 +85,7 @@ export async function GET(request) {
       pageSize,
     });
   } catch (err) {
-    console.error("[WrapupCodes] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load wrapup codes" },
       { status: 500 }
@@ -133,7 +134,7 @@ export async function POST(request) {
 
     return NextResponse.json({ ok: true, id });
   } catch (err) {
-    console.error("[WrapupCodes] POST error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (err.code === "23505") {
       return NextResponse.json(
         { error: "A wrapup code with this name already exists" },

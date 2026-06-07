@@ -5,6 +5,7 @@ import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
 import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export async function DELETE(request, { params }) {
     try {
       await unassignPhoneNumberFromApp(phoneNumberId);
     } catch (error) {
-      console.error("[API] Failed to unassign phone number from app:", error);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         {
           ok: false,
@@ -86,7 +87,7 @@ export async function DELETE(request, { params }) {
       unassigned: true,
     });
   } catch (error) {
-    console.error("[API] Error unassigning phone number:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       {
         ok: false,

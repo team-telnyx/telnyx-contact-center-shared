@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function getTelnyxBaseUrl() {
   return process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
@@ -47,7 +48,7 @@ export async function GET(request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[CallHistoryEvents] Telnyx error:", errorText);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch application events from Telnyx" },
         { status: res.status }
@@ -67,7 +68,7 @@ export async function GET(request) {
       meta: data.meta || {},
     });
   } catch (error) {
-    console.error("[CallHistoryEvents] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch call events" },
       { status: 500 }

@@ -7,6 +7,7 @@ import {
 } from "@/lib/mobile-call-leg-store";
 import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
 import { startAgentlessAiAssistantForCall } from "@/lib/outbound-dialer/ai-assistant";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function dialAndBridge({
   to,
@@ -745,7 +746,7 @@ export async function POST(request) {
     }
 
 
-    console.error("[voice-webhook] Server error:", err);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

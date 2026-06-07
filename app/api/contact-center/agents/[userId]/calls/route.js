@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/contact-center/agents/[userId]/calls
@@ -223,7 +224,7 @@ export async function GET(request, { params }) {
       },
     });
   } catch (error) {
-    console.error("[AgentCalls] Error fetching agent calls:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch agent calls" },
       { status: 500 },

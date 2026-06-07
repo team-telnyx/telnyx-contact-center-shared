@@ -5,6 +5,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export async function GET() {
   try {
@@ -15,7 +16,7 @@ export async function GET() {
       supervisorNumber,
     });
   } catch (error) {
-    console.error("[Config] Error getting supervisor number:", error);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to get supervisor number configuration" },
       { status: 500 },

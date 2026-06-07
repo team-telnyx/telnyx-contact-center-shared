@@ -7,6 +7,7 @@ import {
   listAgentCampaigns,
   setAgentCampaignActivation,
 } from "@/lib/outbound-dialer/agent-campaigns";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function usernameFor(user) {
   return user?.username || user?.email || null;
@@ -40,7 +41,7 @@ export async function GET(request) {
     const campaigns = await listAgentCampaigns(pool, target.username);
     return NextResponse.json({ ok: true, campaigns });
   } catch (err) {
-    console.error("[Agent Campaigns] list failed:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 500 });
   }
 }
@@ -66,7 +67,7 @@ export async function POST(request) {
     await broadcastCampaignActivationChanged(pool, { id: "agent-campaign-assignments", name: "Agent campaign assignments", status: "updated", mode: "preview", userId: target.userId, campaignIds }, "campaign_activation_changed");
     return NextResponse.json({ ok: true, campaigns, activeCampaignIds: campaignIds });
   } catch (err) {
-    console.error("[Agent Campaigns] activation failed:", err);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json({ ok: false, error: err.message || "Server error" }, { status: err.status || 400 });
   }
 }

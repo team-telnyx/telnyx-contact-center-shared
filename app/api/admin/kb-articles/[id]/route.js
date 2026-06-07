@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -43,7 +44,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json(res.rows[0]);
   } catch (err) {
-    console.error("[KB Articles] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load article" },
       { status: 500 }
@@ -145,7 +146,7 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[KB Articles] PUT error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (err.code === "23505") {
       return NextResponse.json(
         { error: "An article with this slug already exists" },
@@ -176,7 +177,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[KB Articles] DELETE error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to delete article" },
       { status: 500 }
