@@ -76,7 +76,7 @@ test("Telnyx STT drops pre-answer media buffers by default", async () => {
     "utf8",
   );
 
-  assert.match(source, /Dropping pre-answer buffered audio/);
+  assert.match(source, /dropping_pre_answer_buffered_audio/);
   assert.match(source, /options\.replayBufferedAudio === true/);
   assert.match(source, /telnyxSession\.clearBuffer\(mapping\.mediaTrack\)/);
   assert.doesNotMatch(source, /Flushing buffers/);
