@@ -54,6 +54,13 @@ test("Standalone STT streaming comments describe the RTP L16 linear16 contract",
   assert.doesNotMatch(engineSource, /delete body\.stream_bidirectional_mode/);
 });
 
+test("Answer requests strip StartStreaming-only sampling rate after provider presets apply", () => {
+  assert.match(
+    engineSource,
+    /case "answer":[\s\S]*body = await applyStreamingProviderConfiguration\(body, action\);[\s\S]*delete body\.stream_bidirectional_sampling_rate;[\s\S]*body = cleanupStreamingProviderFields\(body\);/,
+  );
+});
+
 test("Telnyx RTP L16 payloads are byte-swapped before linear16 STT forwarding", () => {
   const telnyxRtpL16Payload = Buffer.from([0x12, 0x34, 0xab, 0xcd, 0xef]);
   const linear16Payload = convertTelnyxL16PayloadForLinear16(telnyxRtpL16Payload);
