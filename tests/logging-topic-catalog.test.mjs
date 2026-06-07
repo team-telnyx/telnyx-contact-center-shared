@@ -45,7 +45,10 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
 
   const levels = defaultTopicLevelsFromCatalog();
   const enabled = defaultTopicEnabledFromCatalog();
-  assert.equal(levels["platform"], "info");
+  for (const groupId of groupIds) {
+    assert.equal(levels[groupId], undefined, `${groupId} must not be persisted as a topic level`);
+    assert.equal(enabled[groupId], undefined, `${groupId} must not be persisted as a topic enabled flag`);
+  }
   assert.equal(levels["platform.db"], "warn");
   assert.equal(levels["telnyx.media"], "warn");
   assert.equal(levels["agent-assist.llm"], "warn");

@@ -32,6 +32,33 @@ test("sanitizeDiagnosticPayload redacts secret-like keys and media payloads", as
   assert.equal(sanitized.nested.safe, "hello");
 });
 
+test("sanitizeDiagnosticPayload preserves safe call debug identifiers", async () => {
+  const { sanitizeDiagnosticPayload } = await freshLogger();
+
+  const sanitized = sanitizeDiagnosticPayload({
+    topic: "contact-center.timeout",
+    interactionId: "9a9d4b18-9999-4a53-8b0a-72d16f2b2c01",
+    callSessionId: "6f8d3a6f-1111-4425-a333-7bba1d5e0a22",
+    callControlId: "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w",
+    queueId: "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912",
+    agentUserId: "44df75d9-3333-45b1-91ea-08d3ab39f761",
+    runId: "20260607T090159Z-pid123456789",
+    nested: {
+      authorization: "Bearer secret-token-value",
+      clientState: "eyJzdGlsbCI6InNlY3JldCJ9",
+    },
+  });
+
+  assert.equal(sanitized.interactionId, "9a9d4b18-9999-4a53-8b0a-72d16f2b2c01");
+  assert.equal(sanitized.callSessionId, "6f8d3a6f-1111-4425-a333-7bba1d5e0a22");
+  assert.equal(sanitized.callControlId, "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w");
+  assert.equal(sanitized.queueId, "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912");
+  assert.equal(sanitized.agentUserId, "44df75d9-3333-45b1-91ea-08d3ab39f761");
+  assert.equal(sanitized.runId, "20260607T090159Z-pid123456789");
+  assert.match(sanitized.nested.authorization, /^\[redacted:/);
+  assert.match(sanitized.nested.clientState, /^\[redacted:/);
+});
+
 test("sanitizeDiagnosticUrl redacts all query values and sensitive query keys", async () => {
   const { sanitizeDiagnosticPayload, sanitizeDiagnosticUrl } = await freshLogger();
 

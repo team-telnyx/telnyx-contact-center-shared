@@ -75,6 +75,46 @@ test("createLogger emits pino JSON with topic, runId, and redacted sensitive fie
   assert.equal(entry.media.payload, "[redacted:string:20]");
 });
 
+test("createLogger keeps safe contact-center debug identifiers visible while redacting secrets", async () => {
+  const lines = [];
+  const { createLogger } = await freshLoggerModule();
+  const logger = createLogger({
+    topic: "contact-center.timeout",
+    config: {
+      globalLevel: "debug",
+      consoleEnabled: true,
+      fileEnabled: false,
+      redactionEnabled: true,
+      topicLevels: { "contact-center.timeout": "debug" },
+      topicEnabled: { "contact-center.timeout": true },
+    },
+    runId: "20260607T090159Z-pid123456789",
+    stdout: (line) => lines.push(line),
+  });
+
+  logger.info({
+    interactionId: "9a9d4b18-9999-4a53-8b0a-72d16f2b2c01",
+    callSessionId: "6f8d3a6f-1111-4425-a333-7bba1d5e0a22",
+    callControlId: "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w",
+    queueId: "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912",
+    agentUserId: "44df75d9-3333-45b1-91ea-08d3ab39f761",
+    authorization: "Bearer secret-token-value",
+    clientState: "eyJzdGlsbCI6InNlY3JldCJ9",
+  }, "agent_answer_timeout_reenqueue_completed");
+
+  assert.equal(lines.length, 1);
+  const entry = JSON.parse(lines[0]);
+  assert.equal(entry.topic, "contact-center.timeout");
+  assert.equal(entry.runId, "20260607T090159Z-pid123456789");
+  assert.equal(entry.interactionId, "9a9d4b18-9999-4a53-8b0a-72d16f2b2c01");
+  assert.equal(entry.callSessionId, "6f8d3a6f-1111-4425-a333-7bba1d5e0a22");
+  assert.equal(entry.callControlId, "v3:qxbH4PrvSxNeSbuqSOUPGoee36yCcHj3jKDWBi1e9e0vaMchp74P_w");
+  assert.equal(entry.queueId, "7a5c2e0b-2222-4a2e-9f4f-01cc2ed4c912");
+  assert.equal(entry.agentUserId, "44df75d9-3333-45b1-91ea-08d3ab39f761");
+  assert.match(entry.authorization, /^\[redacted:/);
+  assert.match(entry.clientState, /^\[redacted:/);
+});
+
 test("createLogger computes default timestamps for each emitted entry", async () => {
   const lines = [];
   const { createLogger } = await freshLoggerModule();

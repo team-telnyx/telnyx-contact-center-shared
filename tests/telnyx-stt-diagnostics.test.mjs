@@ -57,3 +57,10 @@ test("Telnyx STT transcript normalizer still recognizes Deepgram Results frames"
     rawType: "Results",
   });
 });
+
+test("Telnyx STT diagnostics are controlled by runtime topic config, not DEBUG_TELNYX_STT", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
+  assert.doesNotMatch(source, /envFlagEnabled\("DEBUG_TELNYX_STT"\)/);
+  assert.match(source, /function logSttInfo\(message, payload = \{\}\) \{\s*sttLogger\.info\(message, payload\);\s*\}/);
+  assert.match(source, /function logSttError\(message, payload = \{\}\) \{\s*sttLogger\.error\(message, payload\);\s*\}/);
+});

@@ -43,13 +43,16 @@ test("Admin logging Settings renders grouped topic controls from the catalog", a
   assert.doesNotMatch(page, /Custom & Legacy|Custom or historical|Add topic|newTopic|setNewTopic|addTopic/);
 });
 
-test("Admin logging group enable switch writes every child topic state", async () => {
+test("Admin logging group controls persist only child topic states", async () => {
   const page = await source();
 
   assert.match(page, /function updateTopicGroupEnabled\(group, enabled\)/);
   assert.match(page, /for \(const topic of group\.topics\)/);
   assert.match(page, /topicEnabled\[topic\.id\] = enabled === true/);
-  assert.match(page, /topicEnabled\[group\.id\] = enabled === true/);
+  assert.doesNotMatch(page, /topicEnabled\[group\.id\] = enabled === true/);
+  assert.match(page, /function updateTopicGroupLevel\(group, level\)/);
+  assert.match(page, /topicLevels\[topic\.id\] = level/);
+  assert.doesNotMatch(page, /updateTopic\(group\.id, \{ level \}\)/);
 });
 
 test("Admin logging Filters render grouped topic multi-select", async () => {

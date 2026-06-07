@@ -478,13 +478,12 @@ function LevelTabs({ value, onChange, compact = false }) {
 
 function effectiveTopicLevel(topicId, groupId, config) {
   const topicLevels = config.topicLevels || {};
-  return topicLevels[topicId] || topicLevels[groupId] || config.globalLevel || "info";
+  return topicLevels[topicId] || config.globalLevel || "info";
 }
 
 function effectiveTopicEnabled(topicId, groupId, config) {
   const topicEnabled = config.topicEnabled || {};
   if (Object.prototype.hasOwnProperty.call(topicEnabled, topicId)) return topicEnabled[topicId] !== false;
-  if (Object.prototype.hasOwnProperty.call(topicEnabled, groupId)) return topicEnabled[groupId] !== false;
   return true;
 }
 
@@ -503,11 +502,20 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
 
   function updateTopicGroupEnabled(group, enabled) {
     const topicEnabled = { ...(config.topicEnabled || {}) };
-    topicEnabled[group.id] = enabled === true;
+    delete topicEnabled[group.id];
     for (const topic of group.topics) {
       topicEnabled[topic.id] = enabled === true;
     }
     updateConfig({ topicEnabled });
+  }
+
+  function updateTopicGroupLevel(group, level) {
+    const topicLevels = { ...(config.topicLevels || {}) };
+    delete topicLevels[group.id];
+    for (const topic of group.topics) {
+      topicLevels[topic.id] = level;
+    }
+    updateConfig({ topicLevels });
   }
 
   return (
@@ -528,8 +536,10 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
         <div data-testid="logging-topic-groups-list" data-legacy-testid="logging-topic-levels-list" className="max-h-[min(52vh,620px)] space-y-3 overflow-y-auto pr-1">
           {topicGroups.map((group) => {
             const expanded = expandedGroups.has(group.id);
-            const groupLevel = topicLevels[group.id] || group.defaultLevel || config.globalLevel || "info";
-            const groupEnabled = topicEnabled[group.id] !== false;
+            const groupLevel = group.topics.length
+              ? effectiveTopicLevel(group.topics[0].id, group.id, config)
+              : group.defaultLevel || config.globalLevel || "info";
+            const groupEnabled = group.topics.every((topic) => effectiveTopicEnabled(topic.id, group.id, config));
             const overrideCount = group.topics.filter((topic) => Object.prototype.hasOwnProperty.call(topicLevels, topic.id) || Object.prototype.hasOwnProperty.call(topicEnabled, topic.id)).length;
             const disabledCount = group.topics.filter((topic) => !effectiveTopicEnabled(topic.id, group.id, config)).length;
             return (
@@ -554,7 +564,7 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
                 </div>
                 <div className="mt-4 space-y-2">
                   <Label className="text-xs font-medium text-muted-foreground">Group level</Label>
-                  <LevelTabs value={groupLevel} onChange={(level) => updateTopic(group.id, { level })} />
+                  <LevelTabs value={groupLevel} onChange={(level) => updateTopicGroupLevel(group, level)} />
                 </div>
                 {expanded ? (
                   <div className="mt-4 space-y-2 border-t pt-4">
