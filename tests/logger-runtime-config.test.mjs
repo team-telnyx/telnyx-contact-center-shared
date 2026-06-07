@@ -65,8 +65,8 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
     log_dir: "/var/log/cc",
     rotation_mode: "startup",
     retention_days: 0,
-    topic_levels: { "telnyx.stt": "debug", db: "trace", bad: "loud" },
-    topic_enabled: { "telnyx.stt": true, db: false },
+    topic_levels: { "telnyx.stt": "debug", db: "trace", bad: "loud", frontend: "warn", "frontend.admin": "warn", "telnyx.call-control": "info" },
+    topic_enabled: { "telnyx.stt": true, db: false, frontend: true, "frontend.admin": true, "telnyx.call-control": true },
     redaction_enabled: true,
     expires_at: null,
     updated_at: "2026-06-06T09:00:00Z",
@@ -83,6 +83,12 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
   assert.equal(first.topicLevels["platform.db"], "trace");
   assert.equal(first.topicEnabled["platform.db"], false);
   assert.equal(first.topicLevels.bad, undefined);
+  assert.equal(first.topicLevels.frontend, undefined);
+  assert.equal(first.topicLevels["frontend.admin"], undefined);
+  assert.equal(first.topicLevels["telnyx.call-control"], undefined);
+  assert.equal(first.topicEnabled.frontend, undefined);
+  assert.equal(first.topicEnabled["frontend.admin"], undefined);
+  assert.equal(first.topicEnabled["telnyx.call-control"], undefined);
   assert.deepEqual(second, first);
   const selectCount = pool.queries.filter((q) => /SELECT \* FROM app_logging_config/i.test(q.text)).length;
   assert.equal(selectCount, 1);

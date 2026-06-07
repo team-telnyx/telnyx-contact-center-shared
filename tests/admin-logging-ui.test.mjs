@@ -30,7 +30,7 @@ test("Admin logging Settings keeps the topic levels list independently scrollabl
 test("Admin logging Settings renders grouped topic controls from the catalog", async () => {
   const page = await source();
 
-  assert.match(page, /import \{ LOGGING_TOPIC_GROUPS/);
+  assert.match(page, /import \{[^}]*LOGGING_TOPIC_GROUPS[^}]*\} from "@\/lib\/logger\/topic-catalog\.mjs"/);
   assert.match(page, /function groupedTopicsForSettings\(/);
   assert.match(page, /<SettingsView config=\{config\} topicGroups=\{topicGroups\}/);
   assert.match(page, /data-testid="logging-topic-groups-list"/);
