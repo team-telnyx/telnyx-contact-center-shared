@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY;
 const TELNYX_API_BASE = "https://api.telnyx.com/v2";
@@ -256,7 +257,7 @@ export async function POST(request, { params }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[Generate Response] LLM error:", errorText);
+      workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       throw new Error(`LLM request failed: ${response.status}`);
     }
 
@@ -275,7 +276,7 @@ export async function POST(request, { params }) {
       pendingItems: pendingItems.map(i => ({ label: i.label, slot_name: i.slot_name })),
     });
   } catch (error) {
-    console.error("[Generate Response] Error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to generate response" },
       { status: 500 }
@@ -296,7 +297,7 @@ export async function GET(request, { params }) {
       personas: Object.values(PERSONAS),
     });
   } catch (error) {
-    console.error("[Generate Response] GET error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to get personas" },
       { status: 500 }

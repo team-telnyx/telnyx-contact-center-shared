@@ -17,8 +17,8 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { generateWorkflowInstructions } from "@/lib/agent-assist/workflow-instructions";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { syncWorkflowInsights } from "@/lib/telnyx-insights";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
-const LOG_PREFIX = "[Update Assistant]";
 
 /**
  * Get webhook URL for insights from environment
@@ -122,7 +122,7 @@ export async function POST(request, { params }) {
     return handleFullUpdate(workflow, stages, items, workflowId, apiKey, pool);
 
   } catch (err) {
-    console.error(`${LOG_PREFIX} Error:`, err);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: err?.message || "Failed to update assistant" },
       { status: 500 }
@@ -188,7 +188,7 @@ function generateGreeting(workflowName, stages = []) {
  * Step 1: Update assistant instructions and greeting
  */
 async function updateInstructionsStep(workflow, stages, apiKey) {
-  console.log(`${LOG_PREFIX} Updating instructions for: ${workflow.name}`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
 
   const instructions = generateWorkflowInstructions(workflow, stages);
   const greeting = generateGreeting(workflow.name, stages);
@@ -211,7 +211,7 @@ async function updateInstructionsStep(workflow, stages, apiKey) {
     );
   }
 
-  console.log(`${LOG_PREFIX} Instructions updated successfully`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "Instructions updated" });
 }
 
@@ -230,7 +230,7 @@ async function syncInsightsStep(workflow, stages, items, workflowId, pool) {
     return NextResponse.json({ ok: true, skipped: true, message: "Webhook URL not configured" });
   }
 
-  console.log(`${LOG_PREFIX} Syncing insights for: ${workflow.name}`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
 
   try {
     const workflowWithStages = { ...workflow, stages };
@@ -254,14 +254,14 @@ async function syncInsightsStep(workflow, stages, items, workflowId, pool) {
       ]
     );
 
-    console.log(`${LOG_PREFIX} Insights synced successfully`);
+    workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json({ 
       ok: true, 
       message: "Insights synced",
       insightGroupId: insightResult.groupId,
     });
   } catch (err) {
-    console.error(`${LOG_PREFIX} Failed to sync insights:`, err);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json({ error: err.message }, { status: 502 });
   }
 }
@@ -282,7 +282,7 @@ async function updateGroupAssignmentStep(workflow, workflowId, apiKey, pool) {
     return NextResponse.json({ ok: true, skipped: true, message: "No insight group to assign" });
   }
 
-  console.log(`${LOG_PREFIX} Updating insight group assignment: ${insightGroupId}`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
 
   const res = await fetch(buildTelnyxV2Url(`/ai/assistants/${workflow.ai_assistant_id}`), {
     method: "POST",
@@ -304,7 +304,7 @@ async function updateGroupAssignmentStep(workflow, workflowId, apiKey, pool) {
     );
   }
 
-  console.log(`${LOG_PREFIX} Insight group assignment updated`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "Insight group assigned" });
 }
 
@@ -345,7 +345,7 @@ async function handleFullUpdate(workflow, stages, items, workflowId, apiKey, poo
 
       insightsSynced = true;
     } catch (syncErr) {
-      console.warn(`${LOG_PREFIX} Warning: Failed to sync insights:`, syncErr.message);
+      workflowLogger.warn("admin_workflow_warning", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     }
   }
 
