@@ -80,6 +80,11 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
   assert.match(startWrapper, /tryLoadRuntimeLoggingConfigEarly/);
   assert.match(startWrapper, /const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly\(\)/);
   assert.match(startWrapper, /loadEnvConfig\(process\.cwd\(\), nodeEnv !== "production"\)/);
+  assert.ok(
+    startWrapper.indexOf('loadEnvConfig(process.cwd(), nodeEnv !== "production");') < startWrapper.indexOf('const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();'),
+    "start wrapper must load .env before reading DB-backed logging config",
+  );
+  assert.match(startWrapper, /env:\s*\{ \.\.\.process\.env, NODE_ENV: nodeEnv \}/);
   assert.match(startWrapper, /getConfig: \(\) => runtimeLoggingConfig/);
   assert.match(startWrapper, /web_server_starting/);
   assert.match(startWrapper, /web_server_ready/);

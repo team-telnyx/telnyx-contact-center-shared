@@ -38,7 +38,12 @@ test("platform.db bootstrap fallback does not force info logs when runtime confi
   );
   assert.match(
     src,
-    /consoleFriendly:\s*envFlagEnabled\(["']LOG_CONSOLE_FRIENDLY["']\)/,
-    "platform.db fallback console format should include the same friendly flag as other diagnostic loggers",
+    /createDiagnosticLogger\("platform\.db"/,
+    "platform.db fallback console format should flow through the same diagnostic logger adapter as other topics",
+  );
+  assert.doesNotMatch(
+    src,
+    /\bcreateLogger\s*\(/,
+    "platform.db must not maintain a direct createLogger fallback that can diverge from runtime format settings",
   );
 });

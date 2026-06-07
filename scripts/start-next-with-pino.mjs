@@ -6,13 +6,13 @@ import nextEnv from "@next/env";
 import { createDiagnosticLogger } from "../lib/diagnostic-logger.mjs";
 import { tryLoadRuntimeLoggingConfigEarly } from "../lib/logger/runtime-config.mjs";
 
-const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
-
 const { loadEnvConfig } = nextEnv;
 const originalEnv = { ...process.env };
 const nodeEnv = originalEnv.NODE_ENV || "production";
 process.env.NODE_ENV = nodeEnv;
 loadEnvConfig(process.cwd(), nodeEnv !== "production");
+
+const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
 
 const logger = createDiagnosticLogger("platform.app", {
   config: {
@@ -35,7 +35,7 @@ logger.info("web_server_starting", {
 });
 
 const child = spawn("yarn", args, {
-  env: { ...originalEnv, NODE_ENV: nodeEnv },
+  env: { ...process.env, NODE_ENV: nodeEnv },
   stdio: ["inherit", "pipe", "pipe"],
 });
 

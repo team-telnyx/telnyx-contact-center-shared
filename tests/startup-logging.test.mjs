@@ -34,12 +34,12 @@ test("startup instrumentation emits application, Postgres, and streaming events 
 test("Postgres module logs pool lifecycle through pino instead of direct console calls", async () => {
   const src = await source(postgresPath);
 
-  assert.match(src, /from "\.\/logger\/index\.mjs"/);
+  assert.match(src, /from "\.\/diagnostic-logger\.mjs"/);
   assert.match(src, /getCachedRuntimeLoggingConfig/);
   assert.match(src, /getDbRuntimeLoggingConfig/);
   assert.match(src, /"platform\.db": process\.env\.LOG_DB_LEVEL \|\| runtimeConfig\.topicLevels\?\.\["platform\.db"\] \|\| runtimeConfig\.topicLevels\?\.db \|\| "warn"/);
   assert.match(src, /getConfig: getDbRuntimeLoggingConfig/);
-  assert.match(src, /topic: "platform\.db"/);
+  assert.match(src, /createDiagnosticLogger\("platform\.db"/);
   assert.match(src, /postgres_pool_created/);
   assert.match(src, /postgres_connected/);
   assert.match(src, /postgres_status_check_ok/);
