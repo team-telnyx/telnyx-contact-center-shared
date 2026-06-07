@@ -163,16 +163,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-google-phone-call": {
     id: "telnyx-stt-google-phone-call",
-    label: "Telnyx STT WS — Google phone_call (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Google phone_call. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Google phone_call (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google phone_call. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -180,8 +177,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Google",
       model: "phone_call",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("phone_call"),
     },
@@ -189,16 +186,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-google-latest-long": {
     id: "telnyx-stt-google-latest-long",
-    label: "Telnyx STT WS — Google latest_long (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Google latest_long. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Google latest_long (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google latest_long. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -206,8 +200,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Google",
       model: "latest_long",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("latest_long"),
     },
@@ -215,16 +209,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-google-default": {
     id: "telnyx-stt-google-default",
-    label: "Telnyx STT WS — Google default (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Google default. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Google default (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google default. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -232,8 +223,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Google",
       model: "default",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("default"),
     },
@@ -241,16 +232,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-xai-grok": {
     id: "telnyx-stt-xai-grok",
-    label: "Telnyx STT WS — xAI Grok STT (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using xAI Grok STT. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — xAI Grok STT (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using xAI Grok STT. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -258,8 +246,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "xAI",
       model: "xai/grok-stt",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("xai/grok-stt"),
     },
@@ -267,16 +255,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-deepgram-nova-2": {
     id: "telnyx-stt-deepgram-nova-2",
-    label: "Telnyx STT WS — Deepgram Nova 2 (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Deepgram Nova 2 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2 with native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -284,8 +269,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Deepgram",
       model: "deepgram/nova-2",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("deepgram/nova-2"),
     },
@@ -293,16 +278,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-deepgram-nova-3": {
     id: "telnyx-stt-deepgram-nova-3",
-    label: "Telnyx STT WS — Deepgram Nova 3 (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Deepgram Nova 3 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3 with native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -310,8 +292,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Deepgram",
       model: "deepgram/nova-3",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("deepgram/nova-3"),
     },
@@ -319,16 +301,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-deepgram-flux": {
     id: "telnyx-stt-deepgram-flux",
-    label: "Telnyx STT WS — Deepgram Flux (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Flux. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Deepgram Flux (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Flux with native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -336,8 +315,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Deepgram",
       model: "deepgram/flux",
       language: "auto",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       supported_languages: telnyxSttLanguagesForModel("deepgram/flux"),
     },
@@ -345,16 +324,13 @@ Be friendly, professional, and concise. Provide accurate information about Telny
 
   "telnyx-stt-speechmatics-standard": {
     id: "telnyx-stt-speechmatics-standard",
-    label: "Telnyx STT WS — Speechmatics standard (L16 test)",
-    description: "Standalone Telnyx Speech-to-Text WebSocket using Speechmatics standard. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
+    label: "Telnyx STT WS — Speechmatics standard (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Speechmatics standard. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
-      stream_codec: "L16",
-      stream_bidirectional_mode: "rtp",
-      stream_bidirectional_codec: "L16",
-      stream_bidirectional_sampling_rate: 16000,
+      stream_codec: "PCMU",
     },
     telnyxStt: {
       enabled: true,
@@ -362,8 +338,8 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       transcription_engine: "Speechmatics",
       model: "speechmatics/standard",
       language: "en",
-      input_format: "linear16",
-      sample_rate: 16000,
+      input_format: "mulaw",
+      sample_rate: 8000,
       interim_results: true,
       endpointing: 300,
       supported_languages: telnyxSttLanguagesForModel("speechmatics/standard"),

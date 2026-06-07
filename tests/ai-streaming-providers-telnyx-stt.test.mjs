@@ -20,16 +20,13 @@ function assertTelnyxSttPreset(source, providerId, engine, model, language) {
   const block = extractProviderBlock(source, providerId);
   assert.match(block, /type: "telnyx-stt"/);
   assert.match(block, /stream_track: "inbound_track"/);
-  assert.match(block, /stream_codec: "L16"/);
-  assert.match(block, /stream_bidirectional_mode: "rtp"/);
-  assert.match(block, /stream_bidirectional_codec: "L16"/);
-  assert.match(block, /stream_bidirectional_sampling_rate: 16000/);
+  assert.match(block, /stream_codec: "PCMU"/);
   assert.match(block, /transcription_tracks: "both"/);
   assert.match(block, new RegExp(`transcription_engine: "${engine}"`));
   assert.match(block, new RegExp(`model: "${model.replace("/", "\\/")}"`));
   assert.match(block, new RegExp(`language: "${language}"`));
-  assert.match(block, /input_format: "linear16"/);
-  assert.match(block, /sample_rate: 16000/);
+  assert.match(block, /input_format: "mulaw"/);
+  assert.match(block, /sample_rate: 8000/);
   assert.match(block, /interim_results: true/);
 }
 
@@ -40,22 +37,22 @@ test("Telnyx STT WebSocket presets include Deepgram Nova 2, Nova 3, and Flux", a
     source,
     "telnyx-stt-deepgram-nova-2",
     "Deepgram",
-    "deepgram/nova-2",
-    "en",
+    "nova-2",
+    "en-US",
   );
   assertTelnyxSttPreset(
     source,
     "telnyx-stt-deepgram-nova-3",
     "Deepgram",
-    "deepgram/nova-3",
-    "en",
+    "nova-3",
+    "en-US",
   );
   assertTelnyxSttPreset(
     source,
     "telnyx-stt-deepgram-flux",
     "Deepgram",
-    "deepgram/flux",
-    "auto",
+    "flux",
+    "en-US",
   );
 });
 
@@ -67,11 +64,11 @@ test("StreamingStartNodeEditor exposes one Telnyx STT provider and derives model
 
   assert.match(source, /TELNYX_STT_PROVIDER_OPTION\s*=\s*\{ value: "telnyx-stt", label: "Telnyx Standalone STT" \}/);
   assert.match(source, /TELNYX_STT_MODEL_OPTIONS[\s\S]*provider\.type === "telnyx-stt"/);
-  assert.match(source, /const modelLabel = model/);
+  assert.match(source, /const modelLabel = `\$\{engine\}\/\$\{model\}`/);
   assert.doesNotMatch(source, /\.\.\.TELNYX_STT_PROVIDER_OPTIONS/);
 });
 
-test("Telnyx STT runtime overwrites stale bidirectional audio fields before Call Control", async () => {
+test("Telnyx STT runtime strips stale bidirectional audio fields before Call Control", async () => {
   const source = await readFile(
     new URL("../lib/voice-flow-engine.js", import.meta.url),
     "utf8",
@@ -82,11 +79,8 @@ test("Telnyx STT runtime overwrites stale bidirectional audio fields before Call
   assert.ok(sttBranchEnd > sttBranchStart, "Telnyx STT branch should be parseable");
   const sttBranch = source.slice(sttBranchStart, sttBranchEnd);
 
-  assert.match(sttBranch, /Object\.assign\(body, providerConfig\)/);
-  assert.match(sttBranch, /stream_bidirectional_mode=rtp/);
-  assert.match(sttBranch, /stream_bidirectional_codec=L16/);
-  assert.match(sttBranch, /stream_bidirectional_sampling_rate=16000/);
-  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_mode/);
-  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_codec/);
-  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_sampling_rate/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_mode/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_codec/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_target_legs/);
+  assert.match(sttBranch, /delete body\.stream_bidirectional_sampling_rate/);
 });
