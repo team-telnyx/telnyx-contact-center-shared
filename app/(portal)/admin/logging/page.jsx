@@ -57,6 +57,8 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", icon: IconSettings, description: "Runtime logging controls" },
 ];
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
+const LOGGING_FILTER_STATE_STORAGE_KEY = "admin.logging.filters.v1";
+const DEFAULT_LOG_FILTERS = { file: "", level: "", topics: [], runId: "", search: "", from: "", to: "", limit: "100" };
 const badgeTone = {
   trace: "border-zinc-500/35 text-zinc-600 dark:text-zinc-300",
   debug: "border-violet-500/40 text-violet-700 dark:text-violet-300",
@@ -106,6 +108,24 @@ function localDateTimeToIso(value) {
 function selectedTopics(filters) {
   if (Array.isArray(filters?.topics)) return filters.topics.filter(Boolean);
   return filters?.topic ? [filters.topic] : [];
+}
+
+function initialLogFilters() {
+  if (typeof window === "undefined") return DEFAULT_LOG_FILTERS;
+  try {
+    const raw = window.localStorage.getItem(LOGGING_FILTER_STATE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { ...DEFAULT_LOG_FILTERS, ...(parsed && typeof parsed === "object" ? parsed : {}), topics: selectedTopics(parsed) };
+  } catch (_) {
+    return DEFAULT_LOG_FILTERS;
+  }
+}
+
+function persistLogFilters(next) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LOGGING_FILTER_STATE_STORAGE_KEY, JSON.stringify(next));
+  } catch (_) {}
 }
 
 function appendLogFilterParams(params, filters) {
@@ -166,9 +186,10 @@ export default function AdminLoggingPage() {
   const [logMeta, setLogMeta] = React.useState({ skippedInvalid: 0, truncated: false });
   const [liveConnected, setLiveConnected] = React.useState(false);
   const [liveSourceFile, setLiveSourceFile] = React.useState("");
-  const [logFilters, setLogFilters] = React.useState({ file: "", level: "", topics: [], runId: "", search: "", from: "", to: "", limit: "100" });
+  const [logFilters, setLogFilters] = React.useState(() => initialLogFilters());
   const [confirmation, setConfirmation] = React.useState(null);
   const lastFilesRefreshKeyRef = React.useRef("");
+  const savePreferencesTimeoutRef = React.useRef(null);
 
   const activeMeta = NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0];
   const topicGroups = React.useMemo(() => groupedTopicsForSettings(config), [config]);
@@ -187,6 +208,40 @@ export default function AdminLoggingPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const loadPreferences = React.useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/logging/preferences", { cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to load logging preferences");
+      if (Array.isArray(data?.preferences?.filters?.topics)) {
+        setLogFilters((prev) => {
+          const next = { ...prev, topics: data.preferences.filters.topics || [] };
+          persistLogFilters(next);
+          return next;
+        });
+      }
+    } catch (error) {
+      notify({ title: "Preferences load failed", description: String(error.message || error), variant: "error" });
+    }
+  }, []);
+
+  const saveTopicPreferences = React.useCallback((next) => {
+    if (savePreferencesTimeoutRef.current) clearTimeout(savePreferencesTimeoutRef.current);
+    savePreferencesTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch("/api/admin/logging/preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filters: { topics: selectedTopics(next) } }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.ok) throw new Error(data?.error || "Failed to save logging preferences");
+      } catch (error) {
+        notify({ title: "Preferences save failed", description: String(error.message || error), variant: "error" });
+      }
+    }, 350);
   }, []);
 
   const loadLogs = React.useCallback(async (filterOverrides = {}) => {
@@ -217,7 +272,12 @@ export default function AdminLoggingPage() {
 
   React.useEffect(() => {
     loadConfig();
-  }, [loadConfig]);
+    loadPreferences();
+  }, [loadConfig, loadPreferences]);
+
+  React.useEffect(() => () => {
+    if (savePreferencesTimeoutRef.current) clearTimeout(savePreferencesTimeoutRef.current);
+  }, []);
 
   React.useEffect(() => {
     loadLogs();
@@ -272,7 +332,12 @@ export default function AdminLoggingPage() {
   }, [active, logFilters.file, loadLogs]);
 
   function updateLogFilter(key, value) {
-    setLogFilters((prev) => ({ ...prev, [key]: value }));
+    setLogFilters((prev) => {
+      const next = { ...prev, [key]: value };
+      persistLogFilters(next);
+      if (key === "topics") saveTopicPreferences(next);
+      return next;
+    });
   }
 
   function updateConfig(patch) {
