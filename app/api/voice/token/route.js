@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { credentialsLogger, credentialPayload, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
 
 async function fetchCredentialIdByUsername(apiKey, username) {
   const url = `${buildTelnyxV2Url(
@@ -13,11 +14,9 @@ async function fetchCredentialIdByUsername(apiKey, username) {
       "Content-Type": "application/json",
     },
   });
-  // Do not log secrets; keep request details minimal
-  console.log("[telnyx] fetching telephony credential id", {
-    url,
-    username,
-    status: resp.status,
+  credentialsLogger.info("telephony_credential_lookup_completed", {
+    ...securityUserPayload(null, username),
+    ...credentialPayload({ status: resp.status, credentialSource: "username" }),
   });
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
@@ -50,10 +49,10 @@ async function createAccessToken(apiKey, credentialId) {
       const parsed = JSON.parse(raw);
       detail = parsed?.errors?.[0]?.detail || detail;
       errorCode = parsed?.errors?.[0]?.code || null;
-      console.log("Failed to create access token", {
-        detail,
+      credentialsLogger.warn("telephony_access_credential_token_create_failed", {
+        ...credentialPayload({ credentialId }),
         errorCode,
-        credentialId,
+        errorMessage: detail,
       });
     } catch (_) {}
 
@@ -171,9 +170,7 @@ export async function POST() {
     } catch (tokenError) {
       // If credential expired, try to find an alternative credential
       if (tokenError.code === "CREDENTIAL_EXPIRED" && credentialId) {
-        console.log(
-          "[voice/token] Credential expired, attempting to find alternative"
-        );
+        credentialsLogger.warn("telephony_credential_expired_fallback_started", { ...credentialPayload({ credentialId }) });
 
         // Try to find another credential
         try {
@@ -184,7 +181,7 @@ export async function POST() {
             alternativeCredentialId &&
             alternativeCredentialId !== credentialId
           ) {
-            console.log("[voice/token] Found alternative credential, retrying");
+            credentialsLogger.info("telephony_alternative_credential_found", { ...credentialPayload({ credentialId: alternativeCredentialId }) });
             const token = await createAccessToken(
               telnyxApiKey,
               alternativeCredentialId
@@ -192,10 +189,7 @@ export async function POST() {
             return NextResponse.json({ token });
           }
         } catch (altErr) {
-          console.error(
-            "[voice/token] Failed to find alternative credential:",
-            altErr
-          );
+          credentialsLogger.error("telephony_alternative_credential_lookup_failed", { ...securityErrorPayload(altErr) });
         }
 
         // If no alternative found, return the expired credential error
@@ -210,7 +204,7 @@ export async function POST() {
       throw tokenError;
     }
   } catch (err) {
-    console.error("Error in /api/voice/token:", err);
+    credentialsLogger.error("voice_token_request_failed", { ...securityErrorPayload(err) });
     return NextResponse.json(
       {
         error: err?.message || "Unexpected error",
