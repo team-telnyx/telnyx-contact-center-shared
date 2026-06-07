@@ -534,6 +534,65 @@ test("friendly console works without pretty mode as plain one-line output", asyn
   }
 });
 
+test("renderStructuredLogLineForConsole reformats child-process JSON logs using parent runtime config", async () => {
+  const previousTz = process.env.TZ;
+  process.env.TZ = "UTC";
+  const { renderStructuredLogLineForConsole } = await freshLoggerModule();
+  const childLine = JSON.stringify({
+    level: "info",
+    time: "2026-06-07T18:36:45.847Z",
+    topic: "telnyx.stt",
+    runId: "child-run",
+    callControlId: "v3:visible-debug-id",
+    msg: "provider_socket_open",
+  });
+
+  try {
+    const rendered = renderStructuredLogLineForConsole(childLine, {
+      globalLevel: "info",
+      consoleEnabled: true,
+      consolePretty: true,
+      consoleFriendly: true,
+      fileEnabled: false,
+      topicEnabled: { "telnyx.stt": true },
+      topicLevels: { "telnyx.stt": "info" },
+    });
+
+    assert.equal(rendered, "[18:36:45.847] \u001b[32mINFO\u001b[0m: Provider socket open");
+    assert.doesNotMatch(rendered, /\{"level"|child-run|callControlId/);
+  } finally {
+    if (previousTz === undefined) delete process.env.TZ;
+    else process.env.TZ = previousTz;
+  }
+});
+
+test("renderStructuredLogLineForConsole suppresses child-process JSON logs for disabled topics", async () => {
+  const { renderStructuredLogLineForConsole } = await freshLoggerModule();
+  const childLine = JSON.stringify({
+    level: "error",
+    time: "2026-06-07T18:36:45.847Z",
+    topic: "agent-assist.workflow",
+    msg: "workflow_session_started",
+  });
+
+  const rendered = renderStructuredLogLineForConsole(childLine, {
+    globalLevel: "debug",
+    consoleEnabled: true,
+    consoleFriendly: true,
+    fileEnabled: false,
+    topicEnabled: { "agent-assist.workflow": false },
+  });
+
+  assert.equal(rendered, null);
+});
+
+test("renderStructuredLogLineForConsole leaves non-structured child lines untouched", async () => {
+  const { renderStructuredLogLineForConsole } = await freshLoggerModule();
+
+  assert.equal(renderStructuredLogLineForConsole("plain next output", { consoleFriendly: true }), undefined);
+  assert.equal(renderStructuredLogLineForConsole(JSON.stringify({ level: "info", msg: "missing_topic" }), { consoleFriendly: true }), undefined);
+});
+
 test("friendly console timestamps use the local process timezone", async () => {
   const previousTz = process.env.TZ;
   process.env.TZ = "Europe/Warsaw";

@@ -4,7 +4,11 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import nextEnv from "@next/env";
 import { createDiagnosticLogger } from "../lib/diagnostic-logger.mjs";
-import { tryLoadRuntimeLoggingConfigEarly } from "../lib/logger/runtime-config.mjs";
+import { renderStructuredLogLineForConsole } from "../lib/logger/index.mjs";
+import {
+  getRuntimeLoggingConfig,
+  tryLoadRuntimeLoggingConfigEarly,
+} from "../lib/logger/runtime-config.mjs";
 
 const { loadEnvConfig } = nextEnv;
 const originalEnv = { ...process.env };
@@ -12,7 +16,26 @@ const nodeEnv = originalEnv.NODE_ENV || "production";
 process.env.NODE_ENV = nodeEnv;
 loadEnvConfig(process.cwd(), nodeEnv !== "production");
 
-const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
+let runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
+let runtimeLoggingConfigRefreshAt = Date.now();
+let runtimeLoggingConfigRefreshInFlight = false;
+const RUNTIME_LOGGING_CONFIG_REFRESH_MS = 5000;
+
+function refreshRuntimeLoggingConfigIfStale() {
+  const now = Date.now();
+  if (runtimeLoggingConfigRefreshInFlight) return;
+  if (now - runtimeLoggingConfigRefreshAt < RUNTIME_LOGGING_CONFIG_REFRESH_MS) return;
+  runtimeLoggingConfigRefreshInFlight = true;
+  runtimeLoggingConfigRefreshAt = now;
+  getRuntimeLoggingConfig({ forceRefresh: true })
+    .then((config) => {
+      runtimeLoggingConfig = config;
+    })
+    .catch(() => {})
+    .finally(() => {
+      runtimeLoggingConfigRefreshInFlight = false;
+    });
+}
 
 const logger = createDiagnosticLogger("platform.app", {
   config: {
@@ -44,6 +67,7 @@ let startingSuppressed = false;
 let bannerBlankSuppressed = false;
 
 function forwardLine(line, stream) {
+  refreshRuntimeLoggingConfigIfStale();
   const trimmed = line.trim();
   if (/^▲\s+Next\.js\b/.test(trimmed)) {
     logger.info("web_server_next_runtime", { version: trimmed.replace(/^▲\s+/, "") });
@@ -79,6 +103,12 @@ function forwardLine(line, stream) {
       readyIn: readyMatch[1],
       nextCliStartingLineSuppressed: startingSuppressed,
     });
+    return;
+  }
+  const rendered = renderStructuredLogLineForConsole(line, runtimeLoggingConfig || {});
+  if (rendered === null) return;
+  if (rendered !== undefined) {
+    stream.write(`${rendered}\n`);
     return;
   }
   stream.write(`${line}\n`);

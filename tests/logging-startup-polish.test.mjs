@@ -78,14 +78,22 @@ test("production start is wrapped so Next CLI ready lines become pino events", a
     "start wrapper must import Next env support before creating the pino logger",
   );
   assert.match(startWrapper, /tryLoadRuntimeLoggingConfigEarly/);
-  assert.match(startWrapper, /const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly\(\)/);
+  assert.match(startWrapper, /let runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly\(\)/);
+  assert.match(startWrapper, /getRuntimeLoggingConfig\(\{ forceRefresh: true \}\)/);
+  assert.match(startWrapper, /RUNTIME_LOGGING_CONFIG_REFRESH_MS = 5000/);
+  assert.match(startWrapper, /refreshRuntimeLoggingConfigIfStale\(\)/);
   assert.match(startWrapper, /loadEnvConfig\(process\.cwd\(\), nodeEnv !== "production"\)/);
   assert.ok(
-    startWrapper.indexOf('loadEnvConfig(process.cwd(), nodeEnv !== "production");') < startWrapper.indexOf('const runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();'),
+    startWrapper.indexOf('loadEnvConfig(process.cwd(), nodeEnv !== "production");') < startWrapper.indexOf('let runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();'),
     "start wrapper must load .env before reading DB-backed logging config",
   );
   assert.match(startWrapper, /env:\s*\{ \.\.\.process\.env, NODE_ENV: nodeEnv \}/);
   assert.match(startWrapper, /getConfig: \(\) => runtimeLoggingConfig/);
+  assert.match(startWrapper, /renderStructuredLogLineForConsole/);
+  assert.match(startWrapper, /const rendered = renderStructuredLogLineForConsole\(line, runtimeLoggingConfig \|\| \{\}\)/);
+  assert.match(startWrapper, /if \(rendered === null\) return/);
+  assert.match(startWrapper, /if \(rendered !== undefined\)/);
+  assert.match(startWrapper, /stream\.write\(`\$\{rendered\}\\n`\)/);
   assert.match(startWrapper, /web_server_starting/);
   assert.match(startWrapper, /web_server_ready/);
   assert.match(startWrapper, /web_server_next_runtime/);
