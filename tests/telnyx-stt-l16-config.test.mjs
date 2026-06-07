@@ -54,11 +54,15 @@ test("Standalone STT streaming comments describe the RTP L16 linear16 contract",
   assert.doesNotMatch(engineSource, /delete body\.stream_bidirectional_mode/);
 });
 
-test("Answer requests strip StartStreaming-only sampling rate after provider presets apply", () => {
-  assert.match(
-    engineSource,
-    /case "answer":[\s\S]*body = await applyStreamingProviderConfiguration\(body, action\);[\s\S]*delete body\.stream_bidirectional_sampling_rate;[\s\S]*body = cleanupStreamingProviderFields\(body\);/,
-  );
+test("Answer requests keep RTP L16 sampling rate after provider presets apply", () => {
+  const answerBranchStart = engineSource.indexOf('case "answer":');
+  assert.ok(answerBranchStart >= 0, "answer branch should exist");
+  const answerBranchEnd = engineSource.indexOf('case "hangup":', answerBranchStart);
+  assert.ok(answerBranchEnd > answerBranchStart, "answer branch should be parseable");
+  const answerBranch = engineSource.slice(answerBranchStart, answerBranchEnd);
+
+  assert.match(answerBranch, /body = await applyStreamingProviderConfiguration\(body, action\);/);
+  assert.doesNotMatch(answerBranch, /delete body\.stream_bidirectional_sampling_rate/);
 });
 
 test("Telnyx RTP L16 payloads are byte-swapped before linear16 STT forwarding", () => {
