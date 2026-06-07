@@ -64,3 +64,21 @@ test("Telnyx STT diagnostics are controlled by runtime topic config, not DEBUG_T
   assert.match(source, /function logSttInfo\(message, payload = \{\}\) \{\s*sttLogger\.info\(message, payload\);\s*\}/);
   assert.match(source, /function logSttError\(message, payload = \{\}\) \{\s*sttLogger\.error\(message, payload\);\s*\}/);
 });
+
+test("Telnyx STT log identifiers stay full-length for debugging", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
+  const fullCallControlId = "v3:d7P9yKkdbpNUnshortenedCallControlIdentifierhBveTeRA";
+  const fullInteractionId = "7875d47c-31c4-4bbb-8ac1-2e9a22f9e0a1";
+
+  assert.equal(__telnyxSttTestUtils.logIdentifier(fullCallControlId), fullCallControlId);
+  assert.equal(__telnyxSttTestUtils.logIdentifier(fullInteractionId), fullInteractionId);
+  assert.doesNotMatch(source, /function shortId\(/);
+  assert.doesNotMatch(source, /slice\(0, 4\).*slice\(-8\)/);
+  assert.doesNotMatch(source, /callControlId:\s*shortId\(/);
+  assert.doesNotMatch(source, /interactionId:\s*shortId\(/);
+});
+
+test("Telnyx STT transcript logs include the transcript text", async () => {
+  const source = await import("node:fs/promises").then(({ readFile }) => readFile(new URL("../lib/telnyx-stt-handler.mjs", import.meta.url), "utf8"));
+  assert.match(source, /logSttInfo\("provider_socket_transcript", \{[\s\S]*transcript:\s*normalized\.transcript,[\s\S]*transcriptLength:\s*normalized\.transcript\.length/);
+});
