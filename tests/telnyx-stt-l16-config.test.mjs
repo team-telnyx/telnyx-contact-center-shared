@@ -30,22 +30,28 @@ test("Telnyx standalone STT provider presets request Telnyx L16 media streams", 
   for (const providerId of STANDALONE_STT_PROVIDER_IDS) {
     const block = providerBlock(providerId);
     assert.match(block, /telnyx:\s*\{[\s\S]*stream_codec:\s*"L16"/, `${providerId} should request stream_codec=L16`);
+    assert.match(block, /telnyx:\s*\{[\s\S]*stream_bidirectional_mode:\s*"rtp"/, `${providerId} should force RTP bidirectional streaming mode`);
+    assert.match(block, /telnyx:\s*\{[\s\S]*stream_bidirectional_codec:\s*"L16"/, `${providerId} should force L16 RTP payloads`);
+    assert.match(block, /telnyx:\s*\{[\s\S]*stream_bidirectional_sampling_rate:\s*16000/, `${providerId} should force 16 kHz RTP payloads`);
     assert.match(block, /telnyxStt:\s*\{[\s\S]*input_format:\s*"linear16"/, `${providerId} should connect STT WS with input_format=linear16`);
     assert.match(block, /telnyxStt:\s*\{[\s\S]*sample_rate:\s*16000/, `${providerId} should connect STT WS with sample_rate=16000`);
   }
 });
 
-test("Agent-leg Telnyx standalone STT prewarm also requests L16 media", () => {
+test("Agent-leg Telnyx standalone STT prewarm also requests RTP L16 media", () => {
   assert.match(
     handlerSource,
-    /const body = \{[\s\S]*stream_track:\s*"inbound_track",[\s\S]*stream_codec:\s*"L16",[\s\S]*client_state:/,
+    /const body = \{[\s\S]*stream_track:\s*"inbound_track",[\s\S]*stream_codec:\s*"L16",[\s\S]*stream_bidirectional_mode:\s*"rtp",[\s\S]*stream_bidirectional_codec:\s*"L16",[\s\S]*stream_bidirectional_sampling_rate:\s*16000,[\s\S]*client_state:/,
   );
 });
 
-test("Standalone STT streaming comments describe the L16 linear16 contract", () => {
+test("Standalone STT streaming comments describe the RTP L16 linear16 contract", () => {
   assert.match(engineSource, /stream_codec=L16/);
+  assert.match(engineSource, /stream_bidirectional_mode=rtp/);
+  assert.match(engineSource, /stream_bidirectional_codec=L16/);
+  assert.match(engineSource, /stream_bidirectional_sampling_rate=16000/);
   assert.match(engineSource, /input_format=linear16/);
-  assert.doesNotMatch(engineSource, /stream_codec=PCMU remains the only audio format contract/);
+  assert.doesNotMatch(engineSource, /delete body\.stream_bidirectional_mode/);
 });
 
 test("Telnyx RTP L16 payloads are byte-swapped before linear16 STT forwarding", () => {

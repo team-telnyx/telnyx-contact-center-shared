@@ -167,9 +167,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google phone_call. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -190,9 +193,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google latest_long. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -213,9 +219,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Google default. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -236,9 +245,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using xAI Grok STT. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -259,9 +271,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -282,9 +297,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -305,9 +323,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Flux. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,
@@ -328,9 +349,12 @@ Be friendly, professional, and concise. Provide accurate information about Telny
     description: "Standalone Telnyx Speech-to-Text WebSocket using Speechmatics standard. Test preset for Telnyx-managed L16 media transcoding into linear16 @ 16 kHz.",
     type: "telnyx-stt",
     telnyx: {
-      // Each call leg streams its own inbound audio as Telnyx-managed L16; outbound/both start a second stream on the agent leg.
+      // Each call leg streams inbound audio using RTP L16 at 16 kHz; outbound/both start a second stream on the agent leg.
       stream_track: "inbound_track",
       stream_codec: "L16",
+      stream_bidirectional_mode: "rtp",
+      stream_bidirectional_codec: "L16",
+      stream_bidirectional_sampling_rate: 16000,
     },
     telnyxStt: {
       enabled: true,

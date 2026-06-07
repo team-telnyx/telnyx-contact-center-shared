@@ -21,6 +21,9 @@ function assertTelnyxSttPreset(source, providerId, engine, model, language) {
   assert.match(block, /type: "telnyx-stt"/);
   assert.match(block, /stream_track: "inbound_track"/);
   assert.match(block, /stream_codec: "L16"/);
+  assert.match(block, /stream_bidirectional_mode: "rtp"/);
+  assert.match(block, /stream_bidirectional_codec: "L16"/);
+  assert.match(block, /stream_bidirectional_sampling_rate: 16000/);
   assert.match(block, /transcription_tracks: "both"/);
   assert.match(block, new RegExp(`transcription_engine: "${engine}"`));
   assert.match(block, new RegExp(`model: "${model.replace("/", "\\/")}"`));
@@ -68,7 +71,7 @@ test("StreamingStartNodeEditor exposes one Telnyx STT provider and derives model
   assert.doesNotMatch(source, /\.\.\.TELNYX_STT_PROVIDER_OPTIONS/);
 });
 
-test("Telnyx STT runtime strips stale bidirectional audio fields before Call Control", async () => {
+test("Telnyx STT runtime overwrites stale bidirectional audio fields before Call Control", async () => {
   const source = await readFile(
     new URL("../lib/voice-flow-engine.js", import.meta.url),
     "utf8",
@@ -79,8 +82,11 @@ test("Telnyx STT runtime strips stale bidirectional audio fields before Call Con
   assert.ok(sttBranchEnd > sttBranchStart, "Telnyx STT branch should be parseable");
   const sttBranch = source.slice(sttBranchStart, sttBranchEnd);
 
-  assert.match(sttBranch, /delete body\.stream_bidirectional_mode/);
-  assert.match(sttBranch, /delete body\.stream_bidirectional_codec/);
-  assert.match(sttBranch, /delete body\.stream_bidirectional_target_legs/);
-  assert.match(sttBranch, /delete body\.stream_bidirectional_sampling_rate/);
+  assert.match(sttBranch, /Object\.assign\(body, providerConfig\)/);
+  assert.match(sttBranch, /stream_bidirectional_mode=rtp/);
+  assert.match(sttBranch, /stream_bidirectional_codec=L16/);
+  assert.match(sttBranch, /stream_bidirectional_sampling_rate=16000/);
+  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_mode/);
+  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_codec/);
+  assert.doesNotMatch(sttBranch, /delete body\.stream_bidirectional_sampling_rate/);
 });
