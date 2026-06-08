@@ -12,7 +12,7 @@ import {
   IconKey,
   IconAddressBook,
   IconPhone,
-  IconHistory,
+
   IconFileMusic,
   IconAward,
   IconBook,
@@ -42,20 +42,14 @@ export const menuConfig = {
       ],
     },
     {
-      label: "SUPERVISOR",
+      label: "REPORTING",
       icon: null,
       role_access: ["supervisor", "admin", "owner"], // Show this group to supervisor, admin, and owner roles
       items: [
         {
-          title: "Monitor",
+          title: "Reporting",
           url: "/supervisor/monitor",
           icon: IconActivity,
-          role_access: ["supervisor", "admin", "owner"],
-        },
-        {
-          title: "Call History",
-          url: "/supervisor/call-history",
-          icon: IconHistory,
           role_access: ["supervisor", "admin", "owner"],
         },
         {

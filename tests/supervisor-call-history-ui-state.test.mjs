@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const pageSourcePromise = readFile(
-  new URL("../app/(portal)/supervisor/call-history/page.jsx", import.meta.url),
+const callHistorySourcePromise = readFile(
+  new URL("../components/contact-center/SupervisorCallHistoryView.jsx", import.meta.url),
   "utf8",
 );
 const storeSourcePromise = readFile(
@@ -12,13 +12,13 @@ const storeSourcePromise = readFile(
 );
 
 test("supervisor call history date range is persisted in the app state store", async () => {
-  const [pageSource, storeSource] = await Promise.all([
-    pageSourcePromise,
+  const [callHistorySource, storeSource] = await Promise.all([
+    callHistorySourcePromise,
     storeSourcePromise,
   ]);
 
   assert.match(
-    pageSource,
+    callHistorySource,
     /useAppStateStore/,
     "Call History should read and update the app state store instead of keeping date range only in component state",
   );
@@ -45,33 +45,33 @@ test("supervisor call history date range is persisted in the app state store", a
 });
 
 test("supervisor call history exposes quick date range buttons", async () => {
-  const pageSource = await pageSourcePromise;
+  const callHistorySource = await callHistorySourcePromise;
 
   for (const label of ["1 day", "7 days", "30 days"]) {
     assert.match(
-      pageSource,
+      callHistorySource,
       new RegExp(`>${label}<`),
       `Call History should render a ${label} quick range button`,
     );
   }
 
   assert.match(
-    pageSource,
+    callHistorySource,
     /setQuickDateRange\(1\)/,
     "1 day quick range should set a one-day range",
   );
   assert.match(
-    pageSource,
+    callHistorySource,
     /setQuickDateRange\(7\)/,
     "7 days quick range should set a seven-day range",
   );
   assert.match(
-    pageSource,
+    callHistorySource,
     /setQuickDateRange\(30\)/,
     "30 days quick range should set a thirty-day range",
   );
   assert.match(
-    pageSource,
+    callHistorySource,
     /setPage\(1\);[\s\S]*setSupervisorCallHistoryDateRange\(/,
     "Quick range changes should reset pagination and save the date range in app state",
   );

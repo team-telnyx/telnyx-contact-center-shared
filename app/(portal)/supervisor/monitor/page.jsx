@@ -37,6 +37,7 @@ import {
   IconPlayerPause,
   IconPlayerPlay,
   IconPlayerStop,
+  IconHistory,
 } from "@tabler/icons-react";
 import { ChevronDownIcon } from "lucide-react";
 import {
@@ -81,6 +82,7 @@ import {
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
 import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
+import SupervisorCallHistoryView from "@/components/contact-center/SupervisorCallHistoryView";
 import {
   HoverCard,
   HoverCardContent,
@@ -92,7 +94,8 @@ const MONITOR_RAIL_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
   { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
-  { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Trend visualizations" },
+  { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Live reporting snapshots" },
+  { id: "call-history", label: "Call History", icon: IconHistory, description: "Historical interactions, recordings, and workflow details" },
 ];
 const MONITOR_UI_STATE_STORAGE_KEYS = {
   activeSection: "supervisor.monitor.activeSection",
@@ -398,46 +401,98 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
 }
 
 function buildTrendData(range, overall, agents, queues) {
-  const points = range === "1d" ? 8 : range === "7d" ? 7 : 10;
-  const total = Number(overall.calls?.total || 0);
-  const answered = Number(overall.calls?.answered || 0);
-  const abandoned = Number(overall.calls?.abandoned || 0);
-  const active = Number(overall.calls?.active || 0);
-  const waiting = queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
-  const available = Number(overall.agents?.available || agents.filter((a) => a.status === "Available").length);
-  const busy = Number(overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length);
-  const divisor = Math.max(points, 1);
+  const calls = overall.calls || {};
+  const queueTotals = queues.reduce(
+    (acc, queue) => {
+      acc.waiting += Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0);
+      acc.avgWait += Number(queue.avgWaitTimeSeconds ?? queue.averageWaitTime ?? 0);
+      return acc;
+    },
+    { waiting: 0, avgWait: 0 },
+  );
+  const availableAgents = Number(
+    overall.agents?.available ?? agents.filter((agent) => agent.status === "Available").length,
+  );
+  const busyAgents = Number(
+    overall.agents?.busy ?? agents.filter((agent) => Number(agent.currentCalls || 0) > 0).length,
+  );
+  const activeCalls = Number(calls.active || 0);
+  const answered = Number(calls.answered || 0);
+  const missed = Number(calls.abandoned || 0);
+  const totalCalls = Number(calls.total || answered + missed + activeCalls);
+  const avgWait = Number(calls.avgWaitTimeSeconds || 0);
+  const avgHandle = Number(calls.avgHandleTimeSeconds || 0);
+  const avgTalk = Number(calls.avgTalkTimeSeconds || 0);
 
-  return Array.from({ length: points }, (_, idx) => {
-    const weight = (idx + 1) / divisor;
-    return {
-      label: range === "1d" ? `${idx * 3}:00` : range === "7d" ? `D${idx + 1}` : `W${idx + 1}`,
-      inbound: Math.round((total || active + waiting) * weight),
-      outbound: Math.round(Number(overall.calls?.outbound || 0) * weight),
-      answered: Math.round(answered * weight),
-      missed: Math.round(abandoned * weight),
-      wait: Math.round((Number(overall.calls?.avgWaitTimeSeconds || 0) + waiting) * weight),
-      available: Math.round(available * weight),
-      occupied: Math.round(busy * weight),
-    };
-  });
+  if (range === "1d") {
+    return [
+      { label: "Answered", calls: answered },
+      { label: "Missed", calls: missed },
+      { label: "Active", calls: activeCalls },
+      { label: "Waiting", calls: Number(overall.queues?.totalWaitingCalls ?? queueTotals.waiting) },
+    ];
+  }
+
+  if (range === "7d") {
+    return [
+      { label: "Total calls", calls: totalCalls },
+      { label: "Answered", calls: answered },
+      { label: "Missed", calls: missed },
+      { label: "Active now", calls: activeCalls },
+    ];
+  }
+
+  return [
+    { label: "Avg wait", seconds: Math.round(avgWait) },
+    { label: "Avg handle", seconds: Math.round(avgHandle) },
+    { label: "Avg talk", seconds: Math.round(avgTalk) },
+    { label: "Queue avg", seconds: queues.length ? Math.round(queueTotals.avgWait / queues.length) : 0 },
+  ];
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">
+      <div className="mb-1 font-semibold">{label}</div>
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div key={entry.dataKey} className="flex min-w-32 items-center justify-between gap-4">
+            <span className="capitalize text-muted-foreground">{String(entry.name || entry.dataKey).replace(/([A-Z])/g, " $1")}</span>
+            <span className="font-semibold">{Number(entry.value || 0).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function MonitorGraphsView({ overall, agents, queues }) {
   const [range, setRange] = useState("7d");
-  const trendData = buildTrendData(range, overall, agents, queues);
+  const summaryData = buildTrendData(range, overall, agents, queues);
+  const queueData = queues.map((queue) => ({
+    label: queue.queueName || queue.name || queue.displayName || "Queue",
+    waiting: Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0),
+    active: Number(queue.activeCalls ?? queue.realtime?.activeCalls ?? 0),
+    avgWait: Math.round(Number(queue.avgWaitTimeSeconds ?? queue.averageWaitTime ?? 0)),
+  }));
+  const agentStatusData = [
+    { label: "Available", availableAgents: Number(overall.agents?.available ?? agents.filter((agent) => agent.status === "Available").length) },
+    { label: "Busy", busyAgents: Number(overall.agents?.busy ?? agents.filter((agent) => Number(agent.currentCalls || 0) > 0).length) },
+    { label: "Offline / other", otherAgents: Math.max(0, Number(overall.agents?.total || agents.length || 0) - Number(overall.agents?.available || 0) - Number(overall.agents?.busy || 0)) },
+  ];
   const rangeLabels = [
-    { id: "1d", label: "1 day" },
-    { id: "7d", label: "7 days" },
-    { id: "30d", label: "30 days" },
+    { id: "1d", label: "Calls" },
+    { id: "7d", label: "Outcomes" },
+    { id: "30d", label: "Durations" },
   ];
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-background/85 p-4 shadow-sm">
         <div>
-          <h2 className="font-semibold">Trend visualization scaffold</h2>
-          <p className="text-sm text-muted-foreground">Derived from current monitor aggregates until historical time-series data is available.</p>
+          <h2 className="font-semibold">Live reporting snapshot</h2>
+          <p className="text-sm text-muted-foreground">Built from current monitor aggregates: call outcomes, queue depth, wait time, and agent availability.</p>
         </div>
         <div className="flex rounded-xl border bg-muted/40 p-1">
           {rangeLabels.map((item) => (
@@ -449,50 +504,50 @@ function MonitorGraphsView({ overall, agents, queues }) {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <GraphCard title="Inbound / outbound volume" description="Current aggregate distributed across selected range.">
+        <GraphCard title="Call volume / outcomes" description="Current total, answered, missed, active, and waiting call counts.">
           <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={trendData} margin={{ left: -20, right: 10 }}>
+            <BarChart data={summaryData} margin={{ left: -20, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip />
-              <Area type="monotone" dataKey="inbound" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.16} />
-              <Area type="monotone" dataKey="outbound" stroke="#71717a" fill="#71717a" fillOpacity={0.14} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </GraphCard>
-        <GraphCard title="Answered / missed" description="Answered and abandoned call aggregates.">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={trendData} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip />
-              <Bar dataKey="answered" fill="#10b981" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="missed" fill="#71717a" radius={[6, 6, 0, 0]} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey={range === "30d" ? "seconds" : "calls"} name={range === "30d" ? "seconds" : "calls"} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </GraphCard>
-        <GraphCard title="Queue wait pressure" description="Average wait plus current queue depth signal.">
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={trendData} margin={{ left: -20, right: 10 }}>
+        <GraphCard title="Queue depth" description="Waiting and active calls by queue, using live queue statistics.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={queueData.length ? queueData : [{ label: "No queue data", waiting: 0, active: 0 }]} margin={{ left: -20, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip />
-              <Area type="monotone" dataKey="wait" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey="waiting" name="waiting" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="active" name="active" fill="#10b981" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Queue wait pressure" description="Average wait time by queue in seconds.">
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={queueData.length ? queueData : [{ label: "No queue data", avgWait: 0 }]} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} />
+              <Area type="monotone" dataKey="avgWait" name="avg wait seconds" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
             </AreaChart>
           </ResponsiveContainer>
         </GraphCard>
-        <GraphCard title="Agent availability / occupancy" description="Available and busy agent aggregates.">
+        <GraphCard title="Agent availability / occupancy" description="Available, busy, and other activated-agent state counts.">
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={trendData} margin={{ left: -20, right: 10 }}>
+            <BarChart data={agentStatusData} margin={{ left: -20, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip />
-              <Bar dataKey="available" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="occupied" fill="#27272a" radius={[6, 6, 0, 0]} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey="availableAgents" name="available agents" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="busyAgents" name="busy agents" fill="#f97316" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="otherAgents" name="other agents" fill="#71717a" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </GraphCard>
@@ -1643,6 +1698,8 @@ export default function MonitorPage() {
                   <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
                 </CardContent>
               </Card>
+            ) : activeTab === "call-history" ? (
+              <SupervisorCallHistoryView embedded />
             ) : activeTab === "graphs" ? (
               <Card className="flex h-full min-h-0 flex-col overflow-hidden">
                 <CardHeader className="shrink-0">
