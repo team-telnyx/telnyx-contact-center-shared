@@ -1771,6 +1771,59 @@ export default function MonitorPage() {
     return true;
   });
 
+  const filteredAgentMetrics = {
+    total: agents.length,
+    available: agents.filter((agent) => agent.status === "Available").length,
+    busy: agents.filter((agent) => agent.status === "Busy" || Number(agent.currentCalls || 0) > 0).length,
+    activeCalls: agents.reduce((sum, agent) => sum + Number(agent.currentCalls || 0), 0),
+    activeQueues: agents.reduce((sum, agent) => sum + Number(agent.activeQueues || 0), 0),
+    completedToday: agents.reduce((sum, agent) => sum + Number(agent.today?.completedCalls || 0), 0),
+  };
+  filteredAgentMetrics.availability = pct(filteredAgentMetrics.available, Math.max(filteredAgentMetrics.total, 1));
+  filteredAgentMetrics.occupancy = pct(filteredAgentMetrics.busy, Math.max(filteredAgentMetrics.total, 1));
+
+  const queueViewMetrics = queues.reduce(
+    (acc, queue) => {
+      const waiting = Number(queue.realtime?.waitingCalls || 0);
+      const active = Number(queue.realtime?.activeCalls || 0);
+      const availableAgents = Number(queue.agents?.available || 0);
+      const busyAgents = Number(queue.agents?.busy || 0);
+      const totalCalls = Number(queue.today?.totalCalls || 0);
+      const answeredCalls = Number(queue.today?.answeredCalls || 0);
+      const serviceLevel = Number(queue.today?.serviceLevelPercentage || 0);
+
+      acc.total += 1;
+      acc.waiting += waiting;
+      acc.active += active;
+      acc.availableAgents += availableAgents;
+      acc.busyAgents += busyAgents;
+      acc.longestWait = Math.max(acc.longestWait, Number(queue.realtime?.longestWaitSeconds || 0));
+      acc.totalCalls += totalCalls;
+      acc.answeredCalls += answeredCalls;
+      if (Number.isFinite(serviceLevel) && totalCalls > 0) {
+        acc.serviceLevelSum += serviceLevel;
+        acc.serviceLevelCount += 1;
+      }
+      return acc;
+    },
+    {
+      total: 0,
+      waiting: 0,
+      active: 0,
+      availableAgents: 0,
+      busyAgents: 0,
+      longestWait: 0,
+      totalCalls: 0,
+      answeredCalls: 0,
+      serviceLevelSum: 0,
+      serviceLevelCount: 0,
+    },
+  );
+  queueViewMetrics.serviceLevel = queueViewMetrics.serviceLevelCount
+    ? Math.round(queueViewMetrics.serviceLevelSum / queueViewMetrics.serviceLevelCount)
+    : pct(queueViewMetrics.answeredCalls, Math.max(queueViewMetrics.totalCalls, 1));
+  queueViewMetrics.pressure = pct(queueViewMetrics.waiting, Math.max(queueViewMetrics.waiting + queueViewMetrics.active, 1));
+
   const selectMonitorSection = (value) => {
     setActiveTab(value);
     // Clear selected queue when switching tabs to ensure proper view rendering
@@ -2218,9 +2271,35 @@ export default function MonitorPage() {
                   <Skeleton className="h-10 w-full" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          <IconSparkles className="h-4 w-4 text-telnyx-green" />
+                          Agent operations
+                        </div>
+                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Live roster command surface</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Fast snapshot of filtered agents, availability, live workload, and today's completions.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="w-fit border-telnyx-green/40 bg-telnyx-green/10 text-telnyx-green">
+                        {filteredAgentMetrics.total} visible of {allAgents.length} agents
+                      </Badge>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <OverviewMetricCard icon={IconUsers} label="Roster coverage" value={formatShortNumber(filteredAgentMetrics.total)} detail={`${allAgents.length} total · ${selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0)} filters`} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip="Filtered" tone="slate" />
+                      <OverviewMetricCard icon={IconCheck} label="Available now" value={formatShortNumber(filteredAgentMetrics.available)} detail={`${filteredAgentMetrics.availability}% ready to route`} progress={filteredAgentMetrics.availability} chip="Realtime" tone="emerald" />
+                      <OverviewMetricCard icon={IconPhone} label="Live conversations" value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={`${filteredAgentMetrics.occupancy}% occupancy · ${filteredAgentMetrics.busy} busy`} progress={filteredAgentMetrics.occupancy} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconTrendingUp} label="Queue activations" value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={`${filteredAgentMetrics.completedToday} completed today`} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip="Today" tone="violet" />
+                    </div>
+                  </div>
+
                   {/* Filters */}
-                  <div className="flex flex-wrap items-center gap-3 pb-2 border-b">
+                  <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                       <IconFilter className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">Filters:</span>
@@ -2401,7 +2480,9 @@ export default function MonitorPage() {
                       <IconX className="h-4 w-4 mr-1" />
                       Clear filters
                     </Button>
-                  </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Agents Table */}
                   {agents.length === 0 ? (
@@ -2411,7 +2492,9 @@ export default function MonitorPage() {
                         : "No agents match the selected filters"}
                     </p>
                   ) : (
-                    <div className="overflow-x-auto h-full -mx-6 px-6">
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto h-full">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -2792,7 +2875,9 @@ export default function MonitorPage() {
                           })}
                         </TableBody>
                       </Table>
-                    </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               )}
@@ -2805,122 +2890,156 @@ export default function MonitorPage() {
                   <Skeleton className="h-10 w-full" />
                   <Skeleton className="h-10 w-full" />
                 </div>
-              ) : queues.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No queues configured or enabled
-                </p>
               ) : (
-                <div className="overflow-x-auto h-full -mx-6 px-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Queue Name</TableHead>
-                        <TableHead>Waiting</TableHead>
-                        <TableHead>Active</TableHead>
-                        <TableHead>Agents</TableHead>
-                        <TableHead>Longest Wait</TableHead>
-                        <TableHead>Today: Total</TableHead>
-                        <TableHead>Today: Answered</TableHead>
-                        <TableHead>Service Level</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {queues.map((queue) => (
-                        <TableRow key={queue.queueId}>
-                          <TableCell className="font-medium">
-                            <button
-                              onClick={() => loadQueueCalls(queue.queueId)}
-                              className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                            >
-                              {queue.queueName || queue.queueId}
-                            </button>
-                          </TableCell>
-                          <TableCell
-                            className={
-                              highlightedCells.has(
-                                `queue-${queue.queueId}-waiting`,
-                              )
-                                ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                : ""
-                            }
-                          >
-                            <Badge
-                              variant={
-                                queue.realtime?.waitingCalls > 10
-                                  ? "destructive"
-                                  : queue.realtime?.waitingCalls > 5
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                            >
-                              {queue.realtime?.waitingCalls || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell
-                            className={
-                              highlightedCells.has(
-                                `queue-${queue.queueId}-active`,
-                              )
-                                ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                : ""
-                            }
-                          >
-                            {queue.realtime?.activeCalls || 0}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-xs">
-                              <div className="text-green-600">
-                                {queue.agents?.available || 0} avail
-                              </div>
-                              <div className="text-orange-600">
-                                {queue.agents?.busy || 0} busy
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {queue.realtime?.longestWaitSeconds
-                              ? `${Math.round(
-                                  queue.realtime.longestWaitSeconds,
-                                )}s`
-                              : "—"}
-                          </TableCell>
-                          <TableCell>{queue.today?.totalCalls || 0}</TableCell>
-                          <TableCell>
-                            {queue.today?.answeredCalls || 0}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {queue.today?.serviceLevelPercentage >= 80 ? (
-                                <Badge
-                                  variant="default"
-                                  className="bg-green-600"
-                                >
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              ) : queue.today?.serviceLevelPercentage >= 60 ? (
-                                <Badge variant="secondary">
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              ) : (
-                                <Badge variant="destructive">
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70" data-testid="queue-pressure-card">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          <IconGauge className="h-4 w-4 text-telnyx-green" />
+                          Queue command center
+                        </div>
+                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Routing pressure and service health</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Dark-theme queue cards show waiting load, active calls, agent supply, and today's service level.
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                        {queueViewMetrics.pressure}% queue pressure
+                      </Badge>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <OverviewMetricCard icon={IconTrendingUp} label="Queues monitored" value={formatShortNumber(queueViewMetrics.total)} detail={`${queueViewMetrics.availableAgents} available agents`} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip="Realtime" tone="slate" />
+                      <OverviewMetricCard icon={IconClock} label="Waiting callers" value={formatShortNumber(queueViewMetrics.waiting)} detail={`Longest wait ${formatDurationShort(queueViewMetrics.longestWait)}`} progress={queueViewMetrics.pressure} chip="Live" tone="amber" />
+                      <OverviewMetricCard icon={IconPhoneIncoming} label="Active calls" value={formatShortNumber(queueViewMetrics.active)} detail={`${queueViewMetrics.busyAgents} busy agents`} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconCheck} label="Service level" value={`${queueViewMetrics.serviceLevel}%`} detail={`${queueViewMetrics.answeredCalls}/${queueViewMetrics.totalCalls} answered today`} progress={queueViewMetrics.serviceLevel} chip="Today" tone="emerald" />
+                    </div>
+                  </div>
+
+                  {queues.length === 0 ? (
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="py-10">
+                        <p className="text-sm text-muted-foreground text-center">
+                          No queues configured or enabled
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto h-full">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Queue Name</TableHead>
+                                <TableHead>Waiting</TableHead>
+                                <TableHead>Active</TableHead>
+                                <TableHead>Agents</TableHead>
+                                <TableHead>Longest Wait</TableHead>
+                                <TableHead>Today: Total</TableHead>
+                                <TableHead>Today: Answered</TableHead>
+                                <TableHead>Service Level</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {queues.map((queue) => (
+                                <TableRow key={queue.queueId} className="hover:bg-muted/50">
+                                  <TableCell className="font-medium">
+                                    <button
+                                      onClick={() => loadQueueCalls(queue.queueId)}
+                                      className="text-left text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                    >
+                                      {queue.queueName || queue.queueId}
+                                    </button>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
+                                        `queue-${queue.queueId}-waiting`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    <Badge
+                                      variant={
+                                        queue.realtime?.waitingCalls > 10
+                                          ? "destructive"
+                                          : queue.realtime?.waitingCalls > 5
+                                          ? "secondary"
+                                          : "outline"
+                                      }
+                                    >
+                                      {queue.realtime?.waitingCalls || 0}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
+                                        `queue-${queue.queueId}-active`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    {queue.realtime?.activeCalls || 0}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="grid gap-1 text-xs">
+                                      <span className="text-green-600 dark:text-green-400">
+                                        {queue.agents?.available || 0} avail
+                                      </span>
+                                      <span className="text-orange-600 dark:text-orange-400">
+                                        {queue.agents?.busy || 0} busy
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {queue.realtime?.longestWaitSeconds
+                                      ? formatDurationShort(queue.realtime.longestWaitSeconds)
+                                      : "—"}
+                                  </TableCell>
+                                  <TableCell>{queue.today?.totalCalls || 0}</TableCell>
+                                  <TableCell>
+                                    {queue.today?.answeredCalls || 0}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1">
+                                      {queue.today?.serviceLevelPercentage >= 80 ? (
+                                        <Badge
+                                          variant="default"
+                                          className="bg-green-600"
+                                        >
+                                          {queue.today?.serviceLevelPercentage.toFixed(
+                                            1,
+                                          )}
+                                          %
+                                        </Badge>
+                                      ) : queue.today?.serviceLevelPercentage >= 60 ? (
+                                        <Badge variant="secondary">
+                                          {queue.today?.serviceLevelPercentage.toFixed(
+                                            1,
+                                          )}
+                                          %
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="destructive">
+                                          {queue.today?.serviceLevelPercentage?.toFixed
+                                            ? queue.today.serviceLevelPercentage.toFixed(1)
+                                            : "0.0"}
+                                          %
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </>

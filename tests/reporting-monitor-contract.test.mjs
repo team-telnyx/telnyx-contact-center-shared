@@ -51,3 +51,24 @@ test("statistics view supports predefined and custom date ranges like Call Histo
   assert.match(monitorPage, /summary=true/);
   assert.match(historyRoute, /summary=true/);
 });
+
+test("agents and queues views use dark-theme card dashboards with top metric tiles", () => {
+  for (const label of [
+    "Agent operations",
+    "Roster coverage",
+    "Available now",
+    "Live conversations",
+    "Queue activations",
+    "Queue command center",
+    "Queues monitored",
+    "Waiting callers",
+    "Active calls",
+    "Service level",
+  ]) {
+    assert.match(monitorPage, new RegExp(label));
+  }
+  assert.match(monitorPage, /dark:bg-zinc-950\/70/);
+  assert.match(monitorPage, /filteredAgentMetrics/);
+  assert.match(monitorPage, /queueViewMetrics/);
+  assert.match(monitorPage, /queue-pressure-card/);
+});
