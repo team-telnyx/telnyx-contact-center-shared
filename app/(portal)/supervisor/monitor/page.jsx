@@ -361,15 +361,9 @@ function formatDurationShort(seconds) {
   return `${total}s`;
 }
 
-function MiniSignalTile({ label, value, detail, tone = "slate" }) {
-  const tones = {
-    slate: "border-slate-500/20 bg-slate-500/5",
-    emerald: "border-emerald-500/20 bg-emerald-500/5",
-    sky: "border-sky-500/20 bg-sky-500/5",
-    amber: "border-amber-500/20 bg-amber-500/5",
-  };
+function MiniSignalTile({ label, value, detail }) {
   return (
-    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.slate}`}>
+    <div className="rounded-2xl border bg-card/70 p-4">
       <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
       <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
@@ -460,12 +454,12 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2">
-              <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" tone="sky" />
-              <MiniSignalTile label="Average wait" value={formatDurationShort(avgWait)} detail="Today wait aggregate" tone="amber" />
-              <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" tone="emerald" />
-              <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" tone="slate" />
-              <MiniSignalTile label="Handle time" value={formatDurationShort(avgHandle)} detail="Today average handle" tone="slate" />
-              <MiniSignalTile label="Queue pressure" value={`${queuePressure}%`} detail="Waiting vs active" tone="amber" />
+              <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" />
+              <MiniSignalTile label="Average wait" value={formatDurationShort(avgWait)} detail="Today wait aggregate" />
+              <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" />
+              <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" />
+              <MiniSignalTile label="Handle time" value={formatDurationShort(avgHandle)} detail="Today average handle" />
+              <MiniSignalTile label="Queue pressure" value={`${queuePressure}%`} detail="Waiting vs active" />
             </div>
           </CardContent>
         </Card>

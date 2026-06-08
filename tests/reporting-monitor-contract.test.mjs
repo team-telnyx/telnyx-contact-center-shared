@@ -31,6 +31,9 @@ test("dashboard uses standard cards and today-only realtime aggregate tiles", ()
   assert.match(monitorPage, /Today answer rate/);
   assert.match(monitorPage, /function MonitorDashboardView\(\{ overall, agents, queues, timestamp \}\)/);
   assert.match(monitorPage, /<MonitorDashboardView overall=\{overall\} agents=\{allAgents\} queues=\{queues\} timestamp=\{data\?\.timestamp\} \/>/);
+  assert.match(monitorPage, /function MiniSignalTile\(\{ label, value, detail \}\)[\s\S]*rounded-2xl border bg-card\/70 p-4/);
+  assert.doesNotMatch(monitorPage, /function MiniSignalTile[\s\S]*const tones = \{/);
+  assert.doesNotMatch(monitorPage, /<MiniSignalTile[^\n]+tone=/);
   assert.doesNotMatch(monitorPage, /bg-gradient-to-br from-slate-950 to-zinc-900 text-white/);
 });
 
@@ -72,6 +75,8 @@ test("call history keeps date controls inside the first command card before metr
   assert.match(callHistoryView, /Call history command center/);
   assert.match(callHistoryView, /dark:bg-zinc-950\/70/);
   assert.match(callHistoryView, /HistoryMetricCard/);
+  assert.match(callHistoryView, /function HistoryMetricCard[\s\S]*<Card className="overflow-hidden border bg-background\/85 shadow-sm transition hover:-translate-y-0\.5 hover:border-foreground\/20 hover:shadow-md">/);
+  assert.doesNotMatch(callHistoryView, /bg-background\/80 p-4 shadow-sm dark:bg-zinc-900\/70/);
   assert.match(callHistoryView, /label="Interactions"/);
   assert.match(callHistoryView, /label="Completed"/);
   assert.match(callHistoryView, /label="Missed"/);

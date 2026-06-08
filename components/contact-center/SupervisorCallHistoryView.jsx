@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -122,27 +123,32 @@ function HistoryMetricCard({ icon: Icon, label, value, detail, progress = 0, chi
   const tones = {
     slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
     emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
-    sky: "from-sky-500/15 to-cyan-500/5 text-sky-700 dark:text-sky-300",
+    sky: "from-sky-500/15 to-blue-500/5 text-sky-700 dark:text-sky-300",
     amber: "from-amber-500/15 to-orange-500/5 text-amber-700 dark:text-amber-300",
   };
 
   return (
-    <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm dark:bg-zinc-900/70">
-      <div className="flex items-start justify-between gap-3">
-        <div className={`rounded-xl bg-gradient-to-br p-2 ${tones[tone] || tones.slate}`}>
-          <Icon className="h-5 w-5" />
+    <Card className="overflow-hidden border bg-background/85 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">
+            {chip}
+          </Badge>
         </div>
-        <Badge variant="outline" className="bg-background/70 text-[10px] uppercase tracking-wide">
-          {chip}
-        </Badge>
-      </div>
-      <div className="mt-4 text-2xl font-semibold tracking-tight">{value}</div>
-      <div className="mt-1 text-sm font-medium text-foreground">{label}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-telnyx-green transition-all" style={{ width: `${pct(progress, 100)}%` }} />
-      </div>
-    </div>
+        <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{detail}</span>
+            <span>{progress}%</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
