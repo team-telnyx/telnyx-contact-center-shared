@@ -72,3 +72,14 @@ test("agents and queues views use dark-theme card dashboards with top metric til
   assert.match(monitorPage, /queueViewMetrics/);
   assert.match(monitorPage, /queue-pressure-card/);
 });
+
+test("queues view expands one queue row and embeds a scroll-limited calls list", () => {
+  assert.match(monitorPage, /expandedQueueId/);
+  assert.match(monitorPage, /setExpandedQueueId\(queueId\)/);
+  assert.match(monitorPage, /queueCallsMap/);
+  assert.match(monitorPage, /slice\(0, 10\)/);
+  assert.match(monitorPage, /max-h-\[360px\] overflow-y-auto/);
+  assert.match(monitorPage, /Recent calls in this queue/);
+  assert.doesNotMatch(monitorPage, /Back<\/Button>/);
+  assert.doesNotMatch(monitorPage, / - Calls/);
+});
