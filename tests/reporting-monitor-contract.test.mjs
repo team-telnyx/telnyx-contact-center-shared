@@ -29,6 +29,8 @@ test("dashboard uses standard cards and today-only realtime aggregate tiles", ()
   assert.match(monitorPage, /Today SLA/);
   assert.match(monitorPage, /Live queue pressure/);
   assert.match(monitorPage, /Today answer rate/);
+  assert.match(monitorPage, /function MonitorDashboardView\(\{ overall, agents, queues, timestamp \}\)/);
+  assert.match(monitorPage, /<MonitorDashboardView overall=\{overall\} agents=\{allAgents\} queues=\{queues\} timestamp=\{data\?\.timestamp\} \/>/);
   assert.doesNotMatch(monitorPage, /bg-gradient-to-br from-slate-950 to-zinc-900 text-white/);
 });
 

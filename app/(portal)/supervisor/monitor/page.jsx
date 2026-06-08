@@ -377,7 +377,7 @@ function MiniSignalTile({ label, value, detail, tone = "slate" }) {
   );
 }
 
-function MonitorDashboardView({ overall, agents, queues, }) {
+function MonitorDashboardView({ overall, agents, queues, timestamp }) {
   const totalCalls = overall.calls?.total || 0;
   const answered = overall.calls?.answered || 0;
   const abandoned = overall.calls?.abandoned || 0;
@@ -2091,7 +2091,7 @@ export default function MonitorPage() {
             {activeTab === "dashboard" ? (
               <Card className="flex h-full min-h-0 flex-col overflow-hidden">
                 <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
-                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} />
+                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
                 </CardContent>
               </Card>
             ) : activeTab === "call-history" ? (
