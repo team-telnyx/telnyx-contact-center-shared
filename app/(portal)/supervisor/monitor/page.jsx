@@ -1507,7 +1507,6 @@ export default function MonitorPage() {
           ...prev,
           [queueIdKey]: mergeQueueCalls(prev[queueIdKey] || [], data.calls || []),
         }));
-        if (!silent) setExpandedQueueId(queueId);
       } else {
         throw new Error(data.error || "Failed to load queue calls");
       }
@@ -1885,6 +1884,25 @@ export default function MonitorPage() {
     }
   };
 
+  const openSkillMatchDetails = async (call, queueId) => {
+    setSelectedCallForSkills(call);
+    setSkillMatchDialogOpen(true);
+    setLoadingAgentsForSkills(true);
+    try {
+      const res = await fetch(`/api/contact-center/queues/${queueId}/agents`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableAgentsForSkills(data.agents || []);
+      }
+    } catch (error) {
+      console.error("[Monitor] Error loading agents:", error);
+    } finally {
+      setLoadingAgentsForSkills(false);
+    }
+  };
+
   const renderQueueCallsPanel = (queue) => {
     const queueId = String(queue.queueId);
     const calls = queueCallsMap[queueId] || [];
@@ -2006,7 +2024,24 @@ export default function MonitorPage() {
                       </TableCell>
                       <TableCell>{waitTimeSeconds > 0 ? formatDurationShort(waitTimeSeconds) : "—"}</TableCell>
                       <TableCell>{talkTimeSeconds > 0 ? formatDurationShort(talkTimeSeconds) : "—"}</TableCell>
-                      <TableCell>{waitingReason || "—"}</TableCell>
+                      <TableCell>
+                        {waitingReason ? (
+                          <div className="flex items-center gap-2">
+                            <span>{waitingReason}</span>
+                            {waitingReason === "Skills not matched" && (
+                              <button
+                                onClick={() => openSkillMatchDetails(call, queue.queueId)}
+                                className="text-muted-foreground transition-colors hover:text-foreground"
+                                title="View skill matching details"
+                              >
+                                <IconInfoCircle className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>
                         {call.answeredAt || call.agentUsername || call.agentName ? (
                           <button
