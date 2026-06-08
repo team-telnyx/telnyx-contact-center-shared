@@ -479,8 +479,8 @@ function getQueueAvgWaitSeconds(queue) {
   return Number(
     queue.avgWaitTimeSeconds
       ?? queue.averageWaitTime
-      ?? queue.today?.avgWaitTimeSeconds
       ?? queue.realtime?.avgWaitSeconds
+      ?? queue.today?.avgWaitTimeSeconds
       ?? 0,
   );
 }
@@ -598,7 +598,7 @@ function MonitorGraphsView({ overall, agents, queues }) {
   const summaryData = buildTrendData(range, overall, agents, queues, summary);
   const calls = summary?.calls || overall.calls || {};
   const durations = summary?.durations || calls;
-  const queueData = (summary?.queues?.length ? summary.queues : queues).map((queue) => ({
+  const queueData = (Array.isArray(summary?.queues) ? summary.queues : queues).map((queue) => ({
     label: queue.queueName || queue.name || queue.displayName || "Queue",
     waiting: Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0),
     active: Number(queue.activeCalls ?? queue.realtime?.activeCalls ?? 0),
@@ -1790,6 +1790,7 @@ export default function MonitorPage() {
       const busyAgents = Number(queue.agents?.busy || 0);
       const totalCalls = Number(queue.today?.totalCalls || 0);
       const answeredCalls = Number(queue.today?.answeredCalls || 0);
+      const serviceLevelDenominator = Number(queue.today?.completedCalls ?? answeredCalls ?? totalCalls ?? 0);
       const serviceLevel = Number(queue.today?.serviceLevelPercentage || 0);
 
       acc.total += 1;
@@ -1800,9 +1801,9 @@ export default function MonitorPage() {
       acc.longestWait = Math.max(acc.longestWait, Number(queue.realtime?.longestWaitSeconds || 0));
       acc.totalCalls += totalCalls;
       acc.answeredCalls += answeredCalls;
-      if (Number.isFinite(serviceLevel) && totalCalls > 0) {
-        acc.serviceLevelSum += serviceLevel;
-        acc.serviceLevelCount += 1;
+      if (Number.isFinite(serviceLevel) && serviceLevelDenominator > 0) {
+        acc.serviceLevelWeightedSum += serviceLevel * serviceLevelDenominator;
+        acc.serviceLevelDenominator += serviceLevelDenominator;
       }
       return acc;
     },
@@ -1815,12 +1816,12 @@ export default function MonitorPage() {
       longestWait: 0,
       totalCalls: 0,
       answeredCalls: 0,
-      serviceLevelSum: 0,
-      serviceLevelCount: 0,
+      serviceLevelWeightedSum: 0,
+      serviceLevelDenominator: 0,
     },
   );
-  queueViewMetrics.serviceLevel = queueViewMetrics.serviceLevelCount
-    ? Math.round(queueViewMetrics.serviceLevelSum / queueViewMetrics.serviceLevelCount)
+  queueViewMetrics.serviceLevel = queueViewMetrics.serviceLevelDenominator
+    ? Math.round(queueViewMetrics.serviceLevelWeightedSum / queueViewMetrics.serviceLevelDenominator)
     : pct(queueViewMetrics.answeredCalls, Math.max(queueViewMetrics.totalCalls, 1));
   queueViewMetrics.pressure = pct(queueViewMetrics.waiting, Math.max(queueViewMetrics.waiting + queueViewMetrics.active, 1));
 

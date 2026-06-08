@@ -129,15 +129,15 @@ export async function GET(request) {
       `;
       const dailyQuery = `
         SELECT
-          DATE(i.created_at) AS day,
+          DATE(COALESCE(i.completed_at, i.abandoned_at, i.created_at)) AS day,
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
           COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
           AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_time_seconds
         FROM cc_interactions i
         ${whereSql}
-        GROUP BY DATE(i.created_at)
-        ORDER BY DATE(i.created_at) ASC
+        GROUP BY DATE(COALESCE(i.completed_at, i.abandoned_at, i.created_at))
+        ORDER BY DATE(COALESCE(i.completed_at, i.abandoned_at, i.created_at)) ASC
       `;
       const queuesQuery = `
         SELECT

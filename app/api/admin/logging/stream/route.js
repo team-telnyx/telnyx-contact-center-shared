@@ -77,6 +77,7 @@ export async function GET(request) {
       };
 
       const poll = async () => {
+        if (closed) return;
         try {
           const [latestFile] = await listLogFiles({ logDir, limit: 1 });
           if (!latestFile?.name) {
@@ -123,11 +124,12 @@ export async function GET(request) {
             if (!send("log", entry)) break;
           }
         } catch (error) {
-          send("error", { error: "Failed to stream logs", detail: error?.message || String(error) });
+          send("stream_error", { error: "Failed to stream logs", detail: error?.message || String(error) });
         }
       };
 
       await poll();
+      if (closed) return;
       pollTimer = setInterval(poll, POLL_MS);
 
       request.signal.addEventListener("abort", () => {

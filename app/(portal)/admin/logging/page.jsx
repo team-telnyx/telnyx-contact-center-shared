@@ -327,6 +327,9 @@ export default function AdminLoggingPage() {
         setLogEntries((prev) => [entry, ...prev].slice(0, Number(logFilters.limit || 100)));
       } catch (_) {}
     });
+    source.addEventListener("stream_error", () => {
+      setLiveConnected(true);
+    });
     source.onerror = () => {
       setLiveConnected(false);
       source.close();
