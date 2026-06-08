@@ -120028,6 +120028,11 @@
             "nullable": true,
             "maxLength": 200,
             "description": "Optional. When absent the rendered PDF falls back to the enterprise contact's legal name."
+          },
+          "signed_at": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional date the LOA was signed, in ISO 8601 full-date format."
           }
         }
       },
