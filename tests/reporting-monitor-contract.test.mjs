@@ -41,7 +41,7 @@ test("statistics charts use real aggregate snapshots with dark tooltip content",
   assert.match(monitorPage, /busyAgents/);
 });
 
-test("statistics view supports predefined and custom date ranges like Call History", () => {
+test("statistics view keeps date controls inside the first command card before metric tiles", () => {
   for (const label of ["1 day", "7 days", "30 days", "Custom range"]) {
     assert.match(monitorPage, new RegExp(`>${label}<`));
   }
@@ -49,7 +49,10 @@ test("statistics view supports predefined and custom date ranges like Call Histo
   assert.match(monitorPage, /setQuickStatisticsRange\(7\)/);
   assert.match(monitorPage, /setQuickStatisticsRange\(30\)/);
   assert.match(monitorPage, /type="datetime-local"/);
-  assert.match(monitorPage, /statistics-header-controls/);
+  assert.match(monitorPage, /statistics-command-card-controls/);
+  assert.match(monitorPage, /statistics-command-card-controls[\s\S]*<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
+  assert.doesNotMatch(monitorPage, /statistics-header-controls/);
+  assert.doesNotMatch(monitorPage, /range\.toUpperCase\(\)/);
   assert.doesNotMatch(monitorPage, /Reporting statistics/);
   assert.match(monitorPage, /<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
   assert.match(monitorPage, /<OverviewMetricCard icon=\{IconCheck\} label="Answered"/);
@@ -58,8 +61,10 @@ test("statistics view supports predefined and custom date ranges like Call Histo
   assert.match(historyRoute, /summary=true/);
 });
 
-test("call history uses the reporting command-card style and header date controls", () => {
-  assert.match(callHistoryView, /call-history-header-controls/);
+test("call history keeps date controls inside the first command card before metric tiles", () => {
+  assert.match(callHistoryView, /call-history-command-card-controls/);
+  assert.match(callHistoryView, /call-history-command-card-controls[\s\S]*<HistoryMetricCard icon=\{IconPhoneIncoming\} label="Interactions"/);
+  assert.doesNotMatch(callHistoryView, /call-history-header-controls/);
   assert.match(callHistoryView, />Custom range</);
   assert.match(callHistoryView, /historyRange === "custom"/);
   assert.match(callHistoryView, /Call history command center/);
@@ -69,7 +74,18 @@ test("call history uses the reporting command-card style and header date control
   assert.match(callHistoryView, /label="Completed"/);
   assert.match(callHistoryView, /label="Missed"/);
   assert.match(callHistoryView, /label="Recordings"/);
+  assert.doesNotMatch(callHistoryView, /10 visible rows/);
   assert.doesNotMatch(callHistoryView, /<CardContent className="flex-1 min-h-0 space-y-6 overflow-y-auto py-6">/);
+});
+
+test("reporting tabs do not render duplicate top title headers above first cards", () => {
+  assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">\s*<IconActivity className="size-5" \/>\s*\{activeSection\.label\}/);
+  assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Agents[\s\S]*?<\/CardTitle>/);
+  assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Queues[\s\S]*?<\/CardTitle>/);
+  assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Statistics[\s\S]*?<\/CardTitle>/);
+  assert.doesNotMatch(callHistoryView, /<CardTitle className="flex items-center gap-2">[\s\S]*?Call History[\s\S]*?<\/CardTitle>/);
+  assert.doesNotMatch(monitorPage, /visible of \{allAgents\.length\} agents/);
+  assert.doesNotMatch(monitorPage, /queue pressure<\/Badge>/);
 });
 
 test("agents and queues views use dark-theme card dashboards with top metric tiles", () => {

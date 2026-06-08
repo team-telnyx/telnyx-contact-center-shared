@@ -377,7 +377,7 @@ function MiniSignalTile({ label, value, detail, tone = "slate" }) {
   );
 }
 
-function MonitorDashboardView({ overall, agents, queues, timestamp }) {
+function MonitorDashboardView({ overall, agents, queues, }) {
   const totalCalls = overall.calls?.total || 0;
   const answered = overall.calls?.answered || 0;
   const abandoned = overall.calls?.abandoned || 0;
@@ -547,7 +547,7 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function MonitorGraphsView({ overall, agents, queues, timestamp }) {
+function MonitorGraphsView({ overall, agents, queues, }) {
   const [range, setRange] = useState("7d");
   const [dateRange, setDateRange] = useState(() => quickStatisticsDateRange(7));
   const [summary, setSummary] = useState(null);
@@ -612,41 +612,10 @@ function MonitorGraphsView({ overall, agents, queues, timestamp }) {
 
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardHeader className="shrink-0">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <IconChartBar className="size-5" />
-              Statistics
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Reporting snapshots and historical aggregates from Call History interaction data.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="statistics-header-controls">
-            <div className="flex rounded-xl border bg-muted/40 p-1">
-              <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(1)}>1 day</Button>
-              <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(7)}>7 days</Button>
-              <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(30)}>30 days</Button>
-              <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
-            </div>
-            <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
-              <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
-            </div>
-            <div>
-              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
-              <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
-            </div>
-            <Badge variant="outline" className="mb-1 bg-background/70">{summaryLoading ? "Loading…" : "Aggregated"}</Badge>
-            {timestamp && <div className="mb-2 text-xs text-muted-foreground">Updated {new Date(timestamp).toLocaleString()}</div>}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+      <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
         <div className="space-y-5">
           <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   <IconSparkles className="h-4 w-4 text-telnyx-green" />
@@ -654,12 +623,25 @@ function MonitorGraphsView({ overall, agents, queues, timestamp }) {
                 </div>
                 <h3 className="mt-2 text-xl font-semibold tracking-tight">Reporting health for selected range</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Date/time controls live in the page header; these tiles match Agents and Queues styling.
+                  Select a quick or custom range, then review matching reporting tiles and charts.
                 </p>
               </div>
-              <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                {range === "custom" ? "Custom range" : range.toUpperCase()}
-              </Badge>
+              <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="statistics-command-card-controls">
+                <div className="flex rounded-xl border bg-muted/40 p-1">
+                  <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(1)}>1 day</Button>
+                  <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(7)}>7 days</Button>
+                  <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(30)}>30 days</Button>
+                  <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
+                </div>
+                <div>
+                  <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
+                  <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+                </div>
+                <div>
+                  <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
+                  <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+                </div>
+              </div>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(calls.total)} detail="Selected range" progress={pct(calls.total, Math.max(calls.total, 1))} chip="Range" tone="sky" />
@@ -1869,10 +1851,6 @@ export default function MonitorPage() {
     }
   };
 
-  const activeSection =
-    MONITOR_RAIL_ITEMS.find((item) => item.id === activeTab) ||
-    MONITOR_RAIL_ITEMS[0];
-
   const toggleExpandedQueue = (queueId) => {
     if (String(expandedQueueId || "") === String(queueId)) {
       setExpandedQueueId(null);
@@ -2112,59 +2090,19 @@ export default function MonitorPage() {
           <section className="h-full min-h-0 overflow-hidden pr-1">
             {activeTab === "dashboard" ? (
               <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-                <CardHeader className="shrink-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <IconActivity className="size-5" />
-                        {activeSection.label}
-                      </CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {activeSection.description}
-                      </p>
-                    </div>
-                    {data?.timestamp && (
-                      <div className="text-xs text-muted-foreground">
-                        Last updated: {new Date(data.timestamp).toLocaleString()}
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} />
                 </CardContent>
               </Card>
             ) : activeTab === "call-history" ? (
               <SupervisorCallHistoryView embedded />
             ) : activeTab === "graphs" ? (
-              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
             ) : (
               <>
       {/* Statistics Section */}
       <Card className="mb-0 flex h-full min-h-0 flex-col overflow-hidden">
-        <CardHeader className="shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              {activeTab === "agents" ? (
-                <>
-                  <IconUsers className="size-5" />
-                  Agents
-                </>
-              ) : (
-                <>
-                  <IconTrendingUp className="size-5" />
-                  Queues
-                </>
-              )}
-            </CardTitle>
-            {data?.timestamp && (
-              <div className="text-xs text-muted-foreground">
-                Last updated: {new Date(data.timestamp).toLocaleString()}
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto min-h-0 pb-2 px-6">
+        <CardContent className="flex-1 overflow-y-auto min-h-0 p-6">
           {activeTab === "agents" ? (
 
             <>
@@ -2188,9 +2126,6 @@ export default function MonitorPage() {
                           Fast snapshot of filtered agents, availability, live workload, and today's completions.
                         </p>
                       </div>
-                      <Badge variant="outline" className="w-fit border-telnyx-green/40 bg-telnyx-green/10 text-telnyx-green">
-                        {filteredAgentMetrics.total} visible of {allAgents.length} agents
-                      </Badge>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <OverviewMetricCard icon={IconUsers} label="Roster coverage" value={formatShortNumber(filteredAgentMetrics.total)} detail={`${allAgents.length} total · ${selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0)} filters`} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip="Filtered" tone="slate" />
@@ -2808,9 +2743,6 @@ export default function MonitorPage() {
                           Dark-theme queue cards show waiting load, active calls, agent supply, and today's service level.
                         </p>
                       </div>
-                      <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                        {queueViewMetrics.pressure}% queue pressure
-                      </Badge>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       <OverviewMetricCard icon={IconTrendingUp} label="Queues monitored" value={formatShortNumber(queueViewMetrics.total)} detail={`${queueViewMetrics.availableAgents} available agents`} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip="Realtime" tone="slate" />

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -288,8 +288,8 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
     };
   }, [items, total]);
 
-  const headerDateControls = (
-    <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="call-history-header-controls">
+  const commandCardDateControls = (
+    <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="call-history-command-card-controls">
       <div className="flex rounded-xl border bg-muted/40 p-1">
         <Button type="button" size="sm" variant={historyRange === "1d" ? "default" : "ghost"} onClick={() => setQuickDateRange(1)}>1 day</Button>
         <Button type="button" size="sm" variant={historyRange === "7d" ? "default" : "ghost"} onClick={() => setQuickDateRange(7)}>7 days</Button>
@@ -313,23 +313,9 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
 
   const content = (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden shadow-sm">
-      <CardHeader className="shrink-0">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <IconHistory className="size-5" />
-              Call History
-            </CardTitle>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Historical interactions, recordings, and workflow details.
-            </p>
-          </div>
-          {headerDateControls}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+      <CardContent className="flex-1 min-h-0 space-y-5 overflow-y-auto p-6">
         <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 <IconHistory className="h-4 w-4 text-telnyx-green" />
@@ -337,12 +323,10 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
               </div>
               <h3 className="mt-2 text-xl font-semibold tracking-tight">Interaction archive for the selected range</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Dark-theme reporting cards match Agents, Queues, and Statistics. Date/time controls stay in the header line.
+                Select a quick or custom range, then review matching history tiles and interaction rows.
               </p>
             </div>
-            <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
-              {formatShortNumber(historyMetrics.visible)} visible rows
-            </Badge>
+            {commandCardDateControls}
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <HistoryMetricCard icon={IconPhoneIncoming} label="Interactions" value={formatShortNumber(historyMetrics.total)} detail={`${formatShortNumber(historyMetrics.visible)} visible on current page`} progress={pct(historyMetrics.visible, Math.max(historyMetrics.total, 1))} chip="Range" tone="sky" />
