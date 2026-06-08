@@ -42,7 +42,7 @@ export const menuConfig = {
       ],
     },
     {
-      label: "REPORTING",
+      label: "SUPERVISOR",
       icon: null,
       role_access: ["supervisor", "admin", "owner"], // Show this group to supervisor, admin, and owner roles
       items: [

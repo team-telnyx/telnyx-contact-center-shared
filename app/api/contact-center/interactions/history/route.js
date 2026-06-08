@@ -76,6 +76,7 @@ export async function GET(request) {
     const to = searchParams.get("to");
     const queueName = searchParams.get("queue");
     const agentUsername = searchParams.get("agent");
+    const summaryOnly = searchParams.get("summary") === "true"; // summary=true enables Statistics range aggregates
 
     const where = [
       "i.is_contact_center = true",
@@ -113,6 +114,79 @@ export async function GET(request) {
     }
 
     const whereSql = `WHERE ${where.join(" AND ")}`;
+
+    if (summaryOnly) {
+      const callsQuery = `
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
+          COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+          AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_time_seconds,
+          AVG(i.handle_time_seconds)::NUMERIC(10,2) AS avg_handle_time_seconds,
+          AVG(i.talk_time_seconds)::NUMERIC(10,2) AS avg_talk_time_seconds
+        FROM cc_interactions i
+        ${whereSql}
+      `;
+      const dailyQuery = `
+        SELECT
+          DATE(i.created_at) AS day,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
+          COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+          AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_time_seconds
+        FROM cc_interactions i
+        ${whereSql}
+        GROUP BY DATE(i.created_at)
+        ORDER BY DATE(i.created_at) ASC
+      `;
+      const queuesQuery = `
+        SELECT
+          COALESCE(i.queue_name, 'No queue') AS queue_name,
+          COUNT(*)::int AS total,
+          AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_time_seconds
+        FROM cc_interactions i
+        ${whereSql}
+        GROUP BY COALESCE(i.queue_name, 'No queue')
+        ORDER BY total DESC
+        LIMIT 12
+      `;
+
+      const [callsRes, dailyRes, queuesRes] = await Promise.all([
+        pool.query(callsQuery, vals),
+        pool.query(dailyQuery, vals),
+        pool.query(queuesQuery, vals),
+      ]);
+      const calls = callsRes.rows?.[0] || {};
+      return NextResponse.json({
+        ok: true,
+        summary: {
+          calls: {
+            total: Number(calls.total || 0),
+            answered: Number(calls.answered || 0),
+            abandoned: Number(calls.abandoned || 0),
+          },
+          durations: {
+            avgWaitTimeSeconds: Number(calls.avg_wait_time_seconds || 0),
+            avgHandleTimeSeconds: Number(calls.avg_handle_time_seconds || 0),
+            avgTalkTimeSeconds: Number(calls.avg_talk_time_seconds || 0),
+          },
+          daily: dailyRes.rows.map((row) => ({
+            day: row.day,
+            label: new Date(row.day).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+            total: Number(row.total || 0),
+            answered: Number(row.answered || 0),
+            abandoned: Number(row.abandoned || 0),
+            avgWaitTimeSeconds: Number(row.avg_wait_time_seconds || 0),
+          })),
+          queues: queuesRes.rows.map((row) => ({
+            queueName: row.queue_name,
+            total: Number(row.total || 0),
+            avgWaitTimeSeconds: Number(row.avg_wait_time_seconds || 0),
+          })),
+        },
+      });
+    }
+
     const offset = (page - 1) * pageSize;
 
     const query = `
