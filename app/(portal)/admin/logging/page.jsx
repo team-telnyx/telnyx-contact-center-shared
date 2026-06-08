@@ -328,7 +328,8 @@ export default function AdminLoggingPage() {
       } catch (_) {}
     });
     source.onerror = () => {
-      setLiveConnected(source.readyState === EventSource.OPEN);
+      setLiveConnected(false);
+      source.close();
     };
     return () => {
       setLiveConnected(false);

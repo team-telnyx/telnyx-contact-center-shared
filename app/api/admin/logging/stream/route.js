@@ -45,10 +45,6 @@ function sseFrame(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function logFrame(entry) {
-  return `event: log\ndata: ${JSON.stringify(entry)}\n\n`;
-}
-
 export async function GET(request) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403, headers: { "Cache-Control": "no-store" } });
@@ -62,10 +58,22 @@ export async function GET(request) {
   let seen = new Set();
   let closed = false;
 
+  const cleanup = () => {
+    closed = true;
+    if (pollTimer) clearInterval(pollTimer);
+  };
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event, data) => {
-        if (!closed) controller.enqueue(encoder.encode(sseFrame(event, data)));
+        if (closed) return false;
+        try {
+          controller.enqueue(encoder.encode(sseFrame(event, data)));
+          return true;
+        } catch (error) {
+          cleanup();
+          return false;
+        }
       };
 
       const poll = async () => {
@@ -112,7 +120,7 @@ export async function GET(request) {
             const key = entryKey(entry);
             if (seen.has(key)) continue;
             seen.add(key);
-            if (!closed) controller.enqueue(encoder.encode(logFrame(entry)));
+            if (!send("log", entry)) break;
           }
         } catch (error) {
           send("error", { error: "Failed to stream logs", detail: error?.message || String(error) });
@@ -123,16 +131,14 @@ export async function GET(request) {
       pollTimer = setInterval(poll, POLL_MS);
 
       request.signal.addEventListener("abort", () => {
-        closed = true;
-        if (pollTimer) clearInterval(pollTimer);
+        cleanup();
         try {
           controller.close();
         } catch (_) {}
       });
     },
     cancel() {
-      closed = true;
-      if (pollTimer) clearInterval(pollTimer);
+      cleanup();
     },
   });
 

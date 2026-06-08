@@ -12,14 +12,16 @@ test("Admin logging exposes an SSE stream for newest live log file", async () =>
   assert.match(source, /export const dynamic = "force-dynamic"/);
   assert.match(source, /text\/event-stream/);
   assert.match(source, /Cache-Control": "no-cache, no-transform"/);
+  assert.match(source, /const cleanup = \(\) => \{[\s\S]*closed = true[\s\S]*clearInterval\(pollTimer\)[\s\S]*\}/);
+  assert.match(source, /const send = \(event, data\) => \{[\s\S]*try \{[\s\S]*controller\.enqueue\(encoder\.encode\(sseFrame\(event, data\)\)\)[\s\S]*\} catch \(error\) \{[\s\S]*cleanup\(\)[\s\S]*return false[\s\S]*\}/);
   assert.match(source, /request\.signal\.addEventListener\("abort"/);
   assert.match(source, /listLogFiles\(\{ logDir, limit: 1 \}\)/);
   assert.match(source, /queryLogEntries\(\{[\s\S]*file: latestFile\.name/);
   assert.match(source, /send\("ready", \{ ok: true, file: latestFile\.name, entries: initial\.entries \}\)/);
   assert.match(source, /setInterval\(/);
   assert.match(source, /clearInterval\(pollTimer\)/);
-  assert.match(source, /event: log/);
-  assert.match(source, /\$\{JSON\.stringify\(entry\)\}/);
+  assert.match(source, /send\("log", entry\)/);
+  assert.match(source, /\$\{JSON\.stringify\(data\)\}/);
   assert.doesNotMatch(source, /queryParam\(request, "logDir"\)|searchParams\.get\("logDir"\)/);
 });
 
@@ -31,8 +33,8 @@ test("Admin Logging Live uses EventSource subscription and closes it only when l
   assert.match(source, /source\.addEventListener\("log"/);
   assert.match(source, /if \(Array\.isArray\(data\.entries\)\) setLogEntries\(data\.entries\)/);
   assert.match(source, /setLogEntries\(\(prev\) => \[/);
+  assert.match(source, /source\.onerror = \(\) => \{[\s\S]*setLiveConnected\(false\)[\s\S]*source\.close\(\)[\s\S]*\};[\s\S]*return \(\) =>/);
   assert.match(source, /return \(\) => \{[\s\S]*source\.close\(\)[\s\S]*\}/);
-  assert.doesNotMatch(source, /source\.onerror = \(\) => \{[\s\S]*source\.close\(\)[\s\S]*\};[\s\S]*return \(\) =>/);
   assert.match(source, /if \(active !== "live"\) return undefined/);
   assert.match(source, /latest: "1"/);
 });
@@ -43,7 +45,7 @@ test("Admin Logging Files renders selected file events with the same log entry v
   assert.match(source, /function FileLogView\(/);
   assert.match(source, /<FileLogView entries=\{logEntries\}/);
   assert.match(source, /fileSize=\{currentFile\?\.size\}/);
-  assert.match(source, /loadLogs\(\{ file: logFilters\.file \|\| currentFile\?\.name \|\| "" \}\)/);
+  assert.match(source, /loadLogs\(\{ file: logFilters\.file \}\)/);
   assert.doesNotMatch(source, /active === "files" \? \(\s*<FilesView/);
   assert.doesNotMatch(source, /setActive\("live"\); loadLogs\(\{ file \}\)/);
 });
