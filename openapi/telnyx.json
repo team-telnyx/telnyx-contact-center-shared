@@ -17539,7 +17539,7 @@
     "/dir": {
       "get": {
         "summary": "List all DIRs across your enterprises",
-        "description": "Convenience endpoint that returns every DIR you own without scoping to a specific enterprise. Equivalent to calling `GET /v2/enterprises/{enterprise_id}/dir` for each enterprise and concatenating the results, but server-side and paginated as a single list.",
+        "description": "Returns every DIR (Display Identity Record) you own, across all of your enterprises, as a single list. Pagination is JSON:API style (`page[number]`, `page[size]`, max 250). Supports `filter[]` query params: `filter[enterprise_id]`, `filter[status]`, `filter[display_name][contains]`, `filter[call_reason][contains]`, plus the renewal-window filters `filter[expiring_at][gte]` / `filter[expiring_at][lte]`. Sortable by `created_at`, `updated_at`, `display_name`, `status` (prefix `-` for descending; default `-created_at`).",
         "operationId": "listAllDirs",
         "tags": [
           "Display Identity Records"
@@ -17550,34 +17550,6 @@
           },
           {
             "$ref": "#/components/parameters/BcPageSize"
-          },
-          {
-            "name": "enterprise_id",
-            "in": "query",
-            "required": false,
-            "description": "Restrict results to a single enterprise.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "description": "Filter by DIR status.",
-            "schema": {
-              "$ref": "#/components/schemas/DirStatus"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "description": "Case-insensitive partial match on `display_name` or call reason.",
-            "schema": {
-              "type": "string"
-            }
           },
           {
             "name": "sort",
@@ -17617,6 +17589,43 @@
             "schema": {
               "type": "string",
               "format": "date-time"
+            }
+          },
+          {
+            "name": "filter[enterprise_id]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by enterprise ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "filter[status]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by DIR status.",
+            "schema": {
+              "$ref": "#/components/schemas/DirStatus"
+            }
+          },
+          {
+            "name": "filter[display_name][contains]",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive partial match on display name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[call_reason][contains]",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive partial match on call reason.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -17690,7 +17699,7 @@
     },
     "/dir/{dir_id}": {
       "delete": {
-        "summary": "Delete a DIR (no enterprise_id required)",
+        "summary": "Delete a DIR",
         "description": "Delete a DIR. Failure modes: `400` if a child phone number is in a non-deletable status, `409` if the DIR has an unresolved infringement claim, `404` if the DIR is not yours.",
         "operationId": "deleteDirSimple",
         "tags": [
@@ -17715,7 +17724,7 @@
         "x-latency-category": "responsive"
       },
       "get": {
-        "summary": "Get a DIR by id (no enterprise_id required)",
+        "summary": "Get a DIR by id",
         "description": "Returns a single DIR by id. The enterprise is resolved server-side from the DIR id. Returns `404` if the DIR does not exist or is not yours.",
         "operationId": "getDirByIdSimple",
         "tags": [
@@ -17747,8 +17756,8 @@
         "x-latency-category": "responsive"
       },
       "patch": {
-        "summary": "Update a DIR (no enterprise_id required)",
-        "description": "Edit a DIR. Only DIRs in `draft`, `rejected`, `unsuccessful`, or `suspended` are editable. PATCH is a pure edit \u2014 `status` is never changed by this endpoint. To re-vet after editing, call `POST /v2/dir/{dir_id}/submit` explicitly.",
+        "summary": "Update a DIR",
+        "description": "Edit a DIR. Only DIRs in `draft`, `rejected`, `unsuccessful`, or `suspended` are editable. PATCH is a pure edit - `status` is never changed by this endpoint. To re-vet after editing, call `POST /v2/dir/{dir_id}/submit` explicitly.",
         "operationId": "updateDirSimple",
         "tags": [
           "Display Identity Records"
@@ -17800,7 +17809,7 @@
     },
     "/dir/{dir_id}/comments": {
       "get": {
-        "summary": "List comments on a DIR (no enterprise_id required)",
+        "summary": "List comments on a DIR",
         "description": "List the comments on a DIR. The enterprise is resolved server-side from the DIR id.",
         "operationId": "listCommentsSimple",
         "tags": [
@@ -17847,7 +17856,7 @@
         "x-latency-category": "responsive"
       },
       "post": {
-        "summary": "Post a comment on a DIR (no enterprise_id required)",
+        "summary": "Post a comment on a DIR",
         "description": "Post a customer comment on a DIR (for example, to respond to reviewer notes). Send only `content` (1\u20135000 chars) and an optional `parent_comment_id`; the server sets the comment type, visibility, and author automatically. The enterprise is resolved server-side from the DIR id.",
         "operationId": "createCommentSimple",
         "tags": [
@@ -17992,9 +18001,61 @@
         "x-latency-category": "responsive"
       }
     },
+    "/dir/{dir_id}/loa": {
+      "post": {
+        "tags": [
+          "Display Identity Records"
+        ],
+        "summary": "Render the Branded Calling LOA for a DIR",
+        "operationId": "renderDirLoa",
+        "description": "Generate a pre-filled Letter of Authorization (LOA) PDF for a DIR. Enterprise identity (legal name, DBA, address, contact, website, tax id) and the DIR display name are read server-side; the caller supplies the telephone numbers to authorize, an optional Authorized Agent block, and an optional drawn signature.\n\nWhen `signature` is omitted the PDF is returned unsigned so the customer can sign it externally and upload it via the Documents API. When `signature` is present the PDF embeds the supplied image, printed name, and signed-at date.\n\nReturns `application/pdf`.",
+        "parameters": [
+          {
+            "name": "dir_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The DIR id."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandLoaRenderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The rendered LOA PDF.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
+          },
+          "404": {
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
     "/dir/{dir_id}/phone_number_batches": {
       "get": {
-        "summary": "List phone-number batches for a DIR (simplified)",
+        "summary": "List phone-number batches for a DIR",
         "description": "List the phone-number batches submitted under a DIR. The enterprise is resolved server-side from the DIR id.",
         "operationId": "listDirPhoneNumberBatchesSimplified",
         "tags": [
@@ -18043,7 +18104,7 @@
     },
     "/dir/{dir_id}/phone_number_batches/{batch_id}": {
       "get": {
-        "summary": "Get a phone-number batch (simplified)",
+        "summary": "Get a phone-number batch",
         "description": "Get a single phone-number batch by id. The enterprise is resolved server-side from the DIR id.",
         "operationId": "getDirPhoneNumberBatchSimplified",
         "tags": [
@@ -18088,7 +18149,7 @@
     },
     "/dir/{dir_id}/phone_numbers": {
       "delete": {
-        "summary": "Remove phone numbers from a DIR (simplified)",
+        "summary": "Remove phone numbers from a DIR",
         "description": "Deregister phone numbers from a DIR. The enterprise is resolved server-side from the DIR id. Returns a partial-success envelope.",
         "operationId": "deleteDirPhoneNumbersSimplified",
         "tags": [
@@ -18135,7 +18196,7 @@
         "x-latency-category": "responsive"
       },
       "get": {
-        "summary": "List phone numbers attached to a DIR (simplified)",
+        "summary": "List phone numbers attached to a DIR",
         "description": "List the phone numbers registered under a DIR. The enterprise is resolved server-side from the DIR id.",
         "operationId": "listDirPhoneNumbersSimplified",
         "tags": [
@@ -18182,7 +18243,7 @@
         "x-latency-category": "responsive"
       },
       "post": {
-        "summary": "Add phone numbers to a DIR (simplified)",
+        "summary": "Add phone numbers to a DIR",
         "description": "Register phone numbers under a DIR. The enterprise is resolved server-side from the DIR id. Same body, failure modes, and batch semantics whichever path form you use.\n\n**Pricing:** This is a billable action. See https://telnyx.com/pricing/numbers for current pricing.",
         "operationId": "addDirPhoneNumbersSimplified",
         "tags": [
@@ -18239,7 +18300,7 @@
     },
     "/dir/{dir_id}/submit": {
       "post": {
-        "summary": "Submit a DIR for vetting (no enterprise_id required)",
+        "summary": "Submit a DIR for vetting",
         "description": "Submit a DIR for vetting. Sends the DIR back through the vetting cycle from any non-terminal status. When re-submitting from `suspended` or `expired`, the DIR's previous Branded Calling registration is torn down transactionally and its phone numbers flip back to `submitted`. When re-submitting from `verified`, the existing registration stays live throughout the new vetting cycle.\n\nReturns `400` from `submitted`/`in_review`/`permanently_rejected`. Returns `409` if the DIR has an unresolved infringement claim.",
         "operationId": "submitDirSimple",
         "tags": [
@@ -18992,6 +19053,16 @@
               "type": "string",
               "example": "Acme"
             }
+          },
+          {
+            "name": "filter[legal_name][contains]",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive partial match on legal name.",
+            "schema": {
+              "type": "string",
+              "example": "Acme"
+            }
           }
         ],
         "responses": {
@@ -19000,20 +19071,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/number-reputation_EnterpriseListPublic"
+                  "$ref": "#/components/schemas/EnterpriseListPublic"
                 }
               }
             }
           },
           "401": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
       },
       "post": {
         "summary": "Create an enterprise",
-        "description": "Create the legal entity that owns your Number Reputation registrations.\n\nThe response carries a server-assigned `id` you will use for every subsequent call. After creating an enterprise and agreeing to the Number Reputation Terms of Service (`POST /terms_of_service/number_reputation/agree`), enable reputation monitoring via `POST /enterprises/{enterprise_id}/reputation`.\n\nAn enterprise is shared across Telnyx products; if you also use Branded Calling, the same enterprise is reused.",
+        "description": "Create the legal entity (enterprise) that represents your business on the Telnyx platform.\n\nThe response carries a server-assigned `id` you use for every subsequent call. An enterprise is created once and reused; the API collects all required fields up front.\n\nCommon failure modes:\n- `422` - a required field is missing or malformed (the response `errors[].source.pointer` names the field).\n- `409` - an enterprise with the same identifying details already exists under your account.",
         "operationId": "createEnterprise",
         "tags": [
           "Enterprises"
@@ -19080,13 +19151,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "401": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "422": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -19095,7 +19166,7 @@
     "/enterprises/{enterprise_id}": {
       "delete": {
         "summary": "Delete an enterprise",
-        "description": "Delete an enterprise. Fails with `400` if the enterprise still has dependent resources (e.g. active reputation settings or registered numbers); remove those first. Returns `404` if the enterprise does not exist or does not belong to your account.",
+        "description": "Soft-delete an enterprise.\n\nFailure modes:\n- `400` - the enterprise still has dependent resources in a non-deletable state. Remove those first; the response `detail` identifies what is blocking the delete.\n- `409` - the enterprise has a dependent resource with an unresolved claim. Resolve it before deleting.\n- `404` - the enterprise does not exist or does not belong to your account.",
         "operationId": "deleteEnterprise",
         "tags": [
           "Enterprises"
@@ -19110,13 +19181,13 @@
             "description": "204 (no body)"
           },
           "400": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "401": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "404": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -19145,10 +19216,10 @@
             }
           },
           "401": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "404": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -19225,13 +19296,13 @@
             }
           },
           "400": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "401": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "404": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -19240,7 +19311,7 @@
     "/enterprises/{enterprise_id}/branded_calling": {
       "post": {
         "summary": "Activate Branded Calling on an enterprise",
-        "description": "Branded Calling is a paid product that must be activated on each enterprise. Activation is idempotent:\n- First call: marks the enterprise as activated and begins onboarding it with the Branded Calling platform asynchronously. Returns `200` with `branded_calling_enabled: true`.\n- Re-call after success: no-op, returns the same enterprise body.\n- Re-call after a prior failure: re-queues onboarding, returns `200`.\n\nPrerequisite: the calling user must have agreed to the Branded Calling Terms of Service (`POST /terms_of_service/branded_calling/agree`). Without that, this endpoint returns `403 terms_of_service_not_accepted`.\n\nFailure modes:\n- `403` \u2014 Branded Calling Terms of Service not accepted.\n- `404` \u2014 enterprise does not exist or does not belong to your account.\n\n**Pricing:** This is a billable action. See https://telnyx.com/pricing/numbers for current pricing.",
+        "description": "Branded Calling is a paid product that must be activated on each enterprise. Activation is idempotent:\n- First call: marks the enterprise as activated and begins onboarding it with the Branded Calling platform asynchronously. Returns `200` with `branded_calling_enabled: true`.\n- Re-call after success: no-op, returns the same enterprise body.\n- Re-call after a prior failure: re-queues onboarding, returns `200`.\n\nPrerequisite: the calling user must have agreed to the Branded Calling Terms of Service (`POST /terms_of_service/branded_calling/agree`). Without that, this endpoint returns `403 terms_of_service_not_accepted`.\n\nFailure modes:\n- `403` - Branded Calling Terms of Service not accepted.\n- `404` - enterprise does not exist or does not belong to your account.\n\n**Pricing:** This is a billable action. See https://telnyx.com/pricing/numbers for current pricing.",
         "operationId": "activateBrandedCalling",
         "tags": [
           "Enterprises"
@@ -19274,7 +19345,7 @@
     "/enterprises/{enterprise_id}/dir": {
       "get": {
         "summary": "List DIRs in an enterprise",
-        "description": "Return the DIRs (Display Identity Records) belonging to a single enterprise. Pagination is JSON:API style (`page[number]`, `page[size]`, max 250). Filterable by `status`. Searchable by case-insensitive partial match on `display_name` (`search=`). Sortable by any of `created_at`, `updated_at`, `display_name`, `status`, `submitted_at`, `verified_at`, `expiring_at` (prefix `-` for descending; default `-created_at`). Supports the renewal-window filters `filter[expiring_at][gte]` / `filter[expiring_at][lte]` and the convenience `filter[expiring_within_days]` (mutually exclusive with the explicit gte/lte form).",
+        "description": "Return the DIRs (Display Identity Records) belonging to a single enterprise. Pagination is JSON:API style (`page[number]`, `page[size]`, max 250). Supports `filter[]` query params: `filter[status]`, `filter[display_name][contains]`, `filter[call_reason][contains]`, plus the renewal-window filters `filter[expiring_at][gte]` / `filter[expiring_at][lte]` and the convenience `filter[expiring_within_days]` (mutually exclusive with the explicit gte/lte form). Sortable by `created_at`, `updated_at`, `display_name`, `status`, `submitted_at`, `verified_at`, `expiring_at` (prefix `-` for descending; default `-created_at`).",
         "operationId": "listDirsForEnterprise",
         "tags": [
           "Display Identity Records"
@@ -19288,24 +19359,6 @@
           },
           {
             "$ref": "#/components/parameters/BcPageSize"
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "description": "Filter by DIR status.",
-            "schema": {
-              "$ref": "#/components/schemas/DirStatus"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "required": false,
-            "description": "Case-insensitive partial match on `display_name`.",
-            "schema": {
-              "type": "string"
-            }
           },
           {
             "name": "sort",
@@ -19357,11 +19410,38 @@
             "name": "filter[expiring_within_days]",
             "in": "query",
             "required": false,
-            "description": "Convenience: returns DIRs whose `expiring_at` falls within the next N days (1\u2013365). Equivalent to setting `filter[expiring_at][gte]=<now>` + `filter[expiring_at][lte]=<now+N>`. Mutually exclusive with the explicit `[gte]`/`[lte]` filters \u2014 combining returns 400.",
+            "description": "Convenience: returns DIRs whose `expiring_at` falls within the next N days (1\u2013365). Equivalent to setting `filter[expiring_at][gte]=<now>` + `filter[expiring_at][lte]=<now+N>`. Mutually exclusive with the explicit `[gte]`/`[lte]` filters - combining returns 400.",
             "schema": {
               "type": "integer",
               "minimum": 1,
               "maximum": 365
+            }
+          },
+          {
+            "name": "filter[status]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by DIR status.",
+            "schema": {
+              "$ref": "#/components/schemas/DirStatus"
+            }
+          },
+          {
+            "name": "filter[display_name][contains]",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive partial match on display name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter[call_reason][contains]",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive partial match on call reason.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -19387,7 +19467,7 @@
       },
       "post": {
         "summary": "Create a Display Identity Record (DIR)",
-        "description": "Create a new DIR under the given enterprise. The DIR starts in `draft` status; it must be submitted (`POST .../submit`) and approved by Telnyx before any phone number can be attached.\n\n**Field rules**\n- `display_name`: 1\u201335 characters, no emoji or whitespace-only strings; this is the name shown to recipients.\n- `call_reasons`: 1\u201310 strings, each \u226464 characters; describe why your business calls customers (e.g. 'Appointment reminders', 'Billing inquiries'). Validate the wording against `POST /call_reasons/validate`.\n- `logo_url`: HTTPS URL (max 128 chars) to a 256\u00d7256 BMP (max 1 MB). The image is downloaded and hashed at submission time.\n- `documents`: up to 20 entries; each `document_id` must be obtained by uploading the file via the Telnyx Documents API first. Within one DIR a `document_id` may only appear once.\n- `certify_brand_is_accurate`, `certify_no_shaft_content`, `certify_ip_ownership` MUST all be `true`.\n\n**Failure modes**\n- `422` \u2014 validation error; `errors[].source.pointer` names the offending field.\n- `403` \u2014 Branded Calling not activated on this enterprise (see `POST /enterprises/{id}/branded_calling`).\n- `404` \u2014 enterprise does not exist or does not belong to your account.",
+        "description": "Create a new DIR under the given enterprise. The DIR starts in `draft` status; it must be submitted (`POST .../submit`) and approved by Telnyx before any phone number can be attached.\n\n**Field rules**\n- `display_name`: 1\u201335 characters, no emoji or whitespace-only strings; this is the name shown to recipients.\n- `call_reasons`: 1\u201310 strings, each \u226464 characters; describe why your business calls customers (e.g. 'Appointment reminders', 'Billing inquiries'). Validate the wording against `POST /call_reasons/validate`.\n- `logo_url`: HTTPS URL (max 128 chars) to a 256\u00d7256 BMP (max 1 MB). The image is downloaded and hashed at submission time.\n- `documents`: up to 20 entries; each `document_id` must be obtained by uploading the file via the Telnyx Documents API first. Within one DIR a `document_id` may only appear once.\n- `certify_brand_is_accurate`, `certify_no_shaft_content`, `certify_ip_ownership` MUST all be `true`.\n\n**Failure modes**\n- `422` - validation error; `errors[].source.pointer` names the offending field.\n- `403` - Branded Calling not activated on this enterprise (see `POST /enterprises/{id}/branded_calling`).\n- `404` - enterprise does not exist or does not belong to your account.",
         "operationId": "createDir",
         "tags": [
           "Display Identity Records"
@@ -19535,7 +19615,7 @@
       },
       "post": {
         "summary": "Enable phone-number reputation for an enterprise",
-        "description": "Activate Phone Number Reputation for the given enterprise. Requires an uploaded Letter of Authorization document (the `loa_document_id` references the Telnyx Documents API) and a refresh-frequency selection. After activation, individual phone numbers can be registered via `POST .../reputation/numbers`.\n\n**Prerequisite**: the calling user must have agreed to the Phone Number Reputation Terms of Service (`POST /terms_of_service/number_reputation/agree`).\n\nFailure modes:\n- `403` \u2014 Phone Number Reputation Terms of Service not accepted.\n- `404` \u2014 enterprise does not exist or does not belong to your account.\n- `400` \u2014 reputation already enabled for this enterprise.\n- `422` \u2014 `loa_document_id` missing or `check_frequency` invalid.\n\n**Pricing:** This is a billable action. See https://telnyx.com/pricing/numbers for current pricing.",
+        "description": "Activate Phone Number Reputation for the given enterprise. Requires an uploaded Letter of Authorization document (the `loa_document_id` references the Telnyx Documents API) and a refresh-frequency selection. After activation, individual phone numbers can be registered via `POST .../reputation/numbers`.\n\n**Prerequisite**: the calling user must have agreed to the Phone Number Reputation Terms of Service (`POST /terms_of_service/number_reputation/agree`).\n\nFailure modes:\n- `403` - Phone Number Reputation Terms of Service not accepted.\n- `404` - enterprise does not exist or does not belong to your account.\n- `400` - reputation already enabled for this enterprise.\n- `422` - `loa_document_id` missing or `check_frequency` invalid.\n\n**Pricing:** This is a billable action. See https://telnyx.com/pricing/numbers for current pricing.",
         "operationId": "enableReputationSettings",
         "tags": [
           "Reputation"
@@ -19762,10 +19842,20 @@
             }
           },
           {
-            "name": "phone_number",
+            "name": "filter[phone_number][contains]",
             "in": "query",
-            "description": "Filter by specific phone number (E.164 format).",
             "required": false,
+            "description": "Partial match on phone number. Must contain at least 5 digits.",
+            "schema": {
+              "type": "string",
+              "example": "+16035551234"
+            }
+          },
+          {
+            "name": "filter[phone_number][eq]",
+            "in": "query",
+            "required": false,
+            "description": "Exact phone-number match (E.164).",
             "schema": {
               "type": "string",
               "example": "+16035551234"
@@ -19874,7 +19964,7 @@
         },
         "responses": {
           "200": {
-            "description": "Refresh completed (the call is synchronous from the customer's POV \u2014 Telnyx fans out to the reputation feed before responding).",
+            "description": "Refresh completed (the call is synchronous from the customer's POV - Telnyx fans out to the reputation feed before responding).",
             "content": {
               "application/json": {
                 "schema": {
@@ -22696,7 +22786,7 @@
     "/infringement_claims/{claim_id}/contest": {
       "post": {
         "summary": "Contest an infringement claim",
-        "description": "Submit a written response and supporting documents disputing the claim. The first call moves the claim from `pending` to `contested`; subsequent calls append supplementary evidence without changing status. The `documents[]` you attach are aggregated across rounds in the claim's `contest_documents` field.\n\nOnly `pending` and `contested` claims accept new evidence. A `resolved` claim returns `400`.\n\nFailure modes:\n- `400` \u2014 the claim is `resolved` (terminal); cannot be contested further.\n- `404` \u2014 the claim does not exist or is not against a DIR you own.\n- `422` \u2014 `contest_notes` is too short (< 10 chars), too long (> 2000 chars), `documents` is > 20 entries, or a `document_id` is duplicated within the same submission.",
+        "description": "Submit a written response and supporting documents disputing the claim. The first call moves the claim from `pending` to `contested`; subsequent calls append supplementary evidence without changing status. The `documents[]` you attach are aggregated across rounds in the claim's `contest_documents` field.\n\nOnly `pending` and `contested` claims accept new evidence. A `resolved` claim returns `400`.\n\nFailure modes:\n- `400` - the claim is `resolved` (terminal); cannot be contested further.\n- `404` - the claim does not exist or is not against a DIR you own.\n- `422` - `contest_notes` is too short (< 10 chars), too long (> 2000 chars), `documents` is > 20 entries, or a `document_id` is duplicated within the same submission.",
         "operationId": "contestInfringementClaim",
         "tags": [
           "Infringement Claims"
@@ -39600,10 +39690,30 @@
             "$ref": "#/components/parameters/BcPageSize"
           },
           {
-            "name": "phone_number",
+            "name": "filter[phone_number][contains]",
             "in": "query",
-            "description": "Filter by specific phone number (E.164 format).",
             "required": false,
+            "description": "Partial match on phone number. Must contain at least 5 digits.",
+            "schema": {
+              "type": "string",
+              "example": "+16035551234"
+            }
+          },
+          {
+            "name": "filter[enterprise_id]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by enterprise ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "filter[phone_number][eq]",
+            "in": "query",
+            "required": false,
+            "description": "Exact phone-number match (E.164).",
             "schema": {
               "type": "string",
               "example": "+16035551234"
@@ -43750,16 +43860,7 @@
             "required": false,
             "description": "Filter to entries that support the given service type. For backward compatibility with the values that briefly shipped before the product-aligned rename, the legacy aliases `file_transcription`, `in_call_transcription`, and `ai_assistant_transcription` are silently accepted and normalized to `file_based`, `in_call`, and `ai_assistant` respectively. The response always emits the canonical (post-rename) values.",
             "schema": {
-              "type": "string",
-              "enum": [
-                "streaming",
-                "file_based",
-                "in_call",
-                "ai_assistant",
-                "file_transcription",
-                "in_call_transcription",
-                "ai_assistant_transcription"
-              ]
+              "$ref": "#/components/schemas/STTServiceType"
             }
           },
           {
@@ -45344,7 +45445,7 @@
     "/terms_of_service/agreements": {
       "get": {
         "summary": "List the calling user's Terms of Service agreements",
-        "description": "Returns the Terms of Service agreements the authenticated user has on file. Each entry records the version agreed to and when. Most users only have one agreement per product, but if the ToS is updated and the user re-agrees a new entry is added.\n\nResults are paginated with the standard `page[number]` / `page[size]` parameters; the response uses the standard `{data, meta}` JSON:API envelope.\n\nBy default this returns agreements for **all** products the user has agreed to (including Branded Calling). Pass the `product_type` query parameter to scope the result to a single product.",
+        "description": "Returns the Terms of Service agreements the authenticated user has on file. Each entry records the version agreed to and when. Most users only have one agreement per product, but if the ToS is updated and the user re-agrees a new entry is added.\n\nResults are paginated with the standard `page[number]` / `page[size]` parameters; the response uses the standard `{data, meta}` JSON:API envelope.\n\nBy default this returns agreements for **all** products the user has agreed to. Pass the `product_type` query parameter to scope the result to a single product.",
         "operationId": "listTermsOfServiceAgreements",
         "tags": [
           "Terms of Service"
@@ -45358,7 +45459,7 @@
             "schema": {
               "$ref": "#/components/schemas/TosProductType"
             },
-            "example": "number_reputation"
+            "example": "branded_calling"
           },
           {
             "$ref": "#/components/parameters/BcPageNumber"
@@ -45373,16 +45474,16 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/number-reputation_TosAgreementList"
+                  "$ref": "#/components/schemas/TosAgreementList"
                 }
               }
             }
           },
           "default": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "4XX": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -45420,10 +45521,10 @@
             }
           },
           "default": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "4XX": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -45432,7 +45533,7 @@
     "/terms_of_service/branded_calling/agree": {
       "post": {
         "summary": "Agree to the Branded Calling Terms of Service",
-        "description": "Records the authenticated user's agreement to the current Branded Calling ToS. No body required. Idempotent \u2014 re-calling after agreement is a no-op and returns the existing agreement.\n\nThis is a prerequisite for activating Branded Calling on any enterprise (`POST /enterprises/{id}/branded_calling`); without an agreement, activation returns `403`.",
+        "description": "Records the authenticated user's agreement to the current Branded Calling ToS. No body required. Idempotent - re-calling after agreement is a no-op and returns the existing agreement.\n\nThis is a prerequisite for activating Branded Calling on any enterprise (`POST /enterprises/{id}/branded_calling`); without an agreement, activation returns `403`.",
         "operationId": "agreeToBrandedCallingTos",
         "tags": [
           "Terms of Service"
@@ -45452,6 +45553,47 @@
             "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "4XX": {
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
+          }
+        },
+        "x-latency-category": "responsive"
+      }
+    },
+    "/terms_of_service/info": {
+      "get": {
+        "summary": "Get Terms of Service information",
+        "description": "Returns the available Terms of Service agreements (product, current version, terms URL, effective date). Omit `product_type` to return all products; pass it to scope to one.",
+        "operationId": "getTermsOfServiceInfo",
+        "tags": [
+          "Terms of Service"
+        ],
+        "parameters": [
+          {
+            "name": "product_type",
+            "in": "query",
+            "required": false,
+            "description": "Optional product filter. Omit to return info for all products.",
+            "schema": {
+              "$ref": "#/components/schemas/TosProductType"
+            },
+            "example": "branded_calling"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terms of Service information.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TermsOfServiceInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
+          },
+          "default": {
             "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
@@ -45490,7 +45632,7 @@
     "/terms_of_service/status": {
       "get": {
         "summary": "Get the calling user's Terms of Service status",
-        "description": "Returns whether the authenticated user has agreed to the current Number Reputation Terms of Service. Used during onboarding to decide whether to prompt the user with the ToS dialog before continuing.\n\nThe `agreement_required: true` value means the user has not yet agreed (or has agreed to an outdated version) and must call `POST /terms_of_service/number_reputation/agree` before they can use the Number Reputation endpoints on an enterprise.",
+        "description": "Returns whether the authenticated user has agreed to the current Terms of Service for the product given by `product_type`. Used during onboarding to decide whether to prompt the user with the ToS dialog before continuing.\n\n`agreement_required: true` means the user has not yet agreed (or has agreed to an outdated version) and must agree before using that product's endpoints.",
         "operationId": "getTermsOfServiceStatus",
         "tags": [
           "Terms of Service"
@@ -45500,11 +45642,10 @@
             "name": "product_type",
             "in": "query",
             "required": false,
-            "description": "Which product's ToS to check. Defaults to `branded_calling`; pass `number_reputation` to check the Number Reputation Terms of Service.",
+            "description": "Which product's ToS to check. Defaults to `branded_calling`.",
             "schema": {
               "$ref": "#/components/schemas/TosProductType"
-            },
-            "example": "number_reputation"
+            }
           }
         ],
         "responses": {
@@ -45519,10 +45660,10 @@
             }
           },
           "default": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "4XX": {
-            "$ref": "#/components/responses/number-reputation_GenericErrorResponse"
+            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
         "x-latency-category": "responsive"
@@ -65039,7 +65180,7 @@
             },
             "examples": {
               "validation_error": {
-                "summary": "422 \u2014 request body failed validation",
+                "summary": "422 - request body failed validation",
                 "value": {
                   "errors": [
                     {
@@ -65057,7 +65198,7 @@
                 }
               },
               "bad_request": {
-                "summary": "400 \u2014 request rejected by a state guard",
+                "summary": "400 - request rejected by a state guard",
                 "description": "Returned when the request itself is well-formed but the resource is in a state that disallows this action (e.g. updating a DIR while it is being vetted, or deleting an enterprise that still has DIRs in vetting).",
                 "value": {
                   "errors": [
@@ -65073,7 +65214,7 @@
                 }
               },
               "not_found": {
-                "summary": "404 \u2014 resource does not exist or is not yours",
+                "summary": "404 - resource does not exist or is not yours",
                 "value": {
                   "errors": [
                     {
@@ -65088,7 +65229,7 @@
                 }
               },
               "conflict": {
-                "summary": "409 \u2014 request conflicts with current resource state",
+                "summary": "409 - request conflicts with current resource state",
                 "value": {
                   "errors": [
                     {
@@ -66081,7 +66222,7 @@
             },
             "examples": {
               "validation_error": {
-                "summary": "422 \u2014 request body failed validation",
+                "summary": "422 - request body failed validation",
                 "value": {
                   "errors": [
                     {
@@ -66099,7 +66240,7 @@
                 }
               },
               "bad_request": {
-                "summary": "400 \u2014 request rejected by a state guard",
+                "summary": "400 - request rejected by a state guard",
                 "description": "Returned when the request itself is well-formed but the resource is in a state that disallows this action (e.g. updating a DIR while it is being vetted, or deleting an enterprise that still has DIRs in vetting).",
                 "value": {
                   "errors": [
@@ -66115,7 +66256,7 @@
                 }
               },
               "not_found": {
-                "summary": "404 \u2014 resource does not exist or is not yours",
+                "summary": "404 - resource does not exist or is not yours",
                 "value": {
                   "errors": [
                     {
@@ -66130,7 +66271,7 @@
                 }
               },
               "conflict": {
-                "summary": "409 \u2014 request conflicts with current resource state",
+                "summary": "409 - request conflicts with current resource state",
                 "value": {
                   "errors": [
                     {
@@ -70647,6 +70788,41 @@
         "description": "The verification status of an active brand",
         "type": "string"
       },
+      "BrandLoaRenderRequest": {
+        "type": "object",
+        "required": [
+          "phone_numbers"
+        ],
+        "properties": {
+          "phone_numbers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 15,
+            "description": "Telephone numbers to authorize on the DIR, in `+E164` format (`+` followed by 10-15 digits). Max 15 per request.",
+            "items": {
+              "type": "string",
+              "pattern": "^\\+[1-9][0-9]{9,14}$",
+              "example": "+13125550000"
+            }
+          },
+          "agent": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentInput"
+              }
+            ],
+            "description": "Optional. The third-party reseller / partner managing the enterprise's phone numbers. Omit when working directly with Telnyx; the LOA marks the Authorized Agent block as N/A."
+          },
+          "signature": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignaturePayload"
+              }
+            ],
+            "description": "Optional. When provided the rendered PDF embeds the signature image, printed name, and signed-at date. When absent the PDF is returned unsigned so the customer can sign externally and upload it via the Documents API."
+          }
+        }
+      },
       "BrandOptionalAttributes": {
         "title": "BrandOptionalAttributes",
         "type": "object",
@@ -71178,7 +71354,7 @@
             },
             "minItems": 1,
             "maxItems": 20,
-            "description": "Supporting documents covering this batch. At least one entry with `document_type: letter_of_authorization` is required \u2014 the LOA authorises Telnyx to register these numbers under the DIR. Each `document_id` must come from the Telnyx Documents API. Additional document types (e.g. business registration) may be included alongside the LOA."
+            "description": "Supporting documents covering this batch. At least one entry with `document_type: letter_of_authorization` is required - the LOA authorises Telnyx to register these numbers under the DIR. Each `document_id` must come from the Telnyx Documents API. Additional document types (e.g. business registration) may be included alongside the LOA."
           }
         }
       },
@@ -90300,7 +90476,7 @@
             "enum": [
               "customer"
             ],
-            "description": "Always `customer` on this endpoint \u2014 internal-only comments are filtered out.",
+            "description": "Always `customer` on this endpoint - internal-only comments are filtered out.",
             "example": "customer",
             "readOnly": true
           },
@@ -90619,7 +90795,7 @@
           "infringement_claimed",
           "permanently_rejected"
         ],
-        "description": "DIR lifecycle status.\n- `draft` \u2014 newly created; editable; not yet submitted.\n- `submitted` / `in_review` \u2014 Telnyx is reviewing.\n- `verified` \u2014 approved; phone numbers may be attached.\n- `rejected` \u2014 Telnyx rejected this submission; `rejection_reasons` is populated; customer can edit and resubmit.\n- `unsuccessful` \u2014 system-side error during processing; customer can edit and resubmit.\n- `suspended` \u2014 temporarily disabled (e.g. by an active infringement claim).\n- `expired` \u2014 verification expired; customer must resubmit.\n- `infringement_claimed` \u2014 a trademark/impersonation claim is open against this DIR.\n- `permanently_rejected` \u2014 terminal; cannot be resubmitted."
+        "description": "DIR lifecycle status.\n- `draft` - newly created; editable; not yet submitted.\n- `submitted` / `in_review` - Telnyx is reviewing.\n- `verified` - approved; phone numbers may be attached.\n- `rejected` - Telnyx rejected this submission; `rejection_reasons` is populated; customer can edit and resubmit.\n- `unsuccessful` - system-side error during processing; customer can edit and resubmit.\n- `suspended` - temporarily disabled (e.g. by an active infringement claim).\n- `expired` - verification expired; customer must resubmit.\n- `infringement_claimed` - a trademark/impersonation claim is open against this DIR.\n- `permanently_rejected` - terminal; cannot be resubmitted."
       },
       "DirUpdateRequest": {
         "type": "object",
@@ -91871,7 +92047,7 @@
               "non_profit"
             ],
             "example": "commercial",
-            "description": "Organization category for vetting purposes:\n- `commercial` \u2014 for-profit business entities (LLC, corp, partnership, sole proprietorship). Most callers fall here.\n- `government` \u2014 federal/state/local government bodies.\n- `non_profit` \u2014 registered 501(c)(3)/equivalent (incl. educational institutions, charities, religious organisations)."
+            "description": "Organization category for vetting purposes:\n- `commercial` - for-profit business entities (LLC, corp, partnership, sole proprietorship). Most callers fall here.\n- `government` - federal/state/local government bodies.\n- `non_profit` - registered 501(c)(3)/equivalent (incl. educational institutions, charities, religious organisations)."
           },
           "country_code": {
             "type": "string",
@@ -91973,7 +92149,7 @@
               "other"
             ],
             "example": "llc",
-            "description": "Legal-entity form. Pick the form that matches your incorporation documents:\n- `corporation` \u2014 C-corp or S-corp.\n- `llc` \u2014 limited liability company.\n- `partnership` \u2014 general/limited partnership.\n- `nonprofit` \u2014 non-profit corporation, charitable trust, or 501(c)(3)/equivalent.\n- `other` \u2014 anything else (sole proprietorships, government bodies, DBAs, etc.). You may be asked for additional documents during vetting."
+            "description": "Legal-entity form. Pick the form that matches your incorporation documents:\n- `corporation` - C-corp or S-corp.\n- `llc` - limited liability company.\n- `partnership` - general/limited partnership.\n- `nonprofit` - non-profit corporation, charitable trust, or 501(c)(3)/equivalent.\n- `other` - anything else (sole proprietorships, government bodies, DBAs, etc.). You may be asked for additional documents during vetting."
           },
           "doing_business_as": {
             "type": "string",
@@ -98597,7 +98773,7 @@
           "contested",
           "resolved"
         ],
-        "description": "Lifecycle status. `pending` \u2014 newly filed; the DIR is auto-suspended. `contested` \u2014 you have submitted contest evidence; awaiting Telnyx review. `resolved` \u2014 final."
+        "description": "Lifecycle status. `pending` - newly filed; the DIR is auto-suspended. `contested` - you have submitted contest evidence; awaiting Telnyx review. `resolved` - final."
       },
       "InfringementClaimType": {
         "type": "string",
@@ -109496,7 +109672,7 @@
       },
       "PhoneNumberBulkResponse": {
         "type": "object",
-        "description": "Bulk-add success response (HTTP 201). All numbers in the request were accepted into a single new batch. Every entry in `data` shares the same `batch_id` \u2014 read it from any element to obtain the batch id for subsequent `GET .../phone_number_batches/{batch_id}` calls. If any number in the request fails (schema-invalid, not in inventory, already attached to another DIR, etc.) the entire request is rejected with HTTP 400 and the canonical Telnyx error envelope; the success body described here is therefore an all-or-nothing payload.",
+        "description": "Bulk-add success response (HTTP 201). All numbers in the request were accepted into a single new batch. Every entry in `data` shares the same `batch_id` - read it from any element to obtain the batch id for subsequent `GET .../phone_number_batches/{batch_id}` calls. If any number in the request fails (schema-invalid, not in inventory, already attached to another DIR, etc.) the entire request is rejected with HTTP 400 and the canonical Telnyx error envelope; the success body described here is therefore an all-or-nothing payload.",
         "required": [
           "data"
         ],
@@ -110114,7 +110290,7 @@
       },
       "PhoneNumberItemError": {
         "type": "object",
-        "description": "Per-number error returned by the bulk-delete endpoint. Bulk-add does not use this shape \u2014 it returns a 400 with the canonical envelope grouping numbers by failure category.",
+        "description": "Per-number error returned by the bulk-delete endpoint. Bulk-add does not use this shape - it returns a 400 with the canonical envelope grouping numbers by failure category.",
         "required": [
           "phone_number",
           "code",
@@ -110173,7 +110349,7 @@
           "expired",
           "permanently_rejected"
         ],
-        "description": "Phone-number lifecycle status.\n- `submitted` / `in_review` \u2014 Telnyx is reviewing the batch this number belongs to.\n- `verified` \u2014 approved; the DIR's display identity will be shown on outbound calls from this number.\n- `unsuccessful` \u2014 Telnyx rejected this submission; the customer may re-add to retry.\n- `suspended` \u2014 temporarily disabled (e.g. by an active infringement claim on the DIR).\n- `expired` \u2014 verification expired; re-add to renew.\n- `permanently_rejected` \u2014 terminal; cannot be re-added on this or any other DIR you own."
+        "description": "Phone-number lifecycle status.\n- `submitted` / `in_review` - Telnyx is reviewing the batch this number belongs to.\n- `verified` - approved; the DIR's display identity will be shown on outbound calls from this number.\n- `unsuccessful` - Telnyx rejected this submission; the customer may re-add to retry.\n- `suspended` - temporarily disabled (e.g. by an active infringement claim on the DIR).\n- `expired` - verification expired; re-add to renew.\n- `permanently_rejected` - terminal; cannot be re-added on this or any other DIR you own."
       },
       "PhoneNumberStatusResponsePaginated": {
         "title": "PhoneNumberStatusResponsePaginated",
@@ -116563,7 +116739,7 @@
       },
       "ReputationData": {
         "type": "object",
-        "description": "Reputation snapshot for a phone number. Each metric is a 0\u2013100 score; `spam_risk` is a coarse bucket. Field set may grow over time \u2014 read by key.",
+        "description": "Reputation snapshot for a phone number. Each metric is a 0\u2013100 score; `spam_risk` is a coarse bucket. Field set may grow over time - read by key.",
         "properties": {
           "spam_risk": {
             "type": "string",
@@ -119832,6 +120008,26 @@
             "format": "date-time",
             "description": "ISO 8601 formatted date indicating when the resource was updated.",
             "readOnly": true
+          }
+        }
+      },
+      "SignaturePayload": {
+        "type": "object",
+        "required": [
+          "image_base64"
+        ],
+        "properties": {
+          "image_base64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60000,
+            "description": "PNG image, base64-encoded."
+          },
+          "signer_name": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "description": "Optional. When absent the rendered PDF falls back to the enterprise contact's legal name."
           }
         }
       },
@@ -125078,6 +125274,42 @@
         ],
         "title": "TemplateType"
       },
+      "TermsOfServiceInfo": {
+        "type": "object",
+        "properties": {
+          "agreements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TermsOfServiceInfoItem"
+            }
+          }
+        }
+      },
+      "TermsOfServiceInfoItem": {
+        "type": "object",
+        "properties": {
+          "product_type": {
+            "$ref": "#/components/schemas/TosProductType"
+          },
+          "current_version": {
+            "type": "string",
+            "example": "v1.0.0"
+          },
+          "terms_url": {
+            "type": "string",
+            "example": "https://telnyx.com/terms/reputation-services"
+          },
+          "effective_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2025-07-10"
+          },
+          "description": {
+            "type": "string",
+            "example": "Terms and Conditions for Telnyx Number Reputation service"
+          }
+        }
+      },
       "TestRunDetailResult": {
         "properties": {
           "name": {
@@ -126497,7 +126729,7 @@
       },
       "TosAgreement": {
         "type": "object",
-        "description": "A recorded user agreement to a product's Terms of Service. The `user_id` is intentionally NOT echoed back on this public surface \u2014 the caller already knows their own identity.",
+        "description": "A recorded user agreement to a product's Terms of Service. The `user_id` is intentionally NOT echoed back on this public surface - the caller already knows their own identity.",
         "properties": {
           "id": {
             "type": "string",
@@ -133448,7 +133680,7 @@
       },
       "ValidateCallReasonsRequest": {
         "type": "array",
-        "description": "**Bare JSON array** of candidate call-reason strings (NOT an object \u2014 there is no top-level `call_reasons` key on this endpoint). 1\u201310 strings, each \u226464 characters.",
+        "description": "**Bare JSON array** of candidate call-reason strings (NOT an object - there is no top-level `call_reasons` key on this endpoint). 1\u201310 strings, each \u226464 characters.",
         "items": {
           "type": "string",
           "maxLength": 64
@@ -133484,7 +133716,7 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Subset of the input that does NOT match the pre-vetted library. The DIR can still be submitted with these \u2014 they will go through manual review.",
+                "description": "Subset of the input that does NOT match the pre-vetted library. The DIR can still be submitted with these - they will go through manual review.",
                 "example": [
                   "Appointment reminders",
                   "Billing inquiries"
@@ -139339,12 +139571,12 @@
           "title": {
             "type": "string",
             "example": "Invalid parameters",
-            "description": "Short human-readable category, e.g. `Bad Request`, `Duplicate resource`, `Not Found`, `Forbidden`. Treat as advisory only \u2014 the stable identifier is `code`."
+            "description": "Short human-readable category, e.g. `Bad Request`, `Duplicate resource`, `Not Found`, `Forbidden`. Treat as advisory only - the stable identifier is `code`."
           },
           "detail": {
             "type": "string",
             "example": "field required",
-            "description": "Context-specific message describing what went wrong on this particular request. May embed offending values; do not rely on it for programmatic matching \u2014 branch on `code`."
+            "description": "Context-specific message describing what went wrong on this particular request. May embed offending values; do not rely on it for programmatic matching - branch on `code`."
           },
           "meta": {
             "type": "object",
@@ -141517,24 +141749,6 @@
         },
         "type": "object"
       },
-      "number-reputation_EnterpriseListPublic": {
-        "type": "object",
-        "required": [
-          "data",
-          "meta"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EnterprisePublic"
-            }
-          },
-          "meta": {
-            "$ref": "#/components/schemas/number-reputation_PaginationMeta"
-          }
-        }
-      },
       "number-reputation_Error": {
         "type": "object",
         "required": [
@@ -141552,12 +141766,12 @@
           "title": {
             "type": "string",
             "example": "Invalid parameters",
-            "description": "Short human-readable category, e.g. `Bad Request`, `Duplicate resource`, `Not Found`, `Forbidden`. Treat as advisory only \u2014 the stable identifier is `code`."
+            "description": "Short human-readable category, e.g. `Bad Request`, `Duplicate resource`, `Not Found`, `Forbidden`. Treat as advisory only - the stable identifier is `code`."
           },
           "detail": {
             "type": "string",
             "example": "field required",
-            "description": "Context-specific message describing what went wrong on this particular request. May embed offending values; do not rely on it for programmatic matching \u2014 branch on `code`."
+            "description": "Context-specific message describing what went wrong on this particular request. May embed offending values; do not rely on it for programmatic matching - branch on `code`."
           },
           "meta": {
             "type": "object",
@@ -141659,25 +141873,6 @@
           }
         },
         "description": "JSON:API pagination metadata returned with every paginated list response. Page numbering is 1-based. `page_size` reports the number of items actually returned in `data` for this page; the requested size is taken from the `page[size]` query parameter."
-      },
-      "number-reputation_TosAgreementList": {
-        "type": "object",
-        "description": "Paginated list of Terms of Service agreements for the calling user.",
-        "required": [
-          "data",
-          "meta"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TosAgreement"
-            }
-          },
-          "meta": {
-            "$ref": "#/components/schemas/number-reputation_PaginationMeta"
-          }
-        }
       },
       "numbers_Error": {
         "properties": {
