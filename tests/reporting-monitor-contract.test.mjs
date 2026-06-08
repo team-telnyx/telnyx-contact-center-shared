@@ -25,6 +25,8 @@ test("sidebar keeps the main Supervisor group and uses one Reporting entry", () 
 
 test("dashboard uses standard cards and today-only realtime aggregate tiles", () => {
   assert.match(monitorPage, /Today realtime command center/);
+  assert.match(monitorPage, /<div className="rounded-2xl border border-border\/70 bg-card p-4 shadow-sm dark:bg-zinc-950\/70">[\s\S]*Today realtime command center/);
+  assert.doesNotMatch(monitorPage, /<div className="rounded-3xl border bg-background\/85 p-5 shadow-sm">[\s\S]*Today realtime command center/);
   assert.match(monitorPage, /Realtime signal/);
   assert.match(monitorPage, /Today SLA/);
   assert.match(monitorPage, /Live queue pressure/);

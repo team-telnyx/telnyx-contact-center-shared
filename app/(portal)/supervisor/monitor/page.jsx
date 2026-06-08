@@ -397,7 +397,7 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-3xl border bg-background/85 p-5 shadow-sm">
+      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Today realtime command center</p>
