@@ -400,12 +400,22 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
   );
 }
 
+function getQueueAvgWaitSeconds(queue) {
+  return Number(
+    queue.avgWaitTimeSeconds
+      ?? queue.averageWaitTime
+      ?? queue.today?.avgWaitTimeSeconds
+      ?? queue.realtime?.avgWaitSeconds
+      ?? 0,
+  );
+}
+
 function buildTrendData(range, overall, agents, queues) {
   const calls = overall.calls || {};
   const queueTotals = queues.reduce(
     (acc, queue) => {
       acc.waiting += Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0);
-      acc.avgWait += Number(queue.avgWaitTimeSeconds ?? queue.averageWaitTime ?? 0);
+      acc.avgWait += getQueueAvgWaitSeconds(queue);
       return acc;
     },
     { waiting: 0, avgWait: 0 },
@@ -474,7 +484,7 @@ function MonitorGraphsView({ overall, agents, queues }) {
     label: queue.queueName || queue.name || queue.displayName || "Queue",
     waiting: Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0),
     active: Number(queue.activeCalls ?? queue.realtime?.activeCalls ?? 0),
-    avgWait: Math.round(Number(queue.avgWaitTimeSeconds ?? queue.averageWaitTime ?? 0)),
+    avgWait: Math.round(getQueueAvgWaitSeconds(queue)),
   }));
   const agentStatusData = [
     { label: "Available", availableAgents: Number(overall.agents?.available ?? agents.filter((agent) => agent.status === "Available").length) },
