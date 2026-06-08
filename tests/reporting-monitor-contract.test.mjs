@@ -5,6 +5,7 @@ import { test } from "node:test";
 const monitorPage = readFileSync("app/(portal)/supervisor/monitor/page.jsx", "utf8");
 const menuConfig = readFileSync("config/menu.jsx", "utf8");
 const historyRoute = readFileSync("app/api/contact-center/interactions/history/route.js", "utf8");
+const callHistoryView = readFileSync("components/contact-center/SupervisorCallHistoryView.jsx", "utf8");
 
 test("supervisor monitor rail exposes call history alongside dashboard, agents, queues, and statistics", () => {
   const expectedLabels = ["Dashboard", "Agents", "Queues", "Statistics", "Call History"];
@@ -48,8 +49,27 @@ test("statistics view supports predefined and custom date ranges like Call Histo
   assert.match(monitorPage, /setQuickStatisticsRange\(7\)/);
   assert.match(monitorPage, /setQuickStatisticsRange\(30\)/);
   assert.match(monitorPage, /type="datetime-local"/);
+  assert.match(monitorPage, /statistics-header-controls/);
+  assert.doesNotMatch(monitorPage, /Reporting statistics/);
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconCheck\} label="Answered"/);
+  assert.doesNotMatch(monitorPage, /<MiniSignalTile label="Total calls"/);
   assert.match(monitorPage, /summary=true/);
   assert.match(historyRoute, /summary=true/);
+});
+
+test("call history uses the reporting command-card style and header date controls", () => {
+  assert.match(callHistoryView, /call-history-header-controls/);
+  assert.match(callHistoryView, />Custom range</);
+  assert.match(callHistoryView, /historyRange === "custom"/);
+  assert.match(callHistoryView, /Call history command center/);
+  assert.match(callHistoryView, /dark:bg-zinc-950\/70/);
+  assert.match(callHistoryView, /HistoryMetricCard/);
+  assert.match(callHistoryView, /label="Interactions"/);
+  assert.match(callHistoryView, /label="Completed"/);
+  assert.match(callHistoryView, /label="Missed"/);
+  assert.match(callHistoryView, /label="Recordings"/);
+  assert.doesNotMatch(callHistoryView, /<CardContent className="flex-1 min-h-0 space-y-6 overflow-y-auto py-6">/);
 });
 
 test("agents and queues views use dark-theme card dashboards with top metric tiles", () => {

@@ -547,7 +547,7 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function MonitorGraphsView({ overall, agents, queues }) {
+function MonitorGraphsView({ overall, agents, queues, timestamp }) {
   const [range, setRange] = useState("7d");
   const [dateRange, setDateRange] = useState(() => quickStatisticsDateRange(7));
   const [summary, setSummary] = useState(null);
@@ -611,93 +611,119 @@ function MonitorGraphsView({ overall, agents, queues }) {
   ];
 
   return (
-    <div className="space-y-5">
-      <div className="space-y-4 rounded-2xl border bg-background/85 p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CardHeader className="shrink-0">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <h2 className="font-semibold">Reporting statistics</h2>
-            <p className="text-sm text-muted-foreground">Choose predefined windows or a custom date/time range. Historical aggregates come from Call History interaction data.</p>
+            <CardTitle className="flex items-center gap-2">
+              <IconChartBar className="size-5" />
+              Statistics
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Reporting snapshots and historical aggregates from Call History interaction data.
+            </p>
           </div>
-          <Badge variant="outline" className="bg-background/70">{summaryLoading ? "Loading…" : "Aggregated"}</Badge>
+          <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="statistics-header-controls">
+            <div className="flex rounded-xl border bg-muted/40 p-1">
+              <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(1)}>1 day</Button>
+              <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(7)}>7 days</Button>
+              <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(30)}>30 days</Button>
+              <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
+            </div>
+            <div>
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
+              <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+            </div>
+            <div>
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
+              <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+            </div>
+            <Badge variant="outline" className="mb-1 bg-background/70">{summaryLoading ? "Loading…" : "Aggregated"}</Badge>
+            {timestamp && <div className="mb-2 text-xs text-muted-foreground">Updated {new Date(timestamp).toLocaleString()}</div>}
+          </div>
         </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex rounded-xl border bg-muted/40 p-1">
-            <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(1)}>1 day</Button>
-            <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(7)}>7 days</Button>
-            <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(30)}>30 days</Button>
-            <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
+      </CardHeader>
+      <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <IconSparkles className="h-4 w-4 text-telnyx-green" />
+                  Statistics command center
+                </div>
+                <h3 className="mt-2 text-xl font-semibold tracking-tight">Reporting health for selected range</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Date/time controls live in the page header; these tiles match Agents and Queues styling.
+                </p>
+              </div>
+              <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                {range === "custom" ? "Custom range" : range.toUpperCase()}
+              </Badge>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(calls.total)} detail="Selected range" progress={pct(calls.total, Math.max(calls.total, 1))} chip="Range" tone="sky" />
+              <OverviewMetricCard icon={IconCheck} label="Answered" value={formatShortNumber(calls.answered)} detail={`${pct(calls.answered, Math.max(calls.total, 1))}% answer rate`} progress={pct(calls.answered, Math.max(calls.total, 1))} chip="Range" tone="emerald" />
+              <OverviewMetricCard icon={IconAlertCircle} label="Abandoned" value={formatShortNumber(calls.abandoned)} detail="Missed interactions" progress={pct(calls.abandoned, Math.max(calls.total, 1))} chip="Range" tone="amber" />
+              <OverviewMetricCard icon={IconClock} label="Avg wait" value={formatDurationShort(durations.avgWaitTimeSeconds)} detail="Selected range" progress={pct(durations.avgWaitTimeSeconds, Math.max(durations.avgWaitTimeSeconds, 1))} chip="Wait" tone="slate" />
+            </div>
           </div>
-          <div>
-            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
-            <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} />
-          </div>
-          <div>
-            <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
-            <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} />
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <GraphCard title="Call volume / outcomes" description="Total, answered, abandoned, and wait aggregates for the selected range.">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={summaryData} margin={{ left: -20, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                  <Bar dataKey={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} name={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                  {summary?.daily?.length ? <Bar dataKey="answered" name="answered" fill="#10b981" radius={[6, 6, 0, 0]} /> : null}
+                  {summary?.daily?.length ? <Bar dataKey="missed" name="missed" fill="#f97316" radius={[6, 6, 0, 0]} /> : null}
+                </BarChart>
+              </ResponsiveContainer>
+            </GraphCard>
+            <GraphCard title="Queue depth" description="Waiting and active calls by queue, using live queue statistics.">
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={queueData.length ? queueData : [{ label: "No queue data", waiting: 0, active: 0, calls: 0 }]} margin={{ left: -20, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                  <Bar dataKey="waiting" name="waiting" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="active" name="active" fill="#10b981" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="calls" name="historical calls" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </GraphCard>
+            <GraphCard title="Queue wait pressure" description="Average wait time by queue in seconds.">
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={queueData.length ? queueData : [{ label: "No queue data", avgWait: 0 }]} margin={{ left: -20, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area type="monotone" dataKey="avgWait" name="avg wait seconds" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </GraphCard>
+            <GraphCard title="Agent availability / occupancy" description="Available, busy, and other activated-agent state counts.">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={agentStatusData} margin={{ left: -20, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                  <Bar dataKey="availableAgents" name="available agents" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="busyAgents" name="busy agents" fill="#f97316" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="otherAgents" name="other agents" fill="#71717a" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </GraphCard>
           </div>
         </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MiniSignalTile label="Total calls" value={formatShortNumber(calls.total)} detail="Selected range" tone="sky" />
-        <MiniSignalTile label="Answered" value={formatShortNumber(calls.answered)} detail={`${pct(calls.answered, Math.max(calls.total, 1))}% answer rate`} tone="emerald" />
-        <MiniSignalTile label="Abandoned" value={formatShortNumber(calls.abandoned)} detail="Missed interactions" tone="amber" />
-        <MiniSignalTile label="Avg wait" value={formatDurationShort(durations.avgWaitTimeSeconds)} detail="Selected range" tone="slate" />
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <GraphCard title="Call volume / outcomes" description="Total, answered, abandoned, and wait aggregates for the selected range.">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={summaryData} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-              <Bar dataKey={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} name={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-              {summary?.daily?.length ? <Bar dataKey="answered" name="answered" fill="#10b981" radius={[6, 6, 0, 0]} /> : null}
-              {summary?.daily?.length ? <Bar dataKey="missed" name="missed" fill="#f97316" radius={[6, 6, 0, 0]} /> : null}
-            </BarChart>
-          </ResponsiveContainer>
-        </GraphCard>
-        <GraphCard title="Queue depth" description="Waiting and active calls by queue, using live queue statistics.">
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={queueData.length ? queueData : [{ label: "No queue data", waiting: 0, active: 0, calls: 0 }]} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-              <Bar dataKey="waiting" name="waiting" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="active" name="active" fill="#10b981" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="calls" name="historical calls" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </GraphCard>
-        <GraphCard title="Queue wait pressure" description="Average wait time by queue in seconds.">
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={queueData.length ? queueData : [{ label: "No queue data", avgWait: 0 }]} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="avgWait" name="avg wait seconds" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </GraphCard>
-        <GraphCard title="Agent availability / occupancy" description="Available, busy, and other activated-agent state counts.">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={agentStatusData} margin={{ left: -20, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-              <Bar dataKey="availableAgents" name="available agents" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="busyAgents" name="busy agents" fill="#f97316" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="otherAgents" name="other agents" fill="#71717a" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </GraphCard>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2076,29 +2102,7 @@ export default function MonitorPage() {
             ) : activeTab === "call-history" ? (
               <SupervisorCallHistoryView embedded />
             ) : activeTab === "graphs" ? (
-              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-                <CardHeader className="shrink-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <IconChartBar className="size-5" />
-                        {activeSection.label}
-                      </CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {activeSection.description}
-                      </p>
-                    </div>
-                    {data?.timestamp && (
-                      <div className="text-xs text-muted-foreground">
-                        Last updated: {new Date(data.timestamp).toLocaleString()}
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-                  <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
-                </CardContent>
-              </Card>
+              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
             ) : (
               <>
       {/* Statistics Section */}

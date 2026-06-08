@@ -29,9 +29,13 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
+  IconAlertCircle,
+  IconCheck,
+  IconClock,
   IconExternalLink,
   IconHistory,
   IconInfoCircle,
+  IconPhoneIncoming,
   IconRefresh,
 } from "@tabler/icons-react";
 import InteractionDetailsSheet from "@/components/contact-center/InteractionDetailsSheet";
@@ -105,6 +109,43 @@ function formatDuration(seconds) {
   )}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatShortNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function pct(value, total) {
+  if (!total || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((Number(value || 0) / Number(total || 1)) * 100)));
+}
+
+function HistoryMetricCard({ icon: Icon, label, value, detail, progress = 0, chip = "Range", tone = "slate" }) {
+  const tones = {
+    slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
+    emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
+    sky: "from-sky-500/15 to-cyan-500/5 text-sky-700 dark:text-sky-300",
+    amber: "from-amber-500/15 to-orange-500/5 text-amber-700 dark:text-amber-300",
+  };
+
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm dark:bg-zinc-900/70">
+      <div className="flex items-start justify-between gap-3">
+        <div className={`rounded-xl bg-gradient-to-br p-2 ${tones[tone] || tones.slate}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <Badge variant="outline" className="bg-background/70 text-[10px] uppercase tracking-wide">
+          {chip}
+        </Badge>
+      </div>
+      <div className="mt-4 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-1 text-sm font-medium text-foreground">{label}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-telnyx-green transition-all" style={{ width: `${pct(progress, 100)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 function toIsoDateTime(value) {
   if (!value) return null;
   const date = new Date(value);
@@ -120,6 +161,7 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
     (state) => state.setSupervisorCallHistoryDateRange,
   );
   const [items, setItems] = useState([]);
+  const [historyRange, setHistoryRange] = useState("1d");
   const [filters, setFilters] = useState(() => ({
     ...defaultCallHistoryDateRange(),
     queue: "all",
@@ -155,6 +197,7 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
 
   const updateDateRangeFilter = (updates) => {
     const next = { ...filters, ...updates };
+    setHistoryRange("custom");
     setPage(1);
     setSupervisorCallHistoryDateRange({ from: next.from, to: next.to });
     setFilters(next);
@@ -162,6 +205,7 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
 
   const setQuickDateRange = (days) => {
     const nextRange = quickCallHistoryDateRange(days);
+    setHistoryRange(`${days}d`);
     setPage(1);
     setSupervisorCallHistoryDateRange(nextRange);
     setFilters((prev) => ({ ...prev, ...nextRange }));
@@ -224,140 +268,194 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
     setDetailsOpen(true);
   };
 
+
+  const historyMetrics = useMemo(() => {
+    const completed = items.filter((item) => String(item.state || "").toLowerCase().includes("complete")).length;
+    const missed = items.filter((item) => {
+      const state = String(item.state || "").toLowerCase();
+      return state.includes("abandon") || state.includes("fail") || state.includes("hangup");
+    }).length;
+    const recordings = items.filter((item) => Boolean(item.recording_url || item.metadata?.recording?.recording_url || item.metadata?.recording?.recording_urls?.mp3)).length;
+    return {
+      total,
+      visible: items.length,
+      completed,
+      missed,
+      recordings,
+      completionRate: pct(completed, Math.max(items.length, 1)),
+      missedRate: pct(missed, Math.max(items.length, 1)),
+      recordingRate: pct(recordings, Math.max(items.length, 1)),
+    };
+  }, [items, total]);
+
+  const headerDateControls = (
+    <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="call-history-header-controls">
+      <div className="flex rounded-xl border bg-muted/40 p-1">
+        <Button type="button" size="sm" variant={historyRange === "1d" ? "default" : "ghost"} onClick={() => setQuickDateRange(1)}>1 day</Button>
+        <Button type="button" size="sm" variant={historyRange === "7d" ? "default" : "ghost"} onClick={() => setQuickDateRange(7)}>7 days</Button>
+        <Button type="button" size="sm" variant={historyRange === "30d" ? "default" : "ghost"} onClick={() => setQuickDateRange(30)}>30 days</Button>
+        <Button type="button" size="sm" variant={historyRange === "custom" ? "default" : "ghost"} onClick={() => setHistoryRange("custom")}>Custom range</Button>
+      </div>
+      <div>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">From</div>
+        <Input type="datetime-local" value={filters.from} onChange={(e) => updateDateRangeFilter({ from: e.target.value })} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+      </div>
+      <div>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">To</div>
+        <Input type="datetime-local" value={filters.to} onChange={(e) => updateDateRangeFilter({ to: e.target.value })} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+      </div>
+      <Button variant="outline" size="sm" onClick={load} disabled={loading} className="mb-1">
+        <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        {loading ? "Loading…" : "Refresh"}
+      </Button>
+    </div>
+  );
+
   const content = (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden shadow-sm">
       <CardHeader className="shrink-0">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
               <IconHistory className="size-5" />
               Call History
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Completed and abandoned interactions with recordings and workflow details.
+              Historical interactions, recordings, and workflow details.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Loading…" : "Refresh"}
-          </Button>
+          {headerDateControls}
         </div>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 space-y-6 overflow-y-auto py-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-wrap items-end gap-4 w-full md:w-auto">
+      <CardContent className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 pb-6">
+        <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">From</div>
-              <Input type="datetime-local" value={filters.from} onChange={(e) => updateDateRangeFilter({ from: e.target.value })} className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <IconHistory className="h-4 w-4 text-telnyx-green" />
+                Call history command center
+              </div>
+              <h3 className="mt-2 text-xl font-semibold tracking-tight">Interaction archive for the selected range</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Dark-theme reporting cards match Agents, Queues, and Statistics. Date/time controls stay in the header line.
+              </p>
             </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">To</div>
-              <Input type="datetime-local" value={filters.to} onChange={(e) => updateDateRangeFilter({ to: e.target.value })} className="w-full md:w-[200px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">Quick range</div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => setQuickDateRange(1)}>1 day</Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setQuickDateRange(7)}>7 days</Button>
-                <Button type="button" size="sm" variant="outline" onClick={() => setQuickDateRange(30)}>30 days</Button>
+            <Badge variant="outline" className="w-fit border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
+              {formatShortNumber(historyMetrics.visible)} visible rows
+            </Badge>
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <HistoryMetricCard icon={IconPhoneIncoming} label="Interactions" value={formatShortNumber(historyMetrics.total)} detail={`${formatShortNumber(historyMetrics.visible)} visible on current page`} progress={pct(historyMetrics.visible, Math.max(historyMetrics.total, 1))} chip="Range" tone="sky" />
+            <HistoryMetricCard icon={IconCheck} label="Completed" value={formatShortNumber(historyMetrics.completed)} detail={`${historyMetrics.completionRate}% of visible rows`} progress={historyMetrics.completionRate} chip="Visible" tone="emerald" />
+            <HistoryMetricCard icon={IconAlertCircle} label="Missed" value={formatShortNumber(historyMetrics.missed)} detail={`${historyMetrics.missedRate}% abandoned / failed`} progress={historyMetrics.missedRate} chip="Visible" tone="amber" />
+            <HistoryMetricCard icon={IconClock} label="Recordings" value={formatShortNumber(historyMetrics.recordings)} detail={`${historyMetrics.recordingRate}% with recordings`} progress={historyMetrics.recordingRate} chip="Assets" tone="slate" />
+          </div>
+        </div>
+
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Queue</div>
+                <Select value={filters.queue} onValueChange={(value) => { setPage(1); setFilters((prev) => ({ ...prev, queue: value })); }}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="All queues" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All queues</SelectItem>
+                    {filterOptions.queues.map((queue) => (<SelectItem key={queue} value={queue}>{queue}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Agent</div>
+                <Select value={filters.agent} onValueChange={(value) => { setPage(1); setFilters((prev) => ({ ...prev, agent: value })); }}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="All agents" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All agents</SelectItem>
+                    {filterOptions.agents.map((agent) => (<SelectItem key={agent.username} value={agent.username}>{agent.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          </div>
-          <div className="flex items-end gap-3">
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Queue</div>
-              <Select value={filters.queue} onValueChange={(value) => { setPage(1); setFilters((prev) => ({ ...prev, queue: value })); }}>
-                <SelectTrigger><SelectValue placeholder="All queues" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All queues</SelectItem>
-                  {filterOptions.queues.map((queue) => (<SelectItem key={queue} value={queue}>{queue}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Agent</div>
-              <Select value={filters.agent} onValueChange={(value) => { setPage(1); setFilters((prev) => ({ ...prev, agent: value })); }}>
-                <SelectTrigger><SelectValue placeholder="All agents" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All agents</SelectItem>
-                  {filterOptions.agents.map((agent) => (<SelectItem key={agent.username} value={agent.username}>{agent.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="overflow-x-auto border-t pt-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Direction</TableHead>
-                <TableHead>From</TableHead>
-                <TableHead>To</TableHead>
-                <TableHead>Queue</TableHead>
-                <TableHead>Agent</TableHead>
-                <TableHead>Started</TableHead>
-                <TableHead>Duration</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Recording</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <TableRow key={`skeleton-${idx}`}>
-                    {Array.from({ length: 10 }).map((__, cellIdx) => (<TableCell key={`skeleton-${idx}-${cellIdx}`}><Skeleton className="h-4 w-full" /></TableCell>))}
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Direction</TableHead>
+                    <TableHead>From</TableHead>
+                    <TableHead>To</TableHead>
+                    <TableHead>Queue</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Recording</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))
-              ) : items.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center text-sm">No completed interactions found.</TableCell></TableRow>
-              ) : (
-                items.map((item) => {
-                  const startedAt = item.answered_at || item.assigned_at || item.enqueued_at || item.created_at;
-                  const durationSeconds = item.handle_time_seconds || (item.completed_at && startedAt ? Math.floor((new Date(item.completed_at) - new Date(startedAt)) / 1000) : null);
-                  const hasRecording = Boolean(item.recording_url || item.metadata?.recording?.recording_url || item.metadata?.recording?.recording_urls?.mp3);
-                  const state = String(item.state || "").toLowerCase();
-                  const statusClass = state.includes("complete") ? "border-green-500 text-green-500" : state.includes("abandon") || state.includes("fail") || state.includes("hangup") ? "border-red-500 text-red-500" : "border-blue-500 text-blue-500";
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.direction === "inbound" ? <IconArrowDownLeft className="h-4 w-4 text-green-500" /> : <IconArrowUpRight className="h-4 w-4 text-blue-500" />}</TableCell>
-                      <TableCell className="min-w-[140px]">{item.from_name || item.from_number || "-"}</TableCell>
-                      <TableCell className="min-w-[140px]">{item.to_name || item.to_number || "-"}</TableCell>
-                      <TableCell>{item.queue_name || "-"}</TableCell>
-                      <TableCell>{item.agent_name || item.agent_username || "-"}</TableCell>
-                      <TableCell>{formatDateTime(startedAt)}</TableCell>
-                      <TableCell>{formatDuration(durationSeconds)}</TableCell>
-                      <TableCell><Badge variant="outline" className={`uppercase bg-transparent ${statusClass}`}>{item.state || "unknown"}</Badge></TableCell>
-                      <TableCell>{hasRecording ? <Badge className="bg-green-500/10 text-green-500 border border-green-500/40">Available</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button size="icon" variant="ghost" onClick={() => openDetails(item)}><IconInfoCircle className="h-4 w-4" /></Button>
-                          <Button size="icon" variant="ghost" asChild><Link href={`/supervisor/call-history/${item.id}`}><IconExternalLink className="h-4 w-4" /></Link></Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <TableRow key={`skeleton-${idx}`}>
+                        {Array.from({ length: 10 }).map((__, cellIdx) => (<TableCell key={`skeleton-${idx}-${cellIdx}`}><Skeleton className="h-4 w-full" /></TableCell>))}
+                      </TableRow>
+                    ))
+                  ) : items.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="text-center text-sm">No completed interactions found.</TableCell></TableRow>
+                  ) : (
+                    items.map((item) => {
+                      const startedAt = item.answered_at || item.assigned_at || item.enqueued_at || item.created_at;
+                      const durationSeconds = item.handle_time_seconds || (item.completed_at && startedAt ? Math.floor((new Date(item.completed_at) - new Date(startedAt)) / 1000) : null);
+                      const hasRecording = Boolean(item.recording_url || item.metadata?.recording?.recording_url || item.metadata?.recording?.recording_urls?.mp3);
+                      const state = String(item.state || "").toLowerCase();
+                      const statusClass = state.includes("complete") ? "border-green-500 text-green-500" : state.includes("abandon") || state.includes("fail") || state.includes("hangup") ? "border-red-500 text-red-500" : "border-blue-500 text-blue-500";
+                      return (
+                        <TableRow key={item.id} className="hover:bg-muted/50">
+                          <TableCell>{item.direction === "inbound" ? <IconArrowDownLeft className="h-4 w-4 text-green-500" /> : <IconArrowUpRight className="h-4 w-4 text-blue-500" />}</TableCell>
+                          <TableCell className="min-w-[140px]">{item.from_name || item.from_number || "-"}</TableCell>
+                          <TableCell className="min-w-[140px]">{item.to_name || item.to_number || "-"}</TableCell>
+                          <TableCell>{item.queue_name || "-"}</TableCell>
+                          <TableCell>{item.agent_name || item.agent_username || "-"}</TableCell>
+                          <TableCell>{formatDateTime(startedAt)}</TableCell>
+                          <TableCell>{formatDuration(durationSeconds)}</TableCell>
+                          <TableCell><Badge variant="outline" className={`uppercase bg-transparent ${statusClass}`}>{item.state || "unknown"}</Badge></TableCell>
+                          <TableCell>{hasRecording ? <Badge className="bg-green-500/10 text-green-500 border border-green-500/40">Available</Badge> : <span className="text-xs text-muted-foreground">—</span>}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button size="icon" variant="ghost" onClick={() => openDetails(item)}><IconInfoCircle className="h-4 w-4" /></Button>
+                              <Button size="icon" variant="ghost" asChild><Link href={`/supervisor/call-history/${item.id}`}><IconExternalLink className="h-4 w-4" /></Link></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="border-t pt-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="text-sm font-medium text-foreground">Page {page} of {totalPages}</div>
-          <div className="flex items-center gap-3">
-            <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1} className="rounded-full"><IconChevronsLeft className="h-4 w-4" /></Button>
-            <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full"><IconChevronLeft className="h-4 w-4" /></Button>
-            <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-full"><IconChevronRight className="h-4 w-4" /></Button>
-            <Button size="icon" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-full"><IconChevronsRight className="h-4 w-4" /></Button>
-            <span className="text-sm font-medium text-foreground ml-2">Rows per page</span>
-            <Select value={String(pageSize)} onValueChange={(value) => { setPage(1); setPageSize(Number(value)); }}>
-              <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder="Rows" /></SelectTrigger>
-              <SelectContent>{[10, 25, 50, 100].map((size) => (<SelectItem key={size} value={String(size)}>{size}</SelectItem>))}</SelectContent>
-            </Select>
-          </div>
-        </div>
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
+            <div className="text-sm font-medium text-foreground">Page {page} of {totalPages}</div>
+            <div className="flex items-center gap-3">
+              <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1} className="rounded-full"><IconChevronsLeft className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full"><IconChevronLeft className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-full"><IconChevronRight className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-full"><IconChevronsRight className="h-4 w-4" /></Button>
+              <span className="text-sm font-medium text-foreground ml-2">Rows per page</span>
+              <Select value={String(pageSize)} onValueChange={(value) => { setPage(1); setPageSize(Number(value)); }}>
+                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder="Rows" /></SelectTrigger>
+                <SelectContent>{[10, 25, 50, 100].map((size) => (<SelectItem key={size} value={String(size)}>{size}</SelectItem>))}</SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
       </CardContent>
     </Card>
   );
