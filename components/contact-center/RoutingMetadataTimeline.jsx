@@ -1,12 +1,10 @@
 "use client";
 
 import {
-  IconPhone,
   IconPhoneCall,
   IconPhoneIncoming,
   IconPhoneOutgoing,
   IconClock,
-  IconUser,
   IconUsers,
   IconTransfer,
   IconPlayerPause,
@@ -15,9 +13,9 @@ import {
   IconX,
   IconAlertCircle,
   IconCircleDot,
-  IconHistory,
   IconFileText,
   IconClockHour4,
+  IconRoute,
 } from "@tabler/icons-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -58,14 +56,14 @@ function formatDuration(seconds) {
   return `${hrs}h ${remainingMins}m ${secs}s`;
 }
 
+function isTransfer(type, event = {}) {
+  const key = String(type || "").toLowerCase();
+  return key === "transfer" || (event.transferredBy && (event.to || event.callControlId));
+}
+
 function getEventIcon(type, event = {}) {
   const key = String(type || "").toLowerCase();
-  // Check if this is a transfer event by looking for transfer-related fields
-  const isTransferEvent =
-    key === "transfer" ||
-    (event.transferredBy && (event.to || event.callControlId));
-
-  if (isTransferEvent) return IconTransfer;
+  if (isTransfer(type, event)) return IconTransfer;
   if (key.includes("initiated")) return IconPhoneOutgoing;
   if (key.includes("enqueued")) return IconUsers;
   if (key.includes("offered")) return IconPhoneIncoming;
@@ -85,54 +83,67 @@ function getEventIcon(type, event = {}) {
   return IconCircleDot;
 }
 
-function getEventColor(type, event = {}) {
-  const key = String(type || "").toLowerCase();
-  // Check if this is a transfer event by looking for transfer-related fields
-  const isTransferEvent =
-    key === "transfer" ||
-    (event.transferredBy && (event.to || event.callControlId));
+// Dark-mode friendly tones: translucent tinted node + matching accent strip.
+const EVENT_TONES = {
+  transfer: { node: "border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300", accent: "bg-violet-500", glow: "shadow-violet-500/20" },
+  initiated: { node: "border-teal-500/40 bg-teal-500/10 text-teal-600 dark:text-teal-300", accent: "bg-teal-500", glow: "shadow-teal-500/20" },
+  enqueued: { node: "border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300", accent: "bg-sky-500", glow: "shadow-sky-500/20" },
+  offered: { node: "border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-300", accent: "bg-purple-500", glow: "shadow-purple-500/20" },
+  alerting: { node: "border-orange-500/40 bg-orange-500/10 text-orange-600 dark:text-orange-300", accent: "bg-orange-500", glow: "shadow-orange-500/20" },
+  answered: { node: "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300", accent: "bg-emerald-500", glow: "shadow-emerald-500/20" },
+  connected: { node: "border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-300", accent: "bg-green-500", glow: "shadow-green-500/20" },
+  hold: { node: "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-300", accent: "bg-amber-500", glow: "shadow-amber-500/20" },
+  resume: { node: "border-lime-500/40 bg-lime-500/10 text-lime-600 dark:text-lime-300", accent: "bg-lime-500", glow: "shadow-lime-500/20" },
+  wrapup: { node: "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-300", accent: "bg-fuchsia-500", glow: "shadow-fuchsia-500/20" },
+  ended: { node: "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-300", accent: "bg-red-500", glow: "shadow-red-500/20" },
+  default: { node: "border-zinc-500/40 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300", accent: "bg-zinc-500", glow: "shadow-zinc-500/20" },
+};
 
-  if (isTransferEvent) return "text-violet-600 bg-violet-50 border-violet-200";
-  if (key.includes("initiated"))
-    return "text-teal-600 bg-teal-50 border-teal-200";
-  if (key.includes("enqueued"))
-    return "text-blue-600 bg-blue-50 border-blue-200";
-  if (key.includes("offered"))
-    return "text-purple-600 bg-purple-50 border-purple-200";
-  if (key.includes("alerting"))
-    return "text-orange-600 bg-orange-50 border-orange-200";
-  if (key.includes("answered"))
-    return "text-emerald-600 bg-emerald-50 border-emerald-200";
-  if (key.includes("connected") || key.includes("bridged")) {
-    return "text-green-600 bg-green-50 border-green-200";
-  }
-  if (key.includes("hold"))
-    return "text-amber-600 bg-amber-50 border-amber-200";
-  if (key.includes("resume")) return "text-lime-600 bg-lime-50 border-lime-200";
-  if (key.includes("wrapup"))
-    return "text-fuchsia-600 bg-fuchsia-50 border-fuchsia-200";
+function getEventTone(type, event = {}) {
+  const key = String(type || "").toLowerCase();
+  if (isTransfer(type, event)) return EVENT_TONES.transfer;
+  if (key.includes("initiated")) return EVENT_TONES.initiated;
+  if (key.includes("enqueued")) return EVENT_TONES.enqueued;
+  if (key.includes("offered")) return EVENT_TONES.offered;
+  if (key.includes("alerting")) return EVENT_TONES.alerting;
+  if (key.includes("answered")) return EVENT_TONES.answered;
+  if (key.includes("connected") || key.includes("bridged")) return EVENT_TONES.connected;
+  if (key.includes("hold")) return EVENT_TONES.hold;
+  if (key.includes("resume")) return EVENT_TONES.resume;
+  if (key.includes("wrapup")) return EVENT_TONES.wrapup;
   if (
     key.includes("disconnect") ||
     key.includes("abandon") ||
     key.includes("hangup")
   ) {
-    return "text-red-600 bg-red-50 border-red-200";
+    return EVENT_TONES.ended;
   }
-  return "text-slate-600 bg-slate-50 border-slate-200";
+  return EVENT_TONES.default;
 }
 
-function getEventDescription(event) {
+function getEventTitle(event) {
+  const type = String(event.type || "").toLowerCase();
+  if (isTransfer(event.type, event)) return "Call transferred";
+  if (type.includes("initiated")) return "Call initiated";
+  if (type.includes("enqueued")) return "Call enqueued";
+  if (type.includes("offered")) return "Call offered";
+  if (type.includes("alerting")) return "Agent alerting";
+  if (type.includes("answered")) return "Call answered";
+  if (type.includes("connected") || type.includes("bridged")) return "Call connected";
+  if (type.includes("hold")) return "Call placed on hold";
+  if (type.includes("resume")) return "Call resumed";
+  if (type.includes("wrapup_start")) return "Wrap-up started";
+  if (type.includes("wrapup_end")) return "Wrap-up completed";
+  if (type.includes("disconnected")) return "Call disconnected";
+  if (type.includes("abandoned")) return "Call abandoned";
+  return titleCase(event.type || "Event");
+}
+
+function getEventDetail(event) {
   const type = String(event.type || "").toLowerCase();
   const parts = [];
 
-  // Handle transfer events - the type field might be overwritten with transfer type (queue/agent)
-  // Check for transfer-related fields to identify transfer events
-  const isTransferEvent =
-    type === "transfer" ||
-    (event.transferredBy && (event.to || event.callControlId));
-
-  if (isTransferEvent) {
-    parts.push("Call transferred");
+  if (isTransfer(event.type, event)) {
     if (event.to) {
       if (type === "queue" || event.type === "queue") {
         parts.push(`to queue "${event.to}"`);
@@ -147,69 +158,54 @@ function getEventDescription(event) {
       parts.push(`(${type})`);
     }
   } else if (type.includes("initiated")) {
-    parts.push("Call initiated");
     if (event.from) parts.push(`from ${event.from}`);
     if (event.to) parts.push(`to ${event.to}`);
     if (event.direction) parts.push(`(${event.direction})`);
   } else if (type.includes("enqueued")) {
-    parts.push("Call enqueued");
-    if (event.queueName) parts.push(`in queue "${event.queueName}"`);
+    if (event.queueName) parts.push(`queue "${event.queueName}"`);
     if (event.currentPosition != null) {
-      parts.push(`at position ${event.currentPosition + 1}`);
+      parts.push(`position ${event.currentPosition + 1}`);
     }
     if (event.queueAvgWaitTimeSecs != null) {
       const waitTime = formatDuration(event.queueAvgWaitTimeSecs);
       if (waitTime) parts.push(`(avg wait: ${waitTime})`);
     }
   } else if (type.includes("offered")) {
-    parts.push("Call offered");
     if (event.agentUsername) parts.push(`to agent ${event.agentUsername}`);
   } else if (type.includes("alerting")) {
-    parts.push("Agent alerting");
-    if (event.agentUsername) parts.push(`(${event.agentUsername})`);
-    // Note: routingAlgorithm is displayed as a badge separately, not in description
+    if (event.agentUsername) parts.push(event.agentUsername);
     if (event.reEvaluated) parts.push("(re-evaluated)");
   } else if (type.includes("answered")) {
-    parts.push("Call answered");
     if (event.agentUsername) parts.push(`by ${event.agentUsername}`);
     if (event.alertingDurationSeconds != null) {
       const duration = formatDuration(event.alertingDurationSeconds);
       if (duration) parts.push(`(alerting: ${duration})`);
     }
   } else if (type.includes("connected") || type.includes("bridged")) {
-    parts.push("Call connected");
     if (event.agentUsername) parts.push(`with ${event.agentUsername}`);
   } else if (type.includes("hold")) {
-    parts.push("Call placed on hold");
-    if (event.holdNumber != null) parts.push(`(hold #${event.holdNumber})`);
+    if (event.holdNumber != null) parts.push(`hold #${event.holdNumber}`);
   } else if (type.includes("resume")) {
-    parts.push("Call resumed");
     if (event.holdDuration != null) {
       const duration = formatDuration(event.holdDuration);
-      if (duration) parts.push(`(held for ${duration})`);
+      if (duration) parts.push(`held for ${duration}`);
     }
   } else if (type.includes("wrapup_start")) {
-    parts.push("Wrap-up started");
     if (event.agentUsername) parts.push(`by ${event.agentUsername}`);
   } else if (type.includes("wrapup_end")) {
-    parts.push("Wrap-up completed");
     if (event.agentUsername) parts.push(`by ${event.agentUsername}`);
     if (event.wrapupDurationSeconds != null) {
       const duration = formatDuration(event.wrapupDurationSeconds);
       if (duration) parts.push(`(duration: ${duration})`);
     }
   } else if (type.includes("disconnected")) {
-    parts.push("Call disconnected");
-    if (event.reason) parts.push(`(${event.reason})`);
-    if (event.hangupCause) parts.push(`- ${event.hangupCause}`);
+    if (event.reason) parts.push(event.reason);
+    if (event.hangupCause) parts.push(`· ${event.hangupCause}`);
   } else if (type.includes("abandoned")) {
-    parts.push("Call abandoned");
     if (event.waitTimeSeconds != null) {
       const waitTime = formatDuration(event.waitTimeSeconds);
-      if (waitTime) parts.push(`(waited ${waitTime})`);
+      if (waitTime) parts.push(`waited ${waitTime}`);
     }
-  } else {
-    parts.push(titleCase(event.type || "Event"));
   }
 
   return parts.join(" ");
@@ -226,7 +222,6 @@ function getRoutingStrategyFromAlgorithm(algorithm) {
   // Values can be: "fifo", "first_in_first_out", "skills_based", "priority_based", "manual", etc.
   const algo = String(algorithm || "").toLowerCase();
 
-  // Check for FIFO variations
   if (
     algo === "fifo" ||
     algo === "first_in_first_out" ||
@@ -236,7 +231,6 @@ function getRoutingStrategyFromAlgorithm(algorithm) {
     return "FIFO";
   }
 
-  // Check for Skill-based variations
   if (
     algo === "skills_based" ||
     algo === "skill_based" ||
@@ -245,7 +239,6 @@ function getRoutingStrategyFromAlgorithm(algorithm) {
     return "Skill-based";
   }
 
-  // Check for Priority-based variations
   if (algo === "priority_based" || algo.includes("priority")) {
     return "Priority-based";
   }
@@ -254,10 +247,8 @@ function getRoutingStrategyFromAlgorithm(algorithm) {
 }
 
 function RoutingTypeBadge({ routingAlgorithm }) {
-  // Convert routing algorithm to routing strategy format
   const routingStrategy = getRoutingStrategyFromAlgorithm(routingAlgorithm);
 
-  // Map to display text - always use short form (FIFO, not "First In First Out")
   let displayText;
   if (routingStrategy === "FIFO") {
     displayText = "FIFO";
@@ -266,7 +257,6 @@ function RoutingTypeBadge({ routingAlgorithm }) {
   } else if (routingStrategy === "Priority-based") {
     displayText = "PRIORITY-BASED";
   } else {
-    // If we couldn't map it, use the original value formatted nicely
     displayText = String(routingAlgorithm || "")
       .replace(/_/g, " ")
       .split(" ")
@@ -277,19 +267,31 @@ function RoutingTypeBadge({ routingAlgorithm }) {
 
   return (
     <Badge
-      className={`text-xs uppercase ${
+      className={`text-[10px] uppercase tracking-wide ${
         routingStrategy === "FIFO"
-          ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+          ? "bg-blue-500/10 text-blue-700 border-blue-500/40 dark:text-blue-300"
           : routingStrategy === "Skill-based"
-            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+            ? "bg-green-500/10 text-green-700 border-green-500/40 dark:text-green-300"
             : routingStrategy === "Priority-based"
-              ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
-              : "bg-gray-100 text-gray-700 dark:bg-gray-900/40 dark:text-gray-300"
+              ? "bg-purple-500/10 text-purple-700 border-purple-500/40 dark:text-purple-300"
+              : "bg-zinc-500/10 text-zinc-700 border-zinc-500/40 dark:text-zinc-300"
       }`}
       variant="outline"
     >
+      <IconRoute className="mr-1 h-3 w-3" />
       {displayText}
     </Badge>
+  );
+}
+
+function DetailChip({ icon: Icon, label, value, mono = false }) {
+  if (value == null || value === "") return null;
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/40 px-2.5 py-1 text-[11px] text-muted-foreground">
+      {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
+      <span className="font-medium text-foreground/70">{label}</span>
+      <span className={mono ? "font-mono text-[10px]" : ""}>{value}</span>
+    </span>
   );
 }
 
@@ -332,141 +334,88 @@ export default function RoutingMetadataTimeline({ events = [] }) {
   });
 
   return (
-    <div className="space-y-0">
-      {sorted.map((event, index) => {
-        const Icon = getEventIcon(event.type, event);
-        const colorClasses = getEventColor(event.type, event);
-        const description = getEventDescription(event);
-        const timeSincePrevious = calculateTimeSincePrevious(
-          event,
-          sorted[index - 1],
-        );
+    <div className="relative">
+      {/* Gradient spine connecting the event nodes */}
+      <div className="absolute left-[21px] top-3 bottom-3 w-px bg-gradient-to-b from-teal-500/50 via-border to-red-500/40" aria-hidden="true" />
 
-        return (
-          <div
-            key={`${event.type}-${event.timestamp}-${index}`}
-            className="relative"
-          >
-            {/* Timeline line */}
-            {index < sorted.length - 1 && (
-              <div className="absolute left-5 top-12 bottom-0 w-0.5 bg-border" />
-            )}
+      <div className="space-y-3">
+        {sorted.map((event, index) => {
+          const Icon = getEventIcon(event.type, event);
+          const tone = getEventTone(event.type, event);
+          const title = getEventTitle(event);
+          const detail = getEventDetail(event);
+          const timeSincePrevious = calculateTimeSincePrevious(
+            event,
+            sorted[index - 1],
+          );
 
-            <div className="flex gap-4 pb-6">
-              {/* Icon */}
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 ${colorClasses}`}
-              >
-                <Icon className="h-5 w-5" />
+          const hasChips =
+            event.queueId ||
+            event.agentId ||
+            event.callControlId ||
+            event.routingAlgorithm ||
+            event.waitTimeSeconds != null ||
+            event.alertingDurationSeconds != null ||
+            event.holdDuration != null ||
+            event.wrapupDurationSeconds != null;
+
+          return (
+            <div
+              key={`${event.type}-${event.timestamp}-${index}`}
+              className="relative flex gap-4"
+              data-testid="routing-timeline-event"
+            >
+              {/* Node */}
+              <div className={`relative z-10 mt-1.5 flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border-2 shadow-lg ${tone.node} ${tone.glow} bg-background`}>
+                <span className={`absolute inset-[3px] rounded-full opacity-15 ${tone.accent}`} aria-hidden="true" />
+                <Icon className="relative h-5 w-5" />
               </div>
 
-              {/* Content */}
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{description}</div>
-                    {event.timestamp && (
-                      <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2">
-                        <IconClock className="h-3 w-3" />
-                        <span>{formatDateTime(event.timestamp)}</span>
-                        {timeSincePrevious != null && timeSincePrevious > 0 && (
-                          <span className="text-muted-foreground/70">
-                            (+{formatDuration(timeSincePrevious)})
-                          </span>
-                        )}
-                      </div>
-                    )}
+              {/* Event card */}
+              <div className="group relative min-w-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card/70 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+                <span className={`absolute inset-y-0 left-0 w-1 ${tone.accent}`} aria-hidden="true" />
+                <div className="p-3 pl-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <div className="min-w-0">
+                      <span className="text-sm font-semibold">{title}</span>
+                      {detail ? (
+                        <span className="ml-2 text-sm text-muted-foreground">{detail}</span>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {timeSincePrevious != null && timeSincePrevious > 0 && (
+                        <Badge variant="outline" className="border-border/70 bg-muted/40 px-1.5 py-0 text-[10px] font-medium text-muted-foreground">
+                          +{formatDuration(timeSincePrevious)}
+                        </Badge>
+                      )}
+                      {event.timestamp && (
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground" title={formatDateTime(event.timestamp)}>
+                          {formatTime(event.timestamp)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {event.timestamp && (
-                    <div className="text-xs text-muted-foreground font-mono shrink-0">
-                      {formatTime(event.timestamp)}
+
+                  {hasChips && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {event.routingAlgorithm && (
+                        <RoutingTypeBadge routingAlgorithm={event.routingAlgorithm} />
+                      )}
+                      <DetailChip icon={IconClockHour4} label="Wait" value={formatDuration(event.waitTimeSeconds)} />
+                      <DetailChip icon={IconAlertCircle} label="Alerting" value={formatDuration(event.alertingDurationSeconds)} />
+                      <DetailChip icon={IconPlayerPause} label="Hold" value={formatDuration(event.holdDuration)} />
+                      <DetailChip icon={IconFileText} label="Wrap-up" value={formatDuration(event.wrapupDurationSeconds)} />
+                      <DetailChip icon={IconUsers} label="Queue ID" value={event.queueId} mono />
+                      <DetailChip icon={IconCircleDot} label="Agent ID" value={event.agentId} mono />
+                      <DetailChip icon={IconPhoneCall} label="Call Control ID" value={event.callControlId} mono />
                     </div>
                   )}
                 </div>
-
-                {/* Additional details */}
-                {(event.queueId ||
-                  event.agentId ||
-                  event.callControlId ||
-                  event.routingAlgorithm ||
-                  event.waitTimeSeconds != null ||
-                  event.alertingDurationSeconds != null ||
-                  event.holdDuration != null ||
-                  event.wrapupDurationSeconds != null) && (
-                  <div className="mt-2 space-y-1">
-                    {event.queueId && (
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-medium">Queue ID:</span>{" "}
-                        {event.queueId}
-                      </div>
-                    )}
-                    {event.agentId && (
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-medium">Agent ID:</span>{" "}
-                        {event.agentId}
-                      </div>
-                    )}
-                    {event.callControlId && (
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-medium">Call Control ID:</span>{" "}
-                        <code className="bg-muted px-1 py-0.5 rounded text-[10px]">
-                          {event.callControlId}
-                        </code>
-                      </div>
-                    )}
-                    {event.routingAlgorithm && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-2">
-                        <span className="font-medium">Routing:</span>
-                        <RoutingTypeBadge
-                          routingAlgorithm={event.routingAlgorithm}
-                        />
-                      </div>
-                    )}
-                    {event.waitTimeSeconds != null && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <IconClockHour4 className="h-3 w-3" />
-                        <span>
-                          <span className="font-medium">Wait time:</span>{" "}
-                          {formatDuration(event.waitTimeSeconds)}
-                        </span>
-                      </div>
-                    )}
-                    {event.alertingDurationSeconds != null && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <IconAlertCircle className="h-3 w-3" />
-                        <span>
-                          <span className="font-medium">
-                            Alerting duration:
-                          </span>{" "}
-                          {formatDuration(event.alertingDurationSeconds)}
-                        </span>
-                      </div>
-                    )}
-                    {event.holdDuration != null && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <IconPlayerPause className="h-3 w-3" />
-                        <span>
-                          <span className="font-medium">Hold duration:</span>{" "}
-                          {formatDuration(event.holdDuration)}
-                        </span>
-                      </div>
-                    )}
-                    {event.wrapupDurationSeconds != null && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <IconFileText className="h-3 w-3" />
-                        <span>
-                          <span className="font-medium">Wrap-up duration:</span>{" "}
-                          {formatDuration(event.wrapupDurationSeconds)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

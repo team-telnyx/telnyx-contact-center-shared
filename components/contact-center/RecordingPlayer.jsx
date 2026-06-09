@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  IconPlayerPlay,
-  IconPlayerPause,
-  IconPlayerSkipBack,
-  IconPlayerSkipForward,
+  IconPlayerPlayFilled,
+  IconPlayerPauseFilled,
+  IconRewindBackward10,
+  IconRewindForward10,
   IconVolume,
   IconVolumeOff,
   IconFileText,
   IconLoader2,
+  IconMicrophone,
+  IconWaveSine,
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
 import TranscriptionSheet from "./TranscriptionSheet";
@@ -25,6 +27,8 @@ function formatDuration(seconds) {
   const secs = total % 60;
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
+
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
 
 export default function RecordingPlayer({
   src,
@@ -41,8 +45,10 @@ export default function RecordingPlayer({
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [waveReady, setWaveReady] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.6);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [transcriptionSheetOpen, setTranscriptionSheetOpen] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [localTranscriptionText, setLocalTranscriptionText] =
@@ -73,13 +79,15 @@ export default function RecordingPlayer({
 
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: "#6b7280",
-        progressColor: "#374151",
-        cursorColor: "#111827",
-        barWidth: 2,
-        barRadius: 3,
+        waveColor: "#71717a99",
+        progressColor: "#10b981",
+        cursorColor: "#10b981",
+        cursorWidth: 2,
+        barWidth: 3,
+        barGap: 2,
+        barRadius: 4,
         responsive: true,
-        height: 80,
+        height: 96,
         normalize: true,
         backend: "WebAudio",
         mediaControls: false,
@@ -89,6 +97,7 @@ export default function RecordingPlayer({
 
       wavesurfer.on("ready", () => {
         setDuration(wavesurfer.getDuration() || 0);
+        setWaveReady(true);
       });
 
       wavesurfer.on("play", () => {
@@ -111,7 +120,7 @@ export default function RecordingPlayer({
         console.error("[RecordingPlayer] WaveSurfer error:", error);
         const errorMessage = error?.message || String(error) || "";
         const errorString = errorMessage.toLowerCase();
-        
+
         if (errorString.includes("failed to fetch") || errorString.includes("cors") || errorString.includes("networkerror")) {
           notify({ title: "Failed to load recording. The recording may be unavailable, expired, or there was a network error.", variant: "error" });
         } else {
@@ -136,6 +145,7 @@ export default function RecordingPlayer({
         wavesurferRef.current.destroy();
         wavesurferRef.current = null;
       }
+      setWaveReady(false);
     };
   }, [src, recordingId]);
 
@@ -150,6 +160,16 @@ export default function RecordingPlayer({
       wavesurferRef.current.setMuted(muted);
     }
   }, [muted]);
+
+  useEffect(() => {
+    if (wavesurferRef.current && waveReady) {
+      try {
+        wavesurferRef.current.setPlaybackRate(playbackRate);
+      } catch {
+        // Playback rate is a nice-to-have; ignore unsupported backends.
+      }
+    }
+  }, [playbackRate, waveReady]);
 
   useEffect(() => {
     setLocalTranscriptionText(transcriptionText);
@@ -218,6 +238,12 @@ export default function RecordingPlayer({
     }
   };
 
+  const cyclePlaybackRate = () => {
+    const idx = PLAYBACK_RATES.indexOf(playbackRate);
+    const next = PLAYBACK_RATES[(idx + 1) % PLAYBACK_RATES.length];
+    setPlaybackRate(next);
+  };
+
   const formatLabel = format ? String(format).toUpperCase() : null;
   const channelLabel = (() => {
     if (channels === null || channels === undefined) return null;
@@ -231,23 +257,46 @@ export default function RecordingPlayer({
     return String(channels);
   })();
 
+  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
   return (
-    <Card>
-      <CardHeader className="text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 font-semibold text-base">
-            <IconPlayerPlay className="h-5 w-5 text-telnyx-green" />
-            Call Recording
+    <Card className="overflow-hidden border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+      <CardContent className="p-0">
+        {/* Header strip */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+              <IconWaveSine className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold leading-tight">Call Recording</div>
+              <div className="text-xs text-muted-foreground">
+                {playing ? "Playing" : waveReady ? "Ready to play" : "Loading waveform…"}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {formatLabel ? (
+              <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {formatLabel}
+              </Badge>
+            ) : null}
+            {channelLabel ? (
+              <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {channelLabel} channel
+              </Badge>
+            ) : null}
+            <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+              {formatDuration(duration)}
+            </Badge>
             {localTranscriptionText ? (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setTranscriptionSheetOpen(true)}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80"
+                className="h-7 rounded-lg px-2.5 text-xs"
               >
-                <IconFileText className="h-3 w-3 mr-1" />
+                <IconFileText className="mr-1 h-3.5 w-3.5" />
                 Show Transcription
               </Button>
             ) : (
@@ -256,115 +305,125 @@ export default function RecordingPlayer({
                 variant="outline"
                 onClick={handleTranscribe}
                 disabled={isTranscribing || !recordingId || !interactionId}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50"
+                className="h-7 rounded-lg px-2.5 text-xs disabled:opacity-50"
               >
                 {isTranscribing ? (
                   <>
-                    <IconLoader2 className="h-3 w-3 mr-1 animate-spin" />
+                    <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                     Transcribing...
                   </>
                 ) : (
                   <>
-                    <IconFileText className="h-3 w-3 mr-1" />
+                    <IconMicrophone className="mr-1 h-3.5 w-3.5" />
                     Transcribe Recording
                   </>
                 )}
               </Button>
             )}
-            {formatLabel ? <span>Format:</span> : null}
-            {formatLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
-                {formatLabel}
-              </Badge>
-            ) : null}
-            {channelLabel ? <span>Channels:</span> : null}
-            {channelLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
-                {channelLabel}
-              </Badge>
-            ) : null}
-            <span>Duration:</span>
-            <Badge
-              variant="outline"
-              className="border-telnyx-green/60 text-telnyx-green"
-            >
-              {formatDuration(duration)}
-            </Badge>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="w-full border border-telnyx-green rounded-xl p-3">
-          <div ref={waveformRef} className="w-full" />
-        </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>0:00</span>
-          <span>{formatDuration(duration)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => seek(-5)}>
-            <IconPlayerSkipBack className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            onClick={togglePlay}
-            className="px-6 rounded-[10px] bg-muted text-foreground hover:bg-muted/80"
-          >
-            {playing ? (
-              <>
-                <IconPlayerPause className="h-4 w-4 mr-2" />
-                Pause
-              </>
-            ) : (
-              <>
-                <IconPlayerPlay className="h-4 w-4 mr-2" />
-                Play
-              </>
+
+        {/* Waveform stage */}
+        <div className="px-5 pt-5">
+          <div className="relative rounded-2xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/10 p-4 dark:from-zinc-900/60 dark:to-zinc-950/40">
+            {!waveReady && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <IconLoader2 className="h-4 w-4 animate-spin" />
+                Loading waveform…
+              </div>
             )}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => seek(5)}>
-            <IconPlayerSkipForward className="h-4 w-4" />
-          </Button>
-          <div className="ml-auto flex items-center gap-2 w-40">
-            {muted ? (
-              <IconVolumeOff className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <IconVolume className="h-4 w-4 text-muted-foreground" />
-            )}
+            <div ref={waveformRef} className="w-full" />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-mono tabular-nums text-foreground/80" data-testid="recording-current-time">
+              {formatDuration(currentTime)}
+            </span>
+            <div className="mx-3 hidden h-1 flex-1 overflow-hidden rounded-full bg-muted sm:block">
+              <div className="h-full rounded-full bg-emerald-500/70 transition-[width]" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="font-mono tabular-nums">{formatDuration(duration)}</span>
+          </div>
+        </div>
+
+        {/* Transport controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 pb-5 pt-3">
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => seek(-10)}
+              className="h-10 w-10 rounded-full"
+              aria-label="Back 10 seconds"
+              title="Back 10s"
+            >
+              <IconRewindBackward10 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              onClick={togglePlay}
+              className="h-14 w-14 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 transition hover:scale-105 hover:bg-emerald-500"
+              aria-label={playing ? "Pause" : "Play"}
+              data-testid="recording-play-button"
+            >
+              {playing ? (
+                <IconPlayerPauseFilled className="h-6 w-6" />
+              ) : (
+                <IconPlayerPlayFilled className="ml-0.5 h-6 w-6" />
+              )}
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => seek(10)}
+              className="h-10 w-10 rounded-full"
+              aria-label="Forward 10 seconds"
+              title="Forward 10s"
+            >
+              <IconRewindForward10 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={cyclePlaybackRate}
+              className="ml-1 h-8 w-14 rounded-full font-mono text-xs"
+              aria-label="Playback speed"
+              title="Playback speed"
+            >
+              {playbackRate}x
+            </Button>
+          </div>
+
+          <div className="flex min-w-[200px] flex-1 items-center justify-end gap-2 sm:flex-none">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setMuted(!muted)}
+              className="h-9 w-9 rounded-full"
+              aria-label={muted ? "Unmute" : "Mute"}
+            >
+              {muted ? (
+                <IconVolumeOff className="h-4.5 w-4.5 text-muted-foreground" />
+              ) : (
+                <IconVolume className="h-4.5 w-4.5 text-muted-foreground" />
+              )}
+            </Button>
             <input
               type="range"
               min={0}
               max={100}
               step={1}
-              value={Math.round(volume * 100)}
-              onChange={(e) => setVolume(Number(e.target.value) / 100)}
-              className="h-2 w-full cursor-pointer accent-primary"
+              value={Math.round((muted ? 0 : volume) * 100)}
+              onChange={(e) => {
+                setMuted(false);
+                setVolume(Number(e.target.value) / 100);
+              }}
+              className="h-1.5 w-36 cursor-pointer accent-emerald-600"
               aria-label="Volume"
             />
+            <span className="w-9 text-right font-mono text-xs tabular-nums text-muted-foreground">
+              {muted ? 0 : Math.round(volume * 100)}%
+            </span>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setMuted(!muted)}
-            className="px-5 rounded-[10px] bg-muted text-foreground hover:bg-muted/80"
-          >
-            {muted ? (
-              <>
-                <IconVolumeOff className="h-4 w-4 mr-2" />
-                Unmute
-              </>
-            ) : (
-              <>
-                <IconVolume className="h-4 w-4 mr-2" />
-                Mute
-              </>
-            )}
-          </Button>
         </div>
       </CardContent>
       <TranscriptionSheet
@@ -377,4 +436,3 @@ export default function RecordingPlayer({
     </Card>
   );
 }
-
