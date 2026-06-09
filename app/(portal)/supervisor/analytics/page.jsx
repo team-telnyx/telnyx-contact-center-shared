@@ -29,14 +29,18 @@ import {
   IconChartBar,
   IconCheck,
   IconClock,
+  IconClockPause,
   IconExternalLink,
   IconHeadset,
   IconHourglassLow,
+  IconLogin,
   IconPhoneIncoming,
   IconPhoneOff,
   IconRefresh,
+  IconRobot,
   IconSparkles,
   IconStopwatch,
+  IconTag,
   IconTrendingUp,
   IconUsers,
 } from "@tabler/icons-react";
@@ -63,6 +67,10 @@ const ANALYTICS_RAIL_ITEMS = [
   { id: "queue-performance", label: "Queue Performance", icon: IconTrendingUp, description: "Historical queue volumes, SLA, and handle times" },
   { id: "agent-performance", label: "Agent Scorecard", icon: IconUsers, description: "Agent handled volume, AHT, holds, transfers, occupancy" },
   { id: "abandonment", label: "Abandonment", icon: IconPhoneOff, description: "Abandon rates, wait distribution, and callback list" },
+  { id: "agent-adherence", label: "Adherence", icon: IconClockPause, description: "Agent status mix, logins, breaks, and recent transitions" },
+  { id: "transfers-holds", label: "Transfers & Holds", icon: IconArrowBounce, description: "Transfer and hold pressure by agent and queue" },
+  { id: "wrapup-codes", label: "Wrap-up Codes", icon: IconTag, description: "Why customers call — disposition mix and coverage" },
+  { id: "ai-handoffs", label: "AI Handoffs", icon: IconRobot, description: "AI assistant to agent handoffs, outcomes, and health" },
 ];
 const ANALYTICS_UI_STATE_STORAGE_KEYS = {
   activeSection: "supervisor.analytics.activeSection",
@@ -582,6 +590,485 @@ function AbandonmentView({ data, loading }) {
   );
 }
 
+const STATUS_TONES = {
+  Available: "border-green-500 text-green-600",
+  Busy: "border-sky-500 text-sky-600",
+  Wrapup: "border-violet-500 text-violet-600",
+  Break: "border-amber-500 text-amber-600",
+  Lunch: "border-amber-500 text-amber-600",
+  Away: "border-orange-500 text-orange-600",
+  Offline: "border-zinc-400 text-zinc-500",
+};
+
+function statusBadgeClass(status) {
+  return STATUS_TONES[status] || "border-blue-500 text-blue-500";
+}
+
+function AgentAdherenceView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  const statusMixData = (data.statusMix || []).map((entry) => ({
+    label: entry.status,
+    minutes: Math.round(entry.durationSeconds / 60),
+    changes: entry.changes,
+  }));
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconUsers} label="Agents tracked" value={formatShortNumber(totals.agents)} detail="Agents with status activity in range" progress={pct(totals.agents, Math.max(totals.agents, 1))} chip="Range" tone="sky" />
+        <OverviewMetricCard icon={IconLogin} label="Logins" value={formatShortNumber(totals.logins)} detail="Login events in range" progress={pct(totals.logins, Math.max(totals.logins, 1))} chip="Range" tone="emerald" />
+        <OverviewMetricCard icon={IconClockPause} label="Status changes" value={formatShortNumber(totals.statusChanges)} detail="Transitions across all agents" progress={pct(totals.statusChanges, Math.max(totals.statusChanges, 1))} chip="Range" tone="violet" />
+        <OverviewMetricCard icon={IconClock} label="Top status" value={statusMixData[0]?.label || "—"} detail={statusMixData[0] ? `${formatDurationShort(statusMixData[0].minutes * 60)} total time` : "No status data"} progress={pct(statusMixData[0]?.minutes, Math.max(statusMixData.reduce((sum, item) => sum + item.minutes, 0), 1))} chip="Mix" tone="amber" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Status time mix" description="Minutes spent in each status across all agents.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={statusMixData.length ? statusMixData : [{ label: "No data", minutes: 0 }]} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} interval={0} angle={-15} height={45} textAnchor="end" />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey="minutes" name="minutes" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Recent status transitions</CardTitle>
+            <p className="text-sm text-muted-foreground">Latest transitions from the immutable status ledger.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-[300px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead>From → To</TableHead>
+                    <TableHead className="text-right">In previous</TableHead>
+                    <TableHead className="text-right">When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentTransitions?.length ? (
+                    data.recentTransitions.map((row, idx) => (
+                      <TableRow key={`${row.agentUsername}-${row.createdAt}-${idx}`} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">{row.agentUsername}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className={`bg-transparent ${statusBadgeClass(row.previousStatus)}`}>{row.previousStatus || "—"}</Badge>
+                            <span className="text-muted-foreground">→</span>
+                            <Badge variant="outline" className={`bg-transparent ${statusBadgeClass(row.status)}`}>{row.status}</Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">{formatDurationShort(row.durationSeconds)}</TableCell>
+                        <TableCell className="text-right text-xs">{formatDateTime(row.createdAt)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan={4} className="text-center text-sm">No status transitions in the selected range.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Agent adherence summary</CardTitle>
+          <p className="text-sm text-muted-foreground">Per-agent logins, time accounting, and routing readiness for the selected range.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead className="text-right">Logins</TableHead>
+                  <TableHead className="text-right">First login</TableHead>
+                  <TableHead className="text-right">Status changes</TableHead>
+                  <TableHead className="text-right">Logged in</TableHead>
+                  <TableHead className="text-right">On call</TableHead>
+                  <TableHead className="text-right">Break</TableHead>
+                  <TableHead className="text-right">Availability</TableHead>
+                  <TableHead className="text-right">Occupancy</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.agents?.length ? (
+                  data.agents.map((agent) => (
+                    <TableRow key={agent.username} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{agent.name}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(agent.logins)}</TableCell>
+                      <TableCell className="text-right text-xs">{agent.firstLogin ? formatDateTime(agent.firstLogin) : "—"}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(agent.statusChanges)}</TableCell>
+                      <TableCell className="text-right">{agent.loggedInSeconds ? formatDurationShort(agent.loggedInSeconds) : "—"}</TableCell>
+                      <TableCell className="text-right">{agent.callSeconds ? formatDurationShort(agent.callSeconds) : "—"}</TableCell>
+                      <TableCell className="text-right">{agent.breakSeconds ? formatDurationShort(agent.breakSeconds) : "—"}</TableCell>
+                      <TableCell className="text-right">{agent.availabilityPct == null ? "—" : `${agent.availabilityPct}%`}</TableCell>
+                      <TableCell className="text-right">{agent.occupancyPct == null ? "—" : `${agent.occupancyPct}%`}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={9} className="text-center text-sm">No adherence data in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function TransfersHoldsView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  const queueChartData = (data.queues || []).slice(0, 10).map((queue) => ({
+    label: queue.queueName,
+    transfers: queue.transferCount,
+    holds: queue.holdCount,
+  }));
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconArrowBounce} label="Transfers" value={formatShortNumber(totals.transferCount)} detail={`${totals.transferRatePct}% of calls had a transfer`} progress={totals.transferRatePct || 0} chip="Range" tone="amber" />
+        <OverviewMetricCard icon={IconHourglassLow} label="Hold events" value={formatShortNumber(totals.holdCount)} detail={`${totals.holdRatePct}% of calls had a hold`} progress={totals.holdRatePct || 0} chip="Range" tone="violet" />
+        <OverviewMetricCard icon={IconClock} label="Avg hold time" value={formatDurationShort(totals.avgHoldSeconds)} detail={`${formatDurationShort(totals.holdDurationSeconds)} total hold time`} progress={pct(totals.avgHoldSeconds, Math.max(totals.maxHoldSeconds, 1))} chip="Holds" tone="sky" />
+        <OverviewMetricCard icon={IconAlertCircle} label="Longest hold" value={formatDurationShort(totals.maxHoldSeconds)} detail="Worst single-call hold time" progress={100} chip="Outlier" tone="slate" />
+      </div>
+
+      <GraphCard title="Transfer and hold pressure by queue" description="Which queues generate rework and customer waiting.">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={queueChartData.length ? queueChartData : [{ label: "No data", transfers: 0, holds: 0 }]} margin={{ left: -20, right: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+            <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="transfers" name="transfers" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="holds" name="holds" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </GraphCard>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Agents with most transfers and holds</CardTitle>
+            <p className="text-sm text-muted-foreground">High transfer rate often signals routing or skill gaps, not agent failure.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead className="text-right">Handled</TableHead>
+                  <TableHead className="text-right">Transfers</TableHead>
+                  <TableHead className="text-right">Transfer rate</TableHead>
+                  <TableHead className="text-right">Holds</TableHead>
+                  <TableHead className="text-right">Hold time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.agents?.length ? (
+                  data.agents.map((agent) => (
+                    <TableRow key={agent.username} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{agent.name}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(agent.handled)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(agent.transferCount)}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className={agent.transferRatePct <= 10 ? "border-green-500 text-green-600" : agent.transferRatePct <= 25 ? "border-amber-500 text-amber-600" : "border-red-500 text-red-500"}>
+                          {agent.transferRatePct}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{formatShortNumber(agent.holdCount)}</TableCell>
+                      <TableCell className="text-right">{formatDurationShort(agent.holdDurationSeconds)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={6} className="text-center text-sm">No agent transfer/hold activity in range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Longest holds</CardTitle>
+            <p className="text-sm text-muted-foreground">Worst caller experiences — review these recordings first.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-[420px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Caller</TableHead>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">Holds</TableHead>
+                    <TableHead className="text-right">Hold time</TableHead>
+                    <TableHead className="text-right">Details</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.longestHolds?.length ? (
+                    data.longestHolds.map((row) => (
+                      <TableRow key={row.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">{row.fromName || row.fromNumber || "Unknown"}</TableCell>
+                        <TableCell>{row.agentUsername || "-"}</TableCell>
+                        <TableCell className="text-right">{formatShortNumber(row.holdCount)}</TableCell>
+                        <TableCell className="text-right">{formatDurationShort(row.holdDurationSeconds)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="icon" variant="ghost" asChild>
+                            <Link href={`/supervisor/call-history/${row.id}`}><IconExternalLink className="h-4 w-4" /></Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan={5} className="text-center text-sm">No holds in the selected range. 🎉</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+const WRAPUP_SERIES_COLORS = ["#0ea5e9", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#71717a"];
+
+function WrapupCodesView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  const topCode = data.codes?.[0];
+  const dailySeries = [...(data.topCodes || []), "other"];
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconTag} label="Coded interactions" value={formatShortNumber(totals.withCodes)} detail={`${totals.coveragePct}% of completed calls have wrap-up codes`} progress={totals.coveragePct || 0} chip="Coverage" tone="emerald" />
+        <OverviewMetricCard icon={IconChartBar} label="Distinct codes used" value={formatShortNumber(totals.distinctCodes)} detail="Unique dispositions in range" progress={pct(totals.distinctCodes, Math.max(totals.distinctCodes, 1))} chip="Range" tone="sky" />
+        <OverviewMetricCard icon={IconCheck} label="Top reason" value={topCode?.codeName || "—"} detail={topCode ? `${formatShortNumber(topCode.total)} interactions` : "No coded interactions"} progress={pct(topCode?.total, Math.max(totals.withCodes, 1))} chip="Top" tone="violet" />
+        <OverviewMetricCard icon={IconAlertCircle} label="Missing codes" value={formatShortNumber(Math.max(totals.completed - totals.withCodes, 0))} detail="Completed calls without disposition" progress={Math.max(0, 100 - (totals.coveragePct || 0))} chip="Hygiene" tone="amber" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Disposition mix" description="Why customers contacted you — top wrap-up codes in range.">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={(data.codes || []).slice(0, 10)} layout="vertical" margin={{ left: 30, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <YAxis type="category" dataKey="codeName" tickLine={false} axisLine={false} fontSize={11} width={130} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey="total" name="interactions" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Disposition trend" description="Daily stacked mix of the top codes — watch for rising contact reasons.">
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={data.daily?.length ? data.daily : [{ label: "No data" }]} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {dailySeries.map((series, idx) => (
+                <Bar key={series} dataKey={series} name={series} stackId="codes" fill={WRAPUP_SERIES_COLORS[idx % WRAPUP_SERIES_COLORS.length]} radius={idx === dailySeries.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+      </div>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Dispositions by queue</CardTitle>
+          <p className="text-sm text-muted-foreground">Contact reasons per queue — spot mismatched routing or emerging issues.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="max-h-[420px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Queue</TableHead>
+                  <TableHead>Wrap-up code</TableHead>
+                  <TableHead className="text-right">Interactions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.byQueue?.length ? (
+                  data.byQueue.map((row, idx) => (
+                    <TableRow key={`${row.queueName}-${row.codeId}-${idx}`} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{row.queueName}</TableCell>
+                      <TableCell><Badge variant="outline" className="bg-transparent border-sky-500/50 text-sky-600 dark:text-sky-300">{row.codeName}</Badge></TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.total)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={3} className="text-center text-sm">No coded interactions in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function handoffStatusBadgeClass(status) {
+  if (status === "processed") return "border-green-500 text-green-600";
+  if (String(status || "").startsWith("pending")) return "border-amber-500 text-amber-600";
+  return "border-red-500 text-red-500";
+}
+
+function AiHandoffsView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconRobot} label="AI handoffs" value={formatShortNumber(totals.handoffs)} detail={`${formatShortNumber(totals.aiHandledInteractions)} AI-tagged agent interactions`} progress={pct(totals.handoffs, Math.max(totals.handoffs, 1))} chip="Range" tone="violet" />
+        <OverviewMetricCard icon={IconCheck} label="Processed" value={`${totals.processedRatePct || 0}%`} detail={`${formatShortNumber(totals.processed)} insight payloads delivered to agents`} progress={totals.processedRatePct || 0} chip="Health" tone="emerald" />
+        <OverviewMetricCard icon={IconAlertCircle} label="Pending / failed" value={`${formatShortNumber(totals.pending)} / ${formatShortNumber(totals.failed)}`} detail={`${formatShortNumber(totals.withErrors)} with error messages`} progress={pct(totals.pending + totals.failed, Math.max(totals.handoffs, 1))} chip="Health" tone="amber" />
+        <OverviewMetricCard icon={IconClock} label="Agent AHT after handoff" value={formatDurationShort(totals.avgHandleSecondsAfterHandoff)} detail={`${formatShortNumber(totals.aiCompleted)} completed after AI handoff`} progress={pct(totals.aiCompleted, Math.max(totals.aiHandledInteractions, 1))} chip="Outcome" tone="sky" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Handoffs per day" description="Total handoff events and successfully processed insight payloads.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.daily?.length ? data.daily : [{ label: "No data", total: 0, processed: 0 }]} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="total" name="handoffs" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="processed" name="processed" fill="#10b981" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Handoff destinations</CardTitle>
+            <p className="text-sm text-muted-foreground">Queues that receive AI-transferred callers and how those calls end.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Queue</TableHead>
+                  <TableHead className="text-right">Handoffs</TableHead>
+                  <TableHead className="text-right">Completed</TableHead>
+                  <TableHead className="text-right">Avg handle after AI</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.byQueue?.length ? (
+                  data.byQueue.map((row) => (
+                    <TableRow key={row.queueName} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{row.queueName}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.handoffs)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.completed)}</TableCell>
+                      <TableCell className="text-right">{formatDurationShort(row.avgHandleSeconds)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={4} className="text-center text-sm">No AI handoffs reached a queue in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Recent handoff events</CardTitle>
+          <p className="text-sm text-muted-foreground">Latest AI → agent handoffs with processing status; failures need attention.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="max-h-[420px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Caller</TableHead>
+                  <TableHead>Queue</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">When</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recent?.length ? (
+                  data.recent.map((row) => (
+                    <TableRow key={row.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{row.fromName || row.fromNumber || "Unknown"}</TableCell>
+                      <TableCell>{row.queueName || "-"}</TableCell>
+                      <TableCell>{row.agentUsername || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`bg-transparent ${handoffStatusBadgeClass(row.status)}`} title={row.errorMessage || undefined}>
+                          {row.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-xs">{formatDateTime(row.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        {row.interactionId ? (
+                          <Button size="icon" variant="ghost" asChild>
+                            <Link href={`/supervisor/call-history/${row.interactionId}`}><IconExternalLink className="h-4 w-4" /></Link>
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={6} className="text-center text-sm">No AI handoff events in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 const REPORT_META = {
   "queue-performance": {
     kicker: "Queue performance report",
@@ -600,6 +1087,30 @@ const REPORT_META = {
     title: "Lost callers for the selected range",
     description: "Where, when, and how long callers waited before giving up — plus a callback list.",
     icon: IconPhoneOff,
+  },
+  "agent-adherence": {
+    kicker: "Agent adherence report",
+    title: "Status discipline for the selected range",
+    description: "Logins, status mix, breaks, availability, and the latest status transitions per agent.",
+    icon: IconClockPause,
+  },
+  "transfers-holds": {
+    kicker: "Transfers & holds report",
+    title: "Rework and caller waiting for the selected range",
+    description: "Transfer and hold pressure by agent and queue, plus the longest holds to review.",
+    icon: IconArrowBounce,
+  },
+  "wrapup-codes": {
+    kicker: "Wrap-up codes report",
+    title: "Contact reasons for the selected range",
+    description: "Disposition mix, daily trend, per-queue breakdown, and wrap-up coverage hygiene.",
+    icon: IconTag,
+  },
+  "ai-handoffs": {
+    kicker: "AI handoff report",
+    title: "AI assistant to agent handoffs for the selected range",
+    description: "Handoff volume, insight processing health, destination queues, and agent outcomes after AI.",
+    icon: IconRobot,
   },
 };
 
@@ -747,6 +1258,14 @@ export default function SupervisorAnalyticsPage() {
                   <QueuePerformanceView data={reportData} loading={loading} />
                 ) : activeReport === "agent-performance" ? (
                   <AgentPerformanceView data={reportData} loading={loading} />
+                ) : activeReport === "agent-adherence" ? (
+                  <AgentAdherenceView data={reportData} loading={loading} />
+                ) : activeReport === "transfers-holds" ? (
+                  <TransfersHoldsView data={reportData} loading={loading} />
+                ) : activeReport === "wrapup-codes" ? (
+                  <WrapupCodesView data={reportData} loading={loading} />
+                ) : activeReport === "ai-handoffs" ? (
+                  <AiHandoffsView data={reportData} loading={loading} />
                 ) : (
                   <AbandonmentView data={reportData} loading={loading} />
                 )}

@@ -1,162 +1,144 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTheme } from "next-themes";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
-  ResponsiveContainer,
 } from "recharts";
 import {
-  IconPhone,
-  IconClock,
   IconCheck,
-  IconX,
-  IconTrendingUp,
-  IconTrendingDown,
+  IconHeadset,
+  IconPhone,
   IconRefresh,
+  IconSparkles,
+  IconStopwatch,
+  IconTag,
 } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
-// Custom Tooltip component for Recharts that respects dark/light theme
-function CustomTooltip({ active, payload, label }) {
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  const [isDark, setIsDark] = useState(false);
+const PERFORMANCE_COLORS = { Completed: "#10b981", Abandoned: "#f97316" };
+const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
-  useEffect(() => {
-    setMounted(true);
-    // Check initial theme
-    const checkDark = () => {
-      if (theme === "dark") {
-        setIsDark(true);
-      } else if (theme === "system") {
-        setIsDark(document.documentElement.classList.contains("dark"));
-      } else {
-        setIsDark(false);
-      }
-    };
-    checkDark();
+function pct(value, total) {
+  if (!total || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((Number(value || 0) / Number(total || 1)) * 100)));
+}
 
-    // Listen for theme changes
-    const observer = new MutationObserver(checkDark);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+function formatShortNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
 
-    return () => observer.disconnect();
-  }, [theme]);
+function formatDurationShort(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds || 0)));
+  if (total >= 3600) return `${Math.floor(total / 3600)}h ${Math.floor((total % 3600) / 60)}m`;
+  if (total >= 60) return `${Math.floor(total / 60)}m ${total % 60}s`;
+  return `${total}s`;
+}
 
-  if (!active || !payload || !payload.length) {
-    return null;
-  }
-
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
   return (
-    <div
-      className={cn(
-        "rounded-lg border p-3 shadow-md",
-        isDark
-          ? "bg-card border-border text-card-foreground"
-          : "bg-popover border-border text-popover-foreground",
-      )}
-    >
-      <p className="font-medium mb-2">{label}</p>
-      {payload.map((entry, index) => (
-        <p key={index} className="text-sm">
-          <span
-            className="inline-block w-3 h-3 rounded-sm mr-2"
-            style={{ backgroundColor: entry.color }}
-          />
-          {entry.name}: {entry.value}
-        </p>
-      ))}
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">
+      {label ? <div className="mb-1 font-semibold">{label}</div> : null}
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div key={entry.dataKey || entry.name} className="flex min-w-32 items-center justify-between gap-4">
+            <span className="capitalize text-muted-foreground">{String(entry.name || entry.dataKey).replace(/([A-Z])/g, " $1")}</span>
+            <span className="font-semibold">{Number(entry.value || 0).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function formatTime(seconds) {
-  if (!seconds || seconds === 0) return "0s";
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (mins > 0) {
-    return `${mins}m ${secs}s`;
-  }
-  return `${secs}s`;
-}
+function OverviewMetricCard({ icon: Icon, label, value, detail, progress = 0, chip = "Range", tone = "slate" }) {
+  const tones = {
+    slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
+    emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
+    sky: "from-sky-500/15 to-blue-500/5 text-sky-700 dark:text-sky-300",
+    amber: "from-amber-500/15 to-orange-500/5 text-amber-700 dark:text-amber-300",
+    violet: "from-violet-500/15 to-fuchsia-500/5 text-violet-700 dark:text-violet-300",
+  };
 
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  trend,
-  className,
-}) {
   return (
-    <Card className={cn("relative overflow-hidden", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {Icon && (
-          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Icon className="h-4 w-4 text-primary" />
+    <Card className="overflow-hidden border bg-background/85 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">
+            {chip}
+          </Badge>
+        </div>
+        <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{detail}</span>
+            <span>{progress}%</span>
           </div>
-        )}
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground mt-1">{description}</p>
-        )}
-        {trend && (
-          <div className="flex items-center gap-1 mt-2 text-xs">
-            {trend > 0 ? (
-              <>
-                <IconTrendingUp className="h-3 w-3 text-emerald-500" />
-                <span className="text-emerald-500">+{trend}%</span>
-              </>
-            ) : trend < 0 ? (
-              <>
-                <IconTrendingDown className="h-3 w-3 text-red-500" />
-                <span className="text-red-500">{trend}%</span>
-              </>
-            ) : null}
-            <span className="text-muted-foreground ml-1">vs yesterday</span>
-          </div>
-        )}
+          <Progress value={progress} className="h-2" />
+        </div>
       </CardContent>
     </Card>
   );
 }
 
-function ChartCard({ title, description, children, className }) {
+function MiniSignalTile({ label, value, detail }) {
   return (
-    <Card className={cn(className)}>
+    <div className="rounded-2xl border bg-card/70 p-4">
+      <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+    </div>
+  );
+}
+
+function GraphCard({ title, description, children }) {
+  return (
+    <Card className="border bg-background/85 shadow-sm">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <CardDescription>{description}</CardDescription>}
+        <CardTitle className="text-base">{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>
   );
 }
+
+function statusBadgeClass(status) {
+  if (status === "Available") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (status === "Busy" || status === "On Call") return "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (status === "Offline") return "border-zinc-400/40 bg-zinc-400/10 text-zinc-600 dark:text-zinc-300";
+  return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+}
+
+const PERIODS = [
+  { id: "today", label: "Today" },
+  { id: "7days", label: "7 days" },
+  { id: "30days", label: "30 days" },
+];
 
 export function AgentDashboard({ className }) {
   const [loading, setLoading] = useState(true);
@@ -188,18 +170,19 @@ export function AgentDashboard({ className }) {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period]);
 
   if (loading) {
     return (
-      <div className={cn("space-y-6", className)}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={cn("space-y-4", className)}>
+        <Skeleton className="h-40 w-full" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
+            <Skeleton key={i} className="h-44" />
           ))}
         </div>
-        <Skeleton className="h-80" />
-        <Skeleton className="h-80" />
+        <Skeleton className="h-72 w-full" />
       </div>
     );
   }
@@ -218,17 +201,16 @@ export function AgentDashboard({ className }) {
 
   const metrics = data?.metrics || {};
   const charts = data?.charts || {};
+  const periodLabel = PERIODS.find((p) => p.id === period)?.label || "Today";
 
-  // Prepare pie chart data
-  const performanceData = charts.performanceDistribution || [];
-  const totalPerformance = performanceData.reduce(
-    (sum, item) => sum + item.value,
-    0,
-  );
+  const totalCalls = Number(metrics.totalCalls || 0);
+  const completed = Number(metrics.completedCalls || 0);
+  const abandoned = Number(metrics.abandonedCalls || 0);
+  const completionRate = pct(completed, Math.max(totalCalls, 1));
 
-  // Prepare hourly activity data
+  const performanceData = (charts.performanceDistribution || []).filter((entry) => Number(entry.value || 0) > 0);
+
   const hourlyData = charts.hourlyActivity || [];
-  // Fill in missing hours with 0
   const fullHourlyData = Array.from({ length: 24 }, (_, i) => {
     const existing = hourlyData.find((d) => d.hour === i);
     return (
@@ -242,240 +224,210 @@ export function AgentDashboard({ className }) {
     );
   });
 
-  // Prepare queue distribution data
   const queueData = charts.queueDistribution || [];
+  const wrapupData = charts.wrapupDistribution || [];
 
   return (
-    <div className={cn("space-y-6 pb-6", className)}>
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Your performance metrics and activity overview
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Period Switcher */}
-          <div className="flex gap-2 bg-muted/50 rounded-lg p-1">
-            <button
-              onClick={() => setPeriod("today")}
-              disabled={loading || refreshing}
-              className={cn(
-                "px-4 py-2 rounded-md text-sm font-medium transition-all",
-                period === "today"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background",
-              )}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setPeriod("7days")}
-              disabled={loading || refreshing}
-              className={cn(
-                "px-4 py-2 rounded-md text-sm font-medium transition-all",
-                period === "7days"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background",
-              )}
-            >
-              7 Days
-            </button>
-            <button
-              onClick={() => setPeriod("30days")}
-              disabled={loading || refreshing}
-              className={cn(
-                "px-4 py-2 rounded-md text-sm font-medium transition-all",
-                period === "30days"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-background",
-              )}
-            >
-              30 Days
-            </button>
+    <div className={cn("space-y-5 pb-6", className)}>
+      {/* Command card */}
+      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              <IconSparkles className="h-4 w-4 text-telnyx-green" />
+              My performance
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <h3 className="text-xl font-semibold tracking-tight">Your work summary — {periodLabel.toLowerCase()}</h3>
+              <Badge variant="outline" className={`px-3 py-1 font-semibold ${statusBadgeClass(metrics.status)}`}>
+                {metrics.status || "Offline"}
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Calls handled, time accounting, and outcomes for the selected period.
+            </p>
           </div>
+          <div className="flex flex-wrap items-center gap-3" data-testid="agent-dashboard-controls">
+            <div className="flex rounded-xl border bg-muted/40 p-1">
+              {PERIODS.map(({ id, label }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={period === id ? "default" : "ghost"}
+                  className={period === id ? neutralActionClass : ""}
+                  disabled={loading || refreshing}
+                  onClick={() => setPeriod(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <Button onClick={fetchData} disabled={refreshing || loading} variant="outline" size="sm">
+              <IconRefresh className={cn("mr-2 h-4 w-4", (refreshing || loading) && "animate-spin")} />
+              {refreshing ? "Loading…" : "Refresh"}
+            </Button>
+          </div>
+        </div>
 
-          <Button
-            onClick={fetchData}
-            disabled={refreshing || loading}
-            variant="outline"
-            size="sm"
-          >
-            <IconRefresh
-              className={cn(
-                "h-4 w-4 mr-2",
-                (refreshing || loading) && "animate-spin",
-              )}
-            />
-            Refresh
-          </Button>
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <OverviewMetricCard
+            icon={IconPhone}
+            label="Calls handled"
+            value={formatShortNumber(totalCalls)}
+            detail={`${formatShortNumber(completed)} completed · ${formatShortNumber(abandoned)} abandoned`}
+            progress={completionRate}
+            chip={periodLabel}
+            tone="sky"
+          />
+          <OverviewMetricCard
+            icon={IconCheck}
+            label="Completion rate"
+            value={`${completionRate}%`}
+            detail={`${formatShortNumber(completed)} of ${formatShortNumber(totalCalls)} calls completed`}
+            progress={completionRate}
+            chip={periodLabel}
+            tone="emerald"
+          />
+          <OverviewMetricCard
+            icon={IconStopwatch}
+            label="Avg handle time"
+            value={formatDurationShort(metrics.avgHandleTime)}
+            detail={`Longest: ${formatDurationShort(metrics.longestHandleTime)}`}
+            progress={pct(metrics.avgHandleTime, Math.max(metrics.longestHandleTime, 1))}
+            chip="AHT"
+            tone="violet"
+          />
+          <OverviewMetricCard
+            icon={IconHeadset}
+            label="Talk time"
+            value={formatDurationShort(metrics.totalTalkTime)}
+            detail={`Avg ${formatDurationShort(metrics.avgTalkTime)} per call`}
+            progress={pct(metrics.totalTalkTime, Math.max(metrics.totalHandleTime, 1))}
+            chip={periodLabel}
+            tone="amber"
+          />
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MiniSignalTile
+            label="Occupancy"
+            value={metrics.occupancyPct == null ? "—" : `${metrics.occupancyPct}%`}
+            detail={metrics.loggedInSeconds ? `${formatDurationShort(metrics.loggedInSeconds)} logged in` : "No time tracking in period"}
+          />
+          <MiniSignalTile
+            label="Holds"
+            value={formatShortNumber(metrics.holdCount)}
+            detail={`${formatDurationShort(metrics.holdDurationSeconds)} total hold time`}
+          />
+          <MiniSignalTile
+            label="Transfers"
+            value={formatShortNumber(metrics.transferCount)}
+            detail={`${pct(metrics.transferCount, Math.max(totalCalls, 1))}% of handled calls`}
+          />
+          <MiniSignalTile
+            label="Break time"
+            value={metrics.breakSeconds ? formatDurationShort(metrics.breakSeconds) : "—"}
+            detail={metrics.availableSeconds ? `${formatDurationShort(metrics.availableSeconds)} available` : "No break data in period"}
+          />
         </div>
       </div>
 
-      {/* Metrics Cards - Single Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title={period === "today" ? "Today's Calls" : "Total Calls"}
-          value={metrics.totalCalls || 0}
-          description={`${metrics.completedCalls || 0} completed, ${
-            metrics.abandonedCalls || 0
-          } abandoned`}
-          icon={IconPhone}
-          className="border-l-4 border-l-blue-500"
-        />
-        <MetricCard
-          title="Average Handle Time"
-          value={formatTime(metrics.avgHandleTime)}
-          description="Average time to handle a call"
-          icon={IconClock}
-          className="border-l-4 border-l-purple-500"
-        />
-        <MetricCard
-          title="Completion Rate"
-          value={
-            metrics.totalCalls > 0
-              ? `${Math.round(
-                  (metrics.completedCalls / metrics.totalCalls) * 100,
-                )}%`
-              : "0%"
-          }
-          description={`${metrics.completedCalls || 0} of ${
-            metrics.totalCalls || 0
-          } calls completed`}
-          icon={IconCheck}
-          className="border-l-4 border-l-emerald-500"
-        />
-        <MetricCard
-          title="Total Talk Time"
-          value={formatTime(metrics.totalTalkTime)}
-          description={`Total time spent on calls ${
-            period === "today"
-              ? "today"
-              : `in ${period === "7days" ? "7 days" : "30 days"}`
-          }`}
-          icon={IconPhone}
-          className="border-l-4 border-l-orange-500"
-        />
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Performance Distribution Pie Chart */}
-        <ChartCard
-          title="Call Performance"
-          description="Completed vs Abandoned calls"
-          className="col-span-1"
-        >
-          {totalPerformance > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+      {/* Charts */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Call outcomes" description="Completed vs abandoned calls in the selected period.">
+          {performanceData.length ? (
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
                   data={performanceData}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name}: ${(percent * 100).toFixed(0)}%`
-                  }
-                  outerRadius={100}
-                  fill="#8884d8"
+                  innerRadius={60}
+                  outerRadius={95}
+                  paddingAngle={3}
                   dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
                 >
-                  {performanceData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  {performanceData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color || PERFORMANCE_COLORS[entry.name] || "#71717a"} />
                   ))}
                 </Pie>
-                <RechartsTooltip content={<CustomTooltip />} />
-                <Legend />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+            <div className="flex h-[260px] items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <IconPhone className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No calls today</p>
+                <IconPhone className="mx-auto mb-2 h-12 w-12 opacity-50" />
+                <p>No calls in this period</p>
               </div>
             </div>
           )}
-        </ChartCard>
+        </GraphCard>
 
-        {/* Queue Distribution Bar Chart */}
-        <ChartCard
-          title="Calls by Queue"
-          description="Distribution of calls across queues"
-          className="col-span-1"
-        >
-          {queueData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={350}>
-              <BarChart
-                data={queueData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="queueName"
-                  angle={0}
-                  textAnchor="middle"
-                  tick={{ fontSize: 12 }}
-                  interval={0}
-                  height={60}
-                />
-                <YAxis />
-                <RechartsTooltip content={<CustomTooltip />} />
-                <Legend />
-                <Bar
-                  dataKey="completed"
-                  stackId="a"
-                  fill="#10b981"
-                  name="Completed"
-                />
-                <Bar
-                  dataKey="abandoned"
-                  stackId="a"
-                  fill="#ef4444"
-                  name="Abandoned"
-                />
+        <GraphCard title="My queues" description="Where your calls came from in the selected period.">
+          {queueData.length ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={queueData} margin={{ left: -20, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="queueName" tickLine={false} axisLine={false} fontSize={12} interval={0} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="completed" name="completed" stackId="calls" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="abandoned" name="abandoned" stackId="calls" fill="#f97316" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+            <div className="flex h-[260px] items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <IconPhone className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <IconPhone className="mx-auto mb-2 h-12 w-12 opacity-50" />
                 <p>No queue data available</p>
               </div>
             </div>
           )}
-        </ChartCard>
+        </GraphCard>
       </div>
 
-      {/* Hourly Activity Chart */}
-      <ChartCard
-        title="Hourly Activity"
-        description="Call volume throughout the day"
-        className="col-span-1"
-      >
-        {hourlyData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={fullHourlyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="hourLabel" tick={{ fontSize: 11 }} interval={2} />
-              <YAxis />
-              <RechartsTooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar dataKey="completed" fill="#10b981" name="Completed" />
-              <Bar dataKey="abandoned" fill="#ef4444" name="Abandoned" />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Hourly activity" description="Your call volume through the day — completed and abandoned.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={fullHourlyData} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="hourLabel" tickLine={false} axisLine={false} fontSize={11} interval={2} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="completed" name="completed" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="abandoned" name="abandoned" fill="#f97316" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-            <div className="text-center">
-              <IconClock className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>No hourly activity data</p>
+        </GraphCard>
+
+        <GraphCard title="My wrap-up codes" description="How you dispositioned calls in the selected period.">
+          {wrapupData.length ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={wrapupData} layout="vertical" margin={{ left: 30, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                <YAxis type="category" dataKey="codeName" tickLine={false} axisLine={false} fontSize={11} width={130} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                <Bar dataKey="total" name="interactions" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-[260px] items-center justify-center text-muted-foreground">
+              <div className="text-center">
+                <IconTag className="mx-auto mb-2 h-12 w-12 opacity-50" />
+                <p>No wrap-up codes in this period</p>
+              </div>
             </div>
-          </div>
-        )}
-      </ChartCard>
+          )}
+        </GraphCard>
+      </div>
     </div>
   );
 }

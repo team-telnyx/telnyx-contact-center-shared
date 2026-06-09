@@ -14,12 +14,28 @@ test("sidebar exposes Analytics under SUPERVISOR for supervisor/admin/owner", ()
   );
 });
 
-test("analytics rail exposes the three launch reports", () => {
-  const expectedLabels = ["Queue Performance", "Agent Scorecard", "Abandonment"];
+test("analytics rail exposes the launch reports", () => {
+  const expectedLabels = [
+    "Queue Performance",
+    "Agent Scorecard",
+    "Abandonment",
+    "Adherence",
+    "Transfers & Holds",
+    "Wrap-up Codes",
+    "AI Handoffs",
+  ];
   for (const label of expectedLabels) {
-    assert.match(analyticsPage, new RegExp(`label: ["']${label}["']`));
+    assert.match(analyticsPage, new RegExp(`label: ["']${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
   }
-  for (const id of ["queue-performance", "agent-performance", "abandonment"]) {
+  for (const id of [
+    "queue-performance",
+    "agent-performance",
+    "abandonment",
+    "agent-adherence",
+    "transfers-holds",
+    "wrapup-codes",
+    "ai-handoffs",
+  ]) {
     assert.match(analyticsPage, new RegExp(`id: ["']${id}["']`));
   }
   assert.match(analyticsPage, /SectionRail items=\{ANALYTICS_RAIL_ITEMS\}/);
@@ -64,8 +80,52 @@ test("analytics API guards access and bounds the query range", () => {
   assert.match(analyticsRoute, /status: 403/);
   assert.match(analyticsRoute, /MAX_RANGE_DAYS = 92/);
   assert.match(analyticsRoute, /clampDateRange/);
-  assert.match(analyticsRoute, /REPORTS = \["queue-performance", "agent-performance", "abandonment"\]/);
+  for (const report of [
+    "queue-performance",
+    "agent-performance",
+    "abandonment",
+    "agent-adherence",
+    "transfers-holds",
+    "wrapup-codes",
+    "ai-handoffs",
+  ]) {
+    assert.match(analyticsRoute, new RegExp(`"${report}"`));
+  }
   assert.match(analyticsRoute, /Unknown report/);
+});
+
+test("new analytics reports query the right sources", () => {
+  // Adherence
+  assert.match(analyticsRoute, /cc_user_activity_log/);
+  assert.match(analyticsRoute, /cc_agent_status_history/);
+  assert.match(analyticsRoute, /activity_type = 'status_change'/);
+  // Transfers & holds
+  assert.match(analyticsRoute, /hold_duration_seconds/);
+  assert.match(analyticsRoute, /transfer_count/);
+  // Wrap-up codes
+  assert.match(analyticsRoute, /jsonb_array_elements_text\(COALESCE\(i\.wrapup_codes/);
+  assert.match(analyticsRoute, /cc_wrapup_codes/);
+  // AI handoffs
+  assert.match(analyticsRoute, /aa_ai_handoff_events/);
+  assert.match(analyticsRoute, /ai_call_control_id/);
+});
+
+test("new analytics views render their headline content", () => {
+  // Adherence
+  assert.match(analyticsPage, /Status time mix/);
+  assert.match(analyticsPage, /Recent status transitions/);
+  assert.match(analyticsPage, /Agent adherence summary/);
+  // Transfers & holds
+  assert.match(analyticsPage, /Transfer and hold pressure by queue/);
+  assert.match(analyticsPage, /Longest holds/);
+  // Wrap-up codes
+  assert.match(analyticsPage, /Disposition mix/);
+  assert.match(analyticsPage, /Disposition trend/);
+  assert.match(analyticsPage, /Dispositions by queue/);
+  // AI handoffs
+  assert.match(analyticsPage, /Handoffs per day/);
+  assert.match(analyticsPage, /Handoff destinations/);
+  assert.match(analyticsPage, /Recent handoff events/);
 });
 
 test("analytics API computes reports from cc_interactions with transfer-leg hygiene", () => {
