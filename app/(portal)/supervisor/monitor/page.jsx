@@ -31,17 +31,13 @@ import {
   IconChartBar,
   IconSparkles,
   IconPhoneIncoming,
-  IconPhoneOutgoing,
   IconGauge,
   IconPlayerPause,
   IconPlayerPlay,
   IconPlayerStop,
-  IconHistory,
 } from "@tabler/icons-react";
 import { ChevronDownIcon } from "lucide-react";
 import {
-  Area,
-  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -81,7 +77,6 @@ import {
   DEFAULT_STATUS_ICON,
 } from "@/config/status-icons";
 import { SupervisionModal } from "@/components/contact-center/SupervisionModal";
-import SupervisorCallHistoryView from "@/components/contact-center/SupervisorCallHistoryView";
 import {
   HoverCard,
   HoverCardContent,
@@ -322,35 +317,6 @@ function OverviewMetricCard({ icon: Icon, label, value, detail, progress = 0, ch
   );
 }
 
-function toLocalDateTimeInput(date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const min = String(date.getMinutes()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-}
-
-function quickStatisticsDateRange(days) {
-  const safeDays = Math.max(1, Number(days) || 1);
-  const from = new Date();
-  from.setDate(from.getDate() - (safeDays - 1));
-  from.setHours(0, 0, 0, 0);
-  const to = new Date();
-  to.setHours(23, 59, 0, 0);
-  return {
-    from: toLocalDateTimeInput(from),
-    to: toLocalDateTimeInput(to),
-  };
-}
-
-function toIsoDateTime(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toISOString();
-}
-
 function formatDurationShort(seconds) {
   const total = Math.max(0, Math.round(Number(seconds || 0)));
   if (total >= 3600) return `${Math.floor(total / 3600)}h ${Math.floor((total % 3600) / 60)}m`;
@@ -369,22 +335,66 @@ function MiniSignalTile({ label, value, detail }) {
 }
 
 function MonitorDashboardView({ overall, agents, queues, timestamp }) {
-  const totalCalls = overall.calls?.total || 0;
-  const answered = overall.calls?.answered || 0;
-  const abandoned = overall.calls?.abandoned || 0;
+  const [today, setToday] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+
+  // Today aggregates come from the analytics dashboard-today report so the
+  // dashboard consolidates the former Statistics tiles into a single view.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadToday() {
+      try {
+        const from = new Date();
+        from.setHours(0, 0, 0, 0);
+        const sp = new URLSearchParams();
+        sp.set("report", "dashboard-today");
+        sp.set("from", from.toISOString());
+        sp.set("to", new Date().toISOString());
+        const res = await fetch(`/api/contact-center/analytics?${sp.toString()}`, { cache: "no-store" });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload?.error || "Failed to load today statistics");
+        if (!cancelled) setToday(payload.data || null);
+      } catch (error) {
+        if (!cancelled) {
+          setToday(null);
+          notify({ title: "Dashboard load failed", description: String(error.message || error), variant: "error" });
+        }
+      } finally {
+        if (!cancelled) setTodayLoading(false);
+      }
+    }
+    loadToday();
+    const interval = setInterval(loadToday, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const todayTotals = today?.totals || {};
+  const totalCalls = Number(todayTotals.total ?? overall.calls?.total ?? 0);
+  const answered = Number(todayTotals.answered ?? overall.calls?.answered ?? 0);
+  const abandoned = Number(todayTotals.abandoned ?? overall.calls?.abandoned ?? 0);
+  const outbound = Number(todayTotals.outbound ?? overall.calls?.outbound ?? 0);
+  const avgWait = Math.round(Number(todayTotals.avgWaitSeconds ?? overall.calls?.avgWaitTimeSeconds ?? 0));
+  const avgHandle = Math.round(Number(todayTotals.avgHandleSeconds ?? overall.calls?.avgHandleTimeSeconds ?? 0));
+
   const active = overall.calls?.active || 0;
-  const avgWait = Math.round(overall.calls?.avgWaitTimeSeconds || 0);
-  const avgHandle = Math.round(overall.calls?.avgHandleTimeSeconds || 0);
   const totalAgents = agents.length || overall.agents?.totalActive || 0;
   const available = overall.agents?.available || agents.filter((a) => a.status === "Available").length;
   const busy = overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length;
   const waiting = overall.queues?.totalWaitingCalls || queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
   const activeQueues = queues.filter((q) => Number(q.realtime?.activeCalls || 0) > 0 || Number(q.realtime?.waitingCalls || 0) > 0).length;
-  const inbound = totalCalls || active + waiting;
-  const outbound = overall.calls?.outbound || 0;
   const answerRate = pct(answered, Math.max(totalCalls, answered + abandoned));
   const occupancy = pct(busy, Math.max(totalAgents, available + busy));
   const queuePressure = pct(waiting, Math.max(waiting + active, 1));
+
+  const hourly = today?.hourly || [];
+  const topAgents = today?.topAgents || [];
+  const topWrapupCodes = today?.topWrapupCodes || [];
+  const todayQueues = today?.queues || [];
+  const maxAgentHandled = Math.max(...topAgents.map((a) => a.handled), 1);
+  const maxCodeTotal = Math.max(...topWrapupCodes.map((c) => c.total), 1);
 
   const healthRows = [
     { label: "Today answer rate", value: answered, total: Math.max(totalCalls, answered + abandoned), hint: `${answered} answered · ${abandoned} abandoned` },
@@ -398,9 +408,9 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Today realtime command center</p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tight">Supervisor performance at a glance</h2>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight">Contact center today at a glance</h2>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Daily aggregates are limited to the current day; live tiles stay fed by the monitor stream for active calls, queue pressure, and agent availability.
+              Current-day call statistics, top performers, and contact reasons — live tiles stay fed by the monitor stream for active calls, queue pressure, and agent availability.
             </p>
           </div>
           <Badge variant="outline" className="bg-background/70 px-3 py-1 text-xs">
@@ -408,14 +418,39 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
           </Badge>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OverviewMetricCard icon={IconUsers} label="Users / agents" value={formatShortNumber(totalAgents)} detail={`${available} available · ${busy} busy`} progress={pct(available, Math.max(totalAgents, available + busy))} chip="Realtime" tone="emerald" />
-          <OverviewMetricCard icon={IconTrendingUp} label="Queues" value={formatShortNumber(queues.length)} detail={`${waiting} waiting · ${activeQueues} active`} progress={pct(activeQueues, Math.max(queues.length, 1))} chip="Realtime" tone="sky" />
-          <OverviewMetricCard icon={IconPhoneIncoming} label="Inbound volume" value={formatShortNumber(inbound)} detail={`${answered} answered · ${abandoned} missed`} progress={answerRate} chip="Today" tone="violet" />
-          <OverviewMetricCard icon={IconPhoneOutgoing} label="Outbound volume" value={formatShortNumber(outbound)} detail="Today outbound aggregate if available" progress={outbound ? 100 : 0} chip={outbound ? "Today" : "No data"} tone="slate" />
+          <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(totalCalls)} detail={`${answered} answered · ${abandoned} abandoned`} progress={pct(totalCalls, Math.max(totalCalls, 1))} chip="Today" tone="sky" />
+          <OverviewMetricCard icon={IconCheck} label="Answered" value={formatShortNumber(answered)} detail={`${answerRate}% answer rate`} progress={answerRate} chip="Today" tone="emerald" />
+          <OverviewMetricCard icon={IconAlertCircle} label="Abandoned" value={formatShortNumber(abandoned)} detail={`${pct(abandoned, Math.max(totalCalls, 1))}% of today volume`} progress={pct(abandoned, Math.max(totalCalls, 1))} chip="Today" tone="amber" />
+          <OverviewMetricCard icon={IconClock} label="Avg wait" value={formatDurationShort(avgWait)} detail={`Avg handle ${formatDurationShort(avgHandle)}`} progress={pct(avgWait, Math.max(avgWait, 1))} chip="Today" tone="violet" />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" />
+          <MiniSignalTile label="Waiting" value={formatShortNumber(waiting)} detail={`${activeQueues} of ${queues.length} queues active`} />
+          <MiniSignalTile label="Agents" value={`${available}/${totalAgents}`} detail={`${busy} busy now`} />
+          <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" />
+          <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" />
+          <MiniSignalTile label="Outbound" value={formatShortNumber(outbound)} detail="Today outbound calls" />
         </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <GraphCard title="Today call volume by hour" description="Answered and abandoned interactions per hour for the current day.">
+          {todayLoading ? (
+            <Skeleton className="h-[260px] w-full" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={hourly.length ? hourly : [{ label: "No calls yet", answered: 0, abandoned: 0 }]} margin={{ left: -20, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                <Bar dataKey="answered" name="answered" stackId="calls" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="abandoned" name="abandoned" stackId="calls" fill="#f97316" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </GraphCard>
+
         <Card className="border bg-background/85 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
@@ -438,29 +473,132 @@ function MonitorDashboardView({ overall, agents, queues, timestamp }) {
             ))}
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border bg-background/85 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconStar className="h-5 w-5 text-amber-500" />
+              Top performers today
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Agents ranked by handled interactions for the current day.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {todayLoading ? (
+              <>
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </>
+            ) : topAgents.length ? (
+              topAgents.map((agent, index) => (
+                <div key={agent.username} className="rounded-2xl border bg-card/70 p-3" data-testid="top-performer-row">
+                  <div className="flex items-center gap-3">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${index === 0 ? "bg-amber-500/15 text-amber-600" : index === 1 ? "bg-zinc-400/15 text-zinc-500" : index === 2 ? "bg-orange-700/15 text-orange-700" : "bg-muted text-muted-foreground"}`}>
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{agent.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {agent.handled} handled · AHT {formatDurationShort(agent.avgHandleSeconds)} · talk {formatDurationShort(agent.talkSeconds)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-semibold">{formatShortNumber(agent.handled)}</div>
+                      <div className="text-xs text-muted-foreground">calls</div>
+                    </div>
+                  </div>
+                  <Progress value={pct(agent.handled, maxAgentHandled)} className="mt-2 h-1.5" />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No handled interactions yet today.</p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="border bg-background/85 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <IconSparkles className="h-5 w-5 text-violet-600" />
-              Realtime signal
+              <IconChartBar className="h-5 w-5 text-violet-600" />
+              Top wrap-up codes today
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Clean card styling with tiles for live state and today's operational aggregates.
-            </p>
+            <p className="text-sm text-muted-foreground">Why customers called today — the most used dispositions.</p>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" />
-              <MiniSignalTile label="Average wait" value={formatDurationShort(avgWait)} detail="Today wait aggregate" />
-              <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" />
-              <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" />
-              <MiniSignalTile label="Handle time" value={formatDurationShort(avgHandle)} detail="Today average handle" />
-              <MiniSignalTile label="Queue pressure" value={`${queuePressure}%`} detail="Waiting vs active" />
-            </div>
+          <CardContent className="space-y-3">
+            {todayLoading ? (
+              <>
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </>
+            ) : topWrapupCodes.length ? (
+              topWrapupCodes.map((code) => (
+                <div key={code.codeId} className="rounded-2xl border bg-card/70 p-3" data-testid="top-wrapup-row">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate font-medium">{code.codeName}</span>
+                    <span className="shrink-0 font-semibold">{formatShortNumber(code.total)}</span>
+                  </div>
+                  <Progress value={pct(code.total, maxCodeTotal)} className="mt-2 h-1.5" />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No wrap-up codes recorded yet today.</p>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border bg-background/85 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <IconTrendingUp className="h-5 w-5 text-emerald-600" />
+            Queues today
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">Per-queue volume and answer rate for the current day.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Queue</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">Answered</TableHead>
+                <TableHead className="text-right">Abandoned</TableHead>
+                <TableHead className="text-right">Answer rate</TableHead>
+                <TableHead className="text-right">Avg wait</TableHead>
+                <TableHead className="text-right">Waiting now</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {todayQueues.length ? (
+                todayQueues.map((queue) => {
+                  const liveQueue = queues.find((q) => (q.queueName || q.name || q.displayName) === queue.queueName);
+                  const waitingNow = Number(liveQueue?.realtime?.waitingCalls ?? liveQueue?.currentQueueSize ?? 0);
+                  return (
+                    <TableRow key={queue.queueName}>
+                      <TableCell className="font-medium">{queue.queueName}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.total)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.answered)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.abandoned)}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className={`bg-transparent ${queue.answerRatePct >= 80 ? "border-green-500 text-green-600" : queue.answerRatePct >= 50 ? "border-amber-500 text-amber-600" : "border-red-500 text-red-500"}`}>
+                          {queue.answerRatePct}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{formatDurationShort(queue.avgWaitSeconds)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(waitingNow)}</TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow><TableCell colSpan={7} className="text-center text-sm">No interactions yet today.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -473,52 +611,6 @@ function getQueueAvgWaitSeconds(queue) {
       ?? queue.today?.avgWaitTimeSeconds
       ?? 0,
   );
-}
-
-function buildTrendData(range, overall, agents, queues, summary) {
-  if (summary?.daily?.length) {
-    return summary.daily.map((bucket) => ({
-      label: bucket.label || bucket.day,
-      calls: Number(bucket.total || 0),
-      answered: Number(bucket.answered || 0),
-      missed: Number(bucket.abandoned || 0),
-      seconds: Math.round(Number(bucket.avgWaitTimeSeconds || 0)),
-    }));
-  }
-
-  const calls = summary?.calls || overall.calls || {};
-  const queueTotals = queues.reduce(
-    (acc, queue) => {
-      acc.waiting += Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0);
-      acc.avgWait += getQueueAvgWaitSeconds(queue);
-      return acc;
-    },
-    { waiting: 0, avgWait: 0 },
-  );
-  const activeCalls = Number(calls.active || 0);
-  const answered = Number(calls.answered || 0);
-  const missed = Number(calls.abandoned || 0);
-  const totalCalls = Number(calls.total || answered + missed + activeCalls);
-  const avgWait = Number(calls.avgWaitTimeSeconds || 0);
-  const avgHandle = Number(calls.avgHandleTimeSeconds || 0);
-  const avgTalk = Number(calls.avgTalkTimeSeconds || 0);
-
-  if (range === "30d") {
-    return [
-      { label: "Avg wait", seconds: Math.round(avgWait) },
-      { label: "Avg handle", seconds: Math.round(avgHandle) },
-      { label: "Avg talk", seconds: Math.round(avgTalk) },
-      { label: "Queue avg", seconds: queues.length ? Math.round(queueTotals.avgWait / queues.length) : 0 },
-    ];
-  }
-
-  return [
-    { label: "Total calls", calls: totalCalls },
-    { label: "Answered", calls: answered },
-    { label: "Missed", calls: missed },
-    { label: "Active now", calls: activeCalls },
-    { label: "Waiting", calls: Number(overall.queues?.totalWaitingCalls ?? queueTotals.waiting) },
-  ];
 }
 
 function ChartTooltip({ active, payload, label }) {
@@ -535,168 +627,6 @@ function ChartTooltip({ active, payload, label }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function MonitorGraphsView({ overall, agents, queues, }) {
-  const [range, setRange] = useState("7d");
-  const [dateRange, setDateRange] = useState(() => quickStatisticsDateRange(7));
-  const [summary, setSummary] = useState(null);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-
-  const statisticsQuery = useMemo(() => {
-    const sp = new URLSearchParams();
-    sp.set("summary", "true"); // Statistics endpoint contract: summary=true
-    sp.set("page", "1");
-    sp.set("pageSize", "1");
-    const fromIso = toIsoDateTime(dateRange.from);
-    const toIso = toIsoDateTime(dateRange.to);
-    if (fromIso) sp.set("from", fromIso);
-    if (toIso) sp.set("to", toIso);
-    return sp.toString();
-  }, [dateRange]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadStatisticsSummary() {
-      setSummaryLoading(true);
-      try {
-        const res = await fetch(`/api/contact-center/interactions/history?${statisticsQuery}`, { cache: "no-store" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Failed to load statistics summary");
-        if (!cancelled) setSummary(data.summary || null);
-      } catch (error) {
-        if (!cancelled) {
-          setSummary(null);
-          notify({ title: "Statistics load failed", description: String(error.message || error), variant: "error" });
-        }
-      } finally {
-        if (!cancelled) setSummaryLoading(false);
-      }
-    }
-    loadStatisticsSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [statisticsQuery]);
-
-  const setQuickStatisticsRange = (days) => {
-    setRange(`${days}d`);
-    setDateRange(quickStatisticsDateRange(days));
-  };
-
-  const summaryData = buildTrendData(range, overall, agents, queues, summary);
-  const calls = summary?.calls || overall.calls || {};
-  const durations = summary?.durations || calls;
-  const queueData = (Array.isArray(summary?.queues) ? summary.queues : queues).map((queue) => ({
-    label: queue.queueName || queue.name || queue.displayName || "Queue",
-    waiting: Number(queue.currentQueueSize ?? queue.waitingCalls ?? queue.realtime?.waitingCalls ?? 0),
-    active: Number(queue.activeCalls ?? queue.realtime?.activeCalls ?? 0),
-    avgWait: Math.round(getQueueAvgWaitSeconds(queue)),
-    calls: Number(queue.total || queue.totalCalls || 0),
-  }));
-  const agentStatusData = [
-    { label: "Available", availableAgents: Number(overall.agents?.available ?? agents.filter((agent) => agent.status === "Available").length) },
-    { label: "Busy", busyAgents: Number(overall.agents?.busy ?? agents.filter((agent) => Number(agent.currentCalls || 0) > 0).length) },
-    { label: "Offline / other", otherAgents: Math.max(0, Number(overall.agents?.total || agents.length || 0) - Number(overall.agents?.available || 0) - Number(overall.agents?.busy || 0)) },
-  ];
-
-  return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  <IconSparkles className="h-4 w-4 text-telnyx-green" />
-                  Statistics command center
-                </div>
-                <h3 className="mt-2 text-xl font-semibold tracking-tight">Reporting health for selected range</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Select a quick or custom range, then review matching reporting tiles and charts.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-end justify-start gap-3 xl:justify-end" data-testid="statistics-command-card-controls">
-                <div className="flex rounded-xl border bg-muted/40 p-1">
-                  <Button type="button" size="sm" variant={range === "1d" ? "default" : "ghost"} className={range === "1d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(1)}>1 day</Button>
-                  <Button type="button" size="sm" variant={range === "7d" ? "default" : "ghost"} className={range === "7d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(7)}>7 days</Button>
-                  <Button type="button" size="sm" variant={range === "30d" ? "default" : "ghost"} className={range === "30d" ? neutralActionClass : ""} onClick={() => setQuickStatisticsRange(30)}>30 days</Button>
-                  <Button type="button" size="sm" variant={range === "custom" ? "default" : "ghost"} className={range === "custom" ? neutralActionClass : ""} onClick={() => setRange("custom")}>Custom range</Button>
-                </div>
-                <div>
-                  <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">From</div>
-                  <Input type="datetime-local" value={dateRange.from} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, from: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
-                </div>
-                <div>
-                  <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">To</div>
-                  <Input type="datetime-local" value={dateRange.to} onChange={(event) => { setRange("custom"); setDateRange((prev) => ({ ...prev, to: event.target.value })); }} className="w-[190px] bg-transparent dark:bg-input/30 dark:hover:bg-input/50" />
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(calls.total)} detail="Selected range" progress={pct(calls.total, Math.max(calls.total, 1))} chip="Range" tone="sky" />
-              <OverviewMetricCard icon={IconCheck} label="Answered" value={formatShortNumber(calls.answered)} detail={`${pct(calls.answered, Math.max(calls.total, 1))}% answer rate`} progress={pct(calls.answered, Math.max(calls.total, 1))} chip="Range" tone="emerald" />
-              <OverviewMetricCard icon={IconAlertCircle} label="Abandoned" value={formatShortNumber(calls.abandoned)} detail="Missed interactions" progress={pct(calls.abandoned, Math.max(calls.total, 1))} chip="Range" tone="amber" />
-              <OverviewMetricCard icon={IconClock} label="Avg wait" value={formatDurationShort(durations.avgWaitTimeSeconds)} detail="Selected range" progress={pct(durations.avgWaitTimeSeconds, Math.max(durations.avgWaitTimeSeconds, 1))} chip="Wait" tone="slate" />
-            </div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <GraphCard title="Call volume / outcomes" description="Total, answered, abandoned, and wait aggregates for the selected range.">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={summaryData} margin={{ left: -20, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-                  <Bar dataKey={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} name={range === "30d" && !summary?.daily?.length ? "seconds" : "calls"} fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-                  {summary?.daily?.length ? <Bar dataKey="answered" name="answered" fill="#10b981" radius={[6, 6, 0, 0]} /> : null}
-                  {summary?.daily?.length ? <Bar dataKey="missed" name="missed" fill="#f97316" radius={[6, 6, 0, 0]} /> : null}
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-            <GraphCard title="Queue depth" description="Waiting and active calls by queue, using live queue statistics.">
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={queueData.length ? queueData : [{ label: "No queue data", waiting: 0, active: 0, calls: 0 }]} margin={{ left: -20, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-                  <Bar dataKey="waiting" name="waiting" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="active" name="active" fill="#10b981" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="calls" name="historical calls" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-            <GraphCard title="Queue wait pressure" description="Average wait time by queue in seconds.">
-              <ResponsiveContainer width="100%" height={240}>
-                <AreaChart data={queueData.length ? queueData : [{ label: "No queue data", avgWait: 0 }]} margin={{ left: -20, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="avgWait" name="avg wait seconds" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.16} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </GraphCard>
-            <GraphCard title="Agent availability / occupancy" description="Available, busy, and other activated-agent state counts.">
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={agentStatusData} margin={{ left: -20, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
-                  <Bar dataKey="availableAgents" name="available agents" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="busyAgents" name="busy agents" fill="#f97316" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="otherAgents" name="other agents" fill="#71717a" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -2098,10 +2028,6 @@ export default function MonitorPage() {
                   <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
                 </CardContent>
               </Card>
-            ) : activeTab === "call-history" ? (
-              <SupervisorCallHistoryView embedded />
-            ) : activeTab === "graphs" ? (
-              <MonitorGraphsView overall={overall} agents={allAgents} queues={queues} />
             ) : (
               <>
       {/* Statistics Section */}

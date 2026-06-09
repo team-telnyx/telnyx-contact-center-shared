@@ -19,7 +19,7 @@ const REPORTS = [
   "ai-handoffs",
   "outbound-campaigns",
   "skills-gap",
-  "cradle-to-grave",
+  "dashboard-today",
 ];
 const MAX_RANGE_DAYS = 92;
 const DEFAULT_SLA_SECONDS = 20;
@@ -1172,101 +1172,159 @@ async function skillsGapReport(pool, { from, to }) {
   };
 }
 
-const CRADLE_HIDDEN_EVENTS = new Set(["agent_timeout"]);
-
-async function cradleToGraveReport(pool, { from, to, queueName }) {
-  const { where, vals, paramIndex } = baseFilters({ from, to, queueName });
+// Today-focused aggregate powering the supervisor Monitoring Dashboard:
+// headline volumes, hourly trend, top performing agents, and top wrap-up
+// codes for the current day. Range still flows through clampDateRange so a
+// caller can never request an unbounded scan.
+async function dashboardTodayReport(pool, { from, to, queueName }) {
+  const { where, vals } = baseFilters({ from, to, queueName });
   const whereSql = `WHERE ${where.join(" AND ")}`;
+  const agentWhereSql = `WHERE ${[...where, "i.agent_username IS NOT NULL"].join(" AND ")}`;
 
-  const interactionsQuery = `
+  const totalsQuery = `
     SELECT
-      i.id,
-      i.queue_name,
-      i.agent_username,
-      i.direction,
-      i.state,
-      i.from_number,
-      i.from_name,
-      i.enqueued_at,
-      i.assigned_at,
-      i.answered_at,
-      i.completed_at,
-      i.abandoned_at,
-      i.created_at,
-      i.wait_time_seconds,
-      i.handle_time_seconds,
-      i.talk_time_seconds,
-      i.hold_count,
-      i.hold_duration_seconds,
-      i.transfer_count,
-      i.recording_url,
-      (i.metadata->>'ai_call_control_id') IS NOT NULL AS has_ai,
-      COALESCE(jsonb_array_length(i.routing_metadata->'timeline'), 0)::int AS timeline_events,
-      i.routing_metadata->'timeline' AS timeline
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
+      COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+      COUNT(*) FILTER (WHERE i.direction = 'outbound')::int AS outbound,
+      AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_seconds,
+      MAX(i.wait_time_seconds)::int AS max_wait_seconds,
+      AVG(i.handle_time_seconds) FILTER (WHERE i.state = 'completed')::NUMERIC(10,2) AS avg_handle_seconds,
+      AVG(i.talk_time_seconds) FILTER (WHERE i.state = 'completed')::NUMERIC(10,2) AS avg_talk_seconds,
+      SUM(COALESCE(i.transfer_count, 0))::int AS transfers,
+      SUM(COALESCE(i.hold_count, 0))::int AS holds
     FROM cc_interactions i
     ${whereSql}
-    ORDER BY COALESCE(i.completed_at, i.abandoned_at, i.created_at) DESC
-    LIMIT $${paramIndex}
   `;
 
-  const limit = 30;
-  const interactionsRes = await pool.query(interactionsQuery, [...vals, limit]);
+  const hourlyQuery = `
+    SELECT
+      EXTRACT(HOUR FROM COALESCE(i.completed_at, i.abandoned_at, i.created_at))::int AS hour,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
+      COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+      AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_seconds
+    FROM cc_interactions i
+    ${whereSql}
+    GROUP BY 1
+    ORDER BY 1 ASC
+    LIMIT 24
+  `;
 
-  const interactions = interactionsRes.rows.map((row) => {
-    let timeline = [];
-    if (Array.isArray(row.timeline)) {
-      timeline = row.timeline;
-    } else if (typeof row.timeline === "string") {
-      try {
-        timeline = JSON.parse(row.timeline) || [];
-      } catch {
-        timeline = [];
-      }
-    }
-    const events = (Array.isArray(timeline) ? timeline : [])
-      .filter((event) => event && !CRADLE_HIDDEN_EVENTS.has(event.type))
-      .map((event) => ({
-        type: event.type || "event",
-        at: event.at || event.timestamp || event.time || null,
-        detail:
-          event.agent ||
-          event.agent_username ||
-          event.queue ||
-          event.queue_name ||
-          event.reason ||
-          null,
-      }));
-    return {
-      id: row.id,
-      queueName: row.queue_name,
-      agentUsername: row.agent_username,
-      direction: row.direction,
-      state: row.state,
-      fromNumber: row.from_number,
-      fromName: row.from_name,
-      startedAt: row.answered_at || row.assigned_at || row.enqueued_at || row.created_at,
-      endedAt: row.completed_at || row.abandoned_at,
-      waitTimeSeconds: Number(row.wait_time_seconds || 0),
-      handleTimeSeconds: Number(row.handle_time_seconds || 0),
-      talkTimeSeconds: Number(row.talk_time_seconds || 0),
-      holdCount: Number(row.hold_count || 0),
-      holdDurationSeconds: Number(row.hold_duration_seconds || 0),
-      transferCount: Number(row.transfer_count || 0),
-      hasRecording: Boolean(row.recording_url),
-      hasAi: Boolean(row.has_ai),
-      timelineEvents: Number(row.timeline_events || 0),
-      timeline: events.slice(0, 40),
-    };
-  });
+  const topAgentsQuery = `
+    SELECT
+      i.agent_username,
+      MAX(u.first_name) AS first_name,
+      MAX(u.last_name) AS last_name,
+      COUNT(*)::int AS handled,
+      COUNT(*) FILTER (WHERE i.state = 'completed')::int AS completed,
+      AVG(i.handle_time_seconds) FILTER (WHERE i.state = 'completed')::NUMERIC(10,2) AS avg_handle_seconds,
+      SUM(COALESCE(i.talk_time_seconds, 0))::int AS talk_seconds,
+      SUM(COALESCE(i.transfer_count, 0))::int AS transfer_count
+    FROM cc_interactions i
+    LEFT JOIN users u ON u.username = i.agent_username
+    ${agentWhereSql}
+    GROUP BY i.agent_username
+    ORDER BY handled DESC
+    LIMIT 8
+  `;
+
+  const topCodesQuery = `
+    SELECT
+      code.value AS code_id,
+      COALESCE(MAX(w.name), code.value) AS code_name,
+      COUNT(*)::int AS total
+    FROM cc_interactions i
+    CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(i.wrapup_codes, '[]'::jsonb)) AS code(value)
+    LEFT JOIN cc_wrapup_codes w ON w.id = code.value
+    ${whereSql}
+    GROUP BY code.value
+    ORDER BY total DESC
+    LIMIT 8
+  `;
+
+  const queuesQuery = `
+    SELECT
+      COALESCE(i.queue_name, 'No queue') AS queue_name,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE i.state = 'completed')::int AS answered,
+      COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+      AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_seconds
+    FROM cc_interactions i
+    ${whereSql}
+    GROUP BY COALESCE(i.queue_name, 'No queue')
+    ORDER BY total DESC
+    LIMIT 12
+  `;
+
+  const [totalsRes, hourlyRes, topAgentsRes, topCodesRes, queuesRes] = await Promise.all([
+    pool.query(totalsQuery, vals),
+    pool.query(hourlyQuery, vals),
+    pool.query(topAgentsQuery, vals),
+    pool.query(topCodesQuery, vals),
+    pool.query(queuesQuery, vals),
+  ]);
+
+  const totalsRow = totalsRes.rows?.[0] || {};
+  const answered = Number(totalsRow.answered || 0);
+  const abandoned = Number(totalsRow.abandoned || 0);
+  const offered = Math.max(answered + abandoned, 1);
 
   return {
     totals: {
-      interactions: interactions.length,
-      withTimeline: interactions.filter((row) => row.timelineEvents > 0).length,
-      withRecording: interactions.filter((row) => row.hasRecording).length,
-      withAi: interactions.filter((row) => row.hasAi).length,
+      total: Number(totalsRow.total || 0),
+      answered,
+      abandoned,
+      outbound: Number(totalsRow.outbound || 0),
+      answerRatePct: Math.round((answered / offered) * 100),
+      avgWaitSeconds: Number(totalsRow.avg_wait_seconds || 0),
+      maxWaitSeconds: Number(totalsRow.max_wait_seconds || 0),
+      avgHandleSeconds: Number(totalsRow.avg_handle_seconds || 0),
+      avgTalkSeconds: Number(totalsRow.avg_talk_seconds || 0),
+      transfers: Number(totalsRow.transfers || 0),
+      holds: Number(totalsRow.holds || 0),
     },
-    interactions,
+    hourly: hourlyRes.rows.map((row) => ({
+      hour: Number(row.hour || 0),
+      label: `${String(row.hour).padStart(2, "0")}:00`,
+      total: Number(row.total || 0),
+      answered: Number(row.answered || 0),
+      abandoned: Number(row.abandoned || 0),
+      avgWaitSeconds: Number(row.avg_wait_seconds || 0),
+    })),
+    topAgents: topAgentsRes.rows.map((row) => {
+      const handled = Number(row.handled || 0);
+      return {
+        username: row.agent_username,
+        name:
+          row.first_name || row.last_name
+            ? `${row.first_name || ""} ${row.last_name || ""}`.trim()
+            : row.agent_username,
+        handled,
+        completed: Number(row.completed || 0),
+        avgHandleSeconds: Number(row.avg_handle_seconds || 0),
+        talkSeconds: Number(row.talk_seconds || 0),
+        transferCount: Number(row.transfer_count || 0),
+      };
+    }),
+    topWrapupCodes: topCodesRes.rows.map((row) => ({
+      codeId: row.code_id,
+      codeName: row.code_name,
+      total: Number(row.total || 0),
+    })),
+    queues: queuesRes.rows.map((row) => {
+      const qAnswered = Number(row.answered || 0);
+      const qAbandoned = Number(row.abandoned || 0);
+      const qOffered = Math.max(qAnswered + qAbandoned, 1);
+      return {
+        queueName: row.queue_name,
+        total: Number(row.total || 0),
+        answered: qAnswered,
+        abandoned: qAbandoned,
+        answerRatePct: Math.round((qAnswered / qOffered) * 100),
+        avgWaitSeconds: Number(row.avg_wait_seconds || 0),
+      };
+    }),
   };
 }
 
@@ -1318,8 +1376,8 @@ export async function GET(request) {
       data = await outboundCampaignsReport(pool, { from, to });
     } else if (report === "skills-gap") {
       data = await skillsGapReport(pool, { from, to });
-    } else if (report === "cradle-to-grave") {
-      data = await cradleToGraveReport(pool, { from, to, queueName });
+    } else if (report === "dashboard-today") {
+      data = await dashboardTodayReport(pool, { from, to, queueName });
     } else {
       data = await abandonmentReport(pool, { from, to, queueName });
     }
