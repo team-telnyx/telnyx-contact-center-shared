@@ -428,7 +428,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-purple-500" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
           <p className="text-sm">Loading workflow...</p>
         </div>
       </div>
@@ -632,14 +632,14 @@ function formatLanguageLabel(language) {
 
 function TranslationIndicator({ sourceLanguage, targetLanguage }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border-2 bg-blue-500/5 border-blue-500/30">
-      <div className="p-2 rounded-lg bg-blue-500/10">
-        <Languages className="h-5 w-5 text-blue-500" />
+    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+      <div className="p-2 rounded-lg bg-muted">
+        <Languages className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">🌍 Live Translation Enabled</span>
-          <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/50">
+          <span className="text-sm font-medium">Live Translation</span>
+          <Badge variant="outline" className="text-xs text-muted-foreground">
             Transcription + TTS
           </Badge>
         </div>
@@ -665,28 +665,20 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
  */
 function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
   return (
-    <div className={`flex items-center gap-3 p-3 rounded-lg border-2 ${
-      isReceived 
-        ? "bg-green-500/5 border-green-500/30" 
-        : "bg-amber-500/5 border-amber-500/30 animate-pulse"
-    }`}>
-      <div className={`p-2 rounded-lg ${
-        isReceived ? "bg-green-500/10" : "bg-amber-500/10"
-      }`}>
-        <Bot className={`h-5 w-5 ${
-          isReceived ? "text-green-500" : "text-amber-500"
-        }`} />
+    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+      <div className="p-2 rounded-lg bg-muted">
+        <Bot className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">🤖 AI Assisted Call</span>
+          <span className="text-sm font-medium">AI Assisted Call</span>
           {isReceived ? (
-            <Badge variant="outline" className="text-xs bg-green-500/10 text-green-500 border-green-500/50">
+            <Badge variant="outline" className="text-xs text-emerald-600 dark:text-emerald-400 border-emerald-500/40">
               <CheckCircle className="h-3 w-3 mr-1" />
               Data Received
             </Badge>
           ) : isLoading ? (
-            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-500 border-amber-500/50">
+            <Badge variant="outline" className="text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
               Loading AI data...
             </Badge>
@@ -721,21 +713,21 @@ function AiSummaryPanel({ summary, sentiment }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="border-2 border-purple-500/30 bg-purple-500/5">
+      <Card className="border bg-muted/20">
         <CollapsibleTrigger className="w-full">
-          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-purple-500/5 transition-colors">
+          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/40 transition-colors">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Brain className="h-4 w-4 text-purple-500" />
+              <Brain className="h-4 w-4 text-muted-foreground" />
               AI Call Analysis
               <div className="flex items-center gap-2 ml-auto">
                 {sentiment && (
-                  <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-500 border-purple-500/50">
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
                     {getSentimentEmoji()} Sentiment
                   </Badge>
                 )}
                 {summary && (
-                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/50">
-                    📝 Summary
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    Summary
                   </Badge>
                 )}
                 {isOpen ? (
@@ -754,7 +746,7 @@ function AiSummaryPanel({ summary, sentiment }) {
               {summary && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-blue-500" />
+                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Call Summary</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
@@ -778,7 +770,7 @@ function AiSummaryPanel({ summary, sentiment }) {
               {sentiment && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Heart className="h-4 w-4 text-pink-500" />
+                    <Heart className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Sentiment Analysis</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
@@ -831,7 +823,7 @@ function getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds =
     return {
       type: "needs-confirmation",
       label: "Needs review",
-      className: "border-red-500/70 bg-red-500/10 ring-2 ring-red-500/60 animate-pulse",
+      className: "border-amber-500/60 bg-amber-500/5",
     };
   }
 
@@ -839,7 +831,7 @@ function getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds =
     return {
       type: "completed-recently",
       label: "Updated",
-      className: "border-green-500/70 bg-green-500/10 animate-[stageBlink_0.6s_ease-in-out_2]",
+      className: "border-emerald-500/40 bg-emerald-500/5",
     };
   }
 
@@ -984,13 +976,13 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
   };
 
   return (
-    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-purple-500" />
+          <ClipboardList className="h-4 w-4 text-muted-foreground" />
           Workflow Checklist
           {isAnalyzing && (
-            <Badge variant="outline" className="ml-auto text-xs animate-pulse bg-purple-500/10 text-purple-500 border-purple-500/50">
+            <Badge variant="outline" className="ml-auto text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
               Analyzing
             </Badge>
@@ -1020,9 +1012,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                       stageAlert?.className
                         ? stageAlert.className
                         : isActive
-                        ? "border-purple-500/50 bg-purple-500/5"
+                        ? "border-primary/40 bg-muted/30"
                         : stageCompletion.isComplete
-                        ? "border-green-500/50 bg-green-500/5"
+                        ? "border-border bg-muted/20"
                         : "border-border"
                     }`}
                   >
@@ -1030,9 +1022,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                       <div className="flex items-center gap-2 flex-1">
                         <span className={`flex items-center justify-center w-5 h-5 rounded-full text-xs font-medium ${
                           stageCompletion.isComplete
-                            ? "bg-green-500 text-white"
+                            ? "bg-emerald-600 text-white"
                             : isActive
-                            ? "bg-purple-500 text-white"
+                            ? "bg-primary text-primary-foreground"
                             : "bg-muted text-muted-foreground"
                         }`}>
                           {stageCompletion.isComplete ? (
@@ -1047,9 +1039,9 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                             variant="outline"
                             className={`text-xs ${
                               stageAlert.type === "needs-confirmation"
-                                ? "bg-red-500/10 text-red-500 border-red-500/50 animate-pulse"
+                                ? "text-amber-600 dark:text-amber-400 border-amber-500/50"
                                 : stageAlert.type === "completed-recently"
-                                ? "bg-green-500/10 text-green-500 border-green-500/50 animate-[stageBlink_0.6s_ease-in-out_2]"
+                                ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
                                 : "bg-muted"
                             }`}
                           >
@@ -1060,8 +1052,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           variant="outline"
                           className={`ml-auto text-xs ${
                             stageCompletion.isComplete
-                              ? "bg-green-500/10 text-green-500 border-green-500/50"
-                              : "bg-muted"
+                              ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+                              : "text-muted-foreground"
                           }`}
                         >
                           {stageCompletion.completed}/{stageCompletion.total}
@@ -1100,13 +1092,13 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                               data-workflow-item-id={item.id}
                               className={`flex items-start gap-2 p-2 rounded-md transition-all ${
                                 isLowConfidence
-                                  ? "bg-red-500/10 ring-2 ring-red-500 border border-red-500 animate-pulse"
+                                  ? "bg-amber-500/10 border-l-2 border-amber-500"
                                   : isCompleted
-                                  ? "bg-green-500/10"
+                                  ? "bg-muted/40"
                                   : isSkipped
                                   ? "bg-muted/50 opacity-60"
                                   : isHighlighted
-                                  ? "bg-purple-500/20 ring-1 ring-purple-500"
+                                  ? "bg-muted/60 ring-1 ring-primary/40"
                                   : "hover:bg-muted/50"
                               }`}
                             >
@@ -1124,7 +1116,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                   }
                                 }}
                                 className={`mt-0.5 ${
-                                  isCompleted ? "border-green-500 bg-green-500" : ""
+                                  isCompleted ? "border-emerald-600 bg-emerald-600" : ""
                                 }`}
                               />
                               <div className="flex-1 min-w-0">
@@ -1191,10 +1183,10 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             variant="outline"
                                             className={`text-[10px] px-1.5 py-0 ${
                                               confidenceScore >= 0.7
-                                                ? "bg-green-500/10 text-green-500 border-green-500/50"
+                                                ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
                                                 : confidenceScore >= 0.5
-                                                ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
-                                                : "bg-red-500/10 text-red-500 border-red-500/50"
+                                                ? "text-amber-600 dark:text-amber-400 border-amber-500/40"
+                                                : "text-amber-700 dark:text-amber-300 border-amber-500/60"
                                             }`}
                                             title={`LLM confidence: ${Math.round(confidenceScore * 100)}% (threshold ${Math.round(confidenceThreshold * 100)}%)`}
                                           >
@@ -1205,7 +1197,7 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                           <Button
                                             size="sm"
                                             variant="outline"
-                                            className="h-5 px-2 text-[10px] border-red-500/60 bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                                            className="h-5 px-2 text-[10px] border-amber-500/60 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               handleConfirmSuggestedSlot(item.id, slotValue);
@@ -1259,10 +1251,10 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                         variant="outline"
                                         className={`text-xs ${
                                           confidenceScore >= 0.7
-                                            ? "bg-green-500/10 text-green-500 border-green-500/50"
+                                            ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
                                             : confidenceScore >= 0.5
-                                            ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
-                                            : "bg-red-500/10 text-red-500 border-red-500/50"
+                                            ? "text-amber-600 dark:text-amber-400 border-amber-500/40"
+                                            : "text-amber-700 dark:text-amber-300 border-amber-500/60"
                                         }`}
                                       >
                                         {Math.round(confidenceScore * 100)}%
@@ -1292,10 +1284,10 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
  */
 function ItemTypeBadge({ type }) {
   const config = {
-    action: { color: "bg-blue-500/10 text-blue-500 border-blue-500/50", label: "Action" },
-    question: { color: "bg-amber-500/10 text-amber-500 border-amber-500/50", label: "Question" },
-    topic: { color: "bg-green-500/10 text-green-500 border-green-500/50", label: "Topic" },
-    slot: { color: "bg-purple-500/10 text-purple-500 border-purple-500/50", label: "Data" },
+    action: { color: "text-muted-foreground border-border", label: "Action" },
+    question: { color: "text-muted-foreground border-border", label: "Question" },
+    topic: { color: "text-muted-foreground border-border", label: "Topic" },
+    slot: { color: "text-sky-700 dark:text-sky-300 border-sky-500/40", label: "Data" },
   };
   const { color, label } = config[type] || { color: "bg-muted", label: type };
 
@@ -1319,10 +1311,10 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
   }, [transcriptions]);
 
   return (
-    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-blue-500" />
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
           Live Transcription
           {transcriptions.length > 0 && (
             <Badge variant="outline" className="ml-auto text-xs">
@@ -1432,18 +1424,16 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
         className={`max-w-[90%] rounded-xl px-3 py-2 ${
           isCustomer
             ? "bg-muted rounded-tl-sm"
-            : "bg-purple-500/20 text-foreground rounded-tr-sm"
-        } ${isInterim ? "opacity-80 ring-1 ring-blue-500/30" : ""}`}
+            : "bg-primary/10 text-foreground rounded-tr-sm"
+        } ${isInterim ? "opacity-70" : ""}`}
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
       </div>
 
       {/* Translation bubble */}
       {showTranslation && (
-        <div className={`max-w-[90%] rounded-xl px-3 py-2 mt-1 border ${
-          isCustomer
-            ? "bg-blue-500/10 border-blue-500/30 text-foreground rounded-tl-sm"
-            : "bg-emerald-500/10 border-emerald-500/30 text-foreground rounded-tr-sm"
+        <div className={`max-w-[90%] rounded-xl px-3 py-2 mt-1 border border-border bg-muted/40 text-foreground ${
+          isCustomer ? "rounded-tl-sm" : "rounded-tr-sm"
         }`}>
           <div className="flex items-center gap-2">
             <p className="text-sm leading-relaxed flex-1">{translation.text}</p>
@@ -1472,7 +1462,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
           {showSttConfidence && sttConfidencePercent !== null && (
             <Badge
               variant="outline"
-              className="text-[10px] bg-cyan-500/10 text-cyan-500 border-cyan-500/50"
+              className="text-[10px] text-muted-foreground"
               title="Speech-to-text recognition confidence from Telnyx Standalone STT"
             >
               <Activity className="h-3 w-3 mr-1" />
@@ -1480,7 +1470,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
             </Badge>
           )}
           {intent && (
-            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50">
+            <Badge variant="outline" className="text-[10px] text-muted-foreground">
               {intent}
             </Badge>
           )}
@@ -1792,13 +1782,13 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const isComplete = !currentSlot && suggestions.length > 0;
 
   return (
-    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border-2 border-border">
+    <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-amber-500" />
+          <Sparkles className="h-4 w-4 text-muted-foreground" />
           Suggested Responses
           {generatingSuggestion && (
-            <Badge variant="outline" className="ml-auto text-xs animate-pulse bg-amber-500/10 text-amber-500 border-amber-500/50">
+            <Badge variant="outline" className="ml-auto text-xs text-muted-foreground">
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
               Generating...
             </Badge>
@@ -1816,8 +1806,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
             {/* Fix 3: Show waiting state while AI data loads on AI-assisted calls */}
             {suggestions.length === 0 && isAiAssisted && aiDataLoading ? (
               <div className="text-center text-muted-foreground py-8">
-                <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin text-purple-500" />
-                <p className="text-sm font-medium text-purple-600 dark:text-purple-400">Waiting for AI context...</p>
+                <Loader2 className="h-8 w-8 mx-auto mb-2 opacity-40 animate-spin" />
+                <p className="text-sm font-medium">Waiting for AI context...</p>
                 <p className="text-xs mt-1">Suggestions will appear after AI data is received</p>
               </div>
             ) : suggestions.length === 0 ? (
@@ -1835,10 +1825,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                   return (
                     <div
                       key={suggestion.id}
-                      className={`group w-full max-w-full min-w-0 box-border overflow-hidden p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                      className={`group w-full max-w-full min-w-0 box-border overflow-hidden p-3 rounded-lg border transition-all cursor-pointer ${
                         isLatest
-                          ? "border-amber-500/50 bg-amber-500/5 hover:border-amber-500/80 hover:bg-amber-500/10"
-                          : "border-border/50 bg-muted/30 hover:border-border hover:bg-muted/50"
+                          ? "border-primary/40 bg-muted/30 hover:border-primary/60 hover:bg-muted/50"
+                          : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40"
                       }`}
                       onClick={() => handleCopy(suggestion)}
                     >
@@ -1848,8 +1838,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           variant="outline" 
                           className={`text-[10px] max-w-full min-w-0 overflow-hidden truncate ${
                             isLatest 
-                              ? "bg-purple-500/10 text-purple-500 border-purple-500/50"
-                              : "bg-muted text-muted-foreground"
+                              ? "text-foreground border-border"
+                              : "text-muted-foreground"
                           }`}
                         >
                           <span className="truncate">{suggestion.stageName}</span>
@@ -1859,14 +1849,14 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           variant="outline" 
                           className={`text-[10px] max-w-full min-w-0 overflow-hidden truncate ${
                             isLatest
-                              ? "bg-amber-500/10 text-amber-500 border-amber-500/50"
-                              : "bg-muted text-muted-foreground"
+                              ? "text-foreground border-border"
+                              : "text-muted-foreground"
                           }`}
                         >
                           <span className="truncate">{suggestion.itemLabel}</span>
                         </Badge>
                         {isLatest && (
-                          <Badge className="text-[10px] bg-amber-500 text-white shrink-0">
+                          <Badge variant="outline" className="text-[10px] text-primary border-primary/50 shrink-0">
                             Current
                           </Badge>
                         )}
@@ -1875,7 +1865,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       {/* Suggestion text */}
                       <div className="flex items-start gap-2">
                         <Bot className={`h-4 w-4 mt-0.5 shrink-0 ${
-                          isLatest ? "text-amber-500" : "text-muted-foreground"
+                          isLatest ? "text-foreground" : "text-muted-foreground"
                         }`} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${
@@ -1891,7 +1881,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                                 <Badge 
                                   key={opt} 
                                   variant="outline" 
-                                  className="text-[10px] bg-blue-500/10 text-blue-500 border-blue-500/50"
+                                  className="text-[10px] text-muted-foreground"
                                 >
                                   {opt}
                                 </Badge>
@@ -1902,9 +1892,9 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           <div className="flex items-center gap-2 mt-2">
                             <span className={`text-xs flex items-center gap-1 ${
                               isCopied 
-                                ? "text-green-500" 
+                                ? "text-emerald-600 dark:text-emerald-400" 
                                 : isLatest 
-                                  ? "text-muted-foreground group-hover:text-amber-500"
+                                  ? "text-muted-foreground group-hover:text-foreground"
                                   : "text-muted-foreground"
                             }`}>
                               {isCopied ? (
@@ -1929,8 +1919,8 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                 {/* Completion message */}
                 {isComplete && (
                   <div className="text-center text-muted-foreground py-4 border-t">
-                    <CheckCircle className="h-6 w-6 mx-auto mb-2 text-green-500" />
-                    <p className="text-sm font-medium text-green-600">All items completed!</p>
+                    <CheckCircle className="h-6 w-6 mx-auto mb-2 text-emerald-600 dark:text-emerald-400" />
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">All items completed!</p>
                     <p className="text-xs mt-1">Great job finishing the workflow</p>
                   </div>
                 )}
@@ -1962,7 +1952,7 @@ function WorkflowProgressBar({
     (totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0);
 
   return (
-    <div className="bg-card border-2 border-border rounded-lg p-3">
+    <div className="bg-card border border-border rounded-lg p-3">
       <div className="flex items-center gap-4">
         {/* Stage indicators */}
         <div className="flex items-center gap-1 shrink-0">
@@ -1977,9 +1967,9 @@ function WorkflowProgressBar({
                 <div
                   className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                     completion.isComplete
-                      ? "bg-green-500 text-white"
+                      ? "bg-emerald-600 text-white"
                       : completion.completed > 0
-                      ? "bg-purple-500/50 text-white"
+                      ? "bg-primary/60 text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -2002,7 +1992,7 @@ function WorkflowProgressBar({
           <Progress
             value={displayPercentage}
             className="h-2"
-            indicatorClassName="bg-green-500"
+            indicatorClassName="bg-emerald-600"
           />
         </div>
 
@@ -2015,8 +2005,8 @@ function WorkflowProgressBar({
             variant="outline"
             className={`text-sm font-bold ${
               isComplete
-                ? "bg-green-500/10 text-green-500 border-green-500/50"
-                : "bg-purple-500/10 text-purple-500 border-purple-500/50"
+                ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+                : "text-foreground"
             }`}
           >
             {displayPercentage}%

@@ -100,12 +100,13 @@ test("workflow store keeps suggested slot values and exposes LLM confidence loca
   assert.match(store, /status: nextStatus/);
 });
 
-test("agent workflow UI renders low-confidence suggested slots with a blinking red frame and confirm action", async () => {
+test("agent workflow UI renders low-confidence suggested slots with a subdued amber highlight and confirm action", async () => {
   const ui = await read("../components/contact-center/AgentAssistWorkflow.jsx");
 
   assert.match(ui, /isLowConfidence/);
-  assert.match(ui, /animate-pulse/);
-  assert.match(ui, /ring-red-500/);
+  assert.match(ui, /bg-amber-500\/10 border-l-2 border-amber-500/);
+  assert.doesNotMatch(ui, /animate-pulse/);
+  assert.doesNotMatch(ui, /ring-red-500/);
   assert.match(ui, /LLM/);
   assert.match(ui, /Confirm/);
   assert.match(ui, /handleConfirmSuggestedSlot/);
