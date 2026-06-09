@@ -118969,8 +118969,14 @@
             "nullable": true
           },
           "results": {
-            "$ref": "#/components/schemas/RemediationPerNumberResults",
-            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RemediationPerNumberResults"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "Per-category buckets. Populated once results are available. Null while the request is still pending."
           }
         }
