@@ -17,6 +17,9 @@ const REPORTS = [
   "transfers-holds",
   "wrapup-codes",
   "ai-handoffs",
+  "outbound-campaigns",
+  "skills-gap",
+  "cradle-to-grave",
 ];
 const MAX_RANGE_DAYS = 92;
 const DEFAULT_SLA_SECONDS = 20;
@@ -916,6 +919,357 @@ async function aiHandoffsReport(pool, { from, to, queueName }) {
   };
 }
 
+async function outboundCampaignsReport(pool, { from, to }) {
+  const campaignsQuery = `
+    SELECT
+      c.id,
+      c.name,
+      c.status AS campaign_status,
+      COUNT(DISTINCT r.id)::int AS runs,
+      MAX(r.started_at) AS last_run_at,
+      COUNT(l.id)::int AS attempts,
+      COUNT(l.id) FILTER (WHERE l.status = 'answered')::int AS answered,
+      COUNT(l.id) FILTER (WHERE l.status = 'completed')::int AS completed,
+      COUNT(l.id) FILTER (WHERE l.status = 'failed')::int AS failed,
+      COUNT(l.id) FILTER (WHERE l.status IN ('suppressed', 'skipped', 'cancelled'))::int AS suppressed
+    FROM outbound_campaigns c
+    LEFT JOIN outbound_campaign_runs r
+      ON r.campaign_id = c.id AND r.started_at >= $1 AND r.started_at <= $2
+    LEFT JOIN outbound_attempt_ledger l
+      ON l.campaign_id = c.id AND l.created_at >= $1 AND l.created_at <= $2
+    GROUP BY c.id, c.name, c.status
+    ORDER BY attempts DESC, c.name ASC
+    LIMIT 50
+  `;
+
+  const funnelQuery = `
+    SELECT
+      l.status,
+      COUNT(*)::int AS total
+    FROM outbound_attempt_ledger l
+    WHERE l.created_at >= $1 AND l.created_at <= $2
+    GROUP BY l.status
+    ORDER BY total DESC
+  `;
+
+  const hourlyQuery = `
+    SELECT
+      EXTRACT(HOUR FROM l.created_at)::int AS hour,
+      COUNT(*)::int AS attempts,
+      COUNT(*) FILTER (WHERE l.status IN ('answered', 'completed'))::int AS connected
+    FROM outbound_attempt_ledger l
+    WHERE l.created_at >= $1 AND l.created_at <= $2
+    GROUP BY 1
+    ORDER BY 1
+    LIMIT 24
+  `;
+
+  const failuresQuery = `
+    SELECT
+      COALESCE(NULLIF(TRIM(l.failure_reason), ''), 'Unspecified') AS reason,
+      COUNT(*)::int AS total
+    FROM outbound_attempt_ledger l
+    WHERE l.created_at >= $1 AND l.created_at <= $2 AND l.status = 'failed'
+    GROUP BY 1
+    ORDER BY total DESC
+    LIMIT 12
+  `;
+
+  const recentRunsQuery = `
+    SELECT
+      r.id,
+      c.name AS campaign_name,
+      r.status,
+      r.started_by,
+      r.stop_reason,
+      r.started_at,
+      r.stopped_at
+    FROM outbound_campaign_runs r
+    JOIN outbound_campaigns c ON c.id = r.campaign_id
+    WHERE r.started_at >= $1 AND r.started_at <= $2
+    ORDER BY r.started_at DESC
+    LIMIT 25
+  `;
+
+  const [campaignsRes, funnelRes, hourlyRes, failuresRes, runsRes] = await Promise.all([
+    pool.query(campaignsQuery, [from, to]),
+    pool.query(funnelQuery, [from, to]),
+    pool.query(hourlyQuery, [from, to]),
+    pool.query(failuresQuery, [from, to]),
+    pool.query(recentRunsQuery, [from, to]),
+  ]);
+
+  const campaigns = campaignsRes.rows.map((row) => {
+    const attempts = Number(row.attempts || 0);
+    const connected = Number(row.answered || 0) + Number(row.completed || 0);
+    return {
+      id: row.id,
+      name: row.name,
+      campaignStatus: row.campaign_status,
+      runs: Number(row.runs || 0),
+      lastRunAt: row.last_run_at,
+      attempts,
+      answered: Number(row.answered || 0),
+      completed: Number(row.completed || 0),
+      failed: Number(row.failed || 0),
+      suppressed: Number(row.suppressed || 0),
+      connectRatePct: attempts > 0 ? Math.round((connected / attempts) * 100) : 0,
+    };
+  });
+
+  const totals = campaigns.reduce(
+    (acc, c) => {
+      acc.attempts += c.attempts;
+      acc.answered += c.answered;
+      acc.completed += c.completed;
+      acc.failed += c.failed;
+      acc.suppressed += c.suppressed;
+      acc.runs += c.runs;
+      return acc;
+    },
+    { attempts: 0, answered: 0, completed: 0, failed: 0, suppressed: 0, runs: 0 },
+  );
+
+  return {
+    totals: {
+      ...totals,
+      campaigns: campaigns.length,
+      connectRatePct:
+        totals.attempts > 0
+          ? Math.round(((totals.answered + totals.completed) / totals.attempts) * 100)
+          : 0,
+    },
+    campaigns,
+    funnel: funnelRes.rows.map((row) => ({
+      status: row.status,
+      total: Number(row.total || 0),
+    })),
+    hourly: hourlyRes.rows.map((row) => ({
+      hour: Number(row.hour || 0),
+      label: `${String(row.hour).padStart(2, "0")}:00`,
+      attempts: Number(row.attempts || 0),
+      connected: Number(row.connected || 0),
+    })),
+    failures: failuresRes.rows.map((row) => ({
+      reason: row.reason,
+      total: Number(row.total || 0),
+    })),
+    recentRuns: runsRes.rows.map((row) => ({
+      id: row.id,
+      campaignName: row.campaign_name,
+      status: row.status,
+      startedBy: row.started_by,
+      stopReason: row.stop_reason,
+      startedAt: row.started_at,
+      stoppedAt: row.stopped_at,
+    })),
+  };
+}
+
+async function skillsGapReport(pool, { from, to }) {
+  // Skill supply: active agents and their proficiency per skill (users.skills
+  // is JSONB {skill_uuid: proficiency 1-5}).
+  const supplyQuery = `
+    SELECT
+      s.id AS skill_id,
+      s.name AS skill_name,
+      COUNT(u.id)::int AS agents,
+      COALESCE(AVG((u.skills ->> s.id)::numeric), 0)::NUMERIC(10,2) AS avg_proficiency,
+      COALESCE(MAX((u.skills ->> s.id)::int), 0)::int AS max_proficiency
+    FROM skills s
+    LEFT JOIN users u ON u.skills ? s.id
+    WHERE s.is_active = true
+    GROUP BY s.id, s.name
+    ORDER BY s.name ASC
+    LIMIT 100
+  `;
+
+  // Skill demand: required_skills on interactions in range ({skill_name: level}).
+  const demandQuery = `
+    SELECT
+      req.key AS skill_name,
+      COUNT(*)::int AS interactions,
+      AVG(req.value::numeric)::NUMERIC(10,2) AS avg_required_level,
+      COUNT(*) FILTER (WHERE i.state = 'abandoned')::int AS abandoned,
+      AVG(i.wait_time_seconds)::NUMERIC(10,2) AS avg_wait_seconds
+    FROM cc_interactions i
+    CROSS JOIN LATERAL jsonb_each_text(COALESCE(i.required_skills, '{}'::jsonb)) AS req(key, value)
+    WHERE i.is_contact_center = true
+      AND COALESCE(i.completed_at, i.abandoned_at, i.created_at) >= $1
+      AND COALESCE(i.completed_at, i.abandoned_at, i.created_at) <= $2
+    GROUP BY req.key
+    ORDER BY interactions DESC
+    LIMIT 100
+  `;
+
+  // Queue requirements: cc_queues.skill_requirements is {skill_uuid: level}.
+  const queueReqsQuery = `
+    SELECT
+      q.name AS queue_name,
+      s.name AS skill_name,
+      (q.skill_requirements ->> s.id)::int AS required_level,
+      (
+        SELECT COUNT(*)::int
+        FROM users u
+        WHERE (u.skills ->> s.id)::int >= (q.skill_requirements ->> s.id)::int
+      ) AS qualified_agents
+    FROM cc_queues q
+    JOIN skills s ON q.skill_requirements ? s.id
+    WHERE q.skill_requirements IS NOT NULL AND q.skill_requirements != '{}'::jsonb
+    ORDER BY q.name ASC, s.name ASC
+    LIMIT 200
+  `;
+
+  const [supplyRes, demandRes, queueReqsRes] = await Promise.all([
+    pool.query(supplyQuery),
+    pool.query(demandQuery, [from, to]),
+    pool.query(queueReqsQuery),
+  ]);
+
+  const supply = supplyRes.rows.map((row) => ({
+    skillId: row.skill_id,
+    skillName: row.skill_name,
+    agents: Number(row.agents || 0),
+    avgProficiency: Number(row.avg_proficiency || 0),
+    maxProficiency: Number(row.max_proficiency || 0),
+  }));
+  const supplyByName = new Map(supply.map((row) => [row.skillName, row]));
+
+  const demand = demandRes.rows.map((row) => {
+    const matchingSupply = supplyByName.get(row.skill_name);
+    const interactions = Number(row.interactions || 0);
+    const abandoned = Number(row.abandoned || 0);
+    return {
+      skillName: row.skill_name,
+      interactions,
+      avgRequiredLevel: Number(row.avg_required_level || 0),
+      abandoned,
+      abandonRatePct: interactions > 0 ? Math.round((abandoned / interactions) * 100) : 0,
+      avgWaitSeconds: Number(row.avg_wait_seconds || 0),
+      agentsWithSkill: matchingSupply ? matchingSupply.agents : 0,
+      avgProficiency: matchingSupply ? matchingSupply.avgProficiency : 0,
+      coverageGap: matchingSupply
+        ? Math.max(0, Number(row.avg_required_level || 0) - matchingSupply.avgProficiency)
+        : Number(row.avg_required_level || 0),
+    };
+  });
+
+  return {
+    totals: {
+      skills: supply.length,
+      skillsInDemand: demand.length,
+      uncoveredSkills: demand.filter((row) => row.agentsWithSkill === 0).length,
+      totalSkilledAgents: supply.reduce((max, row) => Math.max(max, row.agents), 0),
+    },
+    supply,
+    demand,
+    queueRequirements: queueReqsRes.rows.map((row) => ({
+      queueName: row.queue_name,
+      skillName: row.skill_name,
+      requiredLevel: Number(row.required_level || 0),
+      qualifiedAgents: Number(row.qualified_agents || 0),
+    })),
+  };
+}
+
+const CRADLE_HIDDEN_EVENTS = new Set(["agent_timeout"]);
+
+async function cradleToGraveReport(pool, { from, to, queueName }) {
+  const { where, vals, paramIndex } = baseFilters({ from, to, queueName });
+  const whereSql = `WHERE ${where.join(" AND ")}`;
+
+  const interactionsQuery = `
+    SELECT
+      i.id,
+      i.queue_name,
+      i.agent_username,
+      i.direction,
+      i.state,
+      i.from_number,
+      i.from_name,
+      i.enqueued_at,
+      i.assigned_at,
+      i.answered_at,
+      i.completed_at,
+      i.abandoned_at,
+      i.created_at,
+      i.wait_time_seconds,
+      i.handle_time_seconds,
+      i.talk_time_seconds,
+      i.hold_count,
+      i.hold_duration_seconds,
+      i.transfer_count,
+      i.recording_url,
+      (i.metadata->>'ai_call_control_id') IS NOT NULL AS has_ai,
+      COALESCE(jsonb_array_length(i.routing_metadata->'timeline'), 0)::int AS timeline_events,
+      i.routing_metadata->'timeline' AS timeline
+    FROM cc_interactions i
+    ${whereSql}
+    ORDER BY COALESCE(i.completed_at, i.abandoned_at, i.created_at) DESC
+    LIMIT $${paramIndex}
+  `;
+
+  const limit = 30;
+  const interactionsRes = await pool.query(interactionsQuery, [...vals, limit]);
+
+  const interactions = interactionsRes.rows.map((row) => {
+    let timeline = [];
+    if (Array.isArray(row.timeline)) {
+      timeline = row.timeline;
+    } else if (typeof row.timeline === "string") {
+      try {
+        timeline = JSON.parse(row.timeline) || [];
+      } catch {
+        timeline = [];
+      }
+    }
+    const events = (Array.isArray(timeline) ? timeline : [])
+      .filter((event) => event && !CRADLE_HIDDEN_EVENTS.has(event.type))
+      .map((event) => ({
+        type: event.type || "event",
+        at: event.at || event.timestamp || event.time || null,
+        detail:
+          event.agent ||
+          event.agent_username ||
+          event.queue ||
+          event.queue_name ||
+          event.reason ||
+          null,
+      }));
+    return {
+      id: row.id,
+      queueName: row.queue_name,
+      agentUsername: row.agent_username,
+      direction: row.direction,
+      state: row.state,
+      fromNumber: row.from_number,
+      fromName: row.from_name,
+      startedAt: row.answered_at || row.assigned_at || row.enqueued_at || row.created_at,
+      endedAt: row.completed_at || row.abandoned_at,
+      waitTimeSeconds: Number(row.wait_time_seconds || 0),
+      handleTimeSeconds: Number(row.handle_time_seconds || 0),
+      talkTimeSeconds: Number(row.talk_time_seconds || 0),
+      holdCount: Number(row.hold_count || 0),
+      holdDurationSeconds: Number(row.hold_duration_seconds || 0),
+      transferCount: Number(row.transfer_count || 0),
+      hasRecording: Boolean(row.recording_url),
+      hasAi: Boolean(row.has_ai),
+      timelineEvents: Number(row.timeline_events || 0),
+      timeline: events.slice(0, 40),
+    };
+  });
+
+  return {
+    totals: {
+      interactions: interactions.length,
+      withTimeline: interactions.filter((row) => row.timelineEvents > 0).length,
+      withRecording: interactions.filter((row) => row.hasRecording).length,
+      withAi: interactions.filter((row) => row.hasAi).length,
+    },
+    interactions,
+  };
+}
+
 export async function GET(request) {
   try {
     const user = await getAuthenticatedUser();
@@ -960,6 +1314,12 @@ export async function GET(request) {
       data = await wrapupCodesReport(pool, { from, to, queueName });
     } else if (report === "ai-handoffs") {
       data = await aiHandoffsReport(pool, { from, to, queueName });
+    } else if (report === "outbound-campaigns") {
+      data = await outboundCampaignsReport(pool, { from, to });
+    } else if (report === "skills-gap") {
+      data = await skillsGapReport(pool, { from, to });
+    } else if (report === "cradle-to-grave") {
+      data = await cradleToGraveReport(pool, { from, to, queueName });
     } else {
       data = await abandonmentReport(pool, { from, to, queueName });
     }
