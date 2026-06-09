@@ -41,7 +41,7 @@ export function MonitorSectionRailNav({ activeId = "call-history" }) {
       activeId={activeId}
       onSelect={(sectionId) => {
         persistMonitorSection(sectionId);
-        router.push("/supervisor/monitor");
+        router.push(`/supervisor/monitor?section=${encodeURIComponent(sectionId)}`);
       }}
       ariaLabel="Supervisor monitor sections"
     />

@@ -779,6 +779,12 @@ export default function MonitorPage() {
 
   useEffect(() => {
     try {
+      const requestedActiveTab = new URLSearchParams(window.location.search).get("section");
+      if (requestedActiveTab && MONITOR_RAIL_ITEMS.some((item) => item.id === requestedActiveTab)) {
+        setActiveTab(requestedActiveTab);
+        return;
+      }
+
       const savedActiveTab = localStorage.getItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection);
       if (savedActiveTab && MONITOR_RAIL_ITEMS.some((item) => item.id === savedActiveTab)) setActiveTab(savedActiveTab);
     } catch {
