@@ -12,9 +12,15 @@ import {
   IconArrowLeft,
   IconCheck,
   IconCopy,
+  IconHeadset,
   IconId,
   IconPhone,
+  IconPhoneIncoming,
+  IconPhoneOutgoing,
+  IconTag,
+  IconUser,
   IconUsers,
+  IconUsersGroup,
   IconTimeline,
   IconRobot,
   IconHistory,
@@ -24,6 +30,7 @@ import { notify } from "@/components/ToastNotify";
 import InteractionTimeline from "@/components/contact-center/InteractionTimeline";
 import RoutingMetadataTimeline from "@/components/contact-center/RoutingMetadataTimeline";
 import RecordingPlayer from "@/components/contact-center/RecordingPlayer";
+import TranscriptionStudioCard from "@/components/contact-center/TranscriptionStudioCard";
 import TranscriptionHistory from "@/components/contact-center/TranscriptionHistory";
 import WorkflowHistoryView from "@/components/contact-center/WorkflowHistoryView";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
@@ -137,6 +144,10 @@ export default function SupervisorCallHistoryDetailPage() {
     interaction?.metadata?.transcription_segments || null;
   const transcriptionSummary =
     interaction?.metadata?.transcription_summary || null;
+  const transcriptionSpeakerTurns =
+    interaction?.metadata?.transcription_speaker_turns || [];
+  const transcriptionDetails =
+    interaction?.metadata?.transcription_details || null;
   const aiCallControlId = interaction?.metadata?.ai_call_control_id || null;
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
 
@@ -189,104 +200,128 @@ export default function SupervisorCallHistoryDetailPage() {
             </div>
           ) : (
             <>
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card className="border-l-4 border-l-blue-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <IconUsers className="h-5 w-5 text-blue-500" />
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {/* Participants */}
+                <Card className="group relative overflow-hidden border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-zinc-950/70" data-testid="participants-tile">
+                  <span className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-cyan-400" aria-hidden="true" />
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2.5 text-base">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
+                        <IconUsers className="h-5 w-5" />
+                      </span>
                       Participants
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Caller Number
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-300">
+                        <IconUser className="h-4 w-4" />
                       </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {interaction.from_number || "-"}
-                      </code>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {interaction.from_name || "Unknown caller"}
+                        </div>
+                        <div className="truncate font-mono text-xs text-muted-foreground">
+                          {interaction.from_number || "-"}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Caller
+                      </Badge>
                     </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Caller Name
+                    <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/30 p-3">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">
+                        <IconHeadset className="h-4 w-4" />
                       </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {interaction.from_name || "Unknown"}
-                      </code>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {interaction.agent_name || interaction.agent_username || "Unassigned"}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {interaction.agent_username || "-"}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
                         Agent
-                      </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {interaction.agent_name ||
-                          interaction.agent_username ||
-                          "-"}
-                      </code>
+                      </Badge>
                     </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <IconUsersGroup className="h-3.5 w-3.5" />
                         Queue
                       </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
+                      <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-xs text-sky-700 dark:text-sky-300">
                         {interaction.queue_name || "-"}
-                      </code>
+                      </Badge>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-green-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <IconPhone className="h-5 w-5 text-green-500" />
+                {/* Call Details */}
+                <Card className="group relative overflow-hidden border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-zinc-950/70" data-testid="call-details-tile">
+                  <span className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" aria-hidden="true" />
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2.5 text-base">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+                        <IconPhone className="h-5 w-5" />
+                      </span>
                       Call Details
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Direction
-                      </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {interaction.direction || "-"}
-                      </code>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Status</div>
+                        <Badge
+                          variant="outline"
+                          className={`mt-1.5 uppercase ${
+                            String(interaction.state || "").includes("complete")
+                              ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
+                              : String(interaction.state || "").includes("abandon")
+                                ? "border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400"
+                                : "border-sky-500/50 bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                          }`}
+                        >
+                          {interaction.state || "unknown"}
+                        </Badge>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Direction</div>
+                        <div className="mt-1.5 flex items-center justify-center gap-1.5 text-sm font-semibold capitalize">
+                          {String(interaction.direction || "").includes("out") ? (
+                            <IconPhoneOutgoing className="h-4 w-4 text-violet-500" />
+                          ) : (
+                            <IconPhoneIncoming className="h-4 w-4 text-emerald-500" />
+                          )}
+                          {interaction.direction || "-"}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Duration</div>
+                        <div className="mt-1.5 font-mono text-sm font-semibold tabular-nums">
+                          {formatDuration(durationSeconds)}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-muted/30 p-3 text-center">
+                        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Started</div>
+                        <div className="mt-1.5 text-xs font-medium leading-snug">
+                          {formatDateTime(startedAt)}
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Status
-                      </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all uppercase">
-                        {interaction.state || "unknown"}
-                      </code>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Started
-                      </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {formatDateTime(startedAt)}
-                      </code>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Duration
-                      </span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all">
-                        {formatDuration(durationSeconds)}
-                      </code>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Wrapup Codes
-                      </span>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <IconTag className="h-3.5 w-3.5" />
+                        Wrap-up codes
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {Array.isArray(interaction.wrapup_code_names) &&
                         interaction.wrapup_code_names.length > 0 ? (
                           interaction.wrapup_code_names.map((name) => (
                             <Badge
                               key={name}
                               variant="outline"
-                              className="border-green-500 text-green-600"
+                              className="border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-300"
                             >
                               {name}
                             </Badge>
@@ -297,113 +332,62 @@ export default function SupervisorCallHistoryDetailPage() {
                             <Badge
                               key={code}
                               variant="outline"
-                              className="border-green-500 text-green-600"
+                              className="border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-300"
                             >
                               {code}
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            -
-                          </span>
+                          <span className="text-xs text-muted-foreground">No codes recorded</span>
                         )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="border-l-4 border-l-purple-500">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <IconId className="h-5 w-5 text-purple-500" />
+                {/* Call IDs */}
+                <Card className="group relative overflow-hidden border-border/70 bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:bg-zinc-950/70 md:col-span-2 xl:col-span-1" data-testid="call-ids-tile">
+                  <span className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-violet-500 to-fuchsia-400" aria-hidden="true" />
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2.5 text-base">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                        <IconId className="h-5 w-5" />
+                      </span>
                       Call IDs
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Interaction ID
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
-                          {interaction.id || "-"}
+                    {[
+                      ["Interaction ID", interaction.id],
+                      ["Call Control ID", interaction.call_control_id],
+                      ["Call Session ID", interaction.call_session_id],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            {label}
+                          </span>
+                          {value ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0 opacity-60 transition group-hover:opacity-100"
+                              onClick={() => handleCopy(value, label)}
+                              aria-label={`Copy ${label}`}
+                            >
+                              {copiedField === label ? (
+                                <IconCheck className="h-3.5 w-3.5 text-green-500" />
+                              ) : (
+                                <IconCopy className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          ) : null}
+                        </div>
+                        <code className="mt-0.5 block break-all font-mono text-xs text-foreground/80">
+                          {value || "-"}
                         </code>
-                        {interaction.id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() =>
-                              handleCopy(interaction.id, "Interaction ID")
-                            }
-                          >
-                            {copiedField === "Interaction ID" ? (
-                              <IconCheck className="h-3.5 w-3.5 text-green-500" />
-                            ) : (
-                              <IconCopy className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        )}
                       </div>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Call Control ID
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
-                          {interaction.call_control_id || "-"}
-                        </code>
-                        {interaction.call_control_id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() =>
-                              handleCopy(
-                                interaction.call_control_id,
-                                "Call Control ID",
-                              )
-                            }
-                          >
-                            {copiedField === "Call Control ID" ? (
-                              <IconCheck className="h-3.5 w-3.5 text-green-500" />
-                            ) : (
-                              <IconCopy className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-[120px_1fr] gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Call Session ID
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <code className="bg-muted px-2 py-1 rounded text-xs font-mono break-all flex-1">
-                          {interaction.call_session_id || "-"}
-                        </code>
-                        {interaction.call_session_id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() =>
-                              handleCopy(
-                                interaction.call_session_id,
-                                "Call Session ID",
-                              )
-                            }
-                          >
-                            {copiedField === "Call Session ID" ? (
-                              <IconCheck className="h-3.5 w-3.5 text-green-500" />
-                            ) : (
-                              <IconCopy className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
+                    ))}
                   </CardContent>
                 </Card>
               </div>
@@ -462,16 +446,23 @@ export default function SupervisorCallHistoryDetailPage() {
 
                 <TabsContent value="recording" className="mt-4 space-y-4">
                   {recordingUrl ? (
-                    <RecordingPlayer
-                      src={recordingUrl}
-                      recordingId={recordingId}
-                      format={recordingFormat}
-                      channels={recordingChannels}
-                      transcriptionText={transcriptionText}
-                      transcriptionSegments={transcriptionSegments}
-                      transcriptionSummary={transcriptionSummary}
-                      interactionId={interaction?.id || null}
-                    />
+                    <>
+                      <RecordingPlayer
+                        src={recordingUrl}
+                        recordingId={recordingId}
+                        format={recordingFormat}
+                        channels={recordingChannels}
+                      />
+                      <TranscriptionStudioCard
+                        recordingId={recordingId}
+                        interactionId={interaction?.id || null}
+                        transcriptionText={transcriptionText}
+                        transcriptionSegments={transcriptionSegments}
+                        transcriptionSummary={transcriptionSummary}
+                        transcriptionSpeakerTurns={transcriptionSpeakerTurns}
+                        transcriptionDetails={transcriptionDetails}
+                      />
+                    </>
                   ) : (
                     <Card className="border-dashed border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
                       <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">

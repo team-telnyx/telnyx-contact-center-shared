@@ -66,9 +66,9 @@ test("recording player has a modern transport with speed control and waveform st
   // CORS-safe proxy loading is preserved
   assert.match(recordingPlayer, /\/api\/voice\/recordings\/\$\{encodeURIComponent\(recordingId\)\}\/stream/);
   assert.match(recordingPlayer, /\/api\/voice\/recordings\/proxy\?url=/);
-  // Transcribe / show transcription actions preserved
-  assert.match(recordingPlayer, /Transcribe Recording/);
-  assert.match(recordingPlayer, /Show Transcription/);
+  // Transcription actions moved to the TranscriptionStudioCard below the player
+  assert.doesNotMatch(recordingPlayer, /Transcribe Recording/);
+  assert.doesNotMatch(recordingPlayer, /Show Transcription/);
 });
 
 test("recording empty state is a friendly card instead of bare text", () => {

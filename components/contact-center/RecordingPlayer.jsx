@@ -11,13 +11,10 @@ import {
   IconRewindForward10,
   IconVolume,
   IconVolumeOff,
-  IconFileText,
   IconLoader2,
-  IconMicrophone,
   IconWaveSine,
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
-import TranscriptionSheet from "./TranscriptionSheet";
 import { notify } from "@/components/ToastNotify";
 
 function formatDuration(seconds) {
@@ -35,10 +32,6 @@ export default function RecordingPlayer({
   recordingId,
   format,
   channels,
-  transcriptionText,
-  transcriptionSegments,
-  transcriptionSummary,
-  interactionId,
 }) {
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
@@ -49,14 +42,6 @@ export default function RecordingPlayer({
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.6);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [transcriptionSheetOpen, setTranscriptionSheetOpen] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [localTranscriptionText, setLocalTranscriptionText] =
-    useState(transcriptionText);
-  const [localTranscriptionSegments, setLocalTranscriptionSegments] =
-    useState(transcriptionSegments);
-  const [localTranscriptionSummary, setLocalTranscriptionSummary] =
-    useState(transcriptionSummary);
 
   useEffect(() => {
     // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
@@ -171,55 +156,6 @@ export default function RecordingPlayer({
     }
   }, [playbackRate, waveReady]);
 
-  useEffect(() => {
-    setLocalTranscriptionText(transcriptionText);
-    setLocalTranscriptionSegments(transcriptionSegments);
-    setLocalTranscriptionSummary(transcriptionSummary);
-  }, [transcriptionText, transcriptionSegments, transcriptionSummary]);
-
-  const handleTranscribe = async () => {
-    if (!recordingId || !interactionId) {
-      notify({ title: "Recording ID and Interaction ID are required", variant: "error" });
-      return;
-    }
-
-    setIsTranscribing(true);
-    try {
-      const response = await fetch(
-        `/api/voice/recordings/${encodeURIComponent(recordingId)}/transcribe`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            interactionId,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to transcribe recording");
-      }
-
-      if (data.transcription_text) {
-        setLocalTranscriptionText(data.transcription_text);
-        setLocalTranscriptionSegments(data.transcription_segments || null);
-        setLocalTranscriptionSummary(data.transcription_summary || null);
-        notify({ title: "Transcription completed successfully", variant: "success" });
-      } else {
-        throw new Error("No transcription text received");
-      }
-    } catch (error) {
-      console.error("[RecordingPlayer] Transcription error:", error);
-      notify({ title: error.message || "Failed to transcribe recording", variant: "error" });
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
   const togglePlay = () => {
     if (!wavesurferRef.current) return;
     wavesurferRef.current.playPause();
@@ -289,37 +225,6 @@ export default function RecordingPlayer({
             <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
               {formatDuration(duration)}
             </Badge>
-            {localTranscriptionText ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setTranscriptionSheetOpen(true)}
-                className="h-7 rounded-lg px-2.5 text-xs"
-              >
-                <IconFileText className="mr-1 h-3.5 w-3.5" />
-                Show Transcription
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleTranscribe}
-                disabled={isTranscribing || !recordingId || !interactionId}
-                className="h-7 rounded-lg px-2.5 text-xs disabled:opacity-50"
-              >
-                {isTranscribing ? (
-                  <>
-                    <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                    Transcribing...
-                  </>
-                ) : (
-                  <>
-                    <IconMicrophone className="mr-1 h-3.5 w-3.5" />
-                    Transcribe Recording
-                  </>
-                )}
-              </Button>
-            )}
           </div>
         </div>
 
@@ -426,13 +331,6 @@ export default function RecordingPlayer({
           </div>
         </div>
       </CardContent>
-      <TranscriptionSheet
-        transcriptionText={localTranscriptionText}
-        transcriptionSegments={localTranscriptionSegments}
-        transcriptionSummary={localTranscriptionSummary}
-        open={transcriptionSheetOpen}
-        onOpenChange={setTranscriptionSheetOpen}
-      />
     </Card>
   );
 }
