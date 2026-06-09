@@ -42,10 +42,11 @@ import {
 import InteractionDetailsSheet from "@/components/contact-center/InteractionDetailsSheet";
 import { notify } from "@/components/ToastNotify";
 import {
-  SupervisorPageContent,
   SupervisorPageHeader,
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
+import { SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import { MonitorSectionRailNav } from "@/components/contact-center/MonitorSectionNav";
 import useAppStateStore from "@/lib/stores/app-state-store";
 
 function toLocalDateTimeInput(date) {
@@ -461,7 +462,13 @@ export default function SupervisorCallHistoryView({ embedded = false }) {
   return (
     <SupervisorPageShell>
       <SupervisorPageHeader title="Call History" />
-      <SupervisorPageContent>{content}</SupervisorPageContent>
+      <main
+        className={SECTION_RAIL_PAGE_GRID_CLASS}
+        style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
+      >
+        <MonitorSectionRailNav activeId="call-history" />
+        <section className="h-full min-h-0 overflow-hidden pr-1">{content}</section>
+      </main>
       {details}
     </SupervisorPageShell>
   );

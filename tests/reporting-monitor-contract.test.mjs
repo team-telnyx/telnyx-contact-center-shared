@@ -6,19 +6,37 @@ const monitorPage = readFileSync("app/(portal)/supervisor/monitor/page.jsx", "ut
 const menuConfig = readFileSync("config/menu.jsx", "utf8");
 const historyRoute = readFileSync("app/api/contact-center/interactions/history/route.js", "utf8");
 const callHistoryView = readFileSync("components/contact-center/SupervisorCallHistoryView.jsx", "utf8");
+const monitorSectionNav = readFileSync("components/contact-center/MonitorSectionNav.jsx", "utf8");
+const callHistoryDetailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");
 
 test("supervisor monitor rail exposes call history alongside dashboard, agents, queues, and statistics", () => {
   const expectedLabels = ["Dashboard", "Agents", "Queues", "Statistics", "Call History"];
   for (const label of expectedLabels) {
-    assert.match(monitorPage, new RegExp(`label: [\\"']${label}[\\"']`));
+    assert.match(monitorSectionNav, new RegExp(`label: [\\"']${label}[\\"']`));
   }
-  assert.match(monitorPage, /id: ["']call-history["']/);
+  assert.match(monitorSectionNav, /id: ["']call-history["']/);
+  assert.match(monitorPage, /MONITOR_RAIL_ITEMS/);
+  assert.match(monitorPage, /from ["']@\/components\/contact-center\/MonitorSectionNav["']/);
   assert.match(monitorPage, /<SupervisorCallHistoryView\s+embedded/);
 });
 
-test("sidebar keeps the main Supervisor group and uses one Reporting entry", () => {
+test("call history sub-pages keep the monitor section rail visible", () => {
+  // Standalone call history list keeps the left rail
+  assert.match(callHistoryView, /<MonitorSectionRailNav activeId=["']call-history["']/);
+  // Interaction detail page keeps the left rail
+  assert.match(callHistoryDetailPage, /<MonitorSectionRailNav activeId=["']call-history["']/);
+  // Rail navigation persists the chosen section and routes back to the monitor
+  assert.match(monitorSectionNav, /persistMonitorSection\(sectionId\)/);
+  assert.match(monitorSectionNav, /router\.push\(["']\/supervisor\/monitor["']\)/);
+  // Both consumers share one storage key so monitor restores the chosen section
+  assert.match(monitorSectionNav, /MONITOR_ACTIVE_SECTION_STORAGE_KEY\s*=\s*["']supervisor\.monitor\.activeSection["']/);
+  assert.match(monitorPage, /activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY/);
+});
+
+test("sidebar keeps the main Supervisor group and uses one Monitoring entry", () => {
   assert.match(menuConfig, /label: ["']SUPERVISOR["']/);
-  assert.match(menuConfig, /title: ["']Reporting["']/);
+  assert.match(menuConfig, /title: ["']Monitoring["']/);
+  assert.doesNotMatch(menuConfig, /title: ["']Reporting["']/);
   assert.doesNotMatch(menuConfig, /label: ["']REPORTING["']/);
   assert.doesNotMatch(menuConfig, /title: ["']Call History["']/);
 });
