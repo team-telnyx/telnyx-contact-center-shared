@@ -32,13 +32,17 @@ import {
   IconClockPause,
   IconExternalLink,
   IconHeadset,
+  IconHistory,
   IconHourglassLow,
   IconLogin,
   IconPhoneIncoming,
   IconPhoneOff,
+  IconPuzzle,
   IconRefresh,
   IconRobot,
+  IconRoute,
   IconSparkles,
+  IconSpeakerphone,
   IconStopwatch,
   IconTag,
   IconTrendingUp,
@@ -71,6 +75,9 @@ const ANALYTICS_RAIL_ITEMS = [
   { id: "transfers-holds", label: "Transfers & Holds", icon: IconArrowBounce, description: "Transfer and hold pressure by agent and queue" },
   { id: "wrapup-codes", label: "Wrap-up Codes", icon: IconTag, description: "Why customers call — disposition mix and coverage" },
   { id: "ai-handoffs", label: "AI Handoffs", icon: IconRobot, description: "AI assistant to agent handoffs, outcomes, and health" },
+  { id: "outbound-campaigns", label: "Outbound", icon: IconSpeakerphone, description: "Campaign attempts, connect rates, and failure reasons" },
+  { id: "skills-gap", label: "Skills Gap", icon: IconPuzzle, description: "Skill supply vs demand and queue coverage" },
+  { id: "cradle-to-grave", label: "Call Journeys", icon: IconRoute, description: "Cradle-to-grave timelines for recent interactions" },
 ];
 const ANALYTICS_UI_STATE_STORAGE_KEYS = {
   activeSection: "supervisor.analytics.activeSection",
@@ -1069,6 +1076,421 @@ function AiHandoffsView({ data, loading }) {
   );
 }
 
+function campaignRunBadgeClass(status) {
+  if (status === "completed") return "border-green-500 text-green-600";
+  if (status === "running") return "border-sky-500 text-sky-600";
+  if (status === "paused") return "border-amber-500 text-amber-600";
+  return "border-zinc-400 text-zinc-500";
+}
+
+function OutboundCampaignsView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconSpeakerphone} label="Dial attempts" value={formatShortNumber(totals.attempts)} detail={`${formatShortNumber(totals.campaigns)} campaigns · ${formatShortNumber(totals.runs)} runs in range`} progress={pct(totals.attempts, Math.max(totals.attempts, 1))} chip="Range" tone="sky" />
+        <OverviewMetricCard icon={IconCheck} label="Connect rate" value={`${totals.connectRatePct || 0}%`} detail={`${formatShortNumber(totals.answered + totals.completed)} connected calls`} progress={totals.connectRatePct || 0} chip="Range" tone="emerald" />
+        <OverviewMetricCard icon={IconAlertCircle} label="Failed attempts" value={formatShortNumber(totals.failed)} detail={`${pct(totals.failed, Math.max(totals.attempts, 1))}% of attempts failed`} progress={pct(totals.failed, Math.max(totals.attempts, 1))} chip="Range" tone="amber" />
+        <OverviewMetricCard icon={IconPhoneOff} label="Suppressed / skipped" value={formatShortNumber(totals.suppressed)} detail="DNC, filters, and cancelled attempts" progress={pct(totals.suppressed, Math.max(totals.attempts, 1))} chip="Compliance" tone="violet" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <GraphCard title="Attempt funnel" description="Ledger statuses for all dial attempts in the selected range.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.funnel?.length ? data.funnel : [{ status: "No data", total: 0 }]} layout="vertical" margin={{ left: 30, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis type="number" tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <YAxis type="category" dataKey="status" tickLine={false} axisLine={false} fontSize={11} width={100} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Bar dataKey="total" name="attempts" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+        <GraphCard title="Best calling hours" description="Attempts vs connected by hour of day — when outreach works.">
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={data.hourly?.length ? data.hourly : [{ label: "No data", attempts: 0, connected: 0 }]} margin={{ left: -20, right: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
+              <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="attempts" name="attempts" fill="#71717a" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="connected" name="connected" fill="#10b981" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </GraphCard>
+      </div>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Campaign effectiveness</CardTitle>
+          <p className="text-sm text-muted-foreground">Attempts, outcomes, and connect rate per campaign in the selected range.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Campaign</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Runs</TableHead>
+                  <TableHead className="text-right">Attempts</TableHead>
+                  <TableHead className="text-right">Answered</TableHead>
+                  <TableHead className="text-right">Completed</TableHead>
+                  <TableHead className="text-right">Failed</TableHead>
+                  <TableHead className="text-right">Suppressed</TableHead>
+                  <TableHead className="text-right">Connect rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.campaigns?.length ? (
+                  data.campaigns.map((campaign) => (
+                    <TableRow key={campaign.id} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{campaign.name}</TableCell>
+                      <TableCell><Badge variant="outline" className={`bg-transparent uppercase ${campaignRunBadgeClass(campaign.campaignStatus)}`}>{campaign.campaignStatus || "—"}</Badge></TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.runs)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.attempts)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.answered)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.completed)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.failed)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(campaign.suppressed)}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className={campaign.connectRatePct >= 40 ? "border-green-500 text-green-600" : campaign.connectRatePct >= 15 ? "border-amber-500 text-amber-600" : "border-red-500 text-red-500"}>
+                          {campaign.connectRatePct}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={9} className="text-center text-sm">No campaigns with activity in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Failure reasons</CardTitle>
+            <p className="text-sm text-muted-foreground">Why dial attempts failed in the selected range.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reason</TableHead>
+                  <TableHead className="text-right">Attempts</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.failures?.length ? (
+                  data.failures.map((row) => (
+                    <TableRow key={row.reason} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{row.reason}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.total)}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={2} className="text-center text-sm">No failed attempts in the selected range. 🎉</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+          <CardHeader>
+            <CardTitle className="text-base">Recent runs</CardTitle>
+            <p className="text-sm text-muted-foreground">Latest campaign runs with who started them and why they stopped.</p>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="max-h-[360px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Started by</TableHead>
+                    <TableHead className="text-right">Started</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.recentRuns?.length ? (
+                    data.recentRuns.map((run) => (
+                      <TableRow key={run.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium">{run.campaignName}</TableCell>
+                        <TableCell><Badge variant="outline" className={`bg-transparent uppercase ${campaignRunBadgeClass(run.status)}`} title={run.stopReason || undefined}>{run.status}</Badge></TableCell>
+                        <TableCell>{run.startedBy || "—"}</TableCell>
+                        <TableCell className="text-right text-xs">{formatDateTime(run.startedAt)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan={4} className="text-center text-sm">No campaign runs in the selected range.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function SkillsGapView({ data, loading }) {
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  const supplyChart = (data.supply || []).map((row) => ({
+    label: row.skillName,
+    agents: row.agents,
+    avgProficiency: row.avgProficiency,
+  }));
+  const worstGap = (data.demand || []).filter((row) => row.coverageGap > 0).sort((a, b) => b.coverageGap - a.coverageGap)[0];
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconPuzzle} label="Active skills" value={formatShortNumber(totals.skills)} detail={`${formatShortNumber(totals.skillsInDemand)} skills requested by calls in range`} progress={pct(totals.skillsInDemand, Math.max(totals.skills, 1))} chip="Catalog" tone="sky" />
+        <OverviewMetricCard icon={IconAlertCircle} label="Uncovered skills" value={formatShortNumber(totals.uncoveredSkills)} detail="Requested by calls but no agent has them" progress={pct(totals.uncoveredSkills, Math.max(totals.skillsInDemand, 1))} chip="Gap" tone="amber" />
+        <OverviewMetricCard icon={IconUsers} label="Deepest skill pool" value={formatShortNumber(totals.totalSkilledAgents)} detail="Most agents sharing a single skill" progress={pct(totals.totalSkilledAgents, Math.max(totals.totalSkilledAgents, 1))} chip="Supply" tone="emerald" />
+        <OverviewMetricCard icon={IconTrendingUp} label="Biggest gap" value={worstGap ? worstGap.skillName : "—"} detail={worstGap ? `Required ~L${worstGap.avgRequiredLevel.toFixed(1)} vs avg L${worstGap.avgProficiency.toFixed(1)}` : "Supply covers current demand"} progress={worstGap ? Math.min(100, Math.round(worstGap.coverageGap * 20)) : 0} chip="Insight" tone="violet" />
+      </div>
+
+      <GraphCard title="Skill supply" description="Agents per skill with average proficiency (1–5 scale).">
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={supplyChart.length ? supplyChart : [{ label: "No skills", agents: 0, avgProficiency: 0 }]} margin={{ left: -20, right: 10 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} interval={0} angle={-15} height={50} textAnchor="end" />
+            <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Bar dataKey="agents" name="agents" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="avgProficiency" name="avg proficiency" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </GraphCard>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Demand vs supply</CardTitle>
+          <p className="text-sm text-muted-foreground">Skills requested by interactions in range, against the current agent pool.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Skill</TableHead>
+                  <TableHead className="text-right">Calls requiring</TableHead>
+                  <TableHead className="text-right">Avg required level</TableHead>
+                  <TableHead className="text-right">Agents with skill</TableHead>
+                  <TableHead className="text-right">Avg proficiency</TableHead>
+                  <TableHead className="text-right">Avg wait</TableHead>
+                  <TableHead className="text-right">Abandon rate</TableHead>
+                  <TableHead className="text-right">Coverage</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.demand?.length ? (
+                  data.demand.map((row) => (
+                    <TableRow key={row.skillName} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{row.skillName}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.interactions)}</TableCell>
+                      <TableCell className="text-right">L{row.avgRequiredLevel.toFixed(1)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(row.agentsWithSkill)}</TableCell>
+                      <TableCell className="text-right">{row.avgProficiency ? `L${row.avgProficiency.toFixed(1)}` : "—"}</TableCell>
+                      <TableCell className="text-right">{formatDurationShort(row.avgWaitSeconds)}</TableCell>
+                      <TableCell className="text-right">{row.abandonRatePct}%</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className={row.agentsWithSkill === 0 ? "border-red-500 text-red-500" : row.coverageGap > 0.5 ? "border-amber-500 text-amber-600" : "border-green-500 text-green-600"}>
+                          {row.agentsWithSkill === 0 ? "Uncovered" : row.coverageGap > 0.5 ? "Below level" : "Covered"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow><TableCell colSpan={8} className="text-center text-sm">No skill-based routing demand in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Queue skill requirements</CardTitle>
+          <p className="text-sm text-muted-foreground">Configured queue requirements and how many agents currently qualify.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Queue</TableHead>
+                <TableHead>Skill</TableHead>
+                <TableHead className="text-right">Required level</TableHead>
+                <TableHead className="text-right">Qualified agents</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.queueRequirements?.length ? (
+                data.queueRequirements.map((row, idx) => (
+                  <TableRow key={`${row.queueName}-${row.skillName}-${idx}`} className="hover:bg-muted/50">
+                    <TableCell className="font-medium">{row.queueName}</TableCell>
+                    <TableCell>{row.skillName}</TableCell>
+                    <TableCell className="text-right">L{row.requiredLevel}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className={row.qualifiedAgents === 0 ? "border-red-500 text-red-500" : row.qualifiedAgents < 2 ? "border-amber-500 text-amber-600" : "border-green-500 text-green-600"}>
+                        {formatShortNumber(row.qualifiedAgents)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow><TableCell colSpan={4} className="text-center text-sm">No queues with skill requirements configured.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+const JOURNEY_EVENT_TONES = {
+  initiated: "bg-sky-500",
+  enqueued: "bg-violet-500",
+  alerting: "bg-amber-500",
+  answered: "bg-emerald-500",
+  connected: "bg-emerald-500",
+  hold: "bg-orange-500",
+  resume: "bg-sky-500",
+  wrapup_start: "bg-fuchsia-500",
+  wrapup_end: "bg-fuchsia-500",
+  disconnected: "bg-zinc-500",
+};
+
+function CradleToGraveView({ data, loading }) {
+  const [expandedId, setExpandedId] = useState(null);
+  if (loading || !data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+  const totals = data.totals || {};
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetricCard icon={IconRoute} label="Recent journeys" value={formatShortNumber(totals.interactions)} detail="Latest interactions in the selected range" progress={pct(totals.interactions, Math.max(totals.interactions, 1))} chip="Range" tone="sky" />
+        <OverviewMetricCard icon={IconHistory} label="With event timeline" value={formatShortNumber(totals.withTimeline)} detail={`${pct(totals.withTimeline, Math.max(totals.interactions, 1))}% have full event history`} progress={pct(totals.withTimeline, Math.max(totals.interactions, 1))} chip="Coverage" tone="violet" />
+        <OverviewMetricCard icon={IconCheck} label="With recording" value={formatShortNumber(totals.withRecording)} detail="Journeys with playable audio" progress={pct(totals.withRecording, Math.max(totals.interactions, 1))} chip="Assets" tone="emerald" />
+        <OverviewMetricCard icon={IconRobot} label="AI-assisted" value={formatShortNumber(totals.withAi)} detail="Journeys that started with the AI assistant" progress={pct(totals.withAi, Math.max(totals.interactions, 1))} chip="AI" tone="amber" />
+      </div>
+
+      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+        <CardHeader>
+          <CardTitle className="text-base">Call journeys</CardTitle>
+          <p className="text-sm text-muted-foreground">Click a row to expand the cradle-to-grave event timeline; open full details for recordings and transcripts.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Caller</TableHead>
+                  <TableHead>Queue</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Wait</TableHead>
+                  <TableHead className="text-right">Handle</TableHead>
+                  <TableHead className="text-right">Events</TableHead>
+                  <TableHead className="text-right">Started</TableHead>
+                  <TableHead className="text-right">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.interactions?.length ? (
+                  data.interactions.map((row) => {
+                    const isExpanded = expandedId === row.id;
+                    const stateClass = String(row.state || "").includes("complete") ? "border-green-500 text-green-600" : String(row.state || "").includes("abandon") ? "border-red-500 text-red-500" : "border-blue-500 text-blue-500";
+                    return (
+                      <Fragment key={row.id}>
+                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedId(isExpanded ? null : row.id)} data-state={isExpanded ? "expanded" : undefined}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {row.hasAi ? <IconRobot className="h-4 w-4 shrink-0 text-violet-500" title="AI-assisted" /> : null}
+                              {row.fromName || row.fromNumber || "Unknown"}
+                            </div>
+                          </TableCell>
+                          <TableCell>{row.queueName || "-"}</TableCell>
+                          <TableCell>{row.agentUsername || "-"}</TableCell>
+                          <TableCell><Badge variant="outline" className={`bg-transparent uppercase ${stateClass}`}>{row.state || "unknown"}</Badge></TableCell>
+                          <TableCell className="text-right">{formatDurationShort(row.waitTimeSeconds)}</TableCell>
+                          <TableCell className="text-right">{formatDurationShort(row.handleTimeSeconds)}</TableCell>
+                          <TableCell className="text-right">{formatShortNumber(row.timelineEvents)}</TableCell>
+                          <TableCell className="text-right text-xs">{formatDateTime(row.startedAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()}>
+                              <Link href={`/supervisor/call-history/${row.id}`}><IconExternalLink className="h-4 w-4" /></Link>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded ? (
+                          <TableRow className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell colSpan={9} className="p-4">
+                              {row.timeline?.length ? (
+                                <ol className="relative ml-3 space-y-3 border-l border-border/70 pl-5" data-testid="journey-timeline">
+                                  {row.timeline.map((event, idx) => (
+                                    <li key={`${row.id}-${idx}`} className="relative">
+                                      <span className={`absolute -left-[26px] top-1 h-2.5 w-2.5 rounded-full ${JOURNEY_EVENT_TONES[event.type] || "bg-zinc-400"}`} />
+                                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                                        <span className="font-medium capitalize">{String(event.type).replace(/_/g, " ")}</span>
+                                        {event.detail ? <span className="text-muted-foreground">· {event.detail}</span> : null}
+                                        <span className="ml-auto text-xs text-muted-foreground">{event.at ? formatDateTime(event.at) : ""}</span>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ol>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">No timeline events stored for this interaction.</p>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })
+                ) : (
+                  <TableRow><TableCell colSpan={9} className="text-center text-sm">No interactions in the selected range.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 const REPORT_META = {
   "queue-performance": {
     kicker: "Queue performance report",
@@ -1111,6 +1533,24 @@ const REPORT_META = {
     title: "AI assistant to agent handoffs for the selected range",
     description: "Handoff volume, insight processing health, destination queues, and agent outcomes after AI.",
     icon: IconRobot,
+  },
+  "outbound-campaigns": {
+    kicker: "Outbound campaign report",
+    title: "Campaign effectiveness for the selected range",
+    description: "Dial attempts, connect rates, best calling hours, failure reasons, and recent runs.",
+    icon: IconSpeakerphone,
+  },
+  "skills-gap": {
+    kicker: "Skills gap report",
+    title: "Skill supply vs demand",
+    description: "Agent skill pool against skills requested by calls and queue requirements.",
+    icon: IconPuzzle,
+  },
+  "cradle-to-grave": {
+    kicker: "Call journey explorer",
+    title: "Cradle-to-grave timelines for recent interactions",
+    description: "Expand any interaction to see its full event journey from first ring to wrap-up.",
+    icon: IconRoute,
   },
 };
 
@@ -1266,6 +1706,12 @@ export default function SupervisorAnalyticsPage() {
                   <WrapupCodesView data={reportData} loading={loading} />
                 ) : activeReport === "ai-handoffs" ? (
                   <AiHandoffsView data={reportData} loading={loading} />
+                ) : activeReport === "outbound-campaigns" ? (
+                  <OutboundCampaignsView data={reportData} loading={loading} />
+                ) : activeReport === "skills-gap" ? (
+                  <SkillsGapView data={reportData} loading={loading} />
+                ) : activeReport === "cradle-to-grave" ? (
+                  <CradleToGraveView data={reportData} loading={loading} />
                 ) : (
                   <AbandonmentView data={reportData} loading={loading} />
                 )}

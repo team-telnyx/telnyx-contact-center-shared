@@ -23,6 +23,9 @@ test("analytics rail exposes the launch reports", () => {
     "Transfers & Holds",
     "Wrap-up Codes",
     "AI Handoffs",
+    "Outbound",
+    "Skills Gap",
+    "Call Journeys",
   ];
   for (const label of expectedLabels) {
     assert.match(analyticsPage, new RegExp(`label: ["']${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
@@ -35,11 +38,50 @@ test("analytics rail exposes the launch reports", () => {
     "transfers-holds",
     "wrapup-codes",
     "ai-handoffs",
+    "outbound-campaigns",
+    "skills-gap",
+    "cradle-to-grave",
   ]) {
     assert.match(analyticsPage, new RegExp(`id: ["']${id}["']`));
   }
   assert.match(analyticsPage, /SectionRail items=\{ANALYTICS_RAIL_ITEMS\}/);
   assert.match(analyticsPage, /activeSection: "supervisor\.analytics\.activeSection"/, "Analytics should persist the selected report with a scoped storage key");
+});
+
+test("final analytics reports query the right sources", () => {
+  // Outbound campaigns
+  assert.match(analyticsRoute, /outbound_campaigns/);
+  assert.match(analyticsRoute, /outbound_campaign_runs/);
+  assert.match(analyticsRoute, /outbound_attempt_ledger/);
+  assert.match(analyticsRoute, /failure_reason/);
+  // Skills gap
+  assert.match(analyticsRoute, /FROM skills s/);
+  assert.match(analyticsRoute, /jsonb_each_text\(COALESCE\(i\.required_skills/);
+  assert.match(analyticsRoute, /skill_requirements/);
+  assert.match(analyticsRoute, /qualified_agents/);
+  // Cradle to grave
+  assert.match(analyticsRoute, /routing_metadata->'timeline'/);
+  assert.match(analyticsRoute, /CRADLE_HIDDEN_EVENTS/);
+  assert.match(analyticsRoute, /agent_timeout/);
+});
+
+test("final analytics views render their headline content", () => {
+  // Outbound
+  assert.match(analyticsPage, /Attempt funnel/);
+  assert.match(analyticsPage, /Best calling hours/);
+  assert.match(analyticsPage, /Campaign effectiveness/);
+  assert.match(analyticsPage, /Failure reasons/);
+  assert.match(analyticsPage, /Recent runs/);
+  // Skills gap
+  assert.match(analyticsPage, /Skill supply/);
+  assert.match(analyticsPage, /Demand vs supply/);
+  assert.match(analyticsPage, /Queue skill requirements/);
+  assert.match(analyticsPage, /Uncovered/);
+  // Call journeys
+  assert.match(analyticsPage, /Call journeys/);
+  assert.match(analyticsPage, /journey-timeline/);
+  assert.match(analyticsPage, /JOURNEY_EVENT_TONES/);
+  assert.match(analyticsPage, /setExpandedId/);
 });
 
 test("analytics page follows the Monitoring workspace design", () => {
