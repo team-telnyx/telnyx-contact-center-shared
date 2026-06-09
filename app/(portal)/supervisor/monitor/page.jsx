@@ -797,6 +797,13 @@ export default function MonitorPage() {
   useEffect(() => {
     if (!monitorUiStateHydratedRef.current) return;
     try { localStorage.setItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection, activeTab); } catch {}
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("section") !== activeTab) {
+        url.searchParams.set("section", activeTab);
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {}
   }, [activeTab]);
 
   useEffect(() => {
