@@ -88,16 +88,13 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { campaignModeBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
+import {
+  MONITOR_ACTIVE_SECTION_STORAGE_KEY,
+  MONITOR_RAIL_ITEMS,
+} from "@/components/contact-center/MonitorSectionNav";
 
-const MONITOR_RAIL_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
-  { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
-  { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
-  { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Live reporting snapshots" },
-  { id: "call-history", label: "Call History", icon: IconHistory, description: "Historical interactions, recordings, and workflow details" },
-];
 const MONITOR_UI_STATE_STORAGE_KEYS = {
-  activeSection: "supervisor.monitor.activeSection",
+  activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY,
 };
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";

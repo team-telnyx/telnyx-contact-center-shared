@@ -47,7 +47,7 @@ export const menuConfig = {
       role_access: ["supervisor", "admin", "owner"], // Show this group to supervisor, admin, and owner roles
       items: [
         {
-          title: "Reporting",
+          title: "Monitoring",
           url: "/supervisor/monitor",
           icon: IconActivity,
           role_access: ["supervisor", "admin", "owner"],
