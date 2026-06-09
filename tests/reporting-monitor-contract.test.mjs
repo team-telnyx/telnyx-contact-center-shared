@@ -27,7 +27,7 @@ test("call history sub-pages keep the monitor section rail visible", () => {
   assert.match(callHistoryDetailPage, /<MonitorSectionRailNav activeId=["']call-history["']/);
   // Rail navigation persists the chosen section and routes back to the monitor
   assert.match(monitorSectionNav, /persistMonitorSection\(sectionId\)/);
-  assert.match(monitorSectionNav, /router\.push\(["']\/supervisor\/monitor["']\)/);
+  assert.match(monitorSectionNav, /router\.push\(`\/supervisor\/monitor\?section=\$\{encodeURIComponent\(sectionId\)\}`\)/);
   // Both consumers share one storage key so monitor restores the chosen section
   assert.match(monitorSectionNav, /MONITOR_ACTIVE_SECTION_STORAGE_KEY\s*=\s*["']supervisor\.monitor\.activeSection["']/);
   assert.match(monitorPage, /activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY/);
