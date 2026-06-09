@@ -18,6 +18,7 @@ import {
   IconTimeline,
   IconRobot,
   IconHistory,
+  IconMicrophoneOff,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import InteractionTimeline from "@/components/contact-center/InteractionTimeline";
@@ -422,12 +423,15 @@ export default function SupervisorCallHistoryDetailPage() {
                 </TabsList>
 
                 <TabsContent value="timeline" className="mt-4 space-y-4">
-                  <Card>
+                  <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <IconTimeline className="h-5 w-5 text-blue-500" />
-                        Interaction Timeline
+                        <IconTimeline className="h-5 w-5 text-sky-500" />
+                        Call Phases
                       </CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        How the call time was split across IVR, queue, agent interaction, and wrap-up.
+                      </p>
                     </CardHeader>
                     <CardContent>
                       <InteractionTimeline events={timelineEvents} />
@@ -437,12 +441,15 @@ export default function SupervisorCallHistoryDetailPage() {
                   {interaction?.routing_metadata?.timeline &&
                     Array.isArray(interaction.routing_metadata.timeline) &&
                     interaction.routing_metadata.timeline.length > 0 && (
-                      <Card>
+                      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
-                            <IconHistory className="h-5 w-5 text-purple-500" />
-                            Detailed Event Timeline
+                            <IconHistory className="h-5 w-5 text-violet-500" />
+                            Event Journey
                           </CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            Every routing event from first ring to wrap-up, with timing between steps.
+                          </p>
                         </CardHeader>
                         <CardContent>
                           <RoutingMetadataTimeline
@@ -466,9 +473,17 @@ export default function SupervisorCallHistoryDetailPage() {
                       interactionId={interaction?.id || null}
                     />
                   ) : (
-                    <Card>
-                      <CardContent className="py-8 text-sm text-muted-foreground">
-                        No recording available for this interaction.
+                    <Card className="border-dashed border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full border border-border/70 bg-muted/40 text-muted-foreground">
+                          <IconMicrophoneOff className="h-6 w-6" />
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold">No recording available</div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            This interaction was not recorded or the recording has not been stored yet.
+                          </p>
+                        </div>
                       </CardContent>
                     </Card>
                   )}
