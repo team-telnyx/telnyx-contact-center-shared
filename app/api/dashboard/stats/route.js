@@ -125,6 +125,56 @@ export async function GET(request) {
     const statsResult = await pool.query(statsQuery, [username]);
     const stats = statsResult.rows[0] || {};
 
+    // Extra personal summary metrics for the redesigned dashboard
+    const extrasQuery = `
+      SELECT
+        SUM(COALESCE(hold_count, 0))::int AS hold_count,
+        SUM(COALESCE(hold_duration_seconds, 0))::bigint AS hold_duration_seconds,
+        SUM(COALESCE(transfer_count, 0))::int AS transfer_count,
+        MAX(handle_time_seconds)::int AS longest_handle_seconds,
+        SUM(handle_time_seconds)::bigint AS total_handle_seconds
+      FROM cc_interactions
+      WHERE agent_username = $1
+        AND ${dateCondition}
+        AND state IN ('completed', 'abandoned')
+    `;
+
+    const wrapupQuery = `
+      SELECT
+        code.value AS code_id,
+        COALESCE(MAX(w.name), code.value) AS code_name,
+        COUNT(*)::int AS total
+      FROM cc_interactions i
+      CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(i.wrapup_codes, '[]'::jsonb)) AS code(value)
+      LEFT JOIN cc_wrapup_codes w ON w.id = code.value
+      WHERE i.agent_username = $1
+        AND ${dateCondition.replace('created_at', 'i.created_at')}
+      GROUP BY code.value
+      ORDER BY total DESC
+      LIMIT 6
+    `;
+
+    const timeTrackingQuery = `
+      SELECT
+        SUM(t.logged_in_seconds)::bigint AS logged_in_seconds,
+        SUM(t.call_seconds)::bigint AS call_seconds,
+        SUM(t.break_seconds)::bigint AS break_seconds,
+        SUM(t.status_available_seconds)::bigint AS available_seconds
+      FROM cc_user_time_tracking t
+      WHERE t.user_id = $1
+        AND ${dateCondition.replace('created_at', 't.tracking_date')}
+    `;
+
+    const [extrasResult, wrapupResult, timeTrackingResult] = await Promise.all([
+      pool.query(extrasQuery, [username]),
+      pool.query(wrapupQuery, [username]),
+      pool.query(timeTrackingQuery, [user.id]),
+    ]);
+    const extras = extrasResult.rows[0] || {};
+    const timeTracking = timeTrackingResult.rows[0] || {};
+    const loggedInSeconds = Number(timeTracking.logged_in_seconds || 0);
+    const callSeconds = Number(timeTracking.call_seconds || 0);
+
     // Get user's agent statistics for real-time data
     const agentStats = await getAgentStatistics(session.user.id);
 
@@ -151,6 +201,18 @@ export async function GET(request) {
         avgTalkTime: Math.round(parseFloat(stats.avg_talk_time_seconds) || 0),
         avgWaitTime: Math.round(parseFloat(stats.avg_wait_time_seconds) || 0),
         totalTalkTime: Math.round(parseInt(stats.total_talk_time_seconds) || 0),
+        totalHandleTime: Number(extras.total_handle_seconds || 0),
+        longestHandleTime: Number(extras.longest_handle_seconds || 0),
+        holdCount: Number(extras.hold_count || 0),
+        holdDurationSeconds: Number(extras.hold_duration_seconds || 0),
+        transferCount: Number(extras.transfer_count || 0),
+        loggedInSeconds,
+        breakSeconds: Number(timeTracking.break_seconds || 0),
+        availableSeconds: Number(timeTracking.available_seconds || 0),
+        occupancyPct:
+          loggedInSeconds > 0
+            ? Math.min(100, Math.round((callSeconds / loggedInSeconds) * 100))
+            : null,
         currentCalls: agentStats?.currentCalls || 0,
         status: agentStats?.status || "Offline",
       },
@@ -158,6 +220,11 @@ export async function GET(request) {
         performanceDistribution,
         hourlyActivity,
         queueDistribution,
+        wrapupDistribution: wrapupResult.rows.map((row) => ({
+          codeId: row.code_id,
+          codeName: row.code_name,
+          total: Number(row.total || 0),
+        })),
       },
       period,
       timestamp: new Date().toISOString(),
