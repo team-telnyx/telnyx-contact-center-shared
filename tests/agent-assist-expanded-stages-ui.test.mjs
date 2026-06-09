@@ -26,8 +26,8 @@ test("Agent Assist workflow checklist supports all-expanded accordions, item aut
   assert.match(workflowSource, /itemRefs\.current\[changedItemId\]\?\.scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
   assert.match(workflowSource, /data-workflow-item-id=\{item\.id\}/);
   assert.match(workflowSource, /getStageVerificationAlert\(stage, itemStatuses, completedBlinkStageIds\)/);
-  assert.match(workflowSource, /stageAlert\.type === "needs-confirmation"[\s\S]*animate-pulse/);
-  assert.match(workflowSource, /stageAlert\.type === "completed-recently"[\s\S]*animate-\[stageBlink_0\.6s_ease-in-out_2\]/);
+  assert.match(workflowSource, /type: "needs-confirmation"[\s\S]*border-amber-500\/60 bg-amber-500\/5/);
+  assert.match(workflowSource, /type: "completed-recently"[\s\S]*border-emerald-500\/40 bg-emerald-500\/5/);
 });
 
 test("Agent Assist workflow stage blink keyframes are defined globally", async () => {
