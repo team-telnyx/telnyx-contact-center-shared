@@ -7,6 +7,7 @@ import {
   IconUsers,
   IconList,
   IconActivity,
+  IconChartBar,
   IconTag,
   IconGitBranch,
   IconKey,
@@ -50,6 +51,12 @@ export const menuConfig = {
           title: "Monitoring",
           url: "/supervisor/monitor",
           icon: IconActivity,
+          role_access: ["supervisor", "admin", "owner"],
+        },
+        {
+          title: "Analytics",
+          url: "/supervisor/analytics",
+          icon: IconChartBar,
           role_access: ["supervisor", "admin", "owner"],
         },
         {
