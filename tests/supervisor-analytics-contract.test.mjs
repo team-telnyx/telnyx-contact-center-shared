@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 const analyticsPage = readFileSync("app/(portal)/supervisor/analytics/page.jsx", "utf8");
 const analyticsRoute = readFileSync("app/api/contact-center/analytics/route.js", "utf8");
+const analyticsSectionNav = readFileSync("components/contact-center/AnalyticsSectionNav.jsx", "utf8");
 const menuConfig = readFileSync("config/menu.jsx", "utf8");
 
 test("sidebar exposes Analytics under SUPERVISOR for supervisor/admin/owner", () => {
@@ -14,7 +15,7 @@ test("sidebar exposes Analytics under SUPERVISOR for supervisor/admin/owner", ()
   );
 });
 
-test("analytics rail exposes the launch reports", () => {
+test("analytics rail exposes the launch reports plus call history", () => {
   const expectedLabels = [
     "Queue Performance",
     "Agent Scorecard",
@@ -25,10 +26,10 @@ test("analytics rail exposes the launch reports", () => {
     "AI Handoffs",
     "Outbound",
     "Skills Gap",
-    "Call Journeys",
+    "Call History",
   ];
   for (const label of expectedLabels) {
-    assert.match(analyticsPage, new RegExp(`label: ["']${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
+    assert.match(analyticsSectionNav, new RegExp(`label: ["']${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
   }
   for (const id of [
     "queue-performance",
@@ -40,12 +41,23 @@ test("analytics rail exposes the launch reports", () => {
     "ai-handoffs",
     "outbound-campaigns",
     "skills-gap",
-    "cradle-to-grave",
+    "call-history",
   ]) {
-    assert.match(analyticsPage, new RegExp(`id: ["']${id}["']`));
+    assert.match(analyticsSectionNav, new RegExp(`id: ["']${id}["']`));
   }
+  // Call Journeys duplicated Call History and was removed.
+  assert.doesNotMatch(analyticsSectionNav, /Call Journeys/);
+  assert.doesNotMatch(analyticsSectionNav, /cradle-to-grave/);
   assert.match(analyticsPage, /SectionRail items=\{ANALYTICS_RAIL_ITEMS\}/);
-  assert.match(analyticsPage, /activeSection: "supervisor\.analytics\.activeSection"/, "Analytics should persist the selected report with a scoped storage key");
+  assert.match(analyticsSectionNav, /ANALYTICS_ACTIVE_SECTION_STORAGE_KEY\s*=\s*["']supervisor\.analytics\.activeSection["']/, "Analytics should persist the selected report with a scoped storage key");
+});
+
+test("analytics embeds call history and honors the section query param", () => {
+  assert.match(analyticsPage, /activeReport === ["']call-history["'] \? \(\s*<SupervisorCallHistoryView embedded \/>/);
+  assert.match(analyticsPage, /new URLSearchParams\(window\.location\.search\)\.get\(["']section["']\)/);
+  assert.match(analyticsPage, /persistAnalyticsSection\(activeReport\)/);
+  // Call history loads its own data; the analytics fetch is skipped for it.
+  assert.match(analyticsPage, /if \(activeReport === ["']call-history["']\) \{/);
 });
 
 test("final analytics reports query the right sources", () => {
@@ -59,10 +71,20 @@ test("final analytics reports query the right sources", () => {
   assert.match(analyticsRoute, /jsonb_each_text\(COALESCE\(i\.required_skills/);
   assert.match(analyticsRoute, /skill_requirements/);
   assert.match(analyticsRoute, /qualified_agents/);
-  // Cradle to grave
-  assert.match(analyticsRoute, /routing_metadata->'timeline'/);
-  assert.match(analyticsRoute, /CRADLE_HIDDEN_EVENTS/);
-  assert.match(analyticsRoute, /agent_timeout/);
+  // Cradle-to-grave report was removed together with the Call Journeys view.
+  assert.doesNotMatch(analyticsRoute, /cradle-to-grave/);
+  assert.doesNotMatch(analyticsRoute, /cradleToGraveReport/);
+});
+
+test("dashboard-today report aggregates the current day for the supervisor dashboard", () => {
+  assert.match(analyticsRoute, /"dashboard-today"/);
+  assert.match(analyticsRoute, /async function dashboardTodayReport/);
+  assert.match(analyticsRoute, /dashboardTodayReport\(pool, \{ from, to, queueName \}\)/);
+  // Headline volumes + hourly trend + top agents + top wrap-up codes + queues
+  assert.match(analyticsRoute, /topAgents:/);
+  assert.match(analyticsRoute, /topWrapupCodes:/);
+  assert.match(analyticsRoute, /hourly:/);
+  assert.match(analyticsRoute, /EXTRACT\(HOUR FROM COALESCE\(i\.completed_at, i\.abandoned_at, i\.created_at\)\)/);
 });
 
 test("final analytics views render their headline content", () => {
@@ -77,11 +99,9 @@ test("final analytics views render their headline content", () => {
   assert.match(analyticsPage, /Demand vs supply/);
   assert.match(analyticsPage, /Queue skill requirements/);
   assert.match(analyticsPage, /Uncovered/);
-  // Call journeys
-  assert.match(analyticsPage, /Call journeys/);
-  assert.match(analyticsPage, /journey-timeline/);
-  assert.match(analyticsPage, /JOURNEY_EVENT_TONES/);
-  assert.match(analyticsPage, /setExpandedId/);
+  // Call Journeys view was removed in favor of the embedded Call History.
+  assert.doesNotMatch(analyticsPage, /CradleToGraveView/);
+  assert.doesNotMatch(analyticsPage, /JOURNEY_EVENT_TONES/);
 });
 
 test("analytics page follows the Monitoring workspace design", () => {
@@ -130,6 +150,7 @@ test("analytics API guards access and bounds the query range", () => {
     "transfers-holds",
     "wrapup-codes",
     "ai-handoffs",
+    "dashboard-today",
   ]) {
     assert.match(analyticsRoute, new RegExp(`"${report}"`));
   }

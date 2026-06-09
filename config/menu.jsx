@@ -60,12 +60,6 @@ export const menuConfig = {
           role_access: ["supervisor", "admin", "owner"],
         },
         {
-          title: "Scheduled Events",
-          url: "/supervisor/scheduled-events",
-          icon: IconCalendar,
-          role_access: ["supervisor", "admin", "owner"],
-        },
-        {
           title: "Outbound Dialer",
           url: "/supervisor/outbound-dialer",
           icon: IconSpeakerphone,
@@ -112,6 +106,12 @@ export const menuConfig = {
           title: "Workflows",
           url: "/admin/workflows",
           icon: IconGitBranch,
+          role_access: ["admin", "owner"],
+        },
+        {
+          title: "Scheduled Events",
+          url: "/supervisor/scheduled-events",
+          icon: IconCalendar,
           role_access: ["admin", "owner"],
         },
         {

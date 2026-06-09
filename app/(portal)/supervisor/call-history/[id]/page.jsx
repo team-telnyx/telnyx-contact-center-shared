@@ -32,7 +32,7 @@ import {
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
 import { SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
-import { MonitorSectionRailNav } from "@/components/contact-center/MonitorSectionNav";
+import { AnalyticsSectionRailNav } from "@/components/contact-center/AnalyticsSectionNav";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -172,7 +172,7 @@ export default function SupervisorCallHistoryDetailPage() {
         className={SECTION_RAIL_PAGE_GRID_CLASS}
         style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
       >
-        <MonitorSectionRailNav activeId="call-history" />
+        <AnalyticsSectionRailNav activeId="call-history" />
         <section className="h-full min-h-0 overflow-y-auto pr-1">
         <Card className="shadow-sm">
           <CardContent className="space-y-6 py-6">

@@ -40,7 +40,6 @@ import {
   IconPuzzle,
   IconRefresh,
   IconRobot,
-  IconRoute,
   IconSparkles,
   IconSpeakerphone,
   IconStopwatch,
@@ -66,21 +65,15 @@ import {
   SupervisorPageShell,
 } from "@/components/contact-center/SupervisorPageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import SupervisorCallHistoryView from "@/components/contact-center/SupervisorCallHistoryView";
+import {
+  ANALYTICS_ACTIVE_SECTION_STORAGE_KEY,
+  ANALYTICS_RAIL_ITEMS,
+  persistAnalyticsSection,
+} from "@/components/contact-center/AnalyticsSectionNav";
 
-const ANALYTICS_RAIL_ITEMS = [
-  { id: "queue-performance", label: "Queue Performance", icon: IconTrendingUp, description: "Historical queue volumes, SLA, and handle times" },
-  { id: "agent-performance", label: "Agent Scorecard", icon: IconUsers, description: "Agent handled volume, AHT, holds, transfers, occupancy" },
-  { id: "abandonment", label: "Abandonment", icon: IconPhoneOff, description: "Abandon rates, wait distribution, and callback list" },
-  { id: "agent-adherence", label: "Adherence", icon: IconClockPause, description: "Agent status mix, logins, breaks, and recent transitions" },
-  { id: "transfers-holds", label: "Transfers & Holds", icon: IconArrowBounce, description: "Transfer and hold pressure by agent and queue" },
-  { id: "wrapup-codes", label: "Wrap-up Codes", icon: IconTag, description: "Why customers call — disposition mix and coverage" },
-  { id: "ai-handoffs", label: "AI Handoffs", icon: IconRobot, description: "AI assistant to agent handoffs, outcomes, and health" },
-  { id: "outbound-campaigns", label: "Outbound", icon: IconSpeakerphone, description: "Campaign attempts, connect rates, and failure reasons" },
-  { id: "skills-gap", label: "Skills Gap", icon: IconPuzzle, description: "Skill supply vs demand and queue coverage" },
-  { id: "cradle-to-grave", label: "Call Journeys", icon: IconRoute, description: "Cradle-to-grave timelines for recent interactions" },
-];
 const ANALYTICS_UI_STATE_STORAGE_KEYS = {
-  activeSection: "supervisor.analytics.activeSection",
+  activeSection: ANALYTICS_ACTIVE_SECTION_STORAGE_KEY,
 };
 
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
@@ -1373,124 +1366,6 @@ function SkillsGapView({ data, loading }) {
   );
 }
 
-const JOURNEY_EVENT_TONES = {
-  initiated: "bg-sky-500",
-  enqueued: "bg-violet-500",
-  alerting: "bg-amber-500",
-  answered: "bg-emerald-500",
-  connected: "bg-emerald-500",
-  hold: "bg-orange-500",
-  resume: "bg-sky-500",
-  wrapup_start: "bg-fuchsia-500",
-  wrapup_end: "bg-fuchsia-500",
-  disconnected: "bg-zinc-500",
-};
-
-function CradleToGraveView({ data, loading }) {
-  const [expandedId, setExpandedId] = useState(null);
-  if (loading || !data) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-40 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-  const totals = data.totals || {};
-  return (
-    <div className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <OverviewMetricCard icon={IconRoute} label="Recent journeys" value={formatShortNumber(totals.interactions)} detail="Latest interactions in the selected range" progress={pct(totals.interactions, Math.max(totals.interactions, 1))} chip="Range" tone="sky" />
-        <OverviewMetricCard icon={IconHistory} label="With event timeline" value={formatShortNumber(totals.withTimeline)} detail={`${pct(totals.withTimeline, Math.max(totals.interactions, 1))}% have full event history`} progress={pct(totals.withTimeline, Math.max(totals.interactions, 1))} chip="Coverage" tone="violet" />
-        <OverviewMetricCard icon={IconCheck} label="With recording" value={formatShortNumber(totals.withRecording)} detail="Journeys with playable audio" progress={pct(totals.withRecording, Math.max(totals.interactions, 1))} chip="Assets" tone="emerald" />
-        <OverviewMetricCard icon={IconRobot} label="AI-assisted" value={formatShortNumber(totals.withAi)} detail="Journeys that started with the AI assistant" progress={pct(totals.withAi, Math.max(totals.interactions, 1))} chip="AI" tone="amber" />
-      </div>
-
-      <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
-        <CardHeader>
-          <CardTitle className="text-base">Call journeys</CardTitle>
-          <p className="text-sm text-muted-foreground">Click a row to expand the cradle-to-grave event timeline; open full details for recordings and transcripts.</p>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Caller</TableHead>
-                  <TableHead>Queue</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Wait</TableHead>
-                  <TableHead className="text-right">Handle</TableHead>
-                  <TableHead className="text-right">Events</TableHead>
-                  <TableHead className="text-right">Started</TableHead>
-                  <TableHead className="text-right">Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.interactions?.length ? (
-                  data.interactions.map((row) => {
-                    const isExpanded = expandedId === row.id;
-                    const stateClass = String(row.state || "").includes("complete") ? "border-green-500 text-green-600" : String(row.state || "").includes("abandon") ? "border-red-500 text-red-500" : "border-blue-500 text-blue-500";
-                    return (
-                      <Fragment key={row.id}>
-                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedId(isExpanded ? null : row.id)} data-state={isExpanded ? "expanded" : undefined}>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2">
-                              {row.hasAi ? <IconRobot className="h-4 w-4 shrink-0 text-violet-500" title="AI-assisted" /> : null}
-                              {row.fromName || row.fromNumber || "Unknown"}
-                            </div>
-                          </TableCell>
-                          <TableCell>{row.queueName || "-"}</TableCell>
-                          <TableCell>{row.agentUsername || "-"}</TableCell>
-                          <TableCell><Badge variant="outline" className={`bg-transparent uppercase ${stateClass}`}>{row.state || "unknown"}</Badge></TableCell>
-                          <TableCell className="text-right">{formatDurationShort(row.waitTimeSeconds)}</TableCell>
-                          <TableCell className="text-right">{formatDurationShort(row.handleTimeSeconds)}</TableCell>
-                          <TableCell className="text-right">{formatShortNumber(row.timelineEvents)}</TableCell>
-                          <TableCell className="text-right text-xs">{formatDateTime(row.startedAt)}</TableCell>
-                          <TableCell className="text-right">
-                            <Button size="icon" variant="ghost" asChild onClick={(event) => event.stopPropagation()}>
-                              <Link href={`/supervisor/call-history/${row.id}`}><IconExternalLink className="h-4 w-4" /></Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                        {isExpanded ? (
-                          <TableRow className="bg-muted/30 hover:bg-muted/30">
-                            <TableCell colSpan={9} className="p-4">
-                              {row.timeline?.length ? (
-                                <ol className="relative ml-3 space-y-3 border-l border-border/70 pl-5" data-testid="journey-timeline">
-                                  {row.timeline.map((event, idx) => (
-                                    <li key={`${row.id}-${idx}`} className="relative">
-                                      <span className={`absolute -left-[26px] top-1 h-2.5 w-2.5 rounded-full ${JOURNEY_EVENT_TONES[event.type] || "bg-zinc-400"}`} />
-                                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                                        <span className="font-medium capitalize">{String(event.type).replace(/_/g, " ")}</span>
-                                        {event.detail ? <span className="text-muted-foreground">· {event.detail}</span> : null}
-                                        <span className="ml-auto text-xs text-muted-foreground">{event.at ? formatDateTime(event.at) : ""}</span>
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ol>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">No timeline events stored for this interaction.</p>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })
-                ) : (
-                  <TableRow><TableCell colSpan={9} className="text-center text-sm">No interactions in the selected range.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 const REPORT_META = {
   "queue-performance": {
     kicker: "Queue performance report",
@@ -1546,11 +1421,11 @@ const REPORT_META = {
     description: "Agent skill pool against skills requested by calls and queue requirements.",
     icon: IconPuzzle,
   },
-  "cradle-to-grave": {
-    kicker: "Call journey explorer",
-    title: "Cradle-to-grave timelines for recent interactions",
-    description: "Expand any interaction to see its full event journey from first ring to wrap-up.",
-    icon: IconRoute,
+  "call-history": {
+    kicker: "Call history",
+    title: "Historical interactions, recordings, and workflow details",
+    description: "Search and inspect completed interactions with full event timelines and recordings.",
+    icon: IconHistory,
   },
 };
 
@@ -1566,6 +1441,12 @@ export default function SupervisorAnalyticsPage() {
 
   useEffect(() => {
     try {
+      const requested = new URLSearchParams(window.location.search).get("section");
+      if (requested && ANALYTICS_RAIL_ITEMS.some((item) => item.id === requested)) {
+        setActiveReport(requested);
+        return;
+      }
+
       const saved = localStorage.getItem(ANALYTICS_UI_STATE_STORAGE_KEYS.activeSection);
       if (saved && ANALYTICS_RAIL_ITEMS.some((item) => item.id === saved)) setActiveReport(saved);
     } catch {
@@ -1574,7 +1455,14 @@ export default function SupervisorAnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(ANALYTICS_UI_STATE_STORAGE_KEYS.activeSection, activeReport); } catch {}
+    persistAnalyticsSection(activeReport);
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("section") !== activeReport) {
+        url.searchParams.set("section", activeReport);
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {}
   }, [activeReport]);
 
   const analyticsQuery = useMemo(() => {
@@ -1606,11 +1494,16 @@ export default function SupervisorAnalyticsPage() {
         if (!cancelled) setLoading(false);
       }
     }
+    // Call history embeds its own view with dedicated data loading.
+    if (activeReport === "call-history") {
+      setLoading(false);
+      return undefined;
+    }
     loadReport();
     return () => {
       cancelled = true;
     };
-  }, [analyticsQuery, refreshNonce]);
+  }, [analyticsQuery, refreshNonce, activeReport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1690,6 +1583,9 @@ export default function SupervisorAnalyticsPage() {
       <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
         <SectionRail items={ANALYTICS_RAIL_ITEMS} activeId={activeReport} onSelect={setActiveReport} ariaLabel="Supervisor analytics reports" />
         <section className="h-full min-h-0 overflow-hidden pr-1">
+          {activeReport === "call-history" ? (
+            <SupervisorCallHistoryView embedded />
+          ) : (
           <Card className="flex h-full min-h-0 flex-col overflow-hidden">
             <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
               <div className="space-y-5">
@@ -1710,14 +1606,13 @@ export default function SupervisorAnalyticsPage() {
                   <OutboundCampaignsView data={reportData} loading={loading} />
                 ) : activeReport === "skills-gap" ? (
                   <SkillsGapView data={reportData} loading={loading} />
-                ) : activeReport === "cradle-to-grave" ? (
-                  <CradleToGraveView data={reportData} loading={loading} />
                 ) : (
                   <AbandonmentView data={reportData} loading={loading} />
                 )}
               </div>
             </CardContent>
           </Card>
+          )}
         </section>
       </main>
     </SupervisorPageShell>

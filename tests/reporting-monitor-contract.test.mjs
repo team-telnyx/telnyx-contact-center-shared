@@ -7,30 +7,35 @@ const menuConfig = readFileSync("config/menu.jsx", "utf8");
 const historyRoute = readFileSync("app/api/contact-center/interactions/history/route.js", "utf8");
 const callHistoryView = readFileSync("components/contact-center/SupervisorCallHistoryView.jsx", "utf8");
 const monitorSectionNav = readFileSync("components/contact-center/MonitorSectionNav.jsx", "utf8");
+const analyticsSectionNav = readFileSync("components/contact-center/AnalyticsSectionNav.jsx", "utf8");
 const callHistoryDetailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");
 
-test("supervisor monitor rail exposes call history alongside dashboard, agents, queues, and statistics", () => {
-  const expectedLabels = ["Dashboard", "Agents", "Queues", "Statistics", "Call History"];
+test("supervisor monitor rail exposes dashboard, agents, and queues only", () => {
+  const expectedLabels = ["Dashboard", "Agents", "Queues"];
   for (const label of expectedLabels) {
     assert.match(monitorSectionNav, new RegExp(`label: [\\"']${label}[\\"']`));
   }
-  assert.match(monitorSectionNav, /id: ["']call-history["']/);
+  // Statistics was consolidated into the dashboard; Call History moved to Analytics.
+  assert.doesNotMatch(monitorSectionNav, /label: ["']Statistics["']/);
+  assert.doesNotMatch(monitorSectionNav, /label: ["']Call History["']/);
+  assert.doesNotMatch(monitorSectionNav, /id: ["']graphs["']/);
+  assert.doesNotMatch(monitorSectionNav, /id: ["']call-history["']/);
   assert.match(monitorPage, /MONITOR_RAIL_ITEMS/);
   assert.match(monitorPage, /from ["']@\/components\/contact-center\/MonitorSectionNav["']/);
-  assert.match(monitorPage, /<SupervisorCallHistoryView\s+embedded/);
+  assert.doesNotMatch(monitorPage, /SupervisorCallHistoryView/);
+  assert.doesNotMatch(monitorPage, /MonitorGraphsView/);
 });
 
-test("call history sub-pages keep the monitor section rail visible", () => {
+test("call history sub-pages keep the analytics section rail visible", () => {
   // Standalone call history list keeps the left rail
-  assert.match(callHistoryView, /<MonitorSectionRailNav activeId=["']call-history["']/);
+  assert.match(callHistoryView, /<AnalyticsSectionRailNav activeId=["']call-history["']/);
   // Interaction detail page keeps the left rail
-  assert.match(callHistoryDetailPage, /<MonitorSectionRailNav activeId=["']call-history["']/);
-  // Rail navigation persists the chosen section and routes back to the monitor
-  assert.match(monitorSectionNav, /persistMonitorSection\(sectionId\)/);
-  assert.match(monitorSectionNav, /router\.push\(`\/supervisor\/monitor\?section=\$\{encodeURIComponent\(sectionId\)\}`\)/);
-  // Both consumers share one storage key so monitor restores the chosen section
-  assert.match(monitorSectionNav, /MONITOR_ACTIVE_SECTION_STORAGE_KEY\s*=\s*["']supervisor\.monitor\.activeSection["']/);
-  assert.match(monitorPage, /activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY/);
+  assert.match(callHistoryDetailPage, /<AnalyticsSectionRailNav activeId=["']call-history["']/);
+  // Rail navigation persists the chosen section and routes back to analytics
+  assert.match(analyticsSectionNav, /persistAnalyticsSection\(sectionId\)/);
+  assert.match(analyticsSectionNav, /router\.push\(`\/supervisor\/analytics\?section=\$\{encodeURIComponent\(sectionId\)\}`\)/);
+  // Both consumers share one storage key so analytics restores the chosen section
+  assert.match(analyticsSectionNav, /ANALYTICS_ACTIVE_SECTION_STORAGE_KEY\s*=\s*["']supervisor\.analytics\.activeSection["']/);
 });
 
 test("sidebar keeps the main Supervisor group and uses one Monitoring entry", () => {
@@ -39,13 +44,29 @@ test("sidebar keeps the main Supervisor group and uses one Monitoring entry", ()
   assert.doesNotMatch(menuConfig, /title: ["']Reporting["']/);
   assert.doesNotMatch(menuConfig, /label: ["']REPORTING["']/);
   assert.doesNotMatch(menuConfig, /title: ["']Call History["']/);
+  // Statistics lives inside the dashboard now — no standalone menu entry.
+  assert.doesNotMatch(menuConfig, /title: ["']Statistics["']/);
 });
 
-test("dashboard uses standard cards and today-only realtime aggregate tiles", () => {
+test("scheduled events moved from SUPERVISOR to ADMIN group", () => {
+  const supervisorGroup = menuConfig.slice(
+    menuConfig.indexOf('label: "SUPERVISOR"'),
+    menuConfig.indexOf('label: "ADMIN"'),
+  );
+  const adminGroup = menuConfig.slice(menuConfig.indexOf('label: "ADMIN"'));
+  assert.doesNotMatch(supervisorGroup, /Scheduled Events/);
+  assert.match(adminGroup, /title: ["']Scheduled Events["'],[\s\S]*?url: ["']\/supervisor\/scheduled-events["'],[\s\S]*?role_access: \["admin", "owner"\]/);
+});
+
+test("dashboard consolidates today statistics tiles and live signals", () => {
   assert.match(monitorPage, /Today realtime command center/);
-  assert.match(monitorPage, /<div className="rounded-2xl border border-border\/70 bg-card p-4 shadow-sm dark:bg-zinc-950\/70">[\s\S]*Today realtime command center/);
-  assert.doesNotMatch(monitorPage, /<div className="rounded-3xl border bg-background\/85 p-5 shadow-sm">[\s\S]*Today realtime command center/);
-  assert.match(monitorPage, /Realtime signal/);
+  assert.match(monitorPage, /Contact center today at a glance/);
+  // Consolidated Statistics tiles
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconCheck\} label="Answered"/);
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconAlertCircle\} label="Abandoned"/);
+  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconClock\} label="Avg wait"/);
+  // Live signal tiles
   assert.match(monitorPage, /Today SLA/);
   assert.match(monitorPage, /Live queue pressure/);
   assert.match(monitorPage, /Today answer rate/);
@@ -57,32 +78,27 @@ test("dashboard uses standard cards and today-only realtime aggregate tiles", ()
   assert.doesNotMatch(monitorPage, /bg-gradient-to-br from-slate-950 to-zinc-900 text-white/);
 });
 
-test("statistics charts use real aggregate snapshots with dark tooltip content", () => {
+test("dashboard renders today widgets: hourly chart, top performers, wrap-up codes, queues", () => {
+  // Today data is fetched from the analytics dashboard-today report
+  assert.match(monitorPage, /report["'],?\s*["']dashboard-today["']|dashboard-today/);
+  assert.match(monitorPage, /Today call volume by hour/);
+  assert.match(monitorPage, /Top performers today/);
+  assert.match(monitorPage, /top-performer-row/);
+  assert.match(monitorPage, /Top wrap-up codes today/);
+  assert.match(monitorPage, /top-wrapup-row/);
+  assert.match(monitorPage, /Queues today/);
+  // Charts keep the dark tooltip content
   assert.match(monitorPage, /function ChartTooltip/);
   assert.doesNotMatch(monitorPage, /<Tooltip\s*\/>/);
-  assert.doesNotMatch(monitorPage, /Trend visualization scaffold/);
-  assert.match(monitorPage, /Queue depth/);
-  assert.match(monitorPage, /availableAgents/);
-  assert.match(monitorPage, /busyAgents/);
 });
 
-test("statistics view keeps date controls inside the first command card before metric tiles", () => {
-  for (const label of ["1 day", "7 days", "30 days", "Custom range"]) {
-    assert.match(monitorPage, new RegExp(`>${label}<`));
-  }
-  assert.match(monitorPage, /setQuickStatisticsRange\(1\)/);
-  assert.match(monitorPage, /setQuickStatisticsRange\(7\)/);
-  assert.match(monitorPage, /setQuickStatisticsRange\(30\)/);
-  assert.match(monitorPage, /type="datetime-local"/);
-  assert.match(monitorPage, /statistics-command-card-controls/);
-  assert.match(monitorPage, /statistics-command-card-controls[\s\S]*<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
-  assert.doesNotMatch(monitorPage, /statistics-header-controls/);
-  assert.doesNotMatch(monitorPage, /range\.toUpperCase\(\)/);
-  assert.doesNotMatch(monitorPage, /Reporting statistics/);
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconPhoneIncoming\} label="Total calls"/);
-  assert.match(monitorPage, /<OverviewMetricCard icon=\{IconCheck\} label="Answered"/);
-  assert.doesNotMatch(monitorPage, /<MiniSignalTile label="Total calls"/);
-  assert.match(monitorPage, /summary=true/);
+test("statistics tab was removed from the monitor", () => {
+  assert.doesNotMatch(monitorPage, /Statistics command center/);
+  assert.doesNotMatch(monitorPage, /setQuickStatisticsRange/);
+  assert.doesNotMatch(monitorPage, /statistics-command-card-controls/);
+  assert.doesNotMatch(monitorPage, /activeTab === ["']graphs["']/);
+  assert.doesNotMatch(monitorPage, /activeTab === ["']call-history["']/);
+  // The history summary endpoint contract remains in place for analytics consumers.
   assert.match(historyRoute, /summary=true/);
 });
 
@@ -109,7 +125,6 @@ test("reporting tabs do not render duplicate top title headers above first cards
   assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">\s*<IconActivity className="size-5" \/>\s*\{activeSection\.label\}/);
   assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Agents[\s\S]*?<\/CardTitle>/);
   assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Queues[\s\S]*?<\/CardTitle>/);
-  assert.doesNotMatch(monitorPage, /<CardTitle className="flex items-center gap-2">[\s\S]*?Statistics[\s\S]*?<\/CardTitle>/);
   assert.doesNotMatch(callHistoryView, /<CardTitle className="flex items-center gap-2">[\s\S]*?Call History[\s\S]*?<\/CardTitle>/);
   assert.doesNotMatch(monitorPage, /visible of \{allAgents\.length\} agents/);
   assert.doesNotMatch(monitorPage, /queue pressure<\/Badge>/);

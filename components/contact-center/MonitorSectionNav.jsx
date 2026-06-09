@@ -3,26 +3,21 @@
 import { useRouter } from "next/navigation";
 import {
   IconActivity,
-  IconChartBar,
-  IconHistory,
   IconTrendingUp,
   IconUsers,
 } from "@tabler/icons-react";
 import { SectionRail } from "@/components/ui/section-rail";
 
 // Single source of truth for the supervisor monitor left rail. The monitor
-// page renders these sections inline; sub-pages (call history list/detail)
-// render the same rail and navigate back into the monitor with the chosen
-// section persisted so the left panel never disappears during navigation.
+// page renders these sections inline. Call History now lives in the Analytics
+// workspace, and the old Statistics tab was consolidated into the Dashboard.
 export const MONITOR_ACTIVE_SECTION_STORAGE_KEY =
   "supervisor.monitor.activeSection";
 
 export const MONITOR_RAIL_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Live workspace overview" },
+  { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Today's contact center picture and live signals" },
   { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },
-  { id: "graphs", label: "Statistics", icon: IconChartBar, description: "Live reporting snapshots" },
-  { id: "call-history", label: "Call History", icon: IconHistory, description: "Historical interactions, recordings, and workflow details" },
 ];
 
 export function persistMonitorSection(sectionId) {
@@ -33,7 +28,7 @@ export function persistMonitorSection(sectionId) {
   }
 }
 
-export function MonitorSectionRailNav({ activeId = "call-history" }) {
+export function MonitorSectionRailNav({ activeId = "dashboard" }) {
   const router = useRouter();
   return (
     <SectionRail
