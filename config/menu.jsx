@@ -8,6 +8,7 @@ import {
   IconList,
   IconActivity,
   IconChartBar,
+  IconClipboardCheck,
   IconTag,
   IconGitBranch,
   IconKey,
@@ -57,6 +58,12 @@ export const menuConfig = {
           title: "Analytics",
           url: "/supervisor/analytics",
           icon: IconChartBar,
+          role_access: ["supervisor", "admin", "owner"],
+        },
+        {
+          title: "Quality",
+          url: "/supervisor/quality",
+          icon: IconClipboardCheck,
           role_access: ["supervisor", "admin", "owner"],
         },
         {
