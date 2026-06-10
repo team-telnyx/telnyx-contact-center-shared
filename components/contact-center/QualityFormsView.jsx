@@ -20,6 +20,7 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -354,8 +355,8 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
       )}
 
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-2xl">
-          <SheetHeader>
+        <SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-2xl">
+          <SheetHeader className="border-b px-6 py-4">
             <SheetTitle>{editingForm ? "Edit quality form" : "New quality form"}</SheetTitle>
             <SheetDescription>
               Define sections and criteria. The AI rubric guides the assistant when scoring calls
@@ -363,7 +364,9 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
             </SheetDescription>
           </SheetHeader>
 
-          <div className="space-y-5 px-4 pb-8">
+          {/* Scrollable content: form metadata + sections/criteria */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="space-y-5 px-6 py-4">
             <div className="grid gap-3">
               <div>
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">Name</Label>
@@ -546,21 +549,23 @@ export default function QualityFormsView({ refreshNonce = 0 }) {
               <span className="text-muted-foreground">Maximum score</span>
               <span className="font-semibold">{formMaxScore(sections)} pts</span>
             </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button type="button" variant="outline" onClick={() => saveForm(false)} disabled={saving}>
-                <IconDeviceFloppy className="mr-1.5 h-4 w-4" />
-                Save draft
-              </Button>
-              <Button type="button" onClick={() => saveForm(true)} disabled={saving}>
-                <IconRosetteDiscountCheck className="mr-1.5 h-4 w-4" />
-                {saving ? "Saving…" : "Save & publish"}
-              </Button>
             </div>
           </div>
+
+          {/* Fixed Footer */}
+          <SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" variant="outline" onClick={() => saveForm(false)} disabled={saving}>
+              <IconDeviceFloppy className="mr-1.5 h-4 w-4" />
+              Save draft
+            </Button>
+            <Button type="button" onClick={() => saveForm(true)} disabled={saving}>
+              <IconRosetteDiscountCheck className="mr-1.5 h-4 w-4" />
+              {saving ? "Saving…" : "Save & publish"}
+            </Button>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     </div>
