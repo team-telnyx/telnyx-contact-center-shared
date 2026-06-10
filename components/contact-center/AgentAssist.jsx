@@ -20,6 +20,8 @@ import {
   FileText,
   Send,
   Volume2,
+  User,
+  Headphones,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { notify } from "@/components/ToastNotify";
@@ -410,9 +412,11 @@ export function AgentAssist({ interactionId, interaction }) {
           <CardContent className="p-0 flex flex-col h-full overflow-hidden">
             <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
               <h3 className="text-lg font-semibold flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-green-500" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
+                  <MessageSquare className="h-5 w-5 text-sky-500" />
+                </span>
                 Live Transcription
-                <Badge className="ml-auto text-xs bg-green-500/10 text-green-500 border-green-500/50">
+                <Badge className="ml-auto text-xs bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/50">
                   {transcriptions.length}
                 </Badge>
               </h3>
@@ -447,7 +451,9 @@ export function AgentAssist({ interactionId, interaction }) {
             <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-amber-500" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/10">
+                    <BookOpen className="h-5 w-5 text-amber-500" />
+                  </span>
                   Suggested Articles
                   <Sparkles className="h-4 w-4 ml-auto text-amber-500" />
                 </h3>
@@ -523,7 +529,11 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
   return (
     <div className="w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div
-        className={`rounded-lg p-3 border-2 bg-card cursor-pointer transition-all hover:shadow-md ${
+        className={`rounded-lg p-3 border-2 cursor-pointer transition-all hover:shadow-md ${
+          isInbound
+            ? "bg-sky-500/5 border-l-4 border-l-sky-500"
+            : "bg-emerald-500/5 border-l-4 border-l-emerald-500"
+        } ${
           isSelected
             ? "border-green-500 shadow-md ring-2 ring-green-500/20"
             : "border-border hover:border-green-500/50"
@@ -531,6 +541,12 @@ function TranscriptionBubble({ transcription, isSelected, onClick }) {
         onClick={onClick}
       >
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          <span className={`flex items-center gap-1 text-xs font-medium ${
+            isInbound ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400"
+          }`}>
+            {isInbound ? <User className="h-3 w-3" /> : <Headphones className="h-3 w-3" />}
+            {isInbound ? "Customer" : "Agent"}
+          </span>
           {transcription.sentiment && (
             <Badge
               variant="outline"
@@ -748,12 +764,20 @@ function ArticleViewer({
       <div className="px-4 pt-4 pb-6 border-b border-border flex-shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5 text-blue-500" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-500/10">
+              <FileText className="h-5 w-5 text-blue-500" />
+            </span>
             {useLLM && llmResponse
               ? "AI Generated Response"
               : article
                 ? "Article Content"
                 : "Content"}
+            {useLLM && llmResponse && (
+              <Badge variant="outline" className="text-xs text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10">
+                <Sparkles className="h-3 w-3 mr-1" />
+                AI
+              </Badge>
+            )}
           </h3>
           <div className="flex items-center gap-2">
             <Switch

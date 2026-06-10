@@ -47,6 +47,7 @@ import {
   Heart,
   AlertCircle,
   Activity,
+  Target,
   Volume2,
   Languages,
 } from "lucide-react";
@@ -632,9 +633,9 @@ function formatLanguageLabel(language) {
 
 function TranslationIndicator({ sourceLanguage, targetLanguage }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-      <div className="p-2 rounded-lg bg-muted">
-        <Languages className="h-5 w-5 text-muted-foreground" />
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-sky-500/30 bg-sky-500/5">
+      <div className="p-2 rounded-lg bg-sky-500/10">
+        <Languages className="h-5 w-5 text-sky-500" />
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
@@ -665,9 +666,9 @@ function TranslationIndicator({ sourceLanguage, targetLanguage }) {
  */
 function AiHandoffIndicator({ isLoading, isReceived, receivedAt }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-      <div className="p-2 rounded-lg bg-muted">
-        <Bot className="h-5 w-5 text-muted-foreground" />
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-violet-500/30 bg-violet-500/5">
+      <div className="p-2 rounded-lg bg-violet-500/10">
+        <Bot className="h-5 w-5 text-violet-500" />
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2">
@@ -713,11 +714,13 @@ function AiSummaryPanel({ summary, sentiment }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="border bg-muted/20">
+      <Card className="border border-violet-500/30 bg-violet-500/5">
         <CollapsibleTrigger className="w-full">
-          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-muted/40 transition-colors">
+          <CardHeader className="py-3 px-4 cursor-pointer hover:bg-violet-500/10 transition-colors">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Brain className="h-4 w-4 text-muted-foreground" />
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
+                <Brain className="h-3.5 w-3.5 text-violet-500" />
+              </span>
               AI Call Analysis
               <div className="flex items-center gap-2 ml-auto">
                 {sentiment && (
@@ -746,7 +749,7 @@ function AiSummaryPanel({ summary, sentiment }) {
               {summary && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    <MessageSquare className="h-4 w-4 text-sky-500" />
                     <span className="text-sm font-medium">Call Summary</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
@@ -770,7 +773,7 @@ function AiSummaryPanel({ summary, sentiment }) {
               {sentiment && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <Heart className="h-4 w-4 text-muted-foreground" />
+                    <Heart className="h-4 w-4 text-rose-500" />
                     <span className="text-sm font-medium">Sentiment Analysis</span>
                   </div>
                   <div className="prose prose-xs dark:prose-invert max-w-none bg-muted/50 rounded-lg p-3 max-h-40 overflow-y-auto">
@@ -979,10 +982,12 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-500/10">
+            <ClipboardList className="h-3.5 w-3.5 text-indigo-500" />
+          </span>
           Workflow Checklist
           {isAnalyzing && (
-            <Badge variant="outline" className="ml-auto text-xs text-muted-foreground">
+            <Badge variant="outline" className="ml-auto text-xs text-indigo-600 dark:text-indigo-400 border-indigo-500/40">
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
               Analyzing
             </Badge>
@@ -1173,9 +1178,15 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                         </span>
                                         {/* Source indicator: AI or Agent */}
                                         {isAiFilled ? (
-                                          <span className="text-sm" title="Filled by AI Assistant">🤖</span>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
+                                            <Bot className="h-3 w-3 mr-0.5" />
+                                            AI
+                                          </Badge>
                                         ) : isAgentFilled ? (
-                                          <span className="text-sm" title="Filled by Agent">👤</span>
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Filled by Agent">
+                                            <User className="h-3 w-3 mr-0.5" />
+                                            Agent
+                                          </Badge>
                                         ) : null}
                                         {/* Confidence indicator for AI-filled slots */}
                                         {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
@@ -1242,9 +1253,15 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                 {item.type !== "slot" && isCompleted && (
                                   <div className="flex items-center gap-1.5 mt-1">
                                     {isAiFilled ? (
-                                      <span className="text-sm" title="Completed by AI Assistant">🤖</span>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Completed by AI Assistant">
+                                        <Bot className="h-3 w-3 mr-0.5" />
+                                        AI
+                                      </Badge>
                                     ) : isAgentFilled ? (
-                                      <span className="text-sm" title="Completed by Agent">👤</span>
+                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sky-600 dark:text-sky-400 border-sky-500/40 bg-sky-500/10" title="Completed by Agent">
+                                        <User className="h-3 w-3 mr-0.5" />
+                                        Agent
+                                      </Badge>
                                     ) : null}
                                     {showLlmConfidence && isAiFilled && confidenceScore !== null && confidenceScore !== undefined && (
                                       <Badge
@@ -1314,10 +1331,12 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-sky-500/10">
+            <MessageSquare className="h-3.5 w-3.5 text-sky-500" />
+          </span>
           Live Transcription
           {transcriptions.length > 0 && (
-            <Badge variant="outline" className="ml-auto text-xs">
+            <Badge variant="outline" className="ml-auto text-xs text-sky-600 dark:text-sky-400 border-sky-500/40">
               {transcriptions.length} messages
             </Badge>
           )}
@@ -1365,8 +1384,11 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
   const SentimentIcon = sentiment === "positive" ? Smile :
     sentiment === "negative" ? Frown : Meh;
 
-  const sentimentColor = sentiment === "positive" ? "text-green-500" :
-    sentiment === "negative" ? "text-red-500" : "text-gray-400";
+  const sentimentBadgeClass = sentiment === "positive"
+    ? "text-emerald-600 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
+    : sentiment === "negative"
+    ? "text-red-600 dark:text-red-400 border-red-500/40 bg-red-500/10"
+    : "text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10";
 
   const translation = transcription.translation;
   const showTranslation = Boolean(translation?.text);
@@ -1408,23 +1430,23 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
   return (
     <div className={`flex flex-col ${isCustomer ? "items-start" : "items-end"}`}>
       {/* Speaker label */}
-      <div className={`flex items-center gap-1 mb-1 text-xs text-muted-foreground ${
-        isCustomer ? "" : "flex-row-reverse"
+      <div className={`flex items-center gap-1 mb-1 text-xs ${
+        isCustomer ? "text-sky-600 dark:text-sky-400" : "text-emerald-600 dark:text-emerald-400 flex-row-reverse"
       }`}>
         {isCustomer ? (
           <User className="h-3 w-3" />
         ) : (
           <Headphones className="h-3 w-3" />
         )}
-        <span>{isCustomer ? "Customer" : "Agent"}</span>
+        <span className="font-medium">{isCustomer ? "Customer" : "Agent"}</span>
       </div>
 
       {/* Message bubble */}
       <div
-        className={`max-w-[90%] rounded-xl px-3 py-2 ${
+        className={`max-w-[90%] rounded-xl px-3 py-2 border ${
           isCustomer
-            ? "bg-muted rounded-tl-sm"
-            : "bg-primary/10 text-foreground rounded-tr-sm"
+            ? "bg-sky-500/10 border-sky-500/20 rounded-tl-sm"
+            : "bg-emerald-500/10 border-emerald-500/20 text-foreground rounded-tr-sm"
         } ${isInterim ? "opacity-70" : ""}`}
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
@@ -1470,17 +1492,19 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
             </Badge>
           )}
           {intent && (
-            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+            <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/40">
+              <Target className="h-3 w-3 mr-1" />
               {intent}
             </Badge>
           )}
           {sentiment && (
-            <div className={`flex items-center gap-0.5 ${sentimentColor}`}>
-              <SentimentIcon className="h-3.5 w-3.5" />
+            <Badge variant="outline" className={`text-[10px] capitalize ${sentimentBadgeClass}`}>
+              <SentimentIcon className="h-3 w-3 mr-1" />
+              {sentiment}
               {typeof sentimentScore === "number" && (
-                <span className="text-[10px]">{sentimentScore}</span>
+                <span className="ml-1">{sentimentScore}</span>
               )}
-            </div>
+            </Badge>
           )}
         </div>
       )}
@@ -1785,16 +1809,18 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
       <CardHeader className="py-3 px-4 border-b shrink-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-muted-foreground" />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-500/10">
+            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+          </span>
           Suggested Responses
           {generatingSuggestion && (
-            <Badge variant="outline" className="ml-auto text-xs text-muted-foreground">
+            <Badge variant="outline" className="ml-auto text-xs text-violet-600 dark:text-violet-400 border-violet-500/40">
               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
               Generating...
             </Badge>
           )}
           {!generatingSuggestion && suggestions.length > 0 && (
-            <Badge variant="outline" className="ml-auto text-xs">
+            <Badge variant="outline" className="ml-auto text-xs text-violet-600 dark:text-violet-400 border-violet-500/40">
               {suggestions.length} suggestions
             </Badge>
           )}
@@ -1827,7 +1853,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       key={suggestion.id}
                       className={`group w-full max-w-full min-w-0 box-border overflow-hidden p-3 rounded-lg border transition-all cursor-pointer ${
                         isLatest
-                          ? "border-primary/40 bg-muted/30 hover:border-primary/60 hover:bg-muted/50"
+                          ? "border-violet-500/40 bg-violet-500/5 hover:border-violet-500/60 hover:bg-violet-500/10"
                           : "border-border/50 bg-muted/20 hover:border-border hover:bg-muted/40"
                       }`}
                       onClick={() => handleCopy(suggestion)}
@@ -1856,7 +1882,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                           <span className="truncate">{suggestion.itemLabel}</span>
                         </Badge>
                         {isLatest && (
-                          <Badge variant="outline" className="text-[10px] text-primary border-primary/50 shrink-0">
+                          <Badge variant="outline" className="text-[10px] text-violet-600 dark:text-violet-400 border-violet-500/50 bg-violet-500/10 shrink-0">
                             Current
                           </Badge>
                         )}
@@ -1865,7 +1891,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
                       {/* Suggestion text */}
                       <div className="flex items-start gap-2">
                         <Bot className={`h-4 w-4 mt-0.5 shrink-0 ${
-                          isLatest ? "text-foreground" : "text-muted-foreground"
+                          isLatest ? "text-violet-500" : "text-muted-foreground"
                         }`} />
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${

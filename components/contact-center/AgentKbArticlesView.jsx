@@ -223,8 +223,8 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                   >
                     <AccordionTrigger className="hover:no-underline py-3">
                       <div className="flex items-center gap-3 flex-1 text-left">
-                        <div className="p-2 rounded-md bg-muted">
-                          <IconBook className="h-4 w-4" />
+                        <div className="p-2 rounded-md bg-amber-500/10">
+                          <IconBook className="h-4 w-4 text-amber-500" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm mb-1">
