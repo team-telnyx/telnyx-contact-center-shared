@@ -191,6 +191,24 @@ test("Quality form editor sheet keeps static header/footer with scrollable body 
   assert.match(view, /<SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">/);
 });
 
+test("Evaluations list paginates like Call History (rows-per-page select, default 10)", () => {
+  const view = read("components/contact-center/QualityEvaluationsView.jsx");
+  assert.match(view, /useState\(10\)/, "default page size must be 10");
+  assert.match(view, /data-testid="quality-evaluations-pagination"/);
+  assert.match(view, /Page \{page\} of \{totalPages\}/);
+  assert.match(view, /Rows per page/);
+  assert.match(view, /\[10, 25, 50, 100\]\.map/, "page size options must match Call History");
+  // Same rounded icon-button pager as SupervisorCallHistoryView (first/prev/next/last)
+  for (const icon of ["IconChevronsLeft", "IconChevronLeft", "IconChevronRight", "IconChevronsRight"]) {
+    assert.match(view, new RegExp(`<${icon} className="h-4 w-4" />`), `pager must use ${icon}`);
+  }
+  assert.match(view, /setPage\(1\)} disabled=\{page === 1\} className="rounded-full"/);
+  assert.match(view, /setPage\(totalPages\)} disabled=\{page === totalPages\} className="rounded-full"/);
+  assert.match(view, /SelectTrigger className="w-\[110px\] rounded-full px-4"/);
+  // Changing page size resets to the first page.
+  assert.match(view, /onValueChange=\{\(value\) => \{ setPage\(1\); setPageSize\(Number\(value\)\); \}\}/);
+});
+
 test("Quality views keep the entrenched metric tile design language", () => {
   for (const view of [
     "components/contact-center/QualityDashboardView.jsx",

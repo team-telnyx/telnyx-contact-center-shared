@@ -34,6 +34,8 @@ import {
   IconChecklist,
   IconChevronLeft,
   IconChevronRight,
+  IconChevronsLeft,
+  IconChevronsRight,
   IconCircleCheck,
   IconClipboardCheck,
   IconGauge,
@@ -115,8 +117,8 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
   const [filterOptions, setFilterOptions] = useState({ queues: [], agents: [] });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [count, setCount] = useState(0);
-  const pageSize = 25;
   const [queueFilter, setQueueFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -138,7 +140,7 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
     if (statusFilter !== "all") sp.set("status", statusFilter);
     if (recordedOnly) sp.set("recordedOnly", "true");
     return sp.toString();
-  }, [from, to, page, queueFilter, agentFilter, statusFilter, recordedOnly]);
+  }, [from, to, page, pageSize, queueFilter, agentFilter, statusFilter, recordedOnly]);
 
   useEffect(() => {
     setPage(1);
@@ -404,29 +406,23 @@ export default function QualityEvaluationsView({ from, to, refreshNonce = 0 }) {
             </Table>
           )}
 
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Page {page} of {totalPages} · {count.toLocaleString()} conversations
-            </span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((value) => Math.max(1, value - 1))}
-              >
-                <IconChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-              >
-                <IconChevronRight className="h-4 w-4" />
-              </Button>
+          <div className="flex flex-wrap items-center justify-between gap-4" data-testid="quality-evaluations-pagination">
+            <div className="text-sm font-medium text-foreground">
+              Page {page} of {totalPages}
+              <span className="ml-2 font-normal text-muted-foreground">
+                · {count.toLocaleString()} conversations
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1} className="rounded-full"><IconChevronsLeft className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full"><IconChevronLeft className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-full"><IconChevronRight className="h-4 w-4" /></Button>
+              <Button size="icon" variant="outline" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="rounded-full"><IconChevronsRight className="h-4 w-4" /></Button>
+              <span className="text-sm font-medium text-foreground ml-2">Rows per page</span>
+              <Select value={String(pageSize)} onValueChange={(value) => { setPage(1); setPageSize(Number(value)); }}>
+                <SelectTrigger className="w-[110px] rounded-full px-4"><SelectValue placeholder="Rows" /></SelectTrigger>
+                <SelectContent>{[10, 25, 50, 100].map((size) => (<SelectItem key={size} value={String(size)}>{size}</SelectItem>))}</SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
