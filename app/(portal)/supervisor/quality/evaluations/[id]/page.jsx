@@ -309,7 +309,7 @@ export default function QualityEvaluationDetailPage() {
         style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}
       >
         <QualitySectionRailNav activeId="evaluations" />
-        <section className="h-full min-h-0 overflow-y-auto pr-1">
+        <section className="h-full min-h-0 overflow-y-auto pr-1 xl:overflow-hidden">
           {loading ? (
             <Card className="shadow-sm">
               <CardContent className="space-y-3 py-6">
@@ -325,10 +325,10 @@ export default function QualityEvaluationDetailPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-              {/* Left column: interaction, recording, transcript */}
-              <div className="space-y-4">
-                <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+            <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+              {/* Left column: interaction, recording, transcript — scrolls on its own */}
+              <div className="min-h-0 space-y-4 xl:overflow-y-auto xl:pr-1">
+                <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2.5 text-base">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-600 dark:text-sky-300">
@@ -368,7 +368,7 @@ export default function QualityEvaluationDetailPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2.5 text-base">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
@@ -388,7 +388,7 @@ export default function QualityEvaluationDetailPage() {
                   </CardContent>
                 </Card>
 
-                <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2.5 text-base">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
@@ -431,9 +431,9 @@ export default function QualityEvaluationDetailPage() {
                 </Card>
               </div>
 
-              {/* Right column: scoring panel */}
-              <div className="space-y-4">
-                <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+              {/* Right column: scoring panel — scrolls independently of the recording */}
+              <div className="min-h-0 space-y-4 xl:overflow-y-auto xl:pr-1">
+                <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardContent className="space-y-4 p-5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-semibold">
@@ -493,7 +493,7 @@ export default function QualityEvaluationDetailPage() {
                 </Card>
 
                 {aiResult ? (
-                  <Card className="border-violet-500/30 bg-violet-500/5 shadow-sm">
+                  <Card className="border-violet-500/30 bg-card/95 shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2 text-sm">
                         <IconRobot className="h-4 w-4 text-violet-500" />
@@ -536,7 +536,7 @@ export default function QualityEvaluationDetailPage() {
                 ) : null}
 
                 {(schema.sections || []).map((section) => (
-                  <Card key={section.id} className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                  <Card key={section.id} className="border-border/70 bg-card/95 shadow-sm">
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2 text-sm">
                         <IconClipboardCheck className="h-4 w-4 text-muted-foreground" />
@@ -592,7 +592,7 @@ export default function QualityEvaluationDetailPage() {
                   </Card>
                 ))}
 
-                <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-sm">
                       <IconCircleCheck className="h-4 w-4 text-muted-foreground" />

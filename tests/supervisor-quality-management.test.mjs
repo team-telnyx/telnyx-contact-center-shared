@@ -156,6 +156,41 @@ test("Evaluation detail page reuses RecordingPlayer and exposes the AI button", 
   assert.match(page, /Scoring the form…/);
 });
 
+test("Evaluation detail cards use the workspace card background (no near-black zinc)", () => {
+  const page = read("app/(portal)/supervisor/quality/evaluations/[id]/page.jsx");
+  assert.match(page, /border-border\/70 bg-card\/95 shadow-sm/);
+  assert.doesNotMatch(
+    page,
+    /dark:bg-zinc-950\/70/,
+    "detail cards must match the rail/list card background, not dark zinc",
+  );
+});
+
+test("Evaluation detail columns scroll independently on xl screens", () => {
+  const page = read("app/(portal)/supervisor/quality/evaluations/[id]/page.jsx");
+  assert.match(
+    page,
+    /<section className="h-full min-h-0 overflow-y-auto pr-1 xl:overflow-hidden">/,
+    "outer section must not scroll on xl so columns own their scrollbars",
+  );
+  assert.match(page, /grid h-full min-h-0 gap-4 xl:grid-cols-\[minmax\(0,1fr\)_420px\]/);
+  const columnScrolls = page.match(/min-h-0 space-y-4 xl:overflow-y-auto xl:pr-1/g) || [];
+  assert.equal(columnScrolls.length, 2, "both columns must scroll independently on xl");
+});
+
+test("Quality form editor sheet keeps static header/footer with scrollable body (Users sheet pattern)", () => {
+  const view = read("components/contact-center/QualityFormsView.jsx");
+  assert.match(view, /SheetFooter/);
+  assert.match(
+    view,
+    /<SheetContent className="flex w-full flex-col overflow-hidden p-0 sm:max-w-2xl">/,
+    "sheet content must be a non-scrolling flex column",
+  );
+  assert.match(view, /<SheetHeader className="border-b px-6 py-4">/);
+  assert.match(view, /<div className="flex-1 overflow-y-auto">/, "only the body scrolls");
+  assert.match(view, /<SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">/);
+});
+
 test("Quality views keep the entrenched metric tile design language", () => {
   for (const view of [
     "components/contact-center/QualityDashboardView.jsx",
