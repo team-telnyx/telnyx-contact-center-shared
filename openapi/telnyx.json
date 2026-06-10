@@ -19692,7 +19692,7 @@
       },
       "patch": {
         "summary": "Update a DIR",
-        "description": "Edit a DIR. Only DIRs in `draft`, `rejected`, `unsuccessful`, or `suspended` are editable. PATCH is a pure edit - `status` is never changed by this endpoint. To re-vet after editing, call `POST /v2/dir/{dir_id}/submit` explicitly.",
+        "description": "Edit a DIR. DIRs in `draft`, `rejected`, `unsuccessful`, or `suspended` can be edited freely: PATCH is a pure edit, `status` is never changed, and you re-vet by calling `POST /v2/dir/{dir_id}/submit` explicitly. A `verified` DIR can also be edited in place: a PATCH that changes any value returns the DIR to `draft` and branded delivery stops until you re-submit and the DIR is approved again, while a PATCH that changes nothing (an empty body or values identical to the current ones) leaves the DIR `verified`, so idempotent retries are safe. DIRs in any other status (`submitted`, `in_review`, `expired`, `infringement_claimed`, `permanently_rejected`) cannot be edited.",
         "operationId": "updateDirSimple",
         "tags": [
           "Display Identity Records"
@@ -89701,6 +89701,9 @@
             "type": "integer",
             "maximum": 86400.0,
             "minimum": 60.0
+          },
+          "call_settings": {
+            "$ref": "#/components/schemas/ScheduledCallSettings"
           }
         },
         "type": "object",
@@ -93014,6 +93017,29 @@
             "minItems": 1,
             "maxItems": 10,
             "description": "1\u201310 reasons your business calls customers. Validate phrasing against `POST /call_reasons/validate`."
+          },
+          "certify_brand_is_accurate": {
+            "type": "boolean",
+            "description": "Certification that the DIR information is accurate. Must be `true` for the DIR to be submitted for vetting.",
+            "example": true
+          },
+          "certify_no_shaft_content": {
+            "type": "boolean",
+            "description": "Certification that this DIR is not used for SHAFT content (Sex, Hate, Alcohol, Firearms, Tobacco) where prohibited. Must be `true` for the DIR to be submitted for vetting.",
+            "example": true
+          },
+          "certify_ip_ownership": {
+            "type": "boolean",
+            "description": "Certification of ownership of any logos/trademarks shown. Must be `true` for the DIR to be submitted for vetting.",
+            "example": true
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Document"
+            },
+            "maxItems": 20,
+            "description": "Additional supporting documents to attach. Append-only: existing documents are never removed or replaced, and an empty or omitted list is a no-op. Each `document_id` may appear at most once on a DIR."
           }
         }
       },
@@ -118905,7 +118931,6 @@
           "phone_numbers_submitted",
           "phone_numbers_ineligible",
           "call_purpose",
-          "contact_email",
           "created_at",
           "updated_at"
         ],
@@ -118940,6 +118965,7 @@
           "contact_email": {
             "type": "string",
             "format": "email",
+            "nullable": true,
             "example": "ops@example.com"
           },
           "webhook_url": {
@@ -118969,14 +118995,8 @@
             "nullable": true
           },
           "results": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/RemediationPerNumberResults"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "$ref": "#/components/schemas/RemediationPerNumberResults",
+            "nullable": true,
             "description": "Per-category buckets. Populated once results are available. Null while the request is still pending."
           }
         }
@@ -118986,8 +119006,7 @@
         "additionalProperties": false,
         "required": [
           "phone_numbers",
-          "call_purpose",
-          "contact_email"
+          "call_purpose"
         ],
         "properties": {
           "phone_numbers": {
@@ -119011,7 +119030,7 @@
           "contact_email": {
             "type": "string",
             "format": "email",
-            "description": "Contact email for tracking this request.",
+            "description": "Optional contact email for this remediation request.",
             "maxLength": 255,
             "example": "ops@example.com"
           },
@@ -121589,6 +121608,16 @@
           "ai_assistant"
         ]
       },
+      "ScheduledCallSettings": {
+        "properties": {
+          "sip_region": {
+            "$ref": "#/components/schemas/SipRegion"
+          }
+        },
+        "type": "object",
+        "title": "ScheduledCallSettings",
+        "description": "Per-call telephony overrides applied when a scheduled phone-call event\ndispatches. Phone-call events only. New per-call dispatch options should be\nadded here rather than as top-level event fields."
+      },
       "ScheduledEventResponse": {
         "anyOf": [
           {
@@ -121717,6 +121746,9 @@
             "type": "string",
             "format": "date-time",
             "description": "Date time at which call was sent"
+          },
+          "call_settings": {
+            "$ref": "#/components/schemas/ScheduledCallSettings"
           }
         },
         "type": "object",
@@ -122994,6 +123026,18 @@
           "name": "User-to-User",
           "value": "value"
         }
+      },
+      "SipRegion": {
+        "type": "string",
+        "enum": [
+          "US",
+          "Europe",
+          "Canada",
+          "Australia",
+          "Middle East"
+        ],
+        "title": "SipRegion",
+        "description": "SIP region passed to Telnyx when initiating an outbound call. Values\nmatch the Telnyx TeXML `SipRegion` parameter exactly. Telnyx defaults to\n`US` when omitted."
       },
       "SipRegistrationStatus": {
         "type": "object",
