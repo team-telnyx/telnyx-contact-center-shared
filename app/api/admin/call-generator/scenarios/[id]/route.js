@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -56,7 +57,7 @@ export async function PUT(request, { params }) {
     const { rows } = await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [id]);
     return NextResponse.json({ scenario: rows[0] });
   } catch (err) {
-    console.error("[CG] PUT scenario error:", err);
+    adminRuntimeLogger.error("call_generator_scenario_update_failed", runtimePayload({ error: err, operation: "cg_scenario_update" }));
     return NextResponse.json({ error: "Failed to update scenario" }, { status: 500 });
   }
 }

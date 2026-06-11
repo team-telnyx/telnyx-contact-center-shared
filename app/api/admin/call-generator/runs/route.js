@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -58,7 +59,7 @@ export async function POST(request) {
     const run = (await pool.query("SELECT * FROM cg_runs WHERE id = $1", [id])).rows[0];
     return NextResponse.json({ run }, { status: 201 });
   } catch (err) {
-    console.error("[CG] POST run error:", err);
+    adminRuntimeLogger.error("call_generator_run_create_failed", runtimePayload({ error: err, operation: "cg_run_create" }));
     return NextResponse.json({ error: "Failed to start run" }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
+import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -64,7 +65,7 @@ export async function POST(request) {
     const scenario = (await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [id])).rows[0];
     return NextResponse.json({ scenario }, { status: 201 });
   } catch (err) {
-    console.error("[CG] POST scenario error:", err);
+    adminRuntimeLogger.error("call_generator_scenario_create_failed", runtimePayload({ error: err, operation: "cg_scenario_create" }));
     return NextResponse.json({ error: "Failed to create scenario" }, { status: 500 });
   }
 }
