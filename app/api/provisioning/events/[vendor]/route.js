@@ -19,12 +19,13 @@ async function handleEvent(request, vendor) {
     body = (await request.text().catch(() => "")).slice(0, 4000);
   }
 
-  let phoneId = null;
-  if (mac) {
-    const { rows } = await pool.query(`SELECT id FROM hp_phones WHERE mac = $1`, [mac]);
-    phoneId = rows[0]?.id || null;
-    if (phoneId) await pool.query(`UPDATE hp_phones SET last_seen_at = NOW() WHERE id = $1`, [phoneId]);
-  }
+  if (!mac) return NextResponse.json({ error: "Valid MAC address is required" }, { status: 400 });
+
+  const { rows } = await pool.query(`SELECT id FROM hp_phones WHERE mac = $1`, [mac]);
+  const phoneId = rows[0]?.id || null;
+  if (!phoneId) return NextResponse.json({ error: "Phone not found" }, { status: 404 });
+
+  await pool.query(`UPDATE hp_phones SET last_seen_at = NOW() WHERE id = $1`, [phoneId]);
   try {
     await pool.query(
       `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,

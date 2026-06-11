@@ -6,7 +6,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeMac, SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
-import { createPhoneCredential } from "@/lib/hardphones/credentials.mjs";
+import { createPhoneCredential, deletePhoneCredential } from "@/lib/hardphones/credentials.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -69,30 +69,44 @@ export async function POST(request) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
 
-    const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
-    const { rows } = await pool.query(
-      `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, provisioning_state, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
-       RETURNING ${PHONE_COLUMNS}`,
-      [
-        mac,
-        vendor,
-        String(body?.model || "").trim() || null,
-        label,
-        String(body?.agent_id || "").trim() || null,
-        credential.id,
-        credential.sip_username,
-        credential.sip_password,
-        adminPassword,
-        JSON.stringify(body?.settings && typeof body.settings === "object" ? body.settings : {}),
-        user.id || user.email || null,
-      ],
-    );
-    await pool.query(
-      `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, 'created', $3)`,
-      [rows[0].id, mac, JSON.stringify({ vendor, credential_id: credential.id })],
-    );
-    return NextResponse.json({ phone: rows[0] }, { status: 201 });
+    try {
+      const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
+      const { rows } = await pool.query(
+        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, provisioning_state, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+         RETURNING ${PHONE_COLUMNS}`,
+        [
+          mac,
+          vendor,
+          String(body?.model || "").trim() || null,
+          label,
+          String(body?.agent_id || "").trim() || null,
+          credential.id,
+          credential.sip_username,
+          credential.sip_password,
+          adminPassword,
+          JSON.stringify(body?.settings && typeof body.settings === "object" ? body.settings : {}),
+          user.id || user.email || null,
+        ],
+      );
+      await pool.query(
+        `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, 'created', $3)`,
+        [rows[0].id, mac, JSON.stringify({ vendor, credential_id: credential.id })],
+      );
+      return NextResponse.json({ phone: rows[0] }, { status: 201 });
+    } catch (err) {
+      if (credential.id) {
+        try {
+          await deletePhoneCredential(credential.id);
+        } catch (cleanupErr) {
+          adminRuntimeLogger.error(
+            "hardphone_credential_cleanup_failed",
+            runtimePayload({ error: cleanupErr, operation: "hp_credential_cleanup", credential_id: credential.id }),
+          );
+        }
+      }
+      throw err;
+    }
   } catch (err) {
     adminRuntimeLogger.error("hardphone_create_failed", runtimePayload({ error: err, operation: "hp_create" }));
     return NextResponse.json({ error: "Failed to create phone" }, { status: 500 });
