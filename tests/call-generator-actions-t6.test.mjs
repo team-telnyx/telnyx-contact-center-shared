@@ -125,10 +125,42 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /rotate through selected numbers round-robin/i);
   });
 
-  it("scenario save is gated on required fields (name, flow, calls>=1, numbers>=1)", async () => {
+  it("scenario save is gated on required fields (name, flow, calls>=1, numbers>=1, action)", async () => {
     const code = await src("app/(portal)/admin/call-generator/page.jsx");
     assert.match(code, /Number\(t\.total_calls\) >= 1/);
     assert.match(code, /t\.from_numbers\.length >= 1/);
     assert.match(code, /String\(t\.flow_id \|\| ""\)\.trim\(\)/);
+    assert.match(code, /String\(t\.action_id \|\| ""\)\.trim\(\)/);
+  });
+
+  it("page has no env-flag references — settings switch is the only gate", async () => {
+    const code = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.doesNotMatch(code, /CALL_GENERATOR/);
+    assert.match(code, /Master switch/);
+  });
+
+  it("settings summary uses dialer-style tiles and telnyx green number badges", async () => {
+    const code = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(code, /toneClasses/);
+    assert.match(code, /telnyxNumberBadgeClass/);
+    assert.match(code, /#00E58F/);
+    assert.match(code, /showBadges=\{false\}/);
+  });
+
+  it("actions editor renders preview play buttons for speak and media steps", async () => {
+    const code = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(code, /useAudioPreview/);
+    assert.match(code, /PreviewButton/);
+    assert.match(code, /MediaFileSelector/);
+    assert.match(code, /\/api\/tts\/speech/);
+    assert.match(code, /media-library\/\$\{encodeURIComponent\(value\)\}\/stream/);
+    assert.match(code, /previewText=\{step\.text \|\| ""\}/);
+  });
+
+  it("voice dropdown sits on its own row with the preview button beside it", async () => {
+    const code = await src("app/(portal)/admin/call-generator/page.jsx");
+    // provider+model share a 2-col row; voice select moved to a separate flex row
+    assert.match(code, /grid grid-cols-2 gap-2/);
+    assert.match(code, /IconPlayerStop/);
   });
 });

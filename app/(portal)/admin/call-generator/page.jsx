@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,10 @@ import {
   IconActivity,
   IconArrowDown,
   IconArrowUp,
+  IconChartBar,
   IconCheck,
   IconChevronDown,
+  IconClockHour4,
   IconDashboard,
   IconDeviceFloppy,
   IconList,
@@ -27,6 +29,7 @@ import {
   IconMusic,
   IconPhoneCall,
   IconPlayerPlay,
+  IconPlayerStop,
   IconPlus,
   IconRefresh,
   IconSettings,
@@ -120,11 +123,23 @@ function SettingCard({ icon: Icon, title, subtitle, children }) {
   );
 }
 
-function MiniStat({ label, value }) {
+const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300", rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300" };
+const telnyxNumberBadgeClass = "bg-transparent text-[#00E58F] border-[#00E58F]";
+
+function MiniStat({ label, value, icon: Icon, tone = "blue" }) {
   return (
     <div className="rounded-lg border bg-muted/40 p-3">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+          <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+        </div>
+        {Icon ? (
+          <span className={`shrink-0 rounded-lg bg-gradient-to-br p-1.5 ${toneClasses[tone] || toneClasses.blue}`}>
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -138,7 +153,7 @@ function Empty({ title, description }) {
   );
 }
 
-function MultiSelect({ label, values = [], options = [], onChange = () => {}, emptyLabel = "No options available" }) {
+function MultiSelect({ label, values = [], options = [], onChange = () => {}, emptyLabel = "No options available", showBadges = true }) {
   const [open, setOpen] = useState(false);
   const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
   const selected = normalized.filter((o) => values.includes(o.value));
@@ -173,19 +188,82 @@ function MultiSelect({ label, values = [], options = [], onChange = () => {}, em
           </div>
         </PopoverContent>
       </Popover>
-      {selected.length ? (
-        <div className="flex flex-wrap gap-1">
-          {selected.map((o) => <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>)}
-        </div>
-      ) : <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
+      {showBadges ? (
+        selected.length ? (
+          <div className="flex flex-wrap gap-1">
+            {selected.map((o) => <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>)}
+          </div>
+        ) : <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      ) : null}
     </div>
   );
 }
 
+// Shared preview-audio controller: only one preview plays at a time per
+// component instance; returns play/stop helpers and the playing flag.
+function useAudioPreview() {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+
+  const stop = useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch {}
+      audioRef.current = null;
+    }
+    setPlaying(false);
+  }, []);
+
+  useEffect(() => stop, [stop]);
+
+  const playUrl = useCallback((url, { revoke = false } = {}) => {
+    stop();
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    const done = () => {
+      if (revoke) URL.revokeObjectURL(url);
+      if (audioRef.current === audio) audioRef.current = null;
+      setPlaying(false);
+    };
+    audio.onended = done;
+    audio.onerror = () => {
+      done();
+      notify({ title: "Playback error", description: "Could not play the audio preview.", variant: "error" });
+    };
+    setPlaying(true);
+    audio.play().catch(() => done());
+  }, [stop]);
+
+  return { playing, playUrl, stop, setPlaying };
+}
+
+// Small square play/stop button — same affordance as the Speak Text node
+// and the queue position-in-queue message preview.
+function PreviewButton({ playing, busy, onClick, title: buttonTitle = "Play preview" }) {
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant="outline"
+      className="h-9 w-9 shrink-0"
+      title={playing ? "Stop preview" : buttonTitle}
+      onClick={onClick}
+      disabled={busy}
+      data-testid="cg-preview-button"
+    >
+      {busy ? <IconLoader2 className="h-4 w-4 animate-spin" /> : playing ? <IconPlayerStop className="h-4 w-4" /> : <IconPlayerPlay className="h-4 w-4" />}
+    </Button>
+  );
+}
+
 // Compact TTS voice selector following the Speak node concept:
-// provider → model → voice from /api/tts/voices.
-function VoiceSelector({ value, onChange }) {
+// provider → model → voice from /api/tts/voices. The voice dropdown sits on
+// its own row (so long voice names never overflow the card) with a square
+// preview Play button on the right that speaks `previewText` via
+// /api/tts/speech — same pattern as the call flow Speak Text node.
+function VoiceSelector({ value, onChange, previewText = "" }) {
   const [providers, setProviders] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const { playing, playUrl, stop } = useAudioPreview();
   useEffect(() => {
     let cancelled = false;
     fetch("/api/tts/voices", { cache: "no-store" })
@@ -202,35 +280,100 @@ function VoiceSelector({ value, onChange }) {
   const model = models.find((m) => current.startsWith(`${providerId}.${m.id}.`)) || models[0] || null;
   const voices = model?.voices || [];
 
+  const preview = async () => {
+    if (playing) { stop(); return; }
+    const text = String(previewText || "").trim();
+    if (!text) {
+      notify({ title: "Nothing to preview", description: "Enter text to speak first.", variant: "error" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch("/api/tts/speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-cache, no-store, must-revalidate" },
+        cache: "no-store",
+        body: JSON.stringify({ text, voice: current }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const firstError = Array.isArray(errorData?.errors) ? errorData.errors[0] : null;
+        throw new Error(errorData?.error || firstError?.detail || firstError?.title || "Failed to generate speech");
+      }
+      const audioBlob = await response.blob();
+      playUrl(URL.createObjectURL(audioBlob), { revoke: true });
+    } catch (error) {
+      notify({ title: "Preview failed", description: error.message || "Failed to generate speech", variant: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <Select value={provider?.id || ""} onValueChange={(pid) => {
-        const nextProvider = providers.find((p) => p.id === pid);
-        const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
-        onChange(firstVoice?.id || `${pid}.`);
-      }}>
-        <SelectTrigger><SelectValue placeholder="Provider" /></SelectTrigger>
-        <SelectContent>
-          {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Select value={model?.id || ""} onValueChange={(mid) => {
-        const nextModel = models.find((m) => m.id === mid);
-        const firstVoice = nextModel?.voices?.[0];
-        onChange(firstVoice?.id || `${providerId}.${mid}.`);
-      }}>
-        <SelectTrigger><SelectValue placeholder="Model" /></SelectTrigger>
-        <SelectContent>
-          {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Select value={current} onValueChange={onChange}>
-        <SelectTrigger><SelectValue placeholder="Voice" /></SelectTrigger>
-        <SelectContent>
-          {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
-          {!voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
-        </SelectContent>
-      </Select>
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        <Select value={provider?.id || ""} onValueChange={(pid) => {
+          const nextProvider = providers.find((p) => p.id === pid);
+          const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
+          onChange(firstVoice?.id || `${pid}.`);
+        }}>
+          <SelectTrigger><SelectValue placeholder="Provider" /></SelectTrigger>
+          <SelectContent>
+            {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={model?.id || ""} onValueChange={(mid) => {
+          const nextModel = models.find((m) => m.id === mid);
+          const firstVoice = nextModel?.voices?.[0];
+          onChange(firstVoice?.id || `${providerId}.${mid}.`);
+        }}>
+          <SelectTrigger><SelectValue placeholder="Model" /></SelectTrigger>
+          <SelectContent>
+            {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <Select value={current} onValueChange={onChange}>
+            <SelectTrigger><SelectValue placeholder="Voice" /></SelectTrigger>
+            <SelectContent>
+              {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
+              {!voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
+            </SelectContent>
+          </Select>
+        </div>
+        <PreviewButton playing={playing} busy={busy} onClick={preview} title="Play text with selected voice" />
+      </div>
+    </div>
+  );
+}
+
+// Media Library file picker with an inline square Play button streaming the
+// file through /api/admin/media-library/[mediaName]/stream.
+function MediaFileSelector({ value, onChange, media = [] }) {
+  const { playing, playUrl, stop } = useAudioPreview();
+
+  const preview = () => {
+    if (playing) { stop(); return; }
+    if (!value) {
+      notify({ title: "Nothing to preview", description: "Select a media file first.", variant: "error" });
+      return;
+    }
+    playUrl(`/api/admin/media-library/${encodeURIComponent(value)}/stream`);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <Select value={value || ""} onValueChange={onChange}>
+          <SelectTrigger><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
+          <SelectContent>
+            {media.map((m) => <SelectItem key={m.media_name} value={m.media_name}>{m.media_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <PreviewButton playing={playing} onClick={preview} title="Play media file" />
     </div>
   );
 }
@@ -241,7 +384,8 @@ function scenarioTargetsValid(targets, allowedFromNumbers) {
     String(t.flow_id || "").trim() &&
     Number(t.total_calls) >= 1 &&
     Array.isArray(t.from_numbers) && t.from_numbers.length >= 1 &&
-    t.from_numbers.every((n) => allowedFromNumbers.includes(n)),
+    t.from_numbers.every((n) => allowedFromNumbers.includes(n)) &&
+    String(t.action_id || "").trim(),
   );
 }
 
@@ -705,14 +849,14 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">Calls rotate through selected numbers round-robin.</p> : null}
             </div>
             <div>
-              <Label>Action sequence</Label>
-              <Select value={target.action_id || "none"} onValueChange={(v) => updateTarget(index, { action_id: v === "none" ? "" : v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="No action" /></SelectTrigger>
+              <Label>Action sequence<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Select value={target.action_id || ""} onValueChange={(v) => updateTarget(index, { action_id: v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select action sequence" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No action</SelectItem>
                   {actions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {!actions.length ? <p className="mt-1 text-xs text-muted-foreground">No actions defined yet — create one in the Actions section first.</p> : null}
             </div>
             {draft.targets.length > 1 ? (
               <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
@@ -758,7 +902,7 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
       </Button>
       {!valid ? (
         <p className="text-xs text-amber-600 dark:text-amber-300">
-          Required: scenario name and at least one target with a Target Flow, at least 1 call, and at least one From number.
+          Required: scenario name and at least one target with a Target Flow, at least 1 call, at least one From number, and an Action sequence.
         </p>
       ) : null}
     </>
@@ -850,12 +994,9 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
             {step.type === "play_media" ? (
               <div>
                 <Label>Media file<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-                <Select value={step.media_name || ""} onValueChange={(v) => updateStep(index, { media_name: v })}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
-                  <SelectContent>
-                    {media.map((m) => <SelectItem key={m.media_name} value={m.media_name}>{m.media_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="mt-1">
+                  <MediaFileSelector value={step.media_name || ""} onChange={(v) => updateStep(index, { media_name: v })} media={media} />
+                </div>
               </div>
             ) : step.type === "speak" ? (
               <>
@@ -866,7 +1007,7 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
                 <div>
                   <Label>Voice</Label>
                   <div className="mt-1">
-                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} />
+                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText={step.text || ""} />
                   </div>
                 </div>
               </>
@@ -924,29 +1065,27 @@ function SettingsSummaryView({ settings }) {
         <p className="text-sm text-muted-foreground">Global generator defaults. Edit and persist these from Context Settings on the right.</p>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <MiniStat label="Status" value={settings.enabled ? "Enabled" : "Disabled"} />
-        <MiniStat label="Max concurrent calls" value={settings.max_concurrent_calls ?? 10} />
-        <MiniStat label="Max CPS" value={settings.max_cps ?? 2} />
-        <MiniStat label="Dial timeout (sec)" value={settings.dial_timeout_secs ?? 30} />
-        <MiniStat label="Max call duration (sec)" value={settings.max_call_duration_secs ?? 120} />
-        <MiniStat label="From numbers" value={(settings.from_numbers || []).length} />
+        <MiniStat label="Status" value={settings.enabled ? "Enabled" : "Disabled"} icon={IconActivity} tone={settings.enabled ? "emerald" : "rose"} />
+        <MiniStat label="Max concurrent calls" value={settings.max_concurrent_calls ?? 10} icon={IconPhoneCall} tone="blue" />
+        <MiniStat label="Max CPS" value={settings.max_cps ?? 2} icon={IconChartBar} tone="violet" />
+        <MiniStat label="Dial timeout (sec)" value={settings.dial_timeout_secs ?? 30} icon={IconClockHour4} tone="amber" />
+        <MiniStat label="Max call duration (sec)" value={settings.max_call_duration_secs ?? 120} icon={IconClockHour4} tone="rose" />
+        <MiniStat label="From numbers" value={(settings.from_numbers || []).length} icon={IconPhoneCall} tone="emerald" />
       </div>
-      <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
-        <h4 className="text-sm font-semibold">Enabled From Numbers</h4>
+      <SettingCard icon={IconPhoneCall} title="From Numbers" subtitle="Telnyx inventory numbers enabled as generator caller IDs">
         {(settings.from_numbers || []).length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {settings.from_numbers.map((n) => <Badge key={n} variant="outline" className="font-mono">{n}</Badge>)}
+          <div className="flex flex-wrap gap-2">
+            {settings.from_numbers.map((n) => <Badge key={n} className={telnyxNumberBadgeClass}>{n}</Badge>)}
           </div>
-        ) : <p className="mt-2 text-sm text-muted-foreground">No numbers enabled yet — select them in Context Settings.</p>}
-      </div>
-      <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
-        <h4 className="text-sm font-semibold">PSTN whitelist</h4>
+        ) : <p className="text-sm text-muted-foreground">No numbers enabled yet — select them in Context Settings.</p>}
+      </SettingCard>
+      <SettingCard icon={IconShieldCheck} title="PSTN whitelist" subtitle="Generated PSTN destinations allowed by the safety rail">
         {(settings.pstn_whitelist || []).length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {settings.pstn_whitelist.map((n) => <Badge key={n} variant="outline" className="font-mono">{n}</Badge>)}
+          <div className="flex flex-wrap gap-2">
+            {settings.pstn_whitelist.map((n) => <Badge key={n} className={telnyxNumberBadgeClass}>{n}</Badge>)}
           </div>
-        ) : <p className="mt-2 text-sm text-muted-foreground">Empty — generated PSTN calls are fully blocked.</p>}
-      </div>
+        ) : <p className="text-sm text-muted-foreground">Empty — generated PSTN calls are fully blocked.</p>}
+      </SettingCard>
     </div>
   );
 }
@@ -967,7 +1106,7 @@ function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
           <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 p-3">
             <div>
               <div className="text-sm font-medium">Enable Call Generator</div>
-              <div className="text-xs text-muted-foreground">Server flag CALL_GENERATOR=true is also required.</div>
+              <div className="text-xs text-muted-foreground">Master switch — no run can originate calls while disabled.</div>
             </div>
             <Switch checked={draft.enabled === true} onCheckedChange={(checked) => update({ enabled: checked === true })} />
           </div>
@@ -998,7 +1137,9 @@ function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
           options={fromNumberOptions}
           emptyLabel="No active numbers found in the Telnyx inventory."
           onChange={(values) => update({ from_numbers: values })}
+          showBadges={false}
         />
+        <p className="mt-2 text-xs text-muted-foreground">Selected numbers are shown on the Settings card in the main panel.</p>
       </SettingCard>
 
       <SettingCard icon={IconShieldCheck} title="PSTN Safety" subtitle="Whitelist for generated PSTN destinations">

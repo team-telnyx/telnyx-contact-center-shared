@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it } from "node:test";
 import {
   buildGeneratorClientState,
   parseGeneratorClientState,
@@ -10,24 +10,21 @@ import {
   isCallGeneratorEnabled,
 } from "../lib/call-generator/engine.mjs";
 
+function poolWithSettings(settings) {
+  return { query: async () => ({ rows: settings === undefined ? [] : [{ settings }] }) };
+}
+
 describe("call generator engine (T2)", () => {
-  let envBackup;
-  beforeEach(() => { envBackup = process.env.CALL_GENERATOR; });
-  afterEach(() => {
-    if (envBackup === undefined) delete process.env.CALL_GENERATOR;
-    else process.env.CALL_GENERATOR = envBackup;
+  it("is dormant by default (no settings row, no pool)", async () => {
+    assert.strictEqual(await isCallGeneratorEnabled(null), false);
+    assert.strictEqual(await isCallGeneratorEnabled(poolWithSettings(undefined)), false);
   });
 
-  it("is dormant by default (flag off)", () => {
-    delete process.env.CALL_GENERATOR;
-    assert.strictEqual(isCallGeneratorEnabled(), false);
-  });
-
-  it("activates only with CALL_GENERATOR=true", () => {
-    process.env.CALL_GENERATOR = "true";
-    assert.strictEqual(isCallGeneratorEnabled(), true);
-    process.env.CALL_GENERATOR = "1";
-    assert.strictEqual(isCallGeneratorEnabled(), false);
+  it("activates only when settings.enabled === true in the database", async () => {
+    assert.strictEqual(await isCallGeneratorEnabled(poolWithSettings({ enabled: true })), true);
+    assert.strictEqual(await isCallGeneratorEnabled(poolWithSettings({ enabled: false })), false);
+    assert.strictEqual(await isCallGeneratorEnabled(poolWithSettings({ enabled: "true" })), false);
+    assert.strictEqual(await isCallGeneratorEnabled({ query: async () => { throw new Error("db down"); } }), false);
   });
 
   it("client_state round-trips with callGenerator marker", () => {
@@ -82,12 +79,12 @@ describe("call generator engine (T2)", () => {
 });
 
 describe("call generator webhook route (T2)", () => {
-  it("webhook route exists with fail-open flag gating", async () => {
+  it("webhook route processes generator events via client_state correlation", async () => {
     const { readFile } = await import("node:fs/promises");
     const code = await readFile(new URL("../app/api/call-generator/webhook/route.js", import.meta.url), "utf8");
-    assert.match(code, /isCallGeneratorEnabled/);
     assert.match(code, /handleGeneratorWebhookEvent/);
     assert.match(code, /ignored: true/);
+    assert.doesNotMatch(code, /CALL_GENERATOR/);
   });
 
   it("run control route supports stop and panic", async () => {

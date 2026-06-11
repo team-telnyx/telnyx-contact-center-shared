@@ -52,8 +52,8 @@ export async function POST(request) {
     if (!scenario_id) {
       return NextResponse.json({ error: "scenario_id is required" }, { status: 400 });
     }
-    if (!isCallGeneratorEnabled()) {
-      return NextResponse.json({ error: "Call Generator is disabled (CALL_GENERATOR env flag is off)" }, { status: 409 });
+    if (!(await isCallGeneratorEnabled(pool))) {
+      return NextResponse.json({ error: "Call Generator is disabled — enable it in Settings first" }, { status: 409 });
     }
     const id = randomUUID();
     await pool.query(

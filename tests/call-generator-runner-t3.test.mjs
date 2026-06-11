@@ -49,11 +49,12 @@ describe("call generator runner (T3)", () => {
     assert.strictEqual(breaker.state().consecutiveFailures, 0);
   });
 
-  it("runs API gates run start on CALL_GENERATOR flag and runner result", async () => {
+  it("runs API gates run start on the settings master switch and runner result", async () => {
     const code = await readFile(new URL("../app/api/admin/call-generator/runs/route.js", import.meta.url), "utf8");
-    assert.match(code, /isCallGeneratorEnabled\(\)/);
+    assert.match(code, /await isCallGeneratorEnabled\(pool\)/);
     assert.match(code, /startRunLoop/);
     assert.match(code, /'pending'|"pending"/);
+    assert.doesNotMatch(code, /CALL_GENERATOR/);
   });
 
   it("run control stops the in-process loop on stop and panic", async () => {
