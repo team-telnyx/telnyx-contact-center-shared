@@ -1,123 +1,1021 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { IconRefresh } from "@tabler/icons-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
-import {
-  CALL_GENERATOR_ACTIVE_SECTION_STORAGE_KEY,
-  CALL_GENERATOR_RAIL_ITEMS,
-  persistCallGeneratorSection,
-} from "@/components/contact-center/CallGeneratorSectionNav";
 import CallGeneratorDashboardView from "@/components/contact-center/CallGeneratorDashboardView";
-import CallGeneratorScenariosView from "@/components/contact-center/CallGeneratorScenariosView";
-import CallGeneratorSettingsView from "@/components/contact-center/CallGeneratorSettingsView";
+import {
+  IconActivity,
+  IconArrowDown,
+  IconArrowUp,
+  IconCheck,
+  IconChevronDown,
+  IconDashboard,
+  IconDeviceFloppy,
+  IconList,
+  IconListDetails,
+  IconLoader2,
+  IconMusic,
+  IconPhoneCall,
+  IconPlayerPlay,
+  IconPlus,
+  IconRefresh,
+  IconSettings,
+  IconShieldCheck,
+  IconSpeakerphone,
+  IconTrash,
+  IconWand,
+} from "@tabler/icons-react";
 
-const SECTION_META = {
-  dashboard: {
-    kicker: "Call generator",
-    title: "Live test runs and metrics",
-    description: "Monitor active generated calls, answer rates, and routing performance in real time.",
-    badge: "Live monitoring",
-  },
-  scenarios: {
-    kicker: "Call generator",
-    title: "Test scenarios",
-    description: "Build, edit, and run structured call-load scenarios against flows, queues, and agents.",
-    badge: "Scenario management",
-  },
-  settings: {
-    kicker: "Call generator",
-    title: "Workspace settings",
-    description: "Global defaults for concurrency, CPS caps, caller numbers, and safety rails.",
-    badge: "Configuration",
-  },
+const API = "/api/admin/call-generator";
+
+const NAV_ITEMS = [
+  { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Live runs and generated calls" },
+  { id: "scenarios", label: "Scenarios", icon: IconList, description: "Test scenarios with flow targets" },
+  { id: "actions", label: "Actions", icon: IconListDetails, description: "Post-answer action sequences" },
+  { id: "settings", label: "Settings", icon: IconSettings, description: "Caps, numbers, safety rails" },
+];
+
+const SECTION_STORAGE_KEY = "admin.call-generator.activeSection";
+
+const DEFAULT_SETTINGS = {
+  enabled: false,
+  max_concurrent_calls: 10,
+  max_cps: 2,
+  from_numbers: [],
+  dial_timeout_secs: 30,
+  max_call_duration_secs: 120,
+  pstn_whitelist: [],
 };
 
+const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], action_id: "" });
+const emptyScenarioDraft = () => ({
+  name: "",
+  description: "",
+  targets: [emptyTarget()],
+  assert_queue: "",
+  assert_answer_within: "",
+  assert_max_abandon: "",
+  assert_min_answer: "",
+});
+
+// Build config.assertions from editor fields (routed_to_queue,
+// answer_within_secs, max_abandon_rate, min_answer_rate).
+function assertionsFromDraft(draft) {
+  const assertions = [];
+  if (String(draft.assert_queue || "").trim()) assertions.push({ type: "routed_to_queue", queue: draft.assert_queue.trim() });
+  if (Number(draft.assert_answer_within) > 0) assertions.push({ type: "answer_within_secs", seconds: Number(draft.assert_answer_within) });
+  if (draft.assert_max_abandon !== "" && Number(draft.assert_max_abandon) >= 0) assertions.push({ type: "max_abandon_rate", percent: Number(draft.assert_max_abandon) });
+  if (draft.assert_min_answer !== "" && Number(draft.assert_min_answer) >= 0) assertions.push({ type: "min_answer_rate", percent: Number(draft.assert_min_answer) });
+  return assertions;
+}
+
+function draftAssertionFields(config) {
+  const assertions = Array.isArray(config?.assertions) ? config.assertions : [];
+  const find = (type) => assertions.find((a) => a?.type === type);
+  return {
+    assert_queue: find("routed_to_queue")?.queue || "",
+    assert_answer_within: find("answer_within_secs")?.seconds ?? "",
+    assert_max_abandon: find("max_abandon_rate")?.percent ?? "",
+    assert_min_answer: find("min_answer_rate")?.percent ?? "",
+  };
+}
+
+const emptyActionDraft = () => ({ name: "", description: "", steps: [] });
+
+const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
+
+function PanelHeader({ title, description }) {
+  return (
+    <div className="h-16 shrink-0 border-b px-4 flex flex-col justify-center">
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="text-xs text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function SettingCard({ icon: Icon, title, subtitle, children }) {
+  return (
+    <div className="rounded-2xl border bg-background/85 p-4 shadow-sm">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="rounded-xl bg-gradient-to-br from-sky-500/15 to-violet-500/15 p-2 text-sky-600">
+          <Icon className="h-4 w-4" />
+        </span>
+        <div>
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }) {
+  return (
+    <div className="rounded-lg border bg-muted/40 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function Empty({ title, description }) {
+  return (
+    <div className="rounded-xl border border-dashed p-6 text-center">
+      <h4 className="font-semibold">{title}</h4>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+function MultiSelect({ label, values = [], options = [], onChange = () => {}, emptyLabel = "No options available" }) {
+  const [open, setOpen] = useState(false);
+  const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  const selected = normalized.filter((o) => values.includes(o.value));
+  const toggle = (value) => onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+  return (
+    <div className="space-y-2">
+      {label ? <Label>{label}</Label> : null}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" className="w-full justify-between">
+            <span className="truncate">{selected.length ? `${selected.length} selected` : "Select values"}</span>
+            <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-2">
+          <div className="max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-1">
+              {normalized.length ? normalized.map((o) => {
+                const checked = values.includes(o.value);
+                return (
+                  <button key={o.value} type="button" onClick={() => toggle(o.value)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-muted">
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${checked ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/20" : "border-muted-foreground/35 bg-background text-transparent"}`} aria-hidden="true">
+                      {checked ? <IconCheck className="h-3.5 w-3.5 stroke-[3] text-white" /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">{o.label}</span>
+                  </button>
+                );
+              }) : (
+                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">{emptyLabel}</div>
+              )}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {selected.length ? (
+        <div className="flex flex-wrap gap-1">
+          {selected.map((o) => <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>)}
+        </div>
+      ) : <p className="text-xs text-muted-foreground">{emptyLabel}</p>}
+    </div>
+  );
+}
+
+// Compact TTS voice selector following the Speak node concept:
+// provider → model → voice from /api/tts/voices.
+function VoiceSelector({ value, onChange }) {
+  const [providers, setProviders] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/tts/voices", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : { providers: [] }))
+      .then((data) => { if (!cancelled) setProviders(Array.isArray(data?.providers) ? data.providers : []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const current = String(value || "AWS.Polly.Joanna");
+  const providerId = current.split(".")[0] || "";
+  const provider = providers.find((p) => p.id === providerId || p.name === providerId) || null;
+  const models = provider?.models || [];
+  const model = models.find((m) => current.startsWith(`${providerId}.${m.id}.`)) || models[0] || null;
+  const voices = model?.voices || [];
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <Select value={provider?.id || ""} onValueChange={(pid) => {
+        const nextProvider = providers.find((p) => p.id === pid);
+        const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
+        onChange(firstVoice?.id || `${pid}.`);
+      }}>
+        <SelectTrigger><SelectValue placeholder="Provider" /></SelectTrigger>
+        <SelectContent>
+          {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={model?.id || ""} onValueChange={(mid) => {
+        const nextModel = models.find((m) => m.id === mid);
+        const firstVoice = nextModel?.voices?.[0];
+        onChange(firstVoice?.id || `${providerId}.${mid}.`);
+      }}>
+        <SelectTrigger><SelectValue placeholder="Model" /></SelectTrigger>
+        <SelectContent>
+          {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={current} onValueChange={onChange}>
+        <SelectTrigger><SelectValue placeholder="Voice" /></SelectTrigger>
+        <SelectContent>
+          {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
+          {!voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function scenarioTargetsValid(targets, allowedFromNumbers) {
+  if (!Array.isArray(targets) || !targets.length) return false;
+  return targets.every((t) =>
+    String(t.flow_id || "").trim() &&
+    Number(t.total_calls) >= 1 &&
+    Array.isArray(t.from_numbers) && t.from_numbers.length >= 1 &&
+    t.from_numbers.every((n) => allowedFromNumbers.includes(n)),
+  );
+}
+
 export default function AdminCallGeneratorPage() {
-  const [activeSection, setActiveSection] = useState("dashboard");
+  const [active, setActive] = useState("dashboard");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const [scenarios, setScenarios] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [inventoryNumbers, setInventoryNumbers] = useState([]);
+  const [resources, setResources] = useState({ flows: [], media: [] });
+
+  const [selectedScenarioId, setSelectedScenarioId] = useState(null);
+  const [selectedActionId, setSelectedActionId] = useState(null);
+  const [scenarioDraft, setScenarioDraft] = useState(emptyScenarioDraft());
+  const [actionDraft, setActionDraft] = useState(emptyActionDraft());
+  const [settingsDraft, setSettingsDraft] = useState(DEFAULT_SETTINGS);
+
+  const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
+  const allowedFromNumbers = Array.isArray(settings.from_numbers) ? settings.from_numbers : [];
 
   useEffect(() => {
     try {
       const requested = new URLSearchParams(window.location.search).get("section");
-      if (requested && CALL_GENERATOR_RAIL_ITEMS.some((item) => item.id === requested)) {
-        setActiveSection(requested);
-        return;
-      }
-      const saved = localStorage.getItem(CALL_GENERATOR_ACTIVE_SECTION_STORAGE_KEY);
-      if (saved && CALL_GENERATOR_RAIL_ITEMS.some((item) => item.id === saved)) setActiveSection(saved);
-    } catch {
-      // storage access may fail in sandboxed frames
-    }
+      if (requested && NAV_ITEMS.some((i) => i.id === requested)) { setActive(requested); return; }
+      const saved = localStorage.getItem(SECTION_STORAGE_KEY);
+      if (saved && NAV_ITEMS.some((i) => i.id === saved)) setActive(saved);
+    } catch {}
   }, []);
 
   useEffect(() => {
-    persistCallGeneratorSection(activeSection);
     try {
+      localStorage.setItem(SECTION_STORAGE_KEY, active);
       const url = new URL(window.location.href);
-      if (url.searchParams.get("section") !== activeSection) {
-        url.searchParams.set("section", activeSection);
+      if (url.searchParams.get("section") !== active) {
+        url.searchParams.set("section", active);
         window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
       }
     } catch {}
-  }, [activeSection]);
+  }, [active]);
 
-  const meta = SECTION_META[activeSection] || SECTION_META.dashboard;
+  const refresh = useCallback(async (toast = false) => {
+    setLoading(true);
+    try {
+      const [scenarioRes, actionsRes, settingsRes, resourcesRes] = await Promise.all([
+        fetch(`${API}/scenarios`),
+        fetch(`${API}/actions`),
+        fetch(`${API}/settings`),
+        fetch(`${API}/resources`),
+      ]);
+      const scenarioData = scenarioRes.ok ? await scenarioRes.json() : { scenarios: [] };
+      const actionsData = actionsRes.ok ? await actionsRes.json() : { actions: [] };
+      const settingsData = settingsRes.ok ? await settingsRes.json() : { settings: DEFAULT_SETTINGS, inventoryNumbers: [] };
+      const resourcesData = resourcesRes.ok ? await resourcesRes.json() : { flows: [], media: [] };
+      setScenarios(scenarioData.scenarios || []);
+      setActions(actionsData.actions || []);
+      setSettings({ ...DEFAULT_SETTINGS, ...(settingsData.settings || {}) });
+      setSettingsDraft({ ...DEFAULT_SETTINGS, ...(settingsData.settings || {}) });
+      setInventoryNumbers(settingsData.inventoryNumbers || []);
+      setResources({ flows: resourcesData.flows || [], media: resourcesData.media || [] });
+      setRefreshNonce((n) => n + 1);
+      if (toast) notify({ title: "Call generator refreshed", description: "Data reloaded.", variant: "success" });
+    } catch (err) {
+      notify({ title: "Failed to load call generator", description: err.message, variant: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const selectedScenario = useMemo(() => scenarios.find((s) => s.id === selectedScenarioId) || null, [scenarios, selectedScenarioId]);
+  const selectedAction = useMemo(() => actions.find((a) => a.id === selectedActionId) || null, [actions, selectedActionId]);
+
+  useEffect(() => {
+    if (selectedScenario) {
+      const targets = Array.isArray(selectedScenario.config?.targets) && selectedScenario.config.targets.length
+        ? selectedScenario.config.targets.map((t) => ({ flow_id: t.flow_id || "", total_calls: t.total_calls || 1, from_numbers: t.from_numbers || [], action_id: t.action_id || "" }))
+        : [emptyTarget()];
+      setScenarioDraft({
+        name: selectedScenario.name || "",
+        description: selectedScenario.description || "",
+        targets,
+        ...draftAssertionFields(selectedScenario.config),
+      });
+    } else {
+      setScenarioDraft(emptyScenarioDraft());
+    }
+  }, [selectedScenario]);
+
+  useEffect(() => {
+    if (selectedAction) {
+      setActionDraft({
+        name: selectedAction.name || "",
+        description: selectedAction.description || "",
+        steps: Array.isArray(selectedAction.steps) ? selectedAction.steps : [],
+      });
+    } else {
+      setActionDraft(emptyActionDraft());
+    }
+  }, [selectedAction]);
+
+  const scenarioValid = scenarioDraft.name.trim().length > 0 && scenarioTargetsValid(scenarioDraft.targets, allowedFromNumbers);
+
+  async function saveScenario() {
+    if (!scenarioValid) return;
+    setSaving(true);
+    try {
+      const payload = {
+        name: scenarioDraft.name.trim(),
+        description: scenarioDraft.description.trim(),
+        config: {
+          targets: scenarioDraft.targets.map((t) => ({
+            flow_id: t.flow_id,
+            total_calls: Math.max(1, Math.min(1000, Number(t.total_calls) || 1)),
+            from_numbers: t.from_numbers,
+            action_id: t.action_id || null,
+          })),
+          assertions: assertionsFromDraft(scenarioDraft),
+        },
+      };
+      const url = selectedScenario ? `${API}/scenarios/${selectedScenario.id}` : `${API}/scenarios`;
+      const res = await fetch(url, {
+        method: selectedScenario ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Save failed");
+      }
+      const data = await res.json();
+      notify({ title: selectedScenario ? "Scenario updated" : "Scenario created", description: payload.name, variant: "success" });
+      setScenarios((prev) => (selectedScenario ? prev.map((s) => (s.id === selectedScenario.id ? data.scenario : s)) : [data.scenario, ...prev]));
+      if (!selectedScenario && data.scenario?.id) setSelectedScenarioId(data.scenario.id);
+    } catch (err) {
+      notify({ title: "Save failed", description: err.message, variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteScenario(item) {
+    if (!window.confirm(`Delete scenario "${item.name}"?`)) return;
+    try {
+      const res = await fetch(`${API}/scenarios/${item.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      notify({ title: "Scenario deleted", variant: "success" });
+      setScenarios((prev) => prev.filter((s) => s.id !== item.id));
+      if (selectedScenarioId === item.id) setSelectedScenarioId(null);
+    } catch (err) {
+      notify({ title: "Delete failed", description: err.message, variant: "error" });
+    }
+  }
+
+  async function startRun(item) {
+    try {
+      const res = await fetch(`${API}/runs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenario_id: item.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to start run");
+      }
+      notify({ title: "Run started", description: item.name, variant: "success" });
+      setActive("dashboard");
+    } catch (err) {
+      notify({ title: "Run failed", description: err.message, variant: "error" });
+    }
+  }
+
+  const actionValid = actionDraft.name.trim().length > 0 && actionDraft.steps.length > 0;
+
+  async function saveAction() {
+    if (!actionValid) return;
+    setSaving(true);
+    try {
+      const payload = { name: actionDraft.name.trim(), description: actionDraft.description.trim(), steps: actionDraft.steps };
+      const url = selectedAction ? `${API}/actions/${selectedAction.id}` : `${API}/actions`;
+      const res = await fetch(url, {
+        method: selectedAction ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Save failed");
+      }
+      const data = await res.json();
+      notify({ title: selectedAction ? "Action updated" : "Action created", description: payload.name, variant: "success" });
+      setActions((prev) => (selectedAction ? prev.map((a) => (a.id === selectedAction.id ? data.action : a)) : [data.action, ...prev]));
+      if (!selectedAction && data.action?.id) setSelectedActionId(data.action.id);
+    } catch (err) {
+      notify({ title: "Save failed", description: err.message, variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteAction(item) {
+    if (!window.confirm(`Delete action "${item.name}"?`)) return;
+    try {
+      const res = await fetch(`${API}/actions/${item.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      notify({ title: "Action deleted", variant: "success" });
+      setActions((prev) => prev.filter((a) => a.id !== item.id));
+      if (selectedActionId === item.id) setSelectedActionId(null);
+    } catch (err) {
+      notify({ title: "Delete failed", description: err.message, variant: "error" });
+    }
+  }
+
+  async function saveSettings() {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: settingsDraft }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Save failed");
+      }
+      const data = await res.json();
+      setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
+      setSettingsDraft({ ...DEFAULT_SETTINGS, ...(data.settings || {}) });
+      notify({ title: "Settings saved", description: "Call generator settings have been persisted.", variant: "success" });
+    } catch (err) {
+      notify({ title: "Failed to save settings", description: err.message, variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const flowName = useCallback((flowId) => resources.flows.find((f) => f.id === flowId)?.name || flowId || "—", [resources.flows]);
+  const actionName = useCallback((actionId) => actions.find((a) => a.id === actionId)?.name || null, [actions]);
+
+  const headerCreate = active === "scenarios"
+    ? { label: "New scenario", onClick: () => setSelectedScenarioId(null) }
+    : active === "actions"
+      ? { label: "New action", onClick: () => setSelectedActionId(null) }
+      : null;
 
   return (
     <AdminPageShell>
       <AdminPageHeader
         title="Call Generator"
         badges={(
-          <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-            {meta.badge}
+          <Badge variant="outline" className={settings.enabled ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"}>
+            {settings.enabled ? "Enabled" : "Disabled"}
           </Badge>
         )}
         actions={(
-          <Button variant="outline" size="sm" onClick={() => setRefreshNonce((n) => n + 1)}>
-            <IconRefresh className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
+          <>
+            <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={loading}>
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            {headerCreate ? (
+              <Button size="sm" className={neutralActionClass} onClick={headerCreate.onClick} disabled={saving}>
+                <IconWand className="mr-2 h-4 w-4" />
+                {headerCreate.label}
+              </Button>
+            ) : null}
+          </>
         )}
       />
-      <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
-        <SectionRail
-          items={CALL_GENERATOR_RAIL_ITEMS}
-          activeId={activeSection}
-          onSelect={setActiveSection}
-          ariaLabel="Admin call generator sections"
-        />
-        <section className="h-full min-h-0 overflow-hidden pr-1">
-          <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-            <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
-              <div className="space-y-5">
-                <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm dark:bg-zinc-950/70">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                        {meta.kicker}
-                      </div>
-                      <h3 className="mt-2 text-xl font-semibold tracking-tight">{meta.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{meta.description}</p>
-                    </div>
-                  </div>
-                </div>
-                {activeSection === "dashboard" ? (
-                  <CallGeneratorDashboardView refreshNonce={refreshNonce} />
-                ) : activeSection === "scenarios" ? (
-                  <CallGeneratorScenariosView refreshNonce={refreshNonce} />
-                ) : (
-                  <CallGeneratorSettingsView refreshNonce={refreshNonce} />
-                )}
-              </div>
-            </CardContent>
-          </Card>
+      <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr) 380px` }}>
+        <SectionRail items={NAV_ITEMS} activeId={active} onSelect={setActive} ariaLabel="Call generator sections" />
+
+        {/* Main panel */}
+        <section className="min-h-0 overflow-hidden rounded-2xl border bg-card/95 shadow-sm backdrop-blur flex flex-col">
+          <div className="h-16 shrink-0 border-b bg-card/95 px-5 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">{activeMeta.label}</h2>
+              <p className="text-xs text-muted-foreground">{activeMeta.description}</p>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-5">
+            {active === "dashboard" ? (
+              <CallGeneratorDashboardView refreshNonce={refreshNonce} />
+            ) : active === "scenarios" ? (
+              <ScenariosListView
+                scenarios={scenarios}
+                selectedScenarioId={selectedScenario?.id || null}
+                setSelectedScenarioId={setSelectedScenarioId}
+                flowName={flowName}
+                startRun={startRun}
+                deleteScenario={deleteScenario}
+              />
+            ) : active === "actions" ? (
+              <ActionsListView
+                actions={actions}
+                selectedActionId={selectedAction?.id || null}
+                setSelectedActionId={setSelectedActionId}
+                deleteAction={deleteAction}
+              />
+            ) : (
+              <SettingsSummaryView settings={settings} />
+            )}
+          </div>
         </section>
+
+        {/* Right panel — Context Settings */}
+        <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
+          <PanelHeader
+            title={active === "dashboard" ? "Run monitor" : "Context settings"}
+            description={active === "dashboard" ? "Live execution overview" : `${activeMeta.label} configuration`}
+          />
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+            {active === "dashboard" ? (
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                Live calls and run progress update automatically every 2 seconds. Use Stop or Panic on a running run to halt traffic.
+              </div>
+            ) : active === "scenarios" ? (
+              <ScenarioEditor
+                draft={scenarioDraft}
+                setDraft={setScenarioDraft}
+                editing={Boolean(selectedScenario)}
+                valid={scenarioValid}
+                saving={saving}
+                save={saveScenario}
+                flows={resources.flows}
+                actions={actions}
+                allowedFromNumbers={allowedFromNumbers}
+              />
+            ) : active === "actions" ? (
+              <ActionEditor
+                draft={actionDraft}
+                setDraft={setActionDraft}
+                editing={Boolean(selectedAction)}
+                valid={actionValid}
+                saving={saving}
+                save={saveAction}
+                media={resources.media}
+              />
+            ) : (
+              <SettingsEditor
+                draft={settingsDraft}
+                setDraft={setSettingsDraft}
+                saving={saving}
+                save={saveSettings}
+                inventoryNumbers={inventoryNumbers}
+              />
+            )}
+          </div>
+        </aside>
       </main>
     </AdminPageShell>
+  );
+}
+
+function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioId, flowName, startRun, deleteScenario }) {
+  if (!scenarios.length) {
+    return <Empty title="No scenarios yet" description="Use New scenario in the header, configure targets in Context Settings on the right, then save." />;
+  }
+  return (
+    <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold">Scenario inventory</h3>
+          <p className="text-sm text-muted-foreground">Rows select configuration in the right Context Settings panel.</p>
+        </div>
+        <Badge variant="outline" className="bg-card">{scenarios.length} total</Badge>
+      </div>
+      <div className="mt-5 overflow-hidden rounded-xl border">
+        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 96px" }}>
+          <span>Name</span><span>Targets</span><span>Calls</span><span>Numbers</span><span className="text-right">Actions</span>
+        </div>
+        {scenarios.map((s) => {
+          const targets = Array.isArray(s.config?.targets) ? s.config.targets : [];
+          const totalCalls = targets.reduce((sum, t) => sum + (Number(t.total_calls) || 0), 0);
+          const numbersCount = [...new Set(targets.flatMap((t) => t.from_numbers || []))].length;
+          const selected = selectedScenarioId === s.id;
+          return (
+            <div
+              key={s.id}
+              onClick={() => setSelectedScenarioId(s.id)}
+              className={`grid cursor-pointer items-center border-t px-3 py-2.5 text-sm transition hover:bg-muted/40 ${selected ? "bg-sky-500/10" : ""}`}
+              style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 96px" }}
+            >
+              <span className="truncate font-medium">{s.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {targets.length ? targets.map((t) => flowName(t.flow_id)).join(", ") : "—"}
+              </span>
+              <span className="tabular-nums">{totalCalls || "—"}</span>
+              <span className="tabular-nums">{numbersCount || "—"}</span>
+              <span className="flex items-center justify-end gap-1">
+                <Button size="icon" variant="ghost" className="h-7 w-7" title="Start run" onClick={(e) => { e.stopPropagation(); startRun(s); }}>
+                  <IconPlayerPlay className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" title="Delete" onClick={(e) => { e.stopPropagation(); deleteScenario(s); }}>
+                  <IconTrash className="h-3.5 w-3.5" />
+                </Button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, actions, allowedFromNumbers }) {
+  const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const updateTarget = (index, patch) => setDraft((d) => ({
+    ...d,
+    targets: d.targets.map((t, i) => (i === index ? { ...t, ...patch } : t)),
+  }));
+  const addTarget = () => setDraft((d) => ({ ...d, targets: [...d.targets, emptyTarget()] }));
+  const removeTarget = (index) => setDraft((d) => ({ ...d, targets: d.targets.filter((_, i) => i !== index) }));
+  const fromNumberOptions = allowedFromNumbers.map((n) => ({ value: n, label: n }));
+
+  return (
+    <>
+      <SettingCard icon={IconList} title={editing ? "Edit scenario" : "New scenario"} subtitle="Persisted scenario details">
+        <div className="space-y-3">
+          <div>
+            <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+            <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Scenario name" />
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+          </div>
+        </div>
+      </SettingCard>
+
+      {draft.targets.map((target, index) => (
+        <SettingCard key={index} icon={IconPhoneCall} title={`Target ${index + 1}`} subtitle="Flow destination and dialing volume">
+          <div className="space-y-3">
+            <div>
+              <Label>Target Flow<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Select value={target.flow_id || ""} onValueChange={(v) => updateTarget(index, { flow_id: v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select call flow" /></SelectTrigger>
+                <SelectContent>
+                  {flows.map((f) => <SelectItem key={f.id} value={f.id}>{f.name || f.id}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Number of calls<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Input className="mt-1" type="number" min={1} max={1000} value={target.total_calls} onChange={(e) => updateTarget(index, { total_calls: Number(e.target.value) || 1 })} />
+            </div>
+            <div>
+              <Label>From numbers<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <div className="mt-1">
+                <MultiSelect
+                  values={target.from_numbers}
+                  options={fromNumberOptions}
+                  emptyLabel="No numbers enabled. Pick From Numbers in Settings first."
+                  onChange={(values) => updateTarget(index, { from_numbers: values })}
+                />
+              </div>
+              {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">Calls rotate through selected numbers round-robin.</p> : null}
+            </div>
+            <div>
+              <Label>Action sequence</Label>
+              <Select value={target.action_id || "none"} onValueChange={(v) => updateTarget(index, { action_id: v === "none" ? "" : v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="No action" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No action</SelectItem>
+                  {actions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {draft.targets.length > 1 ? (
+              <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
+                <IconTrash className="mr-2 h-3.5 w-3.5" />
+                Remove target
+              </Button>
+            ) : null}
+          </div>
+        </SettingCard>
+      ))}
+
+      <Button size="sm" variant="outline" className="w-full" onClick={addTarget}>
+        <IconPlus className="mr-2 h-4 w-4" />
+        Add target
+      </Button>
+
+      <SettingCard icon={IconShieldCheck} title="Assertions" subtitle="Optional pass/fail checks evaluated in the run report">
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">Routed to queue</Label>
+            <Input className="mt-1" value={draft.assert_queue} onChange={(e) => update({ assert_queue: e.target.value })} placeholder="queue name" />
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-xs">Answer ≤ (s)</Label>
+              <Input className="mt-1" type="number" min={1} max={600} value={draft.assert_answer_within} onChange={(e) => update({ assert_answer_within: e.target.value })} placeholder="20" />
+            </div>
+            <div>
+              <Label className="text-xs">Abandon ≤ (%)</Label>
+              <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_max_abandon} onChange={(e) => update({ assert_max_abandon: e.target.value })} placeholder="5" />
+            </div>
+            <div>
+              <Label className="text-xs">Answer ≥ (%)</Label>
+              <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_min_answer} onChange={(e) => update({ assert_min_answer: e.target.value })} placeholder="80" />
+            </div>
+          </div>
+        </div>
+      </SettingCard>
+
+      <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="cg-save-scenario">
+        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
+        {editing ? "Save scenario" : "Create scenario"}
+      </Button>
+      {!valid ? (
+        <p className="text-xs text-amber-600 dark:text-amber-300">
+          Required: scenario name and at least one target with a Target Flow, at least 1 call, and at least one From number.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function ActionsListView({ actions, selectedActionId, setSelectedActionId, deleteAction }) {
+  if (!actions.length) {
+    return <Empty title="No actions yet" description="Use New action in the header to define a post-answer sequence: play media, speak text, or send DTMF." />;
+  }
+  return (
+    <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold">Action sequences</h3>
+          <p className="text-sm text-muted-foreground">Sequences executed on answered generated calls. Attach them to scenario targets.</p>
+        </div>
+        <Badge variant="outline" className="bg-card">{actions.length} total</Badge>
+      </div>
+      <div className="mt-5 space-y-2">
+        {actions.map((a) => {
+          const steps = Array.isArray(a.steps) ? a.steps : [];
+          const selected = selectedActionId === a.id;
+          return (
+            <div
+              key={a.id}
+              onClick={() => setSelectedActionId(a.id)}
+              className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition hover:bg-muted/40 ${selected ? "bg-sky-500/10 border-sky-500/40" : ""}`}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{a.name}</span>
+                  <Badge variant="outline" className="bg-card text-xs">{steps.length} steps</Badge>
+                </div>
+                <div className="mt-1 truncate text-xs text-muted-foreground">
+                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Delete" onClick={(e) => { e.stopPropagation(); deleteAction(a); }}>
+                <IconTrash className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) {
+  const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const updateStep = (index, patch) => setDraft((d) => ({ ...d, steps: d.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
+  const removeStep = (index) => setDraft((d) => ({ ...d, steps: d.steps.filter((_, i) => i !== index) }));
+  const moveStep = (index, delta) => setDraft((d) => {
+    const next = [...d.steps];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return d;
+    [next[index], next[target]] = [next[target], next[index]];
+    return { ...d, steps: next };
+  });
+  const addStep = (type) => setDraft((d) => ({
+    ...d,
+    steps: [...d.steps, type === "play_media" ? { type, media_name: "" } : type === "speak" ? { type, text: "", voice: "AWS.Polly.Joanna" } : { type, digits: "" }],
+  }));
+
+  return (
+    <>
+      <SettingCard icon={IconListDetails} title={editing ? "Edit action" : "New action"} subtitle="Sequential steps executed after answer">
+        <div className="space-y-3">
+          <div>
+            <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+            <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Action name" />
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+          </div>
+        </div>
+      </SettingCard>
+
+      {draft.steps.map((step, index) => (
+        <SettingCard
+          key={index}
+          icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : IconActivity}
+          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : "Send DTMF"}`}
+          subtitle="Executed in order"
+        >
+          <div className="space-y-3">
+            {step.type === "play_media" ? (
+              <div>
+                <Label>Media file<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Select value={step.media_name || ""} onValueChange={(v) => updateStep(index, { media_name: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
+                  <SelectContent>
+                    {media.map((m) => <SelectItem key={m.media_name} value={m.media_name}>{m.media_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : step.type === "speak" ? (
+              <>
+                <div>
+                  <Label>Text to speak<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                  <Textarea className="mt-1" rows={3} value={step.text || ""} onChange={(e) => updateStep(index, { text: e.target.value })} placeholder="This is a test call" />
+                </div>
+                <div>
+                  <Label>Voice</Label>
+                  <div className="mt-1">
+                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div>
+                <Label>DTMF digits<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Input className="mt-1 font-mono" value={step.digits || ""} onChange={(e) => updateStep(index, { digits: e.target.value })} placeholder="3467 or 1w2w3#" />
+                <p className="mt-1 text-xs text-muted-foreground">Allowed: 0-9 A-D # * and w (0.5s pause).</p>
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" disabled={index === 0} onClick={() => moveStep(index, -1)}>
+                <IconArrowUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move down" disabled={index === draft.steps.length - 1} onClick={() => moveStep(index, 1)}>
+                <IconArrowDown className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title="Remove step" onClick={() => removeStep(index)}>
+                <IconTrash className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </SettingCard>
+      ))}
+
+      <div className="grid grid-cols-3 gap-2">
+        <Button size="sm" variant="outline" onClick={() => addStep("play_media")}>
+          <IconMusic className="mr-1 h-3.5 w-3.5" />
+          Media
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => addStep("speak")}>
+          <IconSpeakerphone className="mr-1 h-3.5 w-3.5" />
+          Speak
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => addStep("send_dtmf")}>
+          <IconActivity className="mr-1 h-3.5 w-3.5" />
+          DTMF
+        </Button>
+      </div>
+
+      <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="cg-save-action">
+        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
+        {editing ? "Save action" : "Create action"}
+      </Button>
+      {!valid ? <p className="text-xs text-amber-600 dark:text-amber-300">Required: action name and at least one step.</p> : null}
+    </>
+  );
+}
+
+function SettingsSummaryView({ settings }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
+        <h3 className="text-lg font-semibold">Call generator settings</h3>
+        <p className="text-sm text-muted-foreground">Global generator defaults. Edit and persist these from Context Settings on the right.</p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <MiniStat label="Status" value={settings.enabled ? "Enabled" : "Disabled"} />
+        <MiniStat label="Max concurrent calls" value={settings.max_concurrent_calls ?? 10} />
+        <MiniStat label="Max CPS" value={settings.max_cps ?? 2} />
+        <MiniStat label="Dial timeout (sec)" value={settings.dial_timeout_secs ?? 30} />
+        <MiniStat label="Max call duration (sec)" value={settings.max_call_duration_secs ?? 120} />
+        <MiniStat label="From numbers" value={(settings.from_numbers || []).length} />
+      </div>
+      <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
+        <h4 className="text-sm font-semibold">Enabled From Numbers</h4>
+        {(settings.from_numbers || []).length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {settings.from_numbers.map((n) => <Badge key={n} variant="outline" className="font-mono">{n}</Badge>)}
+          </div>
+        ) : <p className="mt-2 text-sm text-muted-foreground">No numbers enabled yet — select them in Context Settings.</p>}
+      </div>
+      <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
+        <h4 className="text-sm font-semibold">PSTN whitelist</h4>
+        {(settings.pstn_whitelist || []).length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {settings.pstn_whitelist.map((n) => <Badge key={n} variant="outline" className="font-mono">{n}</Badge>)}
+          </div>
+        ) : <p className="mt-2 text-sm text-muted-foreground">Empty — generated PSTN calls are fully blocked.</p>}
+      </div>
+    </div>
+  );
+}
+
+function SettingsEditor({ draft, setDraft, saving, save, inventoryNumbers }) {
+  const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const fromNumberOptions = inventoryNumbers.map((item) => ({
+    value: item.phone_number,
+    label: item.connection_name
+      ? `${item.phone_number} · ${String(item.connection_name).slice(0, 24)}${String(item.connection_name).length > 24 ? "…" : ""}`
+      : item.phone_number,
+  }));
+
+  return (
+    <>
+      <SettingCard icon={IconSettings} title="Generator" subtitle="Master switch and pacing caps">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 p-3">
+            <div>
+              <div className="text-sm font-medium">Enable Call Generator</div>
+              <div className="text-xs text-muted-foreground">Server flag CALL_GENERATOR=true is also required.</div>
+            </div>
+            <Switch checked={draft.enabled === true} onCheckedChange={(checked) => update({ enabled: checked === true })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Max concurrent</Label>
+              <Input className="mt-1" type="number" min={1} max={100} value={draft.max_concurrent_calls} onChange={(e) => update({ max_concurrent_calls: Number(e.target.value) || 1 })} />
+            </div>
+            <div>
+              <Label>Max CPS</Label>
+              <Input className="mt-1" type="number" min={1} max={20} value={draft.max_cps} onChange={(e) => update({ max_cps: Number(e.target.value) || 1 })} />
+            </div>
+            <div>
+              <Label>Dial timeout (sec)</Label>
+              <Input className="mt-1" type="number" min={10} max={120} value={draft.dial_timeout_secs} onChange={(e) => update({ dial_timeout_secs: Number(e.target.value) || 30 })} />
+            </div>
+            <div>
+              <Label>Max duration (sec)</Label>
+              <Input className="mt-1" type="number" min={10} max={3600} value={draft.max_call_duration_secs} onChange={(e) => update({ max_call_duration_secs: Number(e.target.value) || 120 })} />
+            </div>
+          </div>
+        </div>
+      </SettingCard>
+
+      <SettingCard icon={IconPhoneCall} title="From Numbers" subtitle="Telnyx inventory numbers usable as caller IDs">
+        <MultiSelect
+          values={Array.isArray(draft.from_numbers) ? draft.from_numbers : []}
+          options={fromNumberOptions}
+          emptyLabel="No active numbers found in the Telnyx inventory."
+          onChange={(values) => update({ from_numbers: values })}
+        />
+      </SettingCard>
+
+      <SettingCard icon={IconShieldCheck} title="PSTN Safety" subtitle="Whitelist for generated PSTN destinations">
+        <Label>One E.164 number per line</Label>
+        <Textarea
+          className="mt-2 font-mono text-xs"
+          rows={4}
+          placeholder={"+48123456789\n+12025550100"}
+          value={(draft.pstn_whitelist || []).join("\n")}
+          onChange={(e) => update({ pstn_whitelist: e.target.value.split("\n").map((n) => n.trim()).filter(Boolean) })}
+        />
+      </SettingCard>
+
+      <Button className="w-full" onClick={save} disabled={saving} data-testid="cg-save-settings">
+        {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
+        Save settings
+      </Button>
+    </>
   );
 }

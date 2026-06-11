@@ -72,22 +72,21 @@ describe("call generator runner (T3)", () => {
     assert.match(code, /ON CONFLICT \(id\) DO UPDATE/);
   });
 
-  it("settings view renders From Numbers multiselect from inventory", async () => {
-    const code = await readFile(new URL("../components/contact-center/CallGeneratorSettingsView.jsx", import.meta.url), "utf8");
+  it("settings editor renders From Numbers multiselect from inventory", async () => {
+    const code = await readFile(new URL("../app/(portal)/admin/call-generator/page.jsx", import.meta.url), "utf8");
     assert.match(code, /MultiSelect/);
     assert.match(code, /inventoryNumbers/);
     assert.match(code, /from_numbers/);
-    assert.match(code, /Max concurrent calls/);
-    assert.match(code, /Max CPS/);
-    assert.match(code, /PSTN whitelist/);
+    assert.match(code, /Max concurrent/i);
+    assert.match(code, /Max CPS/i);
+    assert.match(code, /PSTN/i);
   });
 
-  it("scenario editor offers per-scenario from-number multiselect limited to settings", async () => {
-    const code = await readFile(new URL("../components/contact-center/CallGeneratorScenariosView.jsx", import.meta.url), "utf8");
-    assert.match(code, /FromNumbersMultiSelect/);
+  it("scenario editor offers per-target from-number multiselect limited to settings", async () => {
+    const code = await readFile(new URL("../app/(portal)/admin/call-generator/page.jsx", import.meta.url), "utf8");
+    assert.match(code, /allowedFromNumbers/);
     assert.match(code, /from_numbers/);
-    assert.match(code, /SETTINGS_API/);
-    assert.match(code, /target_type/);
+    assert.match(code, /Target Flow/);
     assert.match(code, /total_calls/);
   });
 

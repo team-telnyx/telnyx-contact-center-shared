@@ -13,6 +13,7 @@ describe("call generator code completeness", () => {
     assert.match(code, /cg_scenarios\s*\(/);
     assert.match(code, /cg_runs\s*\(/);
     assert.match(code, /cg_call_ledger\s*\(/);
+    assert.match(code, /cg_actions\s*\(/);
   });
 
   it("menu includes Call Generator under ADMIN", async () => {
@@ -21,14 +22,17 @@ describe("call generator code completeness", () => {
     assert.match(code, /\/admin\/call-generator/);
   });
 
-  it("page shell uses SectionRail with dashboard/scenarios/settings", async () => {
+  it("page shell uses SectionRail with dashboard/scenarios/actions/settings and a 3-column grid", async () => {
     const code = await srcFile("app/(portal)/admin/call-generator/page.jsx");
     assert.match(code, /SectionRail/);
     assert.match(code, /dashboard/);
     assert.match(code, /scenarios/);
+    assert.match(code, /actions/);
     assert.match(code, /settings/);
     assert.match(code, /AdminPageShell/);
     assert.match(code, /AdminPageHeader/);
+    assert.match(code, /380px/);
+    assert.match(code, /Context settings/);
   });
 
   it("dashboard view fetches /api/admin/call-generator/runs", async () => {
@@ -36,17 +40,18 @@ describe("call generator code completeness", () => {
     assert.match(code, /\/api\/admin\/call-generator\/runs/);
   });
 
-  it("scenarios view supports create, update, delete, start run", async () => {
-    const code = await srcFile("components/contact-center/CallGeneratorScenariosView.jsx");
-    assert.match(code, /\/api\/admin\/call-generator\/scenarios/);
-    assert.match(code, /POST/);
-    assert.match(code, /PUT/);
-    assert.match(code, /DELETE/);
-    assert.match(code, /\/api\/admin\/call-generator\/runs/);
+  it("scenarios are managed on the page with create, update, delete, start run", async () => {
+    const code = await srcFile("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(code, /\/api\/admin\/call-generator/);
+    assert.match(code, /\$\{API\}\/scenarios/);
+    assert.match(code, /"POST"/);
+    assert.match(code, /"PUT"/);
+    assert.match(code, /"DELETE"/);
+    assert.match(code, /\$\{API\}\/runs/);
   });
 
-  it("settings view renders toggle and numeric inputs", async () => {
-    const code = await srcFile("components/contact-center/CallGeneratorSettingsView.jsx");
+  it("settings editor renders toggle and numeric inputs in the context panel", async () => {
+    const code = await srcFile("app/(portal)/admin/call-generator/page.jsx");
     assert.match(code, /Switch/);
     assert.match(code, /Max concurrent|concurrent/i);
     assert.match(code, /CPS/i);

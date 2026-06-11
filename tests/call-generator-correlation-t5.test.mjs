@@ -123,7 +123,7 @@ describe("call generator correlation (T5)", () => {
   });
 
   it("scenario editor captures assertion fields into config.assertions", async () => {
-    const code = await readFile(new URL("../components/contact-center/CallGeneratorScenariosView.jsx", import.meta.url), "utf8");
+    const code = await readFile(new URL("../app/(portal)/admin/call-generator/page.jsx", import.meta.url), "utf8");
     assert.match(code, /assertionsFromDraft/);
     assert.match(code, /routed_to_queue/);
     assert.match(code, /answer_within_secs/);
