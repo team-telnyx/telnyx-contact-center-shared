@@ -61,4 +61,41 @@ describe("call generator live dashboard (T4)", () => {
     assert.match(code, /to_number/);
     assert.match(code, /from_number/);
   });
+
+  it("dashboard offers per-call Disconnect icons and a Disconnect all button", async () => {
+    const code = await src("components/contact-center/CallGeneratorDashboardView.jsx");
+    assert.match(code, /Disconnect all/);
+    assert.match(code, /cg-disconnect-all/);
+    assert.match(code, /cg-disconnect-call/);
+    assert.match(code, /IconPhoneOff/);
+    // per-call icon only renders for active calls
+    assert.match(code, /\["dialing", "ringing", "answered", "talking"\]\.includes\(call\.status\)/);
+    // bulk action requires confirmation and is disabled with no active calls
+    assert.match(code, /window\.confirm\(`Disconnect ALL/);
+    assert.match(code, /totals\.activeCalls === 0/);
+    assert.match(code, /\/api\/admin\/call-generator\/calls/);
+  });
+
+  it("calls API exposes single disconnect and disconnect_all endpoints", async () => {
+    const itemCode = await src("app/api/admin/call-generator/calls/[id]/route.js");
+    assert.match(itemCode, /export async function PATCH/);
+    assert.match(itemCode, /disconnectGeneratedCall/);
+    assert.match(itemCode, /const \{ id \} = await params/);
+    assert.match(itemCode, /requireAdmin/);
+    const listCode = await src("app/api/admin/call-generator/calls/route.js");
+    assert.match(listCode, /export async function POST/);
+    assert.match(listCode, /disconnect_all/);
+    assert.match(listCode, /disconnectActiveCalls/);
+    assert.match(listCode, /requireAdmin/);
+  });
+
+  it("engine disconnect helpers hang up gracefully without force-failing ledger rows", async () => {
+    const code = await src("lib/call-generator/engine.mjs");
+    assert.match(code, /export async function disconnectGeneratedCall/);
+    assert.match(code, /export async function disconnectActiveCalls/);
+    assert.match(code, /manual_disconnect/);
+    // unlike panicStop, disconnect must not mark rows failed — the webhook finalizes
+    const disconnectSection = code.slice(code.indexOf("disconnectGeneratedCall"));
+    assert.doesNotMatch(disconnectSection, /markLedgerStatus\(pool, (row\.id|ledgerId), "failed"/);
+  });
 });

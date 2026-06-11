@@ -77,6 +77,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
   const [actionBusy, setActionBusy] = useState(null);
   const [report, setReport] = useState(null);
   const [reportBusy, setReportBusy] = useState(null);
+  const [disconnectBusy, setDisconnectBusy] = useState(null);
   const sourceRef = useRef(null);
 
   useEffect(() => {
@@ -142,6 +143,47 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       notify({ title: "Report failed", description: err.message, variant: "error" });
     } finally {
       setReportBusy(null);
+    }
+  }
+
+  async function disconnectCall(call) {
+    setDisconnectBusy(call.id);
+    try {
+      const res = await fetch(`/api/admin/call-generator/calls/${call.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Disconnect failed");
+      }
+      notify({ title: "Call disconnected", description: call.to_number || call.id, variant: "success" });
+    } catch (err) {
+      notify({ title: "Disconnect failed", description: err.message, variant: "error" });
+    } finally {
+      setDisconnectBusy(null);
+    }
+  }
+
+  async function disconnectAllCalls() {
+    setDisconnectBusy("all");
+    try {
+      const res = await fetch("/api/admin/call-generator/calls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "disconnect_all" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Disconnect all failed");
+      }
+      const data = await res.json();
+      notify({ title: "Calls disconnected", description: `${data.disconnected ?? 0} active calls were hung up.`, variant: "success" });
+    } catch (err) {
+      notify({ title: "Disconnect all failed", description: err.message, variant: "error" });
+    } finally {
+      setDisconnectBusy(null);
     }
   }
 
@@ -298,7 +340,20 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       ) : null}
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
-        <h4 className="text-sm font-semibold">Recent calls</h4>
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold">Recent calls</h4>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-rose-500/35 text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
+            disabled={disconnectBusy === "all" || totals.activeCalls === 0}
+            onClick={() => { if (window.confirm(`Disconnect ALL ${totals.activeCalls} active generated calls?`)) disconnectAllCalls(); }}
+            data-testid="cg-disconnect-all"
+          >
+            {disconnectBusy === "all" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneOff className="mr-1 h-3.5 w-3.5" />}
+            Disconnect all
+          </Button>
+        </div>
         {recentCalls.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">No generated calls in the last 15 minutes.</p>
         ) : (
@@ -313,24 +368,43 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                   <TableHead>Answered</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Result</TableHead>
+                  <TableHead className="text-right">Disconnect</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentCalls.map((call) => (
-                  <TableRow key={call.id}>
-                    <TableCell className="font-mono text-xs">{call.to_number || "—"}</TableCell>
-                    <TableCell className="font-mono text-xs">{call.from_number || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={statusBadgeClass(call.status)}>{call.status}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatTime(call.started_at)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatTime(call.answered_at)}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{formatDuration(call.duration_ms)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {call.result?.reason || call.result?.hangup_cause || "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {recentCalls.map((call) => {
+                  const isActive = ["dialing", "ringing", "answered", "talking"].includes(call.status);
+                  return (
+                    <TableRow key={call.id}>
+                      <TableCell className="font-mono text-xs">{call.to_number || "—"}</TableCell>
+                      <TableCell className="font-mono text-xs">{call.from_number || "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(call.status)}>{call.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatTime(call.started_at)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatTime(call.answered_at)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">{formatDuration(call.duration_ms)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {call.result?.reason || call.result?.hangup_cause || "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isActive ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 rounded-full text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
+                            title="Disconnect call"
+                            disabled={disconnectBusy === call.id}
+                            onClick={() => disconnectCall(call)}
+                            data-testid="cg-disconnect-call"
+                          >
+                            {disconnectBusy === call.id ? <IconLoader2 className="h-3.5 w-3.5 animate-spin" /> : <IconPhoneOff className="h-3.5 w-3.5" />}
+                          </Button>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
