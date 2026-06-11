@@ -22,7 +22,7 @@ async function requireAdmin() {
 }
 
 const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username,
-  admin_password, settings, provisioning_state, last_seen_at, last_user_agent, created_at, updated_at`;
+  admin_password, settings, provisioning_state, ip_address, last_ip, last_seen_at, last_user_agent, created_at, updated_at`;
 
 export async function GET(_request, { params }) {
   const user = await requireAdmin();
@@ -63,6 +63,7 @@ export async function PUT(request, { params }) {
     if (body.label !== undefined) { columns.push(`label = $${idx++}`); values.push(String(body.label || "").trim() || null); }
     if (body.agent_id !== undefined) { columns.push(`agent_id = $${idx++}`); values.push(String(body.agent_id || "").trim() || null); }
     if (body.admin_password !== undefined) { columns.push(`admin_password = $${idx++}`); values.push(String(body.admin_password || "").trim() || null); }
+    if (body.ip_address !== undefined) { columns.push(`ip_address = $${idx++}`); values.push(String(body.ip_address || "").trim() || null); }
     if (body.settings !== undefined) { columns.push(`settings = $${idx++}`); values.push(JSON.stringify(body.settings && typeof body.settings === "object" ? body.settings : {})); }
     if (body.provisioning_state !== undefined) {
       const state = String(body.provisioning_state || "");

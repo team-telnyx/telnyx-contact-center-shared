@@ -133,7 +133,7 @@ function Empty({ title, description }) {
   );
 }
 
-const emptyPhoneDraft = () => ({ mac: "", vendor: "polycom", model: "", label: "", admin_password: "" });
+const emptyPhoneDraft = () => ({ mac: "", vendor: "polycom", model: "", label: "", admin_password: "", ip_address: "" });
 
 function phoneDraftValid(draft) {
   const mac = String(draft.mac || "").toLowerCase().replace(/[^0-9a-f]/g, "");
@@ -201,6 +201,7 @@ export default function PhonesProvisioningPage() {
         model: selectedPhone.model || "",
         label: selectedPhone.label || "",
         admin_password: selectedPhone.admin_password || "",
+        ip_address: selectedPhone.ip_address || "",
       });
     } else {
       setPhoneDraft(emptyPhoneDraft());
@@ -219,6 +220,7 @@ export default function PhonesProvisioningPage() {
         model: phoneDraft.model.trim(),
         label: phoneDraft.label.trim(),
         admin_password: phoneDraft.admin_password.trim(),
+        ip_address: phoneDraft.ip_address.trim(),
       };
       const url = selectedPhone ? `${API}/phones/${selectedPhone.id}` : `${API}/phones`;
       const res = await fetch(url, {
@@ -516,6 +518,11 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
             <Input className="mt-1 font-mono" value={draft.admin_password} onChange={(e) => update({ admin_password: e.target.value })} placeholder="Generated automatically when empty" />
             <p className="mt-1 text-xs text-muted-foreground">Replaces the factory default (456 / admin / 1234) during provisioning.</p>
           </div>
+          <div>
+            <Label>Phone IP address</Label>
+            <Input className="mt-1 font-mono" value={draft.ip_address} onChange={(e) => update({ ip_address: e.target.value })} placeholder="Auto-detected from provisioning when empty" />
+            <p className="mt-1 text-xs text-muted-foreground">Used for CTI control (Polycom REST / Yealink Action URI). Leave empty to use the last provisioning IP.</p>
+          </div>
         </div>
       </SettingCard>
 
@@ -546,6 +553,8 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
         </SettingCard>
       ) : null}
 
+      {editing && phone ? <PhoneCtiCard phone={phone} /> : null}
+
       <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="hp-save-phone">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
         {editing ? "Save phone" : "Add phone"}
@@ -557,6 +566,84 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
         <p className="text-xs text-muted-foreground">Saving creates a dedicated Telnyx telephony credential for this phone automatically.</p>
       ) : null}
     </>
+  );
+}
+
+// CTI control card — drives the phone through the vendor driver (Polycom
+// REST, Yealink Action URI, Telnyx fallback for AudioCodes/NAT-ed phones).
+function PhoneCtiCard({ phone }) {
+  const [busy, setBusy] = useState(null);
+  const [dialNumber, setDialNumber] = useState("");
+  const [lastStatus, setLastStatus] = useState(null);
+
+  const ctiMode = phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
+  const reachableIp = phone.ip_address || phone.last_ip;
+
+  async function runCti(action, params = {}) {
+    setBusy(action);
+    try {
+      const res = await fetch(`${API}/phones/${phone.id}/cti`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...params }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `${action} failed`);
+      if (action === "status") setLastStatus(data.result || null);
+      notify({ title: `CTI: ${action}`, description: action === "dial" ? params.number : "OK", variant: "success" });
+    } catch (err) {
+      notify({ title: `CTI ${action} failed`, description: err.message, variant: "error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const ctlBtn = (action, label, params = {}) => (
+    <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => runCti(action, params)} data-testid={`hp-cti-${action}`}>
+      {busy === action ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+      {label}
+    </Button>
+  );
+
+  return (
+    <SettingCard icon={IconActivity} title="CTI control" subtitle={`Driver: ${ctiMode}`}>
+      <div className="space-y-3">
+        {!reachableIp && phone.vendor !== "audiocodes" ? (
+          <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            No known phone IP yet — set it above or wait for the phone to fetch its config.
+          </p>
+        ) : null}
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <Input className="font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" />
+          </div>
+          <Button size="sm" disabled={Boolean(busy) || !dialNumber.trim()} onClick={() => runCti("dial", { number: dialNumber.trim() })} data-testid="hp-cti-dial">
+            {busy === "dial" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneCall className="mr-1 h-3.5 w-3.5" />}
+            Dial
+          </Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {ctlBtn("answer", "Answer")}
+          {ctlBtn("hold", "Hold")}
+          {ctlBtn("resume", "Resume")}
+          {ctlBtn("mute", "Mute")}
+          {ctlBtn("unmute", "Unmute")}
+          {ctlBtn("hangup", "Hang up")}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {ctlBtn("status", "Check status")}
+          {ctlBtn("reprovision", "Re-provision")}
+        </div>
+        {lastStatus ? (
+          <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+            <div>Reachable: <span className="font-medium">{lastStatus.result?.reachable === null ? "n/a" : String(lastStatus.result?.reachable ?? lastStatus.reachable ?? "unknown")}</span></div>
+            {lastStatus.result?.call || lastStatus.call ? (
+              <div className="mt-1 truncate font-mono">{JSON.stringify(lastStatus.result?.call || lastStatus.call).slice(0, 160)}</div>
+            ) : <div className="mt-1 text-muted-foreground">No active call</div>}
+          </div>
+        ) : null}
+      </div>
+    </SettingCard>
   );
 }
 

@@ -29,6 +29,12 @@ function resolveBaseUrl(request) {
   }
 }
 
+function requestIp(request) {
+  const fwd = request.headers.get("x-forwarded-for") || "";
+  const ip = fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || "";
+  return ip || null;
+}
+
 async function logEvent(pool, { phoneId = null, mac = null, eventType, detail = {} }) {
   try {
     await pool.query(
@@ -99,10 +105,10 @@ export async function GET(request, { params }) {
   }
 
   await pool.query(
-    `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2,
+    `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2, last_ip = COALESCE($3, last_ip),
        provisioning_state = CASE WHEN provisioning_state = 'pending' THEN 'provisioned' ELSE provisioning_state END
      WHERE id = $1`,
-    [phone.id, userAgent.slice(0, 300) || null],
+    [phone.id, userAgent.slice(0, 300) || null, requestIp(request)],
   );
   await logEvent(pool, {
     phoneId: phone.id,

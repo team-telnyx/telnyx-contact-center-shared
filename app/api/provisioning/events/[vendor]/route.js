@@ -25,7 +25,9 @@ async function handleEvent(request, vendor) {
   const phoneId = rows[0]?.id || null;
   if (!phoneId) return NextResponse.json({ error: "Phone not found" }, { status: 404 });
 
-  await pool.query(`UPDATE hp_phones SET last_seen_at = NOW() WHERE id = $1`, [phoneId]);
+  const fwd = request.headers.get("x-forwarded-for") || "";
+  const ip = fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
+  await pool.query(`UPDATE hp_phones SET last_seen_at = NOW(), last_ip = COALESCE($2, last_ip) WHERE id = $1`, [phoneId, ip]);
   try {
     await pool.query(
       `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,

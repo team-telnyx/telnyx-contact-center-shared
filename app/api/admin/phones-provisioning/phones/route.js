@@ -23,7 +23,7 @@ async function requireAdmin() {
 }
 
 const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username,
-  admin_password, settings, provisioning_state, last_seen_at, last_user_agent, created_at, updated_at`;
+  admin_password, settings, provisioning_state, ip_address, last_ip, last_seen_at, last_user_agent, created_at, updated_at`;
 
 export async function GET() {
   const user = await requireAdmin();
@@ -76,8 +76,8 @@ export async function POST(request) {
       await client.query("BEGIN");
       const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
       const { rows } = await client.query(
-        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, provisioning_state, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, ip_address, provisioning_state, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)
          RETURNING ${PHONE_COLUMNS}`,
         [
           mac,
@@ -90,6 +90,7 @@ export async function POST(request) {
           credential.sip_password,
           adminPassword,
           JSON.stringify(body?.settings && typeof body.settings === "object" ? body.settings : {}),
+          String(body?.ip_address || "").trim() || null,
           user.id || user.email || null,
         ],
       );
