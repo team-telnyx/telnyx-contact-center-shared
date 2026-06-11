@@ -6,35 +6,125 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { notify } from "@/components/ToastNotify";
 import {
+  IconCheck,
+  IconChevronDown,
+  IconEdit,
   IconPlayerPlay,
   IconPlus,
   IconTrash,
-  IconEdit,
 } from "@tabler/icons-react";
 
 const API = "/api/admin/call-generator/scenarios";
+const SETTINGS_API = "/api/admin/call-generator/settings";
+
+const TARGET_TYPES = [
+  { value: "call_flow", label: "Call Flow (SIP)" },
+  { value: "sip", label: "SIP URI" },
+  { value: "pstn", label: "PSTN number" },
+];
+
+function FromNumbersMultiSelect({ values = [], options = [], onChange = () => {} }) {
+  const [open, setOpen] = useState(false);
+  const normalized = options.map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  const selected = normalized.filter((o) => values.includes(o.value));
+  const toggle = (value) => onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+  return (
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button type="button" variant="outline" className="w-full justify-between">
+            <span className="truncate">{selected.length ? `${selected.length} selected` : "Select from numbers"}</span>
+            <IconChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-2">
+          <div className="max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-1">
+              {normalized.length ? (
+                normalized.map((o) => {
+                  const checked = values.includes(o.value);
+                  return (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => toggle(o.value)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition hover:bg-muted"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${checked ? "border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/20" : "border-muted-foreground/35 bg-background text-transparent"}`}
+                        aria-hidden="true"
+                      >
+                        {checked ? <IconCheck className="h-3.5 w-3.5 stroke-[3] text-white" /> : null}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{o.label}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-md border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                  No numbers enabled. Pick From Numbers in Settings first.
+                </div>
+              )}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+      {selected.length ? (
+        <div className="flex flex-wrap gap-1">
+          {selected.map((o) => (
+            <Badge key={o.value} variant="outline" className="font-normal">{o.label}</Badge>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No from numbers selected — the run will fail validation.</p>
+      )}
+    </div>
+  );
+}
+
+const emptyDraft = () => ({
+  name: "",
+  description: "",
+  target_type: "call_flow",
+  target: "",
+  total_calls: 5,
+  from_numbers: [],
+});
 
 export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const [draft, setDraft] = useState(emptyDraft());
+  const [allowedFromNumbers, setAllowedFromNumbers] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(API);
-        if (!res.ok) throw new Error("Failed to load scenarios");
-        const data = await res.json();
-        if (!cancelled) setItems(data.scenarios || []);
+        const [scenarioRes, settingsRes] = await Promise.all([
+          fetch(API),
+          fetch(SETTINGS_API).catch(() => null),
+        ]);
+        if (!scenarioRes.ok) throw new Error("Failed to load scenarios");
+        const data = await scenarioRes.json();
+        let fromNumbers = [];
+        if (settingsRes?.ok) {
+          const settingsData = await settingsRes.json();
+          fromNumbers = Array.isArray(settingsData?.settings?.from_numbers) ? settingsData.settings.from_numbers : [];
+        }
+        if (!cancelled) {
+          setItems(data.scenarios || []);
+          setAllowedFromNumbers(fromNumbers);
+        }
       } catch {
         if (!cancelled) setItems([]);
       } finally {
@@ -45,15 +135,27 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
     return () => { cancelled = true; };
   }, [refreshNonce]);
 
+  const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+
   async function save() {
-    const payload = {
-      name: name.trim(),
-      description: description.trim(),
-    };
-    if (!payload.name) {
-      notify("Name is required", "error");
+    if (!draft.name.trim()) {
+      notify({ title: "Name is required", description: "Give the scenario a name before saving.", variant: "warning" });
       return;
     }
+    if (!draft.target.trim()) {
+      notify({ title: "Target is required", description: "Provide a call flow ID, SIP URI, or PSTN number.", variant: "warning" });
+      return;
+    }
+    const payload = {
+      name: draft.name.trim(),
+      description: draft.description.trim(),
+      config: {
+        target_type: draft.target_type,
+        target: draft.target.trim(),
+        total_calls: Math.max(1, Math.min(1000, Number(draft.total_calls) || 1)),
+        from_numbers: Array.isArray(draft.from_numbers) ? draft.from_numbers : [],
+      },
+    };
     try {
       const url = editing ? `${API}/${editing.id}` : API;
       const method = editing ? "PUT" : "POST";
@@ -62,18 +164,18 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(await res.text());
-      notify(editing ? "Scenario updated" : "Scenario created", "success");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Save failed");
+      }
+      const data = await res.json();
+      notify({ title: editing ? "Scenario updated" : "Scenario created", description: payload.name, variant: "success" });
       setFormOpen(false);
       setEditing(null);
-      setName("");
-      setDescription("");
-      const data = await res.json();
-      setItems((prev) => (editing
-        ? prev.map((i) => (i.id === editing.id ? data.scenario : i))
-        : [data.scenario, ...prev]));
+      setDraft(emptyDraft());
+      setItems((prev) => (editing ? prev.map((i) => (i.id === editing.id ? data.scenario : i)) : [data.scenario, ...prev]));
     } catch (err) {
-      notify(err.message || "Save failed", "error");
+      notify({ title: "Save failed", description: err.message, variant: "error" });
     }
   }
 
@@ -82,40 +184,55 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
     try {
       const res = await fetch(`${API}/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      notify("Scenario deleted", "success");
+      notify({ title: "Scenario deleted", variant: "success" });
       setItems((prev) => prev.filter((i) => i.id !== id));
     } catch (err) {
-      notify(err.message || "Delete failed", "error");
+      notify({ title: "Delete failed", description: err.message, variant: "error" });
     }
   }
 
-  async function startRun(id) {
+  async function startRun(item) {
+    const fromNumbers = item?.config?.from_numbers || [];
+    if (!fromNumbers.length) {
+      notify({ title: "No from numbers", description: "Edit the scenario and select at least one From number.", variant: "warning" });
+      return;
+    }
     try {
       const res = await fetch("/api/admin/call-generator/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario_id: id }),
+        body: JSON.stringify({ scenario_id: item.id }),
       });
-      if (!res.ok) throw new Error("Failed to start run");
-      notify("Run started", "success");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to start run");
+      }
+      notify({ title: "Run started", description: item.name, variant: "success" });
     } catch (err) {
-      notify(err.message || "Run failed", "error");
+      notify({ title: "Run failed", description: err.message, variant: "error" });
     }
   }
 
   function openNew() {
     setEditing(null);
-    setName("");
-    setDescription("");
+    setDraft(emptyDraft());
     setFormOpen(true);
   }
 
   function openEdit(item) {
     setEditing(item);
-    setName(item.name);
-    setDescription(item.description || "");
+    setDraft({
+      name: item.name || "",
+      description: item.description || "",
+      target_type: item.config?.target_type || "call_flow",
+      target: item.config?.target || "",
+      total_calls: item.config?.total_calls || 5,
+      from_numbers: Array.isArray(item.config?.from_numbers) ? item.config.from_numbers : [],
+    });
     setFormOpen(true);
   }
+
+  const fromNumberOptions = allowedFromNumbers.map((n) => ({ value: n, label: n }));
 
   return (
     <div className="space-y-4">
@@ -150,14 +267,21 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
                     }>
                       {item.status || "draft"}
                     </Badge>
+                    {item.config?.target_type ? (
+                      <Badge variant="outline" className="border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                        {TARGET_TYPES.find((t) => t.value === item.config.target_type)?.label || item.config.target_type}
+                      </Badge>
+                    ) : null}
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">{item.description || "No description"}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {item.config?.target ? `${item.config.target} · ${item.config?.total_calls || 0} calls · ${(item.config?.from_numbers || []).length} from numbers` : item.description || "No configuration"}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button size="icon" variant="ghost" onClick={() => openEdit(item)} title="Edit">
                     <IconEdit className="h-4 w-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" onClick={() => startRun(item.id)} title="Start run">
+                  <Button size="icon" variant="ghost" onClick={() => startRun(item)} title="Start run">
                     <IconPlayerPlay className="h-4 w-4" />
                   </Button>
                   <Button size="icon" variant="ghost" onClick={() => remove(item.id)} title="Delete">
@@ -174,17 +298,48 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
         <div className="rounded-2xl border bg-card p-5 shadow-sm">
           <h4 className="text-sm font-semibold">{editing ? "Edit scenario" : "New scenario"}</h4>
           <div className="mt-4 space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>Name</Label>
+                <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Scenario name" />
+              </div>
+              <div>
+                <Label>Total calls</Label>
+                <Input className="mt-1" type="number" min={1} max={1000} value={draft.total_calls} onChange={(e) => update({ total_calls: Number(e.target.value) || 1 })} />
+              </div>
+              <div>
+                <Label>Target type</Label>
+                <Select value={draft.target_type} onValueChange={(v) => update({ target_type: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TARGET_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>{draft.target_type === "call_flow" ? "Call flow ID" : draft.target_type === "sip" ? "SIP URI" : "PSTN number (E.164)"}</Label>
+                <Input className="mt-1" value={draft.target} onChange={(e) => update({ target: e.target.value })} placeholder={draft.target_type === "call_flow" ? "flow-id" : draft.target_type === "sip" ? "sip:test@example.sip.telnyx.com" : "+48123456789"} />
+              </div>
+            </div>
             <div>
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Scenario name" />
+              <Label>From numbers (caller IDs for this scenario)</Label>
+              <div className="mt-1">
+                <FromNumbersMultiSelect
+                  values={draft.from_numbers}
+                  options={fromNumberOptions}
+                  onChange={(values) => update({ from_numbers: values })}
+                />
+              </div>
             </div>
             <div>
               <Label>Description</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+              <Textarea className="mt-1" value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={save}>{editing ? "Update" : "Create"}</Button>
-              <Button size="sm" variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+              <Button size="sm" variant="outline" onClick={() => { setFormOpen(false); setEditing(null); }}>Cancel</Button>
             </div>
           </div>
         </div>

@@ -50,7 +50,7 @@ describe("call generator code completeness", () => {
     assert.match(code, /Switch/);
     assert.match(code, /Max concurrent|concurrent/i);
     assert.match(code, /CPS/i);
-    assert.match(code, /panic/i);
+    assert.match(code, /whitelist/i);
   });
 
   it("API route for scenarios supports GET list and POST create", async () => {

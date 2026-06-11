@@ -6,6 +6,8 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { startRunLoop } from "@/lib/call-generator/runner.mjs";
+import { isCallGeneratorEnabled } from "@/lib/call-generator/engine.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -50,12 +52,20 @@ export async function POST(request) {
     if (!scenario_id) {
       return NextResponse.json({ error: "scenario_id is required" }, { status: 400 });
     }
+    if (!isCallGeneratorEnabled()) {
+      return NextResponse.json({ error: "Call Generator is disabled (CALL_GENERATOR env flag is off)" }, { status: 409 });
+    }
     const id = randomUUID();
     await pool.query(
-      `INSERT INTO cg_runs (id, scenario_id, status, started_at, config, created_at)
-       VALUES ($1, $2, $3, NOW(), $4, NOW())`,
-      [id, scenario_id, "running", JSON.stringify(config || {})]
+      `INSERT INTO cg_runs (id, scenario_id, status, config, created_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [id, scenario_id, "pending", JSON.stringify(config || {})]
     );
+    const startResult = await startRunLoop(pool, id);
+    if (!startResult.ok) {
+      await pool.query(`UPDATE cg_runs SET status = 'failed', stopped_at = NOW(), stats = $2 WHERE id = $1`, [id, JSON.stringify({ error: startResult.reason })]);
+      return NextResponse.json({ error: `Run could not start: ${startResult.reason}` }, { status: 409 });
+    }
     const run = (await pool.query("SELECT * FROM cg_runs WHERE id = $1", [id])).rows[0];
     return NextResponse.json({ run }, { status: 201 });
   } catch (err) {

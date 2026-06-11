@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { panicStop } from "@/lib/call-generator/engine.mjs";
+import { stopRunLoop } from "@/lib/call-generator/runner.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -57,10 +58,12 @@ export async function PATCH(request, { params }) {
     const body = await request.json();
     const action = String(body?.action || "");
     if (action === "stop") {
+      stopRunLoop(params.id);
       await pool.query(`UPDATE cg_runs SET status = 'stopped', stopped_at = NOW() WHERE id = $1 AND status IN ('pending','running')`, [params.id]);
       return NextResponse.json({ ok: true, action: "stop" });
     }
     if (action === "panic") {
+      stopRunLoop(params.id);
       const stopped = await panicStop(pool, params.id);
       return NextResponse.json({ ok: true, action: "panic", stoppedCalls: stopped });
     }
