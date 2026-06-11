@@ -99,6 +99,19 @@ test("WS3 producer call sites are fire-and-forget and flag-guarded", async () =>
   );
 });
 
+test("WS3 call.enqueued reactor probe does not reserve agents", async () => {
+  const routingReactor = await readFile(
+    new URL("../lib/contact-center/routing-reactor.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    routingReactor,
+    /routeCall\(queueId, \{[\s\S]*?reserve: false,[\s\S]*?trigger: "event:call\.enqueued"/,
+    "call.enqueued notifications may probe routing but must not create reservations",
+  );
+});
+
 test("WS3 existing lease-gated periodic re-eval remains untouched (safety backstop)", async () => {
   const stateManager = await readFile(
     new URL("../lib/contact-center/state-manager.js", import.meta.url),
