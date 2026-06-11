@@ -82,7 +82,7 @@ function FromNumbersMultiSelect({ values = [], options = [], onChange = () => {}
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">No from numbers selected — the run will fail validation.</p>
+        <p className="text-xs text-muted-foreground">No from numbers selected — runs will use the global Settings caller IDs.</p>
       )}
     </div>
   );
@@ -192,11 +192,6 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
   }
 
   async function startRun(item) {
-    const fromNumbers = item?.config?.from_numbers || [];
-    if (!fromNumbers.length) {
-      notify({ title: "No from numbers", description: "Edit the scenario and select at least one From number.", variant: "warning" });
-      return;
-    }
     try {
       const res = await fetch("/api/admin/call-generator/runs", {
         method: "POST",
