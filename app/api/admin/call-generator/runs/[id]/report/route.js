@@ -28,7 +28,8 @@ export async function GET(_request, { params }) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    const result = await buildRunReport(pool, params.id);
+    const { id } = await params;
+    const result = await buildRunReport(pool, id);
     if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(result);
   } catch (err) {
