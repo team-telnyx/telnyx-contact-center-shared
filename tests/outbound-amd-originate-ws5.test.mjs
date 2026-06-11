@@ -51,7 +51,7 @@ test("WS5-T2 machine detection handler: human connect path, machine voicemail ac
   );
   assert.match(
     source,
-    /registerWebhookEventOnce\(pool, \{\s*eventId,\s*callControlId,\s*eventType: "call\.machine\.detection\.ended",\s*\}\)/,
+    /registerWebhookEventOnce\(pool, \{\s*eventId,\s*callControlId,\s*eventType,\s*\}\)/,
     "AMD events deduped via outbound_webhook_events (replay-safe)",
   );
   assert.match(
@@ -61,7 +61,7 @@ test("WS5-T2 machine detection handler: human connect path, machine voicemail ac
   );
   assert.match(
     source,
-    /voicemailAction === "drop_message" && amdConfig\.voicemailMessage/,
+    /\["drop_message", "leave_message"\]\.includes\(voicemailAction\) && voicemailMessage/,
     "drop_message action speaks the configured message",
   );
   assert.match(
@@ -72,7 +72,7 @@ test("WS5-T2 machine detection handler: human connect path, machine voicemail ac
   // The handler must classify AMD results through the shared dial-state mapper.
   assert.match(
     source,
-    /applyDialStateForEvent\(pool, ledger, "call\.machine\.detection\.ended"/,
+    /applyDialStateForEvent\(pool, ledger, eventType, \{\s*amdResult: normalizedResult,/,
     "AMD drives the dial-state machine",
   );
 });
@@ -101,12 +101,12 @@ test("WS5-T2 voicemail drop transitions dial_state to voicemail_action", async (
   const source = await readFile(executionPath, "utf8");
   assert.match(
     source,
-    /transitionDialState\(pool, ledger\.id, "voicemail_action", \{\s*event: "call\.machine\.detection\.ended",\s*reason: "drop_message",/,
+    /transitionDialState\(pool, ledger\.id, "voicemail_action", \{\s*event: eventType,\s*reason: voicemailAction,/,
     "drop_message records voicemail_action state",
   );
   assert.match(
     source,
-    /transitionDialState\(pool, ledger\.id, "voicemail_action", \{\s*event: "call\.machine\.detection\.ended",\s*reason: "hangup",/,
+    /transitionDialState\(pool, ledger\.id, "voicemail_action", \{\s*event: eventType,\s*reason: "hangup",/,
     "hangup records voicemail_action state",
   );
 });
