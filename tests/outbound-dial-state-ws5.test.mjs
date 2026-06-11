@@ -99,6 +99,8 @@ test("WS5-T1 webhook events map to expected dial states", () => {
     dialStateForWebhookEvent("call.machine.detection.ended", { amdResult: "human" }),
     DIAL_STATES.HUMAN,
   );
+  assert.equal(dialStateForWebhookEvent("call.machine.greeting.ended"), DIAL_STATES.MACHINE);
+  assert.equal(dialStateForWebhookEvent("call.machine.premium.greeting.ended"), DIAL_STATES.MACHINE);
   assert.equal(
     dialStateForWebhookEvent("call.hangup", { hangupCause: "user_busy" }),
     DIAL_STATES.BUSY,
