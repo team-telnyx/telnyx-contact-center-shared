@@ -271,12 +271,13 @@ export async function POST(request, { params }) {
     }
 
     // WS5-T2: AMD result for outbound campaign calls — human → connect path,
-    // machine → campaign voicemailAction (hangup / drop_message). No-op for
-    // calls that don't belong to an outbound attempt.
+    // machine/beep → campaign voicemailAction (hangup / drop_message). No-op
+    // for calls that don't belong to an outbound attempt.
     if (
       callControlId &&
       (event === "call.machine.detection.ended" ||
-        event === "call.machine.premium.detection.ended")
+        event === "call.machine.premium.detection.ended" ||
+        event === "call.machine.premium.greeting.ended")
     ) {
       try {
         const pool = getPostgresPool();

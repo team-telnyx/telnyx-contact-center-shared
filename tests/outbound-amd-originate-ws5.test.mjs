@@ -66,6 +66,11 @@ test("WS5-T2 machine detection handler: human connect path, machine voicemail ac
   );
   assert.match(
     source,
+    /amdConfig\.machine_action \|\| amdConfig\.voicemailAction \|\| "hangup"/,
+    "machine_action alias is honored before voicemailAction",
+  );
+  assert.match(
+    source,
     /actions\/hangup/,
     "default machine action hangs up",
   );
@@ -83,6 +88,11 @@ test("WS5-T2 webhook route dispatches call.machine.detection.ended to the outbou
     source,
     /event === "call\.machine\.detection\.ended"/,
     "route reacts to AMD events",
+  );
+  assert.match(
+    source,
+    /event === "call\.machine\.premium\.greeting\.ended"/,
+    "route reacts to premium greeting-ended beep events",
   );
   assert.match(
     source,
