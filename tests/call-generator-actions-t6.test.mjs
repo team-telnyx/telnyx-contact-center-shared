@@ -61,6 +61,11 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.strictEqual(legacy.length, 1);
     assert.strictEqual(legacy[0].flow_id, "legacy-flow");
     assert.strictEqual(legacy[0].total_calls, 7);
+    const legacyWithGlobalNumbers = normalizeTargets(
+      { target_type: "call_flow", target: "legacy-flow", total_calls: 2 },
+      ["+15550001111"],
+    );
+    assert.deepStrictEqual(legacyWithGlobalNumbers[0].from_numbers, ["+15550001111"]);
     assert.deepStrictEqual(normalizeTargets({}), []);
   });
 
@@ -78,6 +83,8 @@ describe("call generator actions & multi-target (T6)", () => {
     const itemCode = await src("app/api/admin/call-generator/actions/[id]/route.js");
     assert.match(itemCode, /export async function PUT/);
     assert.match(itemCode, /export async function DELETE/);
+    assert.match(itemCode, /const \{ id \} = await params/);
+    assert.doesNotMatch(itemCode, /params\.id/);
   });
 
   it("resources API returns flows, audio media and actions", async () => {
