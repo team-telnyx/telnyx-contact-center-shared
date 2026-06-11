@@ -170,6 +170,12 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
+          title: "Call Generator",
+          url: "/admin/call-generator",
+          icon: IconPhoneCall,
+          role_access: ["admin", "owner"],
+        },
+        {
           title: "Logging",
           url: "/admin/logging",
           icon: IconBug,
