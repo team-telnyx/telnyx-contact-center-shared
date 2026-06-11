@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { parseCtiClientState } from "@/lib/hardphones/drivers/telnyx-fallback.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx.js";
+import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks.js";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +14,13 @@ export async function POST(request) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
 
+  const rawBody = await request.text();
+  const signatureValid = await verifyTelnyxSignature(request, rawBody);
+  if (!signatureValid) return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+
   let body;
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody || "{}");
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
