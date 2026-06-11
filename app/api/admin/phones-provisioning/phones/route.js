@@ -69,9 +69,13 @@ export async function POST(request) {
       return NextResponse.json({ error: err.message }, { status: 502 });
     }
 
+    let client = null;
+    let commitStarted = false;
     try {
+      client = await pool.connect();
+      await client.query("BEGIN");
       const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
-      const { rows } = await pool.query(
+      const { rows } = await client.query(
         `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, provisioning_state, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
          RETURNING ${PHONE_COLUMNS}`,
@@ -89,13 +93,22 @@ export async function POST(request) {
           user.id || user.email || null,
         ],
       );
-      await pool.query(
+      await client.query(
         `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, 'created', $3)`,
         [rows[0].id, mac, JSON.stringify({ vendor, credential_id: credential.id })],
       );
+      commitStarted = true;
+      await client.query("COMMIT");
       return NextResponse.json({ phone: rows[0] }, { status: 201 });
     } catch (err) {
-      if (credential.id) {
+      if (client) {
+        try {
+          await client.query("ROLLBACK");
+        } catch (rollbackErr) {
+          adminRuntimeLogger.error("hardphone_create_rollback_failed", runtimePayload({ error: rollbackErr, operation: "hp_create_rollback" }));
+        }
+      }
+      if (credential.id && !commitStarted) {
         try {
           await deletePhoneCredential(credential.id);
         } catch (cleanupErr) {
@@ -106,6 +119,8 @@ export async function POST(request) {
         }
       }
       throw err;
+    } finally {
+      if (client) client.release();
     }
   } catch (err) {
     adminRuntimeLogger.error("hardphone_create_failed", runtimePayload({ error: err, operation: "hp_create" }));
