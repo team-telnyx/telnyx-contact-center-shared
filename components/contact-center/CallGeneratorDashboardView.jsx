@@ -14,6 +14,7 @@ import {
   IconPhoneCall,
   IconPhoneOff,
   IconPlayerStop,
+  IconReportAnalytics,
   IconWifi,
   IconWifiOff,
 } from "@tabler/icons-react";
@@ -74,6 +75,8 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(null);
+  const [report, setReport] = useState(null);
+  const [reportBusy, setReportBusy] = useState(null);
   const sourceRef = useRef(null);
 
   useEffect(() => {
@@ -122,6 +125,23 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
       notify({ title: "Action failed", description: err.message, variant: "error" });
     } finally {
       setActionBusy(null);
+    }
+  }
+
+  async function loadReport(runId) {
+    setReportBusy(runId);
+    try {
+      const res = await fetch(`/api/admin/call-generator/runs/${runId}/report`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Report failed");
+      }
+      const data = await res.json();
+      setReport({ runId, ...data });
+    } catch (err) {
+      notify({ title: "Report failed", description: err.message, variant: "error" });
+    } finally {
+      setReportBusy(null);
     }
   }
 
@@ -196,20 +216,25 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{formatTime(run.started_at)}</TableCell>
                       <TableCell className="text-right">
-                        {isRunning ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <Button size="sm" variant="outline" disabled={actionBusy === `${run.id}:stop`} onClick={() => runAction(run.id, "stop")}>
-                              {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}
-                              Stop
+                        <div className="flex items-center justify-end gap-2">
+                          {isRunning ? (
+                            <>
+                              <Button size="sm" variant="outline" disabled={actionBusy === `${run.id}:stop`} onClick={() => runAction(run.id, "stop")}>
+                                {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}
+                                Stop
+                              </Button>
+                              <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => { if (window.confirm("Panic stop: hang up ALL active generated calls for this run?")) runAction(run.id, "panic"); }}>
+                                {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}
+                                Panic
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="outline" disabled={reportBusy === run.id} onClick={() => loadReport(run.id)}>
+                              {reportBusy === run.id ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconReportAnalytics className="mr-1 h-3.5 w-3.5" />}
+                              Report
                             </Button>
-                            <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => { if (window.confirm("Panic stop: hang up ALL active generated calls for this run?")) runAction(run.id, "panic"); }}>
-                              {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}
-                              Panic
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -219,6 +244,58 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
           </div>
         )}
       </div>
+
+      {report ? (
+        <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">Run report — {report.report?.scenario_name || report.runId}</h4>
+            <div className="flex items-center gap-2">
+              {report.report?.passed !== null && report.report?.passed !== undefined ? (
+                <Badge variant="outline" className={report.report.passed ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"}>
+                  {report.report.passed ? "PASSED" : "FAILED"}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300">No assertions</Badge>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => setReport(null)}>Close</Button>
+            </div>
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <MetricCard icon={IconPhoneCall} label="Total" value={report.report?.summary?.total ?? 0} tone="sky" />
+            <MetricCard icon={IconActivity} label="Correlated" value={report.report?.summary?.correlated ?? 0} tone="violet" />
+            <MetricCard icon={IconHeadphones} label="Answered" value={report.report?.summary?.answered ?? 0} tone="emerald" />
+            <MetricCard icon={IconPhoneOff} label="Abandoned" value={report.report?.summary?.abandoned ?? 0} tone="amber" />
+            <MetricCard icon={IconAlertTriangle} label="Failed" value={report.report?.summary?.failed ?? 0} tone="rose" />
+            <MetricCard icon={IconActivity} label="Avg wait (s)" value={report.report?.summary?.avgWaitSecs ?? "—"} tone="sky" />
+          </div>
+          {Object.keys(report.report?.summary?.queues || {}).length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.entries(report.report.summary.queues).map(([queue, count]) => (
+                <Badge key={queue} variant="outline" className="border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                  {queue}: {count}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+          {(report.report?.assertions || []).length ? (
+            <div className="mt-4 space-y-2">
+              {report.report.assertions.map((a, idx) => (
+                <div key={idx} className="flex items-center justify-between rounded-lg border bg-background/70 px-3 py-2 text-sm">
+                  <span className="font-mono text-xs">{a.type}{a.queue ? ` → ${a.queue}` : ""}{a.seconds ? ` ≤ ${a.seconds}s` : ""}{a.percent !== undefined ? ` ${a.percent}%` : ""}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{a.detail}</span>
+                    <Badge variant="outline" className={a.passed ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"}>
+                      {a.passed ? "PASS" : "FAIL"}
+                    </Badge>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">No assertions configured on this scenario. Add them in the scenario config to get pass/fail evaluation.</p>
+          )}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
         <h4 className="text-sm font-semibold">Recent calls</h4>

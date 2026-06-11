@@ -95,7 +95,31 @@ const emptyDraft = () => ({
   target: "",
   total_calls: 5,
   from_numbers: [],
+  assert_queue: "",
+  assert_answer_within: "",
+  assert_max_abandon: "",
+  assert_min_answer: "",
 });
+
+function assertionsFromDraft(draft) {
+  const assertions = [];
+  if (draft.assert_queue.trim()) assertions.push({ type: "routed_to_queue", queue: draft.assert_queue.trim() });
+  if (Number(draft.assert_answer_within) > 0) assertions.push({ type: "answer_within_secs", seconds: Number(draft.assert_answer_within) });
+  if (draft.assert_max_abandon !== "" && Number(draft.assert_max_abandon) >= 0) assertions.push({ type: "max_abandon_rate", percent: Number(draft.assert_max_abandon) });
+  if (draft.assert_min_answer !== "" && Number(draft.assert_min_answer) >= 0) assertions.push({ type: "min_answer_rate", percent: Number(draft.assert_min_answer) });
+  return assertions;
+}
+
+function draftAssertionFields(config) {
+  const assertions = Array.isArray(config?.assertions) ? config.assertions : [];
+  const find = (type) => assertions.find((a) => a?.type === type);
+  return {
+    assert_queue: find("routed_to_queue")?.queue || "",
+    assert_answer_within: find("answer_within_secs")?.seconds ?? "",
+    assert_max_abandon: find("max_abandon_rate")?.percent ?? "",
+    assert_min_answer: find("min_answer_rate")?.percent ?? "",
+  };
+}
 
 export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
   const [items, setItems] = useState([]);
@@ -154,6 +178,7 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
         target: draft.target.trim(),
         total_calls: Math.max(1, Math.min(1000, Number(draft.total_calls) || 1)),
         from_numbers: Array.isArray(draft.from_numbers) ? draft.from_numbers : [],
+        assertions: assertionsFromDraft(draft),
       },
     };
     try {
@@ -223,6 +248,7 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
       target: item.config?.target || "",
       total_calls: item.config?.total_calls || 5,
       from_numbers: Array.isArray(item.config?.from_numbers) ? item.config.from_numbers : [],
+      ...draftAssertionFields(item.config),
     });
     setFormOpen(true);
   }
@@ -331,6 +357,27 @@ export default function CallGeneratorScenariosView({ refreshNonce = 0 }) {
             <div>
               <Label>Description</Label>
               <Textarea className="mt-1" value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+            </div>
+            <div className="rounded-xl border bg-background/70 p-3">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">Assertions (optional — evaluated in the run report)</Label>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs">Routed to queue</Label>
+                  <Input className="mt-1" value={draft.assert_queue} onChange={(e) => update({ assert_queue: e.target.value })} placeholder="queue name" />
+                </div>
+                <div>
+                  <Label className="text-xs">Answer within (sec)</Label>
+                  <Input className="mt-1" type="number" min={1} max={600} value={draft.assert_answer_within} onChange={(e) => update({ assert_answer_within: e.target.value })} placeholder="e.g. 20" />
+                </div>
+                <div>
+                  <Label className="text-xs">Max abandon rate (%)</Label>
+                  <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_max_abandon} onChange={(e) => update({ assert_max_abandon: e.target.value })} placeholder="e.g. 5" />
+                </div>
+                <div>
+                  <Label className="text-xs">Min answer rate (%)</Label>
+                  <Input className="mt-1" type="number" min={0} max={100} value={draft.assert_min_answer} onChange={(e) => update({ assert_min_answer: e.target.value })} placeholder="e.g. 80" />
+                </div>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={save}>{editing ? "Update" : "Create"}</Button>
