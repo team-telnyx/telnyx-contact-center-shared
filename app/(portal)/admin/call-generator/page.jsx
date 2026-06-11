@@ -262,6 +262,7 @@ function PreviewButton({ playing, busy, onClick, title: buttonTitle = "Play prev
 // /api/tts/speech — same pattern as the call flow Speak Text node.
 function VoiceSelector({ value, onChange, previewText = "" }) {
   const [providers, setProviders] = useState([]);
+  const [voicesLoading, setVoicesLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const { playing, playUrl, stop } = useAudioPreview();
   useEffect(() => {
@@ -269,7 +270,8 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
     fetch("/api/tts/voices", { cache: "no-store" })
       .then((res) => (res.ok ? res.json() : { providers: [] }))
       .then((data) => { if (!cancelled) setProviders(Array.isArray(data?.providers) ? data.providers : []); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setVoicesLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
@@ -312,22 +314,22 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-2 gap-2">
-        <Select value={provider?.id || ""} onValueChange={(pid) => {
+        <Select value={voicesLoading ? "" : (provider?.id || "")} disabled={voicesLoading} onValueChange={(pid) => {
           const nextProvider = providers.find((p) => p.id === pid);
           const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
           onChange(firstVoice?.id || `${pid}.`);
         }}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Provider" /></SelectTrigger>
+          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading…" : "Provider"} /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={model?.id || ""} onValueChange={(mid) => {
+        <Select value={voicesLoading ? "" : (model?.id || "")} disabled={voicesLoading} onValueChange={(mid) => {
           const nextModel = models.find((m) => m.id === mid);
           const firstVoice = nextModel?.voices?.[0];
           onChange(firstVoice?.id || `${providerId}.${mid}.`);
         }}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Model" /></SelectTrigger>
+          <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading…" : "Model"} /></SelectTrigger>
           <SelectContent>
             {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
           </SelectContent>
@@ -335,11 +337,15 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
       </div>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <Select value={current} onValueChange={onChange}>
-            <SelectTrigger className="w-full"><SelectValue placeholder="Voice" /></SelectTrigger>
+          {/* While voices load, render an empty disabled select with a
+              placeholder — binding `current` too early would surface the raw
+              voice ID via the fallback item and stretch the trigger beyond
+              the card. */}
+          <Select value={voicesLoading ? "" : current} disabled={voicesLoading} onValueChange={onChange}>
+            <SelectTrigger className="w-full min-w-0"><SelectValue placeholder={voicesLoading ? "Loading voices…" : "Voice"} /></SelectTrigger>
             <SelectContent>
               {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
-              {!voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
+              {!voicesLoading && !voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
             </SelectContent>
           </Select>
         </div>

@@ -162,11 +162,20 @@ describe("call generator actions & multi-target (T6)", () => {
     // provider+model share a 2-col row; voice select moved to a separate flex row
     assert.match(code, /grid grid-cols-2 gap-2/);
     assert.match(code, /IconPlayerStop/);
-    // triggers must be w-full so provider/model fill 50% each and
-    // voice/media stretch up to the Play button (default trigger is w-fit)
-    assert.match(code, /<SelectTrigger className="w-full"><SelectValue placeholder="Provider" \/>/);
-    assert.match(code, /<SelectTrigger className="w-full"><SelectValue placeholder="Model" \/>/);
-    assert.match(code, /<SelectTrigger className="w-full"><SelectValue placeholder="Voice" \/>/);
+    // triggers must be w-full min-w-0 so provider/model fill 50% each and
+    // voice/media stretch up to the Play button without overflowing the card
+    assert.match(code, /<SelectTrigger className="w-full min-w-0"><SelectValue placeholder=\{voicesLoading \? "Loading…" : "Provider"\} \/>/);
+    assert.match(code, /<SelectTrigger className="w-full min-w-0"><SelectValue placeholder=\{voicesLoading \? "Loading…" : "Model"\} \/>/);
+    assert.match(code, /<SelectTrigger className="w-full min-w-0"><SelectValue placeholder=\{voicesLoading \? "Loading voices…" : "Voice"\} \/>/);
     assert.match(code, /<SelectTrigger className="w-full"><SelectValue placeholder="Select from Media Library" \/>/);
+  });
+
+  it("voice selector hides raw voice IDs while the voice list is loading", async () => {
+    const code = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(code, /voicesLoading/);
+    // value is blanked during load so the fallback raw-ID item never renders
+    assert.match(code, /value=\{voicesLoading \? "" : current\}/);
+    assert.match(code, /!voicesLoading && !voices\.length && current/);
+    assert.match(code, /disabled=\{voicesLoading\}/);
   });
 });
