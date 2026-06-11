@@ -317,7 +317,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
           const firstVoice = nextProvider?.models?.[0]?.voices?.[0];
           onChange(firstVoice?.id || `${pid}.`);
         }}>
-          <SelectTrigger><SelectValue placeholder="Provider" /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue placeholder="Provider" /></SelectTrigger>
           <SelectContent>
             {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name || p.id}</SelectItem>)}
           </SelectContent>
@@ -327,7 +327,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
           const firstVoice = nextModel?.voices?.[0];
           onChange(firstVoice?.id || `${providerId}.${mid}.`);
         }}>
-          <SelectTrigger><SelectValue placeholder="Model" /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue placeholder="Model" /></SelectTrigger>
           <SelectContent>
             {models.map((m) => <SelectItem key={m.id} value={m.id}>{m.name || m.id}</SelectItem>)}
           </SelectContent>
@@ -336,7 +336,7 @@ function VoiceSelector({ value, onChange, previewText = "" }) {
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <Select value={current} onValueChange={onChange}>
-            <SelectTrigger><SelectValue placeholder="Voice" /></SelectTrigger>
+            <SelectTrigger className="w-full"><SelectValue placeholder="Voice" /></SelectTrigger>
             <SelectContent>
               {voices.map((v) => <SelectItem key={v.id} value={v.id}>{v.name || v.id}</SelectItem>)}
               {!voices.length && current ? <SelectItem value={current}>{current}</SelectItem> : null}
@@ -367,7 +367,7 @@ function MediaFileSelector({ value, onChange, media = [] }) {
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">
         <Select value={value || ""} onValueChange={onChange}>
-          <SelectTrigger><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
+          <SelectTrigger className="w-full"><SelectValue placeholder="Select from Media Library" /></SelectTrigger>
           <SelectContent>
             {media.map((m) => <SelectItem key={m.media_name} value={m.media_name}>{m.media_name}</SelectItem>)}
           </SelectContent>
