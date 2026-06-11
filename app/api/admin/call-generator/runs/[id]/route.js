@@ -22,6 +22,7 @@ async function requireAdmin() {
 }
 
 export async function GET(_request, { params }) {
+  params = await params;
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
@@ -50,6 +51,7 @@ export async function GET(_request, { params }) {
 
 // PATCH { action: "stop" | "panic" }
 export async function PATCH(request, { params }) {
+  params = await params;
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();

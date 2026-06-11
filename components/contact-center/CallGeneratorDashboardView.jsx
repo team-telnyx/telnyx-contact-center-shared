@@ -1,93 +1,261 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { notify } from "@/components/ToastNotify";
+import {
+  IconActivity,
+  IconAlertTriangle,
+  IconHeadphones,
+  IconLoader2,
+  IconPhoneCall,
+  IconPhoneOff,
+  IconPlayerStop,
+  IconWifi,
+  IconWifiOff,
+} from "@tabler/icons-react";
+
+const STREAM_URL = "/api/admin/call-generator/stream";
+
+const statusBadgeClass = (status) => {
+  const value = String(status || "").toLowerCase();
+  if (["running", "answered", "talking", "completed"].includes(value)) return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (["dialing", "ringing", "pending"].includes(value)) return "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (["failed", "abandoned"].includes(value)) return "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  if (["stopped"].includes(value)) return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+};
+
+function MetricCard({ icon: Icon, label, value, tone = "sky" }) {
+  const tones = {
+    sky: "from-sky-500/15 to-blue-500/5 text-sky-600 dark:text-sky-300",
+    emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-600 dark:text-emerald-300",
+    violet: "from-violet-500/15 to-fuchsia-500/5 text-violet-600 dark:text-violet-300",
+    amber: "from-amber-500/18 to-orange-500/5 text-amber-600 dark:text-amber-300",
+    rose: "from-rose-500/15 to-red-500/5 text-rose-600 dark:text-rose-300",
+  };
+  return (
+    <div className="rounded-2xl border bg-background/85 p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className={`rounded-xl bg-gradient-to-br p-2 ${tones[tone] || tones.sky}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+          <div className="text-2xl font-semibold tabular-nums">{value}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatDuration(ms) {
+  if (!ms && ms !== 0) return "—";
+  const totalSecs = Math.round(Number(ms) / 1000);
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  return mins ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
+function formatTime(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleTimeString();
+  } catch {
+    return "—";
+  }
+}
 
 export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
-  const [runs, setRuns] = useState([]);
+  const [snapshot, setSnapshot] = useState(null);
+  const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actionBusy, setActionBusy] = useState(null);
+  const sourceRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      setLoading(true);
+    const source = new EventSource(STREAM_URL);
+    sourceRef.current = source;
+
+    source.addEventListener("cg_update", (event) => {
+      if (cancelled) return;
       try {
-        const res = await fetch("/api/admin/call-generator/runs");
-        if (!res.ok) throw new Error("Failed to load runs");
-        const data = await res.json();
-        if (!cancelled) setRuns(data.runs || []);
-      } catch {
-        if (!cancelled) setRuns([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
+        const data = JSON.parse(event.data);
+        setSnapshot(data);
+        setLoading(false);
+        setConnected(true);
+      } catch {}
+    });
+    source.onopen = () => { if (!cancelled) setConnected(true); };
+    source.onerror = () => { if (!cancelled) setConnected(false); };
+
+    return () => {
+      cancelled = true;
+      try { source.close(); } catch {}
+      sourceRef.current = null;
+    };
   }, [refreshNonce]);
 
-  const stats = {
-    active: runs.filter((r) => r.status === "running").length,
-    completed: runs.filter((r) => r.status === "completed").length,
-    failed: runs.filter((r) => r.status === "failed").length,
-  };
+  async function runAction(runId, action) {
+    setActionBusy(`${runId}:${action}`);
+    try {
+      const res = await fetch(`/api/admin/call-generator/runs/${runId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `${action} failed`);
+      }
+      const data = await res.json();
+      notify({
+        title: action === "panic" ? "Panic stop executed" : "Run stopped",
+        description: action === "panic" ? `${data.stoppedCalls ?? 0} active calls were hung up.` : "The run has been stopped.",
+        variant: action === "panic" ? "warning" : "success",
+      });
+    } catch (err) {
+      notify({ title: "Action failed", description: err.message, variant: "error" });
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  const totals = snapshot?.totals || { activeCalls: 0, dialing: 0, ringing: 0, answered: 0, runningRuns: 0 };
+  const runs = snapshot?.runs || [];
+  const statsByRun = snapshot?.statsByRun || {};
+  const recentCalls = snapshot?.recentCalls || [];
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+        </div>
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Active runs</div>
-            <div className="mt-1 text-2xl font-semibold">{stats.active}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Completed</div>
-            <div className="mt-1 text-2xl font-semibold">{stats.completed}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Failed</div>
-            <div className="mt-1 text-2xl font-semibold">{stats.failed}</div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-between">
+        <Badge variant="outline" className={connected ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300"}>
+          {connected ? <IconWifi className="mr-1 h-3.5 w-3.5" /> : <IconWifiOff className="mr-1 h-3.5 w-3.5" />}
+          {connected ? "Live" : "Reconnecting…"}
+        </Badge>
+        <span className="text-xs text-muted-foreground">Updates every 2s · {snapshot?.timestamp ? formatTime(snapshot.timestamp) : "—"}</span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <MetricCard icon={IconActivity} label="Active calls" value={totals.activeCalls} tone="emerald" />
+        <MetricCard icon={IconPhoneCall} label="Dialing" value={totals.dialing} tone="sky" />
+        <MetricCard icon={IconPhoneCall} label="Ringing" value={totals.ringing} tone="violet" />
+        <MetricCard icon={IconHeadphones} label="Answered" value={totals.answered} tone="amber" />
+        <MetricCard icon={IconActivity} label="Running runs" value={totals.runningRuns} tone="rose" />
       </div>
 
       <div className="rounded-2xl border bg-card p-5 shadow-sm">
-        <h4 className="text-sm font-semibold">Recent runs</h4>
-        {loading ? (
-          <div className="mt-4 space-y-2">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : runs.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No runs yet. Create a scenario and start your first run.</p>
+        <h4 className="text-sm font-semibold">Runs</h4>
+        {runs.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">No runs yet. Start one from the Scenarios section.</p>
         ) : (
-          <div className="mt-4 space-y-2">
-            {runs.map((run) => (
-              <div key={run.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{run.scenario_name || run.scenario_id}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(run.created_at).toLocaleString()}</div>
-                </div>
-                <Badge variant="outline" className={
-                  run.status === "running"
-                    ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                    : run.status === "completed"
-                    ? "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                    : run.status === "failed"
-                    ? "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                    : "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300"
-                }>
-                  {run.status}
-                </Badge>
-              </div>
-            ))}
+          <div className="mt-3 overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Scenario</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {runs.map((run) => {
+                  const stats = statsByRun[run.id] || run.stats || {};
+                  const done = (stats.completed || 0) + (stats.failed || 0) + (stats.abandoned || 0);
+                  const total = Object.values(stats).reduce((sum, n) => sum + (Number(n) || 0), 0);
+                  const isRunning = run.status === "running";
+                  return (
+                    <TableRow key={run.id}>
+                      <TableCell className="font-medium">{run.scenario_name || run.scenario_id}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(run.status)}>{run.status}</Badge>
+                      </TableCell>
+                      <TableCell className="tabular-nums text-sm">
+                        {done}/{total}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {stats.completed ? `✓${stats.completed} ` : ""}{stats.failed ? `✗${stats.failed} ` : ""}{stats.abandoned ? `⊘${stats.abandoned}` : ""}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatTime(run.started_at)}</TableCell>
+                      <TableCell className="text-right">
+                        {isRunning ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button size="sm" variant="outline" disabled={actionBusy === `${run.id}:stop`} onClick={() => runAction(run.id, "stop")}>
+                              {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}
+                              Stop
+                            </Button>
+                            <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => { if (window.confirm("Panic stop: hang up ALL active generated calls for this run?")) runAction(run.id, "panic"); }}>
+                              {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}
+                              Panic
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border bg-card p-5 shadow-sm">
+        <h4 className="text-sm font-semibold">Recent calls</h4>
+        {recentCalls.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">No generated calls in the last 15 minutes.</p>
+        ) : (
+          <div className="mt-3 max-h-[420px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>To</TableHead>
+                  <TableHead>From</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Answered</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Result</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentCalls.map((call) => (
+                  <TableRow key={call.id}>
+                    <TableCell className="font-mono text-xs">{call.to_number || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">{call.from_number || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={statusBadgeClass(call.status)}>{call.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatTime(call.started_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatTime(call.answered_at)}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{formatDuration(call.duration_ms)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {call.result?.reason || call.result?.hangup_cause || "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </div>
