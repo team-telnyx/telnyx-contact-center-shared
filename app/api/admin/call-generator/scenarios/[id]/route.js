@@ -24,7 +24,8 @@ export async function GET(_request, { params }) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    const { rows } = await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [params.id]);
+    const { id } = await params;
+    const { rows } = await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [id]);
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ scenario: rows[0] });
   } catch {
@@ -38,6 +39,7 @@ export async function PUT(request, { params }) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
+    const { id } = await params;
     const body = await request.json();
     const { name, description, status, tasks, config } = body;
     const columns = [];
@@ -49,9 +51,9 @@ export async function PUT(request, { params }) {
     if (tasks !== undefined) { columns.push(`tasks = $${idx++}`); values.push(JSON.stringify(tasks)); }
     if (config !== undefined) { columns.push(`config = $${idx++}`); values.push(JSON.stringify(config)); }
     if (columns.length === 0) return NextResponse.json({ error: "No changes" }, { status: 400 });
-    values.push(params.id);
+    values.push(id);
     await pool.query(`UPDATE cg_scenarios SET ${columns.join(", ")} WHERE id = $${idx}`, values);
-    const { rows } = await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [params.id]);
+    const { rows } = await pool.query("SELECT * FROM cg_scenarios WHERE id = $1", [id]);
     return NextResponse.json({ scenario: rows[0] });
   } catch (err) {
     console.error("[CG] PUT scenario error:", err);
@@ -65,7 +67,8 @@ export async function DELETE(_request, { params }) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    await pool.query("DELETE FROM cg_scenarios WHERE id = $1", [params.id]);
+    const { id } = await params;
+    await pool.query("DELETE FROM cg_scenarios WHERE id = $1", [id]);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to delete" }, { status: 500 });
