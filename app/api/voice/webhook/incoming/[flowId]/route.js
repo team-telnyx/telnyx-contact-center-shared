@@ -16,7 +16,7 @@ import {
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
 import { findNextEdges, findNextNodes } from "@/lib/voice-flow-routing.js";
-import { finalizeAgentlessAttemptByWebhook } from "@/lib/outbound-dialer/execution";
+import { finalizeAgentlessAttemptByWebhook, handleOutboundMachineDetection } from "@/lib/outbound-dialer/execution";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -236,6 +236,24 @@ export async function POST(request, { params }) {
         }
       } catch (err) {
         voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
+      }
+    }
+
+    // WS5-T2: AMD result for outbound campaign calls — human → connect path,
+    // machine → campaign voicemailAction (hangup / drop_message). No-op for
+    // calls that don't belong to an outbound attempt.
+    if (callControlId && event === "call.machine.detection.ended") {
+      try {
+        const pool = getPostgresPool();
+        if (pool) {
+          await handleOutboundMachineDetection(pool, {
+            callControlId,
+            amdResult: payload?.result || null,
+            eventId: body?.data?.id || body?.id || null,
+          });
+        }
+      } catch (err) {
+        voiceWebhookLogger.error("voice_webhook_outbound_amd", voiceRuntimePayload({ error: err, eventType: event, callControlId, flowId }));
       }
     }
 
