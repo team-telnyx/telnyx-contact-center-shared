@@ -23,15 +23,18 @@ import {
 } from "@/lib/contact-center/call-timeline-tracker.js";
 import { voiceRuntimePayload, voiceWebhookLogger } from "@/lib/voice/logging.mjs";
 
-// Track executed transitions to prevent duplicate execution
-// Key: `${call_control_id}:${from_node_id}:${to_node_id}`
-// Value: timestamp
-const executedTransitions = new Map();
+// WS4-T1: transition/flow-completion dedupe is replay-safe across nodes and
+// restarts. The helper keeps the previous in-memory 5-minute TTL semantics as
+// a fast path and adds DB-backed idempotency (cc_processed_events) guarded by
+// WEBHOOK_IDEMPOTENCY_DB (default on, fail-open to memory on DB errors).
+import {
+  claimOnce as claimWebhookKeyOnce,
+  wasProcessed as webhookKeyProcessed,
+  markProcessed as markWebhookKeyProcessed,
+} from "@/lib/events/webhook-dedupe.js";
 
-// Track completed flows (flows that reached a terminal node with no outgoing edges)
-// Key: `${call_control_id}:${flowId}`
-// Value: timestamp
-const completedFlows = new Map();
+const DEDUPE_KIND_TRANSITION = "voice:transition";
+const DEDUPE_KIND_FLOW_COMPLETE = "voice:flow-complete";
 
 const AI_CALL_ID_HEADER = "X-AI-Call-ID";
 
@@ -171,20 +174,6 @@ async function updateConversationMetadata(conversationId, metadata) {
 
 export async function POST(request, { params }) {
   try {
-    // Clean up old transitions and completed flows (older than 5 minutes)
-    const now = Date.now();
-    const fiveMinutesAgo = now - 5 * 60 * 1000;
-    for (const [key, timestamp] of executedTransitions.entries()) {
-      if (timestamp < fiveMinutesAgo) {
-        executedTransitions.delete(key);
-      }
-    }
-    for (const [key, timestamp] of completedFlows.entries()) {
-      if (timestamp < fiveMinutesAgo) {
-        completedFlows.delete(key);
-      }
-    }
-
     const { flowId } = await params;
     if (!flowId) {
       return NextResponse.json(
@@ -982,7 +971,7 @@ export async function POST(request, { params }) {
 
     // Check if this flow has already completed
     const flowCompletionKey = `${payload.call_control_id}:${flowId}`;
-    if (completedFlows.has(flowCompletionKey)) {
+    if (await webhookKeyProcessed(flowCompletionKey)) {
       return NextResponse.json({
         ok: true,
         message: "Flow already completed",
@@ -1167,19 +1156,26 @@ export async function POST(request, { params }) {
         });
 
         if (nextNodes.length > 0) {
-          // Filter out nodes that have already been executed for this event
-          const nodesToExecute = nextNodes.filter((nextNode) => {
+          // Filter out nodes that have already been executed for this event.
+          // claimOnce is atomic (DB INSERT … ON CONFLICT when enabled), so two
+          // nodes processing the same replayed webhook cannot both claim it.
+          const nodesToExecute = [];
+          for (const nextNode of nextNodes) {
             const transitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:${event}`;
             const defaultTransitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:default`;
-            // Check both event-specific and default transition keys
-            if (
-              executedTransitions.has(transitionKey) ||
-              executedTransitions.has(defaultTransitionKey)
-            ) {
-              return false;
+            // Check the default transition key first (read-only), then
+            // atomically claim the event-specific key.
+            if (await webhookKeyProcessed(defaultTransitionKey)) {
+              continue;
             }
-            return true;
-          });
+            const claimed = await claimWebhookKeyOnce(
+              transitionKey,
+              DEDUPE_KIND_TRANSITION,
+            );
+            if (claimed) {
+              nodesToExecute.push(nextNode);
+            }
+          }
 
           if (nodesToExecute.length === 0) {
             return NextResponse.json({
@@ -1188,12 +1184,6 @@ export async function POST(request, { params }) {
               variables,
             });
           }
-
-          // Mark all transitions as executed
-          nodesToExecute.forEach((nextNode) => {
-            const transitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:${event}`;
-            executedTransitions.set(transitionKey, Date.now());
-          });
 
           // Execute all nodes in parallel
           try {
@@ -1381,7 +1371,10 @@ export async function POST(request, { params }) {
 
           if (!hasAnyEdges) {
             const flowCompletionKey = `${payload.call_control_id}:${flowId}`;
-            completedFlows.set(flowCompletionKey, Date.now());
+            await markWebhookKeyProcessed(
+              flowCompletionKey,
+              DEDUPE_KIND_FLOW_COMPLETE,
+            );
 
             return NextResponse.json({
               ok: true,
@@ -1457,16 +1450,17 @@ async function executeNodeChain(
   for (const nextNode of nextNodes) {
     const nextNodeType = nextNode.data?.nodeType || nextNode.type;
 
-    // Check if this transition was already executed
+    // Atomically claim this transition; skip if already executed (replay-safe)
     const transitionKey = `${callControlId}:${currentNode.id}:${nextNode.id}:${
       currentResult.output || 0
     }`;
-    if (executedTransitions.has(transitionKey)) {
+    const claimed = await claimWebhookKeyOnce(
+      transitionKey,
+      DEDUPE_KIND_TRANSITION,
+    );
+    if (!claimed) {
       continue;
     }
-
-    // Mark this transition as executed
-    executedTransitions.set(transitionKey, Date.now());
 
     // Configure node with client_state for flow tracking
     // Merge client_state from webhook payload (set by previous nodes like Set Queue Options),
