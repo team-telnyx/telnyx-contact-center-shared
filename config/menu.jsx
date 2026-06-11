@@ -194,8 +194,8 @@ export const menuConfig = {
           role_access: ["admin", "owner"],
         },
         {
-          title: "CTI Testing",
-          url: "/admin/cti-testing",
+          title: "Phones Provisioning",
+          url: "/admin/phones-provisioning",
           icon: IconPhoneCall,
           role_access: ["admin", "owner"],
         },
