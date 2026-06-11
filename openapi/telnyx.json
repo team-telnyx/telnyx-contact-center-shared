@@ -1249,7 +1249,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Resend brand 2FA email"
       }
     },
     "/10dlc/brand/{brandId}/externalVetting": {
@@ -1839,7 +1840,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Campaign Cost"
       }
     },
     "/10dlc/campaign/{campaignId}": {
@@ -2244,7 +2246,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get OSR campaign attributes"
       }
     },
     "/10dlc/campaign/{campaignId}/sharing": {
@@ -2292,7 +2295,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Sharing Status"
       }
     },
     "/10dlc/campaignBuilder": {
@@ -2498,7 +2502,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Enum"
       }
     },
     "/10dlc/partnerCampaign/sharedByMe": {
@@ -2612,7 +2617,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Sharing Status"
       }
     },
     "/10dlc/partner_campaigns": {
@@ -3026,7 +3032,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone number campaigns"
       },
       "post": {
         "tags": [
@@ -3060,7 +3067,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create New Phone Number Campaign"
       }
     },
     "/10dlc/phone_number_campaigns/{phoneNumber}": {
@@ -3179,7 +3187,8 @@
             "$ref": "#/components/responses/10dlc_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create New Phone Number Campaign"
       }
     },
     "/access_ip_address": {
@@ -3362,7 +3371,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List all Access IP Addresses"
       },
       "post": {
         "summary": "Create new Access IP Address",
@@ -3402,7 +3412,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create new Access IP Address"
       }
     },
     "/access_ip_address/{access_ip_address_id}": {
@@ -3445,7 +3456,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete access IP address"
       },
       "get": {
         "summary": "Retrieve an access IP address",
@@ -3486,7 +3498,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve an access IP address"
       }
     },
     "/access_ip_ranges": {
@@ -3710,7 +3723,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List all Access IP Ranges"
       },
       "post": {
         "summary": "Create new Access IP Range",
@@ -3750,7 +3764,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create new Access IP Range"
       }
     },
     "/access_ip_ranges/{access_ip_range_id}": {
@@ -3793,7 +3808,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete access IP ranges"
       }
     },
     "/actions/purchase/esims": {
@@ -4194,7 +4210,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Accepts this address suggestion as a new emergency address for Operator Connect and finishes the uploads of the numbers associated with it to Microsoft."
       }
     },
     "/advanced_orders": {
@@ -4239,7 +4256,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Advanced Orders"
       },
       "post": {
         "summary": "Create Advanced Order",
@@ -4284,7 +4302,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create Advanced Order"
       }
     },
     "/advanced_orders/{advanced-order-id}/requirement_group": {
@@ -4344,7 +4363,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update Advanced Order"
       }
     },
     "/advanced_orders/{order_id}": {
@@ -4394,7 +4414,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Advanced Order"
       }
     },
     "/ai/assistants": {
@@ -4543,7 +4564,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get All Tags"
       }
     },
     "/ai/assistants/tests": {
@@ -4722,7 +4744,7 @@
         ],
         "summary": "Get test suite run history",
         "description": "Retrieves paginated history of test runs for a specific test suite with filtering options",
-        "operationId": "get_test_suite_runs_for_test_public_assistants_tests_test_suites__suite_name__runs_get",
+        "operationId": "ListTestSuiteRuns",
         "parameters": [
           {
             "name": "suite_name",
@@ -4814,7 +4836,7 @@
         ],
         "summary": "Trigger test suite execution",
         "description": "Executes all tests within a specific test suite as a batch operation",
-        "operationId": "trigger_test_suite_runs_public_assistants_tests_test_suites__suite_name__runs_post",
+        "operationId": "TriggerTestSuiteRuns",
         "parameters": [
           {
             "name": "suite_name",
@@ -5007,7 +5029,7 @@
         ],
         "summary": "Get test run history for a specific test",
         "description": "Retrieves paginated execution history for a specific assistant test with filtering options",
-        "operationId": "get_test_runs_for_test_public_assistants_tests__test_id__runs_get",
+        "operationId": "ListTestRuns",
         "parameters": [
           {
             "name": "test_id",
@@ -5380,7 +5402,7 @@
         ],
         "summary": "Delete Canary Deploy",
         "description": "Endpoint to delete a canary deploy configuration for an assistant.\n\nRemoves all canary deploy configurations for the specified assistant.",
-        "operationId": "delete_canary_deploy_assistants__assistant_id__canary_deploys_delete",
+        "operationId": "DeleteCanaryDeploy",
         "parameters": [
           {
             "name": "assistant_id",
@@ -5459,7 +5481,7 @@
         ],
         "summary": "Create Canary Deploy",
         "description": "Endpoint to create a canary deploy configuration for an assistant.\n\nCreates a new canary deploy configuration with multiple version IDs and their traffic\npercentages for A/B testing or gradual rollouts of assistant versions.",
-        "operationId": "create_canary_deploy_assistants__assistant_id__canary_deploys_post",
+        "operationId": "CreateCanaryDeploy",
         "parameters": [
           {
             "name": "assistant_id",
@@ -5512,7 +5534,7 @@
         ],
         "summary": "Update Canary Deploy",
         "description": "Endpoint to update a canary deploy configuration for an assistant.\n\nUpdates the existing canary deploy configuration with new version IDs and percentages.\n  All old versions and percentages are replaces by new ones from this request.",
-        "operationId": "update_canary_deploy_assistants__assistant_id__canary_deploys_put",
+        "operationId": "UpdateCanaryDeploy",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6022,7 +6044,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Add Assistant Tag"
       }
     },
     "/ai/assistants/{assistant_id}/tags/{tag}": {
@@ -6076,7 +6099,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Remove Assistant Tag"
       }
     },
     "/ai/assistants/{assistant_id}/texml": {
@@ -6173,7 +6197,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Remove Assistant Tool"
       },
       "put": {
         "tags": [
@@ -6223,7 +6248,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Add Assistant Tool"
       }
     },
     "/ai/assistants/{assistant_id}/tools/{tool_id}/test": {
@@ -6233,7 +6259,7 @@
         ],
         "summary": "Test Assistant Tool",
         "description": "Test a webhook tool for an assistant",
-        "operationId": "test_assistant_tool_public_assistants__assistant_id__tools__tool_id__test_post",
+        "operationId": "TestAssistantTool",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6297,7 +6323,7 @@
         ],
         "summary": "Get all versions of an assistant",
         "description": "Retrieves all versions of a specific assistant with complete configuration and metadata",
-        "operationId": "get_assistant_versions_public_assistants__assistant_id__versions_get",
+        "operationId": "ListAssistantVersions",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6342,7 +6368,7 @@
         ],
         "summary": "Delete a specific assistant version",
         "description": "Permanently removes a specific version of an assistant. Can not delete main version",
-        "operationId": "delete_assistant_version_public_assistants__assistant_id__versions__version_id__delete",
+        "operationId": "DeleteAssistantVersion",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6388,7 +6414,7 @@
         ],
         "summary": "Get a specific assistant version",
         "description": "Retrieves a specific version of an assistant by assistant_id and version_id",
-        "operationId": "get_assistant_version_public_assistants__assistant_id__versions__version_id__get",
+        "operationId": "GetAssistantVersion",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6450,7 +6476,7 @@
         ],
         "summary": "Update a specific assistant version",
         "description": "Updates the configuration of a specific assistant version. Can not update main version",
-        "operationId": "update_assistant_version_public_assistants__assistant_id__versions__version_id__post",
+        "operationId": "UpdateAssistantVersion",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6515,7 +6541,7 @@
         ],
         "summary": "Promote an assistant version to main",
         "description": "Promotes a specific version to be the main/current version of the assistant. This will delete any existing canary deploy configuration and send all live production traffic to this version.",
-        "operationId": "promote_assistant_version_public_assistants__assistant_id__versions__version_id__promote_post",
+        "operationId": "PromoteAssistantVersion",
         "parameters": [
           {
             "name": "assistant_id",
@@ -6717,7 +6743,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List all clusters"
       },
       "post": {
         "tags": [
@@ -6795,7 +6822,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a cluster"
       },
       "get": {
         "tags": [
@@ -6859,7 +6887,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Fetch a cluster"
       }
     },
     "/ai/clusters/{task_id}/graph": {
@@ -6868,7 +6897,7 @@
           "Clusters"
         ],
         "summary": "Fetch a cluster visualization",
-        "operationId": "fetch_cluster_image_by_task_id_public_text_clusters__task_id__image_get",
+        "operationId": "GetClusterImage",
         "parameters": [
           {
             "name": "task_id",
@@ -6914,7 +6943,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Fetch a cluster visualization"
       }
     },
     "/ai/conversations": {
@@ -8135,7 +8165,7 @@
         ],
         "summary": "Disable AI for an Embedded Bucket",
         "description": "Deletes an entire bucket's embeddings and disables the bucket for AI-use, returning it to normal storage pricing.",
-        "operationId": "embedding_bucket_files_public_embedding_buckets__bucket_name__delete",
+        "operationId": "DeleteEmbeddingBucket",
         "parameters": [
           {
             "required": true,
@@ -8622,7 +8652,7 @@
         ],
         "summary": "Get User Integration connection By Id",
         "description": "Get user setup integrations",
-        "operationId": "get_user_integration_by_id_public_integrations_connections__user_connection_id__get",
+        "operationId": "GetUserIntegration",
         "parameters": [
           {
             "name": "user_connection_id",
@@ -9476,7 +9506,7 @@
         ],
         "summary": "Delete knowledge base",
         "description": "Delete a knowledge base from a mission",
-        "operationId": "delete_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "operationId": "DeleteMissionKnowledgeBase",
         "parameters": [
           {
             "name": "mission_id",
@@ -9522,7 +9552,7 @@
         ],
         "summary": "Get knowledge base",
         "description": "Get a specific knowledge base by ID",
-        "operationId": "get_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "operationId": "GetMissionKnowledgeBase",
         "parameters": [
           {
             "name": "mission_id",
@@ -9573,7 +9603,7 @@
         ],
         "summary": "Update knowledge base",
         "description": "Update a knowledge base definition",
-        "operationId": "put_public_missions_missions_mission_id_knowledge_bases_knowledge_base_id",
+        "operationId": "PutMissionKnowledgeBase",
         "parameters": [
           {
             "name": "mission_id",
@@ -9710,7 +9740,7 @@
         ],
         "summary": "Delete MCP server",
         "description": "Delete an MCP server from a mission",
-        "operationId": "delete_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "operationId": "DeleteMissionMcpServer",
         "parameters": [
           {
             "name": "mission_id",
@@ -9756,7 +9786,7 @@
         ],
         "summary": "Get MCP server",
         "description": "Get a specific MCP server by ID",
-        "operationId": "get_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "operationId": "GetMissionMcpServer",
         "parameters": [
           {
             "name": "mission_id",
@@ -9807,7 +9837,7 @@
         ],
         "summary": "Update MCP server",
         "description": "Update an MCP server definition",
-        "operationId": "put_public_missions_missions_mission_id_mcp_servers_mcp_server_id",
+        "operationId": "PutMissionMcpServer",
         "parameters": [
           {
             "name": "mission_id",
@@ -10355,7 +10385,7 @@
         ],
         "summary": "Get event details",
         "description": "Get details of a specific event",
-        "operationId": "get_public_missions_missions_mission_id_runs_run_id_events_event_id",
+        "operationId": "GetMissionRunEvent",
         "parameters": [
           {
             "name": "mission_id",
@@ -10668,7 +10698,7 @@
         ],
         "summary": "Get step details",
         "description": "Get details of a specific plan step",
-        "operationId": "get_public_missions_missions_mission_id_runs_run_id_plan_steps_step_id",
+        "operationId": "GetMissionRunStep",
         "parameters": [
           {
             "name": "mission_id",
@@ -10733,7 +10763,7 @@
         ],
         "summary": "Update step status",
         "description": "Update the status of a plan step",
-        "operationId": "patch_public_missions_missions_mission_id_runs_run_id_plan_steps_step_id",
+        "operationId": "UpdateMissionRunStep",
         "parameters": [
           {
             "name": "mission_id",
@@ -10867,7 +10897,7 @@
         ],
         "summary": "List linked Telnyx agents",
         "description": "List all Telnyx agents linked to a run",
-        "operationId": "get_public_missions_missions_mission_id_runs_run_id_telnyx_agents",
+        "operationId": "ListMissionRunAgents",
         "parameters": [
           {
             "name": "mission_id",
@@ -10922,7 +10952,7 @@
         ],
         "summary": "Link Telnyx agent to run",
         "description": "Link a Telnyx AI agent (voice/messaging) to a run",
-        "operationId": "post_public_missions_missions_mission_id_runs_run_id_telnyx_agents",
+        "operationId": "CreateMissionRunAgent",
         "parameters": [
           {
             "name": "mission_id",
@@ -10989,7 +11019,7 @@
         ],
         "summary": "Unlink Telnyx agent",
         "description": "Unlink a Telnyx agent from a run",
-        "operationId": "delete_public_missions_missions_mission_id_runs_run_id_telnyx_agents_telnyx_agent_id",
+        "operationId": "DeleteMissionRunAgent",
         "parameters": [
           {
             "name": "mission_id",
@@ -11753,7 +11783,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Tools"
       },
       "post": {
         "tags": [
@@ -11793,7 +11824,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create Tool"
       }
     },
     "/ai/tools/{tool_id}": {
@@ -11835,7 +11867,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete Tool"
       },
       "get": {
         "tags": [
@@ -11877,7 +11910,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Tool"
       },
       "patch": {
         "tags": [
@@ -11929,7 +11963,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update Tool"
       }
     },
     "/alphanumeric_sender_ids": {
@@ -12660,7 +12695,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List available phone number blocks"
       }
     },
     "/available_phone_numbers": {
@@ -12815,7 +12851,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List available phone numbers"
       }
     },
     "/balance": {
@@ -12854,14 +12891,15 @@
             "$ref": "#/components/responses/GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get user balance details"
       }
     },
     "/billing_groups": {
       "get": {
         "summary": "List all billing groups",
         "deprecated": false,
-        "description": "",
+        "description": "List all billing groups",
         "operationId": "ListBillingGroups",
         "tags": [
           "Billing Groups"
@@ -12928,7 +12966,7 @@
       "post": {
         "summary": "Create a billing group",
         "deprecated": false,
-        "description": "",
+        "description": "Create a billing group",
         "operationId": "CreateBillingGroup",
         "tags": [
           "Billing Groups"
@@ -12980,7 +13018,7 @@
       "delete": {
         "summary": "Delete a billing group",
         "deprecated": false,
-        "description": "",
+        "description": "Delete a billing group",
         "operationId": "DeleteBillingGroup",
         "tags": [
           "Billing Groups"
@@ -13036,7 +13074,7 @@
       "get": {
         "summary": "Get a billing group",
         "deprecated": false,
-        "description": "",
+        "description": "Get a billing group",
         "operationId": "GetBillingGroup",
         "tags": [
           "Billing Groups"
@@ -13086,7 +13124,7 @@
       "patch": {
         "summary": "Update a billing group",
         "deprecated": false,
-        "description": "",
+        "description": "Update a billing group",
         "operationId": "UpdateBillingGroup",
         "tags": [
           "Billing Groups"
@@ -15887,7 +15925,8 @@
         "tags": [
           "Call Commands"
         ],
-        "x-latency-category": "interactive"
+        "x-latency-category": "interactive",
+        "description": "Noise Suppression Start (BETA)"
       }
     },
     "/calls/{call_control_id}/actions/suppression_stop": {
@@ -15937,7 +15976,8 @@
         "tags": [
           "Call Commands"
         ],
-        "x-latency-category": "interactive"
+        "x-latency-category": "interactive",
+        "description": "Noise Suppression Stop (BETA)"
       }
     },
     "/calls/{call_control_id}/actions/switch_supervisor_role": {
@@ -16454,7 +16494,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve all comments"
       },
       "post": {
         "summary": "Create a comment",
@@ -16511,7 +16552,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a comment"
       }
     },
     "/comments/{id}": {
@@ -16571,7 +16613,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a comment"
       }
     },
     "/comments/{id}/read": {
@@ -16631,7 +16674,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Mark a comment as read"
       }
     },
     "/conferences": {
@@ -22929,7 +22973,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a location's static emergency address"
       }
     },
     "/external_connections/{id}/phone_numbers": {
@@ -23741,7 +23786,7 @@
     "/faxes": {
       "get": {
         "summary": "View a list of faxes",
-        "description": "",
+        "description": "View a list of faxes",
         "operationId": "ListFaxes",
         "x-latency-category": "background",
         "tags": [
@@ -23957,7 +24002,8 @@
             "$ref": "#/components/responses/programmable-fax_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a fax"
       },
       "get": {
         "summary": "View a fax",
@@ -24001,7 +24047,8 @@
             "$ref": "#/components/responses/programmable-fax_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a fax"
       }
     },
     "/faxes/{id}/actions/cancel": {
@@ -24772,7 +24819,8 @@
             "$ref": "#/components/responses/netapps_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Global IP Assignment Health Check Metrics"
       }
     },
     "/global_ip_assignments": {
@@ -25072,7 +25120,8 @@
             "$ref": "#/components/responses/netapps_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Global IP Assignment Usage Metrics"
       }
     },
     "/global_ip_health_check_types": {
@@ -25343,7 +25392,8 @@
             "$ref": "#/components/responses/netapps_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Global IP Latency Metrics"
       }
     },
     "/global_ip_protocols": {
@@ -25451,7 +25501,8 @@
             "$ref": "#/components/responses/netapps_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Global IP Usage Metrics"
       }
     },
     "/global_ips": {
@@ -27137,7 +27188,7 @@
       "post": {
         "summary": "Create a ledger billing group report",
         "deprecated": false,
-        "description": "",
+        "description": "Create a ledger billing group report",
         "operationId": "CreateBillingGroupReport",
         "tags": [
           "Reports"
@@ -27196,7 +27247,7 @@
       "get": {
         "summary": "Get a ledger billing group report",
         "deprecated": false,
-        "description": "",
+        "description": "Get a ledger billing group report",
         "operationId": "GetBillingGroupReport",
         "tags": [
           "Reports"
@@ -27928,7 +27979,7 @@
         "requestBody": {
           "description": "MDR detail request data",
           "content": {
-            "*/*": {
+            "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MdrUsageRequestLegacy"
               }
@@ -28119,7 +28170,7 @@
         "requestBody": {
           "description": "Telco data usage request data",
           "content": {
-            "*/*": {
+            "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TelcoDataUsageRequest"
               }
@@ -28387,7 +28438,7 @@
         "requestBody": {
           "description": "Cdr detail request data",
           "content": {
-            "*/*": {
+            "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UsageRequestLegacy"
               }
@@ -29592,7 +29643,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send a group MMS message"
       }
     },
     "/messages/long_code": {
@@ -29633,7 +29685,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send a long code message"
       }
     },
     "/messages/number_pool": {
@@ -29674,7 +29727,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send a message using number pool"
       }
     },
     "/messages/rcs": {
@@ -29710,7 +29764,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send an RCS message"
       }
     },
     "/messages/rcs/deeplinks/{agent_id}": {
@@ -29850,7 +29905,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send a short code message"
       }
     },
     "/messages/whatsapp": {
@@ -29887,7 +29943,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Send a Whatsapp message"
       }
     },
     "/messages/{id}": {
@@ -30023,7 +30080,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List all RCS agents"
       }
     },
     "/messaging/rcs/agents/{id}": {
@@ -30059,7 +30117,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve an RCS agent"
       },
       "patch": {
         "summary": "Modify an RCS agent",
@@ -30102,7 +30161,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Modify an RCS agent"
       }
     },
     "/messaging/rcs/bulk_capabilities": {
@@ -30136,7 +30196,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Check RCS capabilities (batch)"
       }
     },
     "/messaging/rcs/capabilities/{agent_id}/{phone_number}": {
@@ -30181,7 +30242,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Check RCS capabilities"
       }
     },
     "/messaging/rcs/test_number_invite/{id}/{phone_number}": {
@@ -30270,7 +30332,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List messaging hosted number orders"
       },
       "post": {
         "summary": "Create a messaging hosted number order",
@@ -30309,7 +30372,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a messaging hosted number order"
       }
     },
     "/messaging_hosted_number_orders/eligibility_numbers_check": {
@@ -30362,7 +30426,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Check hosted messaging eligibility"
       }
     },
     "/messaging_hosted_number_orders/{id}": {
@@ -30445,7 +30510,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a messaging hosted number order"
       }
     },
     "/messaging_hosted_number_orders/{id}/actions/file_upload": {
@@ -30505,7 +30571,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Upload hosted number document"
       }
     },
     "/messaging_hosted_number_orders/{id}/validation_codes": {
@@ -30747,7 +30814,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a messaging hosted number"
       },
       "get": {
         "summary": "Retrieve a messaging hosted number",
@@ -30884,7 +30952,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Bulk update phone number profiles"
       }
     },
     "/messaging_numbers_bulk_updates/{order_id}": {
@@ -30926,7 +30995,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve bulk update status"
       }
     },
     "/messaging_optouts": {
@@ -31156,7 +31226,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List messaging profiles"
       },
       "post": {
         "summary": "Create a messaging profile",
@@ -31197,7 +31268,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a messaging profile"
       }
     },
     "/messaging_profiles/{id}": {
@@ -31233,7 +31305,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a messaging profile"
       },
       "get": {
         "summary": "Retrieve a messaging profile",
@@ -31267,7 +31340,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a messaging profile"
       },
       "patch": {
         "summary": "Update a messaging profile",
@@ -31312,7 +31386,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a messaging profile"
       }
     },
     "/messaging_profiles/{id}/actions/regenerate_secret": {
@@ -31535,7 +31610,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone numbers associated with a messaging profile"
       }
     },
     "/messaging_profiles/{id}/short_codes": {
@@ -31581,7 +31657,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List short codes associated with a messaging profile"
       }
     },
     "/messaging_profiles/{profile_id}/autoresp_configs": {
@@ -31714,7 +31791,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Auto-Response Settings"
       },
       "post": {
         "tags": [
@@ -31772,7 +31850,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create auto-response setting"
       }
     },
     "/messaging_profiles/{profile_id}/autoresp_configs/{autoresp_cfg_id}": {
@@ -31822,7 +31901,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete Auto-Response Setting"
       },
       "get": {
         "tags": [
@@ -31882,7 +31962,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Auto-Response Setting"
       },
       "put": {
         "tags": [
@@ -31953,7 +32034,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update Auto-Response Setting"
       }
     },
     "/messaging_tollfree/verification/requests": {
@@ -32315,7 +32397,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List messaging URL domains"
       }
     },
     "/mobile_network_operators": {
@@ -32406,7 +32489,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List mobile phone numbers with messaging settings"
       }
     },
     "/mobile_phone_numbers/{id}/messaging": {
@@ -32448,7 +32532,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a mobile phone number with messaging settings"
       }
     },
     "/mobile_push_credentials": {
@@ -34403,7 +34488,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update requirement group for a phone number order"
       }
     },
     "/number_order_phone_numbers/{number_order_phone_number_id}": {
@@ -36556,7 +36642,8 @@
             "$ref": "#/components/responses/wireless_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List OTA updates"
       }
     },
     "/ota_updates/{id}": {
@@ -37016,7 +37103,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Lists the phone number blocks jobs"
       }
     },
     "/phone_number_blocks/jobs/delete_phone_number_block": {
@@ -37126,7 +37214,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieves a phone number blocks job"
       }
     },
     "/phone_numbers": {
@@ -37366,7 +37455,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone numbers"
       }
     },
     "/phone_numbers/actions/verify_ownership": {
@@ -37477,7 +37567,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List CSV downloads"
       },
       "post": {
         "x-latency-category": "background",
@@ -37634,7 +37725,8 @@
           "500": {
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
-        }
+        },
+        "description": "Create a CSV download"
       }
     },
     "/phone_numbers/csv_downloads/{id}": {
@@ -37692,7 +37784,8 @@
           "500": {
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
-        }
+        },
+        "description": "Retrieve a CSV download"
       }
     },
     "/phone_numbers/jobs": {
@@ -37840,7 +37933,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Lists the phone numbers jobs"
       }
     },
     "/phone_numbers/jobs/delete_phone_numbers": {
@@ -38323,7 +38417,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a phone numbers job"
       }
     },
     "/phone_numbers/messaging": {
@@ -38421,7 +38516,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone numbers with messaging settings"
       }
     },
     "/phone_numbers/slim": {
@@ -38763,7 +38859,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone numbers with voice settings"
       }
     },
     "/phone_numbers/{id}": {
@@ -38812,7 +38909,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a phone number"
       },
       "get": {
         "summary": "Retrieve a phone number",
@@ -38859,7 +38957,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a phone number"
       },
       "patch": {
         "summary": "Update a phone number",
@@ -38917,7 +39016,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a phone number"
       }
     },
     "/phone_numbers/{id}/actions/bundle_status_change": {
@@ -38976,7 +39076,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Change the bundle status for a phone number (set to being in a bundle or remove from a bundle)"
       }
     },
     "/phone_numbers/{id}/actions/enable_emergency": {
@@ -39051,7 +39152,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Enable emergency for a phone number"
       }
     },
     "/phone_numbers/{id}/messaging": {
@@ -39093,7 +39195,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a phone number with messaging settings"
       },
       "patch": {
         "summary": "Update the messaging profile and/or messaging product of a phone number",
@@ -39144,7 +39247,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update the messaging profile and/or messaging product of a phone number"
       }
     },
     "/phone_numbers/{id}/voice": {
@@ -39193,7 +39297,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a phone number with voice settings"
       },
       "patch": {
         "summary": "Update a phone number with voice settings",
@@ -39251,7 +39356,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a phone number with voice settings"
       }
     },
     "/phone_numbers/{phone_number_id}/voicemail": {
@@ -39459,7 +39565,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve regulatory requirements for a list of phone numbers"
       }
     },
     "/portability_checks": {
@@ -45634,7 +45741,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve regulatory requirements"
       }
     },
     "/reports/cdr_usage_reports/sync": {
@@ -45847,7 +45955,7 @@
         "requestBody": {
           "description": "Mdr usage report data",
           "content": {
-            "*/*": {
+            "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/MdrPostUsageReportRequest"
               }
@@ -46611,7 +46719,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List requirement groups"
       },
       "post": {
         "summary": "Create a new requirement group",
@@ -46702,7 +46811,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a new requirement group"
       }
     },
     "/requirement_groups/{id}": {
@@ -46750,7 +46860,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a requirement group by ID"
       },
       "get": {
         "summary": "Get a single requirement group by ID",
@@ -46796,7 +46907,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get a single requirement group by ID"
       },
       "patch": {
         "summary": "Update requirement values in requirement group",
@@ -46877,7 +46989,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update requirement values in requirement group"
       }
     },
     "/requirement_groups/{id}/submit_for_approval": {
@@ -46925,7 +47038,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Submit a Requirement Group for Approval"
       }
     },
     "/requirement_types": {
@@ -47130,7 +47244,7 @@
     "/room_compositions": {
       "get": {
         "summary": "View a list of room compositions.",
-        "description": "",
+        "description": "View a list of room compositions.",
         "operationId": "ListRoomCompositions",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -47335,13 +47449,14 @@
             "$ref": "#/components/responses/video_ResourceNotFound"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a room composition."
       }
     },
     "/room_participants": {
       "get": {
         "summary": "View a list of room participants.",
-        "description": "",
+        "description": "View a list of room participants.",
         "operationId": "ListRoomParticipants",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -47514,13 +47629,14 @@
             "$ref": "#/components/responses/video_ResourceNotFound"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a room participant."
       }
     },
     "/room_recordings": {
       "delete": {
         "summary": "Delete several room recordings in a bulk.",
-        "description": "",
+        "description": "Delete several room recordings in a bulk.",
         "operationId": "DeleteRoomRecordings",
         "x-endpoint-cost": "heavy",
         "tags": [
@@ -47655,7 +47771,7 @@
       },
       "get": {
         "summary": "View a list of room recordings.",
-        "description": "",
+        "description": "View a list of room recordings.",
         "operationId": "ListRoomRecordings",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -47859,13 +47975,14 @@
             "$ref": "#/components/responses/video_ResourceNotFound"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a room recording."
       }
     },
     "/room_sessions": {
       "get": {
         "summary": "View a list of room sessions.",
-        "description": "",
+        "description": "View a list of room sessions.",
         "operationId": "ListRoomSessions",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48056,7 +48173,8 @@
             "$ref": "#/components/responses/video_ResourceNotFound"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a room session."
       }
     },
     "/room_sessions/{room_session_id}/actions/end": {
@@ -48114,7 +48232,7 @@
     "/room_sessions/{room_session_id}/actions/kick": {
       "post": {
         "summary": "Kick participants from a room session.",
-        "description": "",
+        "description": "Kick participants from a room session.",
         "operationId": "KickParticipantInSession",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48177,7 +48295,7 @@
     "/room_sessions/{room_session_id}/actions/mute": {
       "post": {
         "summary": "Mute participants in room session.",
-        "description": "",
+        "description": "Mute participants in room session.",
         "operationId": "MuteParticipantInSession",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48240,7 +48358,7 @@
     "/room_sessions/{room_session_id}/actions/unmute": {
       "post": {
         "summary": "Unmute participants in room session.",
-        "description": "",
+        "description": "Unmute participants in room session.",
         "operationId": "UnmuteParticipantInSession",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48303,7 +48421,7 @@
     "/room_sessions/{room_session_id}/participants": {
       "get": {
         "summary": "View a list of room participants.",
-        "description": "",
+        "description": "View a list of room participants.",
         "operationId": "RetrieveListRoomParticipants",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48444,7 +48562,7 @@
     "/rooms": {
       "get": {
         "summary": "View a list of rooms.",
-        "description": "",
+        "description": "View a list of rooms.",
         "operationId": "ListRooms",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -48679,7 +48797,8 @@
             "$ref": "#/components/responses/video_ResourceNotFound"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "View a room."
       },
       "patch": {
         "summary": "Update a room.",
@@ -48902,7 +49021,7 @@
     "/rooms/{room_id}/sessions": {
       "get": {
         "summary": "View a list of room sessions.",
-        "description": "",
+        "description": "View a list of room sessions.",
         "operationId": "RetrieveListRoomSessions",
         "x-endpoint-cost": "medium",
         "tags": [
@@ -49417,7 +49536,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List short codes"
       }
     },
     "/short_codes/{id}": {
@@ -49453,7 +49573,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a short code"
       },
       "patch": {
         "summary": "Update short code",
@@ -52111,7 +52232,7 @@
       "get": {
         "summary": "List Migration Source coverage",
         "deprecated": false,
-        "description": "",
+        "description": "List Migration Source coverage",
         "operationId": "ListMigrationSourceCoverage",
         "tags": [
           "Data Migration"
@@ -52154,7 +52275,7 @@
       "get": {
         "summary": "List all Migration Sources",
         "deprecated": false,
-        "description": "",
+        "description": "List all Migration Sources",
         "operationId": "ListMigrationSources",
         "tags": [
           "Data Migration"
@@ -52241,7 +52362,7 @@
       "delete": {
         "summary": "Delete a Migration Source",
         "deprecated": false,
-        "description": "",
+        "description": "Delete a Migration Source",
         "operationId": "DeleteMigrationSource",
         "tags": [
           "Data Migration"
@@ -52290,7 +52411,7 @@
       "get": {
         "summary": "Get a Migration Source",
         "deprecated": false,
-        "description": "",
+        "description": "Get a Migration Source",
         "operationId": "GetMigrationSource",
         "tags": [
           "Data Migration"
@@ -52341,7 +52462,7 @@
       "get": {
         "summary": "List all Migrations",
         "deprecated": false,
-        "description": "",
+        "description": "List all Migrations",
         "operationId": "ListMigrations",
         "tags": [
           "Data Migration"
@@ -52428,7 +52549,7 @@
       "get": {
         "summary": "Get a Migration",
         "deprecated": false,
-        "description": "",
+        "description": "Get a Migration",
         "operationId": "GetMigration",
         "tags": [
           "Data Migration"
@@ -52479,7 +52600,7 @@
       "post": {
         "summary": "Stop a Migration",
         "deprecated": false,
-        "description": "",
+        "description": "Stop a Migration",
         "operationId": "StopMigration",
         "tags": [
           "Data Migration"
@@ -52685,7 +52806,8 @@
             "$ref": "#/components/responses/numbers_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update requirement group for a sub number order"
       }
     },
     "/sub_number_orders/{sub_number_order_id}": {
@@ -56850,7 +56972,8 @@
             "description": "Unauthorized"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Mobile Phone Numbers"
       }
     },
     "/v2/mobile_phone_numbers/{id}": {
@@ -56891,7 +57014,8 @@
             "description": "Resource not found"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a Mobile Phone Number"
       },
       "patch": {
         "summary": "Update a Mobile Phone Number",
@@ -56940,7 +57064,8 @@
             "description": "Unprocessable Entity"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a Mobile Phone Number"
       }
     },
     "/v2/mobile_voice_connections": {
@@ -57010,7 +57135,8 @@
             "description": "Unauthorized"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Mobile Voice Connections"
       },
       "post": {
         "summary": "Create a Mobile Voice Connection",
@@ -57051,7 +57177,8 @@
             "description": "Unprocessable Entity"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a Mobile Voice Connection"
       }
     },
     "/v2/mobile_voice_connections/{id}": {
@@ -57092,7 +57219,8 @@
             "description": "Resource not found"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a Mobile Voice Connection"
       },
       "get": {
         "summary": "Retrieve a Mobile Voice Connection",
@@ -57131,7 +57259,8 @@
             "description": "Resource not found"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a Mobile Voice Connection"
       },
       "patch": {
         "summary": "Update a Mobile Voice Connection",
@@ -57183,7 +57312,8 @@
             "description": "Unprocessable Entity"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a Mobile Voice Connection"
       }
     },
     "/v2/payment/stored_payment_transactions": {
@@ -57276,7 +57406,8 @@
             }
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a stored payment transaction"
       }
     },
     "/v2/whatsapp/business_accounts": {
@@ -57300,7 +57431,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Whatsapp Business Accounts"
       }
     },
     "/v2/whatsapp/business_accounts/{id}": {
@@ -57323,7 +57455,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a Whatsapp Business Account"
       },
       "get": {
         "tags": [
@@ -57345,7 +57478,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get a single Whatsapp Business Account"
       }
     },
     "/v2/whatsapp/business_accounts/{id}/phone_numbers": {
@@ -57372,7 +57506,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List phone numbers for a WABA"
       },
       "post": {
         "tags": [
@@ -57403,7 +57538,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Initialize Whatsapp phone number verification"
       }
     },
     "/v2/whatsapp/business_accounts/{id}/settings": {
@@ -57427,7 +57563,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get WABA settings"
       },
       "patch": {
         "tags": [
@@ -57459,7 +57596,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update WABA settings"
       }
     },
     "/v2/whatsapp/message_templates": {
@@ -57520,7 +57658,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Whatsapp message templates"
       },
       "post": {
         "tags": [
@@ -57547,7 +57686,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Create a Whatsapp message template"
       }
     },
     "/v2/whatsapp/phone_numbers": {
@@ -57556,7 +57696,7 @@
           "Whatsapp Phone Numbers"
         ],
         "summary": "List Whatsapp phone numbers",
-        "operationId": "ListPhoneNumbers",
+        "operationId": "ListWhatsappPhoneNumbers",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageConsolidated"
@@ -57571,7 +57711,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List Whatsapp phone numbers"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}": {
@@ -57594,7 +57735,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a Whatsapp phone number"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}/calling_settings": {
@@ -57618,7 +57760,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get calling settings for a phone number"
       },
       "patch": {
         "tags": [
@@ -57650,7 +57793,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Enable or disable Whatsapp calling for a phone number"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}/profile": {
@@ -57674,7 +57818,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get phone number business profile"
       },
       "patch": {
         "tags": [
@@ -57706,7 +57851,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update phone number business profile"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}/profile/photo": {
@@ -57729,7 +57875,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete Whatsapp profile photo"
       },
       "get": {
         "tags": [
@@ -57757,7 +57904,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get Whatsapp profile photo"
       },
       "post": {
         "tags": [
@@ -57799,7 +57947,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Upload Whatsapp profile photo"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}/resend_verification": {
@@ -57832,7 +57981,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Resend verification code"
       }
     },
     "/v2/whatsapp/phone_numbers/{phone_number}/verify": {
@@ -57865,7 +58015,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Submit verification code for a phone number"
       }
     },
     "/v2/whatsapp/user_data": {
@@ -57884,7 +58035,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Fetch Whatsapp user data"
       },
       "patch": {
         "tags": [
@@ -57911,7 +58063,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update Whatsapp user data"
       }
     },
     "/v2/whatsapp_message_templates/{id}": {
@@ -57934,7 +58087,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a Whatsapp message template"
       },
       "get": {
         "tags": [
@@ -57956,7 +58110,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Get a Whatsapp message template by ID"
       },
       "patch": {
         "tags": [
@@ -57988,7 +58143,8 @@
             "$ref": "#/components/responses/messaging_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update a Whatsapp message template"
       }
     },
     "/v2/x402/credit_account": {
@@ -58357,7 +58513,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "List verifications by phone number"
       }
     },
     "/verifications/by_phone_number/{phone_number}/actions/verify": {
@@ -58405,7 +58562,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Verify verification code by phone number"
       }
     },
     "/verifications/call": {
@@ -58453,7 +58611,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Trigger Call verification"
       }
     },
     "/verifications/flashcall": {
@@ -58501,7 +58660,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Trigger Flash call verification"
       }
     },
     "/verifications/sms": {
@@ -58536,7 +58696,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Trigger SMS verification"
       }
     },
     "/verifications/whatsapp": {
@@ -58585,7 +58746,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Trigger WhatsApp verification"
       }
     },
     "/verifications/{verification_id}": {
@@ -58623,7 +58785,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve verification"
       }
     },
     "/verifications/{verification_id}/actions/verify": {
@@ -58671,7 +58834,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Verify verification code by ID"
       }
     },
     "/verified_numbers": {
@@ -58866,7 +59030,8 @@
             "$ref": "#/components/responses/verified-numbers_NotFoundErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete a verified number"
       },
       "get": {
         "tags": [
@@ -58908,7 +59073,8 @@
             "$ref": "#/components/responses/verified-numbers_NotFoundErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Retrieve a verified number"
       }
     },
     "/verified_numbers/{phone_number}/actions/verify": {
@@ -58975,7 +59141,8 @@
             "$ref": "#/components/responses/verified-numbers_UnprocessableEntityErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Submit verification code"
       }
     },
     "/verify_profiles": {
@@ -59283,7 +59450,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Delete Verify profile"
       },
       "get": {
         "tags": [
@@ -59411,7 +59579,8 @@
             "$ref": "#/components/responses/verify_GenericErrorResponse"
           }
         },
-        "x-latency-category": "responsive"
+        "x-latency-category": "responsive",
+        "description": "Update Verify profile"
       }
     },
     "/virtual_cross_connects": {
