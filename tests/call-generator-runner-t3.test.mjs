@@ -102,4 +102,19 @@ describe("call generator runner (T3)", () => {
     assert.match(code, /reapOrphans/);
     assert.match(code, /orphan_reaped/);
   });
+
+  it("runner fails pending ledger rows when the settings switch is disabled mid-run", async () => {
+    const code = await readFile(new URL("../lib/call-generator/runner.mjs", import.meta.url), "utf8");
+    assert.match(code, /await isCallGeneratorEnabled\(pool\)/);
+    assert.match(code, /status = 'failed'/);
+    assert.match(code, /call_generator_disabled/);
+  });
+
+  it("runner rejects targets without resolvable non-empty action sequences", async () => {
+    const code = await readFile(new URL("../lib/call-generator/runner.mjs", import.meta.url), "utf8");
+    assert.match(code, /missing_action_sequence/);
+    assert.match(code, /invalid_action_sequence/);
+    assert.match(code, /SELECT id, steps FROM cg_actions/);
+    assert.match(code, /row\.steps\.length > 0/);
+  });
 });
