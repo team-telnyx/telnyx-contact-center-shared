@@ -56,6 +56,37 @@ function findCustomHeader(headers, name) {
   );
 }
 
+function decodeClientState(clientState) {
+  if (!clientState) return null;
+  try {
+    return JSON.parse(Buffer.from(clientState, "base64").toString("utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+async function hangupVoicemailDropCall(callControlId) {
+  const apiKey = process.env.TELNYX_API_KEY;
+  if (!apiKey || !callControlId) return false;
+
+  try {
+    const response = await fetch(
+      buildTelnyxV2Url(`/calls/${encodeURIComponent(callControlId)}/actions/hangup`),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function lookupOutboundContactRecord(payload = {}) {
   const pool = getPostgresPool();
   if (!pool) return null;
@@ -242,7 +273,11 @@ export async function POST(request, { params }) {
     // WS5-T2: AMD result for outbound campaign calls — human → connect path,
     // machine → campaign voicemailAction (hangup / drop_message). No-op for
     // calls that don't belong to an outbound attempt.
-    if (callControlId && event === "call.machine.detection.ended") {
+    if (
+      callControlId &&
+      (event === "call.machine.detection.ended" ||
+        event === "call.machine.premium.detection.ended")
+    ) {
       try {
         const pool = getPostgresPool();
         if (pool) {
@@ -250,10 +285,23 @@ export async function POST(request, { params }) {
             callControlId,
             amdResult: payload?.result || null,
             eventId: body?.data?.id || body?.id || null,
+            eventType: event,
           });
         }
       } catch (err) {
         voiceWebhookLogger.error("voice_webhook_outbound_amd", voiceRuntimePayload({ error: err, eventType: event, callControlId, flowId }));
+      }
+    }
+
+    if (callControlId && event === "call.speak.ended") {
+      const decodedClientState = decodeClientState(payload?.client_state);
+      if (decodedClientState?.voicemailDrop) {
+        const hangupIssued = await hangupVoicemailDropCall(callControlId);
+        return NextResponse.json({
+          ok: true,
+          message: "Voicemail drop completed",
+          hangupIssued,
+        });
       }
     }
 
@@ -1092,10 +1140,8 @@ export async function POST(request, { params }) {
     try {
       const clientState = payload.client_state;
       if (clientState) {
-        const decoded = JSON.parse(
-          Buffer.from(clientState, "base64").toString("utf-8"),
-        );
-        currentNodeId = decoded.currentNodeId;
+        const decoded = decodeClientState(clientState);
+        currentNodeId = decoded?.currentNodeId || null;
       }
     } catch (e) {
       // Ignore client_state decode errors
