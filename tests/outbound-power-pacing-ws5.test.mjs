@@ -108,8 +108,8 @@ test("WS5-T3 AMD human handler only invokes power connect for power campaigns", 
   const source = await readFile(executionPath, "utf8");
   assert.match(
     source,
-    /String\(ledger\.mode \|\| ""\) === "power"/,
-    "machine-detection human path is mode-gated",
+    /\["power", "predictive"\]\.includes\(String\(ledger\.mode \|\| ""\)\)/,
+    "machine-detection human path is mode-gated (power + predictive since WS6)",
   );
   assert.match(
     source,
