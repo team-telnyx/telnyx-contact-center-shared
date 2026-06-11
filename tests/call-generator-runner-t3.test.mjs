@@ -103,10 +103,11 @@ describe("call generator runner (T3)", () => {
     assert.match(code, /orphan_reaped/);
   });
 
-  it("runner fails pending ledger rows when the settings switch is disabled mid-run", async () => {
+  it("runner fails pending and in-flight ledger rows when the settings switch is disabled mid-run", async () => {
     const code = await readFile(new URL("../lib/call-generator/runner.mjs", import.meta.url), "utf8");
     assert.match(code, /await isCallGeneratorEnabled\(pool\)/);
     assert.match(code, /status = 'failed'/);
+    assert.match(code, /status IN \('pending','dialing','ringing','answered','talking'\)/);
     assert.match(code, /call_generator_disabled/);
   });
 
