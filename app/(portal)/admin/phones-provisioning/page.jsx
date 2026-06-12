@@ -21,6 +21,7 @@ import {
   IconExternalLink,
   IconLoader2,
   IconPhoneCall,
+  IconPower,
   IconRefresh,
   IconRouteAltLeft,
   IconServer,
@@ -46,39 +47,61 @@ const VENDORS = [
   { value: "audiocodes", label: "AudioCodes" },
 ];
 
+const POLY_UCS_DOCS = "https://docs.poly.com/bundle/poly-ucs-ag-6-4-5/page/r-ucs-supported-phone-models.html";
+const POLY_EDGE_DOCS = "https://docs.poly.com/bundle/poly-edge-e-ag-current/page/r-poly-edge-e-supported-features.html";
+const AUDIOCODES_DOCS = "https://www.audiocodes.com/library/technical-documents?productFamilyGroup=1639";
+
 const VENDOR_MODELS = {
-  polycom: ["VVX 150", "VVX 250", "VVX 350", "VVX 450", "Edge E220", "Edge E350", "Edge E450", "CCX 400", "CCX 500"],
+  polycom: [
+    "VVX 101", "VVX 150", "VVX 201", "VVX 250", "VVX 300", "VVX 301", "VVX 310", "VVX 311", "VVX 350",
+    "VVX 400", "VVX 401", "VVX 410", "VVX 411", "VVX 450", "VVX 500", "VVX 501", "VVX 600", "VVX 601",
+    "CCX 350", "CCX 400", "CCX 500", "CCX 505", "CCX 600", "CCX 700",
+    "Edge E100", "Edge E220", "Edge E300", "Edge E320", "Edge E350", "Edge E400", "Edge E450", "Edge E500", "Edge E550",
+    "Edge B10", "Edge B20", "Edge B30", "Rove 20", "Rove 30", "Rove 40",
+  ],
   yealink: ["T31P", "T33G", "T43U", "T46U", "T48U", "T53W", "T54W", "T57W", "T58W"],
-  audiocodes: ["405HD", "445HD", "450HD"],
+  audiocodes: ["405", "405HD", "420HD", "430HD", "440HD", "445HD", "450HD"],
 };
 
+function polyImage(model) {
+  if (model.startsWith("CCX")) return model === "CCX 500" || model === "CCX 505" ? "/images/hardphones/poly-ccx-500.jpg" : "/images/hardphones/poly-ccx-400.jpg";
+  if (model.startsWith("Edge E")) {
+    if (["Edge E100", "Edge E220", "Edge E300", "Edge E320"].includes(model)) return "/images/hardphones/poly-edge-e220.jpg";
+    if (["Edge E350", "Edge E400"].includes(model)) return "/images/hardphones/poly-edge-e350.jpg";
+    return "/images/hardphones/poly-edge-e450.jpg";
+  }
+  if (model.startsWith("Edge B") || model.startsWith("Rove")) return "/images/hardphones/poly-edge-e220.jpg";
+  if (["VVX 101", "VVX 150", "VVX 201"].includes(model)) return "/images/hardphones/poly-vvx-150.jpg";
+  if (["VVX 250", "VVX 300", "VVX 301", "VVX 310", "VVX 311"].includes(model)) return "/images/hardphones/poly-vvx-250.jpg";
+  if (["VVX 350", "VVX 400", "VVX 401", "VVX 410", "VVX 411"].includes(model)) return "/images/hardphones/poly-vvx-350.jpg";
+  return "/images/hardphones/poly-vvx-450.jpg";
+}
+
+function polyDocs(model) {
+  return model.startsWith("Edge") ? POLY_EDGE_DOCS : POLY_UCS_DOCS;
+}
+
 const PHONE_MODEL_CATALOG = {
-  polycom: {
-    "VVX 150": { image: "/images/hardphones/poly-vvx-150.jpg", docs: "https://docs.poly.com/category/vvx" },
-    "VVX 250": { image: "/images/hardphones/poly-vvx-250.jpg", docs: "https://docs.poly.com/category/vvx" },
-    "VVX 350": { image: "/images/hardphones/poly-vvx-350.jpg", docs: "https://docs.poly.com/category/vvx" },
-    "VVX 450": { image: "/images/hardphones/poly-vvx-450.jpg", docs: "https://docs.poly.com/category/vvx" },
-    "Edge E220": { image: "/images/hardphones/poly-edge-e220.jpg", docs: "https://docs.poly.com/category/edge-e" },
-    "Edge E350": { image: "/images/hardphones/poly-edge-e350.jpg", docs: "https://docs.poly.com/category/edge-e" },
-    "Edge E450": { image: "/images/hardphones/poly-edge-e450.jpg", docs: "https://docs.poly.com/category/edge-e" },
-    "CCX 400": { image: "/images/hardphones/poly-ccx-400.jpg", docs: "https://docs.poly.com/category/ccx" },
-    "CCX 500": { image: "/images/hardphones/poly-ccx-500.jpg", docs: "https://docs.poly.com/category/ccx" },
-  },
+  polycom: Object.fromEntries(VENDOR_MODELS.polycom.map((model) => [model, { image: polyImage(model), docs: polyDocs(model) }])),
   yealink: {
     T31P: { image: "/images/hardphones/yealink-t31p.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t31p" },
     T33G: { image: "/images/hardphones/yealink-t33g.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t33g" },
-    T43U: { image: "/images/hardphones/yealink-t43u.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t43u" },
+    T43U: { image: "/images/hardphones/yealink-t43u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t43u" },
     T46U: { image: "/images/hardphones/yealink-t46u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t46u" },
     T48U: { image: "/images/hardphones/yealink-t48u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t48u" },
-    T53W: { image: "/images/hardphones/yealink-t53w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t53w" },
-    T54W: { image: "/images/hardphones/yealink-t54w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t54w" },
-    T57W: { image: "/images/hardphones/yealink-t57w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t57w" },
+    T53W: { image: "/images/hardphones/yealink-t53w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t53w" },
+    T54W: { image: "/images/hardphones/yealink-t54w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t54w" },
+    T57W: { image: "/images/hardphones/yealink-t57w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t57w" },
     T58W: { image: "/images/hardphones/yealink-t58w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t58w" },
   },
   audiocodes: {
-    "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
-    "445HD": { image: "/images/hardphones/audiocodes-445hd.png", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
-    "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: "https://www.audiocodes.com/products/ip-phones/450hd-ip-phone" },
+    "405": { image: "/images/hardphones/audiocodes-405.png", docs: AUDIOCODES_DOCS },
+    "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: AUDIOCODES_DOCS },
+    "420HD": { image: "/images/hardphones/audiocodes-420hd.png", docs: AUDIOCODES_DOCS },
+    "430HD": { image: "/images/hardphones/audiocodes-430hd.png", docs: AUDIOCODES_DOCS },
+    "440HD": { image: "/images/hardphones/audiocodes-440hd.png", docs: AUDIOCODES_DOCS },
+    "445HD": { image: "/images/hardphones/audiocodes-445hd.png", docs: AUDIOCODES_DOCS },
+    "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: AUDIOCODES_DOCS },
   },
 };
 
@@ -170,7 +193,35 @@ function Empty({ title, description }) {
   );
 }
 
-const emptyPhoneDraft = () => ({ mac: "", vendor: "polycom", model: "", label: "", admin_password: "", ip_address: "" });
+const emptyPhoneDraft = () => ({
+  mac: "",
+  vendor: "polycom",
+  model: "",
+  label: "",
+  admin_password: "",
+  ip_address: "",
+  settings: {
+    cti_mode: "direct",
+    line_keys: "1",
+    timezone_discovery: true,
+    sntp_server: "pool.ntp.org",
+    dynamic_reload: true,
+    automatic_firmware_updates: true,
+    firmware_source: "vendor-default",
+    custom_config_url: "",
+    syslog_server: "",
+  },
+});
+
+function normalizePhoneSettings(raw = {}) {
+  return {
+    ...emptyPhoneDraft().settings,
+    ...(raw && typeof raw === "object" ? raw : {}),
+    timezone_discovery: raw?.timezone_discovery !== false,
+    dynamic_reload: raw?.dynamic_reload !== false,
+    automatic_firmware_updates: raw?.automatic_firmware_updates !== false,
+  };
+}
 
 function phoneDraftValid(draft) {
   const mac = String(draft.mac || "").toLowerCase().replace(/[^0-9a-f]/g, "");
@@ -184,6 +235,8 @@ export default function PhonesProvisioningPage() {
   const [phones, setPhones] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
+  const [selectedRebootIds, setSelectedRebootIds] = useState([]);
+  const [rebooting, setRebooting] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState(emptyPhoneDraft());
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
@@ -239,6 +292,7 @@ export default function PhonesProvisioningPage() {
         label: selectedPhone.label || "",
         admin_password: selectedPhone.admin_password || "",
         ip_address: selectedPhone.ip_address || "",
+        settings: normalizePhoneSettings(selectedPhone.settings),
       });
     } else {
       setPhoneDraft(emptyPhoneDraft());
@@ -258,6 +312,7 @@ export default function PhonesProvisioningPage() {
         label: phoneDraft.label.trim(),
         admin_password: phoneDraft.admin_password.trim(),
         ip_address: phoneDraft.ip_address.trim(),
+        settings: normalizePhoneSettings(phoneDraft.settings),
       };
       const url = selectedPhone ? `${API}/phones/${selectedPhone.id}` : `${API}/phones`;
       const res = await fetch(url, {
@@ -310,6 +365,30 @@ export default function PhonesProvisioningPage() {
     }
   }
 
+  async function rebootPhones(ids) {
+    const phoneIds = ids && ids.length ? ids : selectedRebootIds;
+    if (!phoneIds.length) return;
+    const label = phoneIds.length === phones.length ? "all phones" : `${phoneIds.length} phone${phoneIds.length === 1 ? "" : "s"}`;
+    if (!window.confirm(`Send remote reboot to ${label}?`)) return;
+    setRebooting(true);
+    try {
+      const res = await fetch(`${API}/phones/reboot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_ids: phoneIds }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Remote reboot failed");
+      const ok = (data.results || []).filter((r) => r.ok).length;
+      notify({ title: "Remote reboot requested", description: `${ok}/${data.results?.length || phoneIds.length} accepted`, variant: ok ? "success" : "warning" });
+      await refresh(false);
+    } catch (err) {
+      notify({ title: "Remote reboot failed", description: err.message, variant: "error" });
+    } finally {
+      setRebooting(false);
+    }
+  }
+
   const headerCreate = active === "phones" ? { label: "New phone", onClick: () => setSelectedPhoneId(null) } : null;
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
 
@@ -355,9 +434,13 @@ export default function PhonesProvisioningPage() {
               <PhonesListView
                 phones={phones}
                 selectedPhoneId={selectedPhone?.id || null}
+                selectedRebootIds={selectedRebootIds}
                 setSelectedPhoneId={setSelectedPhoneId}
+                setSelectedRebootIds={setSelectedRebootIds}
                 deletePhone={deletePhone}
                 togglePhoneState={togglePhoneState}
+                rebootPhones={rebootPhones}
+                rebooting={rebooting}
               />
             ) : (
               <SettingsSummaryView />
@@ -465,32 +548,45 @@ function DashboardView({ dashboard, phones }) {
   );
 }
 
-function PhonesListView({ phones, selectedPhoneId, setSelectedPhoneId, deletePhone, togglePhoneState }) {
+function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelectedPhoneId, setSelectedRebootIds, deletePhone, togglePhoneState, rebootPhones, rebooting }) {
   if (!phones.length) {
     return <Empty title="No phones yet" description="Use New phone in the header, fill in the MAC and vendor in Context Settings on the right, then save. A Telnyx SIP credential is created automatically." />;
   }
+  const allSelected = selectedRebootIds.length === phones.length;
+  const toggleRebootSelection = (id) => setSelectedRebootIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   return (
     <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">Phone inventory</h3>
-          <p className="text-sm text-muted-foreground">Rows select configuration in the right Context Settings panel.</p>
+          <p className="text-sm text-muted-foreground">Rows select configuration in the right Context Settings panel. Use checkboxes for bulk remote reboot.</p>
         </div>
-        <Badge variant="outline" className="bg-card">{phones.length} total</Badge>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" variant="outline" disabled={rebooting || !selectedRebootIds.length} onClick={() => rebootPhones(selectedRebootIds)} data-testid="hp-bulk-reboot-selected">
+            {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}
+            Reboot selected
+          </Button>
+          <Button size="sm" variant="outline" disabled={rebooting || !phones.length} onClick={() => rebootPhones(phones.map((p) => p.id))} data-testid="hp-bulk-reboot-all">
+            Reboot all
+          </Button>
+          <Badge variant="outline" className="bg-card">{phones.length} total</Badge>
+        </div>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border">
-        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}>
-          <span>Phone</span><span>Vendor</span><span>Model</span><span>State</span><span>Last seen</span><span className="text-right">Actions</span>
+        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}>
+          <span><input type="checkbox" checked={allSelected} onChange={() => setSelectedRebootIds(allSelected ? [] : phones.map((p) => p.id))} aria-label="Select all phones for reboot" /></span><span>Phone</span><span>Vendor</span><span>Model</span><span>State</span><span>Last seen</span><span className="text-right">Actions</span>
         </div>
         {phones.map((p) => {
           const selected = selectedPhoneId === p.id;
+          const rebootSelected = selectedRebootIds.includes(p.id);
           return (
             <div
               key={p.id}
               onClick={() => setSelectedPhoneId(p.id)}
               className={`grid cursor-pointer items-center border-t px-3 py-2.5 text-sm transition hover:bg-muted/40 ${selected ? "bg-sky-500/10" : ""}`}
-              style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
+              style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
             >
+              <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={`Select ${formatMacDisplay(p.mac)} for reboot`} /></span>
               <span className="min-w-0">
                 <span className="block truncate font-medium">{p.label || formatMacDisplay(p.mac)}</span>
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
@@ -500,6 +596,9 @@ function PhonesListView({ phones, selectedPhoneId, setSelectedPhoneId, deletePho
               <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge></span>
               <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
               <span className="flex items-center justify-end gap-1">
+                <Button size="icon" variant="ghost" className="h-7 w-7" title="Remote reboot" disabled={rebooting} onClick={(e) => { e.stopPropagation(); rebootPhones([p.id]); }}>
+                  <IconPower className="h-3.5 w-3.5" />
+                </Button>
                 <Button size="icon" variant="ghost" className="h-7 w-7" title={p.provisioning_state === "disabled" ? "Enable provisioning" : "Disable provisioning"} onClick={(e) => { e.stopPropagation(); togglePhoneState(p); }}>
                   {p.provisioning_state === "disabled" ? <IconEye className="h-3.5 w-3.5" /> : <IconEyeOff className="h-3.5 w-3.5" />}
                 </Button>
@@ -517,6 +616,7 @@ function PhonesListView({ phones, selectedPhoneId, setSelectedPhoneId, deletePho
 
 function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }) }));
   const models = VENDOR_MODELS[draft.vendor] || [];
   const catalogEntry = modelCatalogEntry(draft.vendor, draft.model);
 
@@ -548,6 +648,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
             </Select>
           </div>
           {catalogEntry ? <PhoneModelPreview vendor={draft.vendor} model={draft.model} catalogEntry={catalogEntry} /> : null}
+          <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} />
           <div>
             <Label>Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
@@ -605,6 +706,62 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
         <p className="text-xs text-muted-foreground">Saving creates a dedicated Telnyx telephony credential for this phone automatically.</p>
       ) : null}
     </>
+  );
+}
+
+function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
+  const isPoly = vendor === "polycom";
+  const isAudioCodes = vendor === "audiocodes";
+  const capabilityText = isPoly
+    ? "Poly UCS/PVOS config supports line keys, polling/reload, firmware source, time/SNTP, admin password and REST API enablement."
+    : isAudioCodes
+      ? "AudioCodes 400HD config supports dynamic reload, automatic firmware updates, line keys, time/SNTP and custom config file append URLs."
+      : "Yealink config supports line keys, auto-provision schedule, time/SNTP and Action URI control.";
+  return (
+    <div className="rounded-xl border bg-muted/20 p-3">
+      <div className="mb-3">
+        <div className="text-sm font-medium">Context settings view{model ? ` · ${model}` : ""}</div>
+        <p className="mt-1 text-xs text-muted-foreground">{capabilityText}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Line keys</Label>
+          <Input className="mt-1" value={settings.line_keys || ""} onChange={(e) => updateSettings({ line_keys: e.target.value })} placeholder="1" />
+        </div>
+        <div>
+          <Label>CTI mode</Label>
+          <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="direct">Direct phone API</SelectItem>
+              <SelectItem value="telnyx">Telnyx fallback</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>SNTP server</Label>
+          <Input className="mt-1 font-mono" value={settings.sntp_server || ""} onChange={(e) => updateSettings({ sntp_server: e.target.value })} placeholder="pool.ntp.org" />
+        </div>
+        <div>
+          <Label>Firmware source URL</Label>
+          <Input className="mt-1 font-mono" value={settings.firmware_source || ""} onChange={(e) => updateSettings({ firmware_source: e.target.value })} placeholder="vendor-default or https://..." />
+        </div>
+        <div>
+          <Label>Custom config URL</Label>
+          <Input className="mt-1 font-mono" value={settings.custom_config_url || ""} onChange={(e) => updateSettings({ custom_config_url: e.target.value })} placeholder="https://.../extra.cfg" />
+        </div>
+        <div>
+          <Label>Syslog server</Label>
+          <Input className="mt-1 font-mono" value={settings.syslog_server || ""} onChange={(e) => updateSettings({ syslog_server: e.target.value })} placeholder="10.0.0.10" />
+        </div>
+      </div>
+      <div className="mt-3 space-y-2 text-xs">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.timezone_discovery !== false} onChange={(e) => updateSettings({ timezone_discovery: e.target.checked })} /> Timezone discovery from DHCP / site defaults</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.dynamic_reload !== false} onChange={(e) => updateSettings({ dynamic_reload: e.target.checked })} /> Dynamic reload / periodic provisioning checks</label>
+        <label className="flex items-center gap-2"><input type="checkbox" checked={settings.automatic_firmware_updates !== false} onChange={(e) => updateSettings({ automatic_firmware_updates: e.target.checked })} /> Automatic firmware updates</label>
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">These values are emitted into generated provisioning files when supported by the vendor syntax; unsupported vendor/model combinations keep the values as inventory context.</p>
+    </div>
   );
 }
 
@@ -694,6 +851,7 @@ function PhoneCtiCard({ phone }) {
         <div className="grid grid-cols-2 gap-2">
           {ctlBtn("status", "Check status")}
           {ctlBtn("reprovision", "Re-provision")}
+          {ctlBtn("reboot", "Reboot")}
         </div>
         {lastStatus ? (
           <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
@@ -729,19 +887,14 @@ function SettingsSummaryView() {
         </ul>
       </SettingCard>
 
-      <SettingCard icon={IconRouteAltLeft} title="NAT and local-network CTI" subtitle="Genesys-style managed phones without inbound firewall holes">
+      <SettingCard icon={IconRouteAltLeft} title="NAT and local-network CTI" subtitle="Managed hardphones without inbound firewall holes">
         <div className="space-y-3 text-sm text-muted-foreground">
           <p>
             Direct Poly REST and Yealink Action URI need server-to-phone reachability. For phones behind customer NAT, prefer <span className="font-medium text-foreground">Telnyx Call Control fallback</span>: the phone registers outbound to Telnyx, auto-answers the CTI leg, and the Contact Center controls that Telnyx leg instead of opening inbound firewall access to the handset.
           </p>
           <p>
-            Genesys Cloud takes the same managed-telephony pattern: phone provisioning and supported model management live in the cloud, while edge/SBC-style components handle private-network telephony reachability. If we need true local key-level control for NAT-ed Poly/Yealink phones, the safer design is a small LAN bridge that opens an outbound WebSocket to CC and proxies local phone REST/Action URI calls; a browser plugin is possible but worse for credentials, CORS and enterprise rollout.
+            For true local key-level control with NAT-ed phones, use a small LAN bridge/agent that opens an outbound WebSocket to CC and proxies local phone REST/Action URI calls. A browser plugin is possible but weaker operationally because of credentials, CORS/Private Network Access and enterprise rollout policy.
           </p>
-          <div className="flex flex-wrap gap-2">
-            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/managed-phones-models-and-features-matrix/" target="_blank" rel="noreferrer">Genesys managed phone matrix <IconExternalLink className="h-3 w-3" /></a>
-            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/provisioning-phones-genesys-cloud-voice/" target="_blank" rel="noreferrer">Genesys phone provisioning <IconExternalLink className="h-3 w-3" /></a>
-            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/about-managed-phone-configuration/" target="_blank" rel="noreferrer">Managed phone configuration <IconExternalLink className="h-3 w-3" /></a>
-          </div>
         </div>
       </SettingCard>
 

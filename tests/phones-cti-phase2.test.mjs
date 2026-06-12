@@ -16,7 +16,7 @@ async function src(path) {
 
 describe("hard phones CTI driver layer (Phase 2)", () => {
   it("exposes the full CTI action set", () => {
-    for (const action of ["dial", "answer", "hangup", "hold", "resume", "mute", "unmute", "send_dtmf", "status", "reprovision"]) {
+    for (const action of ["dial", "answer", "hangup", "hold", "resume", "mute", "unmute", "send_dtmf", "status", "reprovision", "reboot"]) {
       assert.ok(CTI_ACTIONS.includes(action), `missing action ${action}`);
     }
   });
@@ -85,6 +85,14 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /const \{ id \} = await params/);
   });
 
+  it("bulk reboot admin endpoint gates on admin and logs per-phone results", async () => {
+    const code = await src("app/api/admin/phones-provisioning/phones/reboot/route.js");
+    assert.match(code, /requireAdmin/);
+    assert.match(code, /phone_ids/);
+    assert.match(code, /executeCtiAction\(phone, "reboot"/);
+    assert.match(code, /cti_reboot/);
+  });
+
   it("CTI webhook transfers the auto-answered leg to the dial target", async () => {
     const code = await src("app/api/provisioning/cti-webhook/route.js");
     assert.match(code, /parseCtiClientState/);
@@ -123,6 +131,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /\/api\/v1\/callctrl\/mute/);
     assert.match(code, /\/api\/v1\/webCallControl\/callStatus/);
     assert.match(code, /\/api\/v1\/mgmt\/updateConfiguration/);
+    assert.match(code, /\/api\/v1\/mgmt\/safeReboot/);
     assert.match(code, /4010/);
   });
 
@@ -134,6 +143,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /key=F_HOLD/);
     assert.match(code, /key=MUTE/);
     assert.match(code, /key=AUTOP/);
+    assert.match(code, /key=REBOOT/);
   });
 
   it("telnyx fallback dials with auto-answer Alert-Info header", async () => {

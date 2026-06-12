@@ -28,7 +28,15 @@ const phone = {
   sip_username: "gencredabc123",
   sip_password: "secretpw",
   admin_password: "newadminpw",
-  settings: {},
+  settings: {
+    line_keys: 3,
+    sntp_server: "time.example.com",
+    dynamic_reload: true,
+    automatic_firmware_updates: true,
+    firmware_source: "https://firmware.example.com/poly/",
+    custom_config_url: "https://cfg.example.com/extra.cfg",
+    syslog_server: "10.0.0.10",
+  },
 };
 
 describe("hard phones provisioning (Phase 1)", () => {
@@ -64,6 +72,10 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(reg, /apps\.telNotification\.URL=/);
     assert.match(reg, /device\.auth\.localAdminPassword="newadminpw"/);
     assert.match(reg, /prov\.polling\.enabled="1"/);
+    assert.match(reg, /reg\.1\.lineKeys="3"/);
+    assert.match(reg, /time\.example\.com/);
+    assert.match(reg, /device\.prov\.upgradeServer/);
+    assert.match(reg, /log\.server\.address="10\.0\.0\.10"/);
   });
 
   it("generates Yealink cfg with version header, account and action URLs", () => {
@@ -80,6 +92,12 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(cfg, /action_url\.incoming_call = /);
     assert.match(cfg, /action_url\.call_terminated = /);
     assert.match(cfg, /static\.security\.user_password = admin:newadminpw/);
+    assert.match(cfg, /linekey\.1\.label = Desk 12/);
+    assert.match(cfg, /features\.config_dsskey_length = 3/);
+    assert.match(cfg, /local_time\.ntp_server1 = time\.example\.com/);
+    assert.match(cfg, /firmware\.url = https:\/\/firmware\.example\.com\/poly\//);
+    assert.match(cfg, /custom_config\.url = https:\/\/cfg\.example\.com\/extra\.cfg/);
+    assert.match(cfg, /syslog\.server = 10\.0\.0\.10/);
   });
 
   it("generates AudioCodes INI cfg with line 0 and provisioning persistence", () => {
@@ -92,6 +110,12 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(cfg, /provisioning\/check_sync\/enabled=1/);
     assert.match(cfg, /voip\/auto_answer\/enabled=1/);
     assert.match(cfg, /system\/password=newadminpw/);
+    assert.match(cfg, /provisioning\/firmware\/auto_update=1/);
+    assert.match(cfg, /provisioning\/firmware\/url=https:\/\/firmware\.example\.com\/poly\//);
+    assert.match(cfg, /provisioning\/custom_configuration\/url=https:\/\/cfg\.example\.com\/extra\.cfg/);
+    assert.match(cfg, /system\/time\/ntp_server=time\.example\.com/);
+    assert.match(cfg, /system\/line_keys=3/);
+    assert.match(cfg, /system\/syslog\/server=10\.0\.0\.10/);
   });
 
   it("builds per-vendor config from the request kind", () => {
@@ -179,8 +203,17 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /PhoneModelPreview/);
     assert.match(code, /Full manufacturer documentation/);
     assert.match(code, /\/images\/hardphones\/poly-vvx-450\.jpg/);
+    assert.match(code, /VVX 101/);
+    assert.match(code, /Edge E550/);
+    assert.match(code, /420HD/);
     assert.match(code, /https:\/\/www\.yealink\.com\/en\/product-detail\/ip-phone-t46u/);
-    assert.match(code, /Genesys managed phone matrix/);
+    assert.match(code, /Context settings view/);
+    assert.match(code, /Dynamic reload/);
+    assert.match(code, /Automatic firmware updates/);
+    assert.match(code, /Reboot selected/);
+    assert.match(code, /\/phones\/reboot/);
+    assert.doesNotMatch(code, /Genesys managed phone matrix/);
+    assert.doesNotMatch(code, /help\.genesys\.cloud/);
     assert.match(code, /settings\.cti_mode = &quot;telnyx&quot;/);
   });
 
@@ -190,7 +223,9 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.ok(files.includes("poly-vvx-450.jpg"));
     assert.ok(files.includes("yealink-t46u.png"));
     assert.ok(files.includes("audiocodes-445hd.png"));
-    assert.ok(files.length >= 20);
+    assert.ok(files.includes("audiocodes-420hd.png"));
+    assert.ok(files.includes("yealink-t43u.png"));
+    assert.ok(files.length >= 25);
   });
 
   it("menu replaces CTI Testing with Phones Provisioning", async () => {
