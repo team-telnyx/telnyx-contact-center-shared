@@ -6,6 +6,11 @@ import { URL } from "node:url";
 
 const PORT = Number(process.env.PORT || 8787);
 const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || "";
+const CC_WS_URL = process.env.CC_WS_URL || "";
+const BRIDGE_ID = process.env.BRIDGE_ID || `local-${crypto.randomUUID()}`;
+const BRIDGE_SITE = process.env.BRIDGE_SITE || process.env.SITE_NAME || "local";
+const RECONNECT_MS = Number(process.env.RECONNECT_MS || 5000);
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS || 25000);
 const DEFAULT_POLY_ADMIN_PASSWORD = process.env.DEFAULT_POLY_ADMIN_PASSWORD || "";
 const DEFAULT_YEALINK_ADMIN_USER = process.env.DEFAULT_YEALINK_ADMIN_USER || "admin";
 const DEFAULT_YEALINK_ADMIN_PASSWORD = process.env.DEFAULT_YEALINK_ADMIN_PASSWORD || "";
@@ -142,6 +147,80 @@ function hostFromPath(parts) {
   return host;
 }
 
+async function executeCommand({ vendor, host, action = "status", payload = {} }) {
+  if (!host) return { ok: false, reason: "missing_host" };
+  if (vendor === "polycom") {
+    const password = payload.admin_password || payload.password || "";
+    if (action === "status") return polyStatus(host, password);
+    if (action === "dial") return polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(payload.number || payload.target || ""), Line: "1", Type: "SIP" } } });
+    if (["answer", "hangup", "hold", "resume"].includes(action)) {
+      const ref = await activePolyCallRef(host, password);
+      if (!ref) return { ok: false, reason: "no_active_call" };
+      const map = { answer: "answerCall", hangup: "endCall", hold: "holdCall", resume: "resumeCall" };
+      return polyRequest(host, `/api/v1/callctrl/${map[action]}`, { method: "POST", password, body: { data: { Ref: ref } } });
+    }
+    if (action === "reboot") return polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password });
+    if (action === "reprovision") return polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password });
+  }
+  if (vendor === "yealink") {
+    if (action === "dial") return yealinkAction(host, `number=${payload.number || payload.target || ""}`);
+    if (action === "answer") return yealinkAction(host, "OK");
+    if (action === "hangup") return yealinkAction(host, "CALLEND");
+    if (action === "hold") return yealinkAction(host, "F_HOLD");
+    if (action === "reboot") return yealinkAction(host, "Reboot");
+  }
+  return { ok: false, reason: "unsupported_action" };
+}
+
+function buildCcWsUrl() {
+  if (!CC_WS_URL) return "";
+  const url = new URL(CC_WS_URL);
+  url.searchParams.set("bridge_id", BRIDGE_ID);
+  url.searchParams.set("site", BRIDGE_SITE);
+  if (BRIDGE_TOKEN) url.searchParams.set("token", BRIDGE_TOKEN);
+  return url.toString();
+}
+
+function startOutboundConnection() {
+  const target = buildCcWsUrl();
+  if (!target) return;
+  if (typeof WebSocket === "undefined") {
+    console.error(JSON.stringify({ ok: false, event: "websocket_unavailable" }));
+    return;
+  }
+  let heartbeat = null;
+  let closed = false;
+  const ws = new WebSocket(target);
+  const send = (message) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+  };
+  ws.addEventListener("open", () => {
+    console.log(JSON.stringify({ ok: true, event: "cc_ws_connected", bridge_id: BRIDGE_ID }));
+    send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"] } });
+    heartbeat = setInterval(() => send({ type: "heartbeat", bridge_id: BRIDGE_ID, timestamp: new Date().toISOString() }), HEARTBEAT_MS);
+  });
+  ws.addEventListener("message", async (event) => {
+    let message = null;
+    try { message = JSON.parse(String(event.data)); } catch { return; }
+    if (message.type !== "command") return;
+    try {
+      const result = await executeCommand({ vendor: message.vendor, host: message.host, action: message.action, payload: message.payload || {} });
+      send({ type: "command_result", command_id: message.command_id, ok: result.ok !== false, result });
+    } catch (err) {
+      send({ type: "command_result", command_id: message.command_id, ok: false, error: err?.message || String(err) });
+    }
+  });
+  const scheduleReconnect = (event, error = null) => {
+    if (closed) return;
+    closed = true;
+    if (heartbeat) clearInterval(heartbeat);
+    console.log(JSON.stringify({ ok: false, event, error, reconnect_ms: RECONNECT_MS }));
+    setTimeout(startOutboundConnection, RECONNECT_MS).unref?.();
+  };
+  ws.addEventListener("close", () => scheduleReconnect("cc_ws_closed"));
+  ws.addEventListener("error", () => scheduleReconnect("cc_ws_error"));
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
   try {
@@ -153,25 +232,9 @@ const server = http.createServer(async (req, res) => {
     const host = hostFromPath(parts);
     const action = parts[3] || "status";
     const body = req.method === "GET" ? {} : await readBody(req);
-    if (vendor === "polycom") {
-      const password = body.admin_password || body.password || "";
-      if (action === "status" && req.method === "GET") return json(res, 200, await polyStatus(host, password));
-      if (action === "dial" && req.method === "POST") return json(res, 200, await polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(body.number || body.target || ""), Line: "1", Type: "SIP" } } }));
-      if (["answer", "hangup", "hold", "resume"].includes(action) && req.method === "POST") {
-        const ref = await activePolyCallRef(host, password);
-        if (!ref) return json(res, 200, { ok: false, reason: "no_active_call" });
-        const map = { answer: "answerCall", hangup: "endCall", hold: "holdCall", resume: "resumeCall" };
-        return json(res, 200, await polyRequest(host, `/api/v1/callctrl/${map[action]}`, { method: "POST", password, body: { data: { Ref: ref } } }));
-      }
-      if (action === "reboot" && req.method === "POST") return json(res, 200, await polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password }));
-      if (action === "reprovision" && req.method === "POST") return json(res, 200, await polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password }));
-    }
-    if (vendor === "yealink") {
-      if (action === "dial" && req.method === "POST") return json(res, 200, await yealinkAction(host, `number=${body.number || body.target || ""}`));
-      if (action === "answer" && req.method === "POST") return json(res, 200, await yealinkAction(host, "OK"));
-      if (action === "hangup" && req.method === "POST") return json(res, 200, await yealinkAction(host, "CALLEND"));
-      if (action === "hold" && req.method === "POST") return json(res, 200, await yealinkAction(host, "F_HOLD"));
-      if (action === "reboot" && req.method === "POST") return json(res, 200, await yealinkAction(host, "Reboot"));
+    if (vendor === "polycom" || vendor === "yealink") {
+      const result = await executeCommand({ vendor, host, action, payload: body });
+      return json(res, result.ok === false ? 502 : 200, result);
     }
     json(res, 400, { ok: false, reason: "unsupported_action" });
   } catch (err) {
@@ -180,5 +243,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(JSON.stringify({ ok: true, service: "hardphone-bridge", port: PORT }));
+  console.log(JSON.stringify({ ok: true, service: "hardphone-bridge", port: PORT, bridge_id: BRIDGE_ID, outbound_enabled: Boolean(CC_WS_URL) }));
+  startOutboundConnection();
 });

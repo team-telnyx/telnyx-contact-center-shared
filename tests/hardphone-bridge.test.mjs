@@ -21,7 +21,8 @@ describe("hardphone local bridge", () => {
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot/);
     assert.match(server, /\/servlet\?key=/);
 
-    assert.match(compose, /network_mode: host/);
+    assert.match(compose, /ports:/);
+    assert.match(compose, /host\.docker\.internal:host-gateway/);
     assert.match(compose, /env_file:/);
     assert.match(deploy, /docker compose up -d --build/);
   });

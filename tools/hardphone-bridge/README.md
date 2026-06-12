@@ -4,12 +4,16 @@ Local sidecar for controlling LAN-only desk phones from Telnyx Contact Center de
 
 ## Why it exists
 
-Poly/Yealink CTI endpoints are usually RFC1918 LAN addresses (`10.x`, `192.168.x`) and must not be exposed to the public internet. The bridge runs inside the customer LAN and talks to phones locally. Contact Center can then talk to the bridge through a secure private route (VPN/Tailscale/Cloudflare Tunnel) or, in a future mode, through an outbound WebSocket tunnel.
+Poly/Yealink CTI endpoints are usually RFC1918 LAN addresses (`10.x`, `192.168.x`) and must not be exposed to the public internet. The bridge runs inside the customer LAN, talks to phones locally, and opens a persistent **outbound WebSocket** to Contact Center. CC never needs inbound reachability to the LAN.
+
+For local Docker Desktop testing, point the bridge at the CC streaming sidecar via `ws://host.docker.internal:3001/hardphone-bridge`.
 
 ## Current MVP
 
 - Runs as a Docker container.
-- Exposes a token-protected local HTTP API.
+- Opens an outbound WebSocket to CC: `CC_WS_URL=ws://.../hardphone-bridge`.
+- Sends `hello` and heartbeat messages; receives `command` messages; returns `command_result` messages.
+- Keeps the token-protected local HTTP API for diagnostics/manual LAN testing.
 - Supports Polycom/Poly VVX/Edge REST CTI:
   - status
   - dial
@@ -32,7 +36,21 @@ cd tools/hardphone-bridge
 ./scripts/deploy-local.sh
 ```
 
-The script creates `.env` from `.env.example` and generates a `BRIDGE_TOKEN` if missing.
+The script creates `.env` from `.env.example` and generates a `BRIDGE_TOKEN` if missing. The same token must be set in Contact Center as `HARDPHONE_BRIDGE_TOKEN`.
+
+For local end-to-end testing on Docker Desktop:
+
+```bash
+# terminal 1, from repo root — local CC relay sidecar
+HARDPHONE_BRIDGE_TOKEN=$(grep '^BRIDGE_TOKEN=' tools/hardphone-bridge/.env | cut -d= -f2-) \
+STREAMING_WS_PORT=3001 node -e "import('./lib/streaming-ws-handler.mjs').then(m=>m.initStreamingWSServer({port:3001}))"
+
+# terminal 2 — Docker bridge in LAN mode
+cd tools/hardphone-bridge
+./scripts/deploy-local.sh
+```
+
+The bridge connects out to `ws://host.docker.internal:3001/hardphone-bridge` by default.
 
 ## API examples
 
@@ -78,15 +96,14 @@ Desk phones
   └─ private addresses, never exposed publicly
 ```
 
-## What still needs CC integration
+## What still needs product integration
 
-This MVP is immediately useful when the CC server can reach the bridge over a private route. For pure cloud-to-LAN without inbound networking, implement:
+The outbound WebSocket relay now exists in the CC streaming sidecar and works for local/cloud-to-LAN command delivery. Next product slices:
 
-1. DB tables: `hp_local_bridges`, `hp_local_bridge_commands`.
-2. Streaming WS route on CC for bridge registration/heartbeat/command results.
-3. Admin UI for generating bridge tokens and assigning phones to `bridge_id`.
-4. `cti_mode = local_bridge` driver that queues commands to the bridge registry instead of calling phone IP directly.
-5. Optional Docker enrollment command generated from UI.
+1. DB tables: `hp_local_bridges`, `hp_local_bridge_commands` for persistent registry/audit instead of the current in-memory relay.
+2. Admin UI for generating bridge tokens, showing online bridges, and assigning phones to `bridge_id`.
+3. `cti_mode = local_bridge` driver that sends commands through the bridge relay instead of calling phone IP directly.
+4. Optional Docker enrollment command generated from UI.
 
 ## Security notes
 

@@ -24,6 +24,18 @@ PY
   echo "Created tools/hardphone-bridge/.env with a generated BRIDGE_TOKEN"
 fi
 
+for kv in \
+  "CC_WS_URL=ws://host.docker.internal:3001/hardphone-bridge" \
+  "BRIDGE_ID=local-lab" \
+  "BRIDGE_SITE=local-lan" \
+  "RECONNECT_MS=5000" \
+  "HEARTBEAT_MS=25000"; do
+  key="${kv%%=*}"
+  if ! grep -q "^${key}=" .env; then
+    printf '%s\n' "$kv" >> .env
+  fi
+done
+
 docker compose up -d --build
 
 echo "Hardphone bridge is starting. Health: http://127.0.0.1:${PORT:-8787}/health"
