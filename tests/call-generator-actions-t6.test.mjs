@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
 import { normalizeSteps, describeStep } from "../lib/call-generator/actions.mjs";
 import { normalizeTargets } from "../lib/call-generator/runner.mjs";
+import { analyzeFlowForWorkflowTesting } from "../lib/call-generator/workflow-testing.mjs";
 
 async function src(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -218,6 +219,19 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(page, /LLM caller simulator will test workflow/);
     assert.match(page, /transcription is not active/);
     assert.match(page, /Disabled while Test Workflow is active/);
+  });
+
+  it("workflow testing analysis reads React Flow data.nodeType before customNode type", () => {
+    const analysis = analyzeFlowForWorkflowTesting({
+      nodes: [
+        { type: "customNode", data: { nodeType: "answer", config: { transcription_enabled: true } } },
+        { type: "customNode", data: { nodeType: "agent_assist", config: { enabled: true, assist_type: "workflows", workflow_id: "wf-1" } } },
+      ],
+    }, { "wf-1": { name: "Healthcare Intake" } });
+    assert.strictEqual(analysis.capable, true);
+    assert.strictEqual(analysis.enabled, true);
+    assert.strictEqual(analysis.workflow_id, "wf-1");
+    assert.strictEqual(analysis.workflow_name, "Healthcare Intake");
   });
 
   it("finalized agent transcription triggers dynamic workflow-testing caller replies", async () => {

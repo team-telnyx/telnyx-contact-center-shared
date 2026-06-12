@@ -120,6 +120,96 @@ describe("call generator engine (T2)", () => {
     }
   });
 
+  it("ignores late bridged events after the ledger is already final", async () => {
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const originalFetch = global.fetch;
+    process.env.TELNYX_API_KEY = "test-key";
+    let fetchCount = 0;
+    global.fetch = async () => {
+      fetchCount += 1;
+      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
+    };
+
+    const ledger = {
+      status: "completed",
+      result: {
+        action_trigger: "agent_bridge",
+        action_steps: [{ type: "speak", text: "too late", voice: "AWS.Polly.Joanna" }],
+      },
+    };
+    const pool = {
+      query: async (sql, params = []) => {
+        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
+        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
+        if (/SET status = \$1/.test(sql)) return { rowCount: 0 };
+        if (/action_sequence_started_at/.test(sql)) {
+          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
+          return { rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    try {
+      const payload = {
+        client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
+        call_control_id: "cc-1",
+      };
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), null);
+      assert.strictEqual(ledger.result.action_sequence_started_at, undefined);
+      assert.strictEqual(fetchCount, 0);
+    } finally {
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("does not fall back to legacy post-answer audio for empty action steps", async () => {
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const originalFetch = global.fetch;
+    process.env.TELNYX_API_KEY = "test-key";
+    const calls = [];
+    global.fetch = async (url, options) => {
+      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
+      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
+    };
+
+    const ledger = {
+      status: "ringing",
+      result: { action_trigger: "call_answer", action_steps: [] },
+    };
+    const pool = {
+      query: async (sql, params = []) => {
+        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
+        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
+        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { postAnswer: { action: "tts_loop", ttsText: "legacy audio" }, maxDurationSecs: 120 } }] };
+        if (/SET status = \$1/.test(sql)) {
+          ledger.status = params[0];
+          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
+          return { rowCount: 1 };
+        }
+        if (/action_sequence_started_at/.test(sql)) {
+          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
+          return { rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    try {
+      const payload = {
+        client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
+        call_control_id: "cc-1",
+      };
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.answered", payload), "answered");
+      assert.strictEqual(calls.some((call) => call.url.includes("/actions/speak") || call.body.payload === "legacy audio"), false);
+    } finally {
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+      global.fetch = originalFetch;
+    }
+  });
 
   it("state machine allows only forward transitions", () => {
     assert.strictEqual(canTransition("pending", "dialing"), true);
