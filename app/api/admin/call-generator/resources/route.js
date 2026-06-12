@@ -6,6 +6,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { analyzeFlowForWorkflowTesting, ensureWorkflowTestingAction } from "@/lib/call-generator/workflow-testing.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -64,13 +65,21 @@ export async function GET() {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    const [flowsResult, actionsResult, media] = await Promise.all([
-      pool.query(`SELECT id, name, description FROM voice_flows ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 300`),
+    await ensureWorkflowTestingAction(pool);
+    const [flowsResult, actionsResult, workflowsResult, media] = await Promise.all([
+      pool.query(`SELECT id, name, description, nodes FROM voice_flows ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 300`),
       pool.query(`SELECT id, name, description, steps FROM cg_actions ORDER BY updated_at DESC LIMIT 200`),
+      pool.query(`SELECT id, name FROM aa_workflows ORDER BY updated_at DESC NULLS LAST, name ASC LIMIT 500`),
       loadAudioMedia(),
     ]);
+    const workflowById = Object.fromEntries(workflowsResult.rows.map((workflow) => [workflow.id, workflow]));
     return NextResponse.json({
-      flows: flowsResult.rows,
+      flows: flowsResult.rows.map((flow) => ({
+        id: flow.id,
+        name: flow.name,
+        description: flow.description,
+        workflow_testing: analyzeFlowForWorkflowTesting(flow, workflowById),
+      })),
       actions: actionsResult.rows,
       media,
     });

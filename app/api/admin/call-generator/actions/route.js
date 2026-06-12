@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 import { normalizeSteps } from "@/lib/call-generator/actions.mjs";
+import { ensureWorkflowTestingAction } from "@/lib/call-generator/workflow-testing.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -27,6 +28,7 @@ export async function GET() {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
+    await ensureWorkflowTestingAction(pool);
     const { rows } = await pool.query(`SELECT * FROM cg_actions ORDER BY updated_at DESC LIMIT 200`);
     return NextResponse.json({ actions: rows });
   } catch {

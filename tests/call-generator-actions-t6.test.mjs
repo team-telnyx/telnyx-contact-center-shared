@@ -190,4 +190,51 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /!voicesLoading && !voices\.length && current/);
     assert.match(code, /disabled=\{voicesLoading\}/);
   });
+
+  it("workflow testing action is protected, seeded, and configurable by voice", async () => {
+    const steps = normalizeSteps([{ type: "workflow_testing", voice: "MiniMax.Customer" }]);
+    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer" }]);
+    assert.match(describeStep(steps[0]), /Workflow Testing/);
+    const schema = await src("lib/postgres-schema.mjs");
+    assert.match(schema, /ensureWorkflowTestingAction/);
+    const actionsApi = await src("app/api/admin/call-generator/actions/[id]/route.js");
+    assert.match(actionsApi, /WORKFLOW_TESTING_ACTION_ID/);
+    assert.match(actionsApi, /protected system action and cannot be deleted/);
+  });
+
+  it("workflow testing target bypasses manual action sequence and validates transcription", () => {
+    const targets = normalizeTargets({ targets: [{ flow_id: "flow-1", total_calls: 1, from_numbers: ["+48123"], workflow_testing: true, workflow_id: "wf-1", workflow_name: "Healthcare Intake", transcription_active: true }] });
+    assert.strictEqual(targets[0].workflow_testing, true);
+    assert.strictEqual(targets[0].workflow_id, "wf-1");
+    assert.strictEqual(targets[0].action_id, "00000000-0000-4000-8000-000000000001");
+  });
+
+  it("resources and UI expose workflow readiness, workflow name, and transcription gating", async () => {
+    const resources = await src("app/api/admin/call-generator/resources/route.js");
+    assert.match(resources, /aa_workflows/);
+    assert.match(resources, /analyzeFlowForWorkflowTesting/);
+    const page = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(page, /Test Workflow/);
+    assert.match(page, /LLM caller simulator will test workflow/);
+    assert.match(page, /transcription is not active/);
+    assert.match(page, /Disabled while Test Workflow is active/);
+  });
+
+  it("finalized agent transcription triggers dynamic workflow-testing caller replies", async () => {
+    const router = await src("lib/agent-assist-transcription-router.mjs");
+    assert.match(router, /handleWorkflowTestingFinalTranscription/);
+    assert.match(router, /workflow_testing_transcription_reply_failed/);
+    const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
+    assert.match(workflowTesting, /latest_agent_transcript/);
+    assert.match(workflowTesting, /actions\/speak/);
+    assert.match(workflowTesting, /aa_workflows/);
+  });
+
+  it("runner persists workflow testing metadata and rejects missing transcription", async () => {
+    const code = await src("lib/call-generator/runner.mjs");
+    assert.match(code, /workflow_testing_transcription_required/);
+    assert.match(code, /workflow_testing_workflow_required/);
+    assert.match(code, /workflowTestingVoiceFromAction/);
+    assert.match(code, /workflow_testing/);
+  });
 });

@@ -40,6 +40,7 @@ import {
 } from "@tabler/icons-react";
 
 const API = "/api/admin/call-generator";
+const WORKFLOW_TESTING_ACTION_ID = "00000000-0000-4000-8000-000000000001";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Live runs and generated calls" },
@@ -60,7 +61,7 @@ const DEFAULT_SETTINGS = {
   pstn_whitelist: [],
 };
 
-const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], action_id: "", action_trigger: "call_answer" });
+const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], action_id: "", action_trigger: "call_answer", workflow_testing: false, workflow_id: "", workflow_name: "", transcription_active: false });
 const emptyScenarioDraft = () => ({
   name: "",
   description: "",
@@ -386,13 +387,21 @@ function MediaFileSelector({ value, onChange, media = [] }) {
 
 function scenarioTargetsValid(targets, allowedFromNumbers) {
   if (!Array.isArray(targets) || !targets.length) return false;
-  return targets.every((t) =>
-    String(t.flow_id || "").trim() &&
-    Number(t.total_calls) >= 1 &&
-    Array.isArray(t.from_numbers) && t.from_numbers.length >= 1 &&
-    t.from_numbers.every((n) => allowedFromNumbers.includes(n)) &&
-    String(t.action_id || "").trim(),
-  );
+  return targets.every((t) => {
+    const baseValid =
+      String(t.flow_id || "").trim() &&
+      Number(t.total_calls) >= 1 &&
+      Array.isArray(t.from_numbers) && t.from_numbers.length >= 1 &&
+      t.from_numbers.every((n) => allowedFromNumbers.includes(n));
+    if (!baseValid) return false;
+    if (t.workflow_testing === true) return Boolean(t.workflow_id && t.transcription_active === true);
+    return String(t.action_id || "").trim();
+  });
+}
+
+function flowWorkflowTestingInfo(flows, flowId) {
+  const flow = (Array.isArray(flows) ? flows : []).find((f) => String(f.id) === String(flowId));
+  return flow?.workflow_testing || { capable: false, enabled: false, agent_assist_active: false, transcription_active: false, workflow_id: null, workflow_name: null };
 }
 
 export default function AdminCallGeneratorPage() {
@@ -472,7 +481,7 @@ export default function AdminCallGeneratorPage() {
   useEffect(() => {
     if (selectedScenario) {
       const targets = Array.isArray(selectedScenario.config?.targets) && selectedScenario.config.targets.length
-        ? selectedScenario.config.targets.map((t) => ({ flow_id: t.flow_id || "", total_calls: t.total_calls || 1, from_numbers: t.from_numbers || [], action_id: t.action_id || "", action_trigger: t.action_trigger === "agent_bridge" ? "agent_bridge" : "call_answer" }))
+        ? selectedScenario.config.targets.map((t) => ({ flow_id: t.flow_id || "", total_calls: t.total_calls || 1, from_numbers: t.from_numbers || [], action_id: t.action_id || "", action_trigger: t.action_trigger === "agent_bridge" ? "agent_bridge" : "call_answer", workflow_testing: t.workflow_testing === true, workflow_id: t.workflow_id || "", workflow_name: t.workflow_name || "", transcription_active: t.transcription_active === true }))
         : [emptyTarget()];
       setScenarioDraft({
         name: selectedScenario.name || "",
@@ -511,8 +520,12 @@ export default function AdminCallGeneratorPage() {
             flow_id: t.flow_id,
             total_calls: Math.max(1, Math.min(1000, Number(t.total_calls) || 1)),
             from_numbers: t.from_numbers,
-            action_id: t.action_id || null,
+            action_id: t.workflow_testing === true ? WORKFLOW_TESTING_ACTION_ID : (t.action_id || null),
             action_trigger: t.action_trigger === "agent_bridge" ? "agent_bridge" : "call_answer",
+            workflow_testing: t.workflow_testing === true,
+            workflow_id: t.workflow_testing === true ? (t.workflow_id || null) : null,
+            workflow_name: t.workflow_testing === true ? (t.workflow_name || null) : null,
+            transcription_active: t.workflow_testing === true ? t.transcription_active === true : false,
           })),
           assertions: assertionsFromDraft(scenarioDraft),
         },
@@ -808,6 +821,34 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
     ...d,
     targets: d.targets.map((t, i) => (i === index ? { ...t, ...patch } : t)),
   }));
+  const selectTargetFlow = (index, flowId) => {
+    const info = flowWorkflowTestingInfo(flows, flowId);
+    updateTarget(index, {
+      flow_id: flowId,
+      workflow_testing: false,
+      workflow_id: info.workflow_id || "",
+      workflow_name: info.workflow_name || "",
+      transcription_active: info.transcription_active === true,
+      action_id: "",
+    });
+  };
+  const toggleWorkflowTesting = (index, checked) => {
+    const target = draft.targets[index] || {};
+    const info = flowWorkflowTestingInfo(flows, target.flow_id);
+    if (!checked) {
+      updateTarget(index, { workflow_testing: false, action_id: "" });
+      return;
+    }
+    if (!info.enabled) return;
+    updateTarget(index, {
+      workflow_testing: true,
+      action_id: WORKFLOW_TESTING_ACTION_ID,
+      action_trigger: "agent_bridge",
+      workflow_id: info.workflow_id || "",
+      workflow_name: info.workflow_name || "",
+      transcription_active: info.transcription_active === true,
+    });
+  };
   const addTarget = () => setDraft((d) => ({ ...d, targets: [...d.targets, emptyTarget()] }));
   const removeTarget = (index) => setDraft((d) => ({ ...d, targets: d.targets.filter((_, i) => i !== index) }));
   const fromNumberOptions = allowedFromNumbers.map((n) => ({ value: n, label: n }));
@@ -827,17 +868,44 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
         </div>
       </SettingCard>
 
-      {draft.targets.map((target, index) => (
+      {draft.targets.map((target, index) => {
+        const workflowInfo = flowWorkflowTestingInfo(flows, target.flow_id);
+        const canEnableWorkflowTesting = workflowInfo.enabled === true;
+        const hasWorkflowAssist = workflowInfo.capable === true;
+        const missingTranscription = hasWorkflowAssist && workflowInfo.transcription_active !== true;
+        return (
         <SettingCard key={index} icon={IconPhoneCall} title={`Target ${index + 1}`} subtitle="Flow destination and dialing volume">
           <div className="space-y-3">
             <div>
               <Label>Target Flow<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-              <Select value={target.flow_id || ""} onValueChange={(v) => updateTarget(index, { flow_id: v })}>
+              <Select value={target.flow_id || ""} onValueChange={(v) => selectTargetFlow(index, v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select call flow" /></SelectTrigger>
                 <SelectContent>
                   {flows.map((f) => <SelectItem key={f.id} value={f.id}>{f.name || f.id}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {hasWorkflowAssist ? (
+                <div className={`mt-3 rounded-xl border p-3 ${canEnableWorkflowTesting ? "bg-emerald-500/5 border-emerald-500/25" : "bg-amber-500/5 border-amber-500/25"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Label className="text-sm font-medium">Test Workflow</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {canEnableWorkflowTesting
+                          ? `LLM caller simulator will test workflow: ${workflowInfo.workflow_name || workflowInfo.workflow_id}.`
+                          : missingTranscription
+                            ? "This flow has Agent Assist workflow configured, but call transcription is not active on Answer or Streaming Start. Enable transcription before testing the workflow."
+                            : "This flow is not ready for workflow testing."}
+                      </p>
+                    </div>
+                    <Switch checked={target.workflow_testing === true} disabled={!canEnableWorkflowTesting} onCheckedChange={(checked) => toggleWorkflowTesting(index, checked)} />
+                  </div>
+                  {target.workflow_testing === true ? (
+                    <Badge variant="outline" className="mt-3 bg-card">Workflow: {workflowInfo.workflow_name || target.workflow_name || target.workflow_id}</Badge>
+                  ) : null}
+                </div>
+              ) : target.flow_id ? (
+                <p className="mt-2 text-xs text-muted-foreground">Test Workflow appears when the selected flow has an active Agent Assist node connected to a workflow.</p>
+              ) : null}
             </div>
             <div>
               <Label>Number of calls<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
@@ -855,14 +923,15 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               </div>
               {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">Calls rotate through selected numbers round-robin.</p> : null}
             </div>
-            <div>
+            <div className={target.workflow_testing === true ? "opacity-50" : ""}>
               <Label>Action sequence<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-              <Select value={target.action_id || ""} onValueChange={(v) => updateTarget(index, { action_id: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select action sequence" /></SelectTrigger>
+              <Select disabled={target.workflow_testing === true} value={target.workflow_testing === true ? WORKFLOW_TESTING_ACTION_ID : (target.action_id || "")} onValueChange={(v) => updateTarget(index, { action_id: v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder={target.workflow_testing === true ? "Disabled while Test Workflow is active" : "Select action sequence"} /></SelectTrigger>
                 <SelectContent>
                   {actions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {target.workflow_testing === true ? <p className="mt-1 text-xs text-muted-foreground">Action sequence is disabled because Test Workflow generates caller replies dynamically from agent-side transcription.</p> : null}
               {!actions.length ? <p className="mt-1 text-xs text-muted-foreground">No actions defined yet — create one in the Actions section first.</p> : null}
             </div>
             <div>
@@ -884,7 +953,8 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
             ) : null}
           </div>
         </SettingCard>
-      ))}
+        );
+      })}
 
       <Button size="sm" variant="outline" className="w-full" onClick={addTarget}>
         <IconPlus className="mr-2 h-4 w-4" />
@@ -920,7 +990,7 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
       </Button>
       {!valid ? (
         <p className="text-xs text-amber-600 dark:text-amber-300">
-          Required: scenario name and at least one target with a Target Flow, at least 1 call, at least one From number, and an Action sequence.
+          Required: scenario name and at least one target with a Target Flow, at least 1 call, at least one From number, and either an Action sequence or enabled Test Workflow with active call-flow transcription.
         </p>
       ) : null}
     </>
@@ -953,15 +1023,17 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{a.name}</span>
-                  <Badge variant="outline" className="bg-card text-xs">{steps.length} steps</Badge>
+                  <Badge variant="outline" className="bg-card text-xs">{a.id === WORKFLOW_TESTING_ACTION_ID ? "Protected" : `${steps.length} steps`}</Badge>
                 </div>
                 <div className="mt-1 truncate text-xs text-muted-foreground">
-                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
+                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : s.type === "workflow_testing" ? `Workflow Testing voice ${s.voice || "AWS.Polly.Joanna"}` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
                 </div>
               </div>
-              <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Delete" onClick={(e) => { e.stopPropagation(); deleteAction(a); }}>
-                <IconTrash className="h-3.5 w-3.5" />
-              </Button>
+              {a.id === WORKFLOW_TESTING_ACTION_ID ? null : (
+                <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" title="Delete" onClick={(e) => { e.stopPropagation(); deleteAction(a); }}>
+                  <IconTrash className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
           );
         })}
@@ -1004,9 +1076,9 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
       {draft.steps.map((step, index) => (
         <SettingCard
           key={index}
-          icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : IconActivity}
-          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : "Send DTMF"}`}
-          subtitle="Executed in order"
+          icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : step.type === "workflow_testing" ? IconWand : IconActivity}
+          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : step.type === "workflow_testing" ? "Workflow Testing" : "Send DTMF"}`}
+          subtitle={step.type === "workflow_testing" ? "Dynamic LLM caller replies for workflow testing" : "Executed in order"}
         >
           <div className="space-y-3">
             {step.type === "play_media" ? (
@@ -1029,6 +1101,14 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
                   </div>
                 </div>
               </>
+            ) : step.type === "workflow_testing" ? (
+              <div>
+                <Label>Caller simulation voice</Label>
+                <div className="mt-1">
+                  <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText="I need to order a new medical transport for our patient." />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.</p>
+              </div>
             ) : (
               <div>
                 <Label>DTMF digits<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
@@ -1037,13 +1117,13 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
               </div>
             )}
             <div className="flex items-center gap-1">
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" disabled={index === 0} onClick={() => moveStep(index, -1)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" disabled={index === 0 || step.type === "workflow_testing"} onClick={() => moveStep(index, -1)}>
                 <IconArrowUp className="h-3.5 w-3.5" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move down" disabled={index === draft.steps.length - 1} onClick={() => moveStep(index, 1)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" title="Move down" disabled={index === draft.steps.length - 1 || step.type === "workflow_testing"} onClick={() => moveStep(index, 1)}>
                 <IconArrowDown className="h-3.5 w-3.5" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title="Remove step" onClick={() => removeStep(index)}>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title="Remove step" disabled={step.type === "workflow_testing"} onClick={() => removeStep(index)}>
                 <IconTrash className="h-3.5 w-3.5" />
               </Button>
             </div>

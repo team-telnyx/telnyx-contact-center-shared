@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeSteps } from "@/lib/call-generator/actions.mjs";
+import { WORKFLOW_TESTING_ACTION_ID } from "@/lib/call-generator/workflow-testing.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -35,10 +36,17 @@ export async function PUT(request, { params }) {
       const name = String(body.name || "").trim();
       if (!name) return NextResponse.json({ error: "Name cannot be empty" }, { status: 400 });
       columns.push(`name = $${idx++}`);
-      values.push(name);
+      values.push(String(id) === WORKFLOW_TESTING_ACTION_ID ? "Workflow Testing" : name);
     }
-    if (body.description !== undefined) { columns.push(`description = $${idx++}`); values.push(String(body.description || "").trim() || null); }
-    if (body.steps !== undefined) { columns.push(`steps = $${idx++}`); values.push(JSON.stringify(normalizeSteps(body.steps))); }
+    if (body.description !== undefined) { columns.push(`description = $${idx++}`); values.push(String(id) === WORKFLOW_TESTING_ACTION_ID ? "Protected call-generator action used by Test Workflow targets. Only the TTS voice is editable." : (String(body.description || "").trim() || null)); }
+    if (body.steps !== undefined) {
+      const steps = normalizeSteps(body.steps);
+      const safeSteps = String(id) === WORKFLOW_TESTING_ACTION_ID
+        ? [{ type: "workflow_testing", voice: steps.find((step) => step.type === "workflow_testing")?.voice || "AWS.Polly.Joanna" }]
+        : steps;
+      columns.push(`steps = $${idx++}`);
+      values.push(JSON.stringify(safeSteps));
+    }
     if (!columns.length) return NextResponse.json({ error: "No changes" }, { status: 400 });
     values.push(id);
     await pool.query(`UPDATE cg_actions SET ${columns.join(", ")} WHERE id = $${idx}`, values);
@@ -58,6 +66,9 @@ export async function DELETE(_request, { params }) {
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
     const { id } = await params;
+    if (String(id) === WORKFLOW_TESTING_ACTION_ID) {
+      return NextResponse.json({ error: "Workflow Testing is a protected system action and cannot be deleted" }, { status: 409 });
+    }
     await pool.query(`DELETE FROM cg_actions WHERE id = $1`, [id]);
     return NextResponse.json({ ok: true });
   } catch {
