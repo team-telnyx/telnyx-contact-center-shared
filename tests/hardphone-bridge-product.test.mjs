@@ -27,6 +27,17 @@ describe("hardphone bridge product integration", () => {
     assert.doesNotMatch(route, /DELETE FROM hp_local_bridges/);
   });
 
+  it("authenticates bridge connections with persisted enrollment token hashes", async () => {
+    const relay = await file("lib/hardphones/bridge-relay.mjs");
+    const streaming = await file("lib/streaming-ws-handler.mjs");
+    assert.match(relay, /function tokenHash\(token\)/);
+    assert.match(relay, /bridgeTokenAuthorized/);
+    assert.match(relay, /SELECT 1 FROM hp_local_bridges WHERE bridge_id = \$1 AND token_hash = \$2 LIMIT 1/);
+    assert.match(relay, /export async function registerBridgeConnection/);
+    assert.match(streaming, /await handleHardphoneBridgeConnection\(clientWs, request\)/);
+    assert.doesNotMatch(relay, /const expectedToken = process\.env\.HARDPHONE_BRIDGE_TOKEN \|\| process\.env\.BRIDGE_TOKEN \|\| "";\n\s*if \(!tokenMatches\(token, expectedToken\)\)/);
+  });
+
   it("routes CTI through outbound local bridge mode", async () => {
     const cti = await file("lib/hardphones/cti.mjs");
     const driver = await file("lib/hardphones/drivers/local-bridge.mjs");
