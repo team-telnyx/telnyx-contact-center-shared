@@ -55,7 +55,30 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /setBridges/);
     assert.match(page, /<SelectItem value="local_bridge">Local bridge \(outbound WS\)<\/SelectItem>/);
     assert.match(page, /Local bridge ID/);
-    assert.match(page, /BridgeManager/);
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
+  });
+
+  it("renders bridges as a first-class rail section with list and context settings", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /id: "bridges", label: "Bridges"/);
+    assert.match(page, /active === "bridges" \? \(/);
+    assert.match(page, /<BridgesListView[\s\S]*bridges=\{bridges\}/);
+    assert.match(page, /<BridgeEditor[\s\S]*bridges=\{bridges\}/);
+    assert.match(page, /Bridge status/);
+    assert.match(page, /Connected phones/);
+  });
+
+  it("keeps one-time bridge enrollment inside the card with copy actions and a real CC_WS_URL", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const route = await file("app/api/admin/phones-provisioning/bridges/route.js");
+    assert.match(page, /IconCopy/);
+    assert.match(page, /navigator\.clipboard\.writeText/);
+    assert.match(page, /whitespace-pre-wrap break-all/);
+    assert.match(page, /enrollment\.env/);
+    assert.doesNotMatch(page, /wss:\/\/<cc-host>/);
+    assert.match(route, /function ccWsUrl\(\)/);
+    assert.match(route, /NEXT_PUBLIC_BASE_URL/);
+    assert.match(route, /STREAMING_WS_PORT \|\| "3001"/);
+    assert.match(route, /enrollment: \{ bridge_id: bridgeId, token, cc_ws_url: ccWsUrl\(\), env: bridgeEnvBlock/);
   });
 });

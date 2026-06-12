@@ -12,6 +12,7 @@ import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@
 import {
   IconActivity,
   IconClockHour4,
+  IconCopy,
   IconDashboard,
   IconDeviceFloppy,
   IconDeviceLandlinePhone,
@@ -36,6 +37,7 @@ const API = "/api/admin/phones-provisioning";
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Fleet status and provisioning activity" },
   { id: "phones", label: "Phones", icon: IconDeviceLandlinePhone, description: "Hard phone inventory and per-device config" },
+  { id: "bridges", label: "Bridges", icon: IconRouteAltLeft, description: "Local LAN bridge agents and connection status" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Provisioning endpoint and vendor setup" },
 ];
 
@@ -237,12 +239,14 @@ export default function PhonesProvisioningPage() {
   const [bridges, setBridges] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
+  const [selectedBridgeId, setSelectedBridgeId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
   const [rebooting, setRebooting] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState(emptyPhoneDraft());
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
   const selectedPhone = useMemo(() => phones.find((p) => p.id === selectedPhoneId) || null, [phones, selectedPhoneId]);
+  const selectedBridge = useMemo(() => bridges.find((b) => b.bridge_id === selectedBridgeId) || bridges[0] || null, [bridges, selectedBridgeId]);
 
   useEffect(() => {
     try {
@@ -396,7 +400,7 @@ export default function PhonesProvisioningPage() {
     }
   }
 
-  const headerCreate = active === "phones" ? { label: "New phone", onClick: () => setSelectedPhoneId(null) } : null;
+  const headerCreate = active === "phones" ? { label: "New phone", onClick: () => setSelectedPhoneId(null) } : active === "bridges" ? { label: "New bridge", onClick: () => setSelectedBridgeId(null) } : null;
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
 
   return (
@@ -449,6 +453,8 @@ export default function PhonesProvisioningPage() {
                 rebootPhones={rebootPhones}
                 rebooting={rebooting}
               />
+            ) : active === "bridges" ? (
+              <BridgesListView bridges={bridges} phones={phones} selectedBridgeId={selectedBridge?.bridge_id || null} setSelectedBridgeId={setSelectedBridgeId} />
             ) : (
               <SettingsSummaryView />
             )}
@@ -477,6 +483,8 @@ export default function PhonesProvisioningPage() {
                 bridges={bridges}
                 save={savePhone}
               />
+            ) : active === "bridges" ? (
+              <BridgeEditor bridges={bridges} bridge={selectedBridge} phones={phones} refresh={refresh} onSelect={setSelectedBridgeId} />
             ) : (
               <SettingsEditor bridges={bridges} refresh={refresh} />
             )}
@@ -962,11 +970,73 @@ function SettingsSummaryView() {
   );
 }
 
-function BridgeManager({ bridges = [], refresh }) {
+function bridgeStatusBadgeClass(online) {
+  return online ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+}
+
+function bridgePhoneCount(bridge, phones = []) {
+  if (!bridge?.bridge_id) return 0;
+  return phones.filter((p) => (p.local_bridge_id || p.settings?.local_bridge_id) === bridge.bridge_id).length;
+}
+
+function BridgesListView({ bridges = [], phones = [], selectedBridgeId, setSelectedBridgeId }) {
+  if (!bridges.length) return <Empty title="No local bridges yet" description="Create a bridge enrollment from Context settings, then run the Docker bridge in the customer LAN." />;
+  return (
+    <div className="space-y-3">
+      {bridges.map((bridge) => {
+        const selected = bridge.bridge_id === selectedBridgeId;
+        return (
+          <button
+            key={bridge.bridge_id}
+            type="button"
+            onClick={() => setSelectedBridgeId(bridge.bridge_id)}
+            className={`w-full rounded-2xl border bg-background/80 p-4 text-left shadow-sm transition hover:border-sky-500/50 ${selected ? "border-sky-500/70 ring-2 ring-sky-500/15" : ""}`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="truncate text-sm font-semibold">{bridge.label || bridge.bridge_id}</h3>
+                  <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? "online" : "offline"}</Badge>
+                </div>
+                <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{bridge.bridge_id}</p>
+              </div>
+              <IconRouteAltLeft className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <MiniStat label="Bridge status" value={bridge.online ? "online" : "offline"} icon={IconActivity} tone={bridge.online ? "emerald" : "amber"} />
+              <MiniStat label="Connected phones" value={bridgePhoneCount(bridge, phones)} icon={IconDeviceLandlinePhone} tone="blue" />
+              <MiniStat label="Last seen" value={formatTime(bridge.last_seen_at)} icon={IconClockHour4} tone="violet" />
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CopyButton({ value, label = "Copy" }) {
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value || "");
+      notify({ title: "Copied", description: label, variant: "success" });
+    } catch (err) {
+      notify({ title: "Copy failed", description: err.message, variant: "error" });
+    }
+  }
+  return (
+    <Button type="button" size="sm" variant="outline" onClick={copy} disabled={!value}>
+      <IconCopy className="mr-2 h-4 w-4" />
+      {label}
+    </Button>
+  );
+}
+
+function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) {
   const [label, setLabel] = useState("Local office bridge");
   const [site, setSite] = useState("");
   const [creating, setCreating] = useState(false);
   const [enrollment, setEnrollment] = useState(null);
+  const assignedPhones = bridge ? phones.filter((p) => (p.local_bridge_id || p.settings?.local_bridge_id) === bridge.bridge_id) : [];
 
   async function createBridge() {
     setCreating(true);
@@ -979,6 +1049,7 @@ function BridgeManager({ bridges = [], refresh }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Bridge enrollment failed");
       setEnrollment(data.enrollment || null);
+      if (data.bridge?.bridge_id) onSelect?.(data.bridge.bridge_id);
       notify({ title: "Local bridge enrolled", description: data.bridge?.bridge_id, variant: "success" });
       await refresh?.(false);
     } catch (err) {
@@ -989,9 +1060,9 @@ function BridgeManager({ bridges = [], refresh }) {
   }
 
   return (
-    <SettingCard icon={IconRouteAltLeft} title="Local bridge manager" subtitle="Outbound WebSocket agents for LAN hardphone CTI">
-      <div className="space-y-3">
-        <div className="grid gap-2 sm:grid-cols-2">
+    <div className="space-y-4">
+      <SettingCard icon={IconRouteAltLeft} title="Bridge configuration" subtitle="Create an outbound WebSocket bridge enrollment for a LAN site">
+        <div className="space-y-3">
           <div>
             <Label>Bridge label</Label>
             <Input className="mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Warsaw office bridge" />
@@ -1000,41 +1071,48 @@ function BridgeManager({ bridges = [], refresh }) {
             <Label>Site / location</Label>
             <Input className="mt-1" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Warsaw LAN" />
           </div>
-        </div>
-        <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating} data-testid="hp-create-local-bridge">
-          {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
-          Create bridge enrollment
-        </Button>
-        {enrollment ? (
-          <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
-            <div className="font-semibold text-amber-800 dark:text-amber-200">Copy this token now — it is shown only once.</div>
-            <div className="mt-2 space-y-1 font-mono">
-              <div>BRIDGE_ID={enrollment.bridge_id}</div>
-              <div>BRIDGE_TOKEN={enrollment.token}</div>
-              <div>CC_WS_URL=wss://&lt;cc-host&gt;{enrollment.cc_ws_path}</div>
+          <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating} data-testid="hp-create-local-bridge">
+            {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
+            Create bridge enrollment
+          </Button>
+          {enrollment ? (
+            <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-semibold text-amber-800 dark:text-amber-200">Copy this token now — it is shown only once.</div>
+                <CopyButton value={enrollment.env || `BRIDGE_ID=${enrollment.bridge_id}\nBRIDGE_TOKEN=${enrollment.token}\nCC_WS_URL=${enrollment.cc_ws_url}`} label="Copy .env" />
+              </div>
+              <pre className="mt-2 max-w-full whitespace-pre-wrap break-all rounded-md border bg-background/70 p-2 font-mono text-[11px] leading-relaxed text-foreground">{enrollment.env || `BRIDGE_ID=${enrollment.bridge_id}\nBRIDGE_TOKEN=${enrollment.token}\nCC_WS_URL=${enrollment.cc_ws_url}`}</pre>
             </div>
+          ) : null}
+        </div>
+      </SettingCard>
+
+      <SettingCard icon={IconActivity} title="Bridge status" subtitle="Live relay presence and phones assigned to this bridge">
+        {bridge ? (
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2">
+              <span className="min-w-0 font-mono text-xs">{bridge.bridge_id}</span>
+              <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? "online" : "offline"}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <MiniStat label="Connected phones" value={assignedPhones.length} icon={IconDeviceLandlinePhone} tone="blue" />
+              <MiniStat label="Last seen" value={formatTime(bridge.last_seen_at)} icon={IconClockHour4} tone="violet" />
+            </div>
+            {assignedPhones.length ? (
+              <div className="space-y-1.5">
+                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.label || formatMacDisplay(phone.mac)} · {phone.ip_address || phone.last_ip || "no IP"}</div>)}
+              </div>
+            ) : <p className="text-xs text-muted-foreground">No phones are assigned to this bridge yet.</p>}
           </div>
-        ) : null}
-        <div className="space-y-1.5">
-          {bridges.length ? bridges.map((b) => (
-            <div key={b.bridge_id} className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm">
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{b.label || b.bridge_id}</span>
-                <span className="block truncate font-mono text-[11px] text-muted-foreground">{b.bridge_id}{b.site ? ` · ${b.site}` : ""}</span>
-              </span>
-              <Badge variant="outline" className={b.online ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300"}>{b.online ? "online" : "offline"}</Badge>
-            </div>
-          )) : <p className="text-sm text-muted-foreground">No enrolled local bridges yet.</p>}
-        </div>
-      </div>
-    </SettingCard>
+        ) : <p className="text-sm text-muted-foreground">Create or select a bridge to see its live status.</p>}
+      </SettingCard>
+    </div>
   );
 }
 
-function SettingsEditor({ bridges = [], refresh }) {
+function SettingsEditor() {
   return (
     <div className="space-y-4">
-      <BridgeManager bridges={bridges} refresh={refresh} />
       <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
         <div className="space-y-2 text-sm text-muted-foreground">
           <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>

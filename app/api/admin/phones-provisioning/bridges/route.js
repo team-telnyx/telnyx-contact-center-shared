@@ -37,6 +37,22 @@ function relayAdminToken() {
   return process.env.HARDPHONE_BRIDGE_ADMIN_TOKEN || process.env.HARDPHONE_BRIDGE_TOKEN || process.env.BRIDGE_TOKEN || "";
 }
 
+function ccWsUrl() {
+  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "https://<cc-host>";
+  const wsPort = process.env.STREAMING_WS_PORT || "3001";
+  try {
+    const url = new URL(base);
+    url.protocol = url.protocol === "http:" ? "ws:" : "wss:";
+    url.port = wsPort;
+    url.pathname = "/hardphone-bridge";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return `wss://<cc-host>:${wsPort}/hardphone-bridge`;
+  }
+}
+
 async function liveBridges() {
   const headers = {};
   const token = relayAdminToken();
@@ -96,7 +112,8 @@ export async function POST(request) {
        RETURNING id, bridge_id, label, site, status, last_seen_at, metadata, created_at, updated_at`,
       [bridgeId, label, site, tokenHash(token), JSON.stringify({ relay_url: relayBaseUrl() }), user.id || user.email || null],
     );
-    return NextResponse.json({ ok: true, bridge: rows[0], enrollment: { bridge_id: bridgeId, token, cc_ws_path: "/hardphone-bridge" } }, { status: 201 });
+    const bridgeEnvBlock = `BRIDGE_ID=${bridgeId}\nBRIDGE_TOKEN=${token}\nCC_WS_URL=${ccWsUrl()}`;
+    return NextResponse.json({ ok: true, bridge: rows[0], enrollment: { bridge_id: bridgeId, token, cc_ws_url: ccWsUrl(), env: bridgeEnvBlock, cc_ws_path: "/hardphone-bridge" } }, { status: 201 });
   } catch (err) {
     adminRuntimeLogger.error("hardphone_bridge_create_failed", runtimePayload({ error: err, operation: "hp_bridge_create" }));
     return NextResponse.json({ error: "Failed to create local bridge" }, { status: 500 });
