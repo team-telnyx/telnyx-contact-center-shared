@@ -129,6 +129,13 @@ async function readBody(req) {
   return JSON.parse(raw);
 }
 
+async function readRequestPayload(req, url) {
+  const queryPayload = Object.fromEntries(url.searchParams.entries());
+  const hasBody = Number(req.headers["content-length"] || 0) > 0 || /json/i.test(String(req.headers["content-type"] || ""));
+  if (!hasBody) return queryPayload;
+  return { ...queryPayload, ...await readBody(req) };
+}
+
 function requireToken(req, res) {
   if (!BRIDGE_TOKEN) return true;
   const got = (req.headers.authorization || "").replace(/^Bearer\s+/i, "") || req.headers["x-bridge-token"] || "";
@@ -231,7 +238,7 @@ const server = http.createServer(async (req, res) => {
     const vendor = parts[1];
     const host = hostFromPath(parts);
     const action = parts[3] || "status";
-    const body = req.method === "GET" ? {} : await readBody(req);
+    const body = await readRequestPayload(req, url);
     if (vendor === "polycom" || vendor === "yealink") {
       const result = await executeCommand({ vendor, host, action, payload: body });
       return json(res, result.ok === false ? 502 : 200, result);
