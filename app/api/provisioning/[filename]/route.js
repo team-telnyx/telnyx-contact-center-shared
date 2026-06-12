@@ -34,13 +34,6 @@ function requestSourceIp(request) {
   return fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
 }
 
-function isPrivatePhoneIp(value) {
-  const parts = String(value || "").split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  const [a, b] = parts;
-  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
-}
-
 async function logEvent(pool, { phoneId = null, mac = null, eventType, detail = {} }) {
   try {
     await pool.query(
@@ -113,10 +106,9 @@ export async function GET(request, { params }) {
 
   await pool.query(
     `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2,
-       last_ip = COALESCE($3, last_ip),
        provisioning_state = CASE WHEN provisioning_state = 'pending' THEN 'provisioned' ELSE provisioning_state END
      WHERE id = $1`,
-    [phone.id, userAgent.slice(0, 300) || null, isPrivatePhoneIp(requestSourceIp(request)) ? requestSourceIp(request) : null],
+    [phone.id, userAgent.slice(0, 300) || null],
   );
   await logEvent(pool, {
     phoneId: phone.id,
