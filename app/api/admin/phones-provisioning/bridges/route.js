@@ -38,12 +38,13 @@ function relayAdminToken() {
 }
 
 function ccWsUrl() {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "https://<cc-host>";
+  const explicitWsBase = process.env.WS_BASE_URL;
+  const appBase = process.env.NEXT_PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "https://<cc-host>";
   const wsPort = process.env.STREAMING_WS_PORT || "3001";
   try {
-    const url = new URL(base);
-    url.protocol = url.protocol === "http:" ? "ws:" : "wss:";
-    url.port = wsPort;
+    const url = new URL(explicitWsBase || appBase);
+    url.protocol = url.protocol === "http:" ? "ws:" : url.protocol === "https:" ? "wss:" : url.protocol;
+    if (!explicitWsBase) url.port = wsPort;
     url.pathname = "/hardphone-bridge";
     url.search = "";
     url.hash = "";

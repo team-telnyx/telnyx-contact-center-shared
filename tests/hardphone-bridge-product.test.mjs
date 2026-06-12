@@ -77,8 +77,9 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /enrollment\.env/);
     assert.doesNotMatch(page, /wss:\/\/<cc-host>/);
     assert.match(route, /function ccWsUrl\(\)/);
+    assert.match(route, /WS_BASE_URL/);
     assert.match(route, /NEXT_PUBLIC_BASE_URL/);
-    assert.match(route, /STREAMING_WS_PORT \|\| "3001"/);
+    assert.match(route, /if \(!explicitWsBase\) url\.port = wsPort/);
     assert.match(route, /enrollment: \{ bridge_id: bridgeId, token, cc_ws_url: ccWsUrl\(\), env: bridgeEnvBlock/);
   });
 });
