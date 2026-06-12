@@ -87,9 +87,10 @@ export async function POST(request) {
       client = await pool.connect();
       await client.query("BEGIN");
       const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
+      const ipAddress = String(body?.ip_address || body?.settings?.ip_address || "").trim() || null;
       const { rows } = await client.query(
-        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, local_bridge_id, provisioning_state, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)
+        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, ip_address, local_bridge_id, provisioning_state, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13)
          RETURNING ${PHONE_COLUMNS}`,
         [
           mac,
@@ -102,6 +103,7 @@ export async function POST(request) {
           credential.sip_password,
           adminPassword,
           JSON.stringify(body?.settings && typeof body.settings === "object" ? body.settings : {}),
+          ipAddress,
           String(body?.local_bridge_id || body?.settings?.local_bridge_id || "").trim() || null,
           user.id || user.email || null,
         ],

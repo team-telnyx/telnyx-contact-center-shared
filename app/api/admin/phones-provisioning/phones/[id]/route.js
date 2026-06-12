@@ -63,6 +63,7 @@ export async function PUT(request, { params }) {
     if (body.label !== undefined) { columns.push(`label = $${idx++}`); values.push(String(body.label || "").trim() || null); }
     if (body.agent_id !== undefined) { columns.push(`agent_id = $${idx++}`); values.push(String(body.agent_id || "").trim() || null); }
     if (body.admin_password !== undefined) { columns.push(`admin_password = $${idx++}`); values.push(String(body.admin_password || "").trim() || null); }
+    if (body.ip_address !== undefined) { columns.push(`ip_address = $${idx++}`); values.push(String(body.ip_address || "").trim() || null); }
     if (body.local_bridge_id !== undefined) { columns.push(`local_bridge_id = $${idx++}`); values.push(String(body.local_bridge_id || "").trim() || null); }
     if (body.settings !== undefined) { columns.push(`settings = $${idx++}`); values.push(JSON.stringify(body.settings && typeof body.settings === "object" ? body.settings : {})); }
     if (body.provisioning_state !== undefined) {
