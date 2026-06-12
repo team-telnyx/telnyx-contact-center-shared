@@ -742,6 +742,7 @@ export default function AdminCallGeneratorPage() {
               <ActionEditor
                 draft={actionDraft}
                 setDraft={setActionDraft}
+                actionId={selectedAction?.id || null}
                 editing={Boolean(selectedAction)}
                 valid={actionValid}
                 saving={saving}
@@ -1042,7 +1043,8 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
   );
 }
 
-function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) {
+function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save, media }) {
+  const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID;
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const updateStep = (index, patch) => setDraft((d) => ({ ...d, steps: d.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
   const removeStep = (index) => setDraft((d) => ({ ...d, steps: d.steps.filter((_, i) => i !== index) }));
@@ -1060,18 +1062,26 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
 
   return (
     <>
-      <SettingCard icon={IconListDetails} title={editing ? "Edit action" : "New action"} subtitle="Sequential steps executed after answer">
-        <div className="space-y-3">
-          <div>
-            <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-            <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Action name" />
+      {protectedWorkflowTesting ? (
+        <SettingCard icon={IconWand} title="Workflow Testing" subtitle="Protected system action">
+          <p className="text-sm text-muted-foreground">
+            This protected action is managed by the application. Only the caller simulation TTS voice can be changed here.
+          </p>
+        </SettingCard>
+      ) : (
+        <SettingCard icon={IconListDetails} title={editing ? "Edit action" : "New action"} subtitle="Sequential steps executed after answer">
+          <div className="space-y-3">
+            <div>
+              <Label>Name<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+              <Input className="mt-1" value={draft.name} onChange={(e) => update({ name: e.target.value })} placeholder="Action name" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+            </div>
           </div>
-          <div>
-            <Label>Description</Label>
-            <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
-          </div>
-        </div>
-      </SettingCard>
+        </SettingCard>
+      )}
 
       {draft.steps.map((step, index) => (
         <SettingCard
@@ -1116,7 +1126,7 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
                 <p className="mt-1 text-xs text-muted-foreground">Allowed: 0-9 A-D # * and w (0.5s pause).</p>
               </div>
             )}
-            <div className="flex items-center gap-1">
+            {protectedWorkflowTesting ? null : <div className="flex items-center gap-1">
               <Button size="icon" variant="ghost" className="h-7 w-7" title="Move up" disabled={index === 0 || step.type === "workflow_testing"} onClick={() => moveStep(index, -1)}>
                 <IconArrowUp className="h-3.5 w-3.5" />
               </Button>
@@ -1126,12 +1136,12 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
               <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" title="Remove step" disabled={step.type === "workflow_testing"} onClick={() => removeStep(index)}>
                 <IconTrash className="h-3.5 w-3.5" />
               </Button>
-            </div>
+            </div>}
           </div>
         </SettingCard>
       ))}
 
-      <div className="grid grid-cols-3 gap-2">
+      {protectedWorkflowTesting ? null : <div className="grid grid-cols-3 gap-2">
         <Button size="sm" variant="outline" onClick={() => addStep("play_media")}>
           <IconMusic className="mr-1 h-3.5 w-3.5" />
           Media
@@ -1144,7 +1154,7 @@ function ActionEditor({ draft, setDraft, editing, valid, saving, save, media }) 
           <IconActivity className="mr-1 h-3.5 w-3.5" />
           DTMF
         </Button>
-      </div>
+      </div>}
 
       <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="cg-save-action">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}

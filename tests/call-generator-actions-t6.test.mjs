@@ -203,6 +203,15 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(actionsApi, /protected system action and cannot be deleted/);
   });
 
+  it("protected workflow testing action editor only exposes TTS voice settings", async () => {
+    const page = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(page, /const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID/);
+    assert.match(page, /Only the caller simulation TTS voice can be changed here/);
+    assert.match(page, /protectedWorkflowTesting \? null : <div className="grid grid-cols-3 gap-2">/);
+    assert.match(page, /Caller simulation voice/);
+    assert.match(page, /protectedWorkflowTesting \? null : <div className="flex items-center gap-1">/);
+  });
+
   it("workflow testing target bypasses manual action sequence and validates transcription", () => {
     const targets = normalizeTargets({ targets: [{ flow_id: "flow-1", total_calls: 1, from_numbers: ["+48123"], workflow_testing: true, workflow_id: "wf-1", workflow_name: "Healthcare Intake", transcription_active: true }] });
     assert.strictEqual(targets[0].workflow_testing, true);
