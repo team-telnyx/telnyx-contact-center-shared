@@ -127,8 +127,11 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /Context settings/);
     assert.match(code, /Target Flow/);
     assert.match(code, /Run actions on/);
-    assert.match(code, /Call answer — start immediately when the flow answers/);
-    assert.match(code, /Agent bridge — wait until the caller is bridged to an agent/);
+    assert.match(code, /role="tablist" aria-label="Run actions on"/);
+    assert.match(code, /Call Answer/);
+    assert.match(code, /Agent Bridge/);
+    assert.match(code, /Start immediately when the flow answers/);
+    assert.match(code, /Wait until the caller is bridged to an agent/);
     assert.match(code, /Add target/);
     assert.match(code, /scenarioTargetsValid/);
     assert.match(code, /disabled=\{!valid \|\| saving\}/);

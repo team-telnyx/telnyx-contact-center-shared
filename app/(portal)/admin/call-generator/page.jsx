@@ -937,14 +937,27 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
             </div>
             <div>
               <Label>Run actions on</Label>
-              <Select value={target.action_trigger || "call_answer"} onValueChange={(v) => updateTarget(index, { action_trigger: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select action trigger" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="call_answer">Call answer — start immediately when the flow answers</SelectItem>
-                  <SelectItem value="agent_bridge">Agent bridge — wait until the caller is bridged to an agent</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="mt-1 text-xs text-muted-foreground">Use Call answer for IVR/flow tests. Use Agent bridge when the action audio or DTMF must be heard by the live agent.</p>
+              <div className="mt-1 grid gap-1 rounded-xl border bg-muted/25 p-1" role="tablist" aria-label="Run actions on">
+                {[
+                  { value: "call_answer", label: "Call Answer", description: "Start immediately when the flow answers — best for IVR and flow tests." },
+                  { value: "agent_bridge", label: "Agent Bridge", description: "Wait until the caller is bridged to an agent — best when audio or DTMF must be heard by the live agent." },
+                ].map((option) => {
+                  const activeTrigger = (target.action_trigger || "call_answer") === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={activeTrigger}
+                      onClick={() => updateTarget(index, { action_trigger: option.value })}
+                      className={`rounded-lg border px-3 py-2 text-left transition ${activeTrigger ? "border-sky-500/50 bg-sky-500/10 shadow-sm" : "border-transparent hover:bg-background/70"}`}
+                    >
+                      <span className="block text-sm font-medium">{option.label}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             {draft.targets.length > 1 ? (
               <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
