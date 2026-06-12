@@ -8,6 +8,7 @@ import {
   isPstnTargetAllowed,
   canTransition,
   isCallGeneratorEnabled,
+  handleGeneratorWebhookEvent,
 } from "../lib/call-generator/engine.mjs";
 
 function poolWithSettings(settings) {
@@ -62,6 +63,63 @@ describe("call generator engine (T2)", () => {
     assert.strictEqual(isPstnTargetAllowed("+12025550199", wl), false);
     assert.strictEqual(isPstnTargetAllowed("", wl), false);
   });
+
+
+
+  it("delays action sequence until agent bridge when configured", async () => {
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const originalFetch = global.fetch;
+    process.env.TELNYX_API_KEY = "test-key";
+    const calls = [];
+    global.fetch = async (url, options) => {
+      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
+      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
+    };
+
+    const ledger = {
+      status: "ringing",
+      result: {
+        action_trigger: "agent_bridge",
+        action_steps: [{ type: "speak", text: "hello agent", voice: "AWS.Polly.Joanna" }],
+      },
+    };
+    const pool = {
+      query: async (sql, params = []) => {
+        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
+        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
+        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
+        if (/SET status = \$1/.test(sql)) {
+          const next = params[0];
+          if (params[3] !== ledger.status) return { rowCount: 0 };
+          ledger.status = next;
+          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
+          return { rowCount: 1 };
+        }
+        if (/action_sequence_started_at/.test(sql)) {
+          if (ledger.result.action_sequence_started_at) return { rowCount: 0 };
+          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
+          return { rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const payload = {
+      client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
+      call_control_id: "cc-1",
+    };
+
+    try {
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.answered", payload), "answered");
+      assert.strictEqual(calls.some((call) => call.url.includes("/actions/speak")), false);
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), "talking");
+      assert.strictEqual(calls.some((call) => call.body.payload === "hello agent"), true);
+    } finally {
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+      global.fetch = originalFetch;
+    }
+  });
+
 
   it("state machine allows only forward transitions", () => {
     assert.strictEqual(canTransition("pending", "dialing"), true);

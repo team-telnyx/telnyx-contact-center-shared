@@ -44,7 +44,7 @@ const API = "/api/admin/call-generator";
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Live runs and generated calls" },
   { id: "scenarios", label: "Scenarios", icon: IconList, description: "Test scenarios with flow targets" },
-  { id: "actions", label: "Actions", icon: IconListDetails, description: "Post-answer action sequences" },
+  { id: "actions", label: "Actions", icon: IconListDetails, description: "Action sequences for generated calls" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Caps, numbers, safety rails" },
 ];
 
@@ -60,7 +60,7 @@ const DEFAULT_SETTINGS = {
   pstn_whitelist: [],
 };
 
-const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], action_id: "" });
+const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], action_id: "", action_trigger: "call_answer" });
 const emptyScenarioDraft = () => ({
   name: "",
   description: "",
@@ -472,7 +472,7 @@ export default function AdminCallGeneratorPage() {
   useEffect(() => {
     if (selectedScenario) {
       const targets = Array.isArray(selectedScenario.config?.targets) && selectedScenario.config.targets.length
-        ? selectedScenario.config.targets.map((t) => ({ flow_id: t.flow_id || "", total_calls: t.total_calls || 1, from_numbers: t.from_numbers || [], action_id: t.action_id || "" }))
+        ? selectedScenario.config.targets.map((t) => ({ flow_id: t.flow_id || "", total_calls: t.total_calls || 1, from_numbers: t.from_numbers || [], action_id: t.action_id || "", action_trigger: t.action_trigger === "agent_bridge" ? "agent_bridge" : "call_answer" }))
         : [emptyTarget()];
       setScenarioDraft({
         name: selectedScenario.name || "",
@@ -512,6 +512,7 @@ export default function AdminCallGeneratorPage() {
             total_calls: Math.max(1, Math.min(1000, Number(t.total_calls) || 1)),
             from_numbers: t.from_numbers,
             action_id: t.action_id || null,
+            action_trigger: t.action_trigger === "agent_bridge" ? "agent_bridge" : "call_answer",
           })),
           assertions: assertionsFromDraft(scenarioDraft),
         },
@@ -864,6 +865,17 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               </Select>
               {!actions.length ? <p className="mt-1 text-xs text-muted-foreground">No actions defined yet — create one in the Actions section first.</p> : null}
             </div>
+            <div>
+              <Label>Run actions on</Label>
+              <Select value={target.action_trigger || "call_answer"} onValueChange={(v) => updateTarget(index, { action_trigger: v })}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select action trigger" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="call_answer">Call answer — start immediately when the flow answers</SelectItem>
+                  <SelectItem value="agent_bridge">Agent bridge — wait until the caller is bridged to an agent</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">Use Call answer for IVR/flow tests. Use Agent bridge when the action audio or DTMF must be heard by the live agent.</p>
+            </div>
             {draft.targets.length > 1 ? (
               <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
                 <IconTrash className="mr-2 h-3.5 w-3.5" />
@@ -917,14 +929,14 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
 
 function ActionsListView({ actions, selectedActionId, setSelectedActionId, deleteAction }) {
   if (!actions.length) {
-    return <Empty title="No actions yet" description="Use New action in the header to define a post-answer sequence: play media, speak text, or send DTMF." />;
+    return <Empty title="No actions yet" description="Use New action in the header to define a sequence: play media, speak text, or send DTMF." />;
   }
   return (
     <div className="rounded-2xl border bg-background/85 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">Action sequences</h3>
-          <p className="text-sm text-muted-foreground">Sequences executed on answered generated calls. Attach them to scenario targets.</p>
+          <p className="text-sm text-muted-foreground">Sequences for generated calls. Attach them to scenario targets and choose whether they run on answer or agent bridge.</p>
         </div>
         <Badge variant="outline" className="bg-card">{actions.length} total</Badge>
       </div>

@@ -44,7 +44,7 @@ describe("call generator actions & multi-target (T6)", () => {
   it("normalizeTargets validates flow_id and from_numbers per target", () => {
     const targets = normalizeTargets({
       targets: [
-        { flow_id: "flow-1", total_calls: 10, from_numbers: ["+48123", "+48456"], action_id: "a1" },
+        { flow_id: "flow-1", total_calls: 10, from_numbers: ["+48123", "+48456"], action_id: "a1", action_trigger: "agent_bridge" },
         { flow_id: "", total_calls: 5, from_numbers: ["+48123"] }, // dropped: no flow
         { flow_id: "flow-2", total_calls: 3, from_numbers: [] }, // dropped: no numbers
       ],
@@ -52,15 +52,18 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.strictEqual(targets.length, 1);
     assert.strictEqual(targets[0].flow_id, "flow-1");
     assert.strictEqual(targets[0].action_id, "a1");
+    assert.strictEqual(targets[0].action_trigger, "agent_bridge");
   });
 
   it("normalizeTargets clamps total_calls and falls back to legacy config", () => {
     const clamped = normalizeTargets({ targets: [{ flow_id: "f", total_calls: 99999, from_numbers: ["+1"] }] });
     assert.strictEqual(clamped[0].total_calls, 1000);
+    assert.strictEqual(clamped[0].action_trigger, "call_answer");
     const legacy = normalizeTargets({ target_type: "call_flow", target: "legacy-flow", total_calls: 7, from_numbers: ["+1"] });
     assert.strictEqual(legacy.length, 1);
     assert.strictEqual(legacy[0].flow_id, "legacy-flow");
     assert.strictEqual(legacy[0].total_calls, 7);
+    assert.strictEqual(legacy[0].action_trigger, "call_answer");
     const legacyWithGlobalNumbers = normalizeTargets(
       { target_type: "call_flow", target: "legacy-flow", total_calls: 2 },
       ["+15550001111"],
@@ -100,6 +103,8 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /normalizeTargets/);
     assert.match(code, /i % target\.from_numbers\.length/);
     assert.match(code, /action_steps/);
+    assert.match(code, /action_trigger/);
+    assert.match(code, /agent_bridge/);
     assert.match(code, /from_numbers_not_enabled/);
     assert.match(code, /no_valid_targets/);
   });
@@ -107,6 +112,10 @@ describe("call generator actions & multi-target (T6)", () => {
   it("engine executes action step sequences on answer", async () => {
     const code = await src("lib/call-generator/engine.mjs");
     assert.match(code, /action_steps/);
+    assert.match(code, /shouldRunActionTrigger/);
+    assert.match(code, /case "call\.bridged"/);
+    assert.match(code, /executeSequence/);
+    assert.match(code, /action_sequence_started_at/);
     assert.match(code, /playback_start/);
     assert.match(code, /send_dtmf/);
     assert.match(code, /speak/);
@@ -116,6 +125,9 @@ describe("call generator actions & multi-target (T6)", () => {
     const code = await src("app/(portal)/admin/call-generator/page.jsx");
     assert.match(code, /Context settings/);
     assert.match(code, /Target Flow/);
+    assert.match(code, /Run actions on/);
+    assert.match(code, /Call answer — start immediately when the flow answers/);
+    assert.match(code, /Agent bridge — wait until the caller is bridged to an agent/);
     assert.match(code, /Add target/);
     assert.match(code, /scenarioTargetsValid/);
     assert.match(code, /disabled=\{!valid \|\| saving\}/);
