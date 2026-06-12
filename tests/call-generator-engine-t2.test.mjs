@@ -85,6 +85,7 @@ describe("call generator engine (T2)", () => {
     };
     const pool = {
       query: async (sql, params = []) => {
+        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
         if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
@@ -139,6 +140,7 @@ describe("call generator engine (T2)", () => {
     };
     const pool = {
       query: async (sql, params = []) => {
+        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
         if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
@@ -173,6 +175,62 @@ describe("call generator engine (T2)", () => {
     }
   });
 
+  it("preserves call-answer actions when bridged arrives before answered", async () => {
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const originalFetch = global.fetch;
+    process.env.TELNYX_API_KEY = "test-key";
+    const calls = [];
+    global.fetch = async (url, options) => {
+      calls.push({ url: String(url), body: JSON.parse(options.body || "{}") });
+      return { ok: true, status: 200, json: async () => ({ data: {} }), text: async () => "" };
+    };
+
+    const ledger = {
+      status: "dialing",
+      result: {
+        action_trigger: "call_answer",
+        action_steps: [{ type: "speak", text: "answer first", voice: "AWS.Polly.Joanna" }],
+      },
+    };
+    const pool = {
+      query: async (sql, params = []) => {
+        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
+        if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
+        if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
+        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
+        if (/SET status = \$1/.test(sql)) {
+          const next = params[0];
+          if (params[3] !== ledger.status) return { rowCount: 0 };
+          ledger.status = next;
+          ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };
+          return { rowCount: 1 };
+        }
+        if (/action_sequence_started_at/.test(sql)) {
+          if (ledger.result.action_sequence_started_at) return { rowCount: 0 };
+          ledger.result = { ...ledger.result, ...JSON.parse(params[0] || "{}") };
+          return { rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    try {
+      const payload = {
+        client_state: buildGeneratorClientState({ runId: "run-1", ledgerId: "ledger-1" }),
+        call_control_id: "cc-1",
+      };
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.bridged", payload), null);
+      assert.strictEqual(ledger.status, "dialing");
+      assert.strictEqual(calls.some((call) => call.body.payload === "answer first"), false);
+      assert.strictEqual(await handleGeneratorWebhookEvent(pool, "call.answered", payload), "answered");
+      assert.strictEqual(calls.some((call) => call.body.payload === "answer first"), true);
+    } finally {
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+      global.fetch = originalFetch;
+    }
+  });
+
   it("ignores late bridged events after the ledger is already final", async () => {
     const originalApiKey = process.env.TELNYX_API_KEY;
     const originalFetch = global.fetch;
@@ -192,6 +250,7 @@ describe("call generator engine (T2)", () => {
     };
     const pool = {
       query: async (sql, params = []) => {
+        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
         if (/SET status = \$1/.test(sql)) return { rowCount: 0 };
@@ -234,6 +293,7 @@ describe("call generator engine (T2)", () => {
     };
     const pool = {
       query: async (sql, params = []) => {
+        if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
         if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { postAnswer: { action: "tts_loop", ttsText: "legacy audio" }, maxDurationSecs: 120 } }] };
