@@ -121,6 +121,29 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /ip_address: phoneDraft\.ip_address\.trim\(\)/);
   });
 
+  it("polycom driver falls back to HTTP when VVX HTTPS web UI returns 404 for REST", async () => {
+    const calls = [];
+    const previousFetch = global.fetch;
+    global.fetch = async (url, options = {}) => {
+      calls.push({ url: String(url), method: options.method });
+      if (String(url).startsWith("https://")) {
+        return { status: 404, ok: false, json: async () => { throw new Error("html"); } };
+      }
+      assert.strictEqual(String(url), "http://10.10.10.121/api/v1/callctrl/dial");
+      return { status: 200, ok: true, json: async () => ({ Status: "2000" }) };
+    };
+    try {
+      const result = await polycomDriver.dial({ ip_address: "10.10.10.121", admin_password: "secret" }, "123");
+      assert.strictEqual(result.ok, true);
+      assert.deepStrictEqual(calls.map((call) => call.url), [
+        "https://10.10.10.121/api/v1/callctrl/dial",
+        "http://10.10.10.121/api/v1/callctrl/dial",
+      ]);
+    } finally {
+      global.fetch = previousFetch;
+    }
+  });
+
   it("polycom driver covers the REST call-control surface", async () => {
     const code = await src("lib/hardphones/drivers/polycom.mjs");
     assert.match(code, /\/api\/v1\/callctrl\/dial/);
@@ -132,6 +155,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /\/api\/v1\/webCallControl\/callStatus/);
     assert.match(code, /\/api\/v1\/mgmt\/updateConfiguration/);
     assert.match(code, /\/api\/v1\/mgmt\/safeReboot/);
+    assert.match(code, /shouldRetryPolyOverHttp/);
     assert.match(code, /4010/);
   });
 
