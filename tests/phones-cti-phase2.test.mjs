@@ -8,7 +8,7 @@ import {
   buildCtiClientState,
   parseCtiClientState,
 } from "../lib/hardphones/drivers/telnyx-fallback.mjs";
-import { resolveCtiDriver, executeCtiAction, CTI_ACTIONS } from "../lib/hardphones/cti.mjs";
+import { resolveCtiDriver, resolveCtiDriverForAction, executeCtiAction, CTI_ACTIONS } from "../lib/hardphones/cti.mjs";
 
 async function src(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -28,6 +28,13 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.strictEqual(resolveCtiDriver({ vendor: "unknown" }).vendor, "telnyx-fallback");
     // explicit override forces fallback regardless of vendor
     assert.strictEqual(resolveCtiDriver({ vendor: "polycom", settings: { cti_mode: "telnyx" } }).vendor, "telnyx-fallback");
+  });
+
+  it("keeps AudioCodes local-bridge status on the bridge while call control uses fallback", () => {
+    const phone = { vendor: "audiocodes", settings: { cti_mode: "local_bridge" } };
+    assert.strictEqual(resolveCtiDriverForAction(phone, "status").vendor, "local-bridge");
+    assert.strictEqual(resolveCtiDriverForAction(phone, "dial").vendor, "telnyx-fallback");
+    assert.strictEqual(resolveCtiDriverForAction(phone, "hangup").vendor, "telnyx-fallback");
   });
 
   it("drivers fail fast without a phone IP", async () => {
