@@ -23,17 +23,19 @@ function firstPrivateIp(values) {
   return null;
 }
 
-function extractPhoneIp({ request, queryParams, body }) {
+function requestSourceIp(request) {
   const fwd = request.headers.get("x-forwarded-for") || "";
-  const headerIp = fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || "";
+  return fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
+}
+
+function extractPhoneIp({ queryParams, body }) {
   return firstPrivateIp([
     queryParams.ip,
     queryParams.phone_ip,
     queryParams.local_ip,
     queryParams.ip_address,
     body,
-    headerIp,
-  ]) || headerIp || null;
+  ]);
 }
 
 function registrationStatusFromEvent({ vendor, queryParams, body }) {
@@ -67,14 +69,15 @@ async function handleEvent(request, vendor) {
   const phoneId = rows[0]?.id || null;
   if (!phoneId) return NextResponse.json({ error: "Phone not found" }, { status: 404 });
 
-  const ip = extractPhoneIp({ request, queryParams, body });
+  const ip = extractPhoneIp({ queryParams, body });
+  const sourceIp = requestSourceIp(request);
   const registrationStatus = registrationStatusFromEvent({ vendor, queryParams, body });
   await pool.query(`UPDATE hp_phones SET last_seen_at = NOW(), last_ip = COALESCE($2, last_ip) WHERE id = $1`, [phoneId, ip]);
   const eventType = registrationStatus ? "registration_status_event" : `phone_event_${vendor}`;
   try {
     await pool.query(
       `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,
-      [phoneId, mac, eventType, JSON.stringify({ query: queryParams, body, detected_ip: ip, registration_status: registrationStatus })],
+      [phoneId, mac, eventType, JSON.stringify({ query: queryParams, body, detected_ip: ip, source_ip: sourceIp, registration_status: registrationStatus })],
     );
   } catch {}
   return NextResponse.json({ ok: true });

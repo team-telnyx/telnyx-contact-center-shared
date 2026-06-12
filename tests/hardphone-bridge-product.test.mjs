@@ -63,7 +63,8 @@ describe("hardphone bridge product integration", () => {
     const eventsRoute = await file("app/api/provisioning/events/[vendor]/route.js");
     const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
     const generator = await file("lib/hardphones/config-generators.mjs");
-    assert.match(eventsRoute, /extractPhoneIp\(\{ request, queryParams, body \}\)/);
+    assert.match(eventsRoute, /extractPhoneIp\(\{ queryParams, body \}\)/);
+    assert.match(eventsRoute, /source_ip: sourceIp/);
     assert.match(eventsRoute, /last_ip = COALESCE\(\$2, last_ip\)/);
     assert.match(generator, /&ip=\$ip/);
     assert.match(page, /Detected phone IP address/);

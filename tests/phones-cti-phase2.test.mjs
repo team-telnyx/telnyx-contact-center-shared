@@ -114,12 +114,14 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /bridged/);
   });
 
-  it("provisioning endpoints capture phone IP for CTI reachability", async () => {
+  it("phone events capture explicit phone IP for CTI reachability without trusting proxy headers", async () => {
     const serveCode = await src("app/api/provisioning/[filename]/route.js");
-    assert.match(serveCode, /last_ip = COALESCE/);
-    assert.match(serveCode, /x-forwarded-for/);
+    assert.doesNotMatch(serveCode, /last_ip = COALESCE\(\$3, last_ip\)/);
+    assert.match(serveCode, /sourceIp: requestSourceIp\(request\)/);
     const eventsCode = await src("app/api/provisioning/events/[vendor]/route.js");
     assert.match(eventsCode, /last_ip = COALESCE/);
+    assert.match(eventsCode, /queryParams\.ip/);
+    assert.match(eventsCode, /source_ip: sourceIp/);
   });
 
   it("phone editor exposes IP field and CTI control card", async () => {

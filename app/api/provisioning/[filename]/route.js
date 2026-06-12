@@ -29,10 +29,9 @@ function resolveBaseUrl(request) {
   }
 }
 
-function requestIp(request) {
+function requestSourceIp(request) {
   const fwd = request.headers.get("x-forwarded-for") || "";
-  const ip = fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || "";
-  return ip || null;
+  return fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
 }
 
 async function logEvent(pool, { phoneId = null, mac = null, eventType, detail = {} }) {
@@ -106,16 +105,16 @@ export async function GET(request, { params }) {
   }
 
   await pool.query(
-    `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2, last_ip = COALESCE($3, last_ip),
+    `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2,
        provisioning_state = CASE WHEN provisioning_state = 'pending' THEN 'provisioned' ELSE provisioning_state END
      WHERE id = $1`,
-    [phone.id, userAgent.slice(0, 300) || null, requestIp(request)],
+    [phone.id, userAgent.slice(0, 300) || null],
   );
   await logEvent(pool, {
     phoneId: phone.id,
     mac,
     eventType: "config_served",
-    detail: { filename, kind, vendor: phone.vendor, userAgent, uaVendorMismatch: Boolean(uaVendor && uaVendor !== phone.vendor) },
+    detail: { filename, kind, vendor: phone.vendor, userAgent, sourceIp: requestSourceIp(request), uaVendorMismatch: Boolean(uaVendor && uaVendor !== phone.vendor) },
   });
 
   return new NextResponse(config.body, {

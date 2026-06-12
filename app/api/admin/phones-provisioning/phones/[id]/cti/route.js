@@ -34,6 +34,16 @@ function resolveBaseUrl(request) {
   }
 }
 
+function registrationStatusFromCtiResult(result) {
+  const lines = Array.isArray(result?.line) ? result.line : result?.line ? [result.line] : [];
+  for (const line of lines) {
+    const value = String(line?.RegistrationStatus || line?.registration_status || "").toLowerCase();
+    if (value === "registered") return "registered";
+    if (value && value !== "registered") return "not_registered";
+  }
+  return null;
+}
+
 // POST { action, number?, digits? } — execute a CTI action on a phone.
 // Driver is resolved per vendor: Polycom REST, Yealink Action URI, or the
 // Telnyx fallback (AudioCodes / settings.cti_mode = "telnyx").
@@ -61,9 +71,10 @@ export async function POST(request, { params }) {
       baseUrl: resolveBaseUrl(request),
     });
 
+    const registrationStatus = action === "status" ? registrationStatusFromCtiResult(result) : null;
     await pool.query(
       `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,
-      [phone.id, phone.mac, `cti_${action}`, JSON.stringify({ ok: result.ok, reason: result.reason || null, by: user.email || user.id || null })],
+      [phone.id, phone.mac, action === "status" && registrationStatus ? "registration_status_event" : `cti_${action}`, JSON.stringify({ ok: result.ok, reason: result.reason || null, registration_status: registrationStatus, by: user.email || user.id || null })],
     );
 
     if (!result.ok) {
