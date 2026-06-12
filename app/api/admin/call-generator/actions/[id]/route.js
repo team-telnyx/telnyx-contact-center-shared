@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeSteps } from "@/lib/call-generator/actions.mjs";
-import { WORKFLOW_TESTING_ACTION_ID } from "@/lib/call-generator/workflow-testing.mjs";
+import { DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT, DEFAULT_WORKFLOW_TESTING_VOICE, WORKFLOW_TESTING_ACTION_ID } from "@/lib/call-generator/workflow-testing.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -38,11 +38,15 @@ export async function PUT(request, { params }) {
       columns.push(`name = $${idx++}`);
       values.push(String(id) === WORKFLOW_TESTING_ACTION_ID ? "Workflow Testing" : name);
     }
-    if (body.description !== undefined) { columns.push(`description = $${idx++}`); values.push(String(id) === WORKFLOW_TESTING_ACTION_ID ? "Protected call-generator action used by Test Workflow targets. Only the TTS voice is editable." : (String(body.description || "").trim() || null)); }
+    if (body.description !== undefined) { columns.push(`description = $${idx++}`); values.push(String(id) === WORKFLOW_TESTING_ACTION_ID ? "Protected call-generator action used by Test Workflow targets. Only the TTS voice and preview sample text are editable." : (String(body.description || "").trim() || null)); }
     if (body.steps !== undefined) {
       const steps = normalizeSteps(body.steps);
       const safeSteps = String(id) === WORKFLOW_TESTING_ACTION_ID
-        ? [{ type: "workflow_testing", voice: steps.find((step) => step.type === "workflow_testing")?.voice || "AWS.Polly.Joanna" }]
+        ? [{
+            type: "workflow_testing",
+            voice: steps.find((step) => step.type === "workflow_testing")?.voice || DEFAULT_WORKFLOW_TESTING_VOICE,
+            sample_text: steps.find((step) => step.type === "workflow_testing")?.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT,
+          }]
         : steps;
       columns.push(`steps = $${idx++}`);
       values.push(JSON.stringify(safeSteps));

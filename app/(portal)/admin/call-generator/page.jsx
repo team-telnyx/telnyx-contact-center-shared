@@ -41,6 +41,7 @@ import {
 
 const API = "/api/admin/call-generator";
 const WORKFLOW_TESTING_ACTION_ID = "00000000-0000-4000-8000-000000000001";
+const DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT = "This is a neutral voice preview for workflow testing.";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Live runs and generated calls" },
@@ -818,6 +819,7 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
 
 function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, actions, allowedFromNumbers }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const selectableActions = actions.filter((a) => a.id !== WORKFLOW_TESTING_ACTION_ID);
   const updateTarget = (index, patch) => setDraft((d) => ({
     ...d,
     targets: d.targets.map((t, i) => (i === index ? { ...t, ...patch } : t)),
@@ -929,11 +931,11 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               <Select disabled={target.workflow_testing === true} value={target.workflow_testing === true ? WORKFLOW_TESTING_ACTION_ID : (target.action_id || "")} onValueChange={(v) => updateTarget(index, { action_id: v })}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder={target.workflow_testing === true ? "Disabled while Test Workflow is active" : "Select action sequence"} /></SelectTrigger>
                 <SelectContent>
-                  {actions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  {selectableActions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               {target.workflow_testing === true ? <p className="mt-1 text-xs text-muted-foreground">Action sequence is disabled because Test Workflow generates caller replies dynamically from agent-side transcription.</p> : null}
-              {!actions.length ? <p className="mt-1 text-xs text-muted-foreground">No actions defined yet — create one in the Actions section first.</p> : null}
+              {!selectableActions.length ? <p className="mt-1 text-xs text-muted-foreground">No manual action sequences defined yet — create one in the Actions section first, or enable Test Workflow above.</p> : null}
             </div>
             <div>
               <Label>Run actions on</Label>
@@ -1078,7 +1080,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
       {protectedWorkflowTesting ? (
         <SettingCard icon={IconWand} title="Workflow Testing" subtitle="Protected system action">
           <p className="text-sm text-muted-foreground">
-            This protected action is managed by the application. Only the caller simulation TTS voice can be changed here.
+            This protected action is managed by the application. Only the caller simulation TTS voice and preview sample text can be changed here.
           </p>
         </SettingCard>
       ) : (
@@ -1125,10 +1127,17 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                 </div>
               </>
             ) : step.type === "workflow_testing" ? (
-              <div>
-                <Label>Caller simulation voice</Label>
-                <div className="mt-1">
-                  <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText="I need to order a new medical transport for our patient." />
+              <div className="space-y-3">
+                <div>
+                  <Label>Preview sample text</Label>
+                  <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
+                  <p className="mt-1 text-xs text-muted-foreground">This text is only used by the Play preview button so admins can test any language or phrase with the selected voice.</p>
+                </div>
+                <div>
+                  <Label>Caller simulation voice</Label>
+                  <div className="mt-1">
+                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
+                  </div>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.</p>
               </div>

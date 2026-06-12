@@ -195,24 +195,40 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /disabled=\{voicesLoading\}/);
   });
 
-  it("workflow testing action is protected, seeded, and configurable by voice", async () => {
-    const steps = normalizeSteps([{ type: "workflow_testing", voice: "MiniMax.Customer" }]);
-    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer" }]);
+  it("workflow testing action is protected, seeded, and configurable by voice and preview sample text", async () => {
+    const steps = normalizeSteps([{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku." }]);
+    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku." }]);
     assert.match(describeStep(steps[0]), /Workflow Testing/);
+    const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
+    assert.match(workflowTesting, /DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT/);
+    assert.match(workflowTesting, /This is a neutral voice preview for workflow testing\./);
+    assert.doesNotMatch(workflowTesting, /medical transport/i);
     const schema = await src("lib/postgres-schema.mjs");
     assert.match(schema, /ensureWorkflowTestingAction/);
     const actionsApi = await src("app/api/admin/call-generator/actions/[id]/route.js");
     assert.match(actionsApi, /WORKFLOW_TESTING_ACTION_ID/);
+    assert.match(actionsApi, /sample_text/);
     assert.match(actionsApi, /protected system action and cannot be deleted/);
   });
 
-  it("protected workflow testing action editor only exposes TTS voice settings", async () => {
+  it("protected workflow testing action editor exposes TTS voice and editable preview text", async () => {
     const page = await src("app/(portal)/admin/call-generator/page.jsx");
     assert.match(page, /const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID/);
-    assert.match(page, /Only the caller simulation TTS voice can be changed here/);
+    assert.match(page, /Only the caller simulation TTS voice and preview sample text can be changed here/);
     assert.match(page, /protectedWorkflowTesting \? null : <div className="grid grid-cols-3 gap-2">/);
     assert.match(page, /Caller simulation voice/);
+    assert.match(page, /Preview sample text/);
+    assert.match(page, /value=\{step\.sample_text \|\| DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT\}/);
+    assert.match(page, /previewText=\{step\.sample_text \|\| DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT\}/);
+    assert.doesNotMatch(page, /medical transport/i);
     assert.match(page, /protectedWorkflowTesting \? null : <div className="flex items-center gap-1">/);
+  });
+
+  it("scenario action sequence select hides protected Workflow Testing action", async () => {
+    const page = await src("app/(portal)/admin/call-generator/page.jsx");
+    assert.match(page, /const selectableActions = actions\.filter\(\(a\) => a\.id !== WORKFLOW_TESTING_ACTION_ID\)/);
+    assert.match(page, /selectableActions\.map\(\(a\) => <SelectItem key=\{a\.id\} value=\{a\.id\}>\{a\.name\}<\/SelectItem>\)/);
+    assert.match(page, /!selectableActions\.length/);
   });
 
   it("workflow testing target bypasses manual action sequence and validates transcription", () => {
