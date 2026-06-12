@@ -1,0 +1,9 @@
+services:
+  hardphone-bridge:
+    build: .
+    image: telnyx-contact-center-hardphone-bridge:local
+    container_name: telnyx-hardphone-bridge
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
