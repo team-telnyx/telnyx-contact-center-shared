@@ -53,6 +53,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.deepStrictEqual(resolveProvisioningRequest("y000000000000.cfg"), { vendor: "yealink", kind: "common", mac: null });
     assert.deepStrictEqual(resolveProvisioningRequest("y000000000066.cfg"), { vendor: "yealink", kind: "common", mac: null });
     assert.deepStrictEqual(resolveProvisioningRequest("0004f2abcdef-reg.cfg"), { vendor: "polycom", kind: "registration", mac: "0004f2abcdef" });
+    assert.deepStrictEqual(resolveProvisioningRequest("0004f2abcdef-phone.cfg"), { vendor: "polycom", kind: "phone", mac: "0004f2abcdef" });
     assert.deepStrictEqual(resolveProvisioningRequest("000000000000.cfg"), { vendor: "polycom", kind: "default-master", mac: null });
     assert.deepStrictEqual(resolveProvisioningRequest("805ec0123456.cfg"), { vendor: null, kind: "mac-config", mac: "805ec0123456" });
     assert.strictEqual(resolveProvisioningRequest("evil.php"), null);
@@ -61,7 +62,7 @@ describe("hard phones provisioning (Phase 1)", () => {
 
   it("generates Polycom master and registration XML with Telnyx registration", () => {
     const master = polycomMasterConfig();
-    assert.match(master, /CONFIG_FILES="\[PHONE_MAC_ADDRESS\]-reg\.cfg"/);
+    assert.match(master, /CONFIG_FILES="\[PHONE_MAC_ADDRESS\]-phone\.cfg,\[PHONE_MAC_ADDRESS\]-reg\.cfg"/);
     const reg = polycomRegistrationConfig(phone, { baseUrl: "https://cc.example.com" });
     assert.match(reg, /reg\.1\.address="gencredabc123"/);
     assert.match(reg, /reg\.1\.auth\.userId="gencredabc123"/);
@@ -124,6 +125,9 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.strictEqual(polyMaster.contentType, "text/xml");
     const polyReg = buildConfigForPhone(phone, "registration", {});
     assert.match(polyReg.body, /reg\.1\.address/);
+    const polyPhone = buildConfigForPhone(phone, "phone", {});
+    assert.match(polyPhone.body, /reg\.1\.address/);
+    assert.strictEqual(polyPhone.contentType, "text/xml");
     const yl = buildConfigForPhone({ ...phone, vendor: "yealink" }, "mac-config", {});
     assert.match(yl.body, /account\.1\.enable = 1/);
     assert.strictEqual(yl.contentType, "text/plain");
