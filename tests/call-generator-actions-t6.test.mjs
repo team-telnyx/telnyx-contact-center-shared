@@ -127,7 +127,9 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(code, /Context settings/);
     assert.match(code, /Target Flow/);
     assert.match(code, /Run actions on/);
-    assert.match(code, /role="tablist" aria-label="Run actions on"/);
+    assert.match(code, /role="radiogroup" aria-label="Run actions on"/);
+    assert.match(code, /role="radio"/);
+    assert.match(code, /aria-checked=\{activeTrigger\}/);
     assert.match(code, /Call Answer/);
     assert.match(code, /Agent Bridge/);
     assert.match(code, /Start immediately when the flow answers/);
@@ -224,11 +226,13 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(page, /protectedWorkflowTesting \? null : <div className="flex items-center gap-1">/);
   });
 
-  it("scenario action sequence select hides protected Workflow Testing action", async () => {
+  it("scenario action controls are hidden while Test Workflow is active", async () => {
     const page = await src("app/(portal)/admin/call-generator/page.jsx");
     assert.match(page, /const selectableActions = actions\.filter\(\(a\) => a\.id !== WORKFLOW_TESTING_ACTION_ID\)/);
     assert.match(page, /selectableActions\.map\(\(a\) => <SelectItem key=\{a\.id\} value=\{a\.id\}>\{a\.name\}<\/SelectItem>\)/);
-    assert.match(page, /!selectableActions\.length/);
+    assert.match(page, new RegExp(String.raw`target\.workflow_testing !== true \? \(\s*<>[\s\S]*Action sequence[\s\S]*Run actions on[\s\S]*<\/>\s*\) : null`));
+    assert.doesNotMatch(page, /Disabled while Test Workflow is active/);
+    assert.doesNotMatch(page, /Action sequence is disabled because Test Workflow/);
   });
 
   it("workflow testing target bypasses manual action sequence and validates transcription", () => {
@@ -246,7 +250,7 @@ describe("call generator actions & multi-target (T6)", () => {
     assert.match(page, /Test Workflow/);
     assert.match(page, /LLM caller simulator will test workflow/);
     assert.match(page, /transcription is not active/);
-    assert.match(page, /Disabled while Test Workflow is active/);
+    assert.match(page, /target\.workflow_testing !== true \? \(/);
   });
 
   it("workflow testing analysis reads React Flow data.nodeType before customNode type", () => {

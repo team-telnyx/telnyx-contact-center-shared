@@ -926,41 +926,44 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
               </div>
               {target.from_numbers.length > 1 ? <p className="mt-1 text-xs text-muted-foreground">Calls rotate through selected numbers round-robin.</p> : null}
             </div>
-            <div className={target.workflow_testing === true ? "opacity-50" : ""}>
-              <Label>Action sequence<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-              <Select disabled={target.workflow_testing === true} value={target.workflow_testing === true ? WORKFLOW_TESTING_ACTION_ID : (target.action_id || "")} onValueChange={(v) => updateTarget(index, { action_id: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder={target.workflow_testing === true ? "Disabled while Test Workflow is active" : "Select action sequence"} /></SelectTrigger>
-                <SelectContent>
-                  {selectableActions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {target.workflow_testing === true ? <p className="mt-1 text-xs text-muted-foreground">Action sequence is disabled because Test Workflow generates caller replies dynamically from agent-side transcription.</p> : null}
-              {!selectableActions.length ? <p className="mt-1 text-xs text-muted-foreground">No manual action sequences defined yet — create one in the Actions section first, or enable Test Workflow above.</p> : null}
-            </div>
-            <div>
-              <Label>Run actions on</Label>
-              <div className="mt-1 grid gap-1 rounded-xl border bg-muted/25 p-1" role="tablist" aria-label="Run actions on">
-                {[
-                  { value: "call_answer", label: "Call Answer", description: "Start immediately when the flow answers — best for IVR and flow tests." },
-                  { value: "agent_bridge", label: "Agent Bridge", description: "Wait until the caller is bridged to an agent — best when audio or DTMF must be heard by the live agent." },
-                ].map((option) => {
-                  const activeTrigger = (target.action_trigger || "call_answer") === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={activeTrigger}
-                      onClick={() => updateTarget(index, { action_trigger: option.value })}
-                      className={`rounded-lg border px-3 py-2 text-left transition ${activeTrigger ? "border-sky-500/50 bg-sky-500/10 shadow-sm" : "border-transparent hover:bg-background/70"}`}
-                    >
-                      <span className="block text-sm font-medium">{option.label}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            {target.workflow_testing !== true ? (
+              <>
+                <div>
+                  <Label>Action sequence<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                  <Select value={target.action_id || ""} onValueChange={(v) => updateTarget(index, { action_id: v })}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select action sequence" /></SelectTrigger>
+                    <SelectContent>
+                      {selectableActions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {!selectableActions.length ? <p className="mt-1 text-xs text-muted-foreground">No manual action sequences defined yet — create one in the Actions section first, or enable Test Workflow above.</p> : null}
+                </div>
+                <div>
+                  <Label>Run actions on</Label>
+                  <div className="mt-1 grid gap-1 rounded-xl border bg-muted/25 p-1" role="radiogroup" aria-label="Run actions on">
+                    {[
+                      { value: "call_answer", label: "Call Answer", description: "Start immediately when the flow answers — best for IVR and flow tests." },
+                      { value: "agent_bridge", label: "Agent Bridge", description: "Wait until the caller is bridged to an agent — best when audio or DTMF must be heard by the live agent." },
+                    ].map((option) => {
+                      const activeTrigger = (target.action_trigger || "call_answer") === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={activeTrigger}
+                          onClick={() => updateTarget(index, { action_trigger: option.value })}
+                          className={`rounded-lg border px-3 py-2 text-left transition ${activeTrigger ? "border-sky-500/50 bg-sky-500/10 shadow-sm" : "border-transparent hover:bg-background/70"}`}
+                        >
+                          <span className="block text-sm font-medium">{option.label}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">{option.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : null}
             {draft.targets.length > 1 ? (
               <Button size="sm" variant="outline" className="text-rose-600" onClick={() => removeTarget(index)}>
                 <IconTrash className="mr-2 h-3.5 w-3.5" />
