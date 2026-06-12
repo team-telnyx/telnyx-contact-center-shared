@@ -100,6 +100,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /requireAdmin/);
     assert.match(code, /CTI_ACTIONS\.includes\(action\)/);
     assert.match(code, /executeCtiAction/);
+    assert.match(code, /result\?\.registration/);
+    assert.match(code, /line\?\.SipStatus/);
     assert.match(code, /cti_\$\{action\}/);
     assert.match(code, /const \{ id \} = await params/);
   });

@@ -35,9 +35,12 @@ function resolveBaseUrl(request) {
 }
 
 function registrationStatusFromCtiResult(result) {
+  const direct = String(result?.registration || result?.registration_status || result?.data?.registration_status || "").toLowerCase();
+  if (direct === "registered") return "registered";
+  if (direct && !["unknown", "null", "n/a"].includes(direct)) return "not_registered";
   const lines = Array.isArray(result?.line) ? result.line : result?.line ? [result.line] : [];
   for (const line of lines) {
-    const value = String(line?.RegistrationStatus || line?.registration_status || "").toLowerCase();
+    const value = String(line?.RegistrationStatus || line?.registration_status || line?.SipStatus || "").toLowerCase();
     if (value === "registered") return "registered";
     if (value && value !== "registered") return "not_registered";
   }

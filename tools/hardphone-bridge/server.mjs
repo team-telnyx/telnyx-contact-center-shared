@@ -14,6 +14,8 @@ const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS || 25000);
 const DEFAULT_POLY_ADMIN_PASSWORD = process.env.DEFAULT_POLY_ADMIN_PASSWORD || "";
 const DEFAULT_YEALINK_ADMIN_USER = process.env.DEFAULT_YEALINK_ADMIN_USER || "admin";
 const DEFAULT_YEALINK_ADMIN_PASSWORD = process.env.DEFAULT_YEALINK_ADMIN_PASSWORD || "";
+const DEFAULT_AUDIOCODES_ADMIN_USER = process.env.DEFAULT_AUDIOCODES_ADMIN_USER || "admin";
+const DEFAULT_AUDIOCODES_ADMIN_PASSWORD = process.env.DEFAULT_AUDIOCODES_ADMIN_PASSWORD || "";
 const PHONE_MAC_IP_MAP = process.env.PHONE_MAC_IP_MAP || "";
 
 const POLY_USER = "Polycom";
@@ -58,6 +60,33 @@ function requestJson(url, { method = "GET", headers = {}, body = null, timeoutMs
         try { data = raw ? JSON.parse(raw) : null; } catch {}
         resolve({ status: res.statusCode || 0, ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300, data, raw });
       });
+    });
+    req.on("timeout", () => req.destroy(new Error("request_timeout")));
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function requestText(url, { method = "GET", headers = {}, body = null, timeoutMs = 6000 } = {}) {
+  const target = new URL(url);
+  const transport = target.protocol === "https:" ? https : http;
+  const payload = body == null ? null : String(body);
+  return new Promise((resolve, reject) => {
+    const req = transport.request({
+      protocol: target.protocol,
+      hostname: target.hostname,
+      port: target.port || (target.protocol === "https:" ? 443 : 80),
+      path: `${target.pathname}${target.search}`,
+      method,
+      headers: payload ? { ...headers, "content-length": Buffer.byteLength(payload) } : headers,
+      timeout: timeoutMs,
+      rejectUnauthorized: false,
+    }, (res) => {
+      let raw = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { raw += chunk; });
+      res.on("end", () => resolve({ status: res.statusCode || 0, ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300, raw, headers: res.headers || {} }));
     });
     req.on("timeout", () => req.destroy(new Error("request_timeout")));
     req.on("error", reject);
@@ -153,8 +182,57 @@ async function yealinkAction(host, command, { user = DEFAULT_YEALINK_ADMIN_USER,
   return { ok: result.ok, httpStatus: result.status, raw: result.raw?.slice(0, 500) || null };
 }
 
-async function audiocodesStatus(host) {
+function parseAudioCodesVoipStatus(raw) {
+  const xml = String(raw || "");
+  const lineMatches = [...xml.matchAll(/<Line\b[^>]*>([\s\S]*?)<\/Line>/gi)];
+  const lines = lineMatches.map((match) => {
+    const lineXml = match[1] || "";
+    const get = (tag) => lineXml.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, "i"))?.[1]?.trim() || "";
+    return {
+      PhoneState: get("PhoneState"),
+      RegistrationStatus: get("SipStatus"),
+      SipRegSrv: get("SipRegSrv"),
+      Dnd: get("Dnd"),
+      Mute: get("Mute"),
+      ForwardState: get("ForwardState"),
+    };
+  });
+  const primary = lines.find((line) => line.PhoneState && line.PhoneState.toLowerCase() !== "disabled") || lines[0] || null;
+  const registration = primary?.RegistrationStatus || null;
+  return { line: lines, registration: registration ? registration.toLowerCase() : null };
+}
+
+async function audiocodesSessionCookie(host, { user = DEFAULT_AUDIOCODES_ADMIN_USER, password = DEFAULT_AUDIOCODES_ADMIN_PASSWORD } = {}) {
+  if (!password) return "";
+  const form = new URLSearchParams({ user: user || "admin", psw: Buffer.from(String(password)).toString("base64") }).toString();
+  const response = await requestText(`http://${host}/login.cgi`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: form,
+    timeoutMs: 5000,
+  });
+  const setCookie = response.headers?.["set-cookie"] || [];
+  const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+  return cookies.map((cookie) => String(cookie).split(";", 1)[0]).filter(Boolean).join("; ");
+}
+
+async function audiocodesStatus(host, { user = DEFAULT_AUDIOCODES_ADMIN_USER, password = DEFAULT_AUDIOCODES_ADMIN_PASSWORD } = {}) {
   try {
+    let cookie = "";
+    try { cookie = await audiocodesSessionCookie(host, { user, password }); } catch {}
+    const headers = cookie ? { cookie } : {};
+    const voipStatus = await requestText(`http://${host}/voip_status.cgi`, { headers, timeoutMs: 5000 });
+    if (voipStatus.ok && /<Status[\s>]/i.test(voipStatus.raw || "")) {
+      const parsed = parseAudioCodesVoipStatus(voipStatus.raw);
+      return {
+        ok: true,
+        reachable: true,
+        httpStatus: voipStatus.status,
+        vendor: "audiocodes",
+        registration: parsed.registration,
+        line: parsed.line,
+      };
+    }
     const result = await requestJson(`http://${host}/`, { timeoutMs: 5000 });
     return { ok: result.ok, reachable: result.ok, httpStatus: result.status, vendor: "audiocodes", registration: null };
   } catch (err) {
@@ -218,7 +296,11 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
     if (action === "reboot") return yealinkAction(host, "Reboot");
   }
   if (vendor === "audiocodes") {
-    if (action === "status") return { ...(await audiocodesStatus(host)), discovered_ip: host };
+    if (action === "status") {
+      const user = payload.admin_user || payload.user || DEFAULT_AUDIOCODES_ADMIN_USER;
+      const password = payload.admin_password || payload.password || DEFAULT_AUDIOCODES_ADMIN_PASSWORD;
+      return { ...(await audiocodesStatus(host, { user, password })), discovered_ip: host };
+    }
   }
   return { ok: false, reason: "unsupported_action" };
 }
