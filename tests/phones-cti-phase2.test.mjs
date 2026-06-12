@@ -143,7 +143,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /key=F_HOLD/);
     assert.match(code, /key=MUTE/);
     assert.match(code, /key=AUTOP/);
-    assert.match(code, /key=REBOOT/);
+    assert.match(code, /key=Reboot/);
+    assert.doesNotMatch(code, /key=REBOOT/);
   });
 
   it("telnyx fallback dials with auto-answer Alert-Info header", async () => {
