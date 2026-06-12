@@ -72,9 +72,13 @@ export async function POST(request, { params }) {
     });
 
     const registrationStatus = action === "status" ? registrationStatusFromCtiResult(result) : null;
+    const discoveredIp = String(result?.discovered_ip || result?.result?.discovered_ip || "").trim();
+    if (discoveredIp) {
+      await pool.query(`UPDATE hp_phones SET last_ip = $2, last_seen_at = NOW(), updated_at = NOW() WHERE id = $1`, [phone.id, discoveredIp]);
+    }
     await pool.query(
       `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,
-      [phone.id, phone.mac, action === "status" && registrationStatus ? "registration_status_event" : `cti_${action}`, JSON.stringify({ ok: result.ok, reason: result.reason || null, registration_status: registrationStatus, by: user.email || user.id || null })],
+      [phone.id, phone.mac, action === "status" && registrationStatus ? "registration_status_event" : `cti_${action}`, JSON.stringify({ ok: result.ok, reason: result.reason || null, registration_status: registrationStatus, detected_ip: discoveredIp || null, by: user.email || user.id || null })],
     );
 
     if (!result.ok) {

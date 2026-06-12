@@ -14,6 +14,7 @@ const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MS || 25000);
 const DEFAULT_POLY_ADMIN_PASSWORD = process.env.DEFAULT_POLY_ADMIN_PASSWORD || "";
 const DEFAULT_YEALINK_ADMIN_USER = process.env.DEFAULT_YEALINK_ADMIN_USER || "admin";
 const DEFAULT_YEALINK_ADMIN_PASSWORD = process.env.DEFAULT_YEALINK_ADMIN_PASSWORD || "";
+const PHONE_MAC_IP_MAP = process.env.PHONE_MAC_IP_MAP || "";
 
 const POLY_USER = "Polycom";
 const POLY_ERRORS = {
@@ -116,10 +117,49 @@ function yealinkUrl(host, command) {
   return `http://${host}/servlet?key=${encodeURIComponent(command)}`;
 }
 
+function normalizeMac(raw) {
+  const mac = String(raw || "").toLowerCase().replace(/[^0-9a-f]/g, "");
+  return mac.length === 12 ? mac : "";
+}
+
+function macPairs() {
+  return PHONE_MAC_IP_MAP.split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const sep = entry.indexOf("=");
+      if (sep <= 0) return null;
+      const mac = entry.slice(0, sep);
+      const ip = entry.slice(sep + 1);
+      const normalizedMac = normalizeMac(mac);
+      const host = String(ip || "").trim();
+      return normalizedMac && host ? { mac: normalizedMac, ip: host } : null;
+    })
+    .filter(Boolean);
+}
+
+function mappedIpForMac(mac) {
+  const normalized = normalizeMac(mac);
+  return macPairs().find((entry) => entry.mac === normalized)?.ip || "";
+}
+
+function observedPhones() {
+  return macPairs().map((entry) => ({ mac: entry.mac, ip: entry.ip, source: "PHONE_MAC_IP_MAP" }));
+}
+
 async function yealinkAction(host, command, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
   const auth = user || password ? { authorization: "Basic " + Buffer.from(`${user}:${password}`).toString("base64") } : {};
   const result = await requestJson(yealinkUrl(host, command), { headers: auth });
   return { ok: result.ok, httpStatus: result.status, raw: result.raw?.slice(0, 500) || null };
+}
+
+async function audiocodesStatus(host) {
+  try {
+    const result = await requestJson(`http://${host}/`, { timeoutMs: 5000 });
+    return { ok: result.ok, reachable: result.ok, httpStatus: result.status, vendor: "audiocodes", registration: null };
+  } catch (err) {
+    return { ok: false, reachable: false, reason: "phone_unreachable", error: err?.message || String(err) };
+  }
 }
 
 async function readBody(req) {
@@ -155,6 +195,7 @@ function hostFromPath(parts) {
 }
 
 async function executeCommand({ vendor, host, action = "status", payload = {} }) {
+  host = host || mappedIpForMac(payload.mac || payload.phone_mac || "");
   if (!host) return { ok: false, reason: "missing_host" };
   if (vendor === "polycom") {
     const password = payload.admin_password || payload.password || "";
@@ -175,6 +216,9 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
     if (action === "hangup") return yealinkAction(host, "CALLEND");
     if (action === "hold") return yealinkAction(host, "F_HOLD");
     if (action === "reboot") return yealinkAction(host, "Reboot");
+  }
+  if (vendor === "audiocodes") {
+    if (action === "status") return { ...(await audiocodesStatus(host)), discovered_ip: host };
   }
   return { ok: false, reason: "unsupported_action" };
 }
@@ -203,7 +247,8 @@ function startOutboundConnection() {
   };
   ws.addEventListener("open", () => {
     console.log(JSON.stringify({ ok: true, event: "cc_ws_connected", bridge_id: BRIDGE_ID }));
-    send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"] } });
+    send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink", "audiocodes"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"], discovery: ["PHONE_MAC_IP_MAP"] } });
+    for (const phone of observedPhones()) send({ type: "phone_observed", bridge_id: BRIDGE_ID, ...phone });
     heartbeat = setInterval(() => send({ type: "heartbeat", bridge_id: BRIDGE_ID, timestamp: new Date().toISOString() }), HEARTBEAT_MS);
   });
   ws.addEventListener("message", async (event) => {
@@ -239,7 +284,7 @@ const server = http.createServer(async (req, res) => {
     const host = hostFromPath(parts);
     const action = parts[3] || "status";
     const body = await readRequestPayload(req, url);
-    if (vendor === "polycom" || vendor === "yealink") {
+    if (vendor === "polycom" || vendor === "yealink" || vendor === "audiocodes") {
       const result = await executeCommand({ vendor, host, action, payload: body });
       return json(res, result.ok === false ? 502 : 200, result);
     }
