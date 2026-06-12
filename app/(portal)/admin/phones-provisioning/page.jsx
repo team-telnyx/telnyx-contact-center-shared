@@ -621,7 +621,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               </span>
               <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
               <span className="truncate text-xs">{p.model || "—"}</span>
-              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>Registration {p.sip_registration_status || "unknown"}</Badge></span>
+              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>{p.sip_registration_status || "unknown"}</Badge></span>
               <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
               <span className="flex items-center justify-end gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Remote reboot" disabled={rebooting} onClick={(e) => { e.stopPropagation(); rebootPhones([p.id]); }}>

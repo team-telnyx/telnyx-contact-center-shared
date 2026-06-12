@@ -80,8 +80,10 @@ describe("hardphone bridge product integration", () => {
     const bridgeRoute = await file("app/api/admin/phones-provisioning/bridges/route.js");
     assert.match(phonesRoute, /sip_registration_status/);
     assert.match(phonesRoute, /registration_status_event/);
-    assert.match(page, /Registration/);
+    assert.match(page, /Telnyx registration/);
     assert.match(page, /registrationBadgeClass/);
+    assert.match(page, /p\.sip_registration_status \|\| "unknown"/);
+    assert.doesNotMatch(page, /Registration \{p\.sip_registration_status/);
     assert.match(page, /phone\.sip_registration_status/);
     assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true \}\), 10000\)/);
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
