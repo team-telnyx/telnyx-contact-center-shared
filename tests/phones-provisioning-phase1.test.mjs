@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import {
   normalizeMac,
   formatMac,
@@ -175,6 +175,22 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /MAC address/);
     assert.match(code, /disabled=\{!valid \|\| saving\}/);
     assert.match(code, /phoneDraftValid/);
+    assert.match(code, /PHONE_MODEL_CATALOG/);
+    assert.match(code, /PhoneModelPreview/);
+    assert.match(code, /Full manufacturer documentation/);
+    assert.match(code, /\/images\/hardphones\/poly-vvx-450\.jpg/);
+    assert.match(code, /https:\/\/www\.yealink\.com\/en\/product-detail\/ip-phone-t46u/);
+    assert.match(code, /Genesys managed phone matrix/);
+    assert.match(code, /settings\.cti_mode = &quot;telnyx&quot;/);
+  });
+
+  it("bundles local hardphone model photos", () => {
+    const base = new URL("..", import.meta.url).pathname;
+    const files = readdirSync(`${base}public/images/hardphones`).filter((name) => /\.(png|jpe?g)$/i.test(name));
+    assert.ok(files.includes("poly-vvx-450.jpg"));
+    assert.ok(files.includes("yealink-t46u.png"));
+    assert.ok(files.includes("audiocodes-445hd.png"));
+    assert.ok(files.length >= 20);
   });
 
   it("menu replaces CTI Testing with Phones Provisioning", async () => {

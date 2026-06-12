@@ -18,9 +18,11 @@ import {
   IconDownload,
   IconEye,
   IconEyeOff,
+  IconExternalLink,
   IconLoader2,
   IconPhoneCall,
   IconRefresh,
+  IconRouteAltLeft,
   IconServer,
   IconSettings,
   IconShieldCheck,
@@ -49,6 +51,41 @@ const VENDOR_MODELS = {
   yealink: ["T31P", "T33G", "T43U", "T46U", "T48U", "T53W", "T54W", "T57W", "T58W"],
   audiocodes: ["405HD", "445HD", "450HD"],
 };
+
+const PHONE_MODEL_CATALOG = {
+  polycom: {
+    "VVX 150": { image: "/images/hardphones/poly-vvx-150.jpg", docs: "https://docs.poly.com/category/vvx" },
+    "VVX 250": { image: "/images/hardphones/poly-vvx-250.jpg", docs: "https://docs.poly.com/category/vvx" },
+    "VVX 350": { image: "/images/hardphones/poly-vvx-350.jpg", docs: "https://docs.poly.com/category/vvx" },
+    "VVX 450": { image: "/images/hardphones/poly-vvx-450.jpg", docs: "https://docs.poly.com/category/vvx" },
+    "Edge E220": { image: "/images/hardphones/poly-edge-e220.jpg", docs: "https://docs.poly.com/category/edge-e" },
+    "Edge E350": { image: "/images/hardphones/poly-edge-e350.jpg", docs: "https://docs.poly.com/category/edge-e" },
+    "Edge E450": { image: "/images/hardphones/poly-edge-e450.jpg", docs: "https://docs.poly.com/category/edge-e" },
+    "CCX 400": { image: "/images/hardphones/poly-ccx-400.jpg", docs: "https://docs.poly.com/category/ccx" },
+    "CCX 500": { image: "/images/hardphones/poly-ccx-500.jpg", docs: "https://docs.poly.com/category/ccx" },
+  },
+  yealink: {
+    T31P: { image: "/images/hardphones/yealink-t31p.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t31p" },
+    T33G: { image: "/images/hardphones/yealink-t33g.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t33g" },
+    T43U: { image: "/images/hardphones/yealink-t43u.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t43u" },
+    T46U: { image: "/images/hardphones/yealink-t46u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t46u" },
+    T48U: { image: "/images/hardphones/yealink-t48u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t48u" },
+    T53W: { image: "/images/hardphones/yealink-t53w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t53w" },
+    T54W: { image: "/images/hardphones/yealink-t54w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t54w" },
+    T57W: { image: "/images/hardphones/yealink-t57w.jpg", docs: "https://www.yealink.com/en/product-detail/ip-phone-t57w" },
+    T58W: { image: "/images/hardphones/yealink-t58w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t58w" },
+  },
+  audiocodes: {
+    "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
+    "445HD": { image: "/images/hardphones/audiocodes-445hd.png", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
+    "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: "https://www.audiocodes.com/products/ip-phones/450hd-ip-phone" },
+  },
+};
+
+function modelCatalogEntry(vendor, model) {
+  const vendorCatalog = PHONE_MODEL_CATALOG[String(vendor || "").toLowerCase()] || {};
+  return vendorCatalog[model] || null;
+}
 
 const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300", rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300" };
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
@@ -481,6 +518,7 @@ function PhonesListView({ phones, selectedPhoneId, setSelectedPhoneId, deletePho
 function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const models = VENDOR_MODELS[draft.vendor] || [];
+  const catalogEntry = modelCatalogEntry(draft.vendor, draft.model);
 
   return (
     <>
@@ -509,6 +547,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
               </SelectContent>
             </Select>
           </div>
+          {catalogEntry ? <PhoneModelPreview vendor={draft.vendor} model={draft.model} catalogEntry={catalogEntry} /> : null}
           <div>
             <Label>Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
@@ -569,6 +608,23 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
   );
 }
 
+function PhoneModelPreview({ vendor, model, catalogEntry }) {
+  const vendorLabel = VENDORS.find((v) => v.value === vendor)?.label || vendor;
+  return (
+    <div className="overflow-hidden rounded-xl border bg-muted/20">
+      <div className="aspect-[4/3] bg-white p-3 dark:bg-zinc-950">
+        <img src={catalogEntry.image} alt={`${vendorLabel} ${model}`} className="h-full w-full object-contain" loading="lazy" />
+      </div>
+      <div className="border-t px-3 py-2">
+        <div className="text-sm font-medium">{model}</div>
+        <a className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-sky-600 hover:underline dark:text-sky-300" href={catalogEntry.docs} target="_blank" rel="noreferrer">
+          Full manufacturer documentation <IconExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
 // CTI control card — drives the phone through the vendor driver (Polycom
 // REST, Yealink Action URI, Telnyx fallback for AudioCodes/NAT-ed phones).
 function PhoneCtiCard({ phone }) {
@@ -608,6 +664,11 @@ function PhoneCtiCard({ phone }) {
   return (
     <SettingCard icon={IconActivity} title="CTI control" subtitle={`Driver: ${ctiMode}`}>
       <div className="space-y-3">
+        {phone?.settings?.cti_mode === "telnyx" ? (
+          <p className="rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
+            NAT-safe mode is enabled: the phone registers outbound to Telnyx and CTI uses Telnyx Call Control, so no inbound firewall rule to the phone is required.
+          </p>
+        ) : null}
         {!reachableIp && phone.vendor !== "audiocodes" ? (
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
             No known phone IP yet — set it above or wait for the phone to fetch its config.
@@ -668,6 +729,22 @@ function SettingsSummaryView() {
         </ul>
       </SettingCard>
 
+      <SettingCard icon={IconRouteAltLeft} title="NAT and local-network CTI" subtitle="Genesys-style managed phones without inbound firewall holes">
+        <div className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            Direct Poly REST and Yealink Action URI need server-to-phone reachability. For phones behind customer NAT, prefer <span className="font-medium text-foreground">Telnyx Call Control fallback</span>: the phone registers outbound to Telnyx, auto-answers the CTI leg, and the Contact Center controls that Telnyx leg instead of opening inbound firewall access to the handset.
+          </p>
+          <p>
+            Genesys Cloud takes the same managed-telephony pattern: phone provisioning and supported model management live in the cloud, while edge/SBC-style components handle private-network telephony reachability. If we need true local key-level control for NAT-ed Poly/Yealink phones, the safer design is a small LAN bridge that opens an outbound WebSocket to CC and proxies local phone REST/Action URI calls; a browser plugin is possible but worse for credentials, CORS and enterprise rollout.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/managed-phones-models-and-features-matrix/" target="_blank" rel="noreferrer">Genesys managed phone matrix <IconExternalLink className="h-3 w-3" /></a>
+            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/provisioning-phones-genesys-cloud-voice/" target="_blank" rel="noreferrer">Genesys phone provisioning <IconExternalLink className="h-3 w-3" /></a>
+            <a className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300" href="https://help.genesys.cloud/articles/about-managed-phone-configuration/" target="_blank" rel="noreferrer">Managed phone configuration <IconExternalLink className="h-3 w-3" /></a>
+          </div>
+        </div>
+      </SettingCard>
+
       <SettingCard icon={IconDeviceLandlinePhone} title="Served file conventions" subtitle="Files generated per request from the phone inventory">
         <div className="space-y-2 text-sm">
           <div className="rounded-lg border bg-muted/30 px-3 py-2">
@@ -702,7 +779,7 @@ function SettingsEditor() {
     <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
       <div className="space-y-2 text-sm text-muted-foreground">
         <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>
-        <p>Per-phone overrides (transport, CTI allow-list) and CTI call control land in Phase 2.</p>
+        <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, set <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> to force the outbound-only Telnyx Call Control fallback.</p>
       </div>
     </SettingCard>
   );
