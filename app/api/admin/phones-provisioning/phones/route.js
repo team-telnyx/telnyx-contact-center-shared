@@ -36,8 +36,20 @@ export async function GET() {
       `SELECT phone_id, MAX(created_at) AS last_event_at, COUNT(*)::int AS events
        FROM hp_provisioning_events WHERE created_at > NOW() - INTERVAL '7 days' GROUP BY phone_id`,
     );
+    const { rows: registrationRows } = await pool.query(
+      `SELECT DISTINCT ON (phone_id) phone_id, detail->>'registration_status' AS sip_registration_status, created_at AS registration_status_at
+       FROM hp_provisioning_events
+       WHERE event_type = 'registration_status_event'
+       ORDER BY phone_id, created_at DESC`,
+    );
     const eventsByPhone = Object.fromEntries(eventRows.map((r) => [r.phone_id, r]));
-    return NextResponse.json({ phones: rows.map((p) => ({ ...p, recent_events: eventsByPhone[p.id]?.events || 0 })) });
+    const registrationByPhone = Object.fromEntries(registrationRows.map((r) => [r.phone_id, r]));
+    return NextResponse.json({ phones: rows.map((p) => ({
+      ...p,
+      recent_events: eventsByPhone[p.id]?.events || 0,
+      sip_registration_status: registrationByPhone[p.id]?.sip_registration_status || "unknown",
+      sip_registration_status_at: registrationByPhone[p.id]?.registration_status_at || null,
+    })) });
   } catch (err) {
     adminRuntimeLogger.error("hardphone_list_failed", runtimePayload({ error: err, operation: "hp_list" }));
     return NextResponse.json({ error: "Failed to load phones" }, { status: 500 });
@@ -76,8 +88,8 @@ export async function POST(request) {
       await client.query("BEGIN");
       const adminPassword = String(body?.admin_password || "").trim() || randomUUID().slice(0, 12);
       const { rows } = await client.query(
-        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, ip_address, local_bridge_id, provisioning_state, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13)
+        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username, sip_password, admin_password, settings, local_bridge_id, provisioning_state, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', $12)
          RETURNING ${PHONE_COLUMNS}`,
         [
           mac,
@@ -90,7 +102,6 @@ export async function POST(request) {
           credential.sip_password,
           adminPassword,
           JSON.stringify(body?.settings && typeof body.settings === "object" ? body.settings : {}),
-          String(body?.ip_address || "").trim() || null,
           String(body?.local_bridge_id || body?.settings?.local_bridge_id || "").trim() || null,
           user.id || user.email || null,
         ],

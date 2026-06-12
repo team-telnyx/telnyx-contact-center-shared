@@ -113,12 +113,13 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
   it("phone editor exposes IP field and CTI control card", async () => {
     const code = await src("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(code, /Phone IP address/);
+    assert.match(code, /readOnly/);
+    assert.match(code, /phone\.last_ip \|\| phone\.ip_address/);
     assert.match(code, /PhoneCtiCard/);
     assert.match(code, /hp-cti-dial/);
     assert.match(code, /Telnyx Call Control/);
     assert.match(code, /Polycom REST API/);
     assert.match(code, /Yealink Action URI/);
-    assert.match(code, /ip_address: phoneDraft\.ip_address\.trim\(\)/);
   });
 
   it("polycom driver uses phone-local HTTP clients with self-signed HTTPS support and HTTP fallback", async () => {

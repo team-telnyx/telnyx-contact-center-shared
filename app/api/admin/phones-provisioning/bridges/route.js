@@ -87,11 +87,12 @@ export async function GET() {
     const liveById = new Map(live.map((b) => [b.bridge_id, b]));
     const bridges = rows.map((b) => {
       const liveBridge = liveById.get(b.bridge_id);
+      const status = liveBridge?.online ? "online" : "offline";
       return {
         ...b,
         online: Boolean(liveBridge?.online),
         live: liveBridge || null,
-        status: liveBridge?.online ? "online" : b.status || "offline",
+        status,
         last_seen_at: liveBridge?.last_seen_at || b.last_seen_at,
       };
     });

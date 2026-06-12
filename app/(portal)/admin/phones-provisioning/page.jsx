@@ -123,6 +123,13 @@ const stateBadgeClass = (state) => {
   return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 };
 
+const registrationBadgeClass = (state) => {
+  const value = String(state || "unknown").toLowerCase();
+  if (value === "registered") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (value === "not_registered" || value === "unregistered") return "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+};
+
 const vendorBadgeClass = (vendor) => {
   const value = String(vendor || "").toLowerCase();
   if (value === "polycom") return "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300";
@@ -268,8 +275,8 @@ export default function PhonesProvisioningPage() {
     } catch {}
   }, [active]);
 
-  const refresh = useCallback(async (toast = false) => {
-    setLoading(true);
+  const refresh = useCallback(async (toast = false, options = {}) => {
+    if (!options.silent) setLoading(true);
     try {
       const [phonesRes, dashboardRes, bridgesRes] = await Promise.all([
         fetch(`${API}/phones`),
@@ -286,11 +293,17 @@ export default function PhonesProvisioningPage() {
     } catch (err) {
       notify({ title: "Failed to load phones provisioning", description: err.message, variant: "error" });
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (active !== "bridges" && active !== "phones") return undefined;
+    const timer = setInterval(() => refresh(false, { silent: true }), 10000);
+    return () => clearInterval(timer);
+  }, [active, refresh]);
 
   useEffect(() => {
     if (selectedPhone) {
@@ -300,7 +313,7 @@ export default function PhonesProvisioningPage() {
         model: selectedPhone.model || "",
         label: selectedPhone.label || "",
         admin_password: selectedPhone.admin_password || "",
-        ip_address: selectedPhone.ip_address || "",
+        ip_address: selectedPhone.last_ip || selectedPhone.ip_address || "",
         local_bridge_id: selectedPhone.local_bridge_id || selectedPhone.settings?.local_bridge_id || "",
         settings: normalizePhoneSettings(selectedPhone.settings),
       });
@@ -321,7 +334,6 @@ export default function PhonesProvisioningPage() {
         model: phoneDraft.model.trim(),
         label: phoneDraft.label.trim(),
         admin_password: phoneDraft.admin_password.trim(),
-        ip_address: phoneDraft.ip_address.trim(),
         local_bridge_id: phoneDraft.local_bridge_id.trim(),
         settings: normalizePhoneSettings({ ...phoneDraft.settings, local_bridge_id: phoneDraft.local_bridge_id.trim() }),
       };
@@ -609,7 +621,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               </span>
               <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
               <span className="truncate text-xs">{p.model || "—"}</span>
-              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge></span>
+              <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>Registration {p.sip_registration_status || "unknown"}</Badge></span>
               <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
               <span className="flex items-center justify-end gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Remote reboot" disabled={rebooting} onClick={(e) => { e.stopPropagation(); rebootPhones([p.id]); }}>
@@ -676,9 +688,9 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             <p className="mt-1 text-xs text-muted-foreground">Replaces the factory default (456 / admin / 1234) during provisioning.</p>
           </div>
           <div>
-            <Label>Phone IP address</Label>
-            <Input className="mt-1 font-mono" value={draft.ip_address} onChange={(e) => update({ ip_address: e.target.value })} placeholder="Auto-detected from provisioning when empty" />
-            <p className="mt-1 text-xs text-muted-foreground">Used for CTI control (Polycom REST / Yealink Action URI). Leave empty to use the last provisioning IP.</p>
+            <Label>Detected phone IP address</Label>
+            <Input className="mt-1 font-mono" value={editing ? (phone.last_ip || phone.ip_address || "") : "Auto-detected after first phone callback"} readOnly placeholder="Waiting for provisioning/event callback" />
+            <p className="mt-1 text-xs text-muted-foreground">Phone IP address is detected automatically from provisioning callbacks and phone events; admins should not type LAN addresses manually.</p>
           </div>
         </div>
       </SettingCard>
@@ -697,6 +709,10 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">SIP server</span>
               <span className="font-mono text-xs">sip.telnyx.com</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">Telnyx registration</span>
+              <Badge variant="outline" className={registrationBadgeClass(phone.sip_registration_status)}>{phone.sip_registration_status || "unknown"}</Badge>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">State</span>

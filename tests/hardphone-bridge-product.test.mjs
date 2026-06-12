@@ -58,6 +58,34 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
   });
 
+  it("auto-discovers phone IP and keeps the phone IP field read-only", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const eventsRoute = await file("app/api/provisioning/events/[vendor]/route.js");
+    const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
+    const generator = await file("lib/hardphones/config-generators.mjs");
+    assert.match(eventsRoute, /extractPhoneIp\(\{ request, queryParams, body \}\)/);
+    assert.match(eventsRoute, /last_ip = COALESCE\(\$2, last_ip\)/);
+    assert.match(generator, /&ip=\$ip/);
+    assert.match(page, /Detected phone IP address/);
+    assert.match(page, /readOnly/);
+    assert.match(page, /phone\.last_ip \|\| phone\.ip_address/);
+    assert.doesNotMatch(page, /onChange=\{\(e\) => update\(\{ ip_address: e\.target\.value \}\)\}/);
+    assert.doesNotMatch(phonesRoute, /String\(body\?\.ip_address/);
+  });
+
+  it("surfaces SIP registration status and automatically refreshes bridge state", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
+    const bridgeRoute = await file("app/api/admin/phones-provisioning/bridges/route.js");
+    assert.match(phonesRoute, /sip_registration_status/);
+    assert.match(phonesRoute, /registration_status_event/);
+    assert.match(page, /Registration/);
+    assert.match(page, /registrationBadgeClass/);
+    assert.match(page, /phone\.sip_registration_status/);
+    assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true \}\), 10000\)/);
+    assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
+  });
+
   it("renders bridges as a first-class rail section with list and context settings", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(page, /id: "bridges", label: "Bridges"/);
