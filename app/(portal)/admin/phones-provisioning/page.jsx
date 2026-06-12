@@ -200,6 +200,7 @@ const emptyPhoneDraft = () => ({
   label: "",
   admin_password: "",
   ip_address: "",
+  local_bridge_id: "",
   settings: {
     cti_mode: "direct",
     line_keys: "1",
@@ -233,6 +234,7 @@ export default function PhonesProvisioningPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [phones, setPhones] = useState([]);
+  const [bridges, setBridges] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
@@ -265,14 +267,17 @@ export default function PhonesProvisioningPage() {
   const refresh = useCallback(async (toast = false) => {
     setLoading(true);
     try {
-      const [phonesRes, dashboardRes] = await Promise.all([
+      const [phonesRes, dashboardRes, bridgesRes] = await Promise.all([
         fetch(`${API}/phones`),
         fetch(`${API}/dashboard`),
+        fetch(`${API}/bridges`),
       ]);
       const phonesData = phonesRes.ok ? await phonesRes.json() : { phones: [] };
       const dashboardData = dashboardRes.ok ? await dashboardRes.json() : null;
+      const bridgesData = bridgesRes.ok ? await bridgesRes.json() : { bridges: [] };
       setPhones(phonesData.phones || []);
       setDashboard(dashboardData);
+      setBridges(bridgesData.bridges || []);
       if (toast) notify({ title: "Phones provisioning refreshed", description: "Data reloaded.", variant: "success" });
     } catch (err) {
       notify({ title: "Failed to load phones provisioning", description: err.message, variant: "error" });
@@ -292,6 +297,7 @@ export default function PhonesProvisioningPage() {
         label: selectedPhone.label || "",
         admin_password: selectedPhone.admin_password || "",
         ip_address: selectedPhone.ip_address || "",
+        local_bridge_id: selectedPhone.local_bridge_id || selectedPhone.settings?.local_bridge_id || "",
         settings: normalizePhoneSettings(selectedPhone.settings),
       });
     } else {
@@ -312,7 +318,8 @@ export default function PhonesProvisioningPage() {
         label: phoneDraft.label.trim(),
         admin_password: phoneDraft.admin_password.trim(),
         ip_address: phoneDraft.ip_address.trim(),
-        settings: normalizePhoneSettings(phoneDraft.settings),
+        local_bridge_id: phoneDraft.local_bridge_id.trim(),
+        settings: normalizePhoneSettings({ ...phoneDraft.settings, local_bridge_id: phoneDraft.local_bridge_id.trim() }),
       };
       const url = selectedPhone ? `${API}/phones/${selectedPhone.id}` : `${API}/phones`;
       const res = await fetch(url, {
@@ -467,10 +474,11 @@ export default function PhonesProvisioningPage() {
                 phone={selectedPhone}
                 valid={draftValid}
                 saving={saving}
+                bridges={bridges}
                 save={savePhone}
               />
             ) : (
-              <SettingsEditor />
+              <SettingsEditor bridges={bridges} refresh={refresh} />
             )}
           </div>
         </aside>
@@ -614,7 +622,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
   );
 }
 
-function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
+function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], save }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }) }));
   const models = VENDOR_MODELS[draft.vendor] || [];
@@ -649,6 +657,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
           </div>
           {catalogEntry ? <PhoneModelPreview vendor={draft.vendor} model={draft.model} catalogEntry={catalogEntry} /> : null}
           <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} />
+          <LocalBridgeSelector draft={draft} update={update} bridges={bridges} />
           <div>
             <Label>Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
@@ -709,6 +718,31 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, save }) {
   );
 }
 
+function LocalBridgeSelector({ draft, update, bridges = [] }) {
+  const useBridge = draft.settings?.cti_mode === "local_bridge";
+  return (
+    <div className="rounded-xl border bg-muted/20 p-3">
+      <div className="mb-3 flex items-start gap-2">
+        <IconRouteAltLeft className="mt-0.5 h-4 w-4 text-sky-600" />
+        <div>
+          <div className="text-sm font-medium">Local bridge ID</div>
+          <p className="text-xs text-muted-foreground">Used when CTI mode is Local bridge (outbound WS). The phone stays private in LAN; CC sends commands over the bridge WebSocket.</p>
+        </div>
+      </div>
+      <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
+        <SelectTrigger className="w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No bridge assigned</SelectItem>
+          {bridges.map((b) => (
+            <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {!useBridge ? <p className="mt-2 text-xs text-muted-foreground">Switch CTI mode to Local bridge (outbound WS) to activate this selector.</p> : null}
+    </div>
+  );
+}
+
 function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
   const isPoly = vendor === "polycom";
   const isAudioCodes = vendor === "audiocodes";
@@ -734,6 +768,7 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
             <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="direct">Direct phone API</SelectItem>
+              <SelectItem value="local_bridge">Local bridge (outbound WS)</SelectItem>
               <SelectItem value="telnyx">Telnyx fallback</SelectItem>
             </SelectContent>
           </Select>
@@ -789,7 +824,7 @@ function PhoneCtiCard({ phone }) {
   const [dialNumber, setDialNumber] = useState("");
   const [lastStatus, setLastStatus] = useState(null);
 
-  const ctiMode = phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
+  const ctiMode = phone?.settings?.cti_mode === "local_bridge" ? `Local bridge (${phone.local_bridge_id || phone.settings?.local_bridge_id || "unassigned"})` : phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
   const reachableIp = phone.ip_address || phone.last_ip;
 
   async function runCti(action, params = {}) {
@@ -927,13 +962,85 @@ function SettingsSummaryView() {
   );
 }
 
-function SettingsEditor() {
+function BridgeManager({ bridges = [], refresh }) {
+  const [label, setLabel] = useState("Local office bridge");
+  const [site, setSite] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [enrollment, setEnrollment] = useState(null);
+
+  async function createBridge() {
+    setCreating(true);
+    try {
+      const res = await fetch(`${API}/bridges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, site }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Bridge enrollment failed");
+      setEnrollment(data.enrollment || null);
+      notify({ title: "Local bridge enrolled", description: data.bridge?.bridge_id, variant: "success" });
+      await refresh?.(false);
+    } catch (err) {
+      notify({ title: "Bridge enrollment failed", description: err.message, variant: "error" });
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
-    <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>
-        <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, set <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> to force the outbound-only Telnyx Call Control fallback.</p>
+    <SettingCard icon={IconRouteAltLeft} title="Local bridge manager" subtitle="Outbound WebSocket agents for LAN hardphone CTI">
+      <div className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div>
+            <Label>Bridge label</Label>
+            <Input className="mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Warsaw office bridge" />
+          </div>
+          <div>
+            <Label>Site / location</Label>
+            <Input className="mt-1" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Warsaw LAN" />
+          </div>
+        </div>
+        <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating} data-testid="hp-create-local-bridge">
+          {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
+          Create bridge enrollment
+        </Button>
+        {enrollment ? (
+          <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
+            <div className="font-semibold text-amber-800 dark:text-amber-200">Copy this token now — it is shown only once.</div>
+            <div className="mt-2 space-y-1 font-mono">
+              <div>BRIDGE_ID={enrollment.bridge_id}</div>
+              <div>BRIDGE_TOKEN={enrollment.token}</div>
+              <div>CC_WS_URL=wss://&lt;cc-host&gt;{enrollment.cc_ws_path}</div>
+            </div>
+          </div>
+        ) : null}
+        <div className="space-y-1.5">
+          {bridges.length ? bridges.map((b) => (
+            <div key={b.bridge_id} className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-2 text-sm">
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{b.label || b.bridge_id}</span>
+                <span className="block truncate font-mono text-[11px] text-muted-foreground">{b.bridge_id}{b.site ? ` · ${b.site}` : ""}</span>
+              </span>
+              <Badge variant="outline" className={b.online ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300"}>{b.online ? "online" : "offline"}</Badge>
+            </div>
+          )) : <p className="text-sm text-muted-foreground">No enrolled local bridges yet.</p>}
+        </div>
       </div>
     </SettingCard>
+  );
+}
+
+function SettingsEditor({ bridges = [], refresh }) {
+  return (
+    <div className="space-y-4">
+      <BridgeManager bridges={bridges} refresh={refresh} />
+      <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
+        <div className="space-y-2 text-sm text-muted-foreground">
+          <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>
+          <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, use <span className="font-mono text-foreground">settings.cti_mode = &quot;local_bridge&quot;</span> and assign a Local bridge ID for full CTI, or <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> for Call Control fallback.</p>
+        </div>
+      </SettingCard>
+    </div>
   );
 }
