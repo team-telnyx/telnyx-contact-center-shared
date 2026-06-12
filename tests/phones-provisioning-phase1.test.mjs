@@ -177,6 +177,8 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /buildConfigForPhone/);
     assert.match(code, /unknown_phone_request/);
     assert.match(code, /config_served/);
+    assert.match(code, /const kind = resolved\.kind/);
+    assert.doesNotMatch(code, /resolved\.kind === "registration" \? "registration" : "mac-config"/);
     assert.match(code, /last_seen_at = NOW\(\)/);
     assert.match(code, /provisioning_state = 'disabled'|provisioning_state === "disabled"/);
     // No auth gate — phones cannot authenticate; security via MAC allow-list

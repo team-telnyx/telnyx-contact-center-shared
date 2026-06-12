@@ -95,8 +95,9 @@ export async function GET(request, { params }) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  // Polycom requests two files: <mac>.cfg (master) then <mac>-reg.cfg.
-  const kind = resolved.kind === "registration" ? "registration" : "mac-config";
+  // Preserve the resolved file kind so Polycom <mac>-phone.cfg receives the
+  // registration/device XML while <mac>.cfg still receives the master file.
+  const kind = resolved.kind;
   const baseUrl = resolveBaseUrl(request);
   const config = buildConfigForPhone(phone, kind, { baseUrl });
   if (!config) {
