@@ -849,7 +849,7 @@ function PhoneCtiCard({ phone }) {
   const [lastStatus, setLastStatus] = useState(null);
 
   const ctiMode = phone?.settings?.cti_mode === "local_bridge" ? `Local bridge (${phone.local_bridge_id || phone.settings?.local_bridge_id || "unassigned"})` : phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
-  const reachableIp = phone.ip_address || phone.last_ip;
+  const reachableIp = phone.last_ip || phone.ip_address;
 
   async function runCti(action, params = {}) {
     setBusy(action);
@@ -1116,7 +1116,7 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
             </div>
             {assignedPhones.length ? (
               <div className="space-y-1.5">
-                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.label || formatMacDisplay(phone.mac)} · {phone.ip_address || phone.last_ip || "no IP"}</div>)}
+                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.label || formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>)}
               </div>
             ) : <p className="text-xs text-muted-foreground">No phones are assigned to this bridge yet.</p>}
           </div>

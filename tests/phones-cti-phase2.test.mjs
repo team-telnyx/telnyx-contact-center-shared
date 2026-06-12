@@ -38,6 +38,18 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.strictEqual(status.reachable, false);
   });
 
+  it("drivers prefer the auto-detected IP over stale manual values", async () => {
+    const page = await src("app/(portal)/admin/phones-provisioning/page.jsx");
+    const yealinkCode = await src("lib/hardphones/drivers/yealink.mjs");
+    const polycomCode = await src("lib/hardphones/drivers/polycom.mjs");
+    const localBridgeCode = await src("lib/hardphones/drivers/local-bridge.mjs");
+    assert.match(page, /const reachableIp = phone\.last_ip \|\| phone\.ip_address/);
+    assert.doesNotMatch(page, /const reachableIp = phone\.ip_address \|\| phone\.last_ip/);
+    assert.match(yealinkCode, /phone\.last_ip \|\| phone\.ip_address/);
+    assert.match(polycomCode, /phone\.last_ip \|\| phone\.ip_address/);
+    assert.match(localBridgeCode, /phone\?\.last_ip \|\| phone\?\.ip_address/);
+  });
+
   it("yealink driver validates dial digits and dtmf input", async () => {
     assert.deepStrictEqual(await yealinkDriver.dial({ last_ip: "" }, ""), { ok: false, reason: "invalid_number" });
     assert.deepStrictEqual(await yealinkDriver.dial({ last_ip: "10.0.0.5" }, "!!!"), { ok: false, reason: "invalid_number" });
