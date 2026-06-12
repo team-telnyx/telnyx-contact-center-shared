@@ -268,8 +268,16 @@ describe("call generator actions & multi-target (T6)", () => {
 
   it("finalized agent transcription triggers dynamic workflow-testing caller replies", async () => {
     const router = await src("lib/agent-assist-transcription-router.mjs");
+    assert.match(router, /metadata->>'original_call_control_id' = \$1/);
+    assert.match(router, /metadata->>'agent_call_control_id' = \$1/);
     assert.match(router, /handleWorkflowTestingFinalTranscription/);
     assert.match(router, /workflow_testing_transcription_reply_failed/);
+    const contactCenterWebhook = await src("lib/contact-center/webhook-handler.js");
+    assert.match(contactCenterWebhook, /handleWorkflowTestingFinalTranscription/);
+    assert.match(contactCenterWebhook, /routedTranscriptionData/);
+    assert.match(contactCenterWebhook, /workflow_testing_transcription_reply_failed/);
+    const sttHandler = await src("lib/telnyx-stt-handler.mjs");
+    assert.match(sttHandler, /this\.interactionId = this\.clientState\.interaction_id \|\| this\.clientState\.interactionId \|\| null/);
     const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
     assert.match(workflowTesting, /latest_agent_transcript/);
     assert.match(workflowTesting, /actions\/speak/);
