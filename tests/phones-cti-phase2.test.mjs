@@ -81,37 +81,48 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.strictEqual(parseCtiClientState(foreign), null);
   });
 
-  it("telnyx fallback click-to-dial validates phone identity and remains controllable", async () => {
+  it("telnyx fallback creates a phone leg first and keeps mute unsupported", async () => {
     const driver = createTelnyxFallbackDriver({ pool: null });
-    assert.deepStrictEqual(await driver.dial({ id: "p-1" }, "+48123"), { ok: false, reason: "phone_has_no_sip_credential" });
+    assert.deepStrictEqual(await driver.dial({ id: "p-1", assigned_phone_number: "+17209533650" }, "+48123"), { ok: false, reason: "phone_has_no_sip_credential" });
     const answer = await driver.answer();
-    assert.deepStrictEqual(answer, { ok: true, note: "auto-answer endpoint" });
+    assert.deepStrictEqual(answer, { ok: true, note: "telnyx-managed bridge" });
+    assert.deepStrictEqual(await driver.mute({ id: "p-1" }), { ok: false, reason: "mute_not_supported_for_telnyx_bridge" });
     assert.deepStrictEqual(await driver.hangup({ id: "p-1" }), { ok: false, reason: "no_active_call" });
     assert.deepStrictEqual(await driver.reprovision(), { ok: false, reason: "not_supported_use_polling" });
   });
 
-  it("telnyx fallback dials the SIP phone leg through the CTI webhook and rejects extension caller IDs", async () => {
+  it("telnyx fallback creates phone and target legs through the CTI webhook and rejects extension caller IDs", async () => {
     const previousFetch = globalThis.fetch;
     const previousApiKey = process.env.TELNYX_API_KEY;
     const previousFrom = process.env.HP_CTI_FROM_NUMBER;
     const previousDefaultFrom = process.env.TELNYX_DEFAULT_FROM_NUMBER;
-    let requestBody = null;
+    const previousConnection = process.env.TELNYX_CALL_CONTROL_ID;
+    const requestBodies = [];
     try {
       process.env.TELNYX_API_KEY = "test-key";
       process.env.HP_CTI_FROM_NUMBER = "+15550001111";
+      process.env.TELNYX_CALL_CONTROL_ID = "cc-test";
       delete process.env.TELNYX_DEFAULT_FROM_NUMBER;
       globalThis.fetch = async (_url, options) => {
-        requestBody = JSON.parse(options.body);
-        return { ok: true, json: async () => ({ data: { call_control_id: "cc-1" } }) };
+        const body = JSON.parse(options.body);
+        requestBodies.push(body);
+        return { ok: true, json: async () => ({ data: { call_control_id: requestBodies.length === 1 ? "phone-leg" : "target-leg", call_session_id: "session-1" } }) };
       };
       const driver = createTelnyxFallbackDriver({ pool: null, baseUrl: "https://app.example.test" });
       const result = await driver.dial({ id: "p-1", sip_username: "agent-1", assigned_phone_number: "+15551234567 ext 89" }, "+18005551212");
-      assert.deepStrictEqual(result, { ok: true, callControlId: "cc-1" });
-      assert.strictEqual(requestBody.to, "sip:agent-1@sip.telnyx.com");
-      assert.strictEqual(requestBody.from, "+15550001111");
-      assert.strictEqual(requestBody.webhook_url, "https://app.example.test/api/provisioning/cti-webhook");
-      assert.strictEqual(requestBody.webhook_url_method, "POST");
-      assert.deepStrictEqual(requestBody.custom_headers, [{ name: "Alert-Info", value: "info=alert-autoanswer" }]);
+      assert.deepStrictEqual(result, { ok: true, callControlId: "phone-leg", phoneCallControlId: "phone-leg", targetCallControlId: "target-leg" });
+      assert.strictEqual(requestBodies.length, 2);
+      assert.strictEqual(requestBodies[0].to, "sip:agent-1@sip.telnyx.com");
+      assert.strictEqual(requestBodies[0].from, "+15550001111");
+      assert.strictEqual(requestBodies[0].connection_id, "cc-test");
+      assert.strictEqual(requestBodies[0].webhook_url, "https://app.example.test/api/provisioning/cti-webhook");
+      assert.strictEqual(requestBodies[0].webhook_url_method, "POST");
+      assert.deepStrictEqual(requestBodies[0].custom_headers, [{ name: "Alert-Info", value: "info=alert-autoanswer" }]);
+      assert.strictEqual(requestBodies[1].to, "+18005551212");
+      assert.strictEqual(requestBodies[1].from, "+15550001111");
+      assert.strictEqual(requestBodies[1].link_to, "phone-leg");
+      assert.strictEqual(requestBodies[1].bridge_on_answer, true);
+      assert.ok(!("answer_on_bridge" in requestBodies[1]));
     } finally {
       globalThis.fetch = previousFetch;
       if (previousApiKey === undefined) delete process.env.TELNYX_API_KEY;
@@ -120,6 +131,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
       else process.env.HP_CTI_FROM_NUMBER = previousFrom;
       if (previousDefaultFrom === undefined) delete process.env.TELNYX_DEFAULT_FROM_NUMBER;
       else process.env.TELNYX_DEFAULT_FROM_NUMBER = previousDefaultFrom;
+      if (previousConnection === undefined) delete process.env.TELNYX_CALL_CONTROL_ID;
+      else process.env.TELNYX_CALL_CONTROL_ID = previousConnection;
     }
   });
 
@@ -135,7 +148,12 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /ADD COLUMN IF NOT EXISTS ip_address TEXT/);
     assert.match(code, /ADD COLUMN IF NOT EXISTS last_ip TEXT/);
     assert.match(code, /CREATE TABLE IF NOT EXISTS hp_cti_sessions/);
+    assert.match(code, /phone_call_control_id TEXT/);
+    assert.match(code, /target_call_control_id TEXT/);
+    assert.match(code, /call_session_id TEXT/);
     assert.match(code, /idx_hp_cti_sessions_phone/);
+    assert.match(code, /idx_hp_cti_sessions_phone_ccid/);
+    assert.match(code, /idx_hp_cti_sessions_target_ccid/);
   });
 
   it("CTI admin endpoint gates on admin, validates action and logs events", async () => {
@@ -157,19 +175,19 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /cti_reboot/);
   });
 
-  it("CTI webhook transfers the auto-answered leg to the dial target", async () => {
+  it("CTI webhook drives AudioCodes bridge lifecycle from call.initiated/answered/hangup only", async () => {
     const code = await src("app/api/provisioning/cti-webhook/route.js");
-    assert.match(code, /parseCtiClientState/);
-    assert.match(code, /loadCtiSessionState/);
-    assert.match(code, /SELECT s\.phone_id, s\.target/);
-    assert.match(code, /FROM hp_cti_sessions s/);
-    assert.match(code, /LEFT JOIN hp_phones p ON p\.id = s\.phone_id/);
-    assert.match(code, /const state = parsedState \|\| await loadCtiSessionState\(pool, callControlId\)/);
+    assert.match(code, /loadCtiSessionByCallControlId/);
+    assert.match(code, /call\.initiated/);
+    assert.match(code, /direction === "incoming" \? "ringing" : "originating"/);
     assert.match(code, /call\.answered/);
-    assert.match(code, /actions\/transfer/);
-    assert.match(code, /to: state\.target/);
-    assert.match(code, /from: state\.callerId/);
-    assert.match(code, /hp_cti_sessions/);
+    assert.match(code, /answered/);
+    assert.match(code, /call\.bridged/);
+    assert.match(code, /bridged/);
+    assert.match(code, /call\.hangup/);
+    assert.match(code, /completed/);
+    assert.doesNotMatch(code, /call\.ringing/);
+    assert.doesNotMatch(code, /actions\/transfer/);
   });
 
   it("phone events capture explicit phone IP for CTI reachability without trusting proxy headers", async () => {
@@ -222,7 +240,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /call_hold/);
     assert.match(code, /call_connected/);
     assert.match(code, /const canHold = callInfo\.isConnected/);
-    assert.match(code, /const canMute = \(callInfo\.isConnected && !callInfo\.isHeld\)/);
+    assert.match(code, /const canMute = \(callInfo\.isConnected && !callInfo\.isHeld && !telnyxFallbackControls\) \|\| fireAndForgetControls/);
+    assert.match(code, /const muteDisabledReason = telnyxFallbackControls \? "Mute is not available for Telnyx hardphone bridge calls"/);
     assert.match(code, /disabled=\{!canHold\}/);
     assert.match(code, /disabled=\{!canMute\}/);
     assert.doesNotMatch(code, /canHoldOrMute/);
@@ -296,7 +315,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.doesNotMatch(code, /key=REBOOT/);
   });
 
-  it("telnyx fallback rings the hardphone SIP leg with caller ID normalization and CTI webhook routing", async () => {
+  it("telnyx fallback dials phone leg first then target leg with link_to and bridge_on_answer", async () => {
     const code = await src("lib/hardphones/drivers/telnyx-fallback.mjs");
     assert.match(code, /function fallbackCallerId\(phone\)/);
     assert.match(code, /phone\?\.assigned_phone_number/);
@@ -305,17 +324,23 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /if \(!phone\.sip_username\) return \{ ok: false, reason: "phone_has_no_sip_credential" \}/);
     assert.match(code, /to: `sip:\$\{phone\.sip_username\}@sip\.telnyx\.com`/);
     assert.match(code, /from: callerId/);
-    assert.match(code, /Alert-Info/);
-    assert.match(code, /alert-autoanswer/);
+    assert.match(code, /custom_headers: \[\{ name: "Alert-Info", value: "info=alert-autoanswer" \}\]/);
     assert.match(code, /webhook_url: webhookUrl/);
-    assert.doesNotMatch(code, /from: process\.env\.HP_CTI_FROM_NUMBER \|\| process\.env\.TELNYX_DEFAULT_FROM_NUMBER \|\| target/);
+    assert.match(code, /dialTargetLeg/);
+    assert.match(code, /link_to: phoneCallControlId/);
+    assert.match(code, /bridge_on_answer: true/);
+    assert.doesNotMatch(code, /answer_on_bridge/);
+    assert.match(code, /target_call_control_id/);
+    assert.match(code, /phone_call_control_id/);
+    assert.doesNotMatch(code, /suppression_start/);
+    assert.match(code, /mute_not_supported_for_telnyx_bridge/);
     assert.match(code, /hp_cti_sessions/);
     assert.match(code, /findActiveHardphoneInteractionSession/);
     assert.match(code, /metadata->>'hardphone_phone_id'/);
     assert.match(code, /metadata->>'hardphone_connection_id'/);
     assert.match(code, /metadata->>'hardphone_call_control_id'/);
     assert.match(code, /metadata->>'pstn_call_control_id'/);
-    assert.match(code, /COALESCE\(metadata->>'hardphone_call_control_id'/);
+    assert.match(code, /COALESCE\(target_call_control_id, call_control_id/);
     assert.match(code, /function telnyxSessionCall\(session\)/);
     assert.match(code, /RemotePartyNumber: target/);
     assert.match(code, /call: telnyxSessionCall\(session\)/);

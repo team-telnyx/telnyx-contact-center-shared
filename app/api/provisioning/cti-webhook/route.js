@@ -1,35 +1,51 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { parseCtiClientState } from "@/lib/hardphones/drivers/telnyx-fallback.mjs";
-import { buildTelnyxV2Url } from "@/lib/telnyx.js";
 import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks.js";
 
 export const dynamic = "force-dynamic";
 
-async function loadCtiSessionState(pool, callControlId) {
+async function loadCtiSessionByCallControlId(pool, callControlId) {
   if (!callControlId) return null;
   const { rows } = await pool.query(
-    `SELECT s.phone_id, s.target, COALESCE(p.assigned_phone_number, '') AS caller_id
+    `SELECT s.*, COALESCE(p.assigned_phone_number, '') AS caller_id
      FROM hp_cti_sessions s
      LEFT JOIN hp_phones p ON p.id = s.phone_id
      WHERE s.call_control_id = $1
+        OR s.phone_call_control_id = $1
+        OR s.target_call_control_id = $1
+     ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC
      LIMIT 1`,
     [callControlId],
   );
   const row = rows[0];
-  if (!row?.phone_id || !row?.target) return null;
+  if (!row?.phone_id) return null;
   return {
     hardphoneCti: true,
+    sessionId: row.id,
     phoneId: row.phone_id,
     target: row.target,
     callerId: row.caller_id || process.env.HP_CTI_FROM_NUMBER || process.env.TELNYX_DEFAULT_FROM_NUMBER || undefined,
+    phoneCallControlId: row.phone_call_control_id || row.call_control_id || null,
+    targetCallControlId: row.target_call_control_id || null,
   };
 }
 
-// Dedicated webhook for hardphone CTI click-to-dial legs (Telnyx fallback
-// driver). Correlation via client_state { hardphoneCti, phoneId, target }.
-// On call.answered the leg is transferred to the dial target, completing the
-// click-to-dial: phone auto-answers → transfer bridges phone with target.
+function statusForEvent(eventType, direction) {
+  switch (String(eventType || "")) {
+    case "call.initiated":
+      return direction === "incoming" ? "ringing" : "originating";
+    case "call.answered":
+      return "answered";
+    case "call.bridged":
+      return "bridged";
+    case "call.hangup":
+      return "completed";
+    default:
+      return null;
+  }
+}
+
 export async function POST(request) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
@@ -44,51 +60,39 @@ export async function POST(request) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
   const eventType = body?.data?.event_type || body?.event_type || null;
   const payload = body?.data?.payload || body?.payload || {};
   const callControlId = payload?.call_control_id || null;
+  const direction = String(payload?.direction || "").toLowerCase();
   const parsedState = parseCtiClientState(payload?.client_state);
-  const state = parsedState || await loadCtiSessionState(pool, callControlId);
-  if (!state?.phoneId || !eventType) return NextResponse.json({ ok: true, ignored: true });
-
-  const setStatus = async (status) => {
-    if (!callControlId) return;
-    await pool.query(
-      `UPDATE hp_cti_sessions SET status = $2, updated_at = NOW() WHERE call_control_id = $1`,
-      [callControlId, status],
-    );
-  };
+  const state = parsedState || await loadCtiSessionByCallControlId(pool, callControlId);
+  const status = statusForEvent(eventType, direction);
+  if (!state?.phoneId || !eventType || !status) return NextResponse.json({ ok: true, ignored: true });
 
   try {
-    switch (String(eventType)) {
-      case "call.initiated":
-        await setStatus("originating");
-        break;
-      case "call.ringing":
-        await setStatus("ringing");
-        break;
-      case "call.answered": {
-        await setStatus("answered");
-        // Transfer the auto-answered phone leg to the dial target.
-        if (callControlId && state.target && process.env.TELNYX_API_KEY) {
-          const response = await fetch(buildTelnyxV2Url(`/calls/${encodeURIComponent(callControlId)}/actions/transfer`), {
-            method: "POST",
-            headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: state.target,
-              from: state.callerId || process.env.HP_CTI_FROM_NUMBER || process.env.TELNYX_DEFAULT_FROM_NUMBER || undefined,
-            }),
-          });
-          if (response.ok) await setStatus("bridged");
-        }
-        break;
-      }
-      case "call.hangup":
-        await setStatus("completed");
-        break;
-      default:
-        break;
-    }
+    await pool.query(
+      `UPDATE hp_cti_sessions
+       SET status = $2,
+           call_session_id = COALESCE($3, call_session_id),
+           phone_call_control_id = COALESCE(
+             CASE WHEN $4 = 'phone' OR phone_call_control_id = $1 OR (phone_call_control_id IS NULL AND target_call_control_id IS DISTINCT FROM $1) THEN $1 ELSE NULL END,
+             phone_call_control_id
+           ),
+           target_call_control_id = COALESCE(
+             CASE WHEN $4 = 'target' OR target_call_control_id = $1 THEN $1 ELSE NULL END,
+             target_call_control_id
+           ),
+           updated_at = NOW()
+       WHERE phone_id = $5
+         AND (
+           call_control_id = $1
+           OR phone_call_control_id = $1
+           OR target_call_control_id = $1
+           OR id = $6
+         )`,
+      [callControlId, status, payload?.call_session_id || null, parsedState?.leg || null, state.phoneId, state.sessionId || null],
+    );
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: true, error: "handler_error" });

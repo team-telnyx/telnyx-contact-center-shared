@@ -1111,8 +1111,8 @@ function deriveCallInfo(status, phone) {
   const call = primaryCallFromStatus(status);
   const state = normalizeCallState(call?.CallState || call?.state || result.call_state || result.state);
   const disconnectedStates = new Set(["", "disconnected", "idle", "ended", "completed", "failed", "no_active_call"]);
-  const connectedStates = new Set(["connected", "call_connected", "active", "confirmed", "in_call", "talking"]);
-  const dialingStates = new Set(["proceeding", "call_proceeding", "ringback", "call_ringback", "dialing", "outgoing", "trying"]);
+  const connectedStates = new Set(["connected", "call_connected", "active", "confirmed", "in_call", "talking", "answered", "bridged"]);
+  const dialingStates = new Set(["proceeding", "call_proceeding", "ringback", "call_ringback", "dialing", "outgoing", "trying", "originating"]);
   const incomingStates = new Set(["incoming", "call_incoming", "ringing", "call_ringing", "offering", "alerting", "ring", "presenting"]);
   const heldStates = new Set(["held", "hold", "call_hold", "call_held", "on_hold", "local_hold", "remote_hold"]);
   const explicitMute = explicitMuteValue(status);
@@ -1241,10 +1241,12 @@ function PhoneCtiCard({ phone }) {
   const callInfo = useMemo(() => deriveCallInfo(lastStatus, phone), [lastStatus, phone]);
   const hasActiveCall = callInfo.hasCall;
   const fireAndForgetControls = phone.vendor === "yealink" && phone?.settings?.cti_mode !== "telnyx" && Boolean(reachableIp);
+  const telnyxFallbackControls = phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx";
   const canDial = (fireAndForgetControls || !hasActiveCall) && dialNumber.trim();
   const canAnswer = callInfo.isIncoming || fireAndForgetControls;
   const canHold = callInfo.isConnected || fireAndForgetControls;
-  const canMute = (callInfo.isConnected && !callInfo.isHeld) || fireAndForgetControls;
+  const canMute = (callInfo.isConnected && !callInfo.isHeld && !telnyxFallbackControls) || fireAndForgetControls;
+  const muteDisabledReason = telnyxFallbackControls ? "Mute is not available for Telnyx hardphone bridge calls" : callInfo.isHeld ? "Mute is not available while held" : "Mute";
   const canHangup = hasActiveCall || fireAndForgetControls;
 
   const fetchCtiStatus = useCallback(async ({ silent = true } = {}) => {
@@ -1349,7 +1351,7 @@ function PhoneCtiCard({ phone }) {
             <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
             <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
             <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHold} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
-            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
+            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : muteDisabledReason} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
             <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
           </div>
         </div>
