@@ -144,6 +144,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-cti-hold-toggle/);
     assert.match(code, /hp-cti-mute-toggle/);
     assert.match(code, /hp-cti-call-info/);
+    assert.match(code, /hp-cti-inline-error/);
     assert.match(code, /PhoneMaintenanceActions/);
     assert.match(code, /hp-sip-registration-actions/);
     assert.match(code, /hp-sip-check-status/);
@@ -171,6 +172,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.doesNotMatch(code, /Driver: /);
     assert.doesNotMatch(code, /These values are emitted into generated provisioning files/);
     assert.doesNotMatch(code, /Poly UCS\/PVOS config supports/);
+    assert.doesNotMatch(code, /title: `CTI:/);
+    assert.doesNotMatch(code, /title: `CTI \$\{action\} failed`/);
     assert.match(code, /Telnyx Call Control/);
     assert.match(code, /Polycom REST API/);
     assert.match(code, /Yealink Action URI/);

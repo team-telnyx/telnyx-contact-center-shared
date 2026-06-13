@@ -99,8 +99,11 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /fetch\(`\$\{API\}\/bridges`\)/);
     assert.match(page, /setBridges/);
     assert.match(page, /<SelectItem value="local_bridge">Local bridge<\/SelectItem>/);
-    assert.match(page, /Local bridge ID/);
+    assert.match(page, /<Label>Local bridge<\/Label>/);
+    assert.match(page, /disabled=\{!useBridge\}/);
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
+    assert.doesNotMatch(page, /Local bridge ID/);
+    assert.doesNotMatch(page, /Used when CTI mode is Local bridge/);
   });
 
   it("separates Phone Name inventory display from Line Label provisioning copy", async () => {
@@ -322,6 +325,8 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /phoneAdminPasswordConfigured/);
     assert.match(page, /TELNYX_PHONE_ADMIN_PASSWORD/);
     assert.match(page, /Select a Telnyx number/);
+    assert.doesNotMatch(page, /Select a Telnyx number that is not attached to any connection/);
+    assert.doesNotMatch(page, /Saving creates a dedicated Telnyx SIP connection for this phone automatically/);
     assert.doesNotMatch(page, /<Label>Admin password<\/Label>/);
     assert.doesNotMatch(page, /Firmware source URL/);
     assert.doesNotMatch(page, /Custom config URL/);

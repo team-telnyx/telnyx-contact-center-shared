@@ -848,8 +848,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             </Select>
           </div>
           {catalogEntry ? <PhoneModelPreview vendor={draft.vendor} model={draft.model} catalogEntry={catalogEntry} /> : null}
-          <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} />
-          <LocalBridgeSelector draft={draft} update={update} bridges={bridges} />
+          <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} draft={draft} update={update} bridges={bridges} />
           <div>
             <Label>Line Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Line 1 / Agent name" />
@@ -867,7 +866,6 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
                   {availablePhoneNumbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <p className="mt-2 text-xs text-muted-foreground">Select a Telnyx number that is not attached to any connection. It will be assigned to the new hardphone SIP connection.</p>
             </div>
           ) : null}
           {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? null : (
@@ -927,39 +925,12 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
       {!valid ? (
         <p className="text-xs text-amber-600 dark:text-amber-300">Required: a valid 12-hex-digit MAC address and a vendor.</p>
       ) : null}
-      {!editing ? (
-        <p className="text-xs text-muted-foreground">Saving creates a dedicated Telnyx SIP connection for this phone automatically.</p>
-      ) : null}
     </>
   );
 }
 
-function LocalBridgeSelector({ draft, update, bridges = [] }) {
-  const useBridge = draft.settings?.cti_mode === "local_bridge";
-  return (
-    <div className="rounded-xl border bg-muted/20 p-3">
-      <div className="mb-3 flex items-start gap-2">
-        <IconRouteAltLeft className="mt-0.5 h-4 w-4 text-sky-600" />
-        <div>
-          <div className="text-sm font-medium">Local bridge ID</div>
-          <p className="text-xs text-muted-foreground">Used when CTI mode is Local bridge. The phone stays private in LAN; CC sends commands over the bridge WebSocket.</p>
-        </div>
-      </div>
-      <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
-        <SelectTrigger className="w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">No bridge assigned</SelectItem>
-          {bridges.map((b) => (
-            <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {!useBridge ? <p className="mt-2 text-xs text-muted-foreground">Switch CTI mode to Local bridge to activate this selector.</p> : null}
-    </div>
-  );
-}
-
-function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
+function PhoneModelSettingsCard({ vendor, model, settings, updateSettings, draft, update, bridges = [] }) {
+  const useBridge = settings.cti_mode === "local_bridge";
   return (
     <div className="rounded-xl border bg-muted/20 p-3">
       <div className="mb-3 text-sm font-medium">Context settings view{model ? ` · ${model}` : ""}</div>
@@ -968,16 +939,30 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
           <Label>Line keys</Label>
           <Input className="mt-1" value={settings.line_keys || ""} onChange={(e) => updateSettings({ line_keys: e.target.value })} placeholder="1" />
         </div>
-        <div>
-          <Label>CTI mode</Label>
-          <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
-            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="direct">Direct phone API</SelectItem>
-              <SelectItem value="local_bridge">Local bridge</SelectItem>
-              <SelectItem value="telnyx">Telnyx fallback</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-3">
+          <div>
+            <Label>CTI mode</Label>
+            <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
+              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="direct">Direct phone API</SelectItem>
+                <SelectItem value="local_bridge">Local bridge</SelectItem>
+                <SelectItem value="telnyx">Telnyx fallback</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Local bridge</Label>
+            <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
+              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No bridge assigned</SelectItem>
+                {bridges.map((b) => (
+                  <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         <div>
           <Label>SNTP server</Label>
@@ -1200,6 +1185,7 @@ function PhoneCtiCard({ phone }) {
   const [busy, setBusy] = useState(null);
   const [dialNumber, setDialNumber] = useState("");
   const [lastStatus, setLastStatus] = useState(null);
+  const [ctiError, setCtiError] = useState("");
 
   const ctiMode = phone?.settings?.cti_mode === "local_bridge" ? `Local bridge (${phone.local_bridge_id || phone.settings?.local_bridge_id || "unassigned"})` : phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
   const reachableIp = phone.last_ip || phone.ip_address;
@@ -1242,6 +1228,7 @@ function PhoneCtiCard({ phone }) {
 
   async function runCti(action, params = {}) {
     setBusy(action);
+    setCtiError("");
     try {
       const res = await fetch(`${API}/phones/${phone.id}/cti`, {
         method: "POST",
@@ -1258,9 +1245,8 @@ function PhoneCtiCard({ phone }) {
         }
         window.setTimeout(() => fetchCtiStatus({ silent: true }), 1200);
       }
-      notify({ title: `CTI: ${action}`, description: action === "dial" ? params.number : "OK", variant: "success" });
     } catch (err) {
-      notify({ title: `CTI ${action} failed`, description: err.message, variant: "error" });
+      setCtiError(err.message);
     } finally {
       setBusy(null);
     }
@@ -1292,6 +1278,11 @@ function PhoneCtiCard({ phone }) {
             <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
           </div>
         </div>
+        {ctiError ? (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive" data-testid="hp-cti-inline-error">
+            {ctiError}
+          </div>
+        ) : null}
         <div className="rounded-xl border bg-muted/20 p-3" data-testid="hp-cti-call-info">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current call</div>
@@ -1528,7 +1519,7 @@ function SettingsEditor() {
       <SettingCard icon={IconSettings} title="Provisioning defaults" subtitle="Phase 1 serves Telnyx defaults">
         <div className="space-y-2 text-sm text-muted-foreground">
           <p>Config files are generated with <span className="font-mono text-foreground">sip.telnyx.com</span>, UDP transport and hourly re-provisioning polling.</p>
-          <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, use <span className="font-mono text-foreground">settings.cti_mode = &quot;local_bridge&quot;</span> and assign a Local bridge ID for full CTI, or <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> for Call Control fallback.</p>
+          <p>Per-phone IP override controls direct Poly REST / Yealink Action URI. For phones behind NAT, use <span className="font-mono text-foreground">settings.cti_mode = &quot;local_bridge&quot;</span> for full local CTI, or <span className="font-mono text-foreground">settings.cti_mode = &quot;telnyx&quot;</span> for Call Control fallback.</p>
         </div>
       </SettingCard>
     </div>
