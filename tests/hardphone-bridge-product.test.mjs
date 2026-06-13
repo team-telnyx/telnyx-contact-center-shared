@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
+import { createPhoneSipConnection } from "../lib/hardphones/credentials.mjs";
 
 async function file(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -85,7 +86,7 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /p\.sip_registration_status \|\| "unknown"/);
     assert.doesNotMatch(page, /Registration \{p\.sip_registration_status/);
     assert.match(page, /phone\.sip_registration_status/);
-    assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true \}\), 10000\)/);
+    assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true, includeAvailablePhoneNumbers: false \}\), 10000\)/);
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
   });
 
@@ -104,6 +105,39 @@ describe("hardphone bridge product integration", () => {
     assert.match(credentials, /outbound_voice_profile_id: outboundVoiceProfileId/);
     assert.doesNotMatch(credentials, /ani_override/);
     assert.match(credentials, /buildTelnyxV2Url\(`\/phone_numbers\/\$\{encodeURIComponent\(phoneNumberId\)\}`\)/);
+  });
+
+  it("sends Telnyx-safe hardphone SIP connection tags without colon separators", async () => {
+    const originalFetch = global.fetch;
+    const oldApiKey = process.env.TELNYX_API_KEY;
+    const oldOvp = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
+    const oldWebhook = process.env.TELNYX_HARDPHONE_WEBHOOK_URL;
+    const oldWebhookBase = process.env.TELNYX_WEBHOOK_BASE_URL;
+    let requestBody = null;
+    try {
+      process.env.TELNYX_API_KEY = "KEY_TEST";
+      process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp123";
+      delete process.env.TELNYX_HARDPHONE_WEBHOOK_URL;
+      delete process.env.TELNYX_WEBHOOK_BASE_URL;
+      global.fetch = async (_url, options) => {
+        requestBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({ data: { id: "conn123", connection_name: requestBody.connection_name, user_name: requestBody.user_name } }),
+        };
+      };
+
+      await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
+
+      assert.deepStrictEqual(requestBody.tags, ["hardphone", "vendor_audiocodes", "model_420HD", "mac_0004F2ABCDEF"]);
+      assert.ok(requestBody.tags.every((tag) => /^[A-Za-z0-9_-]+$/.test(tag)), "Telnyx tags must contain only letters, numbers, dashes and underscores");
+    } finally {
+      global.fetch = originalFetch;
+      if (oldApiKey === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = oldApiKey;
+      if (oldOvp === undefined) delete process.env.TELNYX_OUTBOUND_VOICE_PROFILE; else process.env.TELNYX_OUTBOUND_VOICE_PROFILE = oldOvp;
+      if (oldWebhook === undefined) delete process.env.TELNYX_HARDPHONE_WEBHOOK_URL; else process.env.TELNYX_HARDPHONE_WEBHOOK_URL = oldWebhook;
+      if (oldWebhookBase === undefined) delete process.env.TELNYX_WEBHOOK_BASE_URL; else process.env.TELNYX_WEBHOOK_BASE_URL = oldWebhookBase;
+    }
   });
 
   it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {
