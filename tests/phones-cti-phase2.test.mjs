@@ -127,10 +127,16 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
   it("CTI webhook transfers the auto-answered leg to the dial target", async () => {
     const code = await src("app/api/provisioning/cti-webhook/route.js");
     assert.match(code, /parseCtiClientState/);
+    assert.match(code, /loadCtiSessionState/);
+    assert.match(code, /SELECT s\.phone_id, s\.target/);
+    assert.match(code, /FROM hp_cti_sessions s/);
+    assert.match(code, /LEFT JOIN hp_phones p ON p\.id = s\.phone_id/);
+    assert.match(code, /const state = parsedState \|\| await loadCtiSessionState\(pool, callControlId\)/);
     assert.match(code, /call\.answered/);
     assert.match(code, /actions\/transfer/);
+    assert.match(code, /to: state\.target/);
+    assert.match(code, /from: state\.callerId/);
     assert.match(code, /hp_cti_sessions/);
-    assert.match(code, /bridged/);
   });
 
   it("phone events capture explicit phone IP for CTI reachability without trusting proxy headers", async () => {

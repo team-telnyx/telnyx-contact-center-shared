@@ -6,6 +6,26 @@ import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks.js";
 
 export const dynamic = "force-dynamic";
 
+async function loadCtiSessionState(pool, callControlId) {
+  if (!callControlId) return null;
+  const { rows } = await pool.query(
+    `SELECT s.phone_id, s.target, COALESCE(p.assigned_phone_number, '') AS caller_id
+     FROM hp_cti_sessions s
+     LEFT JOIN hp_phones p ON p.id = s.phone_id
+     WHERE s.call_control_id = $1
+     LIMIT 1`,
+    [callControlId],
+  );
+  const row = rows[0];
+  if (!row?.phone_id || !row?.target) return null;
+  return {
+    hardphoneCti: true,
+    phoneId: row.phone_id,
+    target: row.target,
+    callerId: row.caller_id || process.env.HP_CTI_FROM_NUMBER || process.env.TELNYX_DEFAULT_FROM_NUMBER || undefined,
+  };
+}
+
 // Dedicated webhook for hardphone CTI click-to-dial legs (Telnyx fallback
 // driver). Correlation via client_state { hardphoneCti, phoneId, target }.
 // On call.answered the leg is transferred to the dial target, completing the
@@ -26,10 +46,11 @@ export async function POST(request) {
   }
   const eventType = body?.data?.event_type || body?.event_type || null;
   const payload = body?.data?.payload || body?.payload || {};
-  const state = parseCtiClientState(payload?.client_state);
+  const callControlId = payload?.call_control_id || null;
+  const parsedState = parseCtiClientState(payload?.client_state);
+  const state = parsedState || await loadCtiSessionState(pool, callControlId);
   if (!state?.phoneId || !eventType) return NextResponse.json({ ok: true, ignored: true });
 
-  const callControlId = payload?.call_control_id || null;
   const setStatus = async (status) => {
     if (!callControlId) return;
     await pool.query(
@@ -55,7 +76,7 @@ export async function POST(request) {
             headers: { Authorization: `Bearer ${process.env.TELNYX_API_KEY}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               to: state.target,
-              from: process.env.HP_CTI_FROM_NUMBER || process.env.TELNYX_DEFAULT_FROM_NUMBER || undefined,
+              from: state.callerId || process.env.HP_CTI_FROM_NUMBER || process.env.TELNYX_DEFAULT_FROM_NUMBER || undefined,
             }),
           });
           if (response.ok) await setStatus("bridged");
