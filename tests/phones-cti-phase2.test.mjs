@@ -262,6 +262,11 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /Alert-Info/);
     assert.match(code, /alert-autoanswer/);
     assert.match(code, /sip:\$\{phone\.sip_username\}@sip\.telnyx\.com/);
+    assert.match(code, /function fallbackCallerId\(phone\)/);
+    assert.match(code, /phone\?\.assigned_phone_number/);
+    assert.match(code, /if \(!callerId\) return \{ ok: false, reason: "phone_has_no_caller_id" \}/);
+    assert.match(code, /from: callerId/);
+    assert.doesNotMatch(code, /from: process\.env\.HP_CTI_FROM_NUMBER \|\| process\.env\.TELNYX_DEFAULT_FROM_NUMBER \|\| target/);
     assert.match(code, /hp_cti_sessions/);
     assert.match(code, /findActiveHardphoneInteractionSession/);
     assert.match(code, /metadata->>'hardphone_phone_id'/);
