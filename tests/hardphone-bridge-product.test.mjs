@@ -89,6 +89,34 @@ describe("hardphone bridge product integration", () => {
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
   });
 
+  it("provisions new hardphones with dedicated Telnyx credential connections", async () => {
+    const schema = await file("lib/postgres-schema.mjs");
+    const route = await file("app/api/admin/phones-provisioning/phones/route.js");
+    const credentials = await file("lib/hardphones/credentials.mjs");
+    assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS telnyx_connection_id TEXT/);
+    assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS assigned_phone_number TEXT/);
+    assert.match(route, /createPhoneSipConnection/);
+    assert.match(route, /TELNYX_PHONE_ADMIN_PASSWORD/);
+    assert.match(route, /TELNYX_OUTBOUND_VOICE_PROFILE/);
+    assert.doesNotMatch(route, /createPhoneCredential\(\{ label, mac \}\)/);
+    assert.match(credentials, /buildTelnyxV2Url\("\/credential_connections"\)/);
+    assert.match(credentials, /sip_uri_calling_preference: "unrestricted"/);
+    assert.match(credentials, /outbound_voice_profile_id: outboundVoiceProfileId/);
+    assert.doesNotMatch(credentials, /ani_override/);
+    assert.match(credentials, /buildTelnyxV2Url\(`\/phone_numbers\/\$\{encodeURIComponent\(phoneNumberId\)\}`\)/);
+  });
+
+  it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /phoneAdminPasswordConfigured/);
+    assert.match(page, /TELNYX_PHONE_ADMIN_PASSWORD/);
+    assert.match(page, /Select a Telnyx number/);
+    assert.doesNotMatch(page, /<Label>Admin password<\/Label>/);
+    assert.doesNotMatch(page, /Firmware source URL/);
+    assert.doesNotMatch(page, /Custom config URL/);
+    assert.doesNotMatch(page, /Syslog server/);
+  });
+
   it("renders bridges as a first-class rail section with list and context settings", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(page, /id: "bridges", label: "Bridges"/);

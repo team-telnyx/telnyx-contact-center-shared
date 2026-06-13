@@ -158,16 +158,18 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /idx_hp_phones_mac/);
   });
 
-  it("admin API supports phone CRUD with credential auto-create", async () => {
+  it("admin API supports phone CRUD with SIP connection auto-create", async () => {
     const listCode = await src("app/api/admin/phones-provisioning/phones/route.js");
     assert.match(listCode, /export async function GET/);
     assert.match(listCode, /export async function POST/);
-    assert.match(listCode, /createPhoneCredential/);
+    assert.match(listCode, /createPhoneSipConnection/);
+    assert.match(listCode, /TELNYX_PHONE_ADMIN_PASSWORD/);
+    assert.match(listCode, /TELNYX_OUTBOUND_VOICE_PROFILE/);
     assert.match(listCode, /requireAdmin/);
     const itemCode = await src("app/api/admin/phones-provisioning/phones/[id]/route.js");
     assert.match(itemCode, /export async function PUT/);
     assert.match(itemCode, /export async function DELETE/);
-    assert.match(itemCode, /deletePhoneCredential/);
+    assert.match(itemCode, /deletePhoneSipConnection/);
     assert.match(itemCode, /const \{ id \} = await params/);
   });
 
@@ -203,7 +205,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /Phones/);
     assert.match(code, /Settings/);
     assert.match(code, /MAC address/);
-    assert.match(code, /disabled=\{!valid \|\| saving\}/);
+    assert.match(code, /disabled=\{!valid \|\| saving \|\| \(!editing && \(!phoneAdminPasswordConfigured \|\| !outboundVoiceProfileConfigured\)\)\}/);
     assert.match(code, /phoneDraftValid/);
     assert.match(code, /PHONE_MODEL_CATALOG/);
     assert.match(code, /PhoneModelPreview/);

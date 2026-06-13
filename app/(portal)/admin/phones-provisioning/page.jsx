@@ -207,7 +207,8 @@ const emptyPhoneDraft = () => ({
   vendor: "polycom",
   model: "",
   label: "",
-  admin_password: "",
+  assigned_phone_number_id: "",
+  assigned_phone_number: "",
   ip_address: "",
   local_bridge_id: "",
   settings: {
@@ -243,6 +244,8 @@ export default function PhonesProvisioningPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [phones, setPhones] = useState([]);
+  const [availablePhoneNumbers, setAvailablePhoneNumbers] = useState([]);
+  const [hardphoneConfig, setHardphoneConfig] = useState({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false });
   const [bridges, setBridges] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
@@ -287,6 +290,8 @@ export default function PhonesProvisioningPage() {
       const dashboardData = dashboardRes.ok ? await dashboardRes.json() : null;
       const bridgesData = bridgesRes.ok ? await bridgesRes.json() : { bridges: [] };
       setPhones(phonesData.phones || []);
+      setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
+      setHardphoneConfig(phonesData.config || { phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false });
       setDashboard(dashboardData);
       setBridges(bridgesData.bridges || []);
       if (toast) notify({ title: "Phones provisioning refreshed", description: "Data reloaded.", variant: "success" });
@@ -312,7 +317,8 @@ export default function PhonesProvisioningPage() {
         vendor: selectedPhone.vendor || "polycom",
         model: selectedPhone.model || "",
         label: selectedPhone.label || "",
-        admin_password: selectedPhone.admin_password || "",
+        assigned_phone_number_id: selectedPhone.assigned_phone_number_id || "",
+        assigned_phone_number: selectedPhone.assigned_phone_number || "",
         ip_address: selectedPhone.last_ip || selectedPhone.ip_address || "",
         local_bridge_id: selectedPhone.local_bridge_id || selectedPhone.settings?.local_bridge_id || "",
         settings: normalizePhoneSettings(selectedPhone.settings),
@@ -333,7 +339,8 @@ export default function PhonesProvisioningPage() {
         vendor: phoneDraft.vendor,
         model: phoneDraft.model.trim(),
         label: phoneDraft.label.trim(),
-        admin_password: phoneDraft.admin_password.trim(),
+        assigned_phone_number_id: phoneDraft.assigned_phone_number_id || "",
+        assigned_phone_number: phoneDraft.assigned_phone_number || "",
         local_bridge_id: phoneDraft.local_bridge_id.trim(),
         settings: normalizePhoneSettings({ ...phoneDraft.settings, local_bridge_id: phoneDraft.local_bridge_id.trim() }),
       };
@@ -493,6 +500,8 @@ export default function PhonesProvisioningPage() {
                 valid={draftValid}
                 saving={saving}
                 bridges={bridges}
+                availablePhoneNumbers={availablePhoneNumbers}
+                hardphoneConfig={hardphoneConfig}
                 save={savePhone}
               />
             ) : active === "bridges" ? (
@@ -642,8 +651,10 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
   );
 }
 
-function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], save }) {
+function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], availablePhoneNumbers = [], hardphoneConfig = {}, save }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const phoneAdminPasswordConfigured = hardphoneConfig.phoneAdminPasswordConfigured === true;
+  const outboundVoiceProfileConfigured = hardphoneConfig.outboundVoiceProfileConfigured === true;
   const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }) }));
   const models = VENDOR_MODELS[draft.vendor] || [];
   const catalogEntry = modelCatalogEntry(draft.vendor, draft.model);
@@ -682,10 +693,28 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             <Label>Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
           </div>
-          <div>
-            <Label>Admin password</Label>
-            <Input className="mt-1 font-mono" value={draft.admin_password} onChange={(e) => update({ admin_password: e.target.value })} placeholder="Generated automatically when empty" />
-            <p className="mt-1 text-xs text-muted-foreground">Replaces the factory default (456 / admin / 1234) during provisioning.</p>
+          {!editing ? (
+            <div className="rounded-xl border bg-muted/20 p-3">
+              <Label>Telnyx number</Label>
+              <Select value={draft.assigned_phone_number_id || "none"} onValueChange={(v) => {
+                const selected = availablePhoneNumbers.find((n) => n.id === v);
+                update({ assigned_phone_number_id: v === "none" ? "" : v, assigned_phone_number: selected?.phone_number || "" });
+              }}>
+                <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Create SIP connection without assigning a number</SelectItem>
+                  {availablePhoneNumbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="mt-2 text-xs text-muted-foreground">Select a Telnyx number that is not attached to any connection. It will be assigned to the new hardphone SIP connection.</p>
+            </div>
+          ) : null}
+          <div className={`rounded-xl border px-3 py-2 text-xs ${phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
+            {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? (
+              <span>Hardphone provisioning prerequisites are configured. Admin login password is managed by TELNYX_PHONE_ADMIN_PASSWORD.</span>
+            ) : (
+              <span>Configure {phoneAdminPasswordConfigured ? "TELNYX_OUTBOUND_VOICE_PROFILE" : "TELNYX_PHONE_ADMIN_PASSWORD"}{!phoneAdminPasswordConfigured && !outboundVoiceProfileConfigured ? " and TELNYX_OUTBOUND_VOICE_PROFILE" : ""} before adding new hard phones.</span>
+            )}
           </div>
           <div>
             <Label>Detected phone IP address</Label>
@@ -696,15 +725,19 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
       </SettingCard>
 
       {editing && phone ? (
-        <SettingCard icon={IconPhoneCall} title="SIP registration" subtitle="Telnyx telephony credential injected into the config">
+        <SettingCard icon={IconPhoneCall} title="SIP registration" subtitle="Dedicated Telnyx credential connection injected into the config">
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">SIP username</span>
               <span className="truncate font-mono text-xs">{phone.sip_username || "—"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Credential ID</span>
-              <span className="truncate font-mono text-xs">{phone.telnyx_credential_id || "—"}</span>
+              <span className="text-xs text-muted-foreground">SIP connection ID</span>
+              <span className="truncate font-mono text-xs">{phone.telnyx_connection_id || phone.telnyx_credential_id || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-muted-foreground">Assigned number</span>
+              <span className="truncate font-mono text-xs">{phone.assigned_phone_number || "—"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">SIP server</span>
@@ -728,7 +761,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
 
       {editing && phone ? <PhoneCtiCard phone={phone} /> : null}
 
-      <Button className="w-full" onClick={save} disabled={!valid || saving} data-testid="hp-save-phone">
+      <Button className="w-full" onClick={save} disabled={!valid || saving || (!editing && (!phoneAdminPasswordConfigured || !outboundVoiceProfileConfigured))} data-testid="hp-save-phone">
         {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
         {editing ? "Save phone" : "Add phone"}
       </Button>
@@ -736,7 +769,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
         <p className="text-xs text-amber-600 dark:text-amber-300">Required: a valid 12-hex-digit MAC address and a vendor.</p>
       ) : null}
       {!editing ? (
-        <p className="text-xs text-muted-foreground">Saving creates a dedicated Telnyx telephony credential for this phone automatically.</p>
+        <p className="text-xs text-muted-foreground">Saving creates a dedicated Telnyx SIP connection for this phone automatically.</p>
       ) : null}
     </>
   );
@@ -771,9 +804,9 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
   const isPoly = vendor === "polycom";
   const isAudioCodes = vendor === "audiocodes";
   const capabilityText = isPoly
-    ? "Poly UCS/PVOS config supports line keys, polling/reload, firmware source, time/SNTP, admin password and REST API enablement."
+    ? "Poly UCS/PVOS config supports line keys, polling/reload, time/SNTP, shared admin password and REST API enablement."
     : isAudioCodes
-      ? "AudioCodes 400HD config supports dynamic reload, automatic firmware updates, line keys, time/SNTP and custom config file append URLs."
+      ? "AudioCodes 400HD config supports dynamic reload, line keys, time/SNTP and shared admin password."
       : "Yealink config supports line keys, auto-provision schedule, time/SNTP and Action URI control.";
   return (
     <div className="rounded-xl border bg-muted/20 p-3">
@@ -800,18 +833,6 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
         <div>
           <Label>SNTP server</Label>
           <Input className="mt-1 font-mono" value={settings.sntp_server || ""} onChange={(e) => updateSettings({ sntp_server: e.target.value })} placeholder="pool.ntp.org" />
-        </div>
-        <div>
-          <Label>Firmware source URL</Label>
-          <Input className="mt-1 font-mono" value={settings.firmware_source || ""} onChange={(e) => updateSettings({ firmware_source: e.target.value })} placeholder="vendor-default or https://..." />
-        </div>
-        <div>
-          <Label>Custom config URL</Label>
-          <Input className="mt-1 font-mono" value={settings.custom_config_url || ""} onChange={(e) => updateSettings({ custom_config_url: e.target.value })} placeholder="https://.../extra.cfg" />
-        </div>
-        <div>
-          <Label>Syslog server</Label>
-          <Input className="mt-1 font-mono" value={settings.syslog_server || ""} onChange={(e) => updateSettings({ syslog_server: e.target.value })} placeholder="10.0.0.10" />
         </div>
       </div>
       <div className="mt-3 space-y-2 text-xs">

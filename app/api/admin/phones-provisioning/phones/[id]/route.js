@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
-import { deletePhoneCredential } from "@/lib/hardphones/credentials.mjs";
+import { deletePhoneSipConnection } from "@/lib/hardphones/credentials.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -21,7 +21,8 @@ async function requireAdmin() {
   return user;
 }
 
-const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, sip_username,
+const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
+  assigned_phone_number_id, assigned_phone_number, sip_username,
   admin_password, settings, provisioning_state, ip_address, last_ip, local_bridge_id, last_seen_at, last_user_agent, created_at, updated_at`;
 
 export async function GET(_request, { params }) {
@@ -62,7 +63,6 @@ export async function PUT(request, { params }) {
     if (body.model !== undefined) { columns.push(`model = $${idx++}`); values.push(String(body.model || "").trim() || null); }
     if (body.label !== undefined) { columns.push(`label = $${idx++}`); values.push(String(body.label || "").trim() || null); }
     if (body.agent_id !== undefined) { columns.push(`agent_id = $${idx++}`); values.push(String(body.agent_id || "").trim() || null); }
-    if (body.admin_password !== undefined) { columns.push(`admin_password = $${idx++}`); values.push(String(body.admin_password || "").trim() || null); }
     if (body.ip_address !== undefined) { columns.push(`ip_address = $${idx++}`); values.push(String(body.ip_address || "").trim() || null); }
     if (body.local_bridge_id !== undefined) { columns.push(`local_bridge_id = $${idx++}`); values.push(String(body.local_bridge_id || "").trim() || null); }
     if (body.settings !== undefined) { columns.push(`settings = $${idx++}`); values.push(JSON.stringify(body.settings && typeof body.settings === "object" ? body.settings : {})); }
@@ -90,9 +90,9 @@ export async function DELETE(_request, { params }) {
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
     const { id } = await params;
-    const { rows } = await pool.query(`SELECT telnyx_credential_id, mac FROM hp_phones WHERE id = $1`, [id]);
+    const { rows } = await pool.query(`SELECT COALESCE(telnyx_connection_id, telnyx_credential_id) AS telnyx_connection_id, mac FROM hp_phones WHERE id = $1`, [id]);
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const credentialDeleted = await deletePhoneCredential(rows[0].telnyx_credential_id);
+    const credentialDeleted = await deletePhoneSipConnection(rows[0].telnyx_connection_id);
     await pool.query(`DELETE FROM hp_provisioning_events WHERE phone_id = $1`, [id]);
     await pool.query(`DELETE FROM hp_phones WHERE id = $1`, [id]);
     return NextResponse.json({ ok: true, credentialDeleted });
