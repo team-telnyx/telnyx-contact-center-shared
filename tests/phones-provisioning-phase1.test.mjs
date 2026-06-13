@@ -94,7 +94,9 @@ describe("hard phones provisioning (Phase 1)", () => {
       const created = await createPhoneSipConnection({ mac: "00:04:F2:CB:F6:D5", vendor: "polycom", model: "VVX 310" });
       assert.strictEqual(created.sip_username, "phone0004F2CBF6D5");
       assert.strictEqual(calls.length, 2);
-      assert.strictEqual(JSON.parse(calls[0].options.body).user_name, "phone0004F2CBF6D5");
+      const createBody = JSON.parse(calls[0].options.body);
+      assert.strictEqual(createBody.user_name, "phone0004F2CBF6D5");
+      assert.strictEqual(createBody.inbound.dnis_number_format, "sip_username");
       assert.strictEqual(calls[1].options.method, "PATCH");
       assert.strictEqual(JSON.parse(calls[1].options.body).user_name, "phone0004F2CBF6D5");
     } finally {

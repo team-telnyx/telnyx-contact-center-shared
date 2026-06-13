@@ -225,6 +225,7 @@ describe("hardphone bridge product integration", () => {
       await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
 
       assert.strictEqual(requestBody.user_name, "phone0004F2ABCDEF");
+      assert.strictEqual(requestBody.inbound.dnis_number_format, "sip_username");
       assert.deepStrictEqual(requestBody.tags, ["hardphone", "vendor_audiocodes", "model_420HD", "mac_0004F2ABCDEF"]);
       assert.ok(requestBody.tags.every((tag) => /^[A-Za-z0-9_-]+$/.test(tag)), "Telnyx tags must contain only letters, numbers, dashes and underscores");
     } finally {
