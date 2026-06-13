@@ -7,6 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
@@ -299,12 +309,15 @@ export default function PhonesProvisioningPage() {
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
+  const [pendingRebootIds, setPendingRebootIds] = useState([]);
   const [rebooting, setRebooting] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState(emptyPhoneDraft());
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
   const selectedPhone = useMemo(() => phones.find((p) => p.id === selectedPhoneId) || null, [phones, selectedPhoneId]);
   const selectedBridge = useMemo(() => bridges.find((b) => b.bridge_id === selectedBridgeId) || bridges[0] || null, [bridges, selectedBridgeId]);
+  const pendingRebootPhones = useMemo(() => phones.filter((p) => pendingRebootIds.includes(p.id)), [phones, pendingRebootIds]);
+  const pendingRebootLabel = pendingRebootIds.length === phones.length ? "all phones" : `${pendingRebootIds.length} phone${pendingRebootIds.length === 1 ? "" : "s"}`;
 
   useEffect(() => {
     try {
@@ -468,11 +481,16 @@ export default function PhonesProvisioningPage() {
     }
   }
 
-  async function rebootPhones(ids) {
+  function requestRebootPhones(ids) {
     const phoneIds = ids && ids.length ? ids : selectedRebootIds;
     if (!phoneIds.length) return;
-    const label = phoneIds.length === phones.length ? "all phones" : `${phoneIds.length} phone${phoneIds.length === 1 ? "" : "s"}`;
-    if (!window.confirm(`Send remote reboot to ${label}?`)) return;
+    setPendingRebootIds(phoneIds);
+  }
+
+  async function confirmRebootPhones() {
+    const phoneIds = pendingRebootIds;
+    if (!phoneIds.length) return;
+    setPendingRebootIds([]);
     setRebooting(true);
     try {
       const res = await fetch(`${API}/phones/reboot`, {
@@ -542,7 +560,7 @@ export default function PhonesProvisioningPage() {
                 setSelectedRebootIds={setSelectedRebootIds}
                 deletePhone={deletePhone}
                 togglePhoneState={togglePhoneState}
-                rebootPhones={rebootPhones}
+                rebootPhones={requestRebootPhones}
                 rebooting={rebooting}
               />
             ) : active === "bridges" ? (
@@ -598,6 +616,33 @@ export default function PhonesProvisioningPage() {
           </div>
         </aside>
       </main>
+      <AlertDialog open={Boolean(pendingRebootIds.length)} onOpenChange={(open) => { if (!open) setPendingRebootIds([]); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reboot hardphone{pendingRebootIds.length === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Send a remote reboot command to {pendingRebootLabel}. Active calls may be interrupted and the phone{pendingRebootIds.length === 1 ? "" : "s"} can be unavailable while restarting.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingRebootPhones.length ? (
+            <div className="max-h-40 overflow-y-auto rounded-lg border bg-muted/30 p-2 text-xs">
+              {pendingRebootPhones.map((phone) => (
+                <div key={phone.id} className="flex items-center justify-between gap-3 py-1">
+                  <span className="truncate">{phone.phone_name || phone.label || phone.model || "Hardphone"}</span>
+                  <span className="shrink-0 font-mono text-muted-foreground">{formatMacDisplay(phone.mac)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rebooting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRebootPhones} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={rebooting}>
+              {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}
+              Reboot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminPageShell>
   );
 }
