@@ -100,6 +100,7 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /setBridges/);
     assert.match(page, /<SelectItem value="local_bridge">Local bridge<\/SelectItem>/);
     assert.match(page, /<Label>Local bridge<\/Label>/);
+    assert.match(page, /<div className="sm:col-span-2">\s*<Label>Local bridge<\/Label>/);
     assert.match(page, /disabled=\{!useBridge\}/);
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
     assert.doesNotMatch(page, /Local bridge ID/);

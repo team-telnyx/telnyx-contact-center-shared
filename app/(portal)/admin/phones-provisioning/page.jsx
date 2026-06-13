@@ -985,30 +985,28 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings, draft
           <Label>Line keys</Label>
           <Input className="mt-1" value={settings.line_keys || ""} onChange={(e) => updateSettings({ line_keys: e.target.value })} placeholder="1" />
         </div>
-        <div className="space-y-3">
-          <div>
-            <Label>CTI mode</Label>
-            <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="direct">Direct phone API</SelectItem>
-                <SelectItem value="local_bridge">Local bridge</SelectItem>
-                <SelectItem value="telnyx">Telnyx fallback</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Local bridge</Label>
-            <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
-              <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No bridge assigned</SelectItem>
-                {bridges.map((b) => (
-                  <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <Label>CTI mode</Label>
+          <Select value={settings.cti_mode || "direct"} onValueChange={(v) => updateSettings({ cti_mode: v })}>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="direct">Direct phone API</SelectItem>
+              <SelectItem value="local_bridge">Local bridge</SelectItem>
+              <SelectItem value="telnyx">Telnyx fallback</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Local bridge</Label>
+          <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select local bridge" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No bridge assigned</SelectItem>
+              {bridges.map((b) => (
+                <SelectItem key={b.bridge_id} value={b.bridge_id}>{b.label || b.bridge_id} · {b.online ? "online" : "offline"}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label>SNTP server</Label>
