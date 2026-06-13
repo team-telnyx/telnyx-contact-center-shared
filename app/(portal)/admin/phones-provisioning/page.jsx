@@ -605,6 +605,8 @@ export default function PhonesProvisioningPage() {
                 availablePhoneNumbers={availablePhoneNumbers}
                 hardphoneConfig={hardphoneConfig}
                 save={savePhone}
+                rebootPhones={requestRebootPhones}
+                rebooting={rebooting}
               />
             ) : active === "bridges" ? (
               <BridgeEditor bridges={bridges} bridge={selectedBridge} phones={phones} refresh={refresh} onSelect={setSelectedBridgeId} />
@@ -855,7 +857,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
   );
 }
 
-function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], availablePhoneNumbers = [], hardphoneConfig = {}, save }) {
+function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], availablePhoneNumbers = [], hardphoneConfig = {}, save, rebootPhones, rebooting = false }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const phoneAdminPasswordConfigured = hardphoneConfig.phoneAdminPasswordConfigured === true;
   const outboundVoiceProfileConfigured = hardphoneConfig.outboundVoiceProfileConfigured === true;
@@ -957,7 +959,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
               <span className="text-xs text-muted-foreground">Last user agent</span>
               <span className="truncate text-xs">{phone.last_user_agent || "—"}</span>
             </div>
-            <PhoneMaintenanceActions phone={phone} />
+            <PhoneMaintenanceActions phone={phone} rebootPhones={rebootPhones} rebooting={rebooting} />
           </div>
         </SettingCard>
       ) : null}
@@ -1190,9 +1192,8 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
   );
 }
 
-function PhoneMaintenanceActions({ phone }) {
+function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
   const [busy, setBusy] = useState(null);
-  const [rebootOpen, setRebootOpen] = useState(false);
   async function run(action) {
     setBusy(action);
     try {
@@ -1210,8 +1211,8 @@ function PhoneMaintenanceActions({ phone }) {
       setBusy(null);
     }
   }
-  const actionButton = (action, label, Icon, testId, onClick = () => run(action)) => (
-    <Button size="sm" variant="outline" className="h-10 min-w-0 flex-1" disabled={Boolean(busy)} onClick={onClick} data-testid={testId} title={label} aria-label={label}>
+  const actionButton = (action, label, Icon, testId, onClick = () => run(action), disabled = false) => (
+    <Button size="sm" variant="outline" className="h-10 min-w-0 flex-1" disabled={Boolean(busy) || disabled} onClick={onClick} data-testid={testId} title={label} aria-label={label}>
       {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
       <span className="sr-only">{label}</span>
     </Button>
@@ -1222,35 +1223,8 @@ function PhoneMaintenanceActions({ phone }) {
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
-        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => setRebootOpen(true))}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => rebootPhones?.([phone.id]), rebooting || !phone?.id)}
       </div>
-      <AlertDialog open={rebootOpen} onOpenChange={setRebootOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reboot hardphone?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remotely reboot {phone.phone_name || phone.label || formatMacDisplay(phone.mac)}. Active calls may be interrupted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-            <div className="font-medium">{phone.phone_name || phone.label || "Hardphone"}</div>
-            <div className="mt-1 font-mono text-xs text-muted-foreground">{formatMacDisplay(phone.mac)}</div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === "reboot"}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={busy === "reboot"}
-              onClick={(event) => {
-                event.preventDefault();
-                run("reboot").then(() => setRebootOpen(false));
-              }}
-            >
-              {busy === "reboot" ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Reboot
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

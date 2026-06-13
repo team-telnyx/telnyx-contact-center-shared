@@ -37,6 +37,16 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.strictEqual(resolveCtiDriverForAction(phone, "hangup").vendor, "telnyx-fallback");
   });
 
+  it("AudioCodes local bridge status is merged with Telnyx fallback call state", async () => {
+    const code = await src("lib/hardphones/cti.mjs");
+    assert.match(code, /isAudioCodesLocalBridgeStatus/);
+    assert.match(code, /mergeAudioCodesHybridStatus/);
+    assert.match(code, /localStatus = await localDriver\.status\(phone\)/);
+    assert.match(code, /telnyxStatus = await telnyxDriver\.status\(phone\)/);
+    assert.match(code, /call: telnyxStatus\?\.call/);
+    assert.match(code, /line: localStatus\?\.line/);
+  });
+
   it("drivers fail fast without a phone IP", async () => {
     const phone = { vendor: "polycom", admin_password: "x" };
     assert.deepStrictEqual(await polycomDriver.dial(phone, "123"), { ok: false, reason: "no_phone_ip" });
@@ -155,10 +165,13 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-sip-check-status/);
     assert.match(code, /hp-sip-reprovision/);
     assert.match(code, /hp-sip-reboot/);
-    assert.match(code, /const \[rebootOpen, setRebootOpen\] = useState\(false\)/);
-    assert.match(code, /hp-sip-reboot", \(\) => setRebootOpen\(true\)/);
-    assert.match(code, /<AlertDialog open=\{rebootOpen\} onOpenChange=\{setRebootOpen\}>/);
-    assert.match(code, /run\("reboot"\)\.then\(\(\) => setRebootOpen\(false\)\)/);
+    assert.match(code, /rebootPhones=\{requestRebootPhones\}/);
+    assert.match(code, /rebooting=\{rebooting\}/);
+    assert.match(code, /<PhoneMaintenanceActions phone=\{phone\} rebootPhones=\{rebootPhones\} rebooting=\{rebooting\}/);
+    assert.match(code, /hp-sip-reboot", \(\) => rebootPhones\?\.\(\[phone\.id\]\), rebooting \|\| !phone\?\.id\)/);
+    assert.doesNotMatch(code, /const \[rebootOpen, setRebootOpen\] = useState\(false\)/);
+    assert.doesNotMatch(code, /<AlertDialog open=\{rebootOpen\} onOpenChange=\{setRebootOpen\}>/);
+    assert.doesNotMatch(code, /run\("reboot"\)\.then\(\(\) => setRebootOpen\(false\)\)/);
     assert.match(code, /from "@\/components\/ui\/alert-dialog"/);
     assert.match(code, /Reboot hardphone/);
     assert.match(code, /requestRebootPhones/);
@@ -250,6 +263,15 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /alert-autoanswer/);
     assert.match(code, /sip:\$\{phone\.sip_username\}@sip\.telnyx\.com/);
     assert.match(code, /hp_cti_sessions/);
+    assert.match(code, /findActiveHardphoneInteractionSession/);
+    assert.match(code, /metadata->>'hardphone_phone_id'/);
+    assert.match(code, /metadata->>'hardphone_connection_id'/);
+    assert.match(code, /metadata->>'hardphone_call_control_id'/);
+    assert.match(code, /metadata->>'pstn_call_control_id'/);
+    assert.match(code, /COALESCE\(metadata->>'hardphone_call_control_id'/);
+    assert.match(code, /function telnyxSessionCall\(session\)/);
+    assert.match(code, /RemotePartyNumber: target/);
+    assert.match(code, /call: telnyxSessionCall\(session\)/);
     assert.match(code, /send_dtmf/);
   });
 });
