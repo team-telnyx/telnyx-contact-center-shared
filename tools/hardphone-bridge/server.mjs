@@ -229,12 +229,12 @@ async function audiocodesStatus(host, { user = DEFAULT_AUDIOCODES_ADMIN_USER, pa
         reachable: true,
         httpStatus: voipStatus.status,
         vendor: "audiocodes",
-        registration: parsed.registration,
+        registration: parsed.registration || "not_registered",
         line: parsed.line,
       };
     }
     const result = await requestJson(`http://${host}/`, { timeoutMs: 5000 });
-    return { ok: result.ok, reachable: result.ok, httpStatus: result.status, vendor: "audiocodes", registration: null };
+    return { ok: result.ok, reachable: result.ok, httpStatus: result.status, vendor: "audiocodes", registration: result.ok ? "not_registered" : null };
   } catch (err) {
     return { ok: false, reachable: false, reason: "phone_unreachable", error: err?.message || String(err) };
   }

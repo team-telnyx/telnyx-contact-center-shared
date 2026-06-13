@@ -170,6 +170,7 @@ describe("hardphone bridge product integration", () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
     const bridgeRoute = await file("app/api/admin/phones-provisioning/bridges/route.js");
+    const bridgeServer = await file("tools/hardphone-bridge/server.mjs");
     assert.match(phonesRoute, /sip_registration_status/);
     assert.match(phonesRoute, /registration_status_event/);
     assert.match(page, /Telnyx registration/);
@@ -181,6 +182,7 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /registrationBadgeLabel\(phone\.sip_registration_status\)/);
     assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true, includeAvailablePhoneNumbers: false \}\), 10000\)/);
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
+    assert.match(bridgeServer, /registration:\s*parsed\.registration \|\| "not_registered"/);
   });
 
   it("provisions new hardphones with dedicated Telnyx credential connections", async () => {
