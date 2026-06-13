@@ -81,11 +81,11 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.strictEqual(parseCtiClientState(foreign), null);
   });
 
-  it("telnyx fallback requires a SIP credential to dial and reports auto-answer", async () => {
+  it("telnyx fallback direct dial validates caller ID and remains controllable", async () => {
     const driver = createTelnyxFallbackDriver({ pool: null });
-    assert.deepStrictEqual(await driver.dial({ id: "p-1" }, "+48123"), { ok: false, reason: "phone_has_no_sip_credential" });
+    assert.deepStrictEqual(await driver.dial({ id: "p-1" }, "+48123"), { ok: false, reason: "phone_has_no_caller_id" });
     const answer = await driver.answer();
-    assert.strictEqual(answer.ok, true);
+    assert.deepStrictEqual(answer, { ok: true, note: "telnyx-managed outbound leg" });
     assert.deepStrictEqual(await driver.hangup({ id: "p-1" }), { ok: false, reason: "no_active_call" });
     assert.deepStrictEqual(await driver.reprovision(), { ok: false, reason: "not_supported_use_polling" });
   });
@@ -263,15 +263,17 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.doesNotMatch(code, /key=REBOOT/);
   });
 
-  it("telnyx fallback dials with auto-answer Alert-Info header", async () => {
+  it("telnyx fallback dials the typed target directly with the hardphone caller ID", async () => {
     const code = await src("lib/hardphones/drivers/telnyx-fallback.mjs");
-    assert.match(code, /Alert-Info/);
-    assert.match(code, /alert-autoanswer/);
-    assert.match(code, /sip:\$\{phone\.sip_username\}@sip\.telnyx\.com/);
     assert.match(code, /function fallbackCallerId\(phone\)/);
     assert.match(code, /phone\?\.assigned_phone_number/);
     assert.match(code, /if \(!callerId\) return \{ ok: false, reason: "phone_has_no_caller_id" \}/);
+    assert.match(code, /to: target/);
     assert.match(code, /from: callerId/);
+    assert.doesNotMatch(code, /sip:\$\{phone\.sip_username\}@sip\.telnyx\.com/);
+    assert.doesNotMatch(code, /Alert-Info/);
+    assert.doesNotMatch(code, /alert-autoanswer/);
+    assert.doesNotMatch(code, /webhook_url: webhookUrl/);
     assert.doesNotMatch(code, /from: process\.env\.HP_CTI_FROM_NUMBER \|\| process\.env\.TELNYX_DEFAULT_FROM_NUMBER \|\| target/);
     assert.match(code, /hp_cti_sessions/);
     assert.match(code, /findActiveHardphoneInteractionSession/);
