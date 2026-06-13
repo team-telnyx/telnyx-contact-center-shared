@@ -22,7 +22,13 @@ import {
   IconEyeOff,
   IconExternalLink,
   IconLoader2,
+  IconMicrophone,
+  IconMicrophoneOff,
   IconPhoneCall,
+  IconPhoneIncoming,
+  IconPhoneOff,
+  IconPlayerPause,
+  IconPlayerPlay,
   IconPower,
   IconRefresh,
   IconRouteAltLeft,
@@ -911,6 +917,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
               <span className="text-xs text-muted-foreground">Last user agent</span>
               <span className="truncate text-xs">{phone.last_user_agent || "—"}</span>
             </div>
+            <PhoneMaintenanceActions phone={phone} />
           </div>
         </SettingCard>
       ) : null}
@@ -1029,6 +1036,115 @@ function PhoneModelPreview({ vendor, model, catalogEntry }) {
 
 // CTI control card — drives the phone through the vendor driver (Polycom
 // REST, Yealink Action URI, Telnyx fallback for AudioCodes/NAT-ed phones).
+function normalizeCallState(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function asArray(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function primaryCallFromStatus(status) {
+  const result = status?.result || status || {};
+  const calls = asArray(result.call || result.data?.call || result.data);
+  return calls.find((call) => call && typeof call === "object" && (call.CallHandle || call.Ref || call.CallState || call.state)) || null;
+}
+
+function deriveCallInfo(status, phone) {
+  const result = status?.result || status || {};
+  const call = primaryCallFromStatus(status);
+  const state = normalizeCallState(call?.CallState || call?.state || result.call_state || result.state);
+  const disconnectedStates = new Set(["", "disconnected", "idle", "ended", "completed", "failed", "no_active_call"]);
+  const incomingStates = new Set(["incoming", "ringing", "offering", "alerting", "ring", "presenting"]);
+  const heldStates = new Set(["held", "hold", "on_hold", "local_hold", "remote_hold"]);
+  const mutedValue = String(call?.Muted ?? call?.Mute ?? result.muted ?? result.mute ?? "").toLowerCase();
+  const direction = String(call?.Type || call?.direction || result.direction || "").toLowerCase();
+  const isIncoming = incomingStates.has(state) || direction === "incoming";
+  const isHeld = heldStates.has(state) || String(call?.HoldState || "").toLowerCase().includes("hold");
+  const isMuted = ["true", "1", "on", "muted", "yes"].includes(mutedValue);
+  const hasCall = Boolean(call) && !disconnectedStates.has(state);
+  const remoteNumber = call?.RemotePartyNumber || call?.remote_party_number || call?.RemotePartyName || call?.to || result.to || "";
+  const localNumber = call?.LocalPartyNumber || call?.local_party_number || phone?.assigned_phone_number || "";
+  return {
+    call,
+    state: state || "idle",
+    label: call?.CallState || call?.state || (hasCall ? "Active" : "Idle"),
+    hasCall,
+    isIncoming,
+    isHeld,
+    isMuted,
+    from: isIncoming ? (remoteNumber || "—") : (localNumber || "—"),
+    to: isIncoming ? (localNumber || "—") : (remoteNumber || "—"),
+    duration: call?.DurationInSeconds && call.DurationInSeconds !== "-1" ? `${call.DurationInSeconds}s` : null,
+    handle: call?.CallHandle || call?.Ref || "",
+    reachable: result.reachable ?? status?.reachable ?? null,
+  };
+}
+
+function callStateBadgeClass(info) {
+  if (info.isIncoming) return "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  if (info.isHeld) return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  if (info.hasCall) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
+}
+
+function CtiIconButton({ action, label, icon: Icon, active = false, disabled = false, busy, onClick, testId }) {
+  return (
+    <Button
+      type="button"
+      size="icon"
+      variant={active ? "default" : "outline"}
+      className="h-9 w-9"
+      disabled={disabled || Boolean(busy)}
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      data-testid={testId || `hp-cti-${action}`}
+    >
+      {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+    </Button>
+  );
+}
+
+function PhoneMaintenanceActions({ phone }) {
+  const [busy, setBusy] = useState(null);
+  async function run(action) {
+    if (action === "reboot" && !window.confirm("Send remote reboot to this phone?")) return;
+    setBusy(action);
+    try {
+      const res = await fetch(`${API}/phones/${phone.id}/cti`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `${action} failed`);
+      notify({ title: `Phone ${action}`, description: action === "status" ? "Status refreshed" : "Command accepted", variant: "success" });
+    } catch (err) {
+      notify({ title: `Phone ${action} failed`, description: err.message, variant: "error" });
+    } finally {
+      setBusy(null);
+    }
+  }
+  const actionButton = (action, label, Icon, testId) => (
+    <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run(action)} data-testid={testId} title={label} aria-label={label}>
+      {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+      <span className="sr-only">{label}</span>
+    </Button>
+  );
+  return (
+    <div className="border-t pt-3">
+      <div className="mb-2 text-xs font-medium text-muted-foreground">Phone actions</div>
+      <div className="flex items-center gap-2" data-testid="hp-sip-registration-actions">
+        {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
+        {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot")}
+      </div>
+    </div>
+  );
+}
+
 function PhoneCtiCard({ phone }) {
   const [busy, setBusy] = useState(null);
   const [dialNumber, setDialNumber] = useState("");
@@ -1036,6 +1152,39 @@ function PhoneCtiCard({ phone }) {
 
   const ctiMode = phone?.settings?.cti_mode === "local_bridge" ? `Local bridge (${phone.local_bridge_id || phone.settings?.local_bridge_id || "unassigned"})` : phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
   const reachableIp = phone.last_ip || phone.ip_address;
+  const callInfo = useMemo(() => deriveCallInfo(lastStatus, phone), [lastStatus, phone]);
+  const hasActiveCall = callInfo.hasCall;
+  const canDial = !hasActiveCall && dialNumber.trim();
+  const canAnswer = callInfo.isIncoming;
+  const canControlCall = hasActiveCall;
+
+  const fetchCtiStatus = useCallback(async ({ silent = true } = {}) => {
+    if (!phone?.id) return null;
+    if (!silent) setBusy("status");
+    try {
+      const res = await fetch(`${API}/phones/${phone.id}/cti`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "status failed");
+      setLastStatus(data.result || null);
+      return data.result || null;
+    } catch (err) {
+      if (!silent) notify({ title: "CTI status failed", description: err.message, variant: "error" });
+      return null;
+    } finally {
+      if (!silent) setBusy(null);
+    }
+  }, [phone?.id]);
+
+  useEffect(() => {
+    setLastStatus(null);
+    fetchCtiStatus({ silent: true });
+    const timer = window.setInterval(() => fetchCtiStatus({ silent: true }), 3000);
+    return () => window.clearInterval(timer);
+  }, [fetchCtiStatus]);
 
   async function runCti(action, params = {}) {
     setBusy(action);
@@ -1047,7 +1196,11 @@ function PhoneCtiCard({ phone }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${action} failed`);
-      if (action === "status") setLastStatus(data.result || null);
+      if (action === "status") {
+        setLastStatus(data.result || null);
+      } else if (!["reboot", "reprovision"].includes(action)) {
+        window.setTimeout(() => fetchCtiStatus({ silent: true }), 650);
+      }
       notify({ title: `CTI: ${action}`, description: action === "dial" ? params.number : "OK", variant: "success" });
     } catch (err) {
       notify({ title: `CTI ${action} failed`, description: err.message, variant: "error" });
@@ -1056,12 +1209,8 @@ function PhoneCtiCard({ phone }) {
     }
   }
 
-  const ctlBtn = (action, label, params = {}) => (
-    <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => runCti(action, params)} data-testid={`hp-cti-${action}`}>
-      {busy === action ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-      {label}
-    </Button>
-  );
+  const toggleHoldAction = callInfo.isHeld ? "resume" : "hold";
+  const toggleMuteAction = callInfo.isMuted ? "unmute" : "mute";
 
   return (
     <SettingCard icon={IconActivity} title="CTI control" subtitle={`Driver: ${ctiMode}`}>
@@ -1073,39 +1222,41 @@ function PhoneCtiCard({ phone }) {
         ) : null}
         {!reachableIp && phone.vendor !== "audiocodes" ? (
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-            No known phone IP yet — set it above or wait for the phone to fetch its config.
+            No known phone IP yet — wait for provisioning or bridge discovery before using local CTI.
           </p>
         ) : null}
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <Input className="font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" />
+        <div className="flex items-center gap-2 rounded-xl border bg-muted/20 p-2" data-testid="hp-cti-toolbar">
+          <Input className="h-9 min-w-0 flex-1 font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" disabled={hasActiveCall || Boolean(busy)} />
+          <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
+          <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
+          <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canControlCall} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
+          <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canControlCall} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
+          <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canControlCall} busy={busy} onClick={() => runCti("hangup")} />
+        </div>
+        <div className="rounded-xl border bg-muted/20 p-3" data-testid="hp-cti-call-info">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current call</div>
+            <Badge variant="outline" className={callStateBadgeClass(callInfo)}>{callInfo.label}</Badge>
           </div>
-          <Button size="sm" disabled={Boolean(busy) || !dialNumber.trim()} onClick={() => runCti("dial", { number: dialNumber.trim() })} data-testid="hp-cti-dial">
-            {busy === "dial" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneCall className="mr-1 h-3.5 w-3.5" />}
-            Dial
-          </Button>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {ctlBtn("answer", "Answer")}
-          {ctlBtn("hold", "Hold")}
-          {ctlBtn("resume", "Resume")}
-          {ctlBtn("mute", "Mute")}
-          {ctlBtn("unmute", "Unmute")}
-          {ctlBtn("hangup", "Hang up")}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {ctlBtn("status", "Check status")}
-          {ctlBtn("reprovision", "Re-provision")}
-          {ctlBtn("reboot", "Reboot")}
-        </div>
-        {lastStatus ? (
-          <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-            <div>Reachable: <span className="font-medium">{lastStatus.result?.reachable === null ? "n/a" : String(lastStatus.result?.reachable ?? lastStatus.reachable ?? "unknown")}</span></div>
-            {lastStatus.result?.call || lastStatus.call ? (
-              <div className="mt-1 truncate font-mono">{JSON.stringify(lastStatus.result?.call || lastStatus.call).slice(0, 160)}</div>
-            ) : <div className="mt-1 text-muted-foreground">No active call</div>}
+          <div className="grid gap-2 text-xs sm:grid-cols-2">
+            <div className="rounded-lg bg-background/70 px-2 py-1.5">
+              <div className="text-muted-foreground">From</div>
+              <div className="truncate font-mono">{callInfo.from}</div>
+            </div>
+            <div className="rounded-lg bg-background/70 px-2 py-1.5">
+              <div className="text-muted-foreground">To</div>
+              <div className="truncate font-mono">{callInfo.to}</div>
+            </div>
+            <div className="rounded-lg bg-background/70 px-2 py-1.5">
+              <div className="text-muted-foreground">Reachability</div>
+              <div className="font-medium">{callInfo.reachable === null ? "Unknown" : callInfo.reachable ? "Reachable" : "Not reachable"}</div>
+            </div>
+            <div className="rounded-lg bg-background/70 px-2 py-1.5">
+              <div className="text-muted-foreground">Details</div>
+              <div className="truncate font-medium">{callInfo.duration ? `Duration ${callInfo.duration}` : callInfo.handle ? `Handle ${callInfo.handle}` : "No active call"}</div>
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
     </SettingCard>
   );
