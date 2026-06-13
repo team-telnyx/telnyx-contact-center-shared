@@ -33,6 +33,31 @@ function hardphoneConfigStatus(user = {}) {
   };
 }
 
+function isNewerTimestamp(candidate, current) {
+  if (!candidate) return false;
+  const candidateTime = new Date(candidate).getTime();
+  if (!Number.isFinite(candidateTime)) return false;
+  if (!current) return true;
+  const currentTime = new Date(current).getTime();
+  if (!Number.isFinite(currentTime)) return true;
+  return candidateTime > currentTime;
+}
+
+function resolveSipRegistrationStatus(phone, registrationEvent) {
+  const useEvent = registrationEvent?.sip_registration_status
+    && isNewerTimestamp(registrationEvent.registration_status_at, phone.sip_registration_status_at);
+  if (useEvent) {
+    return {
+      sip_registration_status: registrationEvent.sip_registration_status,
+      sip_registration_status_at: registrationEvent.registration_status_at,
+    };
+  }
+  return {
+    sip_registration_status: phone.sip_registration_status || registrationEvent?.sip_registration_status || "unknown",
+    sip_registration_status_at: phone.sip_registration_status_at || registrationEvent?.registration_status_at || null,
+  };
+}
+
 export async function GET(request) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -63,8 +88,7 @@ export async function GET(request) {
       phones: rows.map((p) => ({
         ...p,
         recent_events: eventsByPhone[p.id]?.events || 0,
-        sip_registration_status: p.sip_registration_status || registrationByPhone[p.id]?.sip_registration_status || "unknown",
-        sip_registration_status_at: p.sip_registration_status_at || registrationByPhone[p.id]?.registration_status_at || null,
+        ...resolveSipRegistrationStatus(p, registrationByPhone[p.id]),
       })),
       availablePhoneNumbers,
       config: hardphoneConfigStatus(user),
