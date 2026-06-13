@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
-import { deletePhoneSipConnection } from "@/lib/hardphones/credentials.mjs";
+import { deleteLegacyPhoneCredential, deletePhoneSipConnection } from "@/lib/hardphones/credentials.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -90,9 +90,11 @@ export async function DELETE(_request, { params }) {
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
     const { id } = await params;
-    const { rows } = await pool.query(`SELECT COALESCE(telnyx_connection_id, telnyx_credential_id) AS telnyx_connection_id, mac FROM hp_phones WHERE id = $1`, [id]);
+    const { rows } = await pool.query(`SELECT telnyx_connection_id, telnyx_credential_id, mac FROM hp_phones WHERE id = $1`, [id]);
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const credentialDeleted = await deletePhoneSipConnection(rows[0].telnyx_connection_id);
+    const credentialDeleted = rows[0].telnyx_connection_id
+      ? await deletePhoneSipConnection(rows[0].telnyx_connection_id)
+      : await deleteLegacyPhoneCredential(rows[0].telnyx_credential_id);
     await pool.query(`DELETE FROM hp_provisioning_events WHERE phone_id = $1`, [id]);
     await pool.query(`DELETE FROM hp_phones WHERE id = $1`, [id]);
     return NextResponse.json({ ok: true, credentialDeleted });

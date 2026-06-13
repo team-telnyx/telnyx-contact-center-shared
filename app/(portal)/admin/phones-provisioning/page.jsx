@@ -281,8 +281,9 @@ export default function PhonesProvisioningPage() {
   const refresh = useCallback(async (toast = false, options = {}) => {
     if (!options.silent) setLoading(true);
     try {
+      const includeAvailablePhoneNumbers = options.includeAvailablePhoneNumbers || (active === "phones" && !options.silent);
       const [phonesRes, dashboardRes, bridgesRes] = await Promise.all([
-        fetch(`${API}/phones`),
+        fetch(`${API}/phones${includeAvailablePhoneNumbers ? "?includeAvailablePhoneNumbers=1" : ""}`),
         fetch(`${API}/dashboard`),
         fetch(`${API}/bridges`),
       ]);
@@ -290,7 +291,7 @@ export default function PhonesProvisioningPage() {
       const dashboardData = dashboardRes.ok ? await dashboardRes.json() : null;
       const bridgesData = bridgesRes.ok ? await bridgesRes.json() : { bridges: [] };
       setPhones(phonesData.phones || []);
-      setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
+      if (includeAvailablePhoneNumbers) setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
       setHardphoneConfig(phonesData.config || { phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false });
       setDashboard(dashboardData);
       setBridges(bridgesData.bridges || []);
@@ -300,13 +301,13 @@ export default function PhonesProvisioningPage() {
     } finally {
       if (!options.silent) setLoading(false);
     }
-  }, []);
+  }, [active]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
     if (active !== "bridges" && active !== "phones") return undefined;
-    const timer = setInterval(() => refresh(false, { silent: true }), 10000);
+    const timer = setInterval(() => refresh(false, { silent: true, includeAvailablePhoneNumbers: false }), 10000);
     return () => clearInterval(timer);
   }, [active, refresh]);
 
@@ -419,7 +420,7 @@ export default function PhonesProvisioningPage() {
     }
   }
 
-  const headerCreate = active === "phones" ? { label: "New phone", onClick: () => setSelectedPhoneId(null) } : active === "bridges" ? { label: "New bridge", onClick: () => setSelectedBridgeId(null) } : null;
+  const headerCreate = active === "phones" ? { label: "New phone", onClick: () => { setSelectedPhoneId(null); refresh(false, { includeAvailablePhoneNumbers: true }); } } : active === "bridges" ? { label: "New bridge", onClick: () => setSelectedBridgeId(null) } : null;
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
 
   return (

@@ -32,12 +32,13 @@ function hardphoneConfigStatus() {
   };
 }
 
-export async function GET() {
+export async function GET(request) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
+    const includeAvailablePhoneNumbers = new URL(request.url).searchParams.get("includeAvailablePhoneNumbers") === "1";
     const [{ rows }, { rows: eventRows }, { rows: registrationRows }, availablePhoneNumbers] = await Promise.all([
       pool.query(`SELECT ${PHONE_COLUMNS} FROM hp_phones ORDER BY created_at DESC LIMIT 500`),
       pool.query(
@@ -50,10 +51,10 @@ export async function GET() {
          WHERE event_type = 'registration_status_event'
          ORDER BY phone_id, created_at DESC`,
       ),
-      listUnassignedPhoneNumbers().catch((err) => {
+      includeAvailablePhoneNumbers ? listUnassignedPhoneNumbers().catch((err) => {
         adminRuntimeLogger.warn("hardphone_number_inventory_failed", runtimePayload({ error: err, operation: "hp_number_inventory" }));
         return [];
-      }),
+      }) : Promise.resolve([]),
     ]);
     const eventsByPhone = Object.fromEntries(eventRows.map((r) => [r.phone_id, r]));
     const registrationByPhone = Object.fromEntries(registrationRows.map((r) => [r.phone_id, r]));
@@ -99,6 +100,16 @@ export async function POST(request) {
     const model = String(body?.model || "").trim() || null;
     const assignedPhoneNumberId = String(body?.assigned_phone_number_id || "").trim() || null;
     const assignedPhoneNumber = String(body?.assigned_phone_number || "").trim() || null;
+    if (assignedPhoneNumberId || assignedPhoneNumber) {
+      const { rows: assignedRows } = await pool.query(
+        `SELECT id FROM hp_phones
+         WHERE ($1::text IS NOT NULL AND assigned_phone_number_id = $1)
+            OR ($2::text IS NOT NULL AND assigned_phone_number = $2)
+         LIMIT 1`,
+        [assignedPhoneNumberId, assignedPhoneNumber],
+      );
+      if (assignedRows.length) return NextResponse.json({ error: "Selected phone number is already assigned to another hard phone" }, { status: 409 });
+    }
     let connection = { id: null, connection_id: null, connection_name: null, sip_username: null, sip_password: null };
     let assignedNumber = null;
     try {
