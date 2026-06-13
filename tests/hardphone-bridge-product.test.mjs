@@ -142,6 +142,46 @@ describe("hardphone bridge product integration", () => {
     }
   });
 
+  it("sets hardphone SIP webhook URL and parks outbound calls for webhook control", async () => {
+    const originalFetch = global.fetch;
+    const oldApiKey = process.env.TELNYX_API_KEY;
+    const oldOvp = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
+    const oldWebhook = process.env.TELNYX_HARDPHONE_WEBHOOK_URL;
+    const oldWebhookBase = process.env.TELNYX_WEBHOOK_BASE_URL;
+    const oldNextAuth = process.env.NEXTAUTH_URL;
+    const oldAppBase = process.env.APP_BASE_URL;
+    let requestBody = null;
+    try {
+      process.env.TELNYX_API_KEY = "KEY_TEST";
+      process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp123";
+      delete process.env.TELNYX_HARDPHONE_WEBHOOK_URL;
+      delete process.env.TELNYX_WEBHOOK_BASE_URL;
+      process.env.NEXTAUTH_URL = "https://api.tokaj.synology.me";
+      delete process.env.APP_BASE_URL;
+      global.fetch = async (_url, options) => {
+        requestBody = JSON.parse(options.body);
+        return {
+          ok: true,
+          json: async () => ({ data: { id: "conn123", connection_name: requestBody.connection_name, user_name: requestBody.user_name } }),
+        };
+      };
+
+      await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
+
+      assert.strictEqual(requestBody.webhook_event_url, "https://api.tokaj.synology.me/api/voice/webhook");
+      assert.strictEqual(requestBody.webhook_api_version, "2");
+      assert.strictEqual(requestBody.outbound.call_parking_enabled, true);
+    } finally {
+      global.fetch = originalFetch;
+      if (oldApiKey === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = oldApiKey;
+      if (oldOvp === undefined) delete process.env.TELNYX_OUTBOUND_VOICE_PROFILE; else process.env.TELNYX_OUTBOUND_VOICE_PROFILE = oldOvp;
+      if (oldWebhook === undefined) delete process.env.TELNYX_HARDPHONE_WEBHOOK_URL; else process.env.TELNYX_HARDPHONE_WEBHOOK_URL = oldWebhook;
+      if (oldWebhookBase === undefined) delete process.env.TELNYX_WEBHOOK_BASE_URL; else process.env.TELNYX_WEBHOOK_BASE_URL = oldWebhookBase;
+      if (oldNextAuth === undefined) delete process.env.NEXTAUTH_URL; else process.env.NEXTAUTH_URL = oldNextAuth;
+      if (oldAppBase === undefined) delete process.env.APP_BASE_URL; else process.env.APP_BASE_URL = oldAppBase;
+    }
+  });
+
   it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(page, /phoneAdminPasswordConfigured/);
