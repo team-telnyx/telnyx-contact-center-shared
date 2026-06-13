@@ -88,6 +88,13 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /placeholder="Line 1 \/ Agent name"/);
   });
 
+  it("shows the assigned Telnyx phone number as its own phone inventory column", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /<span>Phone number<\/span>/);
+    assert.match(page, /p\.assigned_phone_number \|\| "—"/);
+    assert.match(page, /font-mono text-xs/);
+  });
+
   it("offers an NTP timezone offset dropdown defaulting to the logged-in user's timezone", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     const listRoute = await file("app/api/admin/phones-provisioning/phones/route.js");

@@ -640,8 +640,8 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
         </div>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border">
-        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}>
-          <span><input type="checkbox" checked={allSelected} onChange={() => setSelectedRebootIds(allSelected ? [] : phones.map((p) => p.id))} aria-label="Select all phones for reboot" /></span><span>Phone</span><span>Vendor</span><span>Model</span><span>State</span><span>Last seen</span><span className="text-right">Actions</span>
+        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}>
+          <span><input type="checkbox" checked={allSelected} onChange={() => setSelectedRebootIds(allSelected ? [] : phones.map((p) => p.id))} aria-label="Select all phones for reboot" /></span><span>Phone</span><span>Phone number</span><span>Vendor</span><span>Model</span><span>State</span><span>Last seen</span><span className="text-right">Actions</span>
         </div>
         {phones.map((p) => {
           const selected = selectedPhoneId === p.id;
@@ -651,13 +651,14 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               key={p.id}
               onClick={() => setSelectedPhoneId(p.id)}
               className={`grid cursor-pointer items-center border-t px-3 py-2.5 text-sm transition hover:bg-muted/40 ${selected ? "bg-sky-500/10" : ""}`}
-              style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
+              style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
             >
               <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={`Select ${formatMacDisplay(p.mac)} for reboot`} /></span>
               <span className="min-w-0">
                 <span className="block truncate font-medium">{p.phone_name || p.label || formatMacDisplay(p.mac)}</span>
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
               </span>
+              <span className="truncate font-mono text-xs">{p.assigned_phone_number || "—"}</span>
               <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
               <span className="truncate text-xs">{p.model || "—"}</span>
               <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>{p.sip_registration_status || "unknown"}</Badge></span>
