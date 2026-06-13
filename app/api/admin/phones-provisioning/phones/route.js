@@ -23,7 +23,7 @@ async function requireAdmin() {
 
 const PHONE_COLUMNS = `id, phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
   assigned_phone_number_id, assigned_phone_number, sip_username, admin_password, settings, provisioning_state, ip_address, last_ip,
-  local_bridge_id, last_seen_at, last_user_agent, created_at, updated_at`;
+  local_bridge_id, sip_registration_status, sip_registration_status_at, last_seen_at, last_user_agent, created_at, updated_at`;
 
 function hardphoneConfigStatus(user = {}) {
   return {
@@ -63,8 +63,8 @@ export async function GET(request) {
       phones: rows.map((p) => ({
         ...p,
         recent_events: eventsByPhone[p.id]?.events || 0,
-        sip_registration_status: registrationByPhone[p.id]?.sip_registration_status || "unknown",
-        sip_registration_status_at: registrationByPhone[p.id]?.registration_status_at || null,
+        sip_registration_status: p.sip_registration_status || registrationByPhone[p.id]?.sip_registration_status || "unknown",
+        sip_registration_status_at: p.sip_registration_status_at || registrationByPhone[p.id]?.registration_status_at || null,
       })),
       availablePhoneNumbers,
       config: hardphoneConfigStatus(user),

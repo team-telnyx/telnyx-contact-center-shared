@@ -16,7 +16,7 @@ const DEFAULT_YEALINK_ADMIN_USER = process.env.DEFAULT_YEALINK_ADMIN_USER || "ad
 const DEFAULT_YEALINK_ADMIN_PASSWORD = process.env.DEFAULT_YEALINK_ADMIN_PASSWORD || "";
 const DEFAULT_AUDIOCODES_ADMIN_USER = process.env.DEFAULT_AUDIOCODES_ADMIN_USER || "admin";
 const DEFAULT_AUDIOCODES_ADMIN_PASSWORD = process.env.DEFAULT_AUDIOCODES_ADMIN_PASSWORD || "";
-const PHONE_MAC_IP_MAP = process.env.PHONE_MAC_IP_MAP || "";
+const AUTO_POLL_INTERVAL_MS = Number(process.env.AUTO_POLL_INTERVAL_MS || 30000);
 
 const POLY_USER = "Polycom";
 const POLY_ERRORS = {
@@ -151,29 +151,67 @@ function normalizeMac(raw) {
   return mac.length === 12 ? mac : "";
 }
 
-function macPairs() {
-  return PHONE_MAC_IP_MAP.split(/[\s,]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const sep = entry.indexOf("=");
-      if (sep <= 0) return null;
-      const mac = entry.slice(0, sep);
-      const ip = entry.slice(sep + 1);
-      const normalizedMac = normalizeMac(mac);
-      const host = String(ip || "").trim();
-      return normalizedMac && host ? { mac: normalizedMac, ip: host } : null;
-    })
-    .filter(Boolean);
-}
+const phoneRegistry = new Map();
 
-function mappedIpForMac(mac) {
-  const normalized = normalizeMac(mac);
-  return macPairs().find((entry) => entry.mac === normalized)?.ip || "";
+function registryPhones() {
+  return Array.from(phoneRegistry.values()).filter((entry) => entry?.ip);
 }
 
 function observedPhones() {
-  return macPairs().map((entry) => ({ mac: entry.mac, ip: entry.ip, source: "PHONE_MAC_IP_MAP" }));
+  return registryPhones().map((entry) => ({ ...entry, source: "cc_registry" }));
+}
+
+function updatePhoneRegistry(phones = []) {
+  phoneRegistry.clear();
+  for (const phone of Array.isArray(phones) ? phones : []) {
+    const mac = normalizeMac(phone.mac || phone.phone_mac || "");
+    const ip = String(phone.ip || phone.ip_address || phone.last_ip || "").trim();
+    const key = phone.phone_id || mac || ip;
+    if (!key || !ip) continue;
+    phoneRegistry.set(String(key), {
+      phone_id: phone.phone_id || null,
+      mac,
+      ip,
+      vendor: String(phone.vendor || "").toLowerCase(),
+      admin_password: phone.admin_password || "",
+    });
+  }
+}
+
+async function autoPollOnce(send) {
+  const phones = observedPhones();
+  for (const phone of phones) {
+    if (!phone.ip) continue;
+    const vendors = phone.vendor ? [phone.vendor] : ["polycom", "yealink", "audiocodes"];
+    let result = null;
+    let vendor = phone.vendor || "";
+    for (const candidateVendor of vendors) {
+      result = await executeCommand({
+        vendor: candidateVendor,
+        host: phone.ip,
+        action: "status",
+        payload: { mac: phone.mac, admin_password: phone.admin_password || "" },
+      });
+      if (result?.ok) {
+        vendor = candidateVendor;
+        break;
+      }
+    }
+    if (result) {
+      send({
+        type: "phone_observed",
+        bridge_id: BRIDGE_ID,
+        phone_id: phone.phone_id || null,
+        mac: phone.mac || "",
+        ip: phone.ip,
+        vendor: vendor || result.vendor || phone.vendor || "",
+        registration: result.registration || result.registration_status || null,
+        reachable: result.reachable !== false && result.ok !== false,
+        result,
+        source: phone.source || "auto_poll",
+      });
+    }
+  }
 }
 
 async function yealinkAction(host, command, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
@@ -273,7 +311,7 @@ function hostFromPath(parts) {
 }
 
 async function executeCommand({ vendor, host, action = "status", payload = {} }) {
-  host = host || mappedIpForMac(payload.mac || payload.phone_mac || "");
+  host = host || "";
   if (!host) return { ok: false, reason: "missing_host" };
   if (vendor === "polycom") {
     const password = payload.admin_password || payload.password || "";
@@ -325,17 +363,33 @@ function startOutboundConnection() {
   let closed = false;
   const ws = new WebSocket(target);
   const send = (message) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message));
+    if (ws.readyState === (WebSocket.OPEN ?? 1)) ws.send(JSON.stringify(message));
   };
   ws.addEventListener("open", () => {
     console.log(JSON.stringify({ ok: true, event: "cc_ws_connected", bridge_id: BRIDGE_ID }));
-    send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink", "audiocodes"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"], discovery: ["PHONE_MAC_IP_MAP"] } });
-    for (const phone of observedPhones()) send({ type: "phone_observed", bridge_id: BRIDGE_ID, ...phone });
-    heartbeat = setInterval(() => send({ type: "heartbeat", bridge_id: BRIDGE_ID, timestamp: new Date().toISOString() }), HEARTBEAT_MS);
   });
   ws.addEventListener("message", async (event) => {
     let message = null;
     try { message = JSON.parse(String(event.data)); } catch { return; }
+    if (message.type === "registered") {
+      send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink", "audiocodes"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"], discovery: ["cc_registry", "auto_poll"] } });
+      send({ type: "phone_registry_request", bridge_id: BRIDGE_ID });
+      for (const phone of observedPhones()) send({ type: "phone_observed", bridge_id: BRIDGE_ID, ...phone });
+      setTimeout(() => autoPollOnce(send), 3000).unref?.();
+      const poll = setInterval(() => {
+        send({ type: "phone_registry_request", bridge_id: BRIDGE_ID });
+        autoPollOnce(send);
+      }, AUTO_POLL_INTERVAL_MS);
+      heartbeat = setInterval(() => send({ type: "heartbeat", bridge_id: BRIDGE_ID, timestamp: new Date().toISOString() }), HEARTBEAT_MS);
+      heartbeat._poll = poll;
+      return;
+    }
+    if (message.type === "phone_registry") {
+      updatePhoneRegistry(message.phones || []);
+      console.log(JSON.stringify({ ok: true, event: "phone_registry_updated", bridge_id: BRIDGE_ID, phones: registryPhones().length }));
+      autoPollOnce(send);
+      return;
+    }
     if (message.type !== "command") return;
     try {
       const result = await executeCommand({ vendor: message.vendor, host: message.host, action: message.action, payload: message.payload || {} });
@@ -347,6 +401,7 @@ function startOutboundConnection() {
   const scheduleReconnect = (event, error = null) => {
     if (closed) return;
     closed = true;
+    if (heartbeat?._poll) clearInterval(heartbeat._poll);
     if (heartbeat) clearInterval(heartbeat);
     console.log(JSON.stringify({ ok: false, event, error, reconnect_ms: RECONNECT_MS }));
     setTimeout(startOutboundConnection, RECONNECT_MS).unref?.();

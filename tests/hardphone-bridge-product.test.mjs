@@ -56,6 +56,8 @@ describe("hardphone bridge product integration", () => {
     assert.match(schema, /CREATE TABLE IF NOT EXISTS hp_local_bridge_commands/);
     assert.match(schema, /idx_hp_local_bridge_commands_bridge/);
     assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS local_bridge_id TEXT/);
+    assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS sip_registration_status TEXT/);
+    assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS sip_registration_status_at TIMESTAMPTZ/);
   });
 
   it("exposes admin bridge enrollment and live-status APIs", async () => {
@@ -173,8 +175,19 @@ describe("hardphone bridge product integration", () => {
     const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
     const bridgeRoute = await file("app/api/admin/phones-provisioning/bridges/route.js");
     const bridgeServer = await file("tools/hardphone-bridge/server.mjs");
+    const bridgeRelay = await file("lib/hardphones/bridge-relay.mjs");
+    const deployScript = await file("tools/hardphone-bridge/scripts/deploy-local.sh");
+    const envExample = await file("tools/hardphone-bridge/.env.example");
     assert.match(phonesRoute, /sip_registration_status/);
+    assert.match(phonesRoute, /p\.sip_registration_status \|\| registrationByPhone/);
     assert.match(phonesRoute, /registration_status_event/);
+    assert.match(bridgeRelay, /sip_registration_status = COALESCE\(\$4, sip_registration_status\)/);
+    assert.match(bridgeRelay, /registrationStatusFromMessage/);
+    assert.match(bridgeRelay, /message\.result\?\.line,/);
+    assert.match(bridgeRelay, /message\.RegistrationStatus/);
+    assert.match(bridgeRelay, /phone_registry_request/);
+    assert.match(bridgeRelay, /phone_registry/);
+    assert.match(bridgeRelay, /FROM hp_phones[\s\S]*WHERE local_bridge_id = \$1/);
     assert.match(page, /Telnyx registration/);
     assert.match(page, /registrationBadgeClass/);
     assert.match(page, /function registrationBadgeLabel/);
@@ -185,6 +198,15 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true, includeAvailablePhoneNumbers: false \}\), 10000\)/);
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
     assert.match(bridgeServer, /registration:\s*parsed\.registration \|\| "not_registered"/);
+    assert.match(bridgeServer, /phone_registry_request/);
+    assert.match(bridgeServer, /message\.type === "registered"/);
+    assert.match(bridgeServer, /phone_registry_updated/);
+    assert.match(bridgeServer, /AUTO_POLL_INTERVAL_MS/);
+    assert.match(bridgeServer, /WebSocket\.OPEN \?\? 1/);
+    assert.doesNotMatch(bridgeServer, /readyState === WebSocket\.OPEN\)/);
+    assert.doesNotMatch(bridgeServer, /PHONE_MAC_IP_MAP/);
+    assert.doesNotMatch(deployScript, /PHONE_MAC_IP_MAP/);
+    assert.doesNotMatch(envExample, /PHONE_MAC_IP_MAP/);
   });
 
   it("provisions new hardphones with dedicated Telnyx credential connections", async () => {
