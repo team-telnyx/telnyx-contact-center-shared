@@ -144,6 +144,11 @@ function formatMacDisplay(mac) {
   return value.match(/.{2}/g).join(":");
 }
 
+function formatMacInput(mac) {
+  const value = String(mac || "").toLowerCase().replace(/[^0-9a-f]/g, "").slice(0, 12);
+  return value.match(/.{1,2}/g)?.join(":") || "";
+}
+
 function formatTime(value) {
   if (!value) return "—";
   try { return new Date(value).toLocaleString(); } catch { return "—"; }
@@ -666,7 +671,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
         <div className="space-y-3">
           <div>
             <Label>MAC address<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
-            <Input className="mt-1 font-mono" value={draft.mac} onChange={(e) => update({ mac: e.target.value })} placeholder="00:04:f2:ab:cd:ef" disabled={editing} />
+            <Input className="mt-1 font-mono" value={formatMacInput(draft.mac)} onChange={(e) => update({ mac: formatMacInput(e.target.value) })} placeholder="00:90:8f:56:10:a5" disabled={editing} />
             {editing ? <p className="mt-1 text-xs text-muted-foreground">MAC cannot change — delete and re-add the phone instead.</p> : null}
           </div>
           <div>
