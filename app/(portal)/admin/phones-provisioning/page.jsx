@@ -1154,9 +1154,10 @@ function PhoneCtiCard({ phone }) {
   const reachableIp = phone.last_ip || phone.ip_address;
   const callInfo = useMemo(() => deriveCallInfo(lastStatus, phone), [lastStatus, phone]);
   const hasActiveCall = callInfo.hasCall;
-  const canDial = !hasActiveCall && dialNumber.trim();
-  const canAnswer = callInfo.isIncoming;
-  const canControlCall = hasActiveCall;
+  const fireAndForgetControls = phone.vendor === "yealink" && phone?.settings?.cti_mode !== "telnyx" && Boolean(reachableIp);
+  const canDial = (fireAndForgetControls || !hasActiveCall) && dialNumber.trim();
+  const canAnswer = callInfo.isIncoming || fireAndForgetControls;
+  const canControlCall = hasActiveCall || fireAndForgetControls;
 
   const fetchCtiStatus = useCallback(async ({ silent = true } = {}) => {
     if (!phone?.id) return null;
@@ -1165,7 +1166,7 @@ function PhoneCtiCard({ phone }) {
       const res = await fetch(`${API}/phones/${phone.id}/cti`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "status" }),
+        body: JSON.stringify({ action: "status", silent }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "status failed");
