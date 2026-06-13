@@ -16,6 +16,8 @@ describe("hardphone local bridge", () => {
     assert.match(server, /timingSafeEqual/);
     assert.match(server, /vendor === "polycom"/);
     assert.match(server, /\/api\/v1\/callctrl\/dial/);
+    assert.match(server, /Dest: String\(payload\.number \|\| payload\.target \|\| ""\), Line: "1"/);
+    assert.doesNotMatch(server, /Type: "SIP" \}/);
     assert.match(server, /rejectUnauthorized: false/);
     assert.match(server, /\/api\/v1\/mgmt\/updateConfiguration/);
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot/);

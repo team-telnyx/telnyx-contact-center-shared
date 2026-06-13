@@ -179,7 +179,7 @@ describe("hardphone bridge product integration", () => {
     const deployScript = await file("tools/hardphone-bridge/scripts/deploy-local.sh");
     const envExample = await file("tools/hardphone-bridge/.env.example");
     assert.match(phonesRoute, /sip_registration_status/);
-    assert.match(phonesRoute, /p\.sip_registration_status \|\| registrationByPhone/);
+    assert.match(phonesRoute, /resolveSipRegistrationStatus\(p, registrationByPhone\[p\.id\]\)/);
     assert.match(phonesRoute, /registration_status_event/);
     assert.match(bridgeRelay, /sip_registration_status = COALESCE\(\$4, sip_registration_status\)/);
     assert.match(bridgeRelay, /registrationStatusFromMessage/);

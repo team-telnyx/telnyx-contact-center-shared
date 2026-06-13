@@ -316,7 +316,7 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
   if (vendor === "polycom") {
     const password = payload.admin_password || payload.password || "";
     if (action === "status") return { ...(await polyStatus(host, password)), discovered_ip: host };
-    if (action === "dial") return polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(payload.number || payload.target || ""), Line: "1", Type: "SIP" } } });
+    if (action === "dial") return polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(payload.number || payload.target || ""), Line: "1" } } });
     if (["answer", "hangup", "hold", "resume"].includes(action)) {
       const ref = await activePolyCallRef(host, password);
       if (!ref) return { ok: false, reason: "no_active_call" };

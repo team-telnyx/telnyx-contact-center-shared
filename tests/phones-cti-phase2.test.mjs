@@ -157,6 +157,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
   it("polycom driver covers the REST call-control surface", async () => {
     const code = await src("lib/hardphones/drivers/polycom.mjs");
     assert.match(code, /\/api\/v1\/callctrl\/dial/);
+    assert.match(code, /Dest: String\(number\), Line: "1"/);
+    assert.doesNotMatch(code, /Type: "SIP" \}/);
     assert.match(code, /\/api\/v1\/callctrl\/answerCall/);
     assert.match(code, /\/api\/v1\/callctrl\/endCall/);
     assert.match(code, /\/api\/v1\/callctrl\/holdCall/);
