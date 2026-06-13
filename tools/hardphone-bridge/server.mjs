@@ -337,8 +337,8 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
       if (!call?.ref) return { ok: false, reason: "no_active_call" };
       return polyRequest(host, "/api/v1/callctrl/mute", { method: "POST", password, body: { data: { state: action === "mute" ? "1" : "0" } } });
     }
-    if (action === "reboot") return polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password });
-    if (action === "reprovision") return polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password });
+    if (action === "reboot") return polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password, body: {} });
+    if (action === "reprovision") return polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password, body: {} });
   }
   if (vendor === "yealink") {
     if (action === "dial") return yealinkAction(host, `number=${payload.number || payload.target || ""}`);

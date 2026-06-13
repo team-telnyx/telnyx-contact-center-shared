@@ -155,6 +155,10 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /call_connected/);
     assert.match(code, /canHoldOrMute/);
     assert.match(code, /applyOptimisticCtiState/);
+    assert.match(code, /mergeStatusWithStickyMute/);
+    assert.match(code, /explicitMuteValue/);
+    assert.match(code, /phoneStatusSummary/);
+    assert.match(code, /Registration: /);
     assert.match(code, /grid grid-cols-5 gap-2/);
     assert.match(code, /grid grid-cols-3 gap-2/);
     assert.match(code, /setInterval\(\(\) => fetchCtiStatus/);

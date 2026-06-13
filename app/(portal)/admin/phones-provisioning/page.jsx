@@ -1039,6 +1039,41 @@ function primaryCallFromStatus(status) {
   const calls = asArray(result.call || result.data?.call || result.data);
   return calls.find((call) => call && typeof call === "object" && (call.CallHandle || call.Ref || call.CallState || call.state)) || null;
 }
+function callHandle(call) {
+  return call?.CallHandle || call?.Ref || call?.call_control_id || call?.id || "";
+}
+
+function explicitMuteValue(status) {
+  const result = status?.result || status || {};
+  const call = primaryCallFromStatus(status);
+  const value = call?.Muted ?? call?.Mute ?? result.muted ?? result.mute;
+  if (value === undefined || value === null || value === "") return null;
+  return ["true", "1", "on", "muted", "yes"].includes(String(value).toLowerCase());
+}
+
+function mergeStatusWithStickyMute(nextStatus, previousStatus) {
+  if (!nextStatus || !previousStatus) return nextStatus;
+  const nextInfo = deriveCallInfo(nextStatus, null);
+  if (!nextInfo.hasCall) return nextStatus;
+  if (explicitMuteValue(nextStatus) !== null) return nextStatus;
+  const previousInfo = deriveCallInfo(previousStatus, null);
+  if (!previousInfo.hasCall || !callHandle(nextInfo.call) || callHandle(nextInfo.call) !== callHandle(previousInfo.call)) return nextStatus;
+  if (explicitMuteValue(previousStatus) === null) return nextStatus;
+  return applyOptimisticCtiState(nextStatus, previousInfo.isMuted ? "mute" : "unmute");
+}
+
+function phoneStatusSummary(status, phone) {
+  const result = status?.result || status || {};
+  const line = asArray(result.line || result.data?.line).find(Boolean) || {};
+  const registration = result.registration || result.registration_status || line.RegistrationStatus || line.LineState || "unknown";
+  const info = deriveCallInfo(status, phone);
+  const parts = [`Registration: ${registration}`];
+  parts.push(info.hasCall ? `Call: ${info.label || info.state}${info.from !== "—" ? ` · From ${info.from}` : ""}${info.to !== "—" ? ` → ${info.to}` : ""}` : "Call: idle");
+  if (result.reachable !== undefined || status?.reachable !== undefined) parts.push(`Reachable: ${(result.reachable ?? status.reachable) ? "yes" : "no"}`);
+  if (result.discovered_ip || result.ip) parts.push(`IP: ${result.discovered_ip || result.ip}`);
+  return parts.join(" · ");
+}
+
 
 function deriveCallInfo(status, phone) {
   const result = status?.result || status || {};
@@ -1049,11 +1084,11 @@ function deriveCallInfo(status, phone) {
   const dialingStates = new Set(["proceeding", "call_proceeding", "ringback", "call_ringback", "dialing", "outgoing", "trying"]);
   const incomingStates = new Set(["incoming", "call_incoming", "ringing", "call_ringing", "offering", "alerting", "ring", "presenting"]);
   const heldStates = new Set(["held", "hold", "call_hold", "call_held", "on_hold", "local_hold", "remote_hold"]);
-  const mutedValue = String(call?.Muted ?? call?.Mute ?? result.muted ?? result.mute ?? "").toLowerCase();
+  const explicitMute = explicitMuteValue(status);
   const direction = String(call?.Type || call?.direction || result.direction || "").toLowerCase();
   const isIncoming = incomingStates.has(state) || direction === "incoming";
   const isHeld = heldStates.has(state) || String(call?.HoldState || "").toLowerCase().includes("hold");
-  const isMuted = ["true", "1", "on", "muted", "yes"].includes(mutedValue);
+  const isMuted = explicitMute === true;
   const hasCall = Boolean(call) && !disconnectedStates.has(state);
   const isConnected = hasCall && (connectedStates.has(state) || heldStates.has(state));
   const isDialing = dialingStates.has(state);
@@ -1136,7 +1171,7 @@ function PhoneMaintenanceActions({ phone }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${action} failed`);
-      notify({ title: `Phone ${action}`, description: action === "status" ? "Status refreshed" : "Command accepted", variant: "success" });
+      notify({ title: `Phone ${action}`, description: action === "status" ? phoneStatusSummary(data.result, phone) : "Command accepted", variant: "success" });
     } catch (err) {
       notify({ title: `Phone ${action} failed`, description: err.message, variant: "error" });
     } finally {
@@ -1187,8 +1222,9 @@ function PhoneCtiCard({ phone }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "status failed");
-      setLastStatus(data.result || null);
-      return data.result || null;
+      const nextStatus = data.result || null;
+      setLastStatus((current) => mergeStatusWithStickyMute(nextStatus, current));
+      return nextStatus;
     } catch (err) {
       if (!silent) notify({ title: "CTI status failed", description: err.message, variant: "error" });
       return null;
@@ -1215,7 +1251,7 @@ function PhoneCtiCard({ phone }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${action} failed`);
       if (action === "status") {
-        setLastStatus(data.result || null);
+        setLastStatus((current) => mergeStatusWithStickyMute(data.result || null, current));
       } else if (!["reboot", "reprovision"].includes(action)) {
         if (["hold", "resume", "mute", "unmute"].includes(action)) {
           setLastStatus((current) => applyOptimisticCtiState(current, action));
