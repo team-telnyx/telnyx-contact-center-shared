@@ -61,6 +61,15 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
   });
 
+  it("formats the context settings MAC input like the phone inventory list", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /function formatMacInput\(mac\)/);
+    assert.match(page, /replace\(\/\[\^0-9a-f\]\/g, ""\)\.slice\(0, 12\)/);
+    assert.match(page, /value=\{formatMacInput\(draft\.mac\)\}/);
+    assert.match(page, /onChange=\{\(e\) => update\(\{ mac: formatMacInput\(e\.target\.value\) \}\)\}/);
+    assert.match(page, /placeholder="00:90:8f:56:10:a5"/);
+  });
+
   it("auto-discovers phone IP and keeps the phone IP field read-only", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     const eventsRoute = await file("app/api/provisioning/events/[vendor]/route.js");
