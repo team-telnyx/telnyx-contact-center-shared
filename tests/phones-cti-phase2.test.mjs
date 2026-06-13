@@ -137,6 +137,42 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     }
   });
 
+  it("telnyx fallback sends DTMF to the target leg when a bridge has separate call controls", async () => {
+    const previousFetch = globalThis.fetch;
+    const previousApiKey = process.env.TELNYX_API_KEY;
+    const requests = [];
+    try {
+      process.env.TELNYX_API_KEY = "test-key";
+      globalThis.fetch = async (url, options) => {
+        requests.push({ url: String(url), body: JSON.parse(options.body) });
+        return { ok: true, json: async () => ({ data: { ok: true } }) };
+      };
+      const pool = {
+        async query() {
+          return {
+            rows: [{
+              phone_id: "p-1",
+              call_control_id: "phone-leg",
+              phone_call_control_id: "phone-leg",
+              target_call_control_id: "target-leg",
+              target: "+18005551212",
+              status: "bridged",
+            }],
+          };
+        },
+      };
+      const driver = createTelnyxFallbackDriver({ pool });
+      assert.deepStrictEqual(await driver.sendDtmf({ id: "p-1" }, "123#"), { ok: true, data: { ok: true } });
+      assert.strictEqual(requests.length, 1);
+      assert.match(requests[0].url, /\/calls\/target-leg\/actions\/send_dtmf$/);
+      assert.deepStrictEqual(requests[0].body, { digits: "123#" });
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = previousApiKey;
+    }
+  });
+
   it("executeCtiAction routes actions and rejects unknown ones", async () => {
     const result = await executeCtiAction({ vendor: "polycom" }, "dial", { number: "123" });
     assert.deepStrictEqual(result, { ok: false, reason: "no_phone_ip" });
