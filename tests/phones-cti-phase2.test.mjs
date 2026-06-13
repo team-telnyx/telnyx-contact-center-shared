@@ -144,6 +144,11 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-cti-hold-toggle/);
     assert.match(code, /hp-cti-mute-toggle/);
     assert.match(code, /hp-cti-call-info/);
+    assert.match(code, /HARDPHONE_RINGTONE_URL = "\/audio\/ringtone\.mp3"/);
+    assert.match(code, /new Audio\(HARDPHONE_RINGTONE_URL\)/);
+    assert.match(code, /audio\.loop = true/);
+    assert.match(code, /callInfo\.isIncoming/);
+    assert.match(code, /stopIncomingRingtone/);
     assert.match(code, /hp-cti-inline-error/);
     assert.match(code, /PhoneMaintenanceActions/);
     assert.match(code, /hp-sip-registration-actions/);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
 } from "@tabler/icons-react";
 
 const API = "/api/admin/phones-provisioning";
+const HARDPHONE_RINGTONE_URL = "/audio/ringtone.mp3";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Fleet status and provisioning activity" },
@@ -1186,6 +1187,7 @@ function PhoneCtiCard({ phone }) {
   const [dialNumber, setDialNumber] = useState("");
   const [lastStatus, setLastStatus] = useState(null);
   const [ctiError, setCtiError] = useState("");
+  const ringtoneRef = useRef(null);
 
   const ctiMode = phone?.settings?.cti_mode === "local_bridge" ? `Local bridge (${phone.local_bridge_id || phone.settings?.local_bridge_id || "unassigned"})` : phone.vendor === "audiocodes" || phone?.settings?.cti_mode === "telnyx" ? "Telnyx Call Control" : phone.vendor === "polycom" ? "Polycom REST API" : "Yealink Action URI";
   const reachableIp = phone.last_ip || phone.ip_address;
@@ -1226,7 +1228,37 @@ function PhoneCtiCard({ phone }) {
     return () => window.clearInterval(timer);
   }, [fetchCtiStatus]);
 
+  const stopIncomingRingtone = useCallback(() => {
+    const audio = ringtoneRef.current;
+    if (!audio) return;
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!callInfo.isIncoming) {
+      stopIncomingRingtone();
+      return;
+    }
+    if (!ringtoneRef.current) {
+      const audio = new Audio(HARDPHONE_RINGTONE_URL);
+      audio.loop = true;
+      audio.preload = "auto";
+      ringtoneRef.current = audio;
+    }
+    const audio = ringtoneRef.current;
+    audio.play().catch(() => {
+      // Browser autoplay can be blocked until the user interacts with the page.
+      // The visual incoming-call state and Answer button still remain active.
+    });
+  }, [callInfo.isIncoming, stopIncomingRingtone]);
+
+  useEffect(() => () => stopIncomingRingtone(), [stopIncomingRingtone]);
+
   async function runCti(action, params = {}) {
+    if (["answer", "hangup", "dial"].includes(action)) stopIncomingRingtone();
     setBusy(action);
     setCtiError("");
     try {
