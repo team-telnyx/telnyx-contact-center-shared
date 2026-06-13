@@ -155,11 +155,16 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-sip-check-status/);
     assert.match(code, /hp-sip-reprovision/);
     assert.match(code, /hp-sip-reboot/);
+    assert.match(code, /const \[rebootOpen, setRebootOpen\] = useState\(false\)/);
+    assert.match(code, /hp-sip-reboot", \(\) => setRebootOpen\(true\)/);
+    assert.match(code, /<AlertDialog open=\{rebootOpen\} onOpenChange=\{setRebootOpen\}>/);
+    assert.match(code, /run\("reboot"\)\.then\(\(\) => setRebootOpen\(false\)\)/);
     assert.match(code, /from "@\/components\/ui\/alert-dialog"/);
     assert.match(code, /Reboot hardphone/);
     assert.match(code, /requestRebootPhones/);
     assert.match(code, /confirmRebootPhones/);
     assert.doesNotMatch(code, /Send remote reboot to \$\{label\}\?`\)\)/);
+    assert.doesNotMatch(code, /Send remote reboot to this phone\?/);
     assert.match(code, /deriveCallInfo/);
     assert.match(code, /replace\(\/\(\[a-z0-9\]\)\(\[A-Z\]\)\/g/);
     assert.match(code, /call_hold/);

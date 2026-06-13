@@ -1192,8 +1192,8 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
 
 function PhoneMaintenanceActions({ phone }) {
   const [busy, setBusy] = useState(null);
+  const [rebootOpen, setRebootOpen] = useState(false);
   async function run(action) {
-    if (action === "reboot" && !window.confirm("Send remote reboot to this phone?")) return;
     setBusy(action);
     try {
       const res = await fetch(`${API}/phones/${phone.id}/cti`, {
@@ -1210,8 +1210,8 @@ function PhoneMaintenanceActions({ phone }) {
       setBusy(null);
     }
   }
-  const actionButton = (action, label, Icon, testId) => (
-    <Button size="sm" variant="outline" className="h-10 min-w-0 flex-1" disabled={Boolean(busy)} onClick={() => run(action)} data-testid={testId} title={label} aria-label={label}>
+  const actionButton = (action, label, Icon, testId, onClick = () => run(action)) => (
+    <Button size="sm" variant="outline" className="h-10 min-w-0 flex-1" disabled={Boolean(busy)} onClick={onClick} data-testid={testId} title={label} aria-label={label}>
       {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
       <span className="sr-only">{label}</span>
     </Button>
@@ -1222,8 +1222,35 @@ function PhoneMaintenanceActions({ phone }) {
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
-        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot")}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => setRebootOpen(true))}
       </div>
+      <AlertDialog open={rebootOpen} onOpenChange={setRebootOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reboot hardphone?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remotely reboot {phone.phone_name || phone.label || formatMacDisplay(phone.mac)}. Active calls may be interrupted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+            <div className="font-medium">{phone.phone_name || phone.label || "Hardphone"}</div>
+            <div className="mt-1 font-mono text-xs text-muted-foreground">{formatMacDisplay(phone.mac)}</div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "reboot"}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy === "reboot"}
+              onClick={(event) => {
+                event.preventDefault();
+                run("reboot").then(() => setRebootOpen(false));
+              }}
+            >
+              {busy === "reboot" ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Reboot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
