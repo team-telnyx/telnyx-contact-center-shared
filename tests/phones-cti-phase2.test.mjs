@@ -214,6 +214,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /\/api\/v1\/callctrl\/holdCall/);
     assert.match(code, /\/api\/v1\/callctrl\/resumeCall/);
     assert.match(code, /\/api\/v1\/callctrl\/mute/);
+    assert.match(code, /async mute\(phone, state = true\) \{[\s\S]*if \(isHeldCall\(call\)\) \{[\s\S]*\/api\/v1\/callctrl\/resumeCall[\s\S]*\/api\/v1\/callctrl\/mute[\s\S]*\/api\/v1\/callctrl\/holdCall/);
     assert.match(code, /\/api\/v1\/webCallControl\/callStatus/);
     assert.match(code, /\/api\/v1\/mgmt\/updateConfiguration/);
     assert.match(code, /\/api\/v1\/mgmt\/safeReboot/);

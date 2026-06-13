@@ -21,6 +21,7 @@ describe("hardphone local bridge", () => {
     assert.match(server, /rejectUnauthorized: false/);
     assert.match(server, /\/api\/v1\/callctrl\/mute/);
     assert.match(server, /if \(action === "mute" \|\| action === "unmute"\)/);
+    assert.match(server, /if \(isHeldPolyCall\(call\)\) \{[\s\S]*\/api\/v1\/callctrl\/resumeCall[\s\S]*\/api\/v1\/callctrl\/mute[\s\S]*\/api\/v1\/callctrl\/holdCall/);
     assert.match(server, /\/api\/v1\/mgmt\/updateConfiguration", \{ method: "POST", password, body: \{\} \}/);
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot", \{ method: "POST", password, body: \{\} \}/);
     assert.match(server, /\/api\/v1\/mgmt\/updateConfiguration/);
