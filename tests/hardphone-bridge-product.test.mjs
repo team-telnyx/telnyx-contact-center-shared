@@ -153,9 +153,11 @@ describe("hardphone bridge product integration", () => {
     const eventsRoute = await file("app/api/provisioning/events/[vendor]/route.js");
     const phonesRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
     const generator = await file("lib/hardphones/config-generators.mjs");
+    const bridgeRelay = await file("lib/hardphones/bridge-relay.mjs");
     assert.match(eventsRoute, /extractPhoneIp\(\{ queryParams, body \}\)/);
     assert.match(eventsRoute, /source_ip: sourceIp/);
     assert.match(eventsRoute, /last_ip = COALESCE\(\$2, last_ip\)/);
+    assert.match(bridgeRelay, /ip_address = COALESCE\(NULLIF\(ip_address, ''\), \$2\)/);
     assert.match(generator, /&ip=\$ip/);
     assert.match(page, /Detected phone IP address/);
     assert.match(page, /readOnly/);
@@ -172,9 +174,11 @@ describe("hardphone bridge product integration", () => {
     assert.match(phonesRoute, /registration_status_event/);
     assert.match(page, /Telnyx registration/);
     assert.match(page, /registrationBadgeClass/);
-    assert.match(page, /p\.sip_registration_status \|\| "unknown"/);
+    assert.match(page, /function registrationBadgeLabel/);
+    assert.match(page, /Not registered/);
+    assert.match(page, /registrationBadgeLabel\(p\.sip_registration_status\)/);
     assert.doesNotMatch(page, /Registration \{p\.sip_registration_status/);
-    assert.match(page, /phone\.sip_registration_status/);
+    assert.match(page, /registrationBadgeLabel\(phone\.sip_registration_status\)/);
     assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true, includeAvailablePhoneNumbers: false \}\), 10000\)/);
     assert.match(bridgeRoute, /status = liveBridge\?\.online \? "online" : "offline"/);
   });

@@ -176,19 +176,19 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(cfg, /system\/syslog\/server=10\.0\.0\.10/);
   });
 
-  it("uses assigned phone number as SIP line address while keeping MAC login for authentication", () => {
+  it("uses the Telnyx credential username as SIP line identity for registration", () => {
     const numberedPhone = { ...phone, assigned_phone_number: "+15551234567", sip_username: "0004F2ABCDEF" };
 
     const poly = polycomRegistrationConfig(numberedPhone, { baseUrl: "https://cc.example.com" });
-    assert.match(poly, /reg\.1\.address="\+15551234567"/);
+    assert.match(poly, /reg\.1\.address="0004F2ABCDEF"/);
     assert.match(poly, /reg\.1\.auth\.userId="0004F2ABCDEF"/);
 
     const yealink = yealinkPhoneConfig({ ...numberedPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
-    assert.match(yealink, /account\.1\.user_name = \+15551234567/);
+    assert.match(yealink, /account\.1\.user_name = 0004F2ABCDEF/);
     assert.match(yealink, /account\.1\.auth_name = 0004F2ABCDEF/);
 
     const audiocodes = audiocodesPhoneConfig({ ...numberedPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
-    assert.match(audiocodes, /voip\/line\/0\/id=\+15551234567/);
+    assert.match(audiocodes, /voip\/line\/0\/id=0004F2ABCDEF/);
     assert.match(audiocodes, /voip\/line\/0\/auth_name=0004F2ABCDEF/);
   });
 
@@ -202,18 +202,19 @@ describe("hard phones provisioning (Phase 1)", () => {
     };
 
     const poly = polycomRegistrationConfig(namedPhone, { baseUrl: "https://cc.example.com" });
-    assert.match(poly, /reg\.1\.address="\+15551234567"/);
+    assert.match(poly, /reg\.1\.address="phone0004F2ABCDEF"/);
     assert.match(poly, /reg\.1\.label="Front Desk Line"/);
+    assert.match(poly, /reg\.1\.displayName="Front Desk Line"/);
     assert.doesNotMatch(poly, /Reception inventory name/);
 
     const yealink = yealinkPhoneConfig({ ...namedPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
-    assert.match(yealink, /account\.1\.user_name = \+15551234567/);
+    assert.match(yealink, /account\.1\.user_name = phone0004F2ABCDEF/);
     assert.match(yealink, /account\.1\.label = Front Desk Line/);
     assert.match(yealink, /linekey\.1\.label = Front Desk Line/);
     assert.doesNotMatch(yealink, /Reception inventory name/);
 
     const audiocodes = audiocodesPhoneConfig({ ...namedPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
-    assert.match(audiocodes, /voip\/line\/0\/id=\+15551234567/);
+    assert.match(audiocodes, /voip\/line\/0\/id=phone0004F2ABCDEF/);
     assert.match(audiocodes, /voip\/line\/0\/description=Front Desk Line/);
     assert.doesNotMatch(audiocodes, /Reception inventory name/);
   });
