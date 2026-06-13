@@ -319,7 +319,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /normalizeMac/);
   });
 
-  it("page uses 3-panel layout with dashboard, phones and settings sections", async () => {
+  it("page uses 3-panel layout with dashboard, phones, bridges, logs and settings sections", async () => {
     const code = await src("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(code, /Context settings/);
     assert.match(code, /SectionRail/);
@@ -327,7 +327,10 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /380px/);
     assert.match(code, /Dashboard/);
     assert.match(code, /Phones/);
-    assert.match(code, /Settings/);
+    assert.match(code, /Bridges/);
+    assert.match(code, /Logs/);
+    assert.match(code, /id: "logs"[\s\S]*label: "Logs"/);
+    assert.match(code, /id: "bridges"[\s\S]*id: "logs"[\s\S]*id: "settings"/);
     assert.match(code, /MAC address/);
     assert.match(code, /disabled=\{!valid \|\| saving \|\| \(!editing && \(!phoneAdminPasswordConfigured \|\| !outboundVoiceProfileConfigured\)\)\}/);
     assert.match(code, /phoneDraftValid/);
@@ -347,6 +350,34 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.doesNotMatch(code, /Genesys managed phone matrix/);
     assert.doesNotMatch(code, /help\.genesys\.cloud/);
     assert.match(code, /settings\.cti_mode = &quot;telnyx&quot;/);
+  });
+
+  it("moves provisioning events to a dedicated paged logs section", async () => {
+    const page = await src("app/(portal)/admin/phones-provisioning/page.jsx");
+    const dashboardView = page.slice(page.indexOf("function DashboardView"), page.indexOf("function PhonesListView"));
+    assert.doesNotMatch(dashboardView, /Provisioning activity/);
+    assert.match(page, /function LogsView/);
+    assert.match(page, /setLogDays/);
+    assert.match(page, /setLogPageSize/);
+    assert.match(page, /\[10, 25, 50\]\.map/);
+    assert.match(page, /Accordion/);
+    assert.match(page, /AccordionContent/);
+    assert.match(page, /Phone name/);
+    assert.match(page, /MAC address/);
+    assert.match(page, /Event type/);
+    assert.match(page, /event\.detail/);
+    assert.match(page, /fetch\(`\$\{API\}\/logs\?/);
+
+    const route = await src("app/api/admin/phones-provisioning/logs/route.js");
+    assert.match(route, /export async function GET/);
+    assert.match(route, /hp_provisioning_events/);
+    assert.match(route, /hp_phones/);
+    assert.match(route, /phone_name/);
+    assert.match(route, /detail/);
+    assert.match(route, /days === 7 \? 7 : 1/);
+    assert.match(route, /\[10, 25, 50\]\.includes\(pageSize\)/);
+    assert.match(route, /LIMIT \$2 OFFSET \$3/);
+    assert.match(route, /COUNT\(\*\)::int AS total/);
   });
 
   it("bundles local hardphone model photos", () => {

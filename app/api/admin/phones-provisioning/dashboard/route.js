@@ -18,14 +18,14 @@ async function requireAdmin() {
   return user;
 }
 
-// Dashboard snapshot: fleet totals + recent provisioning events.
+// Dashboard snapshot: fleet totals and inventory split.
 export async function GET() {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    const [{ rows: totalsRows }, { rows: vendorRows }, { rows: events }] = await Promise.all([
+    const [{ rows: totalsRows }, { rows: vendorRows }] = await Promise.all([
       pool.query(
         `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE provisioning_state = 'provisioned')::int AS provisioned,
@@ -35,16 +35,10 @@ export async function GET() {
          FROM hp_phones`,
       ),
       pool.query(`SELECT vendor, COUNT(*)::int AS count FROM hp_phones GROUP BY vendor ORDER BY count DESC`),
-      pool.query(
-        `SELECT e.id, e.mac, e.event_type, e.detail, e.created_at, p.label, p.vendor
-         FROM hp_provisioning_events e LEFT JOIN hp_phones p ON p.id = e.phone_id
-         ORDER BY e.created_at DESC LIMIT 50`,
-      ),
     ]);
     return NextResponse.json({
       totals: totalsRows[0] || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 },
       byVendor: vendorRows,
-      events,
       timestamp: new Date().toISOString(),
     });
   } catch {

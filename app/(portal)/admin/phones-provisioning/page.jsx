@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
@@ -38,6 +39,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Fleet status and provisioning activity" },
   { id: "phones", label: "Phones", icon: IconDeviceLandlinePhone, description: "Hard phone inventory and per-device config" },
   { id: "bridges", label: "Bridges", icon: IconRouteAltLeft, description: "Local LAN bridge agents and connection status" },
+  { id: "logs", label: "Logs", icon: IconDownload, description: "Provisioning event log with raw details" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Provisioning endpoint and vendor setup" },
 ];
 
@@ -282,6 +284,11 @@ export default function PhonesProvisioningPage() {
   const [hardphoneConfig, setHardphoneConfig] = useState({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false, userTimezone: "UTC" });
   const [bridges, setBridges] = useState([]);
   const [dashboard, setDashboard] = useState(null);
+  const [logsData, setLogsData] = useState({ events: [], total: 0, page: 1, pageSize: 10, days: 1, totalPages: 1 });
+  const [logDays, setLogDays] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [logPageSize, setLogPageSize] = useState(10);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
@@ -365,6 +372,28 @@ export default function PhonesProvisioningPage() {
   }, [selectedPhone, hardphoneConfig.userTimezone]);
 
   const draftValid = phoneDraftValid(phoneDraft);
+
+  const loadLogs = useCallback(async (overrides = {}) => {
+    const nextDays = overrides.days ?? logDays;
+    const nextPage = overrides.page ?? logPage;
+    const nextPageSize = overrides.pageSize ?? logPageSize;
+    setLogsLoading(true);
+    try {
+      const params = new URLSearchParams({ days: String(nextDays), page: String(nextPage), pageSize: String(nextPageSize) });
+      const res = await fetch(`${API}/logs?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to load provisioning logs");
+      setLogsData(data);
+    } catch (err) {
+      notify({ title: "Failed to load provisioning logs", description: err.message, variant: "error" });
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [logDays, logPage, logPageSize]);
+
+  useEffect(() => {
+    if (active === "logs") loadLogs();
+  }, [active, loadLogs]);
 
   async function savePhone() {
     if (!draftValid) return;
@@ -470,8 +499,8 @@ export default function PhonesProvisioningPage() {
         )}
         actions={(
           <>
-            <Button variant="outline" size="sm" onClick={() => refresh(true)} disabled={loading}>
-              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            <Button variant="outline" size="sm" onClick={() => (active === "logs" ? loadLogs() : refresh(true))} disabled={loading || logsLoading}>
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading || logsLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
             {headerCreate ? (
@@ -511,6 +540,17 @@ export default function PhonesProvisioningPage() {
               />
             ) : active === "bridges" ? (
               <BridgesListView bridges={bridges} phones={phones} selectedBridgeId={selectedBridge?.bridge_id || null} setSelectedBridgeId={setSelectedBridgeId} />
+            ) : active === "logs" ? (
+              <LogsView
+                logs={logsData}
+                days={logDays}
+                page={logPage}
+                pageSize={logPageSize}
+                loading={logsLoading}
+                setLogDays={(days) => { setLogDays(days); setLogPage(1); }}
+                setLogPage={setLogPage}
+                setLogPageSize={(pageSize) => { setLogPageSize(pageSize); setLogPage(1); }}
+              />
             ) : (
               <SettingsSummaryView />
             )}
@@ -520,13 +560,13 @@ export default function PhonesProvisioningPage() {
         {/* Right panel — Context Settings */}
         <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
           <PanelHeader
-            title={active === "dashboard" ? "Fleet monitor" : "Context settings"}
-            description={active === "dashboard" ? "Provisioning activity overview" : `${activeMeta.label} configuration`}
+            title={active === "dashboard" ? "Fleet monitor" : active === "logs" ? "Log filters" : "Context settings"}
+            description={active === "dashboard" ? "Fleet status overview" : active === "logs" ? "Range and page controls" : `${activeMeta.label} configuration`}
           />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {active === "dashboard" ? (
               <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
-                Phones report in when they fetch config files from the provisioning endpoint. Use Refresh to reload fleet status and the event log.
+                Phones report in when they fetch config files from the provisioning endpoint. Open Logs under Bridges to inspect the detailed event history.
               </div>
             ) : active === "phones" ? (
               <PhoneEditor
@@ -543,6 +583,8 @@ export default function PhonesProvisioningPage() {
               />
             ) : active === "bridges" ? (
               <BridgeEditor bridges={bridges} bridge={selectedBridge} phones={phones} refresh={refresh} onSelect={setSelectedBridgeId} />
+            ) : active === "logs" ? (
+              <LogsContext logs={logsData} days={logDays} pageSize={logPageSize} loading={logsLoading} onRefresh={() => loadLogs()} />
             ) : (
               <SettingsEditor bridges={bridges} refresh={refresh} />
             )}
@@ -556,7 +598,6 @@ export default function PhonesProvisioningPage() {
 function DashboardView({ dashboard, phones }) {
   const totals = dashboard?.totals || { total: 0, provisioned: 0, pending: 0, disabled: 0, recently_seen: 0 };
   const byVendor = dashboard?.byVendor || [];
-  const events = dashboard?.events || [];
 
   return (
     <div className="space-y-4">
@@ -602,22 +643,95 @@ function DashboardView({ dashboard, phones }) {
         ) : <Empty title="No phones yet" description="Add hard phones in the Phones section to see fleet status here." />}
       </SettingCard>
 
-      <SettingCard icon={IconDownload} title="Provisioning activity" subtitle="Latest config fetches and phone events">
-        {events.length ? (
-          <div className="space-y-1.5">
-            {events.slice(0, 20).map((e) => (
-              <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background/70 px-3 py-1.5 text-xs">
-                <span className="flex min-w-0 items-center gap-2">
-                  <Badge variant="outline" className="bg-card font-mono text-[10px]">{e.event_type}</Badge>
-                  <span className="truncate font-mono">{e.mac ? formatMacDisplay(e.mac) : "—"}</span>
-                  {e.label ? <span className="truncate text-muted-foreground">{e.label}</span> : null}
-                </span>
-                <span className="shrink-0 text-muted-foreground">{formatTime(e.created_at)}</span>
-              </div>
-            ))}
+    </div>
+  );
+}
+
+function logDetailText(detail) {
+  if (detail == null) return "{}";
+  if (typeof detail === "string") return detail;
+  try { return JSON.stringify(detail, null, 2); } catch { return String(detail); }
+}
+
+function LogsView({ logs, days, page, pageSize, loading, setLogDays, setLogPage, setLogPageSize }) {
+  const events = logs?.events || [];
+  const total = logs?.total || 0;
+  const totalPages = Math.max(1, logs?.totalPages || Math.ceil(total / pageSize) || 1);
+
+  return (
+    <div className="space-y-4">
+      <SettingCard icon={IconDownload} title="Provisioning logs" subtitle="Phone config fetches, bridge observations, CTI commands, and vendor callbacks">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Range</Label>
+              <Select value={String(days)} onValueChange={(value) => setLogDays(Number(value))}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Last 1 day</SelectItem>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Items per page</Label>
+              <Select value={String(pageSize)} onValueChange={(value) => setLogPageSize(Number(value))}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50].map((size) => <SelectItem key={size} value={String(size)}>{size}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-        ) : <p className="text-sm text-muted-foreground">No provisioning events yet. Point a phone at the provisioning URL to see activity.</p>}
+          <Badge variant="outline" className="bg-card">{total} event{total === 1 ? "" : "s"}</Badge>
+        </div>
       </SettingCard>
+
+      <SettingCard icon={IconActivity} title="Event list" subtitle="Expand a row to inspect hp_provisioning_events.detail">
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><IconLoader2 className="h-4 w-4 animate-spin" /> Loading logs…</div>
+        ) : events.length ? (
+          <Accordion type="multiple" className="rounded-xl border">
+            {events.map((event) => (
+              <AccordionItem key={event.id} value={String(event.id)} className="px-3">
+                <AccordionTrigger className="py-3 hover:no-underline">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 pr-3 text-left">
+                    <Badge variant="outline" className="max-w-[220px] truncate bg-card" title="Phone name">Phone name: {event.phone_name || event.label || "—"}</Badge>
+                    <Badge variant="outline" className="bg-card font-mono" title="MAC address">MAC address: {event.mac ? formatMacDisplay(event.mac) : "—"}</Badge>
+                    <Badge variant="outline" className="bg-card font-mono" title="Event type">Event type: {event.event_type || "—"}</Badge>
+                    <span className="ml-auto shrink-0 text-xs font-normal text-muted-foreground">{formatTime(event.created_at)}</span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <pre className="max-h-96 overflow-auto rounded-lg bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">{logDetailText(event.detail)}</pre>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : (
+          <Empty title="No provisioning logs" description="No hardphone provisioning events exist for the selected range." />
+        )}
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <Button variant="outline" size="sm" disabled={loading || page <= 1} onClick={() => setLogPage(page - 1)}>Previous</Button>
+          <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={loading || page >= totalPages} onClick={() => setLogPage(page + 1)}>Next</Button>
+        </div>
+      </SettingCard>
+    </div>
+  );
+}
+
+function LogsContext({ logs, days, pageSize, loading, onRefresh }) {
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="rounded-xl border bg-muted/30 p-4 text-muted-foreground">
+        Showing the last {days} day{days === 1 ? "" : "s"}, {pageSize} rows per page. Each log row opens the raw hp_provisioning_events.detail payload.
+      </div>
+      <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
+        <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+        Refresh logs
+      </Button>
+      <MiniStat label="Matching events" value={logs?.total || 0} icon={IconActivity} tone="violet" />
     </div>
   );
 }
