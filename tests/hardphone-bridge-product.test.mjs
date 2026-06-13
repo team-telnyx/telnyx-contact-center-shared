@@ -158,6 +158,8 @@ describe("hardphone bridge product integration", () => {
     assert.match(eventsRoute, /source_ip: sourceIp/);
     assert.match(eventsRoute, /last_ip = COALESCE\(\$2, last_ip\)/);
     assert.match(bridgeRelay, /ip_address = COALESCE\(NULLIF\(ip_address, ''\), \$2\)/);
+    assert.match(bridgeRelay, /bridge_command_result/);
+    assert.match(bridgeRelay, /phone_id: command\.phone_id/);
     assert.match(generator, /&ip=\$ip/);
     assert.match(page, /Detected phone IP address/);
     assert.match(page, /readOnly/);
@@ -198,7 +200,8 @@ describe("hardphone bridge product integration", () => {
     assert.match(credentials, /buildTelnyxV2Url\("\/credential_connections"\)/);
     assert.match(credentials, /sip_uri_calling_preference: "unrestricted"/);
     assert.match(credentials, /outbound_voice_profile_id: outboundVoiceProfileId/);
-    assert.doesNotMatch(credentials, /ani_override/);
+    assert.match(credentials, /ani_override_type: "always"/);
+    assert.match(credentials, /updatePhoneSipConnectionCallerId/);
     assert.match(credentials, /buildTelnyxV2Url\(`\/phone_numbers\/\$\{encodeURIComponent\(phoneNumberId\)\}`\)/);
   });
 
@@ -225,7 +228,8 @@ describe("hardphone bridge product integration", () => {
       await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
 
       assert.strictEqual(requestBody.user_name, "phone0004F2ABCDEF");
-      assert.strictEqual(requestBody.inbound.dnis_number_format, "sip_username");
+      assert.strictEqual(requestBody.inbound.ani_number_format, "+E.164");
+      assert.strictEqual(requestBody.inbound.dnis_number_format, "+e164");
       assert.deepStrictEqual(requestBody.tags, ["hardphone", "vendor_audiocodes", "model_420HD", "mac_0004F2ABCDEF"]);
       assert.ok(requestBody.tags.every((tag) => /^[A-Za-z0-9_-]+$/.test(tag)), "Telnyx tags must contain only letters, numbers, dashes and underscores");
     } finally {

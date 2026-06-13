@@ -277,7 +277,7 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
   if (!host) return { ok: false, reason: "missing_host" };
   if (vendor === "polycom") {
     const password = payload.admin_password || payload.password || "";
-    if (action === "status") return polyStatus(host, password);
+    if (action === "status") return { ...(await polyStatus(host, password)), discovered_ip: host };
     if (action === "dial") return polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(payload.number || payload.target || ""), Line: "1", Type: "SIP" } } });
     if (["answer", "hangup", "hold", "resume"].includes(action)) {
       const ref = await activePolyCallRef(host, password);

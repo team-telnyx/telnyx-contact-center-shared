@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeMac, SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
-import { assignPhoneNumberToConnection, createPhoneSipConnection, deletePhoneSipConnection, listUnassignedPhoneNumbers } from "@/lib/hardphones/credentials.mjs";
+import { assignPhoneNumberToConnection, createPhoneSipConnection, deletePhoneSipConnection, listUnassignedPhoneNumbers, updatePhoneSipConnectionCallerId } from "@/lib/hardphones/credentials.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -115,9 +115,13 @@ export async function POST(request) {
     let connection = { id: null, connection_id: null, connection_name: null, sip_username: null, sip_password: null };
     let assignedNumber = null;
     try {
-      connection = await createPhoneSipConnection({ label: phoneName || label, mac, vendor, model });
+      connection = await createPhoneSipConnection({ label: phoneName || label, mac, vendor, model, assignedPhoneNumber });
       if (assignedPhoneNumberId) {
         assignedNumber = await assignPhoneNumberToConnection(assignedPhoneNumberId, connection.connection_id || connection.id);
+      }
+      const callerIdNumber = assignedNumber?.phone_number || assignedPhoneNumber || null;
+      if (callerIdNumber) {
+        await updatePhoneSipConnectionCallerId({ connectionId: connection.connection_id || connection.id, phoneNumber: callerIdNumber });
       }
     } catch (err) {
       adminRuntimeLogger.error("hardphone_credential_failed", runtimePayload({ error: err, operation: "hp_sip_connection_create" }));

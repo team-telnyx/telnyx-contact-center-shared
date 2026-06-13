@@ -21,6 +21,7 @@ describe("hardphone local bridge", () => {
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot/);
     assert.match(server, /\/servlet\?key=/);
     assert.match(server, /\/voip_status\.cgi/);
+    assert.match(server, /discovered_ip: host/);
     assert.match(server, /parseAudioCodesVoipStatus/);
     assert.match(server, /DEFAULT_AUDIOCODES_ADMIN_USER/);
 
