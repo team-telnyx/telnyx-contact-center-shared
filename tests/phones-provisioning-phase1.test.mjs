@@ -119,6 +119,22 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(cfg, /system\/syslog\/server=10\.0\.0\.10/);
   });
 
+  it("uses assigned phone number as SIP line address while keeping hp login for authentication", () => {
+    const numberedPhone = { ...phone, assigned_phone_number: "+15551234567", sip_username: "hp0004F2ABCDEF" };
+
+    const poly = polycomRegistrationConfig(numberedPhone, { baseUrl: "https://cc.example.com" });
+    assert.match(poly, /reg\.1\.address="\+15551234567"/);
+    assert.match(poly, /reg\.1\.auth\.userId="hp0004F2ABCDEF"/);
+
+    const yealink = yealinkPhoneConfig({ ...numberedPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
+    assert.match(yealink, /account\.1\.user_name = \+15551234567/);
+    assert.match(yealink, /account\.1\.auth_name = hp0004F2ABCDEF/);
+
+    const audiocodes = audiocodesPhoneConfig({ ...numberedPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
+    assert.match(audiocodes, /voip\/line\/0\/id=\+15551234567/);
+    assert.match(audiocodes, /voip\/line\/0\/auth_name=hp0004F2ABCDEF/);
+  });
+
   it("builds per-vendor config from the request kind", () => {
     const polyMaster = buildConfigForPhone(phone, "mac-config", {});
     assert.match(polyMaster.body, /APPLICATION/);
@@ -176,7 +192,8 @@ describe("hard phones provisioning (Phase 1)", () => {
   it("public provisioning endpoint serves configs only for inventoried phones", async () => {
     const code = await src("app/api/provisioning/[filename]/route.js");
     assert.match(code, /resolveProvisioningRequest/);
-    assert.match(code, /buildConfigForPhone/);
+    assert.match(code, /SELECT id, mac, vendor, model, label, assigned_phone_number_id, assigned_phone_number, sip_username/);
+    assert.match(code, /buildConfigForPhone\(phone/);
     assert.match(code, /unknown_phone_request/);
     assert.match(code, /config_served/);
     assert.match(code, /const kind = resolved\.kind/);

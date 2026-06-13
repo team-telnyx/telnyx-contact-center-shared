@@ -79,7 +79,7 @@ export async function GET(request, { params }) {
 
   const mac = resolved.mac;
   const { rows } = await pool.query(
-    `SELECT id, mac, vendor, model, label, sip_username, sip_password, admin_password, settings, provisioning_state
+    `SELECT id, mac, vendor, model, label, assigned_phone_number_id, assigned_phone_number, sip_username, sip_password, admin_password, settings, provisioning_state
      FROM hp_phones WHERE mac = $1`,
     [mac],
   );
