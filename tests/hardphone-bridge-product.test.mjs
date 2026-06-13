@@ -44,6 +44,8 @@ describe("hardphone bridge product integration", () => {
     const driver = await file("lib/hardphones/drivers/local-bridge.mjs");
     assert.match(cti, /cti_mode = "local_bridge"/);
     assert.match(cti, /createLocalBridgeDriver/);
+    assert.match(cti, /TELNYX_PHONE_ADMIN_PASSWORD/);
+    assert.match(cti, /phone = withRuntimeAdminPassword\(phone\)/);
     assert.match(driver, /HARDPHONE_BRIDGE_RELAY_URL/);
     assert.match(driver, /\/api\/hardphone-bridge\/command/);
     assert.match(driver, /const bridge_id = phone\.local_bridge_id \|\| phone\?\.settings\?\.local_bridge_id/);
