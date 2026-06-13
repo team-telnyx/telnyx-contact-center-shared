@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import {
+  createPhoneSipConnection,
   phoneConnectionUserName,
   phoneConnectionName,
 } from "../lib/hardphones/credentials.mjs";
@@ -73,6 +74,36 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.strictEqual(phoneConnectionUserName("phone0004F2ABCDEF"), "phone0004F2ABCDEF");
     assert.strictEqual(phoneConnectionName("00:04:F2:AB:CD:EF"), "phone_0004F2ABCDEF");
     assert.throws(() => phoneConnectionUserName("not-a-mac"), /Valid phone MAC is required/);
+  });
+
+  it("repairs Telnyx-created SIP connections when the create response loses the phone prefix", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const originalOutboundProfile = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
+    const calls = [];
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      if (options.method === "PATCH") {
+        return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2CBF6D5", user_name: "phone0004F2CBF6D5" } });
+      }
+      return Response.json({ data: { id: "cc-123", connection_name: "phone_0004F2CBF6D5", user_name: "0004F2CBF6D5" } });
+    };
+    process.env.TELNYX_API_KEY = "test-key";
+    process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp-123";
+    try {
+      const created = await createPhoneSipConnection({ mac: "00:04:F2:CB:F6:D5", vendor: "polycom", model: "VVX 310" });
+      assert.strictEqual(created.sip_username, "phone0004F2CBF6D5");
+      assert.strictEqual(calls.length, 2);
+      assert.strictEqual(JSON.parse(calls[0].options.body).user_name, "phone0004F2CBF6D5");
+      assert.strictEqual(calls[1].options.method, "PATCH");
+      assert.strictEqual(JSON.parse(calls[1].options.body).user_name, "phone0004F2CBF6D5");
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+      if (originalOutboundProfile === undefined) delete process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
+      else process.env.TELNYX_OUTBOUND_VOICE_PROFILE = originalOutboundProfile;
+    }
   });
 
   it("resolves provisioning filenames to vendor and kind", () => {
