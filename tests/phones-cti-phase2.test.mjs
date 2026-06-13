@@ -179,6 +179,12 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.doesNotMatch(code, /Poly UCS\/PVOS config supports/);
     assert.doesNotMatch(code, /title: `CTI:/);
     assert.doesNotMatch(code, /title: `CTI \$\{action\} failed`/);
+    assert.match(code, /const isInbound = direction === "incoming"/);
+    assert.match(code, /const isIncoming = hasCall && !isConnected/);
+    assert.match(code, /from: isInbound/);
+    assert.match(code, /to: isInbound/);
+    assert.match(code, /canAnswer = callInfo\.isIncoming/);
+    assert.doesNotMatch(code, /NAT-safe mode is enabled/);
     assert.match(code, /Telnyx Call Control/);
     assert.match(code, /Polycom REST API/);
     assert.match(code, /Yealink Action URI/);

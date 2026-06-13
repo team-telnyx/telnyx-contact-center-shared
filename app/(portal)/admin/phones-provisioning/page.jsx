@@ -1072,12 +1072,13 @@ function deriveCallInfo(status, phone) {
   const heldStates = new Set(["held", "hold", "call_hold", "call_held", "on_hold", "local_hold", "remote_hold"]);
   const explicitMute = explicitMuteValue(status);
   const direction = String(call?.Type || call?.direction || result.direction || "").toLowerCase();
-  const isIncoming = incomingStates.has(state) || direction === "incoming";
+  const isInbound = direction === "incoming";
   const isHeld = heldStates.has(state) || String(call?.HoldState || "").toLowerCase().includes("hold");
   const isMuted = explicitMute === true;
   const hasCall = Boolean(call) && !disconnectedStates.has(state);
   const isConnected = hasCall && (connectedStates.has(state) || heldStates.has(state));
   const isDialing = dialingStates.has(state);
+  const isIncoming = hasCall && !isConnected && (incomingStates.has(state) || (isInbound && !dialingStates.has(state)));
   const remoteNumber = call?.RemotePartyNumber || call?.remote_party_number || call?.RemotePartyName || call?.to || result.to || "";
   const localNumber = call?.LocalPartyNumber || call?.local_party_number || phone?.assigned_phone_number || "";
   return {
@@ -1090,8 +1091,9 @@ function deriveCallInfo(status, phone) {
     isMuted,
     isConnected,
     isDialing,
-    from: isIncoming ? (remoteNumber || "—") : (localNumber || "—"),
-    to: isIncoming ? (localNumber || "—") : (remoteNumber || "—"),
+    isInbound,
+    from: isInbound ? (remoteNumber || "—") : (localNumber || "—"),
+    to: isInbound ? (localNumber || "—") : (remoteNumber || "—"),
     duration: call?.DurationInSeconds && call.DurationInSeconds !== "-1" ? `${call.DurationInSeconds}s` : null,
     handle: call?.CallHandle || call?.Ref || "",
     reachable: result.reachable ?? status?.reachable ?? null,
@@ -1290,11 +1292,6 @@ function PhoneCtiCard({ phone }) {
   return (
     <SettingCard icon={IconActivity} title="CTI control">
       <div className="space-y-3">
-        {phone?.settings?.cti_mode === "telnyx" ? (
-          <p className="rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
-            NAT-safe mode is enabled: the phone registers outbound to Telnyx and CTI uses Telnyx Call Control, so no inbound firewall rule to the phone is required.
-          </p>
-        ) : null}
         {!reachableIp && phone.vendor !== "audiocodes" ? (
           <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
             No known phone IP yet — wait for provisioning or bridge discovery before using local CTI.
