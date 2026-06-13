@@ -96,7 +96,7 @@ describe("hardphone bridge product integration", () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(page, /fetch\(`\$\{API\}\/bridges`\)/);
     assert.match(page, /setBridges/);
-    assert.match(page, /<SelectItem value="local_bridge">Local bridge \(outbound WS\)<\/SelectItem>/);
+    assert.match(page, /<SelectItem value="local_bridge">Local bridge<\/SelectItem>/);
     assert.match(page, /Local bridge ID/);
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
   });

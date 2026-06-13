@@ -818,7 +818,7 @@ function LocalBridgeSelector({ draft, update, bridges = [] }) {
         <IconRouteAltLeft className="mt-0.5 h-4 w-4 text-sky-600" />
         <div>
           <div className="text-sm font-medium">Local bridge ID</div>
-          <p className="text-xs text-muted-foreground">Used when CTI mode is Local bridge (outbound WS). The phone stays private in LAN; CC sends commands over the bridge WebSocket.</p>
+          <p className="text-xs text-muted-foreground">Used when CTI mode is Local bridge. The phone stays private in LAN; CC sends commands over the bridge WebSocket.</p>
         </div>
       </div>
       <Select value={draft.local_bridge_id || "none"} onValueChange={(v) => update({ local_bridge_id: v === "none" ? "" : v })} disabled={!useBridge}>
@@ -830,7 +830,7 @@ function LocalBridgeSelector({ draft, update, bridges = [] }) {
           ))}
         </SelectContent>
       </Select>
-      {!useBridge ? <p className="mt-2 text-xs text-muted-foreground">Switch CTI mode to Local bridge (outbound WS) to activate this selector.</p> : null}
+      {!useBridge ? <p className="mt-2 text-xs text-muted-foreground">Switch CTI mode to Local bridge to activate this selector.</p> : null}
     </div>
   );
 }
@@ -860,7 +860,7 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
             <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="CTI mode" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="direct">Direct phone API</SelectItem>
-              <SelectItem value="local_bridge">Local bridge (outbound WS)</SelectItem>
+              <SelectItem value="local_bridge">Local bridge</SelectItem>
               <SelectItem value="telnyx">Telnyx fallback</SelectItem>
             </SelectContent>
           </Select>
