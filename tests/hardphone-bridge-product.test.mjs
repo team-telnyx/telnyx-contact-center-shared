@@ -192,7 +192,7 @@ describe("hardphone bridge product integration", () => {
     }
   });
 
-  it("sets hardphone SIP webhook URL without parking direct outbound calls", async () => {
+  it("sets hardphone SIP webhook URL and parks direct outbound calls for Call Control", async () => {
     const originalFetch = global.fetch;
     const oldApiKey = process.env.TELNYX_API_KEY;
     const oldOvp = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
@@ -220,7 +220,7 @@ describe("hardphone bridge product integration", () => {
 
       assert.strictEqual(requestBody.webhook_event_url, "https://api.tokaj.synology.me/api/voice/webhook");
       assert.strictEqual(requestBody.webhook_api_version, "2");
-      assert.strictEqual(requestBody.outbound.call_parking_enabled, false);
+      assert.strictEqual(requestBody.outbound.call_parking_enabled, true);
     } finally {
       global.fetch = originalFetch;
       if (oldApiKey === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = oldApiKey;
@@ -232,6 +232,19 @@ describe("hardphone bridge product integration", () => {
     }
   });
 
+  it("handles parked outbound hardphone calls separately from WebRTC softphone calls", async () => {
+    const route = await file("app/api/voice/webhook/route.js");
+    assert.match(route, /async function findHardphoneByConnectionId/);
+    assert.match(route, /FROM hp_phones hp[\s\S]*LEFT JOIN users u/);
+    assert.match(route, /metadata:\s*\{[\s\S]*is_hardphone_outbound_call:\s*true/);
+    assert.match(route, /hardphoneCallControlId:\s*callControlId/);
+    assert.match(route, /linkTo:\s*callControlId/);
+    assert.match(route, /pstnCallControlId:\s*pstnCallControlId/);
+    assert.match(route, /metadata->>'is_hardphone_outbound_call' = 'true'/);
+    assert.match(route, /hardphone_call_control_id: hardphoneCallControlId \|\| null/);
+    assert.match(route, /source:\s*"hardphone"/);
+    assert.match(route, /direction === "outgoing" &&\s*rtcCallId/);
+  });
 
   it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");

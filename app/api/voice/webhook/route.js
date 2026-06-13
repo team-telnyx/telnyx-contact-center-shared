@@ -58,6 +58,50 @@ async function dialAndBridge({
   return result?.data?.call_control_id || null;
 }
 
+async function findHardphoneByConnectionId(connectionId) {
+  if (!connectionId) return null;
+  try {
+    const { getPostgresPool } = await import("@/lib/postgres.mjs");
+    const pool = getPostgresPool();
+    if (!pool) return null;
+    const { rows } = await pool.query(
+      `SELECT hp.id, hp.phone_name, hp.label, hp.mac, hp.vendor, hp.model,
+              hp.agent_id, hp.telnyx_connection_id, hp.assigned_phone_number,
+              hp.sip_username,
+              u.username, u.voice_number, u.first_name, u.last_name
+       FROM hp_phones hp
+       LEFT JOIN users u ON u.id::text = hp.agent_id OR u.username = hp.agent_id
+       WHERE hp.telnyx_connection_id = $1
+       LIMIT 1`,
+      [connectionId],
+    );
+    return rows?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function updateHardphoneOutboundPstnLegBySession({ callSessionId, pstnCallControlId }) {
+  if (!callSessionId || !pstnCallControlId) return false;
+  try {
+    const { getPostgresPool } = await import("@/lib/postgres.mjs");
+    const pool = getPostgresPool();
+    if (!pool) return false;
+    const { rowCount } = await pool.query(
+      `UPDATE cc_interactions
+       SET metadata = COALESCE(metadata, '{}'::jsonb) || $1::jsonb,
+           updated_at = NOW()
+       WHERE call_session_id = $2
+         AND metadata->>'is_hardphone_outbound_call' = 'true'
+         AND (metadata->>'pstn_call_control_id' IS NULL OR metadata->>'pstn_call_control_id' = '')`,
+      [JSON.stringify({ pstn_call_control_id: pstnCallControlId }), callSessionId],
+    );
+    return rowCount > 0;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Create or update interaction record for outbound call
  */
@@ -68,6 +112,7 @@ async function createOutboundInteraction({
   toNumber,
   username,
   webrtcCallControlId,
+  hardphoneCallControlId,
   pstnCallControlId,
   connectionId,
   metadata: additionalMetadata = {},
@@ -116,6 +161,7 @@ async function createOutboundInteraction({
         agentUsername: agentUsername || null,
         metadata: {
           webrtc_call_control_id: webrtcCallControlId || null,
+          hardphone_call_control_id: hardphoneCallControlId || null,
           pstn_call_control_id: pstnCallControlId || null,
           is_outbound_call: true,
           ...additionalMetadata,
@@ -212,6 +258,8 @@ export async function POST(request) {
     }
 
 
+
+    let handledHardphoneOutboundInitiated = false;
 
     // Handle first leg (WebRTC leg) call.initiated webhook
     // This leg has X-RTC-CALLID header - we need to initiate dialAndBridge
@@ -522,6 +570,79 @@ export async function POST(request) {
       }
     }
 
+    // Handle first leg from a physical hardphone credential connection.
+    // These calls have no X-RTC-CALLID, because the SIP device originated them
+    // directly. With call_parking_enabled=true Telnyx parks this leg and waits
+    // for our Call Control action, so reuse dialAndBridge with link_to just like
+    // the WebRTC path, but skip WebRTC-specific leg mapping/headers.
+    if (
+      eventType === "call.initiated" &&
+      callControlId &&
+      direction === "outgoing" &&
+      !rtcCallId &&
+      payloadConnectionId
+    ) {
+      const hardphone = await findHardphoneByConnectionId(payloadConnectionId);
+      if (hardphone) {
+        handledHardphoneOutboundInitiated = true;
+        const callSessionId = payload?.call_session_id;
+        const effectiveFromNumber = hardphone.assigned_phone_number || hardphone.voice_number || from || process.env.TELNYX_MAIN_FROM_NUMBER || null;
+        const nameParts = [hardphone.first_name, hardphone.last_name].filter(Boolean);
+        const fromDisplayName = nameParts.length
+          ? nameParts.join(" ")
+          : hardphone.phone_name || hardphone.label || null;
+        const hardphoneUsername = hardphone.username || null;
+
+        await createOutboundInteraction({
+          callControlId,
+          callSessionId,
+          fromNumber: effectiveFromNumber,
+          toNumber: to,
+          username: hardphoneUsername,
+          webrtcCallControlId: null,
+          hardphoneCallControlId: callControlId,
+          pstnCallControlId: null,
+          connectionId: payloadConnectionId,
+          metadata: {
+            is_hardphone_outbound_call: true,
+            source: "hardphone",
+            hardphone_id: hardphone.id,
+            hardphone_mac: hardphone.mac,
+            hardphone_connection_id: payloadConnectionId,
+          },
+        });
+
+        const pstnCallControlId = await dialAndBridge({
+          to,
+          from: effectiveFromNumber,
+          linkTo: callControlId,
+          connectionId,
+          fromDisplayName,
+        });
+
+        if (pstnCallControlId) {
+          await createOutboundInteraction({
+            callControlId,
+            callSessionId,
+            fromNumber: effectiveFromNumber,
+            toNumber: to,
+            username: hardphoneUsername,
+            webrtcCallControlId: null,
+            hardphoneCallControlId: callControlId,
+            pstnCallControlId: pstnCallControlId,
+            connectionId: payloadConnectionId,
+            metadata: {
+              is_hardphone_outbound_call: true,
+              source: "hardphone",
+              hardphone_id: hardphone.id,
+              hardphone_mac: hardphone.mac,
+              hardphone_connection_id: payloadConnectionId,
+            },
+          });
+        }
+      }
+    }
+
     // Handle second leg (PSTN leg) call.initiated webhook
     // This leg will NOT have X-RTC-CALLID header but will share the same call_session_id
     if (
@@ -529,6 +650,7 @@ export async function POST(request) {
       callControlId &&
       direction === "outgoing" &&
       !rtcCallId && // No X-RTC-CALLID means this is the PSTN leg
+      !handledHardphoneOutboundInitiated &&
       payload?.call_session_id
     ) {
       const callSessionId = payload?.call_session_id;
@@ -556,18 +678,24 @@ export async function POST(request) {
           connectionId: payloadConnectionId || mapping.connectionId, // User's WebRTC connection ID
         });
       } else {
-
-        // Still create interaction for PSTN leg if mapping not found
-        await createOutboundInteraction({
-          callControlId,
+        const updatedHardphoneInteraction = await updateHardphoneOutboundPstnLegBySession({
           callSessionId,
-          fromNumber: from,
-          toNumber: to,
-          username: null,
-          webrtcCallControlId: null,
           pstnCallControlId: callControlId,
-          connectionId: payloadConnectionId, // User's WebRTC connection ID
         });
+        if (!updatedHardphoneInteraction) {
+
+          // Still create interaction for PSTN leg if mapping not found
+          await createOutboundInteraction({
+            callControlId,
+            callSessionId,
+            fromNumber: from,
+            toNumber: to,
+            username: null,
+            webrtcCallControlId: null,
+            pstnCallControlId: callControlId,
+            connectionId: payloadConnectionId, // User's WebRTC connection ID
+          });
+        }
       }
     }
 
