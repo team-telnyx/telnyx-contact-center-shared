@@ -164,7 +164,11 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /replace\(\/\(\[a-z0-9\]\)\(\[A-Z\]\)\/g/);
     assert.match(code, /call_hold/);
     assert.match(code, /call_connected/);
-    assert.match(code, /canHoldOrMute/);
+    assert.match(code, /const canHold = callInfo\.isConnected/);
+    assert.match(code, /const canMute = \(callInfo\.isConnected && !callInfo\.isHeld\)/);
+    assert.match(code, /disabled=\{!canHold\}/);
+    assert.match(code, /disabled=\{!canMute\}/);
+    assert.doesNotMatch(code, /canHoldOrMute/);
     assert.match(code, /applyOptimisticCtiState/);
     assert.match(code, /mergeStatusWithStickyMute/);
     assert.match(code, /explicitMuteValue/);
@@ -214,7 +218,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /\/api\/v1\/callctrl\/holdCall/);
     assert.match(code, /\/api\/v1\/callctrl\/resumeCall/);
     assert.match(code, /\/api\/v1\/callctrl\/mute/);
-    assert.match(code, /async mute\(phone, state = true\) \{[\s\S]*if \(isHeldCall\(call\)\) \{[\s\S]*\/api\/v1\/callctrl\/resumeCall[\s\S]*\/api\/v1\/callctrl\/mute[\s\S]*\/api\/v1\/callctrl\/holdCall/);
+    assert.match(code, /mute_not_allowed_while_held/);
+    assert.doesNotMatch(code, /async mute\(phone, state = true\) \{[\s\S]*if \(isHeldCall\(call\)\) \{[\s\S]*\/api\/v1\/callctrl\/resumeCall[\s\S]*\/api\/v1\/callctrl\/mute[\s\S]*\/api\/v1\/callctrl\/holdCall/);
     assert.match(code, /\/api\/v1\/webCallControl\/callStatus/);
     assert.match(code, /\/api\/v1\/mgmt\/updateConfiguration/);
     assert.match(code, /\/api\/v1\/mgmt\/safeReboot/);

@@ -335,12 +335,7 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
     if (action === "mute" || action === "unmute") {
       const call = await activePolyCall(host, password);
       if (!call?.ref) return { ok: false, reason: "no_active_call" };
-      if (isHeldPolyCall(call)) {
-        await polyRequest(host, "/api/v1/callctrl/resumeCall", { method: "POST", password, body: { data: { Ref: call.ref } } });
-        const result = await polyRequest(host, "/api/v1/callctrl/mute", { method: "POST", password, body: { data: { state: action === "mute" ? "1" : "0" } } });
-        await polyRequest(host, "/api/v1/callctrl/holdCall", { method: "POST", password, body: { data: { Ref: call.ref } } });
-        return result;
-      }
+      if (isHeldPolyCall(call)) return { ok: false, reason: "mute_not_allowed_while_held", polyStatus: "4003" };
       return polyRequest(host, "/api/v1/callctrl/mute", { method: "POST", password, body: { data: { state: action === "mute" ? "1" : "0" } } });
     }
     if (action === "reboot") return polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password, body: {} });

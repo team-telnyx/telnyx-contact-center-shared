@@ -1242,7 +1242,8 @@ function PhoneCtiCard({ phone }) {
   const fireAndForgetControls = phone.vendor === "yealink" && phone?.settings?.cti_mode !== "telnyx" && Boolean(reachableIp);
   const canDial = (fireAndForgetControls || !hasActiveCall) && dialNumber.trim();
   const canAnswer = callInfo.isIncoming || fireAndForgetControls;
-  const canHoldOrMute = callInfo.isConnected || fireAndForgetControls;
+  const canHold = callInfo.isConnected || fireAndForgetControls;
+  const canMute = (callInfo.isConnected && !callInfo.isHeld) || fireAndForgetControls;
   const canHangup = hasActiveCall || fireAndForgetControls;
 
   const fetchCtiStatus = useCallback(async ({ silent = true } = {}) => {
@@ -1346,8 +1347,8 @@ function PhoneCtiCard({ phone }) {
           <div className="grid grid-cols-5 gap-2">
             <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
             <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
-            <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHoldOrMute} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
-            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canHoldOrMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
+            <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHold} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
+            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
             <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
           </div>
         </div>
