@@ -8,11 +8,13 @@ async function file(path) {
 }
 
 describe("hardphone bridge product integration", () => {
-  it("derives hardphone SIP username from the bare MAC address without hp prefix", () => {
-    assert.strictEqual(phoneConnectionUserName("00:90:8F:56:10:A5"), "00908F5610A5");
-    assert.strictEqual(phoneConnectionUserName("00908f5610a5"), "00908F5610A5");
-    assert.doesNotThrow(() => phoneConnectionUserName("00908F5610A5"));
-    assert.strictEqual(phoneConnectionUserName("hp00908F5610A5"), "00908F5610A5");
+  it("derives Telnyx-safe hardphone SIP usernames from MAC addresses", () => {
+    assert.strictEqual(phoneConnectionUserName("00:90:8F:56:10:A5"), "phone00908F5610A5");
+    assert.strictEqual(phoneConnectionUserName("00908f5610a5"), "phone00908F5610A5");
+    assert.strictEqual(phoneConnectionUserName("A0:90:8F:56:10:A5"), "phoneA0908F5610A5");
+    assert.doesNotThrow(() => phoneConnectionUserName("A0908F5610A5"));
+    assert.strictEqual(phoneConnectionUserName("hp00908F5610A5"), "phone00908F5610A5");
+    assert.strictEqual(phoneConnectionUserName("phone00908F5610A5"), "phone00908F5610A5");
   });
 
   it("persists local bridge registry and command audit tables", async () => {
@@ -178,7 +180,7 @@ describe("hardphone bridge product integration", () => {
 
       await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
 
-      assert.strictEqual(requestBody.user_name, "0004F2ABCDEF");
+      assert.strictEqual(requestBody.user_name, "phone0004F2ABCDEF");
       assert.deepStrictEqual(requestBody.tags, ["hardphone", "vendor_audiocodes", "model_420HD", "mac_0004F2ABCDEF"]);
       assert.ok(requestBody.tags.every((tag) => /^[A-Za-z0-9_-]+$/.test(tag)), "Telnyx tags must contain only letters, numbers, dashes and underscores");
     } finally {
@@ -229,6 +231,7 @@ describe("hardphone bridge product integration", () => {
       if (oldAppBase === undefined) delete process.env.APP_BASE_URL; else process.env.APP_BASE_URL = oldAppBase;
     }
   });
+
 
   it("hides advanced provisioning URL/syslog fields and uses env-managed admin password", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");

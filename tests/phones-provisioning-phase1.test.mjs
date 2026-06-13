@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import {
+  phoneConnectionUserName,
+  phoneConnectionName,
+} from "../lib/hardphones/credentials.mjs";
+import {
   normalizeMac,
   formatMac,
   resolveProvisioningRequest,
@@ -39,6 +43,19 @@ const phone = {
   },
 };
 
+function currentOffsetSeconds(timezone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "shortOffset",
+  }).formatToParts(new Date());
+  const value = parts.find((part) => part.type === "timeZoneName")?.value || "GMT";
+  if (value === "GMT" || value === "UTC") return 0;
+  const match = value.match(/^(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?$/);
+  assert.ok(match, `Expected parseable timezone offset, got ${value}`);
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * ((Number(match[2]) * 3600) + (Number(match[3] || 0) * 60));
+}
+
 describe("hard phones provisioning (Phase 1)", () => {
   it("normalizes and formats MAC addresses", () => {
     assert.strictEqual(normalizeMac("00:04:F2:AB:CD:EF"), "0004f2abcdef");
@@ -47,6 +64,15 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.strictEqual(normalizeMac(""), null);
     assert.strictEqual(formatMac("0004F2ABCDEF"), "00:04:f2:ab:cd:ef");
     assert.deepStrictEqual(SUPPORTED_VENDORS, ["polycom", "yealink", "audiocodes"]);
+  });
+
+  it("derives Telnyx SIP connection usernames with phone prefix before the MAC", () => {
+    assert.strictEqual(phoneConnectionUserName("00:04:F2:AB:CD:EF"), "phone0004F2ABCDEF");
+    assert.strictEqual(phoneConnectionUserName("805ec0123456"), "phone805EC0123456");
+    assert.strictEqual(phoneConnectionUserName("hp0004F2ABCDEF"), "phone0004F2ABCDEF");
+    assert.strictEqual(phoneConnectionUserName("phone0004F2ABCDEF"), "phone0004F2ABCDEF");
+    assert.strictEqual(phoneConnectionName("00:04:F2:AB:CD:EF"), "phone_0004F2ABCDEF");
+    assert.throws(() => phoneConnectionUserName("not-a-mac"), /Valid phone MAC is required/);
   });
 
   it("resolves provisioning filenames to vendor and kind", () => {
@@ -141,7 +167,7 @@ describe("hard phones provisioning (Phase 1)", () => {
       phone_name: "Reception inventory name",
       label: "Front Desk Line",
       assigned_phone_number: "+15551234567",
-      sip_username: "hp0004F2ABCDEF",
+      sip_username: "phone0004F2ABCDEF",
     };
 
     const poly = polycomRegistrationConfig(namedPhone, { baseUrl: "https://cc.example.com" });
@@ -163,18 +189,20 @@ describe("hard phones provisioning (Phase 1)", () => {
 
   it("writes selected NTP timezone offset settings into vendor configs", () => {
     const warsawPhone = { ...phone, settings: { ...phone.settings, ntp_timezone: "Europe/Warsaw", timezone_discovery: false } };
+    const warsawOffset = currentOffsetSeconds("Europe/Warsaw");
+    const warsawYealinkOffset = `${warsawOffset >= 0 ? "+" : ""}${warsawOffset / 3600}`;
 
     const poly = polycomRegistrationConfig(warsawPhone, { baseUrl: "https://cc.example.com" });
-    assert.match(poly, /tcpIpApp\.sntp\.gmtOffset="3600"/);
-    assert.match(poly, /device\.sntp\.gmtOffset="3600"/);
+    assert.match(poly, new RegExp(`tcpIpApp\\.sntp\\.gmtOffset="${warsawOffset}"`));
+    assert.match(poly, new RegExp(`device\\.sntp\\.gmtOffset="${warsawOffset}"`));
 
     const yealink = yealinkPhoneConfig({ ...warsawPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
     assert.match(yealink, /local_time\.dhcp_time = 0/);
-    assert.match(yealink, /local_time\.time_zone = \+1/);
+    assert.match(yealink, new RegExp(`local_time\\.time_zone = \\${warsawYealinkOffset}`));
 
     const audiocodes = audiocodesPhoneConfig({ ...warsawPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
     assert.match(audiocodes, /system\/time\/timezone=Europe\/Warsaw/);
-    assert.match(audiocodes, /system\/time\/gmt_offset=3600/);
+    assert.match(audiocodes, new RegExp(`system/time/gmt_offset=${warsawOffset}`));
   });
 
   it("builds per-vendor config from the request kind", () => {
