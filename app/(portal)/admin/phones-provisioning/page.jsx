@@ -696,7 +696,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
           <PhoneModelSettingsCard vendor={draft.vendor} model={draft.model} settings={normalizePhoneSettings(draft.settings)} updateSettings={updateSettings} />
           <LocalBridgeSelector draft={draft} update={update} bridges={bridges} />
           <div>
-            <Label>Label</Label>
+            <Label>Line Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
           </div>
           {!editing ? (

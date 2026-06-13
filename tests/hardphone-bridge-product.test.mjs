@@ -61,6 +61,13 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
   });
 
+  it("labels the phone display-name input as Line Label", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /<Label>Line Label<\/Label>/);
+    assert.doesNotMatch(page, /<Label>Label<\/Label>/);
+    assert.match(page, /placeholder="Desk 12 \/ Agent name"/);
+  });
+
   it("formats the context settings MAC input like the phone inventory list", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     assert.match(page, /function formatMacInput\(mac\)/);
