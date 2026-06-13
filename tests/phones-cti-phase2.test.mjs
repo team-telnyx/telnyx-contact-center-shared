@@ -109,12 +109,13 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
         return { ok: true, json: async () => ({ data: { call_control_id: requestBodies.length === 1 ? "phone-leg" : "target-leg", call_session_id: "session-1" } }) };
       };
       const driver = createTelnyxFallbackDriver({ pool: null, baseUrl: "https://app.example.test" });
-      const result = await driver.dial({ id: "p-1", sip_username: "agent-1", assigned_phone_number: "+15551234567 ext 89" }, "+18005551212");
+      const result = await driver.dial({ id: "p-1", sip_username: "agent-1", telnyx_connection_id: "sip-credential-connection", assigned_phone_number: "+15551234567 ext 89" }, "+18005551212");
       assert.deepStrictEqual(result, { ok: true, callControlId: "phone-leg", phoneCallControlId: "phone-leg", targetCallControlId: "target-leg" });
       assert.strictEqual(requestBodies.length, 2);
       assert.strictEqual(requestBodies[0].to, "sip:agent-1@sip.telnyx.com");
       assert.strictEqual(requestBodies[0].from, "+15550001111");
       assert.strictEqual(requestBodies[0].connection_id, "cc-test");
+      assert.notStrictEqual(requestBodies[0].connection_id, "sip-credential-connection");
       assert.strictEqual(requestBodies[0].webhook_url, "https://app.example.test/api/provisioning/cti-webhook");
       assert.strictEqual(requestBodies[0].webhook_url_method, "POST");
       assert.deepStrictEqual(requestBodies[0].custom_headers, [{ name: "Alert-Info", value: "info=alert-autoanswer" }]);
