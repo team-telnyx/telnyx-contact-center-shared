@@ -81,6 +81,58 @@ async function findHardphoneByConnectionId(connectionId) {
   }
 }
 
+function looksLikeSipIdentity(value) {
+  const text = String(value || "").trim().toLowerCase();
+  return !text || text.startsWith("sip:") || text.includes("@sip.") || text.includes("@telnyx.com");
+}
+
+function parseInteractionJson(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+async function findOutboundInteractionByAnyCallControlId(callControlId) {
+  if (!callControlId) return null;
+  const { PgDb } = await import("@/lib/pgdb.js");
+  const directInteraction = await PgDb.findInteractionByCallControlId(callControlId);
+  if (directInteraction) return directInteraction;
+
+  const { getPostgresPool } = await import("@/lib/postgres.mjs");
+  const pool = getPostgresPool();
+  if (!pool) return null;
+  const { rows } = await pool.query(
+    `SELECT * FROM cc_interactions
+     WHERE metadata->>'is_outbound_call' = 'true'
+       AND (
+         metadata->>'pstn_call_control_id' = $1
+         OR metadata->>'hardphone_call_control_id' = $1
+         OR metadata->>'webrtc_call_control_id' = $1
+       )
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [callControlId],
+  );
+  const row = rows?.[0];
+  if (!row) return null;
+  return {
+    ...row,
+    required_skills: parseInteractionJson(row.required_skills),
+    routing_metadata: parseInteractionJson(row.routing_metadata),
+    transfer_history: parseInteractionJson(row.transfer_history),
+    tags: parseInteractionJson(row.tags),
+    wrapup_codes: parseInteractionJson(row.wrapup_codes),
+    metadata: parseInteractionJson(row.metadata),
+  };
+}
+
 async function updateHardphoneOutboundPstnLegBySession({ callSessionId, pstnCallControlId }) {
   if (!callSessionId || !pstnCallControlId) return false;
   try {
@@ -93,8 +145,12 @@ async function updateHardphoneOutboundPstnLegBySession({ callSessionId, pstnCall
            updated_at = NOW()
        WHERE call_session_id = $2
          AND metadata->>'is_hardphone_outbound_call' = 'true'
-         AND (metadata->>'pstn_call_control_id' IS NULL OR metadata->>'pstn_call_control_id' = '')`,
-      [JSON.stringify({ pstn_call_control_id: pstnCallControlId }), callSessionId],
+         AND (
+           metadata->>'pstn_call_control_id' IS NULL
+           OR metadata->>'pstn_call_control_id' = ''
+           OR metadata->>'pstn_call_control_id' = $3
+         )`,
+      [JSON.stringify({ pstn_call_control_id: pstnCallControlId }), callSessionId, pstnCallControlId],
     );
     return rowCount > 0;
   } catch {
@@ -586,7 +642,8 @@ export async function POST(request) {
       if (hardphone) {
         handledHardphoneOutboundInitiated = true;
         const callSessionId = payload?.call_session_id;
-        const effectiveFromNumber = hardphone.assigned_phone_number || hardphone.voice_number || from || process.env.TELNYX_MAIN_FROM_NUMBER || null;
+        const hardphoneFromCandidate = hardphone.assigned_phone_number || hardphone.voice_number || null;
+        const effectiveFromNumber = hardphoneFromCandidate || process.env.TELNYX_MAIN_FROM_NUMBER || (looksLikeSipIdentity(from) ? null : from) || null;
         const nameParts = [hardphone.first_name, hardphone.last_name].filter(Boolean);
         const fromDisplayName = nameParts.length
           ? nameParts.join(" ")
@@ -703,9 +760,7 @@ export async function POST(request) {
     if (eventType === "call.recording.saved" && callControlId) {
       try {
         const { PgDb } = await import("@/lib/pgdb.js");
-        const interaction = await PgDb.findInteractionByCallControlId(
-          callControlId
-        );
+        const interaction = await findOutboundInteractionByAnyCallControlId(callControlId);
 
         if (interaction && interaction.metadata?.is_outbound_call) {
           const recordingUrl =
@@ -753,9 +808,7 @@ export async function POST(request) {
       try {
         const { PgDb } = await import("@/lib/pgdb.js");
         const { getPostgresPool } = await import("@/lib/postgres.mjs");
-        const interaction = await PgDb.findInteractionByCallControlId(
-          callControlId
-        );
+        const interaction = await findOutboundInteractionByAnyCallControlId(callControlId);
 
         if (interaction && interaction.metadata?.is_outbound_call) {
           const updates = {};

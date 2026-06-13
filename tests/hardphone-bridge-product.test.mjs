@@ -17,6 +17,37 @@ describe("hardphone bridge product integration", () => {
     assert.strictEqual(phoneConnectionUserName("phone00908F5610A5"), "phone00908F5610A5");
   });
 
+  it("rejects Telnyx SIP connections when username repair does not persist", async () => {
+    const originalFetch = global.fetch;
+    const oldApiKey = process.env.TELNYX_API_KEY;
+    const oldOvp = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
+    const calls = [];
+    try {
+      process.env.TELNYX_API_KEY = "KEY_TEST";
+      process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp123";
+      global.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), method: options.method || "GET" });
+        if (options.method === "DELETE") {
+          return { ok: true, json: async () => ({}) };
+        }
+        return {
+          ok: true,
+          json: async () => ({ data: { id: "conn123", connection_name: "phone_0004F2ABCDEF", user_name: "0004F2ABCDEF" } }),
+        };
+      };
+
+      await assert.rejects(
+        () => createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" }),
+        /username update did not persist/,
+      );
+      assert.ok(calls.some((call) => call.method === "DELETE"), "mismatched Telnyx connection should be cleaned up");
+    } finally {
+      global.fetch = originalFetch;
+      if (oldApiKey === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = oldApiKey;
+      if (oldOvp === undefined) delete process.env.TELNYX_OUTBOUND_VOICE_PROFILE; else process.env.TELNYX_OUTBOUND_VOICE_PROFILE = oldOvp;
+    }
+  });
+
   it("persists local bridge registry and command audit tables", async () => {
     const schema = await file("lib/postgres-schema.mjs");
     assert.match(schema, /CREATE TABLE IF NOT EXISTS hp_local_bridges/);
