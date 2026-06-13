@@ -1,13 +1,20 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { readFile } from "node:fs/promises";
-import { createPhoneSipConnection } from "../lib/hardphones/credentials.mjs";
+import { createPhoneSipConnection, phoneConnectionUserName } from "../lib/hardphones/credentials.mjs";
 
 async function file(path) {
   return readFile(new URL(`../${path}`, import.meta.url), "utf8");
 }
 
 describe("hardphone bridge product integration", () => {
+  it("derives hardphone SIP username from the bare MAC address without hp prefix", () => {
+    assert.strictEqual(phoneConnectionUserName("00:90:8F:56:10:A5"), "00908F5610A5");
+    assert.strictEqual(phoneConnectionUserName("00908f5610a5"), "00908F5610A5");
+    assert.doesNotThrow(() => phoneConnectionUserName("00908F5610A5"));
+    assert.strictEqual(phoneConnectionUserName("hp00908F5610A5"), "00908F5610A5");
+  });
+
   it("persists local bridge registry and command audit tables", async () => {
     const schema = await file("lib/postgres-schema.mjs");
     assert.match(schema, /CREATE TABLE IF NOT EXISTS hp_local_bridges/);
@@ -147,6 +154,7 @@ describe("hardphone bridge product integration", () => {
 
       await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
 
+      assert.strictEqual(requestBody.user_name, "0004F2ABCDEF");
       assert.deepStrictEqual(requestBody.tags, ["hardphone", "vendor_audiocodes", "model_420HD", "mac_0004F2ABCDEF"]);
       assert.ok(requestBody.tags.every((tag) => /^[A-Za-z0-9_-]+$/.test(tag)), "Telnyx tags must contain only letters, numbers, dashes and underscores");
     } finally {
