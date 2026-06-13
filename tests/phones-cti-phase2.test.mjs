@@ -150,6 +150,9 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-sip-reprovision/);
     assert.match(code, /hp-sip-reboot/);
     assert.match(code, /deriveCallInfo/);
+    assert.match(code, /replace\(\/\(\[a-z0-9\]\)\(\[A-Z\]\)\/g/);
+    assert.match(code, /call_hold/);
+    assert.match(code, /call_connected/);
     assert.match(code, /canHoldOrMute/);
     assert.match(code, /applyOptimisticCtiState/);
     assert.match(code, /grid grid-cols-5 gap-2/);

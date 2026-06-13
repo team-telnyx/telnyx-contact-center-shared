@@ -1022,7 +1022,11 @@ function PhoneModelPreview({ vendor, model, catalogEntry }) {
 // CTI control card — drives the phone through the vendor driver (Polycom
 // REST, Yealink Action URI, Telnyx fallback for AudioCodes/NAT-ed phones).
 function normalizeCallState(value) {
-  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return String(value || "")
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
 }
 
 function asArray(value) {
@@ -1041,10 +1045,10 @@ function deriveCallInfo(status, phone) {
   const call = primaryCallFromStatus(status);
   const state = normalizeCallState(call?.CallState || call?.state || result.call_state || result.state);
   const disconnectedStates = new Set(["", "disconnected", "idle", "ended", "completed", "failed", "no_active_call"]);
-  const connectedStates = new Set(["connected", "active", "confirmed", "in_call", "talking"]);
-  const dialingStates = new Set(["proceeding", "ringback", "dialing", "outgoing", "trying"]);
-  const incomingStates = new Set(["incoming", "ringing", "offering", "alerting", "ring", "presenting"]);
-  const heldStates = new Set(["held", "hold", "on_hold", "local_hold", "remote_hold"]);
+  const connectedStates = new Set(["connected", "call_connected", "active", "confirmed", "in_call", "talking"]);
+  const dialingStates = new Set(["proceeding", "call_proceeding", "ringback", "call_ringback", "dialing", "outgoing", "trying"]);
+  const incomingStates = new Set(["incoming", "call_incoming", "ringing", "call_ringing", "offering", "alerting", "ring", "presenting"]);
+  const heldStates = new Set(["held", "hold", "call_hold", "call_held", "on_hold", "local_hold", "remote_hold"]);
   const mutedValue = String(call?.Muted ?? call?.Mute ?? result.muted ?? result.mute ?? "").toLowerCase();
   const direction = String(call?.Type || call?.direction || result.direction || "").toLowerCase();
   const isIncoming = incomingStates.has(state) || direction === "incoming";
