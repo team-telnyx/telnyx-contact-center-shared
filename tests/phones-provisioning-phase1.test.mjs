@@ -135,6 +135,48 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(audiocodes, /voip\/line\/0\/auth_name=0004F2ABCDEF/);
   });
 
+  it("uses Line Label for phone display text without replacing SIP line identity", () => {
+    const namedPhone = {
+      ...phone,
+      phone_name: "Reception inventory name",
+      label: "Front Desk Line",
+      assigned_phone_number: "+15551234567",
+      sip_username: "hp0004F2ABCDEF",
+    };
+
+    const poly = polycomRegistrationConfig(namedPhone, { baseUrl: "https://cc.example.com" });
+    assert.match(poly, /reg\.1\.address="\+15551234567"/);
+    assert.match(poly, /reg\.1\.label="Front Desk Line"/);
+    assert.doesNotMatch(poly, /Reception inventory name/);
+
+    const yealink = yealinkPhoneConfig({ ...namedPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
+    assert.match(yealink, /account\.1\.user_name = \+15551234567/);
+    assert.match(yealink, /account\.1\.label = Front Desk Line/);
+    assert.match(yealink, /linekey\.1\.label = Front Desk Line/);
+    assert.doesNotMatch(yealink, /Reception inventory name/);
+
+    const audiocodes = audiocodesPhoneConfig({ ...namedPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
+    assert.match(audiocodes, /voip\/line\/0\/id=\+15551234567/);
+    assert.match(audiocodes, /voip\/line\/0\/description=Front Desk Line/);
+    assert.doesNotMatch(audiocodes, /Reception inventory name/);
+  });
+
+  it("writes selected NTP timezone offset settings into vendor configs", () => {
+    const warsawPhone = { ...phone, settings: { ...phone.settings, ntp_timezone: "Europe/Warsaw", timezone_discovery: false } };
+
+    const poly = polycomRegistrationConfig(warsawPhone, { baseUrl: "https://cc.example.com" });
+    assert.match(poly, /tcpIpApp\.sntp\.gmtOffset="3600"/);
+    assert.match(poly, /device\.sntp\.gmtOffset="3600"/);
+
+    const yealink = yealinkPhoneConfig({ ...warsawPhone, vendor: "yealink" }, { baseUrl: "https://cc.example.com" });
+    assert.match(yealink, /local_time\.dhcp_time = 0/);
+    assert.match(yealink, /local_time\.time_zone = \+1/);
+
+    const audiocodes = audiocodesPhoneConfig({ ...warsawPhone, vendor: "audiocodes" }, { baseUrl: "https://cc.example.com" });
+    assert.match(audiocodes, /system\/time\/timezone=Europe\/Warsaw/);
+    assert.match(audiocodes, /system\/time\/gmt_offset=3600/);
+  });
+
   it("builds per-vendor config from the request kind", () => {
     const polyMaster = buildConfigForPhone(phone, "mac-config", {});
     assert.match(polyMaster.body, /APPLICATION/);

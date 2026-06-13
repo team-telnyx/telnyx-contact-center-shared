@@ -68,11 +68,35 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /local_bridge_id: phoneDraft\.local_bridge_id/);
   });
 
-  it("labels the phone display-name input as Line Label", async () => {
+  it("separates Phone Name inventory display from Line Label provisioning copy", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const schema = await file("lib/postgres-schema.mjs");
+    const listRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
+    const itemRoute = await file("app/api/admin/phones-provisioning/phones/[id]/route.js");
+    assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS phone_name TEXT/);
+    assert.match(listRoute, /phone_name, mac, vendor, model, label/);
+    assert.match(itemRoute, /phone_name, mac, vendor, model, label/);
+    assert.match(page, /<Label>Phone Name<\/Label>/);
+    assert.match(page, /phone_name: phoneDraft\.phone_name\.trim\(\)/);
+    assert.match(page, /phone_name: selectedPhone\.phone_name \|\| ""/);
     assert.match(page, /<Label>Line Label<\/Label>/);
     assert.doesNotMatch(page, /<Label>Label<\/Label>/);
-    assert.match(page, /placeholder="Desk 12 \/ Agent name"/);
+    assert.match(page, /\{p\.phone_name \|\| p\.label \|\| formatMacDisplay\(p\.mac\)\}/);
+    assert.match(page, /placeholder="Desk phone \/ Reception"/);
+    assert.match(page, /placeholder="Line 1 \/ Agent name"/);
+  });
+
+  it("offers an NTP timezone offset dropdown defaulting to the logged-in user's timezone", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const listRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
+    assert.match(listRoute, /userTimezone: user\.timezone \|\| "UTC"/);
+    assert.match(page, /PHONE_TIMEZONES/);
+    assert.match(page, /Europe\/Warsaw/);
+    assert.match(page, /GMT\+01:00\/\+02:00/);
+    assert.match(page, /emptyPhoneDraft\(hardphoneConfig\.userTimezone\)/);
+    assert.match(page, /<Label>NTP timezone offset<\/Label>/);
+    assert.match(page, /settings\.ntp_timezone/);
+    assert.match(page, /updateSettings\(\{ ntp_timezone: v \}\)/);
   });
 
   it("formats the context settings MAC input like the phone inventory list", async () => {

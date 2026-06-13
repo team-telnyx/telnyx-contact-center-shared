@@ -21,14 +21,15 @@ async function requireAdmin() {
   return user;
 }
 
-const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
+const PHONE_COLUMNS = `id, phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
   assigned_phone_number_id, assigned_phone_number, sip_username, admin_password, settings, provisioning_state, ip_address, last_ip,
   local_bridge_id, last_seen_at, last_user_agent, created_at, updated_at`;
 
-function hardphoneConfigStatus() {
+function hardphoneConfigStatus(user = {}) {
   return {
     phoneAdminPasswordConfigured: Boolean(process.env.TELNYX_PHONE_ADMIN_PASSWORD),
     outboundVoiceProfileConfigured: Boolean(process.env.TELNYX_OUTBOUND_VOICE_PROFILE),
+    userTimezone: user.timezone || "UTC",
   };
 }
 
@@ -66,7 +67,7 @@ export async function GET(request) {
         sip_registration_status_at: registrationByPhone[p.id]?.registration_status_at || null,
       })),
       availablePhoneNumbers,
-      config: hardphoneConfigStatus(),
+      config: hardphoneConfigStatus(user),
     });
   } catch (err) {
     adminRuntimeLogger.error("hardphone_list_failed", runtimePayload({ error: err, operation: "hp_list" }));
@@ -96,6 +97,7 @@ export async function POST(request) {
     const { rows: existing } = await pool.query(`SELECT id FROM hp_phones WHERE mac = $1`, [mac]);
     if (existing.length) return NextResponse.json({ error: "A phone with this MAC already exists" }, { status: 409 });
 
+    const phoneName = String(body?.phone_name || "").trim() || null;
     const label = String(body?.label || "").trim() || null;
     const model = String(body?.model || "").trim() || null;
     const assignedPhoneNumberId = String(body?.assigned_phone_number_id || "").trim() || null;
@@ -113,7 +115,7 @@ export async function POST(request) {
     let connection = { id: null, connection_id: null, connection_name: null, sip_username: null, sip_password: null };
     let assignedNumber = null;
     try {
-      connection = await createPhoneSipConnection({ label, mac, vendor, model });
+      connection = await createPhoneSipConnection({ label: phoneName || label, mac, vendor, model });
       if (assignedPhoneNumberId) {
         assignedNumber = await assignPhoneNumberToConnection(assignedPhoneNumberId, connection.connection_id || connection.id);
       }
@@ -133,11 +135,12 @@ export async function POST(request) {
       const numberId = assignedNumber?.id || assignedPhoneNumberId || null;
       const ipAddress = null;
       const { rows } = await client.query(
-        `INSERT INTO hp_phones (mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
+        `INSERT INTO hp_phones (phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
           assigned_phone_number_id, assigned_phone_number, sip_username, sip_password, admin_password, settings, ip_address, local_bridge_id, provisioning_state, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'pending', $17)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'pending', $18)
          RETURNING ${PHONE_COLUMNS}`,
         [
+          phoneName,
           mac,
           vendor,
           model,

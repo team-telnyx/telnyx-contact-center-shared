@@ -21,7 +21,7 @@ async function requireAdmin() {
   return user;
 }
 
-const PHONE_COLUMNS = `id, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
+const PHONE_COLUMNS = `id, phone_name, mac, vendor, model, label, agent_id, telnyx_credential_id, telnyx_connection_id, telnyx_connection_name,
   assigned_phone_number_id, assigned_phone_number, sip_username,
   admin_password, settings, provisioning_state, ip_address, last_ip, local_bridge_id, last_seen_at, last_user_agent, created_at, updated_at`;
 
@@ -60,6 +60,7 @@ export async function PUT(request, { params }) {
       if (!SUPPORTED_VENDORS.includes(vendor)) return NextResponse.json({ error: "Unsupported vendor" }, { status: 400 });
       columns.push(`vendor = $${idx++}`); values.push(vendor);
     }
+    if (body.phone_name !== undefined) { columns.push(`phone_name = $${idx++}`); values.push(String(body.phone_name || "").trim() || null); }
     if (body.model !== undefined) { columns.push(`model = $${idx++}`); values.push(String(body.model || "").trim() || null); }
     if (body.label !== undefined) { columns.push(`label = $${idx++}`); values.push(String(body.label || "").trim() || null); }
     if (body.agent_id !== undefined) { columns.push(`agent_id = $${idx++}`); values.push(String(body.agent_id || "").trim() || null); }

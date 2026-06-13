@@ -115,6 +115,22 @@ function modelCatalogEntry(vendor, model) {
 const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300", rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300" };
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
+const PHONE_TIMEZONES = [
+  { value: "UTC", label: "UTC · GMT+00:00" },
+  { value: "Europe/London", label: "London · GMT+00:00/+01:00" },
+  { value: "Europe/Warsaw", label: "Warsaw · GMT+01:00/+02:00" },
+  { value: "Europe/Berlin", label: "Berlin · GMT+01:00/+02:00" },
+  { value: "Europe/Paris", label: "Paris · GMT+01:00/+02:00" },
+  { value: "America/New_York", label: "New York · GMT-05:00/-04:00" },
+  { value: "America/Chicago", label: "Chicago · GMT-06:00/-05:00" },
+  { value: "America/Denver", label: "Denver · GMT-07:00/-06:00" },
+  { value: "America/Los_Angeles", label: "Los Angeles · GMT-08:00/-07:00" },
+  { value: "Asia/Dubai", label: "Dubai · GMT+04:00" },
+  { value: "Asia/Singapore", label: "Singapore · GMT+08:00" },
+  { value: "Asia/Tokyo", label: "Tokyo · GMT+09:00" },
+  { value: "Australia/Sydney", label: "Sydney · GMT+10:00/+11:00" },
+];
+
 const stateBadgeClass = (state) => {
   const value = String(state || "").toLowerCase();
   if (value === "provisioned") return "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
@@ -207,31 +223,37 @@ function Empty({ title, description }) {
   );
 }
 
-const emptyPhoneDraft = () => ({
-  mac: "",
-  vendor: "polycom",
-  model: "",
-  label: "",
-  assigned_phone_number_id: "",
-  assigned_phone_number: "",
-  ip_address: "",
-  local_bridge_id: "",
-  settings: {
+function defaultPhoneSettings(userTimezone = "UTC") {
+  return {
     cti_mode: "direct",
     line_keys: "1",
     timezone_discovery: true,
+    ntp_timezone: PHONE_TIMEZONES.some((tz) => tz.value === userTimezone) ? userTimezone : "UTC",
     sntp_server: "pool.ntp.org",
     dynamic_reload: true,
     automatic_firmware_updates: true,
     firmware_source: "vendor-default",
     custom_config_url: "",
     syslog_server: "",
-  },
+  };
+}
+
+const emptyPhoneDraft = (userTimezone = "UTC") => ({
+  mac: "",
+  vendor: "polycom",
+  model: "",
+  phone_name: "",
+  label: "",
+  assigned_phone_number_id: "",
+  assigned_phone_number: "",
+  ip_address: "",
+  local_bridge_id: "",
+  settings: defaultPhoneSettings(userTimezone),
 });
 
-function normalizePhoneSettings(raw = {}) {
+function normalizePhoneSettings(raw = {}, userTimezone = "UTC") {
   return {
-    ...emptyPhoneDraft().settings,
+    ...defaultPhoneSettings(userTimezone),
     ...(raw && typeof raw === "object" ? raw : {}),
     timezone_discovery: raw?.timezone_discovery !== false,
     dynamic_reload: raw?.dynamic_reload !== false,
@@ -250,7 +272,7 @@ export default function PhonesProvisioningPage() {
   const [saving, setSaving] = useState(false);
   const [phones, setPhones] = useState([]);
   const [availablePhoneNumbers, setAvailablePhoneNumbers] = useState([]);
-  const [hardphoneConfig, setHardphoneConfig] = useState({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false });
+  const [hardphoneConfig, setHardphoneConfig] = useState({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false, userTimezone: "UTC" });
   const [bridges, setBridges] = useState([]);
   const [dashboard, setDashboard] = useState(null);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
@@ -297,7 +319,7 @@ export default function PhonesProvisioningPage() {
       const bridgesData = bridgesRes.ok ? await bridgesRes.json() : { bridges: [] };
       setPhones(phonesData.phones || []);
       if (includeAvailablePhoneNumbers) setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
-      setHardphoneConfig(phonesData.config || { phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false });
+      setHardphoneConfig({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false, userTimezone: "UTC", ...(phonesData.config || {}) });
       setDashboard(dashboardData);
       setBridges(bridgesData.bridges || []);
       if (toast) notify({ title: "Phones provisioning refreshed", description: "Data reloaded.", variant: "success" });
@@ -322,17 +344,18 @@ export default function PhonesProvisioningPage() {
         mac: selectedPhone.mac || "",
         vendor: selectedPhone.vendor || "polycom",
         model: selectedPhone.model || "",
+        phone_name: selectedPhone.phone_name || "",
         label: selectedPhone.label || "",
         assigned_phone_number_id: selectedPhone.assigned_phone_number_id || "",
         assigned_phone_number: selectedPhone.assigned_phone_number || "",
         ip_address: selectedPhone.last_ip || selectedPhone.ip_address || "",
         local_bridge_id: selectedPhone.local_bridge_id || selectedPhone.settings?.local_bridge_id || "",
-        settings: normalizePhoneSettings(selectedPhone.settings),
+        settings: normalizePhoneSettings(selectedPhone.settings, hardphoneConfig.userTimezone),
       });
     } else {
-      setPhoneDraft(emptyPhoneDraft());
+      setPhoneDraft(emptyPhoneDraft(hardphoneConfig.userTimezone));
     }
-  }, [selectedPhone]);
+  }, [selectedPhone, hardphoneConfig.userTimezone]);
 
   const draftValid = phoneDraftValid(phoneDraft);
 
@@ -344,11 +367,12 @@ export default function PhonesProvisioningPage() {
         mac: phoneDraft.mac,
         vendor: phoneDraft.vendor,
         model: phoneDraft.model.trim(),
+        phone_name: phoneDraft.phone_name.trim(),
         label: phoneDraft.label.trim(),
         assigned_phone_number_id: phoneDraft.assigned_phone_number_id || "",
         assigned_phone_number: phoneDraft.assigned_phone_number || "",
         local_bridge_id: phoneDraft.local_bridge_id.trim(),
-        settings: normalizePhoneSettings({ ...phoneDraft.settings, local_bridge_id: phoneDraft.local_bridge_id.trim() }),
+        settings: normalizePhoneSettings({ ...phoneDraft.settings, local_bridge_id: phoneDraft.local_bridge_id.trim() }, hardphoneConfig.userTimezone),
       };
       const url = selectedPhone ? `${API}/phones/${selectedPhone.id}` : `${API}/phones`;
       const res = await fetch(url, {
@@ -631,7 +655,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
             >
               <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={`Select ${formatMacDisplay(p.mac)} for reboot`} /></span>
               <span className="min-w-0">
-                <span className="block truncate font-medium">{p.label || formatMacDisplay(p.mac)}</span>
+                <span className="block truncate font-medium">{p.phone_name || p.label || formatMacDisplay(p.mac)}</span>
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
               </span>
               <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
@@ -661,7 +685,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const phoneAdminPasswordConfigured = hardphoneConfig.phoneAdminPasswordConfigured === true;
   const outboundVoiceProfileConfigured = hardphoneConfig.outboundVoiceProfileConfigured === true;
-  const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }) }));
+  const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }, hardphoneConfig.userTimezone) }));
   const models = VENDOR_MODELS[draft.vendor] || [];
   const catalogEntry = modelCatalogEntry(draft.vendor, draft.model);
 
@@ -669,6 +693,10 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
     <>
       <SettingCard icon={IconDeviceLandlinePhone} title={editing ? "Edit phone" : "New phone"} subtitle="Identity used to match boot provisioning requests">
         <div className="space-y-3">
+          <div>
+            <Label>Phone Name</Label>
+            <Input className="mt-1" value={draft.phone_name} onChange={(e) => update({ phone_name: e.target.value })} placeholder="Desk phone / Reception" />
+          </div>
           <div>
             <Label>MAC address<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
             <Input className="mt-1 font-mono" value={formatMacInput(draft.mac)} onChange={(e) => update({ mac: formatMacInput(e.target.value) })} placeholder="00:90:8f:56:10:a5" disabled={editing} />
@@ -697,7 +725,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
           <LocalBridgeSelector draft={draft} update={update} bridges={bridges} />
           <div>
             <Label>Line Label</Label>
-            <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Desk 12 / Agent name" />
+            <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Line 1 / Agent name" />
           </div>
           {!editing ? (
             <div className="rounded-xl border bg-muted/20 p-3">
@@ -839,6 +867,15 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
         <div>
           <Label>SNTP server</Label>
           <Input className="mt-1 font-mono" value={settings.sntp_server || ""} onChange={(e) => updateSettings({ sntp_server: e.target.value })} placeholder="pool.ntp.org" />
+        </div>
+        <div>
+          <Label>NTP timezone offset</Label>
+          <Select value={settings.ntp_timezone || "UTC"} onValueChange={(v) => updateSettings({ ntp_timezone: v })}>
+            <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select timezone offset" /></SelectTrigger>
+            <SelectContent>
+              {PHONE_TIMEZONES.map((tz) => <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="mt-3 space-y-2 text-xs">
@@ -1143,7 +1180,7 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
             </div>
             {assignedPhones.length ? (
               <div className="space-y-1.5">
-                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.label || formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>)}
+                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.phone_name || phone.label || formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>)}
               </div>
             ) : <p className="text-xs text-muted-foreground">No phones are assigned to this bridge yet.</p>}
           </div>
