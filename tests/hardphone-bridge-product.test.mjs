@@ -158,7 +158,7 @@ describe("hardphone bridge product integration", () => {
     }
   });
 
-  it("sets hardphone SIP webhook URL and parks outbound calls for webhook control", async () => {
+  it("sets hardphone SIP webhook URL without parking direct outbound calls", async () => {
     const originalFetch = global.fetch;
     const oldApiKey = process.env.TELNYX_API_KEY;
     const oldOvp = process.env.TELNYX_OUTBOUND_VOICE_PROFILE;
@@ -186,7 +186,7 @@ describe("hardphone bridge product integration", () => {
 
       assert.strictEqual(requestBody.webhook_event_url, "https://api.tokaj.synology.me/api/voice/webhook");
       assert.strictEqual(requestBody.webhook_api_version, "2");
-      assert.strictEqual(requestBody.outbound.call_parking_enabled, true);
+      assert.strictEqual(requestBody.outbound.call_parking_enabled, false);
     } finally {
       global.fetch = originalFetch;
       if (oldApiKey === undefined) delete process.env.TELNYX_API_KEY; else process.env.TELNYX_API_KEY = oldApiKey;
