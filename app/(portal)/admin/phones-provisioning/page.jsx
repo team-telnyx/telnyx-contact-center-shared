@@ -1115,7 +1115,8 @@ function deriveCallInfo(status, phone) {
   const heldStates = new Set(["held", "hold", "call_hold", "call_held", "on_hold", "local_hold", "remote_hold"]);
   const explicitMute = explicitMuteValue(status);
   const direction = String(call?.Type || call?.direction || result.direction || "").toLowerCase();
-  const isInbound = direction === "incoming";
+  const hasOutgoingDirection = direction === "outgoing" || direction === "outbound";
+  const isInbound = direction === "incoming" || direction === "inbound" || (!hasOutgoingDirection && incomingStates.has(state));
   const isHeld = heldStates.has(state) || String(call?.HoldState || "").toLowerCase().includes("hold");
   const isMuted = explicitMute === true;
   const hasCall = Boolean(call) && !disconnectedStates.has(state);
