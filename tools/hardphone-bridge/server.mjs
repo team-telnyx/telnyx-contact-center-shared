@@ -133,13 +133,17 @@ async function polyStatus(host, password) {
   return { ok: callStatus.ok || lineInfo.ok, reachable: callStatus.ok || lineInfo.ok, call: callStatus.ok ? callStatus.data?.data ?? null : null, line: lineInfo.ok ? lineInfo.data?.data ?? null : null, reason: callStatus.ok || lineInfo.ok ? undefined : callStatus.reason };
 }
 
-async function activePolyCallRef(host, password) {
+async function activePolyCall(host, password) {
   const result = await polyRequest(host, "/api/v1/webCallControl/callStatus", { password });
   if (!result.ok) return null;
   const payload = result.data?.data;
   const calls = Array.isArray(payload) ? payload : payload ? [payload] : [];
   const call = calls.find((c) => c?.Ref || c?.CallHandle) || null;
-  return call ? (call.Ref || call.CallHandle) : null;
+  return call ? { ref: call.Ref || call.CallHandle, state: call.CallState || "", raw: call } : null;
+}
+
+function isHeldPolyCall(call) {
+  return /hold|held/i.test(String(call?.state || ""));
 }
 
 function yealinkUrl(host, command) {
@@ -318,10 +322,20 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
     if (action === "status") return { ...(await polyStatus(host, password)), discovered_ip: host };
     if (action === "dial") return polyRequest(host, "/api/v1/callctrl/dial", { method: "POST", password, body: { data: { Dest: String(payload.number || payload.target || ""), Line: "1" } } });
     if (["answer", "hangup", "hold", "resume"].includes(action)) {
-      const ref = await activePolyCallRef(host, password);
-      if (!ref) return { ok: false, reason: "no_active_call" };
+      const call = await activePolyCall(host, password);
+      if (!call?.ref) return { ok: false, reason: "no_active_call" };
       const map = { answer: "answerCall", hangup: "endCall", hold: "holdCall", resume: "resumeCall" };
-      return polyRequest(host, `/api/v1/callctrl/${map[action]}`, { method: "POST", password, body: { data: { Ref: ref } } });
+      const result = await polyRequest(host, `/api/v1/callctrl/${map[action]}`, { method: "POST", password, body: { data: { Ref: call.ref } } });
+      if (action === "hangup" && !result.ok && isHeldPolyCall(call)) {
+        await polyRequest(host, "/api/v1/callctrl/resumeCall", { method: "POST", password, body: { data: { Ref: call.ref } } });
+        return polyRequest(host, "/api/v1/callctrl/endCall", { method: "POST", password, body: { data: { Ref: call.ref } } });
+      }
+      return result;
+    }
+    if (action === "mute" || action === "unmute") {
+      const call = await activePolyCall(host, password);
+      if (!call?.ref) return { ok: false, reason: "no_active_call" };
+      return polyRequest(host, "/api/v1/callctrl/mute", { method: "POST", password, body: { data: { state: action === "mute" ? "1" : "0" } } });
     }
     if (action === "reboot") return polyRequest(host, "/api/v1/mgmt/safeReboot", { method: "POST", password });
     if (action === "reprovision") return polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password });

@@ -135,7 +135,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
 
   it("phone editor exposes IP field and CTI control card", async () => {
     const code = await src("app/(portal)/admin/phones-provisioning/page.jsx");
-    assert.match(code, /Phone IP address/);
+    assert.match(code, /Detected phone IP address/);
     assert.match(code, /readOnly/);
     assert.match(code, /phone\.last_ip \|\| phone\.ip_address/);
     assert.match(code, /PhoneCtiCard/);
@@ -150,8 +150,20 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-sip-reprovision/);
     assert.match(code, /hp-sip-reboot/);
     assert.match(code, /deriveCallInfo/);
+    assert.match(code, /canHoldOrMute/);
+    assert.match(code, /applyOptimisticCtiState/);
+    assert.match(code, /grid grid-cols-5 gap-2/);
+    assert.match(code, /grid grid-cols-3 gap-2/);
     assert.match(code, /setInterval\(\(\) => fetchCtiStatus/);
     assert.doesNotMatch(code, /JSON\.stringify\(lastStatus/);
+    assert.doesNotMatch(code, /Hardphone provisioning prerequisites are configured/);
+    assert.doesNotMatch(code, /Phone IP address is detected automatically/);
+    assert.doesNotMatch(code, /Identity used to match boot provisioning requests/);
+    assert.doesNotMatch(code, /MAC cannot change/);
+    assert.doesNotMatch(code, /Dedicated Telnyx credential connection injected into the config/);
+    assert.doesNotMatch(code, /Driver: /);
+    assert.doesNotMatch(code, /These values are emitted into generated provisioning files/);
+    assert.doesNotMatch(code, /Poly UCS\/PVOS config supports/);
     assert.match(code, /Telnyx Call Control/);
     assert.match(code, /Polycom REST API/);
     assert.match(code, /Yealink Action URI/);

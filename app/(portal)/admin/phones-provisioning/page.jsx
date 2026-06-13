@@ -819,7 +819,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
 
   return (
     <>
-      <SettingCard icon={IconDeviceLandlinePhone} title={editing ? "Edit phone" : "New phone"} subtitle="Identity used to match boot provisioning requests">
+      <SettingCard icon={IconDeviceLandlinePhone} title={editing ? "Edit phone" : "New phone"}>
         <div className="space-y-3">
           <div>
             <Label>Phone Name</Label>
@@ -828,7 +828,6 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
           <div>
             <Label>MAC address<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
             <Input className="mt-1 font-mono" value={formatMacInput(draft.mac)} onChange={(e) => update({ mac: formatMacInput(e.target.value) })} placeholder="00:90:8f:56:10:a5" disabled={editing} />
-            {editing ? <p className="mt-1 text-xs text-muted-foreground">MAC cannot change — delete and re-add the phone instead.</p> : null}
           </div>
           <div>
             <Label>Vendor<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
@@ -871,23 +870,20 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
               <p className="mt-2 text-xs text-muted-foreground">Select a Telnyx number that is not attached to any connection. It will be assigned to the new hardphone SIP connection.</p>
             </div>
           ) : null}
-          <div className={`rounded-xl border px-3 py-2 text-xs ${phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"}`}>
-            {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? (
-              <span>Hardphone provisioning prerequisites are configured. Admin login password is managed by TELNYX_PHONE_ADMIN_PASSWORD.</span>
-            ) : (
+          {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? null : (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
               <span>Configure {phoneAdminPasswordConfigured ? "TELNYX_OUTBOUND_VOICE_PROFILE" : "TELNYX_PHONE_ADMIN_PASSWORD"}{!phoneAdminPasswordConfigured && !outboundVoiceProfileConfigured ? " and TELNYX_OUTBOUND_VOICE_PROFILE" : ""} before adding new hard phones.</span>
-            )}
-          </div>
+            </div>
+          )}
           <div>
             <Label>Detected phone IP address</Label>
             <Input className="mt-1 font-mono" value={editing ? (phone.last_ip || phone.ip_address || "") : "Auto-detected after first phone callback"} readOnly placeholder="Waiting for provisioning/event callback" />
-            <p className="mt-1 text-xs text-muted-foreground">Phone IP address is detected automatically from provisioning callbacks and phone events; admins should not type LAN addresses manually.</p>
           </div>
         </div>
       </SettingCard>
 
       {editing && phone ? (
-        <SettingCard icon={IconPhoneCall} title="SIP registration" subtitle="Dedicated Telnyx credential connection injected into the config">
+        <SettingCard icon={IconPhoneCall} title="SIP registration">
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">SIP username</span>
@@ -964,19 +960,9 @@ function LocalBridgeSelector({ draft, update, bridges = [] }) {
 }
 
 function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
-  const isPoly = vendor === "polycom";
-  const isAudioCodes = vendor === "audiocodes";
-  const capabilityText = isPoly
-    ? "Poly UCS/PVOS config supports line keys, polling/reload, time/SNTP, shared admin password and REST API enablement."
-    : isAudioCodes
-      ? "AudioCodes 400HD config supports dynamic reload, line keys, time/SNTP and shared admin password."
-      : "Yealink config supports line keys, auto-provision schedule, time/SNTP and Action URI control.";
   return (
     <div className="rounded-xl border bg-muted/20 p-3">
-      <div className="mb-3">
-        <div className="text-sm font-medium">Context settings view{model ? ` · ${model}` : ""}</div>
-        <p className="mt-1 text-xs text-muted-foreground">{capabilityText}</p>
-      </div>
+      <div className="mb-3 text-sm font-medium">Context settings view{model ? ` · ${model}` : ""}</div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Line keys</Label>
@@ -1012,7 +998,6 @@ function PhoneModelSettingsCard({ vendor, model, settings, updateSettings }) {
         <label className="flex items-center gap-2"><input type="checkbox" checked={settings.dynamic_reload !== false} onChange={(e) => updateSettings({ dynamic_reload: e.target.checked })} /> Dynamic reload / periodic provisioning checks</label>
         <label className="flex items-center gap-2"><input type="checkbox" checked={settings.automatic_firmware_updates !== false} onChange={(e) => updateSettings({ automatic_firmware_updates: e.target.checked })} /> Automatic firmware updates</label>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">These values are emitted into generated provisioning files when supported by the vendor syntax; unsupported vendor/model combinations keep the values as inventory context.</p>
     </div>
   );
 }
@@ -1056,6 +1041,8 @@ function deriveCallInfo(status, phone) {
   const call = primaryCallFromStatus(status);
   const state = normalizeCallState(call?.CallState || call?.state || result.call_state || result.state);
   const disconnectedStates = new Set(["", "disconnected", "idle", "ended", "completed", "failed", "no_active_call"]);
+  const connectedStates = new Set(["connected", "active", "confirmed", "in_call", "talking"]);
+  const dialingStates = new Set(["proceeding", "ringback", "dialing", "outgoing", "trying"]);
   const incomingStates = new Set(["incoming", "ringing", "offering", "alerting", "ring", "presenting"]);
   const heldStates = new Set(["held", "hold", "on_hold", "local_hold", "remote_hold"]);
   const mutedValue = String(call?.Muted ?? call?.Mute ?? result.muted ?? result.mute ?? "").toLowerCase();
@@ -1064,6 +1051,8 @@ function deriveCallInfo(status, phone) {
   const isHeld = heldStates.has(state) || String(call?.HoldState || "").toLowerCase().includes("hold");
   const isMuted = ["true", "1", "on", "muted", "yes"].includes(mutedValue);
   const hasCall = Boolean(call) && !disconnectedStates.has(state);
+  const isConnected = hasCall && (connectedStates.has(state) || heldStates.has(state));
+  const isDialing = dialingStates.has(state);
   const remoteNumber = call?.RemotePartyNumber || call?.remote_party_number || call?.RemotePartyName || call?.to || result.to || "";
   const localNumber = call?.LocalPartyNumber || call?.local_party_number || phone?.assigned_phone_number || "";
   return {
@@ -1074,12 +1063,35 @@ function deriveCallInfo(status, phone) {
     isIncoming,
     isHeld,
     isMuted,
+    isConnected,
+    isDialing,
     from: isIncoming ? (remoteNumber || "—") : (localNumber || "—"),
     to: isIncoming ? (localNumber || "—") : (remoteNumber || "—"),
     duration: call?.DurationInSeconds && call.DurationInSeconds !== "-1" ? `${call.DurationInSeconds}s` : null,
     handle: call?.CallHandle || call?.Ref || "",
     reachable: result.reachable ?? status?.reachable ?? null,
   };
+}
+
+function applyOptimisticCtiState(status, action) {
+  const next = status ? structuredClone(status) : { call: {} };
+  const result = next.result || next;
+  const call = primaryCallFromStatus(result) || result.call || result.data?.call || {};
+  const patch = action === "hold"
+    ? { CallState: "Held" }
+    : action === "resume"
+      ? { CallState: "Connected" }
+      : action === "mute"
+        ? { Muted: "true" }
+        : action === "unmute"
+          ? { Muted: "false" }
+          : {};
+  Object.assign(call, patch);
+  if (Array.isArray(result.call)) result.call[0] = call;
+  else if (result.call) result.call = call;
+  else if (result.data?.call) result.data.call = call;
+  else result.call = call;
+  return next;
 }
 
 function callStateBadgeClass(info) {
@@ -1095,7 +1107,7 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
       type="button"
       size="icon"
       variant={active ? "default" : "outline"}
-      className="h-9 w-9"
+      className="h-11 min-w-0 flex-1"
       disabled={disabled || Boolean(busy)}
       onClick={onClick}
       title={label}
@@ -1128,7 +1140,7 @@ function PhoneMaintenanceActions({ phone }) {
     }
   }
   const actionButton = (action, label, Icon, testId) => (
-    <Button size="sm" variant="outline" disabled={Boolean(busy)} onClick={() => run(action)} data-testid={testId} title={label} aria-label={label}>
+    <Button size="sm" variant="outline" className="h-10 min-w-0 flex-1" disabled={Boolean(busy)} onClick={() => run(action)} data-testid={testId} title={label} aria-label={label}>
       {busy === action ? <IconLoader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
       <span className="sr-only">{label}</span>
     </Button>
@@ -1136,7 +1148,7 @@ function PhoneMaintenanceActions({ phone }) {
   return (
     <div className="border-t pt-3">
       <div className="mb-2 text-xs font-medium text-muted-foreground">Phone actions</div>
-      <div className="flex items-center gap-2" data-testid="hp-sip-registration-actions">
+      <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
         {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot")}
@@ -1157,7 +1169,8 @@ function PhoneCtiCard({ phone }) {
   const fireAndForgetControls = phone.vendor === "yealink" && phone?.settings?.cti_mode !== "telnyx" && Boolean(reachableIp);
   const canDial = (fireAndForgetControls || !hasActiveCall) && dialNumber.trim();
   const canAnswer = callInfo.isIncoming || fireAndForgetControls;
-  const canControlCall = hasActiveCall || fireAndForgetControls;
+  const canHoldOrMute = callInfo.isConnected || fireAndForgetControls;
+  const canHangup = hasActiveCall || fireAndForgetControls;
 
   const fetchCtiStatus = useCallback(async ({ silent = true } = {}) => {
     if (!phone?.id) return null;
@@ -1200,7 +1213,10 @@ function PhoneCtiCard({ phone }) {
       if (action === "status") {
         setLastStatus(data.result || null);
       } else if (!["reboot", "reprovision"].includes(action)) {
-        window.setTimeout(() => fetchCtiStatus({ silent: true }), 650);
+        if (["hold", "resume", "mute", "unmute"].includes(action)) {
+          setLastStatus((current) => applyOptimisticCtiState(current, action));
+        }
+        window.setTimeout(() => fetchCtiStatus({ silent: true }), 1200);
       }
       notify({ title: `CTI: ${action}`, description: action === "dial" ? params.number : "OK", variant: "success" });
     } catch (err) {
@@ -1214,7 +1230,7 @@ function PhoneCtiCard({ phone }) {
   const toggleMuteAction = callInfo.isMuted ? "unmute" : "mute";
 
   return (
-    <SettingCard icon={IconActivity} title="CTI control" subtitle={`Driver: ${ctiMode}`}>
+    <SettingCard icon={IconActivity} title="CTI control">
       <div className="space-y-3">
         {phone?.settings?.cti_mode === "telnyx" ? (
           <p className="rounded-lg border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
@@ -1226,13 +1242,15 @@ function PhoneCtiCard({ phone }) {
             No known phone IP yet — wait for provisioning or bridge discovery before using local CTI.
           </p>
         ) : null}
-        <div className="flex items-center gap-2 rounded-xl border bg-muted/20 p-2" data-testid="hp-cti-toolbar">
-          <Input className="h-9 min-w-0 flex-1 font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" disabled={hasActiveCall || Boolean(busy)} />
-          <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
-          <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
-          <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canControlCall} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
-          <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canControlCall} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
-          <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canControlCall} busy={busy} onClick={() => runCti("hangup")} />
+        <div className="space-y-2 rounded-xl border bg-muted/20 p-2" data-testid="hp-cti-toolbar">
+          <Input className="h-10 w-full font-mono" value={dialNumber} onChange={(e) => setDialNumber(e.target.value)} placeholder="+48123456789" disabled={hasActiveCall || Boolean(busy)} />
+          <div className="grid grid-cols-5 gap-2">
+            <CtiIconButton action="dial" label="Dial" icon={IconPhoneCall} disabled={!canDial} busy={busy} onClick={() => runCti("dial", { number: dialNumber.trim() })} testId="hp-cti-dial" />
+            <CtiIconButton action="answer" label="Answer" icon={IconPhoneIncoming} disabled={!canAnswer} busy={busy} onClick={() => runCti("answer")} />
+            <CtiIconButton action={toggleHoldAction} label={callInfo.isHeld ? "Resume" : "Hold"} icon={callInfo.isHeld ? IconPlayerPlay : IconPlayerPause} active={callInfo.isHeld} disabled={!canHoldOrMute} busy={busy} onClick={() => runCti(toggleHoldAction)} testId="hp-cti-hold-toggle" />
+            <CtiIconButton action={toggleMuteAction} label={callInfo.isMuted ? "Unmute" : "Mute"} icon={callInfo.isMuted ? IconMicrophone : IconMicrophoneOff} active={callInfo.isMuted} disabled={!canHoldOrMute} busy={busy} onClick={() => runCti(toggleMuteAction)} testId="hp-cti-mute-toggle" />
+            <CtiIconButton action="hangup" label="Hang up" icon={IconPhoneOff} disabled={!canHangup} busy={busy} onClick={() => runCti("hangup")} />
+          </div>
         </div>
         <div className="rounded-xl border bg-muted/20 p-3" data-testid="hp-cti-call-info">
           <div className="mb-2 flex items-center justify-between gap-2">
