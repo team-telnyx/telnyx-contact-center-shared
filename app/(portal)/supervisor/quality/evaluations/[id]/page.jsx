@@ -19,7 +19,6 @@ import {
   IconGauge,
   IconHeadset,
   IconLoader2,
-  IconMicrophone,
   IconQuote,
   IconRobot,
   IconRosetteDiscountCheck,
@@ -370,15 +369,7 @@ export default function QualityEvaluationDetailPage() {
                 </Card>
 
                 <Card className="border-border/70 bg-card/95 shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2.5 text-base">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-                        <IconMicrophone className="h-5 w-5" />
-                      </span>
-                      Recording
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-6">
                     {recordingId || recordingUrl ? (
                       <RecordingPlayer src={recordingUrl} recordingId={recordingId} />
                     ) : (
