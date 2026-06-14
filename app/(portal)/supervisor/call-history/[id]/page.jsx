@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -150,6 +150,13 @@ export default function SupervisorCallHistoryDetailPage() {
     interaction?.metadata?.transcription_details || null;
   const aiCallControlId = interaction?.metadata?.ai_call_control_id || null;
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
+
+  // Recording playback state shared with the transcription sheet so its diarized
+  // bubbles highlight/scroll to the turn being played and clicking seeks.
+  const playerRef = useRef(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [playbackPlaying, setPlaybackPlaying] = useState(false);
+  const seekRecordingTo = (seconds) => playerRef.current?.seekToTime(seconds);
 
   return (
     <SupervisorPageShell>
@@ -448,10 +455,13 @@ export default function SupervisorCallHistoryDetailPage() {
                   {recordingUrl ? (
                     <>
                       <RecordingPlayer
+                        ref={playerRef}
                         src={recordingUrl}
                         recordingId={recordingId}
                         format={recordingFormat}
                         channels={recordingChannels}
+                        onTimeUpdate={setPlaybackTime}
+                        onPlayingChange={setPlaybackPlaying}
                       />
                       <TranscriptionStudioCard
                         recordingId={recordingId}
@@ -461,6 +471,9 @@ export default function SupervisorCallHistoryDetailPage() {
                         transcriptionSummary={transcriptionSummary}
                         transcriptionSpeakerTurns={transcriptionSpeakerTurns}
                         transcriptionDetails={transcriptionDetails}
+                        playbackTime={playbackTime}
+                        playbackPlaying={playbackPlaying}
+                        onSeekRecording={seekRecordingTo}
                       />
                     </>
                   ) : (

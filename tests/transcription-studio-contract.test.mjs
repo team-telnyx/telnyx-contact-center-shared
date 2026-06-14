@@ -5,6 +5,7 @@ import { test } from "node:test";
 const detailPage = readFileSync("app/(portal)/supervisor/call-history/[id]/page.jsx", "utf8");
 const studioCard = readFileSync("components/contact-center/TranscriptionStudioCard.jsx", "utf8");
 const transcriptionSheet = readFileSync("components/contact-center/TranscriptionSheet.jsx", "utf8");
+const diarizedTranscript = readFileSync("components/contact-center/DiarizedTranscript.jsx", "utf8");
 const transcribeRoute = readFileSync("app/api/voice/recordings/[id]/transcribe/route.js", "utf8");
 const modelsConfig = readFileSync("config/transcription-models.js", "utf8");
 const utils = readFileSync("lib/voice-transcription-utils.mjs", "utf8");
@@ -70,17 +71,27 @@ test("transcription studio card offers model, language, and nova-3 toggles", () 
   assert.match(studioCard, /body: JSON\.stringify\(\{\s*interactionId,\s*model,\s*language: effectiveLanguage/);
 });
 
-test("transcription sheet renders diarized chat bubbles with speaker tones", () => {
-  assert.match(transcriptionSheet, /diarized-conversation/);
-  assert.match(transcriptionSheet, /SPEAKER_TONES/);
-  assert.match(transcriptionSheet, /Speaker \{turn\.speaker\}/);
-  assert.match(transcriptionSheet, /speakerTurns = \[\]/);
+test("transcription sheet renders diarized chat bubbles via the shared synced component", () => {
+  // Sheet delegates diarized rendering to the shared DiarizedTranscript (playback-synced)
+  assert.match(transcriptionSheet, /import DiarizedTranscript from "\.\/DiarizedTranscript"/);
+  assert.match(transcriptionSheet, /<DiarizedTranscript/);
+  assert.match(transcriptionSheet, /onSeek=\{onSeekRecording\}/);
   // Keeps the channel-based fallback for legacy transcripts
   assert.match(transcriptionSheet, /parseTranscription/);
   assert.match(transcriptionSheet, /Speaker Timeline/);
   // Header badges with model and confidence
   assert.match(transcriptionSheet, /speakers · /);
   assert.match(transcriptionSheet, /Confidence \{confidenceLabel\}/);
+});
+
+test("shared DiarizedTranscript syncs bubbles to recording playback", () => {
+  assert.match(diarizedTranscript, /data-testid="diarized-transcript"/);
+  assert.match(diarizedTranscript, /SPEAKER_TONES/);
+  assert.match(diarizedTranscript, /Speaker \{Number\(turn\.speaker\) \+ 1\}/);
+  // Highlights the active turn, scrolls to it, and seeks on click
+  assert.match(diarizedTranscript, /ring-2 ring-orange-500/);
+  assert.match(diarizedTranscript, /scrollIntoView/);
+  assert.match(diarizedTranscript, /onSeek\(Math\.max\(0, Number\(turn\.start\) - 0\.3\)\)/);
 });
 
 test("recording tab embeds the studio card below the player", () => {

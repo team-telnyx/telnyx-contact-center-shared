@@ -154,10 +154,12 @@ test("Evaluation detail page reuses RecordingPlayer and exposes the AI button", 
   assert.match(page, /Finalize/);
   assert.match(page, /Transcribing recording…/);
   assert.match(page, /Scoring the form…/);
-  // Diarized transcript renders as chat bubbles (not a flat list) when speaker turns exist
+  // Diarized transcript renders as synced chat bubbles (shared component) when speaker turns exist
   assert.match(page, /quality-diarized-conversation/);
-  assert.match(page, /IconHeadset/);
-  assert.match(page, /rounded-br-md/);
+  assert.match(page, /import DiarizedTranscript from "@\/components\/contact-center\/DiarizedTranscript"/);
+  assert.match(page, /<DiarizedTranscript/);
+  // Wired to the recording player for highlight + click-to-seek
+  assert.match(page, /onSeek=\{\(seconds\) => playerRef\.current\?\.seekToTime\(seconds\)\}/);
 });
 
 test("Evaluation detail cards use the workspace card background (no near-black zinc)", () => {

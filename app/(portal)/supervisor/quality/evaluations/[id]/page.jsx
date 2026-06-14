@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -17,16 +17,15 @@ import {
   IconClipboardCheck,
   IconDeviceFloppy,
   IconGauge,
-  IconHeadset,
   IconLoader2,
   IconQuote,
   IconRobot,
   IconRosetteDiscountCheck,
-  IconUser,
   IconUsers,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import RecordingPlayer from "@/components/contact-center/RecordingPlayer";
+import DiarizedTranscript from "@/components/contact-center/DiarizedTranscript";
 import {
   SupervisorPageHeader,
   SupervisorPageShell,
@@ -201,6 +200,12 @@ export default function QualityEvaluationDetailPage() {
   const transcriptionText = interaction?.metadata?.transcription_text || null;
   const speakerTurns = interaction?.metadata?.transcription_speaker_turns || [];
 
+  // Recording playback state shared with the transcript so the diarized bubbles
+  // highlight/scroll to the turn being played and clicking a bubble seeks.
+  const playerRef = useRef(null);
+  const [playbackTime, setPlaybackTime] = useState(0);
+  const [playbackPlaying, setPlaybackPlaying] = useState(false);
+
   const setAnswer = useCallback((criterionId, updates) => {
     setAnswers((previous) => ({
       ...previous,
@@ -371,7 +376,13 @@ export default function QualityEvaluationDetailPage() {
                 <Card className="border-border/70 bg-card/95 shadow-sm">
                   <CardContent className="pt-6">
                     {recordingId || recordingUrl ? (
-                      <RecordingPlayer src={recordingUrl} recordingId={recordingId} />
+                      <RecordingPlayer
+                        ref={playerRef}
+                        src={recordingUrl}
+                        recordingId={recordingId}
+                        onTimeUpdate={setPlaybackTime}
+                        onPlayingChange={setPlaybackPlaying}
+                      />
                     ) : (
                       <p className="text-sm text-muted-foreground">
                         No recording available for this interaction.
@@ -391,33 +402,13 @@ export default function QualityEvaluationDetailPage() {
                   </CardHeader>
                   <CardContent>
                     {speakerTurns && speakerTurns.length > 0 ? (
-                      <div className="max-h-[420px] space-y-4 overflow-y-auto pr-2" data-testid="quality-diarized-conversation">
-                        {speakerTurns.map((turn, index) => {
-                          const isRight = Number(turn.speaker) % 2 === 1;
-                          const tone = isRight
-                            ? { bubble: "bg-sky-600 text-white", avatar: "bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/40" }
-                            : { bubble: "bg-emerald-600 text-white", avatar: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/40" };
-                          return (
-                            <div
-                              key={index}
-                              className={`flex w-full items-end gap-2 ${isRight ? "flex-row-reverse" : "flex-row"}`}
-                            >
-                              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full border ${tone.avatar}`}>
-                                {isRight ? <IconHeadset className="size-4" /> : <IconUser className="size-4" />}
-                              </div>
-                              <div className={`flex min-w-0 max-w-[85%] flex-col ${isRight ? "items-end" : "items-start"}`}>
-                                <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                                  Speaker {Number(turn.speaker) + 1}
-                                </div>
-                                <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
-                                  isRight ? `${tone.bubble} rounded-br-md` : "rounded-bl-md bg-muted text-foreground"
-                                }`}>
-                                  <p className="whitespace-pre-wrap leading-relaxed">{turn.text}</p>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="max-h-[420px] overflow-y-auto" data-testid="quality-diarized-conversation">
+                        <DiarizedTranscript
+                          speakerTurns={speakerTurns}
+                          currentTime={playbackTime}
+                          isPlaying={playbackPlaying}
+                          onSeek={(seconds) => playerRef.current?.seekToTime(seconds)}
+                        />
                       </div>
                     ) : transcriptionText ? (
                       <p className="max-h-[420px] overflow-y-auto whitespace-pre-wrap pr-2 text-sm leading-relaxed">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -66,12 +66,17 @@ function barOptionsFor(style) {
     : { barWidth: 2, barGap: 1, barRadius: 3 };
 }
 
-export default function RecordingPlayer({
+const RecordingPlayer = forwardRef(function RecordingPlayer({
   src,
   recordingId,
   format,
   channels,
-}) {
+  // Optional playback-sync hooks (used by transcript views to highlight the
+  // turn being played, scroll to it, and seek on bubble click).
+  onTimeUpdate,
+  onPlayingChange,
+  onReady,
+}, ref) {
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const [duration, setDuration] = useState(0);
@@ -87,6 +92,29 @@ export default function RecordingPlayer({
   // without re-subscribing (toggling style must NOT recreate the instance).
   const waveStyleRef = useRef(waveStyle);
   waveStyleRef.current = waveStyle;
+
+  // Keep latest callbacks in refs so the wavesurfer event handlers (subscribed
+  // once at create time) always invoke the current callback without forcing the
+  // create-effect to re-run / recreate the instance.
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  onPlayingChangeRef.current = onPlayingChange;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  // Imperative seek API for transcript bubble click-to-seek (seconds).
+  useImperativeHandle(ref, () => ({
+    seekToTime: (seconds) => {
+      const ws = wavesurferRef.current;
+      if (!ws) return;
+      const total = ws.getDuration() || 0;
+      if (total > 0) ws.seekTo(Math.max(0, Math.min(1, Number(seconds) / total)));
+    },
+    play: () => wavesurferRef.current?.play?.(),
+    pause: () => wavesurferRef.current?.pause?.(),
+    getDuration: () => wavesurferRef.current?.getDuration?.() || 0,
+  }), []);
 
   useEffect(() => {
     // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
@@ -132,24 +160,30 @@ export default function RecordingPlayer({
       wavesurferRef.current = wavesurfer;
 
       wavesurfer.on("ready", () => {
-        setDuration(wavesurfer.getDuration() || 0);
+        const d = wavesurfer.getDuration() || 0;
+        setDuration(d);
         setWaveReady(true);
+        onReadyRef.current?.(d);
       });
 
       wavesurfer.on("play", () => {
         setPlaying(true);
+        onPlayingChangeRef.current?.(true);
       });
 
       wavesurfer.on("pause", () => {
         setPlaying(false);
+        onPlayingChangeRef.current?.(false);
       });
 
       wavesurfer.on("finish", () => {
         setPlaying(false);
+        onPlayingChangeRef.current?.(false);
       });
 
       wavesurfer.on("timeupdate", (time) => {
         setCurrentTime(time || 0);
+        onTimeUpdateRef.current?.(time || 0);
       });
 
       wavesurfer.on("error", (error) => {
@@ -419,4 +453,6 @@ export default function RecordingPlayer({
       </CardContent>
     </Card>
   );
-}
+});
+
+export default RecordingPlayer;

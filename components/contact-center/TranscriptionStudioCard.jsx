@@ -151,6 +151,11 @@ export default function TranscriptionStudioCard({
   transcriptionSummary,
   transcriptionSpeakerTurns,
   transcriptionDetails,
+  // Playback sync (optional): wires the conversation sheet to the recording so
+  // bubbles highlight/scroll to the turn being played and clicking seeks.
+  playbackTime = 0,
+  playbackPlaying = false,
+  onSeekRecording = null,
 }) {
   const [model, setModel] = useState(
     transcriptionDetails?.model && TRANSCRIPTION_MODELS.some((m) => m.value === transcriptionDetails.model)
@@ -394,6 +399,9 @@ export default function TranscriptionStudioCard({
         details={result.details}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
+        playbackTime={playbackTime}
+        playbackPlaying={playbackPlaying}
+        onSeekRecording={onSeekRecording}
       />
     </Card>
   );
