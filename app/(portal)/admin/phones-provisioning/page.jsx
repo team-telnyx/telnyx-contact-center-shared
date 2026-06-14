@@ -425,7 +425,7 @@ export default function PhonesProvisioningPage() {
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
   const selectedPhone = useMemo(() => phones.find((p) => p.id === selectedPhoneId) || null, [phones, selectedPhoneId]);
-  const selectedBridge = useMemo(() => bridges.find((b) => b.bridge_id === selectedBridgeId) || bridges[0] || null, [bridges, selectedBridgeId]);
+  const selectedBridge = useMemo(() => bridges.find((b) => b.bridge_id === selectedBridgeId) || null, [bridges, selectedBridgeId]);
   const pendingRebootPhones = useMemo(() => phones.filter((p) => pendingRebootIds.includes(p.id)), [phones, pendingRebootIds]);
   const pendingRebootLabel = pendingRebootIds.length === phones.length ? "all phones" : `${pendingRebootIds.length} phone${pendingRebootIds.length === 1 ? "" : "s"}`;
 
@@ -1657,8 +1657,22 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
   const [label, setLabel] = useState("Local office bridge");
   const [site, setSite] = useState("");
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [enrollment, setEnrollment] = useState(null);
   const assignedPhones = bridge ? phones.filter((p) => (p.local_bridge_id || p.settings?.local_bridge_id) === bridge.bridge_id) : [];
+  const hasSelectedBridge = Boolean(bridge?.bridge_id);
+
+  useEffect(() => {
+    if (!hasSelectedBridge) {
+      setLabel("Local office bridge");
+      setSite("");
+      return;
+    }
+    setLabel(bridge.label || "");
+    setSite(bridge.site || bridge.location || "");
+    setEnrollment(null);
+  }, [hasSelectedBridge, bridge?.bridge_id]);
 
   async function createBridge() {
     setCreating(true);
@@ -1681,22 +1695,85 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
     }
   }
 
+  async function updateBridge() {
+    if (!bridge?.bridge_id) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/bridges`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bridge_id: bridge.bridge_id, label, site }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Bridge update failed");
+      notify({ title: "Bridge updated", description: data.bridge?.bridge_id || bridge.bridge_id, variant: "success" });
+      await refresh?.(false);
+    } catch (err) {
+      notify({ title: "Bridge update failed", description: err.message, variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteBridge() {
+    if (!bridge?.bridge_id || assignedPhones.length) return;
+    if (!window.confirm(`Delete bridge ${bridge.label || bridge.bridge_id}?`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API}/bridges?bridge_id=${encodeURIComponent(bridge.bridge_id)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Bridge delete failed");
+      notify({ title: "Bridge deleted", description: bridge.bridge_id, variant: "success" });
+      const nextBridge = bridges.find((item) => item.bridge_id !== bridge.bridge_id) || null;
+      onSelect?.(nextBridge?.bridge_id || null);
+      await refresh?.(false);
+    } catch (err) {
+      notify({ title: "Bridge delete failed", description: err.message, variant: "error" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <SettingCard icon={IconRouteAltLeft} title="Bridge configuration" subtitle="Create an outbound WebSocket bridge enrollment for a LAN site">
+      <SettingCard icon={IconRouteAltLeft} title="Bridge configuration" subtitle={hasSelectedBridge ? "Update the selected bridge label and location" : "Create an outbound WebSocket bridge enrollment for a LAN site"}>
         <div className="space-y-3">
+          {hasSelectedBridge ? (
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+              <div className="text-muted-foreground">Selected bridge</div>
+              <div className="mt-1 font-mono text-foreground">{bridge.bridge_id}</div>
+            </div>
+          ) : null}
           <div>
             <Label>Bridge label</Label>
             <Input className="mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Warsaw office bridge" />
           </div>
           <div>
-            <Label>Site / location</Label>
+            <Label>Location</Label>
             <Input className="mt-1" value={site} onChange={(e) => setSite(e.target.value)} placeholder="Warsaw LAN" />
           </div>
-          <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating} data-testid="hp-create-local-bridge">
-            {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
-            Create bridge enrollment
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {hasSelectedBridge ? (
+              <>
+                <Button size="sm" className={neutralActionClass} onClick={updateBridge} disabled={saving || !label.trim()} data-testid="hp-update-local-bridge">
+                  {saving ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconDeviceFloppy className="mr-2 h-4 w-4" />}
+                  Update
+                </Button>
+                <Button size="sm" variant="destructive" onClick={deleteBridge} disabled={deleting || assignedPhones.length > 0} data-testid="hp-delete-local-bridge">
+                  {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}
+                  Delete bridge
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" className={neutralActionClass} onClick={createBridge} disabled={creating || !label.trim()} data-testid="hp-create-local-bridge">
+                {creating ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconRouteAltLeft className="mr-2 h-4 w-4" />}
+                Create bridge enrollment
+              </Button>
+            )}
+          </div>
+          {hasSelectedBridge && assignedPhones.length ? (
+            <p className="text-xs text-muted-foreground">Remove all phones from this bridge before deleting it.</p>
+          ) : null}
           {enrollment ? (
             <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
               <div className="flex items-start justify-between gap-2">
@@ -1716,13 +1793,14 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
               <span className="min-w-0 font-mono text-xs">{bridge.bridge_id}</span>
               <Badge variant="outline" className={bridgeStatusBadgeClass(bridge.online)}>{bridge.online ? "online" : "offline"}</Badge>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <MiniStat label="Connected phones" value={assignedPhones.length} icon={IconDeviceLandlinePhone} tone="blue" />
-              <MiniStat label="Last seen" value={formatTime(bridge.last_seen_at)} icon={IconClockHour4} tone="violet" />
-            </div>
             {assignedPhones.length ? (
-              <div className="space-y-1.5">
-                {assignedPhones.map((phone) => <div key={phone.id} className="truncate rounded-lg border bg-background/70 px-3 py-2 text-xs">{phone.phone_name || phone.label || formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>)}
+              <div className="max-h-[25rem] space-y-1.5 overflow-y-auto pr-1" data-testid="hp-bridge-phone-scroll-list">
+                {assignedPhones.map((phone) => (
+                  <div key={phone.id} className="rounded-lg border bg-background/70 px-3 py-2 text-xs">
+                    <div className="truncate font-medium">{phone.phone_name || phone.label || formatMacDisplay(phone.mac)}</div>
+                    <div className="mt-0.5 truncate text-muted-foreground">{formatMacDisplay(phone.mac)} · {phone.last_ip || phone.ip_address || "no IP"}</div>
+                  </div>
+                ))}
               </div>
             ) : <p className="text-xs text-muted-foreground">No phones are assigned to this bridge yet.</p>}
           </div>

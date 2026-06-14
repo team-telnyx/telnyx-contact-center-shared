@@ -127,3 +127,65 @@ export async function POST(request) {
     return NextResponse.json({ error: "Failed to create local bridge" }, { status: 500 });
   }
 }
+
+export async function PATCH(request) {
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const pool = getPostgresPool();
+  if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
+  try {
+    const body = await request.json().catch(() => ({}));
+    const bridgeId = String(body?.bridge_id || "").trim();
+    if (!bridgeId) return NextResponse.json({ error: "bridge_id is required" }, { status: 400 });
+    const label = String(body?.label || "").trim();
+    const site = String(body?.site || body?.location || "").trim() || null;
+    if (!label) return NextResponse.json({ error: "Bridge label is required" }, { status: 400 });
+    const { rows } = await pool.query(
+      `UPDATE hp_local_bridges
+          SET label = $2, site = $3, updated_at = NOW()
+        WHERE bridge_id = $1
+        RETURNING id, bridge_id, label, site, status, last_seen_at, metadata, created_at, updated_at`,
+      [bridgeId, label, site],
+    );
+    if (!rows.length) return NextResponse.json({ error: "Bridge not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, bridge: rows[0] });
+  } catch (err) {
+    adminRuntimeLogger.error("hardphone_bridge_update_failed", runtimePayload({ error: err, operation: "hp_bridge_update" }));
+    return NextResponse.json({ error: "Failed to update local bridge" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request) {
+  const user = await requireAdmin();
+  if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const pool = getPostgresPool();
+  if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
+  try {
+    const { searchParams } = new URL(request.url);
+    const body = request.headers.get("content-type")?.includes("application/json") ? await request.json().catch(() => ({})) : {};
+    const bridgeId = String(searchParams.get("bridge_id") || body?.bridge_id || "").trim();
+    if (!bridgeId) return NextResponse.json({ error: "bridge_id is required" }, { status: 400 });
+
+    const assigned = await pool.query(
+      `SELECT id FROM hp_phones
+        WHERE local_bridge_id = $1 OR settings->>'local_bridge_id' = $1
+        LIMIT 1`,
+      [bridgeId],
+    );
+    if (assigned.rows.length) {
+      return NextResponse.json({ error: "Remove all phones from this bridge before deleting it" }, { status: 409 });
+    }
+
+    const { rows } = await pool.query(
+      `DELETE FROM hp_local_bridges
+        WHERE bridge_id = $1
+        RETURNING id, bridge_id, label, site, status, last_seen_at, metadata, created_at, updated_at`,
+      [bridgeId],
+    );
+    if (!rows.length) return NextResponse.json({ error: "Bridge not found" }, { status: 404 });
+    return NextResponse.json({ ok: true, bridge: rows[0] });
+  } catch (err) {
+    adminRuntimeLogger.error("hardphone_bridge_delete_failed", runtimePayload({ error: err, operation: "hp_bridge_delete" }));
+    return NextResponse.json({ error: "Failed to delete local bridge" }, { status: 500 });
+  }
+}

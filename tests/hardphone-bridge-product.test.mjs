@@ -60,14 +60,19 @@ describe("hardphone bridge product integration", () => {
     assert.match(schema, /ALTER TABLE hp_phones ADD COLUMN IF NOT EXISTS sip_registration_status_at TIMESTAMPTZ/);
   });
 
-  it("exposes admin bridge enrollment and live-status APIs", async () => {
+  it("exposes admin bridge enrollment, update, delete and live-status APIs", async () => {
     const route = await file("app/api/admin/phones-provisioning/bridges/route.js");
     assert.match(route, /requireAdmin/);
     assert.match(route, /hp_local_bridges/);
     assert.match(route, /crypto\.randomBytes\(32\)/);
     assert.match(route, /HARDPHONE_BRIDGE_RELAY_URL/);
     assert.match(route, /\/api\/hardphone-bridge\/bridges/);
-    assert.doesNotMatch(route, /DELETE FROM hp_local_bridges/);
+    assert.match(route, /export async function PATCH/);
+    assert.match(route, /UPDATE hp_local_bridges/);
+    assert.match(route, /export async function DELETE/);
+    assert.match(route, /DELETE FROM hp_local_bridges/);
+    assert.match(route, /Remove all phones from this bridge before deleting it/);
+    assert.match(route, /settings->>'local_bridge_id' = \$1/);
   });
 
   it("authenticates bridge connections with persisted enrollment token hashes", async () => {
@@ -414,7 +419,15 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /<BridgesListView[\s\S]*bridges=\{bridges\}/);
     assert.match(page, /<BridgeEditor[\s\S]*bridges=\{bridges\}/);
     assert.match(page, /Bridge status/);
-    assert.match(page, /Connected phones/);
+    assert.match(page, /Selected bridge/);
+    assert.match(page, /hp-update-local-bridge/);
+    assert.match(page, /hp-delete-local-bridge/);
+    assert.match(page, /Remove all phones from this bridge before deleting it/);
+    assert.match(page, /data-testid="hp-bridge-phone-scroll-list"/);
+    assert.match(page, /max-h-\[25rem\]/);
+    const bridgeEditor = page.slice(page.indexOf("function BridgeEditor"), page.indexOf("function SettingsEditor"));
+    assert.doesNotMatch(bridgeEditor, /<MiniStat label="Connected phones" value=\{assignedPhones\.length\}/);
+    assert.doesNotMatch(bridgeEditor, /<MiniStat label="Last seen" value=\{formatTime\(bridge\.last_seen_at\)\}/);
   });
 
   it("keeps one-time bridge enrollment inside the card with copy actions and a real CC_WS_URL", async () => {
