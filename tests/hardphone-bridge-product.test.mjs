@@ -132,6 +132,17 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /font-mono text-xs/);
   });
 
+  it("renders vendor logos instead of text badges in phone lists", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /const VENDOR_LOGOS = \{/);
+    assert.match(page, /polycom: "\/images\/hardphones\/logos\/polycom\.jpg"/);
+    assert.match(page, /yealink: "\/images\/hardphones\/logos\/yealink\.jpg"/);
+    assert.match(page, /audiocodes: "\/images\/hardphones\/logos\/audiocodes\.jpg"/);
+    assert.match(page, /function VendorLogoBadge\(\{ vendor, count \}\)/);
+    assert.match(page, /<VendorLogoBadge vendor=\{p\.vendor\} \/>/);
+    assert.doesNotMatch(page, /<Badge variant="outline" className=\{vendorBadgeClass\(p\.vendor\)\}>\{p\.vendor\}<\/Badge>/);
+  });
+
   it("keeps hardphone number assignment editable after SIP connection creation", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     const itemRoute = await file("app/api/admin/phones-provisioning/phones/[id]/route.js");

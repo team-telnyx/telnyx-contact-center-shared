@@ -68,6 +68,12 @@ const VENDORS = [
   { value: "audiocodes", label: "AudioCodes" },
 ];
 
+const VENDOR_LOGOS = {
+  polycom: "/images/hardphones/logos/polycom.jpg",
+  yealink: "/images/hardphones/logos/yealink.jpg",
+  audiocodes: "/images/hardphones/logos/audiocodes.jpg",
+};
+
 const POLY_UCS_DOCS = "https://docs.poly.com/bundle/poly-ucs-ag-6-4-5/page/r-ucs-supported-phone-models.html";
 const POLY_EDGE_DOCS = "https://docs.poly.com/bundle/poly-edge-e-ag-current/page/r-poly-edge-e-supported-features.html";
 const AUDIOCODES_DOCS = "https://www.audiocodes.com/library/technical-documents?productFamilyGroup=1639";
@@ -214,6 +220,27 @@ const vendorBadgeClass = (vendor) => {
   if (value === "audiocodes") return "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300";
   return "border-slate-400/40 bg-slate-500/10 text-slate-600 dark:text-slate-300";
 };
+
+function vendorLabel(vendor) {
+  return VENDORS.find((x) => x.value === vendor)?.label || vendor || "Unknown vendor";
+}
+
+function VendorLogoBadge({ vendor, count }) {
+  const value = String(vendor || "").toLowerCase();
+  const logo = VENDOR_LOGOS[value];
+  const label = vendorLabel(value);
+
+  if (!logo) {
+    return <Badge variant="outline" className={vendorBadgeClass(value)}>{count ? `${label}: ${count}` : label}</Badge>;
+  }
+
+  return (
+    <span className="inline-flex h-7 max-w-[128px] items-center rounded-full border border-border/80 bg-white px-2 py-1 shadow-sm" title={count ? `${label}: ${count}` : label} aria-label={count ? `${label}: ${count}` : label}>
+      <img src={logo} alt={label} className="h-full max-w-[92px] object-contain" loading="lazy" />
+      {count ? <span className="ml-2 text-xs font-semibold tabular-nums text-slate-700">{count}</span> : null}
+    </span>
+  );
+}
 
 function formatMacDisplay(mac) {
   const value = String(mac || "").toLowerCase().replace(/[^0-9a-f]/g, "");
@@ -705,9 +732,7 @@ function DashboardView({ dashboard, phones }) {
         {byVendor.length ? (
           <div className="flex flex-wrap gap-2">
             {byVendor.map((v) => (
-              <Badge key={v.vendor} variant="outline" className={vendorBadgeClass(v.vendor)}>
-                {VENDORS.find((x) => x.value === v.vendor)?.label || v.vendor}: {v.count}
-              </Badge>
+              <VendorLogoBadge key={v.vendor} vendor={v.vendor} count={v.count} />
             ))}
           </div>
         ) : <p className="text-sm text-muted-foreground">No phones in inventory yet — add one in the Phones section.</p>}
@@ -725,7 +750,7 @@ function DashboardView({ dashboard, phones }) {
                   <span className="block truncate font-medium">{p.label || formatMacDisplay(p.mac)}</span>
                   <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
                 </span>
-                <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
+                <span><VendorLogoBadge vendor={p.vendor} /></span>
                 <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge></span>
                 <span className="truncate font-mono text-xs">{p.sip_username || "—"}</span>
                 <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
@@ -872,7 +897,7 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
               </span>
               <span className="truncate font-mono text-xs">{p.assigned_phone_number || "—"}</span>
-              <span><Badge variant="outline" className={vendorBadgeClass(p.vendor)}>{p.vendor}</Badge></span>
+              <span><VendorLogoBadge vendor={p.vendor} /></span>
               <span className="truncate text-xs">{p.model || "—"}</span>
               <span><Badge variant="outline" className={stateBadgeClass(p.provisioning_state)}>{p.provisioning_state}</Badge><Badge variant="outline" className={`${registrationBadgeClass(p.sip_registration_status)} mt-1`}>{registrationBadgeLabel(p.sip_registration_status)}</Badge></span>
               <span className="truncate text-xs text-muted-foreground">{p.last_seen_at ? formatTime(p.last_seen_at) : "never"}</span>
