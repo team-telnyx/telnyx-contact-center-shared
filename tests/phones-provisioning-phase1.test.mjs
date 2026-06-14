@@ -163,6 +163,12 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(cfg, /syslog\.server = 10\.0\.0\.10/);
   });
 
+  it("keeps Yealink common provisioning URLs on the request host instead of public webhook host", async () => {
+    const route = await src("app/api/provisioning/[filename]/route.js");
+    assert.match(route, /function resolveProvisioningBaseUrl\(request\)/);
+    assert.match(route, /yealinkCommonConfig\(\{ baseUrl: resolveProvisioningBaseUrl\(request\) \}\)/);
+  });
+
   it("generates AudioCodes INI cfg with line 0 and provisioning persistence", () => {
     const cfg = audiocodesPhoneConfig({ ...phone, vendor: "audiocodes", model: "445HD" }, { baseUrl: "https://cc.example.com" });
     assert.match(cfg, /system\/type=445HD/);

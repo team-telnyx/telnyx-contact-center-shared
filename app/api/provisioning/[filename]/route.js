@@ -10,6 +10,15 @@ import { voiceRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
+function requestOriginBaseUrl(request) {
+  try {
+    const url = new URL(request.url);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "";
+  }
+}
+
 function resolveBaseUrl(request) {
   const candidates = [
     process.env.TELNYX_WEBHOOK_BASE_URL,
@@ -21,12 +30,11 @@ function resolveBaseUrl(request) {
     const value = String(candidate || "").trim();
     if (value) return value.replace(/\/$/, "");
   }
-  try {
-    const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return "";
-  }
+  return requestOriginBaseUrl(request);
+}
+
+function resolveProvisioningBaseUrl(request) {
+  return requestOriginBaseUrl(request);
 }
 
 function requestSourceIp(request) {
@@ -62,9 +70,8 @@ export async function GET(request, { params }) {
 
   // Yealink common config — static fleet defaults, no credentials inside.
   if (resolved.kind === "common") {
-    const baseUrl = resolveBaseUrl(request);
     await logEvent(pool, { eventType: "common_config_fetch", detail: { filename, userAgent } });
-    return new NextResponse(yealinkCommonConfig({ baseUrl }), {
+    return new NextResponse(yealinkCommonConfig({ baseUrl: resolveProvisioningBaseUrl(request) }), {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
