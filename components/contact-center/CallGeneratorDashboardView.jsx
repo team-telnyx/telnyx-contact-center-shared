@@ -406,13 +406,11 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="destructive"
-                onClick={() => { setConfirmDisconnectAll(false); disconnectAllCalls(); }}
-              >
-                Disconnect all
-              </Button>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { setConfirmDisconnectAll(false); disconnectAllCalls(); }}
+            >
+              Disconnect all
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -429,13 +427,11 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction asChild>
-              <Button
-                variant="destructive"
-                onClick={() => { const runId = confirmPanic; setConfirmPanic(null); if (runId) runAction(runId, "panic"); }}
-              >
-                Panic stop
-              </Button>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const runId = confirmPanic; setConfirmPanic(null); if (runId) runAction(runId, "panic"); }}
+            >
+              Panic stop
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

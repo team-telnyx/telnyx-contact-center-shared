@@ -29,12 +29,14 @@ async function loadSnapshot(pool) {
     ),
     pool.query(
       // max_duration_secs mirrors the effective max-call-duration precedence the
-      // runner/engine apply (run config → per-scenario override → global Settings
-      // → 120s default), clamped to 10s–1h. Surfaced so the dashboard can show
+      // runner/engine apply (top-level run config → legacy post-answer run config
+      // → per-scenario override → global Settings → 120s default), clamped to 10s–1h.
+      // Surfaced so the dashboard can show
       // "elapsed / max" and color the live timer as it nears the hangup.
       `SELECT l.id, l.run_id, l.call_session_id, l.to_number, l.from_number, l.status,
               l.started_at, l.answered_at, l.ended_at, l.duration_ms, l.result, l.created_at,
               GREATEST(10, LEAST(3600, COALESCE(
+                NULLIF(r.config #>> '{maxDurationSecs}', '')::numeric,
                 NULLIF(r.config #>> '{postAnswer,maxDurationSecs}', '')::numeric,
                 NULLIF(s.config #>> '{maxCallDurationSecs}', '')::numeric,
                 NULLIF(cs.settings #>> '{max_call_duration_secs}', '')::numeric,
