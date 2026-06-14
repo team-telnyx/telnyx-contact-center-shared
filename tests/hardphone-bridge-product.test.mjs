@@ -164,6 +164,7 @@ describe("hardphone bridge product integration", () => {
     assert.match(itemRoute, /unassignPhoneNumberFromConnection\(currentNumberId\)/);
     assert.match(itemRoute, /updatePhoneSipConnectionCallerId\(\{ connectionId, phoneNumber: numberValue \}\)/);
     assert.match(listRoute, /syncHardphonePhoneNumbersFromTelnyx\(pool, rows\)/);
+    assert.match(listRoute, /syncHardphoneRegistrationStatusesFromTelnyx\(pool, syncedRows\)/);
     assert.match(credentials, /export async function unassignPhoneNumberFromConnection/);
   });
 
@@ -178,6 +179,8 @@ describe("hardphone bridge product integration", () => {
   it("syncs Numbers menu SIP assignment back into hp_phones", async () => {
     const numbersRoute = await file("app/api/admin/numbers/[id]/route.js");
     const sync = await file("lib/hardphones/number-sync.mjs");
+    const registrationSync = await file("lib/hardphones/registration-sync.mjs");
+    const credentials = await file("lib/hardphones/credentials.mjs");
     assert.match(numbersRoute, /syncHardphonePhoneNumberAssignment\(pool, result\)/);
     assert.match(numbersRoute, /voiceSettings\.connection_id !== undefined/);
     assert.match(sync, /getPhoneSipConnection\(connectionId\)/);
@@ -185,6 +188,21 @@ describe("hardphone bridge product integration", () => {
     assert.match(sync, /hardphoneMacFromSipConnection\(connection\)/);
     assert.match(sync, /SET assigned_phone_number_id = \$2, assigned_phone_number = \$3/);
     assert.match(sync, /SET assigned_phone_number_id = NULL, assigned_phone_number = NULL/);
+    assert.match(registrationSync, /checkPhoneSipRegistrationStatus\(connectionId\)/);
+    assert.match(registrationSync, /SET sip_registration_status = \$2/);
+    assert.match(credentials, /actions\/check_registration_status/);
+  });
+
+  it("persists phone IP and SIP registration from provisioning callbacks", async () => {
+    const provisioningRoute = await file("app/api/provisioning/[filename]/route.js");
+    const eventsRoute = await file("app/api/provisioning/events/[vendor]/route.js");
+    assert.match(provisioningRoute, /trustedPhoneSourceIp\(request\)/);
+    assert.match(provisioningRoute, /last_ip = COALESCE\(\$3, last_ip\)/);
+    assert.match(provisioningRoute, /ip_address = COALESCE\(NULLIF\(ip_address, ''\), \$3, ip_address\)/);
+    assert.match(provisioningRoute, /detectedIp: phoneSourceIp/);
+    assert.match(eventsRoute, /sip_registration_status = COALESCE\(\$3, sip_registration_status\)/);
+    assert.match(eventsRoute, /sip_registration_status_at = CASE WHEN \$3::text IS NULL THEN sip_registration_status_at ELSE NOW\(\) END/);
+    assert.match(eventsRoute, /ip_address = COALESCE\(NULLIF\(ip_address, ''\), \$2, ip_address\)/);
   });
 
   it("offers an NTP timezone offset dropdown defaulting to the logged-in user's timezone", async () => {

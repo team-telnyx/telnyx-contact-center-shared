@@ -72,7 +72,17 @@ async function handleEvent(request, vendor) {
   const ip = extractPhoneIp({ queryParams, body });
   const sourceIp = requestSourceIp(request);
   const registrationStatus = registrationStatusFromEvent({ vendor, queryParams, body });
-  await pool.query(`UPDATE hp_phones SET last_seen_at = NOW(), last_ip = COALESCE($2, last_ip) WHERE id = $1`, [phoneId, ip]);
+  await pool.query(
+    `UPDATE hp_phones
+     SET last_seen_at = NOW(),
+         last_ip = COALESCE($2, last_ip),
+         ip_address = COALESCE(NULLIF(ip_address, ''), $2, ip_address),
+         sip_registration_status = COALESCE($3, sip_registration_status),
+         sip_registration_status_at = CASE WHEN $3::text IS NULL THEN sip_registration_status_at ELSE NOW() END,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [phoneId, ip, registrationStatus],
+  );
   const eventType = registrationStatus ? "registration_status_event" : `phone_event_${vendor}`;
   try {
     await pool.query(

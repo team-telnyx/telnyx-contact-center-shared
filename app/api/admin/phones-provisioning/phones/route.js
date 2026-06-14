@@ -7,6 +7,7 @@ import { isAdmin } from "@/lib/role-utils";
 import { normalizeMac, SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
 import { assignPhoneNumberToConnection, createPhoneSipConnection, deletePhoneSipConnection, listUnassignedPhoneNumbers, updatePhoneSipConnectionCallerId } from "@/lib/hardphones/credentials.mjs";
 import { syncHardphonePhoneNumbersFromTelnyx } from "@/lib/hardphones/number-sync.mjs";
+import { syncHardphoneRegistrationStatusesFromTelnyx } from "@/lib/hardphones/registration-sync.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -85,10 +86,14 @@ export async function GET(request) {
         return [];
       }) : Promise.resolve([]),
     ]);
-    const syncedRows = syncNumbers ? await syncHardphonePhoneNumbersFromTelnyx(pool, rows).catch((err) => {
+    let syncedRows = syncNumbers ? await syncHardphonePhoneNumbersFromTelnyx(pool, rows).catch((err) => {
       adminRuntimeLogger.warn("hardphone_number_sync_failed", runtimePayload({ error: err, operation: "hp_number_sync" }));
       return rows;
     }) : rows;
+    syncedRows = await syncHardphoneRegistrationStatusesFromTelnyx(pool, syncedRows).catch((err) => {
+      adminRuntimeLogger.warn("hardphone_registration_sync_failed", runtimePayload({ error: err, operation: "hp_registration_sync" }));
+      return syncedRows;
+    });
     const eventsByPhone = Object.fromEntries(eventRows.map((r) => [r.phone_id, r]));
     const registrationByPhone = Object.fromEntries(registrationRows.map((r) => [r.phone_id, r]));
     return NextResponse.json({

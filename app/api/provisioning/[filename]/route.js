@@ -46,6 +46,23 @@ function requestSourceIp(request) {
   return fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
 }
 
+function isPrivatePhoneIp(value) {
+  const parts = String(value || "").split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+function isLikelyGatewayIp(value) {
+  const parts = String(value || "").split(".").map((part) => Number(part));
+  return parts.length === 4 && (parts[3] === 1 || parts[3] === 254);
+}
+
+function trustedPhoneSourceIp(request) {
+  const sourceIp = requestSourceIp(request);
+  return isPrivatePhoneIp(sourceIp) && !isLikelyGatewayIp(sourceIp) ? sourceIp : null;
+}
+
 async function logEvent(pool, { phoneId = null, mac = null, eventType, detail = {} }) {
   try {
     await pool.query(
@@ -115,17 +132,21 @@ export async function GET(request, { params }) {
     return new NextResponse("Not found", { status: 404 });
   }
 
+  const sourceIp = requestSourceIp(request);
+  const phoneSourceIp = trustedPhoneSourceIp(request);
   await pool.query(
     `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2,
+       last_ip = COALESCE($3, last_ip),
+       ip_address = COALESCE(NULLIF(ip_address, ''), $3, ip_address),
        provisioning_state = CASE WHEN provisioning_state = 'pending' THEN 'provisioned' ELSE provisioning_state END
      WHERE id = $1`,
-    [phone.id, userAgent.slice(0, 300) || null],
+    [phone.id, userAgent.slice(0, 300) || null, phoneSourceIp],
   );
   await logEvent(pool, {
     phoneId: phone.id,
     mac,
     eventType: "config_served",
-    detail: { filename, kind, vendor: phone.vendor, userAgent, sourceIp: requestSourceIp(request), uaVendorMismatch: Boolean(uaVendor && uaVendor !== phone.vendor) },
+    detail: { filename, kind, vendor: phone.vendor, userAgent, sourceIp, detectedIp: phoneSourceIp, uaVendorMismatch: Boolean(uaVendor && uaVendor !== phone.vendor) },
   });
 
   return new NextResponse(config.body, {

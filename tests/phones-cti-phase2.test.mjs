@@ -229,10 +229,15 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
 
   it("phone events capture explicit phone IP for CTI reachability without trusting proxy headers", async () => {
     const serveCode = await src("app/api/provisioning/[filename]/route.js");
-    assert.doesNotMatch(serveCode, /last_ip = COALESCE\(\$3, last_ip\)/);
-    assert.match(serveCode, /sourceIp: requestSourceIp\(request\)/);
+    assert.match(serveCode, /trustedPhoneSourceIp\(request\)/);
+    assert.match(serveCode, /isPrivatePhoneIp\(sourceIp\)/);
+    assert.match(serveCode, /!isLikelyGatewayIp\(sourceIp\)/);
+    assert.match(serveCode, /last_ip = COALESCE\(\$3, last_ip\)/);
+    assert.match(serveCode, /sourceIp, detectedIp: phoneSourceIp/);
     const eventsCode = await src("app/api/provisioning/events/[vendor]/route.js");
     assert.match(eventsCode, /last_ip = COALESCE/);
+    assert.match(eventsCode, /ip_address = COALESCE/);
+    assert.match(eventsCode, /sip_registration_status = COALESCE/);
     assert.match(eventsCode, /queryParams\.ip/);
     assert.match(eventsCode, /source_ip: sourceIp/);
   });
