@@ -39,6 +39,14 @@ function withFetch(handler, fn) {
   return Promise.resolve(fn()).finally(() => { global.fetch = original; });
 }
 
+function makeThrowingPool() {
+  return {
+    async query() {
+      throw new Error("pool should not be queried");
+    },
+  };
+}
+
 test("generates an LLM caller reply and speaks it on the active generated leg", async () => {
   const captureUpdates = [];
   const ledgerRow = {
@@ -94,6 +102,45 @@ test("returns no_active_workflow_testing_call when no live generated leg matches
   });
   assert.equal(res.ok, false);
   assert.equal(res.reason, "no_active_workflow_testing_call");
+});
+
+test("skips customer-side workflow testing transcripts", async () => {
+  const res = await handleWorkflowTestingFinalTranscription({
+    pool: makeThrowingPool(),
+    interaction: { id: "int-customer", from_number: "+48221811540" },
+    payload: { call_session_id: "FLOW-LEG" },
+    transcriptionData: { transcript: "My name is John", transcription_track: "inbound", is_final: true },
+    assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "customer_transcript");
+});
+
+test("does not pick an arbitrary generated leg when workflow testing correlation is ambiguous", async () => {
+  const pool = {
+    async query(sql) {
+      if (/FROM cg_call_ledger/i.test(sql) && /status IN \('answered','talking'\)/.test(sql)) {
+        assert.match(sql, /LIMIT 2/);
+        return {
+          rows: [
+            { id: "ledger-new", run_id: "run-new", call_control_id: "v3:NEW", result: { workflow_testing: { workflow_id: "wf-1" } } },
+            { id: "ledger-old", run_id: "run-old", call_control_id: "v3:OLD", result: { workflow_testing: { workflow_id: "wf-1" } } },
+          ],
+        };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const res = await handleWorkflowTestingFinalTranscription({
+    pool,
+    interaction: { id: "int-ambiguous", from_number: "+48221811540" },
+    payload: { call_session_id: "FLOW-LEG" },
+    transcriptionData: { transcript: "Can I get your name?", transcription_track: "outbound", is_final: true },
+    assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.reason, "ambiguous_workflow_testing_call");
 });
 
 test("skips when assist is not workflow type", async () => {
