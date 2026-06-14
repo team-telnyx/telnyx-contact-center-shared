@@ -510,6 +510,12 @@ export async function POST(request, { params }) {
               metadata: {
                 flow_owner: flow?.username || null,
                 initiated_at: payload.occurred_at || new Date().toISOString(),
+                ...(payload.client_state
+                  ? {
+                      client_state: payload.client_state,
+                      call_generator_client_state: payload.client_state,
+                    }
+                  : {}),
                 ...(aiCallControlId
                   ? { ai_call_control_id: aiCallControlId }
                   : {}),
