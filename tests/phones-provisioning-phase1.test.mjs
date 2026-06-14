@@ -343,7 +343,7 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /PHONE_MODEL_CATALOG/);
     assert.match(code, /PhoneModelPreview/);
     assert.match(code, /Full manufacturer documentation/);
-    assert.match(code, /\/images\/hardphones\/poly-vvx-450\.jpg/);
+    assert.match(code, /\/images\/hardphones\/poly-vvx-450\.png/);
     assert.match(code, /VVX 101/);
     assert.match(code, /Edge E550/);
     assert.match(code, /420HD/);
@@ -406,15 +406,23 @@ describe("hard phones provisioning (Phase 1)", () => {
       "yealink-t57w.png",
       "yealink-t58w.png",
       "audiocodes-405hd.jpg",
+      "audiocodes-420hd.png",
       "audiocodes-425hd.jpg",
+      "audiocodes-430hd.png",
       "audiocodes-c430hd.jpg",
+      "audiocodes-440hd.png",
       "audiocodes-445hd.jpg",
+      "audiocodes-450hd.png",
       "audiocodes-c450hd.jpg",
     ].forEach((file) => assert.ok(files.includes(file), `missing ${file}`));
 
     assert.match(page, /T54W[\s\S]*yealink-t54w\.png/);
     assert.match(page, /T57W[\s\S]*yealink-t57w\.png/);
+    assert.match(page, /420HD[\s\S]*audiocodes-420hd\.png/);
     assert.match(page, /425HD[\s\S]*audiocodes-425hd\.jpg/);
+    assert.match(page, /430HD[\s\S]*audiocodes-430hd\.png/);
+    assert.match(page, /440HD[\s\S]*audiocodes-440hd\.png/);
+    assert.match(page, /450HD[\s\S]*audiocodes-450hd\.png/);
     assert.match(page, /C450HD[\s\S]*audiocodes-c450hd\.jpg/);
     assert.doesNotMatch(page, /\["T53", "T53W", "T52S", "T54S", "T54W"\]\.includes\(model\)\) return "\/images\/hardphones\/yealink-t53w\.png"/);
     assert.ok(files.length >= 30);

@@ -96,17 +96,38 @@ const VENDOR_MODELS = {
 };
 
 function polyImage(model) {
-  if (model.startsWith("CCX")) return model === "CCX 500" || model === "CCX 505" ? "/images/hardphones/poly-ccx-500.jpg" : "/images/hardphones/poly-ccx-400.jpg";
-  if (model.startsWith("Edge E")) {
-    if (["Edge E100", "Edge E220", "Edge E300", "Edge E320"].includes(model)) return "/images/hardphones/poly-edge-e220.jpg";
-    if (["Edge E350", "Edge E400"].includes(model)) return "/images/hardphones/poly-edge-e350.jpg";
-    return "/images/hardphones/poly-edge-e450.jpg";
-  }
-  if (model.startsWith("Edge B") || model.startsWith("Rove")) return "/images/hardphones/poly-edge-e220.jpg";
-  if (["VVX 101", "VVX 150", "VVX 201"].includes(model)) return "/images/hardphones/poly-vvx-150.jpg";
-  if (["VVX 250", "VVX 300", "VVX 301", "VVX 310", "VVX 311"].includes(model)) return "/images/hardphones/poly-vvx-250.jpg";
-  if (["VVX 350", "VVX 400", "VVX 401", "VVX 410", "VVX 411"].includes(model)) return "/images/hardphones/poly-vvx-350.jpg";
-  return "/images/hardphones/poly-vvx-450.jpg";
+  const exactImages = {
+    "VVX 101": "/images/hardphones/poly-vvx-101.png",
+    "VVX 150": "/images/hardphones/poly-vvx-150.png",
+    "VVX 201": "/images/hardphones/poly-vvx-201.png",
+    "VVX 250": "/images/hardphones/poly-vvx-250.png",
+    "VVX 300": "/images/hardphones/poly-vvx-300.png",
+    "VVX 301": "/images/hardphones/poly-vvx-311.png",
+    "VVX 310": "/images/hardphones/poly-vvx-300.png",
+    "VVX 311": "/images/hardphones/poly-vvx-311.png",
+    "VVX 350": "/images/hardphones/poly-vvx-350.png",
+    "VVX 400": "/images/hardphones/poly-vvx-400.png",
+    "VVX 401": "/images/hardphones/poly-vvx-411.png",
+    "VVX 410": "/images/hardphones/poly-vvx-400.png",
+    "VVX 411": "/images/hardphones/poly-vvx-411.png",
+    "VVX 450": "/images/hardphones/poly-vvx-450.png",
+    "VVX 500": "/images/hardphones/poly-vvx-500.png",
+    "VVX 501": "/images/hardphones/poly-vvx-500.png",
+    "VVX 600": "/images/hardphones/poly-vvx-601.png",
+    "VVX 601": "/images/hardphones/poly-vvx-601.png",
+    "CCX 400": "/images/hardphones/poly-ccx-400.png",
+    "CCX 500": "/images/hardphones/poly-ccx-500.png",
+    "CCX 505": "/images/hardphones/poly-ccx-500.png",
+    "Edge E220": "/images/hardphones/poly-edge-e220.png",
+    "Edge E350": "/images/hardphones/poly-edge-e350.png",
+    "Edge E450": "/images/hardphones/poly-edge-e450.png",
+  };
+  if (exactImages[model]) return exactImages[model];
+  if (["CCX 350", "CCX 600", "CCX 700"].includes(model)) return "/images/hardphones/poly-ccx-400.png";
+  if (["Edge E100", "Edge E300", "Edge E320"].includes(model)) return "/images/hardphones/poly-edge-e220.png";
+  if (["Edge E400"].includes(model)) return "/images/hardphones/poly-edge-e350.png";
+  if (["Edge E500", "Edge E550"].includes(model)) return "/images/hardphones/poly-edge-e450.png";
+  return "/images/hardphones/poly-edge-e220.png";
 }
 
 function polyDocs(model) {
@@ -184,11 +205,11 @@ const PHONE_MODEL_CATALOG = {
     "405HD": { image: "/images/hardphones/audiocodes-405hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
     "420HD": { image: "/images/hardphones/audiocodes-420hd.png", docs: AUDIOCODES_DOCS },
     "425HD": { image: "/images/hardphones/audiocodes-425hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/425hd-ip-phone" },
-    "430HD": { image: "/images/hardphones/audiocodes-c430hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
+    "430HD": { image: "/images/hardphones/audiocodes-430hd.png", docs: AUDIOCODES_DOCS },
     "C430HD": { image: "/images/hardphones/audiocodes-c430hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
     "440HD": { image: "/images/hardphones/audiocodes-440hd.png", docs: AUDIOCODES_DOCS },
     "445HD": { image: "/images/hardphones/audiocodes-445hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
-    "450HD": { image: "/images/hardphones/audiocodes-c450hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
+    "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: AUDIOCODES_DOCS },
     "C450HD": { image: "/images/hardphones/audiocodes-c450hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
   },
 };
@@ -1152,8 +1173,8 @@ function PhoneModelPreview({ vendor, model, catalogEntry }) {
   const vendorLabel = VENDORS.find((v) => v.value === vendor)?.label || vendor;
   return (
     <div className="overflow-hidden rounded-xl border bg-muted/20">
-      <div className="aspect-[4/3] bg-white p-3 dark:bg-zinc-950">
-        <img src={catalogEntry.image} alt={`${vendorLabel} ${model}`} className="h-full w-full object-contain" loading="lazy" />
+      <div className="aspect-[4/3] bg-[radial-gradient(circle_at_50%_35%,rgba(14,165,233,0.13),transparent_45%),linear-gradient(135deg,rgba(248,250,252,0.95),rgba(226,232,240,0.8))] p-3 dark:bg-[radial-gradient(circle_at_50%_35%,rgba(56,189,248,0.18),transparent_45%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(9,9,11,0.92))]">
+        <img src={catalogEntry.image} alt={`${vendorLabel} ${model}`} className="h-full w-full object-contain drop-shadow-sm dark:drop-shadow-[0_18px_28px_rgba(0,0,0,0.55)]" loading="lazy" />
       </div>
       <div className="border-t px-3 py-2">
         <div className="text-sm font-medium">{model}</div>
