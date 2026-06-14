@@ -27,6 +27,35 @@ function formatDuration(seconds) {
 
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
 
+// Telnyx green vertical gradient builders (WaveSurfer v7 accepts CanvasGradient
+// for waveColor/progressColor). Falls back to a solid color if the canvas 2D
+// context is unavailable (e.g. SSR / headless).
+function buildWaveGradient(ctx, height) {
+  if (!ctx || typeof ctx.createLinearGradient !== "function") return "#10b98166";
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#34d399");      // emerald-400 (top)
+  g.addColorStop(0.5, "#10b981");    // emerald-500 (mid)
+  g.addColorStop(1, "#059669aa");    // emerald-600, faded (bottom)
+  return g;
+}
+
+function buildProgressGradient(ctx, height) {
+  if (!ctx || typeof ctx.createLinearGradient !== "function") return "#10b981";
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#6ee7b7");      // emerald-300 (top)
+  g.addColorStop(0.5, "#10b981");    // emerald-500 (mid)
+  g.addColorStop(1, "#047857");      // emerald-700 (bottom)
+  return g;
+}
+
+// Two render styles for the waveform:
+//  - "bars" (default, option B): dense thin bars with a vertical gradient
+//  - "wave" (option C): continuous filled wave (no bars), gradient fill
+const WAVE_STYLE_OPTIONS = [
+  { value: "bars", label: "Bars" },
+  { value: "wave", label: "Wave" },
+];
+
 export default function RecordingPlayer({
   src,
   recordingId,
@@ -42,6 +71,8 @@ export default function RecordingPlayer({
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.6);
   const [playbackRate, setPlaybackRate] = useState(1);
+  // Waveform render style — "bars" (B, default) or "wave" (C, continuous).
+  const [waveStyle, setWaveStyle] = useState("bars");
 
   useEffect(() => {
     // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
@@ -62,19 +93,27 @@ export default function RecordingPlayer({
         loadUrl = src;
       }
 
+      const WAVE_HEIGHT = 96;
+      // WaveSurfer v7 renders to a canvas; grab a 2D context to build gradients.
+      const gradientCtx = document.createElement("canvas").getContext("2d");
+      const waveColor = buildWaveGradient(gradientCtx, WAVE_HEIGHT);
+      const progressColor = buildProgressGradient(gradientCtx, WAVE_HEIGHT);
+
+      // Style B (bars): dense thin bars. Style C (wave): continuous fill —
+      // achieved by omitting barWidth/barGap entirely in v7.
+      const styleOptions = waveStyle === "wave"
+        ? {}
+        : { barWidth: 2, barGap: 1, barRadius: 3 };
+
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: "#71717a99",
-        progressColor: "#10b981",
+        waveColor,
+        progressColor,
         cursorColor: "#10b981",
         cursorWidth: 2,
-        barWidth: 3,
-        barGap: 2,
-        barRadius: 4,
-        responsive: true,
-        height: 96,
+        ...styleOptions,
+        height: WAVE_HEIGHT,
         normalize: true,
-        backend: "WebAudio",
         mediaControls: false,
       });
 
@@ -132,7 +171,7 @@ export default function RecordingPlayer({
       }
       setWaveReady(false);
     };
-  }, [src, recordingId]);
+  }, [src, recordingId, waveStyle]);
 
   useEffect(() => {
     if (wavesurferRef.current) {
@@ -212,6 +251,29 @@ export default function RecordingPlayer({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
+            {/* Waveform style toggle: Bars (B, default) ↔ Wave (C, continuous) */}
+            <div
+              className="inline-flex items-center rounded-full border border-border/70 bg-background/60 p-0.5"
+              role="group"
+              aria-label="Waveform style"
+              data-testid="recording-wave-style-toggle"
+            >
+              {WAVE_STYLE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setWaveStyle(opt.value)}
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
+                    waveStyle === opt.value
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-pressed={waveStyle === opt.value}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             {formatLabel ? (
               <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {formatLabel}

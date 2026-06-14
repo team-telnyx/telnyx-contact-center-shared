@@ -60,9 +60,18 @@ test("recording player has a modern transport with speed control and waveform st
   // Live elapsed time + progress
   assert.match(recordingPlayer, /recording-current-time/);
   assert.match(recordingPlayer, /formatDuration\(currentTime\)/);
-  // Waveform loading state and emerald progress color
+  // Waveform loading state + emerald gradient render (B: dense bars default, C: continuous wave)
   assert.match(recordingPlayer, /Loading waveform/);
-  assert.match(recordingPlayer, /progressColor: "#10b981"/);
+  assert.match(recordingPlayer, /buildWaveGradient/);
+  assert.match(recordingPlayer, /buildProgressGradient/);
+  assert.match(recordingPlayer, /createLinearGradient/);
+  // B = dense bars default, C = continuous wave; user-toggleable
+  assert.match(recordingPlayer, /barWidth: 2, barGap: 1, barRadius: 3/);
+  assert.match(recordingPlayer, /WAVE_STYLE_OPTIONS/);
+  assert.match(recordingPlayer, /recording-wave-style-toggle/);
+  assert.match(recordingPlayer, /useState\("bars"\)/);
+  // Dead WaveSurfer v7 backend option removed
+  assert.doesNotMatch(recordingPlayer, /backend: "WebAudio"/);
   // CORS-safe proxy loading is preserved
   assert.match(recordingPlayer, /\/api\/voice\/recordings\/\$\{encodeURIComponent\(recordingId\)\}\/stream/);
   assert.match(recordingPlayer, /\/api\/voice\/recordings\/proxy\?url=/);

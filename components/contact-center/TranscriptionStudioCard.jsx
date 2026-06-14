@@ -331,7 +331,7 @@ export default function TranscriptionStudioCard({
           <Button
             onClick={handleTranscribe}
             disabled={isTranscribing || !recordingId || !interactionId}
-            className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 text-white shadow-md shadow-violet-600/25 transition hover:from-violet-500 hover:to-fuchsia-500 disabled:opacity-50"
+            className="rounded-xl px-5"
             data-testid="transcribe-button"
           >
             {isTranscribing ? (
