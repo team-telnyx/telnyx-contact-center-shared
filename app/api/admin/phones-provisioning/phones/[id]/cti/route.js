@@ -47,6 +47,12 @@ function registrationStatusFromCtiResult(result) {
   return null;
 }
 
+function validHostOverride(value) {
+  const host = String(value || "").trim();
+  if (!host) return "";
+  return /^([a-z0-9.-]+|\d{1,3}(\.\d{1,3}){3})$/i.test(host) ? host : null;
+}
+
 // POST { action, number?, digits? } — execute a CTI action on a phone.
 // Driver is resolved per vendor: Polycom REST, Yealink Action URI, or the
 // Telnyx fallback (AudioCodes / settings.cti_mode = "telnyx").
@@ -69,15 +75,19 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: "Phone provisioning is disabled" }, { status: 409 });
     }
 
-    const result = await executeCtiAction(phone, action, { number: body?.number, digits: body?.digits }, {
+    const hostOverride = validHostOverride(body?.host || body?.ip || "");
+    if (hostOverride === null) return NextResponse.json({ error: "Invalid phone IP/host override" }, { status: 400 });
+    const targetPhone = hostOverride ? { ...phone, last_ip: hostOverride, ip_address: hostOverride } : phone;
+
+    const result = await executeCtiAction(targetPhone, action, { number: body?.number, digits: body?.digits }, {
       pool,
       baseUrl: resolveBaseUrl(request),
     });
 
     const registrationStatus = action === "status" ? registrationStatusFromCtiResult(result) : null;
-    const discoveredIp = String(result?.discovered_ip || result?.result?.discovered_ip || "").trim();
-    if (discoveredIp) {
-      await pool.query(`UPDATE hp_phones SET last_ip = $2, last_seen_at = NOW(), updated_at = NOW() WHERE id = $1`, [phone.id, discoveredIp]);
+    const discoveredIp = String(result?.discovered_ip || result?.result?.discovered_ip || hostOverride || "").trim();
+    if (discoveredIp && result.ok !== false) {
+      await pool.query(`UPDATE hp_phones SET last_ip = $2, ip_address = COALESCE(NULLIF(ip_address, ''), $2, ip_address), last_seen_at = NOW(), updated_at = NOW() WHERE id = $1`, [phone.id, discoveredIp]);
     }
     if (!(action === "status" && body?.silent)) {
       await pool.query(

@@ -1356,13 +1356,16 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
 
 function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
   const [busy, setBusy] = useState(null);
+  const reachableIp = phone?.last_ip || phone?.ip_address || "";
+  const [hostOverride, setHostOverride] = useState("");
   async function run(action) {
     setBusy(action);
     try {
+      const manualHost = reachableIp ? "" : hostOverride.trim();
       const res = await fetch(`${API}/phones/${phone.id}/cti`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...(manualHost ? { host: manualHost } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${action} failed`);
@@ -1382,6 +1385,16 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
   return (
     <div className="border-t pt-3">
       <div className="mb-2 text-xs font-medium text-muted-foreground">Phone actions</div>
+      {!reachableIp ? (
+        <Input
+          value={hostOverride}
+          onChange={(event) => setHostOverride(event.target.value)}
+          placeholder="Temporary phone IP/host"
+          className="mb-2 h-9 text-xs"
+          data-testid="hp-sip-host-override"
+          aria-label="Temporary phone IP or host for actions"
+        />
+      ) : null}
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}

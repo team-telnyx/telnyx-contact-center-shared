@@ -198,6 +198,10 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /requireAdmin/);
     assert.match(code, /CTI_ACTIONS\.includes\(action\)/);
     assert.match(code, /executeCtiAction/);
+    assert.match(code, /validHostOverride\(body\?\.host \|\| body\?\.ip/);
+    assert.match(code, /const targetPhone = hostOverride/);
+    assert.match(code, /executeCtiAction\(targetPhone, action/);
+    assert.match(code, /ip_address = COALESCE\(NULLIF\(ip_address, ''\), \$2, ip_address\)/);
     assert.match(code, /result\?\.registration/);
     assert.match(code, /line\?\.SipStatus/);
     assert.match(code, /cti_\$\{action\}/);
@@ -263,6 +267,9 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /hp-sip-registration-actions/);
     assert.match(code, /hp-sip-check-status/);
     assert.match(code, /hp-sip-reprovision/);
+    assert.match(code, /hp-sip-host-override/);
+    assert.match(code, /Temporary phone IP\/host/);
+    assert.match(code, /host: manualHost/);
     assert.match(code, /hp-sip-reboot/);
     assert.match(code, /rebootPhones=\{requestRebootPhones\}/);
     assert.match(code, /rebooting=\{rebooting\}/);
