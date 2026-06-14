@@ -47,12 +47,33 @@ const DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT = "This is a neutral voice preview fo
 const WORKFLOW_TESTING_PERSONAS = [
   { id: "neutral", label: "Neutral / cooperative" },
   { id: "angry", label: "Angry" },
-  { id: "in_a_hurry", label: "In a hurry" },
-  { id: "confused", label: "Confused" },
-  { id: "chatty", label: "Chatty / talkative" },
-  { id: "elderly", label: "Elderly / slow" },
-  { id: "suspicious", label: "Suspicious / privacy-conscious" },
+  { id: "excited", label: "Excited" },
+  { id: "content", label: "Content" },
+  { id: "sad", label: "Sad" },
+  { id: "scared", label: "Scared" },
+  { id: "happy", label: "Happy" },
+  { id: "enthusiastic", label: "Enthusiastic" },
+  { id: "curious", label: "Curious" },
+  { id: "calm", label: "Calm" },
+  { id: "grateful", label: "Grateful" },
+  { id: "affectionate", label: "Affectionate" },
+  { id: "sarcastic", label: "Sarcastic" },
+  { id: "surprised", label: "Surprised" },
+  { id: "confident", label: "Confident" },
+  { id: "hesitant", label: "Hesitant" },
+  { id: "apologetic", label: "Apologetic" },
+  { id: "determined", label: "Determined" },
+  { id: "frustrated", label: "Frustrated" },
+  { id: "disappointed", label: "Disappointed" },
 ];
+
+// Voice families that support Expressive Mode TTS tags:
+//   • Telnyx Ultra (Telnyx.Ultra.*): SSML <emotion> tags + [laughter]
+//   • xAI Grok (xAI.*): inline/wrapping speech tags ([pause], <whisper>, ...)
+function voiceSupportsExpressive(voice) {
+  const v = String(voice || "").trim();
+  return /^Telnyx\.Ultra\./i.test(v) || /^xAI\./i.test(v);
+}
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Active runs in real time" },
@@ -1189,7 +1210,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                 <div>
                   <Label>Caller simulation voice</Label>
                   <div className="mt-1">
-                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
+                    <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice, ...(voiceSupportsExpressive(voice) ? {} : { expressive: false }) })} previewText={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
                   </div>
                 </div>
                 <div>
@@ -1204,6 +1225,20 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.</p>
                 </div>
+                {voiceSupportsExpressive(step.voice) ? (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="pr-3">
+                      <Label>Expressive Mode</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {/^xAI\./i.test(String(step.voice || ""))
+                          ? "xAI Grok voice: adds inline speech tags ([pause], [laugh], <whisper>…) so the caller's delivery matches the persona."
+                          : "Telnyx Ultra voice: adds an SSML <emotion> tag matching the persona so the caller actually sounds the part."}
+                        {" "}When off, the LLM still role-plays the persona but the voice stays neutral (no tags).
+                      </p>
+                    </div>
+                    <Switch checked={step.expressive === true} onCheckedChange={(checked) => updateStep(index, { expressive: checked === true })} />
+                  </div>
+                ) : null}
                 <div>
                   <Label>Max answers per turn</Label>
                   <Input

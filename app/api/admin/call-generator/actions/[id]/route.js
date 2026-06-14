@@ -53,6 +53,9 @@ export async function PUT(request, { params }) {
               max_slots_per_turn: maxSlots,
               // randomize only has meaning when more than one slot is allowed.
               randomize_slots: maxSlots > 1 ? wt.randomize_slots === true : false,
+              // normalizeSteps already forces expressive off for voices that
+              // don't support it (non-Ultra / non-xAI), so carry it through.
+              expressive: wt.expressive === true,
             };
           })()]
         : steps;

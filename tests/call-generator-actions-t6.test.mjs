@@ -199,7 +199,7 @@ describe("call generator actions & multi-target (T6)", () => {
 
   it("workflow testing action is protected, seeded, and configurable by voice and preview sample text", async () => {
     const steps = normalizeSteps([{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku." }]);
-    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku.", persona: "neutral", max_slots_per_turn: 1, randomize_slots: false }]);
+    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku.", persona: "neutral", max_slots_per_turn: 1, randomize_slots: false, expressive: false }]);
     assert.match(describeStep(steps[0]), /Workflow Testing/);
     const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
     assert.match(workflowTesting, /DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT/);
