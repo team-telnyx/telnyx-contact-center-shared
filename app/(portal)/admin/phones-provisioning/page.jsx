@@ -202,15 +202,15 @@ const PHONE_MODEL_CATALOG = {
   yealink: Object.fromEntries(VENDOR_MODELS.yealink.map((model) => [model, { image: yealinkImage(model), docs: yealinkDocs(model) }])),
   audiocodes: {
     "405": { image: "/images/hardphones/audiocodes-405.png", docs: AUDIOCODES_DOCS },
-    "405HD": { image: "/images/hardphones/audiocodes-405hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
+    "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
     "420HD": { image: "/images/hardphones/audiocodes-420hd.png", docs: AUDIOCODES_DOCS },
-    "425HD": { image: "/images/hardphones/audiocodes-425hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/425hd-ip-phone" },
+    "425HD": { image: "/images/hardphones/audiocodes-425hd.png", docs: "https://www.audiocodes.com/products/ip-phones/425hd-ip-phone" },
     "430HD": { image: "/images/hardphones/audiocodes-430hd.png", docs: AUDIOCODES_DOCS },
-    "C430HD": { image: "/images/hardphones/audiocodes-c430hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
+    "C430HD": { image: "/images/hardphones/audiocodes-c430hd.png", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
     "440HD": { image: "/images/hardphones/audiocodes-440hd.png", docs: AUDIOCODES_DOCS },
-    "445HD": { image: "/images/hardphones/audiocodes-445hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
+    "445HD": { image: "/images/hardphones/audiocodes-445hd.png", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
     "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: AUDIOCODES_DOCS },
-    "C450HD": { image: "/images/hardphones/audiocodes-c450hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
+    "C450HD": { image: "/images/hardphones/audiocodes-c450hd.png", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
   },
 };
 
@@ -270,6 +270,23 @@ const vendorBadgeClass = (vendor) => {
 
 function vendorLabel(vendor) {
   return VENDORS.find((x) => x.value === vendor)?.label || vendor || "Unknown vendor";
+}
+
+function PhoneModelThumbnail({ vendor, model, className = "" }) {
+  const catalogEntry = modelCatalogEntry(vendor, model);
+  const vendorName = VENDORS.find((v) => v.value === vendor)?.label || vendorLabel(vendor);
+  if (!catalogEntry?.image) {
+    return (
+      <span className={`flex h-12 w-14 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground ${className}`} aria-hidden="true">
+        <IconDeviceLandlinePhone className="h-5 w-5" />
+      </span>
+    );
+  }
+  return (
+    <span className={`flex h-12 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-[radial-gradient(circle_at_50%_35%,rgba(14,165,233,0.14),transparent_52%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(226,232,240,0.86))] p-1.5 shadow-sm dark:bg-[radial-gradient(circle_at_50%_35%,rgba(56,189,248,0.2),transparent_52%),linear-gradient(135deg,rgba(39,39,42,0.98),rgba(9,9,11,0.92))] ${className}`}>
+      <img src={catalogEntry.image} alt={`${vendorName} ${model}`} className="h-full w-full object-contain drop-shadow-sm dark:drop-shadow-[0_10px_18px_rgba(0,0,0,0.65)]" loading="lazy" />
+    </span>
+  );
 }
 
 function VendorLogoBadge({ vendor, count }) {
@@ -950,9 +967,12 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
               style={{ gridTemplateColumns: "36px minmax(0,1.6fr) minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr) minmax(0,1fr) minmax(0,1.1fr) 96px" }}
             >
               <span onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={rebootSelected} onChange={() => toggleRebootSelection(p.id)} aria-label={`Select ${formatMacDisplay(p.mac)} for reboot`} /></span>
-              <span className="min-w-0">
-                <span className="block truncate font-medium">{p.phone_name || p.label || formatMacDisplay(p.mac)}</span>
-                <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
+              <span className="flex min-w-0 items-center gap-3">
+                <PhoneModelThumbnail vendor={p.vendor} model={p.model} />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{p.phone_name || p.label || formatMacDisplay(p.mac)}</span>
+                  <span className="block truncate font-mono text-[11px] text-muted-foreground">{formatMacDisplay(p.mac)}</span>
+                </span>
               </span>
               <span className="truncate font-mono text-xs">{p.assigned_phone_number || "—"}</span>
               <span><VendorLogoBadge vendor={p.vendor} /></span>

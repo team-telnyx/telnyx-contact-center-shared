@@ -432,25 +432,25 @@ describe("hard phones provisioning (Phase 1)", () => {
       "yealink-t54w.png",
       "yealink-t57w.png",
       "yealink-t58w.png",
-      "audiocodes-405hd.jpg",
+      "audiocodes-405hd.png",
       "audiocodes-420hd.png",
-      "audiocodes-425hd.jpg",
+      "audiocodes-425hd.png",
       "audiocodes-430hd.png",
-      "audiocodes-c430hd.jpg",
+      "audiocodes-c430hd.png",
       "audiocodes-440hd.png",
-      "audiocodes-445hd.jpg",
+      "audiocodes-445hd.png",
       "audiocodes-450hd.png",
-      "audiocodes-c450hd.jpg",
+      "audiocodes-c450hd.png",
     ].forEach((file) => assert.ok(files.includes(file), `missing ${file}`));
 
     assert.match(page, /T54W[\s\S]*yealink-t54w\.png/);
     assert.match(page, /T57W[\s\S]*yealink-t57w\.png/);
     assert.match(page, /420HD[\s\S]*audiocodes-420hd\.png/);
-    assert.match(page, /425HD[\s\S]*audiocodes-425hd\.jpg/);
+    assert.match(page, /425HD[\s\S]*audiocodes-425hd\.png/);
     assert.match(page, /430HD[\s\S]*audiocodes-430hd\.png/);
     assert.match(page, /440HD[\s\S]*audiocodes-440hd\.png/);
     assert.match(page, /450HD[\s\S]*audiocodes-450hd\.png/);
-    assert.match(page, /C450HD[\s\S]*audiocodes-c450hd\.jpg/);
+    assert.match(page, /C450HD[\s\S]*audiocodes-c450hd\.png/);
     assert.doesNotMatch(page, /\["T53", "T53W", "T52S", "T54S", "T54W"\]\.includes\(model\)\) return "\/images\/hardphones\/yealink-t53w\.png"/);
     assert.ok(files.length >= 30);
   });
