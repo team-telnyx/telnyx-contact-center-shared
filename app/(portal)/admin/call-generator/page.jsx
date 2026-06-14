@@ -807,20 +807,22 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
         <Badge variant="outline" className="bg-card">{scenarios.length} total</Badge>
       </div>
       <div className="mt-5 overflow-hidden rounded-xl border">
-        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 96px" }}>
-          <span>Name</span><span>Targets</span><span>Calls</span><span>Numbers</span><span className="text-right">Actions</span>
+        <div className="grid bg-muted/45 px-3 py-2 text-xs font-semibold text-muted-foreground" style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 96px" }}>
+          <span>Name</span><span>Targets</span><span>Calls</span><span>Numbers</span><span>Max duration</span><span className="text-right">Actions</span>
         </div>
         {scenarios.map((s) => {
           const targets = Array.isArray(s.config?.targets) ? s.config.targets : [];
           const totalCalls = targets.reduce((sum, t) => sum + (Number(t.total_calls) || 0), 0);
           const numbersCount = [...new Set(targets.flatMap((t) => t.from_numbers || []))].length;
+          const globalMaxDuration = Number(settingsDraft.max_call_duration_secs) || DEFAULT_SETTINGS.max_call_duration_secs;
+          const scenarioMaxDuration = Number(s.config?.maxCallDurationSecs) > 0 ? Number(s.config.maxCallDurationSecs) : null;
           const selected = selectedScenarioId === s.id;
           return (
             <div
               key={s.id}
               onClick={() => setSelectedScenarioId(s.id)}
               className={`grid cursor-pointer items-center border-t px-3 py-2.5 text-sm transition hover:bg-muted/40 ${selected ? "bg-sky-500/10" : ""}`}
-              style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) 96px" }}
+              style={{ gridTemplateColumns: "minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 96px" }}
             >
               <span className="truncate font-medium">{s.name}</span>
               <span className="truncate text-xs text-muted-foreground">
@@ -828,6 +830,11 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
               </span>
               <span className="tabular-nums">{totalCalls || "—"}</span>
               <span className="tabular-nums">{numbersCount || "—"}</span>
+              <span className="tabular-nums text-xs">
+                {scenarioMaxDuration
+                  ? `${scenarioMaxDuration}s`
+                  : <span className="text-muted-foreground">{globalMaxDuration}s <span className="opacity-70">(global)</span></span>}
+              </span>
               <span className="flex items-center justify-end gap-1">
                 <Button size="icon" variant="ghost" className="h-7 w-7" title="Start run" onClick={(e) => { e.stopPropagation(); startRun(s); }}>
                   <IconPlayerPlay className="h-3.5 w-3.5" />
