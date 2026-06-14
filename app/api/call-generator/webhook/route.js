@@ -78,12 +78,14 @@ export async function POST(request) {
   // lands here (instead of the flow connection webhook), forward it so Agent
   // Assist live transcription and contact-center interaction state are not
   // silently lost. This is additive: generator ledger handling below still runs
-  // for lifecycle correlation. Foreign events are dropped by requiring the
-  // generator client_state before forwarding into contact-center handlers.
+  // for lifecycle correlation. Foreign events are dropped by requiring a matched
+  // generator ledger/state before forwarding into contact-center handlers. Keep
+  // the original payload for forwarding because its client_state may contain the
+  // flow/contact-center STT config; generatorPayload is only for ledger handling.
   try {
     if (generatorState && eventType === "call.transcription") {
       const { handleTranscriptionEvent } = await import("@/lib/contact-center/webhook-handler.js");
-      await handleTranscriptionEvent(generatorPayload);
+      await handleTranscriptionEvent(payload);
     } else if (
       generatorState &&
       (eventType === "call.answered" ||
@@ -94,7 +96,7 @@ export async function POST(request) {
         eventType === "call.hangup")
     ) {
       const { handleContactCenterEvent } = await import("@/lib/contact-center/webhook-handler.js");
-      await handleContactCenterEvent(eventType, generatorPayload, { eventId: webhookEventId });
+      await handleContactCenterEvent(eventType, payload, { eventId: webhookEventId });
     }
   } catch (forwardErr) {
     adminRuntimeLogger.warn(
