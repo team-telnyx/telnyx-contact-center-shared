@@ -115,24 +115,50 @@ function polyDocs(model) {
 
 function yealinkImage(model) {
   const exactImages = {
+    T19: "/images/hardphones/yealink-t19.png",
+    T19P: "/images/hardphones/yealink-t19p.png",
+    "T19P E2": "/images/hardphones/yealink-t19p-e2.png",
+    T20P: "/images/hardphones/yealink-t20p.png",
+    T21: "/images/hardphones/yealink-t21.png",
+    T21P: "/images/hardphones/yealink-t21p.png",
+    "T21P E2": "/images/hardphones/yealink-t21p-e2.png",
+    T22P: "/images/hardphones/yealink-t22p.png",
+    T23P: "/images/hardphones/yealink-t23p.png",
+    T23G: "/images/hardphones/yealink-t23g.png",
+    T26P: "/images/hardphones/yealink-t26p.png",
+    T27P: "/images/hardphones/yealink-t27p.png",
+    T27G: "/images/hardphones/yealink-t27g.png",
+    T28P: "/images/hardphones/yealink-t28p.png",
+    T29G: "/images/hardphones/yealink-t29g.png",
     T31P: "/images/hardphones/yealink-t31p.png",
+    T32G: "/images/hardphones/yealink-t32g.png",
     T33G: "/images/hardphones/yealink-t33g.png",
+    T38G: "/images/hardphones/yealink-t38g.png",
+    T40P: "/images/hardphones/yealink-t40p.png",
+    T40G: "/images/hardphones/yealink-t40g.png",
+    T41P: "/images/hardphones/yealink-t41p.png",
+    T41S: "/images/hardphones/yealink-t41s.png",
+    T42G: "/images/hardphones/yealink-t42g.png",
+    T42S: "/images/hardphones/yealink-t42s.png",
     T43U: "/images/hardphones/yealink-t43u.png",
+    T46G: "/images/hardphones/yealink-t46g.png",
+    T46S: "/images/hardphones/yealink-t46s.png",
     T46U: "/images/hardphones/yealink-t46u.png",
+    T48G: "/images/hardphones/yealink-t48g.png",
+    T48S: "/images/hardphones/yealink-t48s.png",
     T48U: "/images/hardphones/yealink-t48u.png",
+    T52S: "/images/hardphones/yealink-t52s.png",
+    T53: "/images/hardphones/yealink-t53w.png",
     T53W: "/images/hardphones/yealink-t53w.png",
+    T54S: "/images/hardphones/yealink-t54s.png",
     T54W: "/images/hardphones/yealink-t54w.png",
+    T56A: "/images/hardphones/yealink-t56a.png",
     T57W: "/images/hardphones/yealink-t57w.png",
+    T58A: "/images/hardphones/yealink-t58a.png",
+    T58V: "/images/hardphones/yealink-t58v.png",
     T58W: "/images/hardphones/yealink-t58w.png",
   };
-  if (exactImages[model]) return exactImages[model];
-  if (["T40P", "T40G", "T41P", "T41S", "T42G", "T42S"].includes(model)) return "/images/hardphones/yealink-t43u.png";
-  if (["T46G", "T46S"].includes(model)) return "/images/hardphones/yealink-t46u.png";
-  if (["T48G", "T48S"].includes(model)) return "/images/hardphones/yealink-t48u.png";
-  if (["T53", "T52S", "T54S"].includes(model)) return "/images/hardphones/yealink-t53w.png";
-  if (["T56A"].includes(model)) return "/images/hardphones/yealink-t57w.png";
-  if (["T58A", "T58V"].includes(model)) return "/images/hardphones/yealink-t58w.png";
-  return "/images/hardphones/yealink-t31p.png";
+  return exactImages[model] || "/images/hardphones/yealink-t31p.png";
 }
 
 function yealinkDocs(model) {
