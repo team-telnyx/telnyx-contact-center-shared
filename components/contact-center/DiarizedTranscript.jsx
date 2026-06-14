@@ -115,7 +115,7 @@ export default function DiarizedTranscript({
                 className={cn(
                   "rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-all",
                   isRight ? `${tone.bubble} rounded-br-md` : "rounded-bl-md bg-muted text-foreground",
-                  isActive && "ring-2 ring-orange-500 shadow-lg shadow-orange-500/30",
+                  isActive && "ring-2 ring-orange-500 shadow-2xl shadow-orange-500/50",
                   clickable && "cursor-pointer hover:opacity-90",
                 )}
                 onClick={() => {
