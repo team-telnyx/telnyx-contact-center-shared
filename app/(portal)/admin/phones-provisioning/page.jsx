@@ -86,7 +86,7 @@ const VENDOR_MODELS = {
     "T31P", "T33G", "T32G", "T38G", "T40P", "T40G", "T41P", "T41S", "T42G", "T42S", "T43U", "T46G", "T46S", "T46U",
     "T48G", "T48S", "T48U", "T52S", "T53", "T53W", "T54S", "T54W", "T56A", "T57W", "T58A", "T58V", "T58W",
   ],
-  audiocodes: ["405", "405HD", "420HD", "430HD", "440HD", "445HD", "450HD"],
+  audiocodes: ["405", "405HD", "420HD", "425HD", "430HD", "C430HD", "440HD", "445HD", "450HD", "C450HD"],
 };
 
 function polyImage(model) {
@@ -108,13 +108,24 @@ function polyDocs(model) {
 }
 
 function yealinkImage(model) {
-  if (["T43U", "T40P", "T40G", "T41P", "T41S", "T42G", "T42S"].includes(model)) return "/images/hardphones/yealink-t43u.png";
-  if (["T46U", "T46G", "T46S"].includes(model)) return "/images/hardphones/yealink-t46u.png";
-  if (["T48U", "T48G", "T48S"].includes(model)) return "/images/hardphones/yealink-t48u.png";
-  if (["T53", "T53W", "T52S", "T54S", "T54W"].includes(model)) return "/images/hardphones/yealink-t53w.png";
-  if (["T56A", "T57W"].includes(model)) return "/images/hardphones/yealink-t57w.png";
-  if (["T58A", "T58V", "T58W"].includes(model)) return "/images/hardphones/yealink-t58w.png";
-  if (["T33G"].includes(model)) return "/images/hardphones/yealink-t33g.png";
+  const exactImages = {
+    T31P: "/images/hardphones/yealink-t31p.png",
+    T33G: "/images/hardphones/yealink-t33g.png",
+    T43U: "/images/hardphones/yealink-t43u.png",
+    T46U: "/images/hardphones/yealink-t46u.png",
+    T48U: "/images/hardphones/yealink-t48u.png",
+    T53W: "/images/hardphones/yealink-t53w.png",
+    T54W: "/images/hardphones/yealink-t54w.png",
+    T57W: "/images/hardphones/yealink-t57w.png",
+    T58W: "/images/hardphones/yealink-t58w.png",
+  };
+  if (exactImages[model]) return exactImages[model];
+  if (["T40P", "T40G", "T41P", "T41S", "T42G", "T42S"].includes(model)) return "/images/hardphones/yealink-t43u.png";
+  if (["T46G", "T46S"].includes(model)) return "/images/hardphones/yealink-t46u.png";
+  if (["T48G", "T48S"].includes(model)) return "/images/hardphones/yealink-t48u.png";
+  if (["T53", "T52S", "T54S"].includes(model)) return "/images/hardphones/yealink-t53w.png";
+  if (["T56A"].includes(model)) return "/images/hardphones/yealink-t57w.png";
+  if (["T58A", "T58V"].includes(model)) return "/images/hardphones/yealink-t58w.png";
   return "/images/hardphones/yealink-t31p.png";
 }
 
@@ -138,12 +149,15 @@ const PHONE_MODEL_CATALOG = {
   yealink: Object.fromEntries(VENDOR_MODELS.yealink.map((model) => [model, { image: yealinkImage(model), docs: yealinkDocs(model) }])),
   audiocodes: {
     "405": { image: "/images/hardphones/audiocodes-405.png", docs: AUDIOCODES_DOCS },
-    "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: AUDIOCODES_DOCS },
+    "405HD": { image: "/images/hardphones/audiocodes-405hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/405hd-ip-phone" },
     "420HD": { image: "/images/hardphones/audiocodes-420hd.png", docs: AUDIOCODES_DOCS },
-    "430HD": { image: "/images/hardphones/audiocodes-430hd.png", docs: AUDIOCODES_DOCS },
+    "425HD": { image: "/images/hardphones/audiocodes-425hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/425hd-ip-phone" },
+    "430HD": { image: "/images/hardphones/audiocodes-c430hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
+    "C430HD": { image: "/images/hardphones/audiocodes-c430hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c430hd-ip-phone" },
     "440HD": { image: "/images/hardphones/audiocodes-440hd.png", docs: AUDIOCODES_DOCS },
-    "445HD": { image: "/images/hardphones/audiocodes-445hd.png", docs: AUDIOCODES_DOCS },
-    "450HD": { image: "/images/hardphones/audiocodes-450hd.png", docs: AUDIOCODES_DOCS },
+    "445HD": { image: "/images/hardphones/audiocodes-445hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/445hd-ip-phone" },
+    "450HD": { image: "/images/hardphones/audiocodes-c450hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
+    "C450HD": { image: "/images/hardphones/audiocodes-c450hd.jpg", docs: "https://www.audiocodes.com/products/ip-phones/c450hd-ip-phone" },
   },
 };
 

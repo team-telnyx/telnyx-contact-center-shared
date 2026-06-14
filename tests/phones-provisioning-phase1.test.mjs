@@ -384,15 +384,34 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(route, /COUNT\(\*\)::int AS total/);
   });
 
-  it("bundles local hardphone model photos", () => {
+  it("bundles exact manufacturer phone photos for catalog models", async () => {
     const base = new URL("..", import.meta.url).pathname;
-    const files = readdirSync(`${base}public/images/hardphones`).filter((name) => /\.(png|jpe?g)$/i.test(name));
-    assert.ok(files.includes("poly-vvx-450.jpg"));
-    assert.ok(files.includes("yealink-t46u.png"));
-    assert.ok(files.includes("audiocodes-445hd.png"));
-    assert.ok(files.includes("audiocodes-420hd.png"));
-    assert.ok(files.includes("yealink-t43u.png"));
-    assert.ok(files.length >= 25);
+    const files = readdirSync(`${base}public/images/hardphones`).filter((name) => /\.(png|jpe?g|webp)$/i.test(name));
+    const page = await src("app/(portal)/admin/phones-provisioning/page.jsx");
+
+    [
+      "yealink-t31p.png",
+      "yealink-t33g.png",
+      "yealink-t43u.png",
+      "yealink-t46u.png",
+      "yealink-t48u.png",
+      "yealink-t53w.png",
+      "yealink-t54w.png",
+      "yealink-t57w.png",
+      "yealink-t58w.png",
+      "audiocodes-405hd.jpg",
+      "audiocodes-425hd.jpg",
+      "audiocodes-c430hd.jpg",
+      "audiocodes-445hd.jpg",
+      "audiocodes-c450hd.jpg",
+    ].forEach((file) => assert.ok(files.includes(file), `missing ${file}`));
+
+    assert.match(page, /T54W[\s\S]*yealink-t54w\.png/);
+    assert.match(page, /T57W[\s\S]*yealink-t57w\.png/);
+    assert.match(page, /425HD[\s\S]*audiocodes-425hd\.jpg/);
+    assert.match(page, /C450HD[\s\S]*audiocodes-c450hd\.jpg/);
+    assert.doesNotMatch(page, /\["T53", "T53W", "T52S", "T54S", "T54W"\]\.includes\(model\)\) return "\/images\/hardphones\/yealink-t53w\.png"/);
+    assert.ok(files.length >= 30);
   });
 
   it("menu replaces CTI Testing with Phones Provisioning", async () => {
