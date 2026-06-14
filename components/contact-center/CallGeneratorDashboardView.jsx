@@ -5,6 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import {
   IconActivity,
@@ -52,12 +62,35 @@ function MetricCard({ icon: Icon, label, value, tone = "sky" }) {
   );
 }
 
-function formatDuration(ms) {
-  if (!ms && ms !== 0) return "—";
-  const totalSecs = Math.round(Number(ms) / 1000);
-  const mins = Math.floor(totalSecs / 60);
-  const secs = totalSecs % 60;
-  return mins ? `${mins}m ${secs}s` : `${secs}s`;
+function formatSecs(secs) {
+  if (!secs && secs !== 0) return "—";
+  const total = Math.max(0, Math.round(Number(secs)));
+  const mins = Math.floor(total / 60);
+  const rest = total % 60;
+  return mins ? `${mins}m ${rest}s` : `${rest}s`;
+}
+
+// Elapsed seconds for a call. Active calls tick live off `now` (answered_at, or
+// started_at before answer); finished calls use the persisted duration_ms.
+function callElapsedSecs(call, nowMs) {
+  if (["completed", "failed", "abandoned", "stopped"].includes(call.status)) {
+    if (call.duration_ms || call.duration_ms === 0) return Math.round(Number(call.duration_ms) / 1000);
+    return null;
+  }
+  const anchor = call.answered_at || call.started_at;
+  if (!anchor) return null;
+  const start = new Date(anchor).getTime();
+  if (Number.isNaN(start)) return null;
+  return Math.max(0, Math.round((nowMs - start) / 1000));
+}
+
+// Color the live timer as it nears the configured max-call-duration hangup:
+// red within 15s of the limit, orange within 60s, default otherwise.
+function durationToneClass(remainingSecs) {
+  if (remainingSecs === null || remainingSecs === undefined) return "text-muted-foreground";
+  if (remainingSecs <= 15) return "text-rose-600 dark:text-rose-400 font-semibold";
+  if (remainingSecs <= 60) return "text-amber-600 dark:text-amber-400 font-medium";
+  return "";
 }
 
 function formatTime(value) {
@@ -75,7 +108,18 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState(null);
   const [disconnectBusy, setDisconnectBusy] = useState(null);
+  // 1s tick so active-call duration counts up live (the SSE snapshot only
+  // refreshes every 2s and carries no live timer for in-progress calls).
+  const [now, setNow] = useState(() => Date.now());
+  // Custom confirm dialogs (no native browser confirm — project convention).
+  const [confirmDisconnectAll, setConfirmDisconnectAll] = useState(false);
+  const [confirmPanic, setConfirmPanic] = useState(null); // holds runId
   const sourceRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +291,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                                 {actionBusy === `${run.id}:stop` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPlayerStop className="mr-1 h-3.5 w-3.5" />}
                                 Stop
                               </Button>
-                              <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => { if (window.confirm("Panic stop: hang up ALL active generated calls for this run?")) runAction(run.id, "panic"); }}>
+                              <Button size="sm" variant="destructive" disabled={actionBusy === `${run.id}:panic`} onClick={() => setConfirmPanic(run.id)}>
                                 {actionBusy === `${run.id}:panic` ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconAlertTriangle className="mr-1 h-3.5 w-3.5" />}
                                 Panic
                               </Button>
@@ -274,7 +318,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
             variant="outline"
             className="border-rose-500/35 text-rose-600 hover:bg-rose-500/10 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200"
             disabled={disconnectBusy === "all" || totals.activeCalls === 0}
-            onClick={() => { if (window.confirm(`Disconnect ALL ${totals.activeCalls} active generated calls?`)) disconnectAllCalls(); }}
+            onClick={() => setConfirmDisconnectAll(true)}
             data-testid="cg-disconnect-all"
           >
             {disconnectBusy === "all" ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconPhoneOff className="mr-1 h-3.5 w-3.5" />}
@@ -293,7 +337,7 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                   <TableHead>Status</TableHead>
                   <TableHead>Started</TableHead>
                   <TableHead>Answered</TableHead>
-                  <TableHead>Duration</TableHead>
+                  <TableHead>Duration / Max</TableHead>
                   <TableHead>Result</TableHead>
                   <TableHead className="text-right">Disconnect</TableHead>
                 </TableRow>
@@ -301,6 +345,12 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
               <TableBody>
                 {recentCalls.map((call) => {
                   const isActive = ["dialing", "ringing", "answered", "talking"].includes(call.status);
+                  const elapsedSecs = callElapsedSecs(call, now);
+                  const maxSecs = Number(call.max_duration_secs) > 0 ? Number(call.max_duration_secs) : null;
+                  // Remaining only matters while the call is live and counting
+                  // toward its max-duration hangup.
+                  const remainingSecs = isActive && maxSecs !== null && elapsedSecs !== null ? maxSecs - elapsedSecs : null;
+                  const toneClass = isActive ? durationToneClass(remainingSecs) : "";
                   return (
                     <TableRow key={call.id}>
                       <TableCell className="font-mono text-xs">{call.to_number || "—"}</TableCell>
@@ -310,7 +360,14 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatTime(call.started_at)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatTime(call.answered_at)}</TableCell>
-                      <TableCell className="text-xs tabular-nums">{formatDuration(call.duration_ms)}</TableCell>
+                      <TableCell className="text-xs tabular-nums">
+                        <span className={toneClass}>
+                          {elapsedSecs === null ? "—" : formatSecs(elapsedSecs)}
+                        </span>
+                        {maxSecs !== null ? (
+                          <span className="ml-1 text-muted-foreground">/ {formatSecs(maxSecs)}</span>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {call.result?.reason || call.result?.hangup_cause || "—"}
                       </TableCell>
@@ -337,6 +394,52 @@ export default function CallGeneratorDashboardView({ refreshNonce = 0 }) {
           </div>
         )}
       </div>
+
+      {/* Custom confirm: Disconnect all (replaces native browser confirm) */}
+      <AlertDialog open={confirmDisconnectAll} onOpenChange={(open) => { if (!open) setConfirmDisconnectAll(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect all active calls?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will immediately hang up all {totals.activeCalls} active generated call{totals.activeCalls === 1 ? "" : "s"}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="destructive"
+                onClick={() => { setConfirmDisconnectAll(false); disconnectAllCalls(); }}
+              >
+                Disconnect all
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Custom confirm: Panic stop (replaces native browser confirm) */}
+      <AlertDialog open={confirmPanic !== null} onOpenChange={(open) => { if (!open) setConfirmPanic(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Panic stop this run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This stops the run and hangs up ALL of its active generated calls immediately. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="destructive"
+                onClick={() => { const runId = confirmPanic; setConfirmPanic(null); if (runId) runAction(runId, "panic"); }}
+              >
+                Panic stop
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

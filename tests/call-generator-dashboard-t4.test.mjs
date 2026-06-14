@@ -45,24 +45,37 @@ describe("call generator live dashboard (T4)", () => {
     assert.match(code, /Reconnecting/);
   });
 
-  it("dashboard exposes per-run Stop and Panic controls with confirmation", async () => {
+  it("dashboard exposes per-run Stop and Panic controls with a custom confirm modal", async () => {
     const code = await src("components/contact-center/CallGeneratorDashboardView.jsx");
     assert.match(code, /runAction\(run\.id, "stop"\)/);
-    assert.match(code, /runAction\(run\.id, "panic"\)/);
-    assert.match(code, /window\.confirm\("Panic stop/);
+    assert.match(code, /runAction\(runId, "panic"\)/);
+    // Panic uses the custom AlertDialog, never native window.confirm
+    assert.doesNotMatch(code, /window\.confirm/);
+    assert.match(code, /AlertDialog/);
+    assert.match(code, /Panic stop this run\?/);
+    assert.match(code, /setConfirmPanic/);
     assert.match(code, /PATCH/);
   });
 
-  it("dashboard renders recent calls table with durations and results", async () => {
+  it("dashboard renders recent calls table with live durations, max and results", async () => {
     const code = await src("components/contact-center/CallGeneratorDashboardView.jsx");
     assert.match(code, /Recent calls/);
-    assert.match(code, /formatDuration/);
+    // live ticking elapsed (1s) instead of a static formatDuration
+    assert.match(code, /callElapsedSecs/);
+    assert.match(code, /setNow\(Date\.now\(\)\)/);
+    // duration shown alongside the effective max call duration
+    assert.match(code, /Duration \/ Max/);
+    assert.match(code, /max_duration_secs/);
+    // color coding as the timer approaches the hangup
+    assert.match(code, /durationToneClass/);
+    assert.match(code, /remainingSecs <= 15/);
+    assert.match(code, /remainingSecs <= 60/);
     assert.match(code, /hangup_cause/);
     assert.match(code, /to_number/);
     assert.match(code, /from_number/);
   });
 
-  it("dashboard offers per-call Disconnect icons and a Disconnect all button", async () => {
+  it("dashboard offers per-call Disconnect icons and a Disconnect all custom modal", async () => {
     const code = await src("components/contact-center/CallGeneratorDashboardView.jsx");
     assert.match(code, /Disconnect all/);
     assert.match(code, /cg-disconnect-all/);
@@ -70,10 +83,21 @@ describe("call generator live dashboard (T4)", () => {
     assert.match(code, /IconPhoneOff/);
     // per-call icon only renders for active calls
     assert.match(code, /\["dialing", "ringing", "answered", "talking"\]\.includes\(call\.status\)/);
-    // bulk action requires confirmation and is disabled with no active calls
-    assert.match(code, /window\.confirm\(`Disconnect ALL/);
+    // bulk action uses the custom confirm modal (no native window.confirm) and is disabled with no active calls
+    assert.match(code, /setConfirmDisconnectAll\(true\)/);
+    assert.match(code, /Disconnect all active calls\?/);
     assert.match(code, /totals\.activeCalls === 0/);
     assert.match(code, /\/api\/admin\/call-generator\/calls/);
+  });
+
+  it("stream snapshot surfaces the effective max call duration per call", async () => {
+    const code = await src("app/api/admin/call-generator/stream/route.js");
+    assert.match(code, /max_duration_secs/);
+    // precedence: run config → scenario override → global settings → 120, clamped
+    assert.match(code, /postAnswer,maxDurationSecs/);
+    assert.match(code, /maxCallDurationSecs/);
+    assert.match(code, /max_call_duration_secs/);
+    assert.match(code, /GREATEST\(10, LEAST\(3600/);
   });
 
   it("calls API exposes single disconnect and disconnect_all endpoints", async () => {
