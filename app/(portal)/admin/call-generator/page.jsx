@@ -69,6 +69,7 @@ const emptyTarget = () => ({ flow_id: "", total_calls: 5, from_numbers: [], acti
 const emptyScenarioDraft = () => ({
   name: "",
   description: "",
+  maxCallDurationSecs: "",
   targets: [emptyTarget()],
   assert_queue: "",
   assert_answer_within: "",
@@ -490,6 +491,10 @@ export default function AdminCallGeneratorPage() {
       setScenarioDraft({
         name: selectedScenario.name || "",
         description: selectedScenario.description || "",
+        maxCallDurationSecs:
+          Number(selectedScenario.config?.maxCallDurationSecs) > 0
+            ? String(selectedScenario.config.maxCallDurationSecs)
+            : "",
         targets,
         ...draftAssertionFields(selectedScenario.config),
       });
@@ -532,6 +537,9 @@ export default function AdminCallGeneratorPage() {
             transcription_active: t.workflow_testing === true ? t.transcription_active === true : false,
           })),
           assertions: assertionsFromDraft(scenarioDraft),
+          ...(Number(scenarioDraft.maxCallDurationSecs) > 0
+            ? { maxCallDurationSecs: Math.min(3600, Math.max(10, Math.round(Number(scenarioDraft.maxCallDurationSecs)))) }
+            : {}),
         },
       };
       const url = selectedScenario ? `${API}/scenarios/${selectedScenario.id}` : `${API}/scenarios`;
@@ -747,6 +755,7 @@ export default function AdminCallGeneratorPage() {
                 flows={resources.flows}
                 actions={actions}
                 allowedFromNumbers={allowedFromNumbers}
+                globalMaxCallDurationSecs={Number(settingsDraft.max_call_duration_secs) || DEFAULT_SETTINGS.max_call_duration_secs}
               />
             ) : active === "actions" ? (
               <ActionEditor
@@ -826,7 +835,7 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
   );
 }
 
-function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, actions, allowedFromNumbers }) {
+function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, actions, allowedFromNumbers, globalMaxCallDurationSecs }) {
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const selectableActions = actions.filter((a) => a.id !== WORKFLOW_TESTING_ACTION_ID);
   const updateTarget = (index, patch) => setDraft((d) => ({
@@ -876,6 +885,22 @@ function ScenarioEditor({ draft, setDraft, editing, valid, saving, save, flows, 
           <div>
             <Label>Description</Label>
             <Textarea className="mt-1" rows={2} value={draft.description} onChange={(e) => update({ description: e.target.value })} placeholder="Optional description" />
+          </div>
+          <div>
+            <Label>Max call duration (seconds)</Label>
+            <Input
+              type="number"
+              min={10}
+              max={3600}
+              className="mt-1"
+              value={draft.maxCallDurationSecs}
+              onChange={(e) => update({ maxCallDurationSecs: e.target.value })}
+              placeholder={`Default: ${globalMaxCallDurationSecs}s (global setting)`}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Per-scenario override. Leave empty to use the global setting ({globalMaxCallDurationSecs}s).
+              Telnyx enforces the hangup on the dial via time_limit_secs.
+            </p>
           </div>
         </div>
       </SettingCard>
