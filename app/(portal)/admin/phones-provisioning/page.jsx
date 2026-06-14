@@ -933,28 +933,30 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Line 1 / Agent name" />
           </div>
           <div className="rounded-xl border bg-muted/20 p-3">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <Label>Telnyx number</Label>
-              {editing && draft.assigned_phone_number && !numberChangeOpen ? (
-                <Button type="button" variant="outline" size="sm" onClick={() => setNumberChangeOpen(true)} data-testid="hp-phone-number-change">
-                  <IconRefresh className="mr-1 h-3.5 w-3.5" /> Change
+            <Label>Telnyx number</Label>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                {editing && draft.assigned_phone_number && !numberChangeOpen ? (
+                  <Input className="font-mono" value={draft.assigned_phone_number} readOnly data-testid="hp-phone-number-readonly" />
+                ) : (
+                  <Select value={draft.assigned_phone_number_id || "none"} onValueChange={(v) => {
+                    const selected = numberOptions.find((n) => n.id === v);
+                    update({ assigned_phone_number_id: v === "none" ? "" : v, assigned_phone_number: selected?.phone_number || "" });
+                  }}>
+                    <SelectTrigger className="w-full" data-testid="hp-phone-number-select"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Telnyx number assigned</SelectItem>
+                      {numberOptions.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}{n.assigned ? " · current" : ""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              {editing && draft.assigned_phone_number ? (
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setNumberChangeOpen(true)} disabled={numberChangeOpen} aria-label="Change Telnyx number" title="Change Telnyx number" data-testid="hp-phone-number-change">
+                  <IconRefresh className="h-4 w-4" />
                 </Button>
               ) : null}
             </div>
-            {editing && draft.assigned_phone_number && !numberChangeOpen ? (
-              <Input className="mt-1 font-mono" value={draft.assigned_phone_number} readOnly data-testid="hp-phone-number-readonly" />
-            ) : (
-              <Select value={draft.assigned_phone_number_id || "none"} onValueChange={(v) => {
-                const selected = numberOptions.find((n) => n.id === v);
-                update({ assigned_phone_number_id: v === "none" ? "" : v, assigned_phone_number: selected?.phone_number || "" });
-              }}>
-                <SelectTrigger className="mt-1 w-full" data-testid="hp-phone-number-select"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Telnyx number assigned</SelectItem>
-                  {numberOptions.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}{n.assigned ? " · current" : ""}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            )}
           </div>
           {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? null : (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

@@ -140,6 +140,10 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /const \[numberChangeOpen, setNumberChangeOpen\] = useState\(false\)/);
     assert.match(page, /data-testid="hp-phone-number-readonly"/);
     assert.match(page, /data-testid="hp-phone-number-change"/);
+    assert.match(page, /size="icon" className="h-9 w-9 shrink-0"/);
+    assert.match(page, /aria-label="Change Telnyx number"/);
+    assert.match(page, /<div className="mt-1 flex items-center gap-2">/);
+    assert.match(page, /<div className="min-w-0 flex-1">/);
     assert.match(page, /setNumberChangeOpen\(true\)/);
     assert.match(page, /data-testid="hp-phone-number-select"/);
     assert.match(page, /numberOptions/);
