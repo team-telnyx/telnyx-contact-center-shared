@@ -13,6 +13,7 @@ import {
   personaEmotion,
   applyVoiceExpression,
   applyUltraExpression,
+  buildPreviewSamplePrompt,
   handleWorkflowTestingFinalTranscription,
 } from "../lib/call-generator/workflow-testing.mjs";
 import { normalizeSteps } from "../lib/call-generator/actions.mjs";
@@ -182,6 +183,32 @@ test("applyUltraExpression back-compat alias delegates with expressive on by def
     applyUltraExpression("Hi.", { voice: "Telnyx.Ultra.Mia", persona: "happy" }),
     '<emotion value="happy" />Hi.'
   );
+});
+
+test("buildPreviewSamplePrompt: Ultra + expressive tells the model to embed the persona emotion tag", () => {
+  const msgs = buildPreviewSamplePrompt({ persona: "angry", voice: "Telnyx.Ultra.Mia", expressive: true });
+  const sys = msgs.find((m) => m.role === "system").content;
+  assert.ok(/20 words/.test(sys), "should cap at 20 words");
+  assert.ok(/<emotion value="angry" \/>/.test(sys), "should reference the angry emotion tag");
+  assert.ok(/angry/i.test(sys), "should carry the persona instruction");
+});
+
+test("buildPreviewSamplePrompt: xAI + expressive references xAI speech tags", () => {
+  const msgs = buildPreviewSamplePrompt({ persona: "hesitant", voice: "xAI.eve", expressive: true });
+  const sys = msgs.find((m) => m.role === "system").content;
+  assert.ok(/xAI speech tags/.test(sys));
+  assert.ok(/\[pause\]/.test(sys));
+});
+
+test("buildPreviewSamplePrompt: expressive off or unsupported voice -> no tag instruction", () => {
+  const off = buildPreviewSamplePrompt({ persona: "angry", voice: "Telnyx.Ultra.Mia", expressive: false });
+  assert.ok(!/<emotion/.test(off.find((m) => m.role === "system").content));
+  const std = buildPreviewSamplePrompt({ persona: "angry", voice: "AWS.Polly.Joanna", expressive: true });
+  const sysStd = std.find((m) => m.role === "system").content;
+  assert.ok(!/<emotion/.test(sysStd));
+  assert.ok(!/xAI speech tags/.test(sysStd));
+  // still carries the persona behaviour
+  assert.ok(/angry/i.test(sysStd));
 });
 
 // --- End-to-end: prompt + spoken payload via handleWorkflowTestingFinalTranscription

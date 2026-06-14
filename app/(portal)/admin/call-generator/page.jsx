@@ -1135,6 +1135,7 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
 
 function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save, media }) {
   const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID;
+  const [generatingSample, setGeneratingSample] = useState(false);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const updateStep = (index, patch) => setDraft((d) => ({ ...d, steps: d.steps.map((s, i) => (i === index ? { ...s, ...patch } : s)) }));
   const removeStep = (index) => setDraft((d) => ({ ...d, steps: d.steps.filter((_, i) => i !== index) }));
@@ -1149,6 +1150,29 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
     ...d,
     steps: [...d.steps, type === "play_media" ? { type, media_name: "" } : type === "speak" ? { type, text: "", voice: "AWS.Polly.Joanna" } : { type, digits: "" }],
   }));
+
+  // Generate an Expressive Mode preview sample (≤20 words) via the LLM for the
+  // workflow_testing step's current persona + voice + expressive setting, then
+  // drop it into the Preview sample text field. When Expressive Mode is on and
+  // the voice supports it (Ultra / xAI), the sentence carries the matching tags.
+  const generateSample = async (index, step) => {
+    setGeneratingSample(true);
+    try {
+      const res = await fetch(`${API}/preview-sample`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ persona: step.persona || "neutral", voice: step.voice || "", expressive: step.expressive === true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.sample) throw new Error(data.error || "Generation failed");
+      updateStep(index, { sample_text: data.sample });
+      notify({ title: "Preview sample generated", variant: "success" });
+    } catch (err) {
+      notify({ title: "Could not generate sample", description: err.message, variant: "error" });
+    } finally {
+      setGeneratingSample(false);
+    }
+  };
 
   return (
     <>
@@ -1204,9 +1228,24 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
             ) : step.type === "workflow_testing" ? (
               <div className="space-y-3">
                 <div>
-                  <Label>Preview sample text</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>Preview sample text</Label>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      disabled={generatingSample}
+                      onClick={() => generateSample(index, step)}
+                      title="Generate a short sample line for the selected persona, voice and Expressive Mode"
+                    >
+                      {generatingSample ? <IconLoader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <IconWand className="mr-1 h-3.5 w-3.5" />}
+                      Generate sample
+                    </Button>
+                  </div>
                   <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
-                  <p className="mt-1 text-xs text-muted-foreground">This text is only used by the Play preview button so admins can test any language or phrase with the selected voice.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Used by the Play preview button to test the selected voice. Click <span className="font-medium">Generate sample</span> to get an LLM one-liner (≤20 words) in the chosen persona{voiceSupportsExpressive(step.voice) && step.expressive ? ", with the matching Expressive Mode tags embedded" : ""}.
+                  </p>
                 </div>
                 <div>
                   <Label>Caller simulation voice</Label>
