@@ -88,7 +88,7 @@ describe("call generator engine (T2)", () => {
         if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
+        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
         if (/SET status = \$1/.test(sql)) {
           const next = params[0];
           if (params[3] !== ledger.status) return { rowCount: 0 };
@@ -143,7 +143,7 @@ describe("call generator engine (T2)", () => {
         if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
+        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
         if (/SET status = \$1/.test(sql)) {
           const next = params[0];
           if (params[3] !== ledger.status) return { rowCount: 0 };
@@ -197,7 +197,7 @@ describe("call generator engine (T2)", () => {
         if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { maxDurationSecs: 120 } }] };
+        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { maxDurationSecs: 120 }, scenario_config: {} }] };
         if (/SET status = \$1/.test(sql)) {
           const next = params[0];
           if (params[3] !== ledger.status) return { rowCount: 0 };
@@ -296,7 +296,7 @@ describe("call generator engine (T2)", () => {
         if (/SELECT status, result FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status, result: ledger.result }] };
         if (/SELECT status FROM cg_call_ledger/.test(sql)) return { rows: [{ status: ledger.status }] };
         if (/SELECT result FROM cg_call_ledger WHERE id/.test(sql)) return { rows: [{ result: ledger.result }] };
-        if (/SELECT r.config, l.result/.test(sql)) return { rows: [{ result: ledger.result, config: { postAnswer: { action: "tts_loop", ttsText: "legacy audio" }, maxDurationSecs: 120 } }] };
+        if (/JOIN cg_runs/.test(sql) && /scenario_config/.test(sql)) return { rows: [{ result: ledger.result, run_config: { postAnswer: { action: "tts_loop", ttsText: "legacy audio" }, maxDurationSecs: 120 }, scenario_config: {} }] };
         if (/SET status = \$1/.test(sql)) {
           ledger.status = params[0];
           ledger.result = { ...ledger.result, ...JSON.parse(params[1] || "{}") };

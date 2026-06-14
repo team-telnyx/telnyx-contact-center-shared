@@ -6,6 +6,9 @@ import {
   personaInstruction,
   normalizeMaxSlotsPerTurn,
   resolveSlotCountForTurn,
+  isUltraVoice,
+  personaEmotion,
+  applyUltraExpression,
   handleWorkflowTestingFinalTranscription,
 } from "../lib/call-generator/workflow-testing.mjs";
 import { normalizeSteps } from "../lib/call-generator/actions.mjs";
@@ -86,6 +89,46 @@ test("normalizeSteps defaults persona to neutral on unknown value", () => {
   const [step] = normalizeSteps([{ type: "workflow_testing", persona: "bogus" }]);
   assert.equal(step.persona, "neutral");
   assert.equal(step.max_slots_per_turn, 1);
+});
+
+test("isUltraVoice detects only Telnyx.Ultra.* voices", () => {
+  assert.equal(isUltraVoice("Telnyx.Ultra.Mia"), true);
+  assert.equal(isUltraVoice("telnyx.ultra.mia"), true);
+  assert.equal(isUltraVoice("AWS.Polly.Joanna"), false);
+  assert.equal(isUltraVoice("Telnyx.Natural.x"), false);
+  assert.equal(isUltraVoice(""), false);
+  assert.equal(isUltraVoice(undefined), false);
+});
+
+test("personaEmotion maps personas to Ultra emotions, neutral -> null", () => {
+  assert.equal(personaEmotion("neutral"), null);
+  assert.equal(personaEmotion("angry"), "angry");
+  assert.equal(personaEmotion("in_a_hurry"), "frustrated");
+  assert.equal(personaEmotion("chatty"), "excited");
+  assert.equal(personaEmotion("bogus"), null); // normalizes to neutral
+});
+
+test("applyUltraExpression prepends an emotion tag only for Ultra voices + non-neutral persona", () => {
+  // Ultra + angry -> tagged
+  assert.equal(
+    applyUltraExpression("I want a refund now.", { voice: "Telnyx.Ultra.Mia", persona: "angry" }),
+    '<emotion value="angry" />I want a refund now.'
+  );
+  // Non-Ultra voice -> untouched (would otherwise be spoken literally)
+  assert.equal(
+    applyUltraExpression("I want a refund now.", { voice: "AWS.Polly.Joanna", persona: "angry" }),
+    "I want a refund now."
+  );
+  // Ultra + neutral -> no tag (most natural delivery)
+  assert.equal(
+    applyUltraExpression("Sure, John Wick.", { voice: "Telnyx.Ultra.Mia", persona: "neutral" }),
+    "Sure, John Wick."
+  );
+});
+
+test("applyUltraExpression does not double-tag text that already has an emotion tag", () => {
+  const already = '<emotion value="excited" />Great news!';
+  assert.equal(applyUltraExpression(already, { voice: "Telnyx.Ultra.Mia", persona: "angry" }), already);
 });
 
 // End-to-end: persona + slot instructions must reach the LLM caller prompt.
@@ -192,3 +235,92 @@ test("default neutral single-slot config yields a single-slot prompt with no per
     global.fetch = original;
   }
 });
+
+test("Ultra voice + angry persona speaks an emotion-tagged payload but stores clean history", async () => {
+  const captureUpdates = [];
+  const ledgerRow = {
+    id: "ledger-ultra",
+    run_id: "run-ultra",
+    call_control_id: "v3:GEN-LEG",
+    result: { workflow_testing: { enabled: true, workflow_id: "wf-1", voice: "Telnyx.Ultra.Mia", history: [], persona: "angry", max_slots_per_turn: 1, randomize_slots: false } },
+  };
+  const pool = makeReplyPool(ledgerRow, captureUpdates);
+
+  let aiBody = null;
+  let speakBody = null;
+  const original = global.fetch;
+  global.fetch = async (url, options) => {
+    const u = String(url);
+    if (u.includes("/ai/chat/completions")) {
+      aiBody = JSON.parse(options.body);
+      return { ok: true, async json() { return { choices: [{ message: { content: "Finally, my name is John Wick." } }] }; } };
+    }
+    if (u.includes("/actions/speak")) { speakBody = JSON.parse(options.body); return { ok: true, async json() { return {}; } }; }
+    return { ok: false, status: 404, async text() { return "nope"; } };
+  };
+  try {
+    const res = await handleWorkflowTestingFinalTranscription({
+      pool,
+      interaction: { id: "int-ultra", from_number: "+48221811540" },
+      payload: { from: "+48221811540" },
+      transcriptionData: { transcript: "Can I get your name?", is_final: true },
+      assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
+    });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    // Expressive instruction reached the prompt (Ultra voice)
+    const systemMsg = aiBody.messages.find((m) => m.role === "system").content;
+    assert.ok(/SSML emotion tags/.test(systemMsg), "expressive instruction expected for Ultra voice");
+    // TTS payload carries the emotion tag for the angry persona
+    assert.equal(speakBody.payload, '<emotion value="angry" />Finally, my name is John Wick.');
+    assert.equal(speakBody.voice, "Telnyx.Ultra.Mia");
+    // History + returned reply stay clean (no SSML)
+    assert.equal(res.reply, "Finally, my name is John Wick.");
+    const hist = captureUpdates.at(-1).workflow_testing.history;
+    assert.equal(hist.at(-1).text, "Finally, my name is John Wick.");
+    assert.ok(!/emotion/.test(hist.at(-1).text), "history must not contain SSML tags");
+  } finally {
+    global.fetch = original;
+  }
+});
+
+test("non-Ultra voice never injects emotion tags into the spoken payload", async () => {
+  const captureUpdates = [];
+  const ledgerRow = {
+    id: "ledger-natural",
+    run_id: "run-natural",
+    call_control_id: "v3:GEN-LEG",
+    result: { workflow_testing: { enabled: true, workflow_id: "wf-1", voice: "AWS.Polly.Joanna", history: [], persona: "angry", max_slots_per_turn: 1, randomize_slots: false } },
+  };
+  const pool = makeReplyPool(ledgerRow, captureUpdates);
+
+  let aiBody = null;
+  let speakBody = null;
+  const original = global.fetch;
+  global.fetch = async (url, options) => {
+    const u = String(url);
+    if (u.includes("/ai/chat/completions")) {
+      aiBody = JSON.parse(options.body);
+      return { ok: true, async json() { return { choices: [{ message: { content: "Ugh, John Wick." } }] }; } };
+    }
+    if (u.includes("/actions/speak")) { speakBody = JSON.parse(options.body); return { ok: true, async json() { return {}; } }; }
+    return { ok: false, status: 404, async text() { return "nope"; } };
+  };
+  try {
+    const res = await handleWorkflowTestingFinalTranscription({
+      pool,
+      interaction: { id: "int-natural", from_number: "+48221811540" },
+      payload: { from: "+48221811540" },
+      transcriptionData: { transcript: "Your name?", is_final: true },
+      assistConfig: { assist_type: "workflows", workflow_id: "wf-1" },
+    });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    // No expressive instruction for non-Ultra voice
+    const systemMsg = aiBody.messages.find((m) => m.role === "system").content;
+    assert.ok(!/SSML emotion tags/.test(systemMsg), "non-Ultra voice must not get expressive instruction");
+    // Plain payload, no tags
+    assert.equal(speakBody.payload, "Ugh, John Wick.");
+  } finally {
+    global.fetch = original;
+  }
+});
+
