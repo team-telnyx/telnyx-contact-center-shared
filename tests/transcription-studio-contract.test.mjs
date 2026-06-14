@@ -87,7 +87,9 @@ test("transcription sheet renders diarized chat bubbles via the shared synced co
 test("shared DiarizedTranscript syncs bubbles to recording playback", () => {
   assert.match(diarizedTranscript, /data-testid="diarized-transcript"/);
   assert.match(diarizedTranscript, /SPEAKER_TONES/);
-  assert.match(diarizedTranscript, /Speaker \{Number\(turn\.speaker\) \+ 1\}/);
+  assert.match(diarizedTranscript, /function formatSpeakerLabel\(speaker\)/);
+  assert.match(diarizedTranscript, /formatSpeakerLabel\(turn\.speaker\)/);
+  assert.match(diarizedTranscript, /return speaker \|\| "Speaker"/);
   // Highlights the active turn, scrolls to it, and seeks on click
   assert.match(diarizedTranscript, /ring-2 ring-orange-500/);
   assert.match(diarizedTranscript, /scrollIntoView/);
