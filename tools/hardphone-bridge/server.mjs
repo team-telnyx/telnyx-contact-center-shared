@@ -153,7 +153,9 @@ function yealinkActionUrl(host, query) {
 const YEALINK_ACCOUNT_STATUS = { 0: "disabled", 1: "registering", 2: "registered", 3: "registration_failed", 4: "unregistered" };
 
 function normalizeYealinkRegistrationStatus(code) {
-  const numeric = Number(String(code ?? "").trim());
+  const normalized = String(code ?? "").trim();
+  if (!normalized) return null;
+  const numeric = Number(normalized);
   return YEALINK_ACCOUNT_STATUS[numeric] || (Number.isFinite(numeric) ? `status_${numeric}` : null);
 }
 
@@ -240,17 +242,23 @@ async function yealinkAction(host, query, { user = DEFAULT_YEALINK_ADMIN_USER, p
 
 async function yealinkLogin(host, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
   const body = new URLSearchParams({ username: user || "admin", pwd: password || "" }).toString();
-  const response = await requestText(`https://${host}/api/auth/login?p=Login`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `https://${host}`, referer: `https://${host}/api` },
-    body,
-    timeoutMs: 7000,
-  }).catch(() => requestText(`http://${host}/api/auth/login?p=Login`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `http://${host}`, referer: `http://${host}/api` },
-    body,
-    timeoutMs: 7000,
-  }));
+  let response;
+  try {
+    response = await requestText(`https://${host}/api/auth/login?p=Login`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `https://${host}`, referer: `https://${host}/api` },
+      body,
+      timeoutMs: 7000,
+    });
+    if (!response.ok && response.status !== 401 && response.status !== 403) throw new Error(`HTTP ${response.status}`);
+  } catch {
+    response = await requestText(`http://${host}/api/auth/login?p=Login`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `http://${host}`, referer: `http://${host}/api` },
+      body,
+      timeoutMs: 7000,
+    });
+  }
   let data = null;
   try { data = response.raw ? JSON.parse(response.raw) : null; } catch {}
   if (response.status === 401 || response.status === 403 || data?.ret !== "ok") return { ok: false, reason: "auth_failed", httpStatus: response.status };
