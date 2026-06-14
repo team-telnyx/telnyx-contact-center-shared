@@ -156,7 +156,7 @@ function yealinkImage(model) {
     T57W: "/images/hardphones/yealink-t57w.png",
     T58A: "/images/hardphones/yealink-t58a.png",
     T58V: "/images/hardphones/yealink-t58v.png",
-    T58W: "/images/hardphones/yealink-t58w.png",
+    T58W: "/images/hardphones/yealink-t58a.png",
   };
   return exactImages[model] || "/images/hardphones/yealink-t31p.png";
 }
@@ -453,6 +453,11 @@ export default function PhonesProvisioningPage() {
   }, [active]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!selectedPhoneId || loading) return;
+    if (!phones.some((phone) => phone.id === selectedPhoneId)) setSelectedPhoneId(null);
+  }, [loading, phones, selectedPhoneId]);
 
   useEffect(() => {
     if (active !== "bridges" && active !== "phones") return undefined;
