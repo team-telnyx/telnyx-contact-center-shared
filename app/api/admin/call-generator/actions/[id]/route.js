@@ -5,7 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeSteps } from "@/lib/call-generator/actions.mjs";
-import { DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT, DEFAULT_WORKFLOW_TESTING_VOICE, WORKFLOW_TESTING_ACTION_ID } from "@/lib/call-generator/workflow-testing.mjs";
+import { DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT, DEFAULT_WORKFLOW_TESTING_VOICE, WORKFLOW_TESTING_ACTION_ID, normalizePersona, normalizeMaxSlotsPerTurn } from "@/lib/call-generator/workflow-testing.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -42,11 +42,19 @@ export async function PUT(request, { params }) {
     if (body.steps !== undefined) {
       const steps = normalizeSteps(body.steps);
       const safeSteps = String(id) === WORKFLOW_TESTING_ACTION_ID
-        ? [{
-            type: "workflow_testing",
-            voice: steps.find((step) => step.type === "workflow_testing")?.voice || DEFAULT_WORKFLOW_TESTING_VOICE,
-            sample_text: steps.find((step) => step.type === "workflow_testing")?.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT,
-          }]
+        ? [(() => {
+            const wt = steps.find((step) => step.type === "workflow_testing") || {};
+            const maxSlots = normalizeMaxSlotsPerTurn(wt.max_slots_per_turn);
+            return {
+              type: "workflow_testing",
+              voice: wt.voice || DEFAULT_WORKFLOW_TESTING_VOICE,
+              sample_text: wt.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT,
+              persona: normalizePersona(wt.persona),
+              max_slots_per_turn: maxSlots,
+              // randomize only has meaning when more than one slot is allowed.
+              randomize_slots: maxSlots > 1 ? wt.randomize_slots === true : false,
+            };
+          })()]
         : steps;
       columns.push(`steps = $${idx++}`);
       values.push(JSON.stringify(safeSteps));
