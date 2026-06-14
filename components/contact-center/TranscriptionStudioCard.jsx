@@ -241,17 +241,6 @@ export default function TranscriptionStudioCard({
               </div>
             </div>
           </div>
-          {hasTranscript ? (
-            <Button
-              size="sm"
-              onClick={() => setSheetOpen(true)}
-              className="h-8 rounded-lg bg-violet-600 px-3 text-xs text-white shadow-md shadow-violet-600/25 hover:bg-violet-500"
-              data-testid="view-conversation-button"
-            >
-              <IconMessages className="mr-1.5 h-3.5 w-3.5" />
-              View Conversation
-            </Button>
-          ) : null}
         </div>
 
         {/* Settings */}
@@ -328,24 +317,37 @@ export default function TranscriptionStudioCard({
 
         {/* Action row */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-muted/20 px-5 py-3">
-          <Button
-            onClick={handleTranscribe}
-            disabled={isTranscribing || !recordingId || !interactionId}
-            className="rounded-xl px-5"
-            data-testid="transcribe-button"
-          >
-            {isTranscribing ? (
-              <>
-                <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
-                Transcribing…
-              </>
-            ) : (
-              <>
-                <IconSparkles className="mr-2 h-4 w-4" />
-                {hasTranscript ? "Re-transcribe" : "Transcribe Recording"}
-              </>
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={handleTranscribe}
+              disabled={isTranscribing || !recordingId || !interactionId}
+              className="rounded-xl px-5"
+              data-testid="transcribe-button"
+            >
+              {isTranscribing ? (
+                <>
+                  <IconLoader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Transcribing…
+                </>
+              ) : (
+                <>
+                  <IconSparkles className="mr-2 h-4 w-4" />
+                  {hasTranscript ? "Re-transcribe" : "Transcribe Recording"}
+                </>
+              )}
+            </Button>
+            {hasTranscript ? (
+              <Button
+                variant="outline"
+                onClick={() => setSheetOpen(true)}
+                className="rounded-xl px-5"
+                data-testid="view-conversation-button"
+              >
+                <IconMessages className="mr-2 h-4 w-4" />
+                View Conversation
+              </Button>
+            ) : null}
+          </div>
 
           {hasTranscript ? (
             <div className="flex flex-wrap items-center gap-1.5" data-testid="transcription-stats">

@@ -70,6 +70,10 @@ test("recording player has a modern transport with speed control and waveform st
   assert.match(recordingPlayer, /WAVE_STYLE_OPTIONS/);
   assert.match(recordingPlayer, /recording-wave-style-toggle/);
   assert.match(recordingPlayer, /useState\("bars"\)/);
+  // Toggling style repaints in place via setOptions (no destroy/re-decode → no blink);
+  // waveStyle must NOT be in the create-effect deps
+  assert.match(recordingPlayer, /setOptions\(barOptionsFor\(waveStyle\)\)/);
+  assert.match(recordingPlayer, /\}, \[src, recordingId\]\);/);
   // Dead WaveSurfer v7 backend option removed
   assert.doesNotMatch(recordingPlayer, /backend: "WebAudio"/);
   // CORS-safe proxy loading is preserved

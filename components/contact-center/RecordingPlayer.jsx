@@ -56,6 +56,16 @@ const WAVE_STYLE_OPTIONS = [
   { value: "wave", label: "Wave" },
 ];
 
+// Bar geometry per style. Style C (wave) is a continuous fill — in WaveSurfer v7
+// that means barWidth/barGap = 0. Returned as a full object so it can be passed
+// to both WaveSurfer.create() and the live setOptions() toggle without recreating
+// the instance (avoids re-decoding the audio / blinking the card).
+function barOptionsFor(style) {
+  return style === "wave"
+    ? { barWidth: 0, barGap: 0, barRadius: 0 }
+    : { barWidth: 2, barGap: 1, barRadius: 3 };
+}
+
 export default function RecordingPlayer({
   src,
   recordingId,
@@ -73,6 +83,10 @@ export default function RecordingPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   // Waveform render style — "bars" (B, default) or "wave" (C, continuous).
   const [waveStyle, setWaveStyle] = useState("bars");
+  // Ref mirror so the create-effect can read the current style at mount time
+  // without re-subscribing (toggling style must NOT recreate the instance).
+  const waveStyleRef = useRef(waveStyle);
+  waveStyleRef.current = waveStyle;
 
   useEffect(() => {
     // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
@@ -99,11 +113,9 @@ export default function RecordingPlayer({
       const waveColor = buildWaveGradient(gradientCtx, WAVE_HEIGHT);
       const progressColor = buildProgressGradient(gradientCtx, WAVE_HEIGHT);
 
-      // Style B (bars): dense thin bars. Style C (wave): continuous fill —
-      // achieved by omitting barWidth/barGap entirely in v7.
-      const styleOptions = waveStyle === "wave"
-        ? {}
-        : { barWidth: 2, barGap: 1, barRadius: 3 };
+      // Style B (bars): dense thin bars. Style C (wave): continuous fill.
+      // Read from the ref so a later style toggle won't recreate this instance.
+      const styleOptions = barOptionsFor(waveStyleRef.current);
 
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
@@ -171,7 +183,19 @@ export default function RecordingPlayer({
       }
       setWaveReady(false);
     };
-  }, [src, recordingId, waveStyle]);
+  }, [src, recordingId]);
+
+  // Toggling the waveform style repaints in place via setOptions() — no destroy /
+  // re-decode, so only the canvas updates and the rest of the card never blinks.
+  useEffect(() => {
+    const ws = wavesurferRef.current;
+    if (!ws || !waveReady) return;
+    try {
+      ws.setOptions(barOptionsFor(waveStyle));
+    } catch {
+      // setOptions is best-effort; ignore if the instance is mid-teardown.
+    }
+  }, [waveStyle, waveReady]);
 
   useEffect(() => {
     if (wavesurferRef.current) {
