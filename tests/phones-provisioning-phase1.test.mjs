@@ -341,6 +341,10 @@ describe("hard phones provisioning (Phase 1)", () => {
     assert.match(code, /VVX 101/);
     assert.match(code, /Edge E550/);
     assert.match(code, /420HD/);
+    assert.match(code, /T22P/);
+    assert.match(code, /T27P/);
+    assert.match(code, /T19P E2/);
+    assert.match(code, /https:\/\/www\.yealink\.com\/en\/products_list_18\.html/);
     assert.match(code, /https:\/\/www\.yealink\.com\/en\/product-detail\/ip-phone-t46u/);
     assert.match(code, /Context settings view/);
     assert.match(code, /Dynamic reload/);

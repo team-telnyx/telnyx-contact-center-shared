@@ -71,6 +71,7 @@ const VENDORS = [
 const POLY_UCS_DOCS = "https://docs.poly.com/bundle/poly-ucs-ag-6-4-5/page/r-ucs-supported-phone-models.html";
 const POLY_EDGE_DOCS = "https://docs.poly.com/bundle/poly-edge-e-ag-current/page/r-poly-edge-e-supported-features.html";
 const AUDIOCODES_DOCS = "https://www.audiocodes.com/library/technical-documents?productFamilyGroup=1639";
+const YEALINK_EOL_DOCS = "https://www.yealink.com/en/products_list_18.html";
 
 const VENDOR_MODELS = {
   polycom: [
@@ -80,7 +81,11 @@ const VENDOR_MODELS = {
     "Edge E100", "Edge E220", "Edge E300", "Edge E320", "Edge E350", "Edge E400", "Edge E450", "Edge E500", "Edge E550",
     "Edge B10", "Edge B20", "Edge B30", "Rove 20", "Rove 30", "Rove 40",
   ],
-  yealink: ["T31P", "T33G", "T43U", "T46U", "T48U", "T53W", "T54W", "T57W", "T58W"],
+  yealink: [
+    "T19", "T19P", "T19P E2", "T20P", "T21", "T21P", "T21P E2", "T22P", "T23P", "T23G", "T26P", "T27P", "T27G", "T28P", "T29G",
+    "T31P", "T33G", "T32G", "T38G", "T40P", "T40G", "T41P", "T41S", "T42G", "T42S", "T43U", "T46G", "T46S", "T46U",
+    "T48G", "T48S", "T48U", "T52S", "T53", "T53W", "T54S", "T54W", "T56A", "T57W", "T58A", "T58V", "T58W",
+  ],
   audiocodes: ["405", "405HD", "420HD", "430HD", "440HD", "445HD", "450HD"],
 };
 
@@ -102,19 +107,35 @@ function polyDocs(model) {
   return model.startsWith("Edge") ? POLY_EDGE_DOCS : POLY_UCS_DOCS;
 }
 
+function yealinkImage(model) {
+  if (["T43U", "T40P", "T40G", "T41P", "T41S", "T42G", "T42S"].includes(model)) return "/images/hardphones/yealink-t43u.png";
+  if (["T46U", "T46G", "T46S"].includes(model)) return "/images/hardphones/yealink-t46u.png";
+  if (["T48U", "T48G", "T48S"].includes(model)) return "/images/hardphones/yealink-t48u.png";
+  if (["T53", "T53W", "T52S", "T54S", "T54W"].includes(model)) return "/images/hardphones/yealink-t53w.png";
+  if (["T56A", "T57W"].includes(model)) return "/images/hardphones/yealink-t57w.png";
+  if (["T58A", "T58V", "T58W"].includes(model)) return "/images/hardphones/yealink-t58w.png";
+  if (["T33G"].includes(model)) return "/images/hardphones/yealink-t33g.png";
+  return "/images/hardphones/yealink-t31p.png";
+}
+
+function yealinkDocs(model) {
+  const productDocs = {
+    T31P: "https://www.yealink.com/en/product-detail/ip-phone-t31p",
+    T33G: "https://www.yealink.com/en/product-detail/ip-phone-t33g",
+    T43U: "https://www.yealink.com/en/product-detail/ip-phone-t43u",
+    T46U: "https://www.yealink.com/en/product-detail/ip-phone-t46u",
+    T48U: "https://www.yealink.com/en/product-detail/ip-phone-t48u",
+    T53W: "https://www.yealink.com/en/product-detail/ip-phone-t53w",
+    T54W: "https://www.yealink.com/en/product-detail/ip-phone-t54w",
+    T57W: "https://www.yealink.com/en/product-detail/ip-phone-t57w",
+    T58W: "https://www.yealink.com/en/product-detail/ip-phone-t58w",
+  };
+  return productDocs[model] || YEALINK_EOL_DOCS;
+}
+
 const PHONE_MODEL_CATALOG = {
   polycom: Object.fromEntries(VENDOR_MODELS.polycom.map((model) => [model, { image: polyImage(model), docs: polyDocs(model) }])),
-  yealink: {
-    T31P: { image: "/images/hardphones/yealink-t31p.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t31p" },
-    T33G: { image: "/images/hardphones/yealink-t33g.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t33g" },
-    T43U: { image: "/images/hardphones/yealink-t43u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t43u" },
-    T46U: { image: "/images/hardphones/yealink-t46u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t46u" },
-    T48U: { image: "/images/hardphones/yealink-t48u.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t48u" },
-    T53W: { image: "/images/hardphones/yealink-t53w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t53w" },
-    T54W: { image: "/images/hardphones/yealink-t54w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t54w" },
-    T57W: { image: "/images/hardphones/yealink-t57w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t57w" },
-    T58W: { image: "/images/hardphones/yealink-t58w.png", docs: "https://www.yealink.com/en/product-detail/ip-phone-t58w" },
-  },
+  yealink: Object.fromEntries(VENDOR_MODELS.yealink.map((model) => [model, { image: yealinkImage(model), docs: yealinkDocs(model) }])),
   audiocodes: {
     "405": { image: "/images/hardphones/audiocodes-405.png", docs: AUDIOCODES_DOCS },
     "405HD": { image: "/images/hardphones/audiocodes-405hd.png", docs: AUDIOCODES_DOCS },
