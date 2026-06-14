@@ -36,10 +36,10 @@ async function loadSnapshot(pool) {
       `SELECT l.id, l.run_id, l.call_session_id, l.to_number, l.from_number, l.status,
               l.started_at, l.answered_at, l.ended_at, l.duration_ms, l.result, l.created_at,
               GREATEST(10, LEAST(3600, COALESCE(
-                NULLIF(r.config #>> '{maxDurationSecs}', '')::numeric,
-                NULLIF(r.config #>> '{postAnswer,maxDurationSecs}', '')::numeric,
-                NULLIF(s.config #>> '{maxCallDurationSecs}', '')::numeric,
-                NULLIF(cs.settings #>> '{max_call_duration_secs}', '')::numeric,
+                CASE WHEN (r.config #>> '{maxDurationSecs}') ~ '^\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)\\s*$' THEN (r.config #>> '{maxDurationSecs}')::numeric END,
+                CASE WHEN (r.config #>> '{postAnswer,maxDurationSecs}') ~ '^\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)\\s*$' THEN (r.config #>> '{postAnswer,maxDurationSecs}')::numeric END,
+                CASE WHEN (s.config #>> '{maxCallDurationSecs}') ~ '^\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)\\s*$' THEN (s.config #>> '{maxCallDurationSecs}')::numeric END,
+                CASE WHEN (cs.settings #>> '{max_call_duration_secs}') ~ '^\\s*[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)\\s*$' THEN (cs.settings #>> '{max_call_duration_secs}')::numeric END,
                 120
               )))::int AS max_duration_secs
        FROM cg_call_ledger l
