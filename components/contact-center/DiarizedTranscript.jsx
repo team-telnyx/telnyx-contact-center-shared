@@ -34,6 +34,12 @@ function formatConfidence(confidence) {
   return `${Math.round(Number(confidence) * 100)}%`;
 }
 
+function formatSpeakerLabel(speaker) {
+  const speakerNumber = Number(speaker);
+  if (Number.isFinite(speakerNumber)) return `Speaker ${speakerNumber + 1}`;
+  return speaker || "Speaker";
+}
+
 // Synced diarized transcript rendered as chat bubbles. When wired to a player
 // (currentTime / isPlaying / onSeek) it highlights the turn currently being
 // played, scrolls it into view, and lets the user click a bubble to seek the
@@ -98,7 +104,7 @@ export default function DiarizedTranscript({
             </div>
             <div className={`flex min-w-0 max-w-[85%] flex-col ${isRight ? "items-end" : "items-start"}`}>
               <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <span className="font-medium">Speaker {Number(turn.speaker) + 1}</span>
+                <span className="font-medium">{formatSpeakerLabel(turn.speaker)}</span>
                 {hasStart && (
                   <span className="font-mono tabular-nums">
                     {formatClock(turn.start)}
