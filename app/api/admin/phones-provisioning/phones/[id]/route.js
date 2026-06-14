@@ -95,6 +95,7 @@ export async function PUT(request, { params }) {
         columns.push(`assigned_phone_number = $${idx++}`); values.push(numberValue);
       } else {
         if (currentNumberId) await unassignPhoneNumberFromConnection(currentNumberId);
+        if (connectionId) await updatePhoneSipConnectionCallerId({ connectionId, phoneNumber: null });
         columns.push(`assigned_phone_number_id = $${idx++}`); values.push(null);
         columns.push(`assigned_phone_number = $${idx++}`); values.push(null);
       }
