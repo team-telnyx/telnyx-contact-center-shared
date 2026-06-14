@@ -17,6 +17,7 @@ import {
   IconClipboardCheck,
   IconDeviceFloppy,
   IconGauge,
+  IconHeadset,
   IconLoader2,
   IconMicrophone,
   IconQuote,
@@ -399,23 +400,33 @@ export default function QualityEvaluationDetailPage() {
                   </CardHeader>
                   <CardContent>
                     {speakerTurns && speakerTurns.length > 0 ? (
-                      <div className="max-h-[420px] space-y-2 overflow-y-auto pr-2">
-                        {speakerTurns.map((turn, index) => (
-                          <div
-                            key={index}
-                            className={`rounded-xl border p-3 text-sm ${
-                              Number(turn.speaker) % 2 === 0
-                                ? "border-border/60 bg-muted/40"
-                                : "border-sky-500/30 bg-sky-500/5"
-                            }`}
-                          >
-                            <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <IconUser className="h-3 w-3" />
-                              Speaker {Number(turn.speaker) + 1}
+                      <div className="max-h-[420px] space-y-4 overflow-y-auto pr-2" data-testid="quality-diarized-conversation">
+                        {speakerTurns.map((turn, index) => {
+                          const isRight = Number(turn.speaker) % 2 === 1;
+                          const tone = isRight
+                            ? { bubble: "bg-sky-600 text-white", avatar: "bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/40" }
+                            : { bubble: "bg-emerald-600 text-white", avatar: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/40" };
+                          return (
+                            <div
+                              key={index}
+                              className={`flex w-full items-end gap-2 ${isRight ? "flex-row-reverse" : "flex-row"}`}
+                            >
+                              <div className={`flex size-8 shrink-0 items-center justify-center rounded-full border ${tone.avatar}`}>
+                                {isRight ? <IconHeadset className="size-4" /> : <IconUser className="size-4" />}
+                              </div>
+                              <div className={`flex min-w-0 max-w-[85%] flex-col ${isRight ? "items-end" : "items-start"}`}>
+                                <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+                                  Speaker {Number(turn.speaker) + 1}
+                                </div>
+                                <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                                  isRight ? `${tone.bubble} rounded-br-md` : "rounded-bl-md bg-muted text-foreground"
+                                }`}>
+                                  <p className="whitespace-pre-wrap leading-relaxed">{turn.text}</p>
+                                </div>
+                              </div>
                             </div>
-                            {turn.text}
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : transcriptionText ? (
                       <p className="max-h-[420px] overflow-y-auto whitespace-pre-wrap pr-2 text-sm leading-relaxed">
