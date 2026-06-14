@@ -745,6 +745,7 @@ export default function AdminCallGeneratorPage() {
                 flowName={flowName}
                 startRun={startRun}
                 deleteScenario={deleteScenario}
+                globalMaxCallDurationSecs={Number(settingsDraft.max_call_duration_secs) || DEFAULT_SETTINGS.max_call_duration_secs}
               />
             ) : active === "actions" ? (
               <ActionsListView
@@ -814,7 +815,7 @@ export default function AdminCallGeneratorPage() {
   );
 }
 
-function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioId, flowName, startRun, deleteScenario }) {
+function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioId, flowName, startRun, deleteScenario, globalMaxCallDurationSecs }) {
   if (!scenarios.length) {
     return <Empty title="No scenarios yet" description="Use New scenario in the header, configure targets in Context Settings on the right, then save." />;
   }
@@ -835,7 +836,7 @@ function ScenariosListView({ scenarios, selectedScenarioId, setSelectedScenarioI
           const targets = Array.isArray(s.config?.targets) ? s.config.targets : [];
           const totalCalls = targets.reduce((sum, t) => sum + (Number(t.total_calls) || 0), 0);
           const numbersCount = [...new Set(targets.flatMap((t) => t.from_numbers || []))].length;
-          const globalMaxDuration = Number(settingsDraft.max_call_duration_secs) || DEFAULT_SETTINGS.max_call_duration_secs;
+          const globalMaxDuration = globalMaxCallDurationSecs;
           const scenarioMaxDuration = Number(s.config?.maxCallDurationSecs) > 0 ? Number(s.config.maxCallDurationSecs) : null;
           const selected = selectedScenarioId === s.id;
           return (
