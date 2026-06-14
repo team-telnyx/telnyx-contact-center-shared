@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -284,7 +285,7 @@ function PhoneModelThumbnail({ vendor, model, className = "" }) {
   }
   return (
     <span className={`flex h-12 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/70 bg-[radial-gradient(circle_at_50%_35%,rgba(14,165,233,0.14),transparent_52%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(226,232,240,0.86))] p-1.5 shadow-sm dark:bg-[radial-gradient(circle_at_50%_35%,rgba(56,189,248,0.2),transparent_52%),linear-gradient(135deg,rgba(39,39,42,0.98),rgba(9,9,11,0.92))] ${className}`}>
-      <img src={catalogEntry.image} alt={`${vendorName} ${model}`} className="h-full w-full object-contain drop-shadow-sm dark:drop-shadow-[0_10px_18px_rgba(0,0,0,0.65)]" loading="lazy" />
+      <Image src={catalogEntry.image} alt={`${vendorName} ${model}`} width={112} height={96} sizes="56px" className="h-full w-full object-contain drop-shadow-sm dark:drop-shadow-[0_10px_18px_rgba(0,0,0,0.65)]" />
     </span>
   );
 }
@@ -1121,7 +1122,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
               <span className="text-xs text-muted-foreground">Last user agent</span>
               <span className="truncate text-xs">{phone.last_user_agent || "—"}</span>
             </div>
-            <PhoneMaintenanceActions phone={phone} rebootPhones={rebootPhones} rebooting={rebooting} />
+            <PhoneMaintenanceActions phone={phone} rebooting={rebooting} />
           </div>
         </SettingCard>
       ) : null}
@@ -1354,7 +1355,7 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
   );
 }
 
-function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
+function PhoneMaintenanceActions({ phone, rebooting = false }) {
   const [busy, setBusy] = useState(null);
   const reachableIp = phone?.last_ip || phone?.ip_address || "";
   const [hostOverride, setHostOverride] = useState("");
@@ -1398,7 +1399,7 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
-        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => rebootPhones?.([phone.id]), rebooting || !phone?.id)}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => run("reboot"), rebooting || !phone?.id)}
       </div>
     </div>
   );
