@@ -44,6 +44,15 @@ import {
 const API = "/api/admin/call-generator";
 const WORKFLOW_TESTING_ACTION_ID = "00000000-0000-4000-8000-000000000001";
 const DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT = "This is a neutral voice preview for workflow testing.";
+const WORKFLOW_TESTING_PERSONAS = [
+  { id: "neutral", label: "Neutral / cooperative" },
+  { id: "angry", label: "Angry" },
+  { id: "in_a_hurry", label: "In a hurry" },
+  { id: "confused", label: "Confused" },
+  { id: "chatty", label: "Chatty / talkative" },
+  { id: "elderly", label: "Elderly / slow" },
+  { id: "suspicious", label: "Suspicious / privacy-conscious" },
+];
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Active runs in real time" },
@@ -1176,6 +1185,42 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                     <VoiceSelector value={step.voice} onChange={(voice) => updateStep(index, { voice })} previewText={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
                   </div>
                 </div>
+                <div>
+                  <Label>Caller persona</Label>
+                  <div className="mt-1">
+                    <Select value={step.persona || "neutral"} onValueChange={(v) => updateStep(index, { persona: v })}>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Neutral / cooperative" /></SelectTrigger>
+                      <SelectContent>
+                        {WORKFLOW_TESTING_PERSONAS.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.</p>
+                </div>
+                <div>
+                  <Label>Max answers per turn</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={6}
+                    className="mt-1"
+                    value={Number(step.max_slots_per_turn) > 0 ? step.max_slots_per_turn : 1}
+                    onChange={(e) => {
+                      const next = Math.min(6, Math.max(1, Math.round(Number(e.target.value)) || 1));
+                      updateStep(index, { max_slots_per_turn: next, ...(next <= 1 ? { randomize_slots: false } : {}) });
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">How many distinct pieces of information the caller may give in one sentence. 1 = one slot per turn (default). Higher values test parallel multi-slot filling (e.g. name + facility + date of birth at once).</p>
+                </div>
+                {Number(step.max_slots_per_turn) > 1 ? (
+                  <div className="flex items-center justify-between rounded-md border p-3">
+                    <div className="pr-3">
+                      <Label>Randomize answers per turn</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">When on, each turn reveals a random number of pieces (1 to the max above), never exceeding the max.</p>
+                    </div>
+                    <Switch checked={step.randomize_slots === true} onCheckedChange={(checked) => updateStep(index, { randomize_slots: checked === true })} />
+                  </div>
+                ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.</p>
               </div>
             ) : (
