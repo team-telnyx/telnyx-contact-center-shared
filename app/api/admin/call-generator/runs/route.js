@@ -22,16 +22,57 @@ async function requireAdmin() {
   return user;
 }
 
-export async function GET() {
+export async function GET(request) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
+    const url = new URL(request.url);
+    // scope=historical → runs that are no longer live (used by the Logs view).
+    // scope=active → live runs only. Anything else returns all runs (legacy).
+    const scope = String(url.searchParams.get("scope") || "").toLowerCase();
+
+    let where = "";
+    if (scope === "historical") {
+      where = `WHERE r.status NOT IN ('pending','running')`;
+    } else if (scope === "active") {
+      where = `WHERE r.status IN ('pending','running')`;
+    }
+
+    // Optional pagination. When page/pageSize are supplied (Logs view) we return
+    // a window plus the total count so the client can render a pager. Without
+    // them we keep the legacy behaviour (single LIMIT 200 list).
+    const hasPaging = url.searchParams.has("page") || url.searchParams.has("pageSize");
+    if (hasPaging) {
+      const allowedSizes = [10, 25, 50];
+      let pageSize = parseInt(url.searchParams.get("pageSize"), 10);
+      if (!allowedSizes.includes(pageSize)) pageSize = 25;
+      let page = parseInt(url.searchParams.get("page"), 10);
+      if (!Number.isInteger(page) || page < 1) page = 1;
+      const offset = (page - 1) * pageSize;
+
+      const { rows: countRows } = await pool.query(
+        `SELECT COUNT(*)::int AS total FROM cg_runs r ${where}`
+      );
+      const total = countRows[0]?.total || 0;
+      const { rows } = await pool.query(
+        `SELECT r.*, s.name AS scenario_name
+         FROM cg_runs r
+         JOIN cg_scenarios s ON s.id = r.scenario_id
+         ${where}
+         ORDER BY r.created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [pageSize, offset]
+      );
+      return NextResponse.json({ runs: rows, total, page, pageSize });
+    }
+
     const { rows } = await pool.query(
       `SELECT r.*, s.name AS scenario_name
        FROM cg_runs r
        JOIN cg_scenarios s ON s.id = r.scenario_id
+       ${where}
        ORDER BY r.created_at DESC
        LIMIT 200`
     );

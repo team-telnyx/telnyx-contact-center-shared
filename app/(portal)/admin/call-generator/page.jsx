@@ -13,6 +13,7 @@ import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import CallGeneratorDashboardView from "@/components/contact-center/CallGeneratorDashboardView";
+import CallGeneratorLogsView from "@/components/contact-center/CallGeneratorLogsView";
 import {
   IconActivity,
   IconArrowDown,
@@ -23,6 +24,7 @@ import {
   IconClockHour4,
   IconDashboard,
   IconDeviceFloppy,
+  IconHistory,
   IconList,
   IconListDetails,
   IconLoader2,
@@ -44,7 +46,8 @@ const WORKFLOW_TESTING_ACTION_ID = "00000000-0000-4000-8000-000000000001";
 const DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT = "This is a neutral voice preview for workflow testing.";
 
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Live runs and generated calls" },
+  { id: "dashboard", label: "Dashboard", icon: IconDashboard, description: "Active runs in real time" },
+  { id: "logs", label: "Logs", icon: IconHistory, description: "Historical runs and reports" },
   { id: "scenarios", label: "Scenarios", icon: IconList, description: "Test scenarios with flow targets" },
   { id: "actions", label: "Actions", icon: IconListDetails, description: "Action sequences for generated calls" },
   { id: "settings", label: "Settings", icon: IconSettings, description: "Caps, numbers, safety rails" },
@@ -694,6 +697,8 @@ export default function AdminCallGeneratorPage() {
           <div className="flex-1 min-h-0 overflow-y-auto p-5">
             {active === "dashboard" ? (
               <CallGeneratorDashboardView refreshNonce={refreshNonce} />
+            ) : active === "logs" ? (
+              <CallGeneratorLogsView refreshNonce={refreshNonce} />
             ) : active === "scenarios" ? (
               <ScenariosListView
                 scenarios={scenarios}
@@ -719,13 +724,17 @@ export default function AdminCallGeneratorPage() {
         {/* Right panel — Context Settings */}
         <aside className="min-h-0 overflow-hidden rounded-2xl border bg-card/92 shadow-sm backdrop-blur flex flex-col">
           <PanelHeader
-            title={active === "dashboard" ? "Run monitor" : "Context settings"}
-            description={active === "dashboard" ? "Live execution overview" : `${activeMeta.label} configuration`}
+            title={active === "dashboard" ? "Run monitor" : active === "logs" ? "Run history" : "Context settings"}
+            description={active === "dashboard" ? "Live execution overview" : active === "logs" ? "Completed run archive" : `${activeMeta.label} configuration`}
           />
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {active === "dashboard" ? (
               <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
                 Live calls and run progress update automatically every 2 seconds. Use Stop or Panic on a running run to halt traffic.
+              </div>
+            ) : active === "logs" ? (
+              <div className="rounded-xl border bg-muted/30 p-4 text-sm text-muted-foreground">
+                Historical runs that have finished, stopped, failed or been abandoned. Expand any run to see its full report — the same stat tiles as the live report. Use the pager at the bottom to change page size (10/25/50).
               </div>
             ) : active === "scenarios" ? (
               <ScenarioEditor
