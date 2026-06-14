@@ -346,6 +346,10 @@ describe("call generator webhook route (T2)", () => {
     const { readFile } = await import("node:fs/promises");
     const code = await readFile(new URL("../app/api/call-generator/webhook/route.js", import.meta.url), "utf8");
     assert.match(code, /handleGeneratorWebhookEvent/);
+    assert.match(code, /findGeneratorStateByLedger/);
+    assert.match(code, /call_control_id = \$1/);
+    assert.match(code, /call_session_id = \$2/);
+    assert.match(code, /buildGeneratorClientState\(\{ runId: generatorState\.runId, ledgerId: generatorState\.ledgerId \}\)/);
     assert.match(code, /ignored: true/);
     assert.doesNotMatch(code, /CALL_GENERATOR/);
   });

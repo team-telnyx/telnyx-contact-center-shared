@@ -45,13 +45,15 @@ test("call-generator webhook forwards CC and transcription events", async () => 
   assert.match(source, /eventType === "call\.transcription"/);
   assert.match(source, /handleTranscriptionEvent \} = await import\("@\/lib\/contact-center\/webhook-handler\.js"\)/);
   assert.match(source, /parseGeneratorClientState\(payload\?\.client_state\)/);
+  assert.match(source, /findGeneratorStateByLedger\(pool, payload\)/);
+  assert.match(source, /buildGeneratorClientState\(\{ runId: generatorState\.runId, ledgerId: generatorState\.ledgerId \}\)/);
   assert.match(source, /generatorState && eventType === "call\.transcription"/);
   assert.match(source, /handleContactCenterEvent \} = await import\("@\/lib\/contact-center\/webhook-handler\.js"\)/);
   assert.match(source, /generatorState &&[\s\S]*eventType === "call\.hangup"/);
   assert.match(source, /const webhookEventId = body\?\.data\?\.id \|\| body\?\.id \|\| null/);
-  assert.match(source, /handleContactCenterEvent\(eventType, payload, \{ eventId: webhookEventId \}\)/);
+  assert.match(source, /handleContactCenterEvent\(eventType, generatorPayload, \{ eventId: webhookEventId \}\)/);
   // still runs the generator ledger handler afterwards
-  assert.match(source, /handleGeneratorWebhookEvent\(pool, eventType, payload\)/);
+  assert.match(source, /handleGeneratorWebhookEvent\(pool, eventType, generatorPayload\)/);
   // forwarding failures must not break ledger handling
   assert.match(source, /call_generator_webhook_cc_forward_failed/);
 });

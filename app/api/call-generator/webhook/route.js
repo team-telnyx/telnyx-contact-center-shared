@@ -1,7 +1,35 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { handleGeneratorWebhookEvent, parseGeneratorClientState } from "@/lib/call-generator/engine.mjs";
+import {
+  buildGeneratorClientState,
+  handleGeneratorWebhookEvent,
+  parseGeneratorClientState,
+} from "@/lib/call-generator/engine.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+
+async function findGeneratorStateByLedger(pool, payload) {
+  const callControlId = payload?.call_control_id || null;
+  const callSessionId = payload?.call_session_id || null;
+  if (!callControlId && !callSessionId) return null;
+
+  const { rows } = await pool.query(
+    `SELECT id, run_id
+     FROM cg_call_ledger
+     WHERE ($1::text IS NOT NULL AND call_control_id = $1)
+        OR ($2::text IS NOT NULL AND call_session_id = $2)
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [callControlId, callSessionId],
+  );
+  const row = rows[0];
+  if (!row?.id) return null;
+
+  return {
+    callGenerator: true,
+    runId: row.run_id,
+    ledgerId: row.id,
+  };
+}
 
 // Dedicated Telnyx webhook endpoint for generated calls. Generated calls set
 // webhook_url to this route, so events never collide with the voice flow or
@@ -26,7 +54,23 @@ export async function POST(request) {
   const payload = body?.data?.payload || body?.payload || {};
   if (!eventType) return NextResponse.json({ ok: true, ignored: true });
 
-  const generatorState = parseGeneratorClientState(payload?.client_state);
+  let generatorState = parseGeneratorClientState(payload?.client_state);
+  if (!generatorState) {
+    try {
+      generatorState = await findGeneratorStateByLedger(pool, payload);
+    } catch (lookupErr) {
+      adminRuntimeLogger.warn(
+        "call_generator_webhook_ledger_lookup_failed",
+        runtimePayload({ error: lookupErr, operation: "cg_webhook_ledger_lookup" }),
+      );
+    }
+  }
+  const generatorPayload = generatorState
+    ? {
+        ...payload,
+        client_state: buildGeneratorClientState({ runId: generatorState.runId, ledgerId: generatorState.ledgerId }),
+      }
+    : payload;
   const webhookEventId = body?.data?.id || body?.id || null;
 
   // Belt-and-suspenders: a generated leg carries this endpoint as its webhook_url
@@ -39,7 +83,7 @@ export async function POST(request) {
   try {
     if (generatorState && eventType === "call.transcription") {
       const { handleTranscriptionEvent } = await import("@/lib/contact-center/webhook-handler.js");
-      await handleTranscriptionEvent(payload);
+      await handleTranscriptionEvent(generatorPayload);
     } else if (
       generatorState &&
       (eventType === "call.answered" ||
@@ -50,7 +94,7 @@ export async function POST(request) {
         eventType === "call.hangup")
     ) {
       const { handleContactCenterEvent } = await import("@/lib/contact-center/webhook-handler.js");
-      await handleContactCenterEvent(eventType, payload, { eventId: webhookEventId });
+      await handleContactCenterEvent(eventType, generatorPayload, { eventId: webhookEventId });
     }
   } catch (forwardErr) {
     adminRuntimeLogger.warn(
@@ -60,7 +104,7 @@ export async function POST(request) {
   }
 
   try {
-    const applied = await handleGeneratorWebhookEvent(pool, eventType, payload);
+    const applied = await handleGeneratorWebhookEvent(pool, eventType, generatorPayload);
     return NextResponse.json({ ok: true, applied: applied || null });
   } catch (err) {
     adminRuntimeLogger.error("call_generator_webhook_failed", runtimePayload({ error: err, operation: "cg_webhook" }));
