@@ -340,7 +340,7 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /4010/);
   });
 
-  it("yealink driver uses Action URI commands", async () => {
+  it("yealink driver uses Action URI commands and Web API status", async () => {
     const code = await src("lib/hardphones/drivers/yealink.mjs");
     assert.match(code, /servlet\?/);
     assert.match(code, /key=OK/);
@@ -349,6 +349,11 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /key=MUTE/);
     assert.match(code, /key=AUTOP/);
     assert.match(code, /key=Reboot/);
+    assert.match(code, /\/api\/auth\/login\?p=Login/);
+    assert.match(code, /\/api\/account\/status\?p=AccountRegister/);
+    assert.match(code, /\/api\/account\/info\?p=AccountRegister/);
+    assert.match(code, /registration_status: registration/);
+    assert.match(code, /rejectUnauthorized: false/);
     assert.doesNotMatch(code, /key=REBOOT/);
   });
 

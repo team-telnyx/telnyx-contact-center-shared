@@ -27,7 +27,14 @@ describe("hardphone local bridge", () => {
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot", \{ method: "POST", password, body: \{\} \}/);
     assert.match(server, /\/api\/v1\/mgmt\/updateConfiguration/);
     assert.match(server, /\/api\/v1\/mgmt\/safeReboot/);
-    assert.match(server, /\/servlet\?key=/);
+    assert.match(server, /\/servlet\?\$\{query\}/);
+    assert.match(server, /\/api\/auth\/login\?p=Login/);
+    assert.match(server, /\/api\/account\/status\?p=AccountRegister/);
+    assert.match(server, /registration_status: registration/);
+    assert.match(server, /action === "mute" \|\| action === "unmute"/);
+    assert.match(server, /action === "send_dtmf"/);
+    assert.match(server, /key=MUTE/);
+    assert.match(server, /key=AUTOP/);
     assert.match(server, /\/voip_status\.cgi/);
     assert.match(server, /discovered_ip: host/);
     assert.match(server, /parseAudioCodesVoipStatus/);

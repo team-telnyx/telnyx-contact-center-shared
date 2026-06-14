@@ -146,8 +146,21 @@ function isHeldPolyCall(call) {
   return /hold|held/i.test(String(call?.state || ""));
 }
 
-function yealinkUrl(host, command) {
-  return `http://${host}/servlet?key=${encodeURIComponent(command)}`;
+function yealinkActionUrl(host, query) {
+  return `http://${host}/servlet?${query}`;
+}
+
+const YEALINK_ACCOUNT_STATUS = { 0: "disabled", 1: "registering", 2: "registered", 3: "registration_failed", 4: "unregistered" };
+
+function normalizeYealinkRegistrationStatus(code) {
+  const numeric = Number(String(code ?? "").trim());
+  return YEALINK_ACCOUNT_STATUS[numeric] || (Number.isFinite(numeric) ? `status_${numeric}` : null);
+}
+
+function yealinkCookie(headers = {}) {
+  const setCookie = headers["set-cookie"] || [];
+  const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+  return cookies.map((cookie) => String(cookie).split(";", 1)[0]).filter(Boolean).join("; ");
 }
 
 function normalizeMac(raw) {
@@ -218,10 +231,72 @@ async function autoPollOnce(send) {
   }
 }
 
-async function yealinkAction(host, command, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
+async function yealinkAction(host, query, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
   const auth = user || password ? { authorization: "Basic " + Buffer.from(`${user}:${password}`).toString("base64") } : {};
-  const result = await requestJson(yealinkUrl(host, command), { headers: auth });
-  return { ok: result.ok, httpStatus: result.status, raw: result.raw?.slice(0, 500) || null };
+  const result = await requestJson(yealinkActionUrl(host, query), { headers: auth });
+  if (result.status === 401 || result.status === 403) return { ok: false, reason: "auth_failed", httpStatus: result.status };
+  return { ok: result.ok, httpStatus: result.status, raw: result.raw?.slice(0, 500) || null, discovered_ip: host };
+}
+
+async function yealinkLogin(host, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
+  const body = new URLSearchParams({ username: user || "admin", pwd: password || "" }).toString();
+  const response = await requestText(`https://${host}/api/auth/login?p=Login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `https://${host}`, referer: `https://${host}/api` },
+    body,
+    timeoutMs: 7000,
+  }).catch(() => requestText(`http://${host}/api/auth/login?p=Login`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded;charset=utf-8", origin: `http://${host}`, referer: `http://${host}/api` },
+    body,
+    timeoutMs: 7000,
+  }));
+  let data = null;
+  try { data = response.raw ? JSON.parse(response.raw) : null; } catch {}
+  if (response.status === 401 || response.status === 403 || data?.ret !== "ok") return { ok: false, reason: "auth_failed", httpStatus: response.status };
+  return { ok: true, cookie: yealinkCookie(response.headers) };
+}
+
+async function yealinkApiGet(host, path, auth) {
+  const login = await yealinkLogin(host, auth);
+  if (!login.ok) return login;
+  const headers = login.cookie ? { cookie: login.cookie } : {};
+  let response;
+  try {
+    response = await requestJson(`https://${host}${path}`, { headers, timeoutMs: 7000 });
+    if (!response.ok && response.status !== 401 && response.status !== 403) throw new Error(`HTTP ${response.status}`);
+  } catch {
+    response = await requestJson(`http://${host}${path}`, { headers, timeoutMs: 7000 });
+  }
+  if (response.status === 401 || response.status === 403) return { ok: false, reason: "auth_failed", httpStatus: response.status };
+  if (!response.ok) return { ok: false, reason: `HTTP ${response.status}`, httpStatus: response.status };
+  return { ok: true, data: response.data, httpStatus: response.status };
+}
+
+async function yealinkStatus(host, { user = DEFAULT_YEALINK_ADMIN_USER, password = DEFAULT_YEALINK_ADMIN_PASSWORD } = {}) {
+  try {
+    const [statusResult, infoResult] = await Promise.all([
+      yealinkApiGet(host, "/api/account/status?p=AccountRegister", { user, password }),
+      yealinkApiGet(host, "/api/account/info?p=AccountRegister", { user, password }),
+    ]);
+    const rawStatus = statusResult.ok ? String(statusResult.data?.data?.["1"] ?? "").trim() : null;
+    const registration = normalizeYealinkRegistrationStatus(rawStatus);
+    const accountRows = Array.isArray(infoResult.data?.data) ? infoResult.data.data : [];
+    const line = accountRows.find((row) => String(row?.id || "") === "1") || null;
+    return {
+      ok: statusResult.ok || infoResult.ok,
+      reachable: statusResult.ok || infoResult.ok,
+      vendor: "yealink",
+      discovered_ip: host,
+      registration,
+      registration_status: registration,
+      line: line ? { ...line, RegistrationStatus: registration, AccountStatusCode: rawStatus } : { RegistrationStatus: registration, AccountStatusCode: rawStatus },
+      call: null,
+      reason: statusResult.ok || infoResult.ok ? undefined : statusResult.reason || infoResult.reason,
+    };
+  } catch (err) {
+    return { ok: false, reachable: false, reason: "phone_unreachable", error: err?.message || String(err) };
+  }
 }
 
 function parseAudioCodesVoipStatus(raw) {
@@ -342,11 +417,31 @@ async function executeCommand({ vendor, host, action = "status", payload = {} })
     if (action === "reprovision") return polyRequest(host, "/api/v1/mgmt/updateConfiguration", { method: "POST", password, body: {} });
   }
   if (vendor === "yealink") {
-    if (action === "dial") return yealinkAction(host, `number=${payload.number || payload.target || ""}`);
-    if (action === "answer") return yealinkAction(host, "OK");
-    if (action === "hangup") return yealinkAction(host, "CALLEND");
-    if (action === "hold") return yealinkAction(host, "F_HOLD");
-    if (action === "reboot") return yealinkAction(host, "Reboot");
+    const user = payload.admin_user || payload.user || DEFAULT_YEALINK_ADMIN_USER;
+    const password = payload.admin_password || payload.password || DEFAULT_YEALINK_ADMIN_PASSWORD;
+    const auth = { user, password };
+    if (action === "status") return yealinkStatus(host, auth);
+    if (action === "dial") {
+      const digits = String(payload.number || payload.target || "").replace(/[^0-9+*#]/g, "");
+      if (!digits) return { ok: false, reason: "invalid_number" };
+      return yealinkAction(host, `number=${encodeURIComponent(digits)}`, auth);
+    }
+    if (action === "answer") return yealinkAction(host, "key=OK", auth);
+    if (action === "hangup") return yealinkAction(host, "key=CALLEND", auth);
+    if (action === "hold" || action === "resume") return yealinkAction(host, "key=F_HOLD", auth);
+    if (action === "mute" || action === "unmute") return yealinkAction(host, "key=MUTE", auth);
+    if (action === "send_dtmf") {
+      const sequence = String(payload.digits || payload.number || "").replace(/[^0-9*#]/g, "").split("");
+      if (!sequence.length) return { ok: false, reason: "invalid_digits" };
+      for (const digit of sequence) {
+        const key = digit === "*" ? "STAR" : digit === "#" ? "POUND" : digit;
+        const result = await yealinkAction(host, `key=${key}`, auth);
+        if (!result.ok) return result;
+      }
+      return { ok: true, discovered_ip: host };
+    }
+    if (action === "reprovision") return yealinkAction(host, "key=AUTOP", auth);
+    if (action === "reboot") return yealinkAction(host, "key=Reboot", auth);
   }
   if (vendor === "audiocodes") {
     if (action === "status") {
@@ -387,7 +482,7 @@ function startOutboundConnection() {
     let message = null;
     try { message = JSON.parse(String(event.data)); } catch { return; }
     if (message.type === "registered") {
-      send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink", "audiocodes"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "reboot", "reprovision"], discovery: ["cc_registry", "auto_poll"] } });
+      send({ type: "hello", bridge_id: BRIDGE_ID, site: BRIDGE_SITE, version: "0.1.0", capabilities: { vendors: ["polycom", "yealink", "audiocodes"], actions: ["status", "dial", "answer", "hangup", "hold", "resume", "mute", "unmute", "send_dtmf", "reboot", "reprovision"], discovery: ["cc_registry", "auto_poll"] } });
       send({ type: "phone_registry_request", bridge_id: BRIDGE_ID });
       for (const phone of observedPhones()) send({ type: "phone_observed", bridge_id: BRIDGE_ID, ...phone });
       setTimeout(() => autoPollOnce(send), 3000).unref?.();
