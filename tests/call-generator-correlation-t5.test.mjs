@@ -114,12 +114,35 @@ describe("call generator correlation (T5)", () => {
     assert.match(code, /jsonb_build_object\('report'/);
   });
 
-  it("dashboard exposes Report button and renders assertions panel", async () => {
-    const code = await readFile(new URL("../components/contact-center/CallGeneratorDashboardView.jsx", import.meta.url), "utf8");
-    assert.match(code, /loadReport\(run\.id\)/);
-    assert.match(code, /Run report/);
-    assert.match(code, /PASSED/);
+  it("logs view renders per-run report (tiles + assertions) inside accordions with paging", async () => {
+    const code = await readFile(new URL("../components/contact-center/CallGeneratorLogsView.jsx", import.meta.url), "utf8");
+    // report is fetched per run on expand
+    assert.match(code, /\/api\/admin\/call-generator\/runs\/\$\{runId\}\/report/);
+    // same stat tiles as the old dashboard report
+    assert.match(code, /Correlated/);
+    assert.match(code, /Avg wait/);
+    assert.match(code, /PASS/);
     assert.match(code, /No assertions/);
+    // accordion + pagination controls
+    assert.match(code, /AccordionItem/);
+    assert.match(code, /scope=historical|scope: "historical"|"historical"/);
+    assert.match(code, /cg-logs-page-size/);
+  });
+
+  it("dashboard shows ONLY active runs (historical moved to Logs)", async () => {
+    const code = await readFile(new URL("../components/contact-center/CallGeneratorDashboardView.jsx", import.meta.url), "utf8");
+    assert.match(code, /\["pending", "running"\]\.includes\(String\(r\.status\)\)/);
+    assert.match(code, /Active runs/);
+    // the historical Report block no longer lives in the dashboard
+    assert.doesNotMatch(code, /Run report —/);
+  });
+
+  it("runs API supports historical scope + pagination for the Logs view", async () => {
+    const code = await readFile(new URL("../app/api/admin/call-generator/runs/route.js", import.meta.url), "utf8");
+    assert.match(code, /scope === "historical"/);
+    assert.match(code, /status NOT IN \('pending','running'\)/);
+    assert.match(code, /\[10, 25, 50\]/);
+    assert.match(code, /LIMIT \$1 OFFSET \$2/);
   });
 
   it("scenario editor captures assertion fields into config.assertions", async () => {
