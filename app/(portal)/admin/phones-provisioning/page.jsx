@@ -858,12 +858,22 @@ function PhonesListView({ phones, selectedPhoneId, selectedRebootIds, setSelecte
 }
 
 function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges = [], availablePhoneNumbers = [], hardphoneConfig = {}, save, rebootPhones, rebooting = false }) {
+  const [numberChangeOpen, setNumberChangeOpen] = useState(false);
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const phoneAdminPasswordConfigured = hardphoneConfig.phoneAdminPasswordConfigured === true;
   const outboundVoiceProfileConfigured = hardphoneConfig.outboundVoiceProfileConfigured === true;
   const updateSettings = (patch) => setDraft((d) => ({ ...d, settings: normalizePhoneSettings({ ...(d.settings || {}), ...patch }, hardphoneConfig.userTimezone) }));
   const models = VENDOR_MODELS[draft.vendor] || [];
   const catalogEntry = modelCatalogEntry(draft.vendor, draft.model);
+  const numberOptions = useMemo(() => {
+    const options = [...availablePhoneNumbers];
+    if (draft.assigned_phone_number_id && draft.assigned_phone_number && !options.some((n) => n.id === draft.assigned_phone_number_id)) {
+      options.unshift({ id: draft.assigned_phone_number_id, phone_number: draft.assigned_phone_number, assigned: true });
+    }
+    return options;
+  }, [availablePhoneNumbers, draft.assigned_phone_number, draft.assigned_phone_number_id]);
+
+  useEffect(() => { setNumberChangeOpen(false); }, [phone?.id]);
 
   return (
     <>
@@ -901,21 +911,30 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
             <Label>Line Label</Label>
             <Input className="mt-1" value={draft.label} onChange={(e) => update({ label: e.target.value })} placeholder="Line 1 / Agent name" />
           </div>
-          {!editing ? (
-            <div className="rounded-xl border bg-muted/20 p-3">
+          <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <Label>Telnyx number</Label>
+              {editing && draft.assigned_phone_number && !numberChangeOpen ? (
+                <Button type="button" variant="outline" size="sm" onClick={() => setNumberChangeOpen(true)} data-testid="hp-phone-number-change">
+                  <IconRefresh className="mr-1 h-3.5 w-3.5" /> Change
+                </Button>
+              ) : null}
+            </div>
+            {editing && draft.assigned_phone_number && !numberChangeOpen ? (
+              <Input className="mt-1 font-mono" value={draft.assigned_phone_number} readOnly data-testid="hp-phone-number-readonly" />
+            ) : (
               <Select value={draft.assigned_phone_number_id || "none"} onValueChange={(v) => {
-                const selected = availablePhoneNumbers.find((n) => n.id === v);
+                const selected = numberOptions.find((n) => n.id === v);
                 update({ assigned_phone_number_id: v === "none" ? "" : v, assigned_phone_number: selected?.phone_number || "" });
               }}>
-                <SelectTrigger className="mt-1 w-full"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
+                <SelectTrigger className="mt-1 w-full" data-testid="hp-phone-number-select"><SelectValue placeholder="Select a Telnyx number" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Create SIP connection without assigning a number</SelectItem>
-                  {availablePhoneNumbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}</SelectItem>)}
+                  <SelectItem value="none">No Telnyx number assigned</SelectItem>
+                  {numberOptions.map((n) => <SelectItem key={n.id} value={n.id}>{n.phone_number}{n.assigned ? " · current" : ""}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-          ) : null}
+            )}
+          </div>
           {phoneAdminPasswordConfigured && outboundVoiceProfileConfigured ? null : (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
               <span>Configure {phoneAdminPasswordConfigured ? "TELNYX_OUTBOUND_VOICE_PROFILE" : "TELNYX_PHONE_ADMIN_PASSWORD"}{!phoneAdminPasswordConfigured && !outboundVoiceProfileConfigured ? " and TELNYX_OUTBOUND_VOICE_PROFILE" : ""} before adding new hard phones.</span>

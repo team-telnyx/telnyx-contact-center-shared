@@ -6,6 +6,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { normalizeMac, SUPPORTED_VENDORS } from "@/lib/hardphones/config-generators.mjs";
 import { assignPhoneNumberToConnection, createPhoneSipConnection, deletePhoneSipConnection, listUnassignedPhoneNumbers, updatePhoneSipConnectionCallerId } from "@/lib/hardphones/credentials.mjs";
+import { syncHardphonePhoneNumbersFromTelnyx } from "@/lib/hardphones/number-sync.mjs";
 import { adminRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -64,7 +65,9 @@ export async function GET(request) {
   const pool = getPostgresPool();
   if (!pool) return NextResponse.json({ error: "Server not ready" }, { status: 500 });
   try {
-    const includeAvailablePhoneNumbers = new URL(request.url).searchParams.get("includeAvailablePhoneNumbers") === "1";
+    const searchParams = new URL(request.url).searchParams;
+    const includeAvailablePhoneNumbers = searchParams.get("includeAvailablePhoneNumbers") === "1";
+    const syncNumbers = includeAvailablePhoneNumbers || searchParams.get("syncNumbers") === "1";
     const [{ rows }, { rows: eventRows }, { rows: registrationRows }, availablePhoneNumbers] = await Promise.all([
       pool.query(`SELECT ${PHONE_COLUMNS} FROM hp_phones ORDER BY created_at DESC LIMIT 500`),
       pool.query(
@@ -82,10 +85,14 @@ export async function GET(request) {
         return [];
       }) : Promise.resolve([]),
     ]);
+    const syncedRows = syncNumbers ? await syncHardphonePhoneNumbersFromTelnyx(pool, rows).catch((err) => {
+      adminRuntimeLogger.warn("hardphone_number_sync_failed", runtimePayload({ error: err, operation: "hp_number_sync" }));
+      return rows;
+    }) : rows;
     const eventsByPhone = Object.fromEntries(eventRows.map((r) => [r.phone_id, r]));
     const registrationByPhone = Object.fromEntries(registrationRows.map((r) => [r.phone_id, r]));
     return NextResponse.json({
-      phones: rows.map((p) => ({
+      phones: syncedRows.map((p) => ({
         ...p,
         recent_events: eventsByPhone[p.id]?.events || 0,
         ...resolveSipRegistrationStatus(p, registrationByPhone[p.id]),

@@ -132,6 +132,38 @@ describe("hardphone bridge product integration", () => {
     assert.match(page, /font-mono text-xs/);
   });
 
+  it("keeps hardphone number assignment editable after SIP connection creation", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    const itemRoute = await file("app/api/admin/phones-provisioning/phones/[id]/route.js");
+    const listRoute = await file("app/api/admin/phones-provisioning/phones/route.js");
+    const credentials = await file("lib/hardphones/credentials.mjs");
+    assert.match(page, /const \[numberChangeOpen, setNumberChangeOpen\] = useState\(false\)/);
+    assert.match(page, /data-testid="hp-phone-number-readonly"/);
+    assert.match(page, /data-testid="hp-phone-number-change"/);
+    assert.match(page, /setNumberChangeOpen\(true\)/);
+    assert.match(page, /data-testid="hp-phone-number-select"/);
+    assert.match(page, /numberOptions/);
+    assert.doesNotMatch(page, /!editing \? \(\s*<div className="rounded-xl border bg-muted\/20 p-3">\s*<Label>Telnyx number<\/Label>/);
+    assert.match(itemRoute, /assigned_phone_number_id !== undefined/);
+    assert.match(itemRoute, /assignPhoneNumberToConnection\(nextNumberId, connectionId\)/);
+    assert.match(itemRoute, /unassignPhoneNumberFromConnection\(currentNumberId\)/);
+    assert.match(itemRoute, /updatePhoneSipConnectionCallerId\(\{ connectionId, phoneNumber: numberValue \}\)/);
+    assert.match(listRoute, /syncHardphonePhoneNumbersFromTelnyx\(pool, rows\)/);
+    assert.match(credentials, /export async function unassignPhoneNumberFromConnection/);
+  });
+
+  it("syncs Numbers menu SIP assignment back into hp_phones", async () => {
+    const numbersRoute = await file("app/api/admin/numbers/[id]/route.js");
+    const sync = await file("lib/hardphones/number-sync.mjs");
+    assert.match(numbersRoute, /syncHardphonePhoneNumberAssignment\(pool, result\)/);
+    assert.match(numbersRoute, /voiceSettings\.connection_id !== undefined/);
+    assert.match(sync, /getPhoneSipConnection\(connectionId\)/);
+    assert.match(sync, /isHardphoneSipConnection\(connection\)/);
+    assert.match(sync, /hardphoneMacFromSipConnection\(connection\)/);
+    assert.match(sync, /SET assigned_phone_number_id = \$2, assigned_phone_number = \$3/);
+    assert.match(sync, /SET assigned_phone_number_id = NULL, assigned_phone_number = NULL/);
+  });
+
   it("offers an NTP timezone offset dropdown defaulting to the logged-in user's timezone", async () => {
     const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
     const listRoute = await file("app/api/admin/phones-provisioning/phones/route.js");

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
+import { syncHardphonePhoneNumberAssignment } from "@/lib/hardphones/number-sync.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
@@ -85,6 +87,15 @@ export async function PATCH(request, { params }) {
       const messagingData = await messagingRes.json();
       // Merge messaging data with voice settings result
       result = { ...result, ...messagingData.data };
+    }
+
+    if (result?.id && (voiceSettings.connection_id !== undefined || voiceSettings.voice?.connection_id !== undefined)) {
+      const pool = getPostgresPool();
+      if (pool) {
+        await syncHardphonePhoneNumberAssignment(pool, result).catch((err) => {
+          adminRuntimeLogger.warn("hardphone_number_assignment_sync_failed", runtimePayload({ error: err, operation: "numbers_hp_assignment_sync", phone_number_id: result.id }));
+        });
+      }
     }
 
     return NextResponse.json({ data: result });
