@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import {
   createPhoneSipConnection,
+  updatePhoneSipConnectionCallerId,
   phoneConnectionUserName,
   phoneConnectionName,
 } from "../lib/hardphones/credentials.mjs";
@@ -111,6 +112,30 @@ describe("hard phones provisioning (Phase 1)", () => {
     }
   });
 
+  it("clears Telnyx SIP connection outbound caller ID with a blank override", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalApiKey = process.env.TELNYX_API_KEY;
+    const calls = [];
+    globalThis.fetch = async (url, options = {}) => {
+      calls.push({ url: String(url), options });
+      return Response.json({ data: { id: "cc-123" } });
+    };
+    process.env.TELNYX_API_KEY = "test-key";
+    try {
+      await updatePhoneSipConnectionCallerId({ connectionId: "cc-123", phoneNumber: null });
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0].options.method, "PATCH");
+      assert.deepStrictEqual(JSON.parse(calls[0].options.body).outbound, {
+        ani_override: "",
+        ani_override_type: "always",
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (originalApiKey === undefined) delete process.env.TELNYX_API_KEY;
+      else process.env.TELNYX_API_KEY = originalApiKey;
+    }
+  });
+
   it("resolves provisioning filenames to vendor and kind", () => {
     assert.deepStrictEqual(resolveProvisioningRequest("y000000000000.cfg"), { vendor: "yealink", kind: "common", mac: null });
     assert.deepStrictEqual(resolveProvisioningRequest("y000000000066.cfg"), { vendor: "yealink", kind: "common", mac: null });
@@ -166,6 +191,8 @@ describe("hard phones provisioning (Phase 1)", () => {
   it("keeps Yealink common provisioning URLs on the request host instead of public webhook host", async () => {
     const route = await src("app/api/provisioning/[filename]/route.js");
     assert.match(route, /function resolveProvisioningBaseUrl\(request\)/);
+    assert.match(route, /x-forwarded-host/);
+    assert.match(route, /x-forwarded-proto/);
     assert.match(route, /yealinkCommonConfig\(\{ baseUrl: resolveProvisioningBaseUrl\(request\) \}\)/);
   });
 

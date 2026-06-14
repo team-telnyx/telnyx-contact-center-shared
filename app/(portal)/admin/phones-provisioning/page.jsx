@@ -415,6 +415,7 @@ export default function PhonesProvisioningPage() {
   const [logPage, setLogPage] = useState(1);
   const [logPageSize, setLogPageSize] = useState(10);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [phonesLoadSucceeded, setPhonesLoadSucceeded] = useState(false);
   const [selectedPhoneId, setSelectedPhoneId] = useState(null);
   const [selectedBridgeId, setSelectedBridgeId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
@@ -457,12 +458,17 @@ export default function PhonesProvisioningPage() {
         fetch(`${API}/dashboard`),
         fetch(`${API}/bridges`),
       ]);
-      const phonesData = phonesRes.ok ? await phonesRes.json() : { phones: [] };
+      const phonesData = phonesRes.ok ? await phonesRes.json() : null;
       const dashboardData = dashboardRes.ok ? await dashboardRes.json() : null;
       const bridgesData = bridgesRes.ok ? await bridgesRes.json() : { bridges: [] };
-      setPhones(phonesData.phones || []);
-      if (includeAvailablePhoneNumbers) setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
-      setHardphoneConfig({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false, userTimezone: "UTC", ...(phonesData.config || {}) });
+      if (phonesData) {
+        setPhones(phonesData.phones || []);
+        if (includeAvailablePhoneNumbers) setAvailablePhoneNumbers(phonesData.availablePhoneNumbers || []);
+        setHardphoneConfig({ phoneAdminPasswordConfigured: false, outboundVoiceProfileConfigured: false, userTimezone: "UTC", ...(phonesData.config || {}) });
+        setPhonesLoadSucceeded(true);
+      } else {
+        setPhonesLoadSucceeded(false);
+      }
       setDashboard(dashboardData);
       setBridges(bridgesData.bridges || []);
       if (toast) notify({ title: "Phones provisioning refreshed", description: "Data reloaded.", variant: "success" });
@@ -476,9 +482,9 @@ export default function PhonesProvisioningPage() {
   useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
-    if (!selectedPhoneId || loading) return;
+    if (!selectedPhoneId || loading || !phonesLoadSucceeded) return;
     if (!phones.some((phone) => phone.id === selectedPhoneId)) setSelectedPhoneId(null);
-  }, [loading, phones, selectedPhoneId]);
+  }, [loading, phones, phonesLoadSucceeded, selectedPhoneId]);
 
   useEffect(() => {
     if (active !== "bridges" && active !== "phones") return undefined;

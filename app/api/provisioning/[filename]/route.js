@@ -13,7 +13,11 @@ export const dynamic = "force-dynamic";
 function requestOriginBaseUrl(request) {
   try {
     const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const host = forwardedHost || request.headers.get("host") || url.host;
+    const protocol = forwardedProto || url.protocol.replace(/:$/, "");
+    return `${protocol}://${host}`;
   } catch {
     return "";
   }
