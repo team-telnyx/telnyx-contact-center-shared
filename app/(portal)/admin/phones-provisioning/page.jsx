@@ -410,7 +410,10 @@ export default function PhonesProvisioningPage() {
     } else {
       setPhoneDraft(emptyPhoneDraft(hardphoneConfig.userTimezone));
     }
-  }, [selectedPhone, hardphoneConfig.userTimezone]);
+    // Deliberately key this to selection changes only. The 10s status refresh replaces
+    // selectedPhone with a fresh object from the server; resetting the draft on every
+    // refresh would wipe unsaved edits in Context Settings before the admin can save.
+  }, [selectedPhoneId, hardphoneConfig.userTimezone]);
 
   const draftValid = phoneDraftValid(phoneDraft);
 

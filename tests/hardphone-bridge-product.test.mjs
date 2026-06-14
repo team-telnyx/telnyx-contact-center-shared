@@ -156,6 +156,14 @@ describe("hardphone bridge product integration", () => {
     assert.match(credentials, /export async function unassignPhoneNumberFromConnection/);
   });
 
+  it("does not reset unsaved phone context edits during 10s auto-refresh", async () => {
+    const page = await file("app/(portal)/admin/phones-provisioning/page.jsx");
+    assert.match(page, /setInterval\(\(\) => refresh\(false, \{ silent: true, includeAvailablePhoneNumbers: false \}\), 10000\)/);
+    assert.match(page, /resetting the draft on every\s*\/\/ refresh would wipe unsaved edits in Context Settings/);
+    assert.match(page, /\}, \[selectedPhoneId, hardphoneConfig\.userTimezone\]\);/);
+    assert.doesNotMatch(page, /\}, \[selectedPhone, hardphoneConfig\.userTimezone\]\);/);
+  });
+
   it("syncs Numbers menu SIP assignment back into hp_phones", async () => {
     const numbersRoute = await file("app/api/admin/numbers/[id]/route.js");
     const sync = await file("lib/hardphones/number-sync.mjs");
