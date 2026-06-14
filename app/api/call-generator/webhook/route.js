@@ -26,6 +26,33 @@ export async function POST(request) {
   const payload = body?.data?.payload || body?.payload || {};
   if (!eventType) return NextResponse.json({ ok: true, ignored: true });
 
+  // Belt-and-suspenders: a generated leg carries this endpoint as its webhook_url
+  // override. If a contact-center / transcription event ever lands here (instead
+  // of the flow connection webhook), forward it so Agent Assist live transcription
+  // and contact-center interaction state are not silently lost. This is additive:
+  // generator ledger handling below still runs for lifecycle correlation.
+  try {
+    if (eventType === "call.transcription") {
+      const { handleTranscriptionEvent } = await import("@/lib/contact-center/webhook-handler.js");
+      await handleTranscriptionEvent(payload);
+    } else if (
+      eventType === "call.answered" ||
+      eventType === "call.bridged" ||
+      eventType === "call.dequeued" ||
+      eventType === "call.held" ||
+      eventType === "call.unheld" ||
+      eventType === "call.hangup"
+    ) {
+      const { handleContactCenterEvent } = await import("@/lib/contact-center/webhook-handler.js");
+      await handleContactCenterEvent(eventType, payload, {});
+    }
+  } catch (forwardErr) {
+    adminRuntimeLogger.warn(
+      "call_generator_webhook_cc_forward_failed",
+      runtimePayload({ error: forwardErr, operation: "cg_webhook_cc_forward" }),
+    );
+  }
+
   try {
     const applied = await handleGeneratorWebhookEvent(pool, eventType, payload);
     return NextResponse.json({ ok: true, applied: applied || null });
