@@ -2074,23 +2074,34 @@ export default function TestAgentPage() {
                               .filter(Boolean)
                               .join(", ");
                             return (
-                              <SelectItem
-                                key={flow.id}
-                                value={flow.id}
-                                disabled={!flow.eligible}
-                              >
+                              <SelectItem key={flow.id} value={flow.id}>
                                 {flow.name}
-                                {!flow.eligible && reasonLabel ? ` — ${reasonLabel}` : ""}
+                                {!flow.eligible && reasonLabel ? ` — ⚠ ${reasonLabel}` : ""}
                               </SelectItem>
                             );
                           })}
                         </SelectContent>
                       </Select>
-                      {!loadingFlows && !eligibleFlows.some((f) => f.eligible) && (
+                      {!loadingFlows && eligibleFlows.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Create a call flow with Answer (transcription on) → Agent Assist (Workflows) → Start AI Assistant
+                          No call flows found. Create a call flow with Answer (transcription on) → Start AI Assistant.
                         </p>
                       )}
+                      {!loadingFlows && selectedCallFlowId && (() => {
+                        const sel = eligibleFlows.find((f) => f.id === selectedCallFlowId);
+                        if (sel && !sel.eligible) {
+                          const reasonLabel = (sel.reasons || [])
+                            .map((r) => FLOW_REASON_LABELS[r] || r)
+                            .filter(Boolean)
+                            .join(", ");
+                          return (
+                            <p className="text-xs text-yellow-500">
+                              Heads up: {reasonLabel || "this flow may not start an AI assistant or transcribe the call"}. The test may not get replies.
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     {/* From number */}

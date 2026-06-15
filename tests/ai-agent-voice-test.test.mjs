@@ -54,10 +54,11 @@ test("validateAiAgentTestFlow flags a flow missing ai_assistant_start", () => {
   assert.ok(v.reasons.includes("missing_ai_assistant_start"));
 });
 
-test("validateAiAgentTestFlow flags a flow missing agent_assist", () => {
+test("validateAiAgentTestFlow no longer requires agent_assist (only AI assistant + transcription)", () => {
   const v = validateAiAgentTestFlow(flow([answerNode(), aiAssistantNode()]));
-  assert.equal(v.ok, false);
-  assert.ok(v.reasons.includes("missing_agent_assist"));
+  assert.equal(v.ok, true);
+  assert.ok(!v.reasons.includes("missing_agent_assist"));
+  assert.equal(v.hasAgentAssist, false);
 });
 
 test("validateAiAgentTestFlow flags a flow missing transcription", () => {
