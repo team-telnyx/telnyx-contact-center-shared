@@ -1645,6 +1645,36 @@ export default function TestAgentPage() {
 
       // Set up event handlers
       const currentAutoMode = isAutoMode; // Capture for closure
+
+      // Arm the event-driven turn-settle debounce. The simulated caller replies only
+      // after the agent stays in "listening" for `turnSettleMs` with no new transcript
+      // lines and no return to speaking/thinking. Safe to call repeatedly (it no-ops
+      // if a timer is already armed or preconditions aren't met).
+      const armTurnSettle = () => {
+        if (!autoModeRef.current || !isTestRunningRef.current) return;
+        if (!welcomeMessageReceivedRef.current) return;
+        if (respondingInProgressRef.current) return;
+        if (agentStateRef.current !== "listening") return;
+        if (turnSettleTimerRef.current) return;
+        const armedAt = Date.now();
+        const tick = () => {
+          if (!isTestRunningRef.current || agentStateRef.current !== "listening") {
+            turnSettleTimerRef.current = null;
+            return;
+          }
+          // If a transcript line arrived after we armed, the turn isn't done — wait again.
+          const sinceLastLine = Date.now() - lastTranscriptAtRef.current;
+          const settle = turnSettleMsRef.current;
+          if (lastTranscriptAtRef.current > armedAt && sinceLastLine < settle) {
+            turnSettleTimerRef.current = setTimeout(tick, settle - sinceLastLine);
+            return;
+          }
+          turnSettleTimerRef.current = null;
+          handleVoiceAutoResponse();
+        };
+        turnSettleTimerRef.current = setTimeout(tick, turnSettleMsRef.current);
+      };
+
       client.on("agent.connected", () => {
         setVoiceStatus("active");
         setMessages((prev) => [
@@ -1736,30 +1766,9 @@ export default function TestAgentPage() {
           // Agent is processing — definitely not the caller's turn yet.
           cancelTurnSettle();
         } else if (state === "listening") {
-          // Event-driven turn end: arm a debounce. The simulated caller replies only
-          // after the agent stays in "listening" for `turnSettleMs` with no new
-          // transcript lines and no return to speaking/thinking. This replaces the
-          // old fixed 3s + voiceResponseDelay guesswork.
-          if (welcomeMessageReceivedRef.current) {
-            cancelTurnSettle();
-            const armedAt = Date.now();
-            const tick = () => {
-              if (!isTestRunningRef.current || agentStateRef.current !== "listening") {
-                turnSettleTimerRef.current = null;
-                return;
-              }
-              // If a transcript line arrived after we armed, the turn isn't done — wait again.
-              const sinceLastLine = Date.now() - lastTranscriptAtRef.current;
-              const settle = turnSettleMsRef.current;
-              if (lastTranscriptAtRef.current > armedAt && sinceLastLine < settle) {
-                turnSettleTimerRef.current = setTimeout(tick, settle - sinceLastLine);
-                return;
-              }
-              turnSettleTimerRef.current = null;
-              handleVoiceAutoResponse();
-            };
-            turnSettleTimerRef.current = setTimeout(tick, turnSettleMsRef.current);
-          }
+          // Event-driven turn end: arm the debounce (no-ops until the welcome gate
+          // is open and the agent is settled in "listening").
+          armTurnSettle();
         }
       });
 
@@ -1768,6 +1777,19 @@ export default function TestAgentPage() {
         if (isAssistant) {
           // Record activity so the turn-settle debounce can detect "still talking".
           lastTranscriptAtRef.current = Date.now();
+          // A real assistant transcript line is hard proof the agent has spoken.
+          // Use it as the welcome gate so replies don't depend on the audio-volume
+          // "speaking" state (which can be missed if TTS stays below the monitor's
+          // loudness threshold). Without this, bubbles render but no reply fires.
+          if (!welcomeMessageReceivedRef.current) {
+            welcomeMessageReceivedRef.current = true;
+            setHasReceivedWelcomeMessage(true);
+            console.log("[Voice] Welcome gate opened by assistant transcript");
+          }
+          // If the agent already settled into "listening" before this transcript
+          // line arrived, arm the turn-settle debounce now (the state handler may
+          // have skipped arming because the welcome gate was still closed).
+          armTurnSettle();
         }
 
         setMessages((prev) => [
