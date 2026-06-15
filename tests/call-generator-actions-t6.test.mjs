@@ -199,7 +199,7 @@ describe("call generator actions & multi-target (T6)", () => {
 
   it("workflow testing action is protected, seeded, and configurable by voice and preview sample text", async () => {
     const steps = normalizeSteps([{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku." }]);
-    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku.", persona: "neutral", max_slots_per_turn: 1, randomize_slots: false, expressive: false }]);
+    assert.deepStrictEqual(steps, [{ type: "workflow_testing", voice: "MiniMax.Customer", sample_text: "Cześć, sprawdzam ten głos po polsku.", persona: "neutral", max_slots_per_turn: 1, randomize_slots: false, reply_delay_ms: 0, expressive: false }]);
     assert.match(describeStep(steps[0]), /Workflow Testing/);
     const workflowTesting = await src("lib/call-generator/workflow-testing.mjs");
     assert.match(workflowTesting, /DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT/);
@@ -217,7 +217,7 @@ describe("call generator actions & multi-target (T6)", () => {
     const page = await src("app/(portal)/admin/call-generator/page.jsx");
     assert.match(page, /const protectedWorkflowTesting = actionId === WORKFLOW_TESTING_ACTION_ID/);
     assert.match(page, /Only the caller simulation TTS voice and preview sample text can be changed here/);
-    assert.match(page, /protectedWorkflowTesting \? null : <div className="grid grid-cols-3 gap-2">/);
+    assert.match(page, /protectedWorkflowTesting \? null : <div className="grid grid-cols-2 gap-2">/);
     assert.match(page, /Caller simulation voice/);
     assert.match(page, /Preview sample text/);
     assert.match(page, /value=\{step\.sample_text \|\| DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT\}/);

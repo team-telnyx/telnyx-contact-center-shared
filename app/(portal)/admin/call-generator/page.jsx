@@ -25,6 +25,7 @@ import {
   IconDashboard,
   IconDeviceFloppy,
   IconHistory,
+  IconInfoCircle,
   IconList,
   IconListDetails,
   IconLoader2,
@@ -161,6 +162,49 @@ function SettingCard({ icon: Icon, title, subtitle, children }) {
 
 const toneClasses = { emerald: "from-emerald-500/18 to-teal-500/5 text-emerald-600 dark:text-emerald-300", blue: "from-sky-500/18 to-blue-500/5 text-sky-600 dark:text-sky-300", violet: "from-violet-500/18 to-fuchsia-500/5 text-violet-600 dark:text-violet-300", amber: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-300", rose: "from-rose-500/18 to-red-500/5 text-rose-600 dark:text-rose-300" };
 const telnyxNumberBadgeClass = "bg-transparent text-[#00E58F] border-[#00E58F]";
+
+// Small info affordance: an (i) icon next to a label that reveals a description
+// on hover OR click/tap. Keeps the cards uncluttered while the help text stays
+// one interaction away. Uses Popover (controlled) so it works on touch + keyboard.
+function InfoHint({ children, label = "More info" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onClick={(e) => { e.preventDefault(); setOpen((v) => !v); }}
+        >
+          <IconInfoCircle className="h-3.5 w-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-72 text-xs leading-relaxed text-muted-foreground"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// A label with an inline InfoHint to its right.
+function LabelWithHint({ children, hint }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Label>{children}</Label>
+      <InfoHint>{hint}</InfoHint>
+    </div>
+  );
+}
 
 function MiniStat({ label, value, icon: Icon, tone = "blue" }) {
   return (
@@ -1117,7 +1161,7 @@ function ActionsListView({ actions, selectedActionId, setSelectedActionId, delet
                   <Badge variant="outline" className="bg-card text-xs">{a.id === WORKFLOW_TESTING_ACTION_ID ? "Protected" : `${steps.length} steps`}</Badge>
                 </div>
                 <div className="mt-1 truncate text-xs text-muted-foreground">
-                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : s.type === "workflow_testing" ? `Workflow Testing voice ${s.voice || "AWS.Polly.Joanna"}` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
+                  {steps.map((s, i) => `${i + 1}. ${s.type === "play_media" ? `Play ${s.media_name}` : s.type === "speak" ? `Speak "${String(s.text || "").slice(0, 24)}…"` : s.type === "workflow_testing" ? `Workflow Testing voice ${s.voice || "AWS.Polly.Joanna"}` : s.type === "delay" ? `Delay ${(Number(s.delay_ms) || 0) / 1000}s` : `DTMF ${s.digits}`}`).join("  ·  ") || "No steps"}
                 </div>
               </div>
               {a.id === WORKFLOW_TESTING_ACTION_ID ? null : (
@@ -1148,7 +1192,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
   });
   const addStep = (type) => setDraft((d) => ({
     ...d,
-    steps: [...d.steps, type === "play_media" ? { type, media_name: "" } : type === "speak" ? { type, text: "", voice: "AWS.Polly.Joanna" } : { type, digits: "" }],
+    steps: [...d.steps, type === "play_media" ? { type, media_name: "" } : type === "speak" ? { type, text: "", voice: "AWS.Polly.Joanna" } : type === "delay" ? { type, delay_ms: 1000 } : { type, digits: "" }],
   }));
 
   // Generate an Expressive Mode preview sample (≤20 words) via the LLM for the
@@ -1178,9 +1222,12 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
     <>
       {protectedWorkflowTesting ? (
         <SettingCard icon={IconWand} title="Workflow Testing" subtitle="Protected system action">
-          <p className="text-sm text-muted-foreground">
-            This protected action is managed by the application. Only the caller simulation TTS voice and preview sample text can be changed here.
-          </p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>Managed by the application</span>
+            <InfoHint label="About this protected action">
+              Only the caller simulation TTS voice and preview sample text can be changed here. This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.
+            </InfoHint>
+          </div>
         </SettingCard>
       ) : (
         <SettingCard icon={IconListDetails} title={editing ? "Edit action" : "New action"} subtitle="Sequential steps executed after answer">
@@ -1200,9 +1247,9 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
       {draft.steps.map((step, index) => (
         <SettingCard
           key={index}
-          icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : step.type === "workflow_testing" ? IconWand : IconActivity}
-          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : step.type === "workflow_testing" ? "Workflow Testing" : "Send DTMF"}`}
-          subtitle={step.type === "workflow_testing" ? "Dynamic LLM caller replies for workflow testing" : "Executed in order"}
+          icon={step.type === "play_media" ? IconMusic : step.type === "speak" ? IconSpeakerphone : step.type === "workflow_testing" ? IconWand : step.type === "delay" ? IconClockHour4 : IconActivity}
+          title={`Step ${index + 1} — ${step.type === "play_media" ? "Play media" : step.type === "speak" ? "Speak text" : step.type === "workflow_testing" ? "Workflow Testing" : step.type === "delay" ? "Delay" : "Send DTMF"}`}
+          subtitle={step.type === "workflow_testing" ? "Dynamic LLM caller replies for workflow testing" : step.type === "delay" ? "Pause between surrounding steps" : "Executed in order"}
         >
           <div className="space-y-3">
             {step.type === "play_media" ? (
@@ -1229,7 +1276,9 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between gap-2">
-                    <Label>Preview sample text</Label>
+                    <LabelWithHint hint="Used by the Play preview button to test the selected voice. Click Generate sample to get an LLM one-liner (≤20 words) in the chosen persona, with the matching Expressive Mode tags embedded.">
+                      Preview sample text
+                    </LabelWithHint>
                     <Button
                       size="sm"
                       variant="outline"
@@ -1243,9 +1292,6 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                     </Button>
                   </div>
                   <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Used by the Play preview button to test the selected voice. Click <span className="font-medium">Generate sample</span> to get an LLM one-liner (≤20 words) in the chosen persona{voiceSupportsExpressive(step.voice) && step.expressive ? ", with the matching Expressive Mode tags embedded" : ""}.
-                  </p>
                 </div>
                 <div>
                   <Label>Caller simulation voice</Label>
@@ -1254,7 +1300,9 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                   </div>
                 </div>
                 <div>
-                  <Label>Caller persona</Label>
+                  <LabelWithHint hint="Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.">
+                    Caller persona
+                  </LabelWithHint>
                   <div className="mt-1">
                     <Select value={step.persona || "neutral"} onValueChange={(v) => updateStep(index, { persona: v })}>
                       <SelectTrigger className="w-full"><SelectValue placeholder="Neutral / cooperative" /></SelectTrigger>
@@ -1263,24 +1311,38 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                       </SelectContent>
                     </Select>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Shapes how the simulated caller behaves (tone, cooperation) while still providing the information the workflow needs.</p>
                 </div>
                 {voiceSupportsExpressive(step.voice) ? (
                   <div className="flex items-center justify-between rounded-md border p-3">
                     <div className="pr-3">
-                      <Label>Expressive Mode</Label>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {/^xAI\./i.test(String(step.voice || ""))
-                          ? "xAI Grok voice: adds inline speech tags ([pause], [laugh], <whisper>…) so the caller's delivery matches the persona."
-                          : "Telnyx Ultra voice: adds an SSML <emotion> tag matching the persona so the caller actually sounds the part."}
-                        {" "}When off, the LLM still role-plays the persona but the voice stays neutral (no tags).
-                      </p>
+                      <LabelWithHint hint="xAI Grok voice: adds inline speech tags ([pause], [laugh], <whisper>…) so the caller's delivery matches the persona. When off, the LLM still role-plays the persona but the voice stays neutral (no tags).">
+                        Expressive Mode
+                      </LabelWithHint>
                     </div>
                     <Switch checked={step.expressive === true} onCheckedChange={(checked) => updateStep(index, { expressive: checked === true })} />
                   </div>
                 ) : null}
                 <div>
-                  <Label>Max answers per turn</Label>
+                  <LabelWithHint hint="Pause (in seconds) after the agent finishes speaking before the generator starts the caller's reply. Use it when the simulated caller jumps in too fast. 0 = reply immediately.">
+                    Reply delay (seconds)
+                  </LabelWithHint>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    className="mt-1"
+                    value={Number(step.reply_delay_ms) > 0 ? (Number(step.reply_delay_ms) / 1000) : 0}
+                    onChange={(e) => {
+                      const secs = Math.min(10, Math.max(0, Number(e.target.value) || 0));
+                      updateStep(index, { reply_delay_ms: Math.round(secs * 1000) });
+                    }}
+                  />
+                </div>
+                <div>
+                  <LabelWithHint hint="How many distinct pieces of information the caller may give in one sentence. 1 = one slot per turn (default). Higher values test parallel multi-slot filling (e.g. name + facility + date of birth at once).">
+                    Max answers per turn
+                  </LabelWithHint>
                   <Input
                     type="number"
                     min={1}
@@ -1292,18 +1354,34 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                       updateStep(index, { max_slots_per_turn: next, ...(next <= 1 ? { randomize_slots: false } : {}) });
                     }}
                   />
-                  <p className="mt-1 text-xs text-muted-foreground">How many distinct pieces of information the caller may give in one sentence. 1 = one slot per turn (default). Higher values test parallel multi-slot filling (e.g. name + facility + date of birth at once).</p>
                 </div>
                 {Number(step.max_slots_per_turn) > 1 ? (
                   <div className="flex items-center justify-between rounded-md border p-3">
                     <div className="pr-3">
-                      <Label>Randomize answers per turn</Label>
-                      <p className="mt-1 text-xs text-muted-foreground">When on, each turn reveals a random number of pieces (1 to the max above), never exceeding the max.</p>
+                      <LabelWithHint hint="When on, each turn reveals a random number of pieces (1 to the max above), never exceeding the max.">
+                        Randomize answers per turn
+                      </LabelWithHint>
                     </div>
                     <Switch checked={step.randomize_slots === true} onCheckedChange={(checked) => updateStep(index, { randomize_slots: checked === true })} />
                   </div>
                 ) : null}
-                <p className="mt-2 text-xs text-muted-foreground">This protected action is auto-seeded on startup. It uses finalized agent-side transcription and the selected Agent Assist workflow to generate the next customer utterance.</p>
+              </div>
+            ) : step.type === "delay" ? (
+              <div>
+                <Label>Delay (seconds)<span aria-hidden="true" className="ml-1 text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  min={0.1}
+                  max={30}
+                  step={0.1}
+                  className="mt-1"
+                  value={Number(step.delay_ms) > 0 ? (Number(step.delay_ms) / 1000) : 1}
+                  onChange={(e) => {
+                    const secs = Math.min(30, Math.max(0.1, Number(e.target.value) || 1));
+                    updateStep(index, { delay_ms: Math.round(secs * 1000) });
+                  }}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Pauses the sequence before the next step (Media, Speak, DTMF…). 0.1–30s.</p>
               </div>
             ) : (
               <div>
@@ -1327,7 +1405,7 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
         </SettingCard>
       ))}
 
-      {protectedWorkflowTesting ? null : <div className="grid grid-cols-3 gap-2">
+      {protectedWorkflowTesting ? null : <div className="grid grid-cols-2 gap-2">
         <Button size="sm" variant="outline" onClick={() => addStep("play_media")}>
           <IconMusic className="mr-1 h-3.5 w-3.5" />
           Media
@@ -1339,6 +1417,10 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
         <Button size="sm" variant="outline" onClick={() => addStep("send_dtmf")}>
           <IconActivity className="mr-1 h-3.5 w-3.5" />
           DTMF
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => addStep("delay")}>
+          <IconClockHour4 className="mr-1 h-3.5 w-3.5" />
+          Delay
         </Button>
       </div>}
 
