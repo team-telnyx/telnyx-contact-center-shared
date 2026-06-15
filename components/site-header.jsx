@@ -229,10 +229,10 @@ export function SiteHeader() {
           await loadStatusRef.current();
         }
       } else {
-        alert(data.error || "Failed to update status");
+        notify({ title: "Status update failed", description: data.error || "Failed to update status", variant: "error" });
       }
     } catch (err) {
-      alert("Failed to update status. Please try again.");
+      notify({ title: "Status update failed", description: "Failed to update status. Please try again.", variant: "error" });
     }
   };
 

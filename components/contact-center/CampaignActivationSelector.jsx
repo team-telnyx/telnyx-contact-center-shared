@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { campaignModeBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
+import { notify } from "@/components/ToastNotify";
 
 const CAMPAIGN_MODE_LABELS = {
   preview: "PREVIEW",
@@ -71,7 +72,7 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
       setLocalCampaigns(data.campaigns || []);
       if (onUpdate) await onUpdate();
     } catch (err) {
-      alert(err.message || "Failed to activate campaign");
+      notify({ title: "Campaign activation failed", description: err.message || "Failed to activate campaign", variant: "error" });
       setLocalCampaigns(campaigns);
     } finally {
       setSaving(false);

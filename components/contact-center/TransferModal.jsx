@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { notify } from "@/components/ToastNotify";
 import {
   Select,
   SelectContent,
@@ -733,7 +734,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       const callsStoreState = useCallsStore.getState();
 
       if (!storeState.call) {
-        alert("No active call to transfer");
+        notify({ title: "No active call", description: "No active call to transfer", variant: "warning" });
         return;
       }
 
@@ -770,9 +771,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       }
 
       if (!callControlId) {
-        alert(
-          "Cannot determine call control ID for transfer. Missing call information."
-        );
+        notify({ title: "Transfer unavailable", description: "Cannot determine call control ID for transfer. Missing call information.", variant: "warning" });
         return;
       }
     }
@@ -783,7 +782,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       const targetValue = target.trim();
 
       if (!targetValue) {
-        alert("Please select a transfer destination");
+        notify({ title: "Destination required", description: "Please select a transfer destination", variant: "warning" });
         setLoading(false);
         return;
       }
@@ -808,7 +807,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           preserveRoutingOptions: preserveRouting,
         };
       } else {
-        alert("Cannot determine call control ID for transfer");
+        notify({ title: "Transfer unavailable", description: "Cannot determine call control ID for transfer", variant: "warning" });
         setLoading(false);
         return;
       }
@@ -838,11 +837,11 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           );
         }
       } else {
-        alert(data.error || "Transfer failed");
+        notify({ title: "Transfer failed", description: data.error || "Transfer failed", variant: "error" });
       }
     } catch (err) {
       console.error("[TransferModal] Transfer error:", err);
-      alert("Transfer failed: " + (err.message || "Unknown error"));
+      notify({ title: "Transfer failed", description: err.message || "Unknown error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -888,7 +887,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     let transferType = "external";
 
     if (selectionType === "queues" && selectedQueueId) {
-      alert("Consult is only available for external transfers");
+      notify({ title: "Consult unavailable", description: "Consult is only available for external transfers", variant: "warning" });
       return;
     } else if (
       selectionType === "agents" &&
@@ -913,7 +912,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
     }
 
     if (!target) {
-      alert("Please select a consult destination");
+      notify({ title: "Destination required", description: "Please select a consult destination", variant: "warning" });
       return;
     }
 
@@ -924,7 +923,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       const callsStoreState = useCallsStore.getState();
 
       if (!storeState.call) {
-        alert("No active call to consult");
+        notify({ title: "No active call", description: "No active call to consult", variant: "warning" });
         setLoading(false);
         return;
       }
@@ -1001,9 +1000,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         currentInteraction?.metadata?.agent_call_control_id;
 
       if (!agentCallControlId) {
-        alert(
-          "Cannot find agent call control ID in interaction metadata. Please ensure the call is properly connected."
-        );
+        notify({ title: "Consult unavailable", description: "Cannot find agent call control ID in interaction metadata. Please ensure the call is properly connected.", variant: "warning" });
         setLoading(false);
         return;
       }
@@ -1059,7 +1056,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
         );
         // Clear consultInProgress flag on API error
         useActiveCallStore.getState().setConsultInProgress(false);
-        alert(data.error || "Consult failed");
+        notify({ title: "Consult failed", description: data.error || "Consult failed", variant: "error" });
         setLoading(false);
         return;
       }
@@ -1107,7 +1104,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       // Step 2: Initiate WebRTC call to consultant (same as softphone outbound call)
       // This will trigger call.initiated webhook which will use dialAndBridge
       if (!client) {
-        alert("WebRTC client not available. Please ensure you're connected.");
+        notify({ title: "WebRTC unavailable", description: "WebRTC client not available. Please ensure you're connected.", variant: "warning" });
         setLoading(false);
         // Clear consultInProgress flag on error
         useActiveCallStore.getState().setConsultInProgress(false);
@@ -1304,10 +1301,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           "[TransferModal] Failed to initiate WebRTC call:",
           callErr
         );
-        alert(
-          "Failed to initiate consult call: " +
-            (callErr.message || "Unknown error")
-        );
+        notify({ title: "Consult call failed", description: "Failed to initiate consult call: " + (callErr.message || "Unknown error"), variant: "error" });
         setLoading(false);
         // Clear consultInProgress flag on error
         useActiveCallStore.getState().setConsultInProgress(false);
@@ -1329,7 +1323,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       }
     } catch (err) {
       console.error("[TransferModal] Consult error:", err);
-      alert("Consult failed: " + (err.message || "Unknown error"));
+      notify({ title: "Consult failed", description: err.message || "Unknown error", variant: "error" });
       // Clear consultInProgress flag on error
       useActiveCallStore.getState().setConsultInProgress(false);
       // Reset consult state on outer error
@@ -1357,7 +1351,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       consultState.parkedCall?.interactionId || interaction?.id;
 
     if (!interactionId) {
-      alert("Cannot switch call leg. Missing interaction information.");
+      notify({ title: "Cannot switch call leg", description: "Missing interaction information.", variant: "warning" });
       return;
     }
 
@@ -1371,7 +1365,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       const interactionData = await interactionRes.json();
 
       if (!interactionData.ok || !interactionData.interaction) {
-        alert("Failed to fetch interaction data");
+        notify({ title: "Switch call leg failed", description: "Failed to fetch interaction data", variant: "error" });
         setLoading(false);
         return;
       }
@@ -1431,9 +1425,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       }
 
       if (!currentAgentCallControlId) {
-        alert(
-          "Cannot switch call leg. Agent consult call control ID not found. Please wait a moment and try again."
-        );
+        notify({ title: "Cannot switch call leg", description: "Agent consult call control ID not found. Please wait a moment and try again.", variant: "warning" });
         setLoading(false);
         return;
       }
@@ -1446,13 +1438,9 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
       if (!targetCallControlId) {
         if (targetLegType === "consultant") {
-          alert(
-            "Cannot switch to consult call. Consult PSTN call control ID not found. Please wait a moment and try again."
-          );
+          notify({ title: "Cannot switch to consult call", description: "Consult PSTN call control ID not found. Please wait a moment and try again.", variant: "warning" });
         } else {
-          alert(
-            `Cannot switch to ${targetLegType} call. Missing call control ID.`
-          );
+          notify({ title: "Cannot switch call leg", description: `Cannot switch to ${targetLegType} call. Missing call control ID.`, variant: "warning" });
         }
         setLoading(false);
         return;
@@ -1489,7 +1477,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
 
       const data = await res.json();
       if (!data.ok) {
-        alert(data.error || "Failed to switch call leg");
+        notify({ title: "Switch call leg failed", description: data.error || "Failed to switch call leg", variant: "error" });
       } else {
         console.log(
           `[TransferModal] Successfully switched to ${targetLegType} call leg`
@@ -1502,7 +1490,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
       }
     } catch (err) {
       console.error("[TransferModal] Switch call leg error:", err);
-      alert("Failed to switch call leg: " + (err.message || "Unknown error"));
+      notify({ title: "Switch call leg failed", description: err.message || "Unknown error", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -1611,9 +1599,7 @@ export function TransferModal({ open, onOpenChange, interaction, onTransfer }) {
           useActiveCallStore.getState().callControlId;
 
         if (!consultPstnCallControlId) {
-          alert(
-            "Cannot disconnect consult call. Consult PSTN call control ID not found. Please wait a moment and try again."
-          );
+          notify({ title: "Cannot disconnect consult call", description: "Consult PSTN call control ID not found. Please wait a moment and try again.", variant: "warning" });
           return;
         }
 

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { notify } from "@/components/ToastNotify";
 import {
   Sheet,
   SheetContent,
@@ -329,7 +330,7 @@ export function EdgeVariableMapper({
       try {
         JSON.parse(samplePayload);
       } catch {
-        alert("Invalid JSON in sample payload. Please fix the format.");
+        notify({ title: "Invalid JSON", description: "Invalid JSON in sample payload. Please fix the format.", variant: "error" });
         return;
       }
     }
@@ -368,7 +369,7 @@ export function EdgeVariableMapper({
     });
 
     if (errors.length > 0) {
-      alert("Validation errors:\n\n" + errors.join("\n"));
+      notify({ title: "Validation errors", description: errors.join("\n"), variant: "error" });
       return;
     }
 
