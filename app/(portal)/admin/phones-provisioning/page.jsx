@@ -439,6 +439,8 @@ export default function PhonesProvisioningPage() {
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
   const [pendingRebootIds, setPendingRebootIds] = useState([]);
   const [rebooting, setRebooting] = useState(false);
+  // Custom confirm dialog for phone delete (no native window.confirm — project convention).
+  const [confirmDeletePhone, setConfirmDeletePhone] = useState(null);
   const [phoneDraft, setPhoneDraft] = useState(emptyPhoneDraft());
 
   const activeMeta = useMemo(() => NAV_ITEMS.find((i) => i.id === active) || NAV_ITEMS[0], [active]);
@@ -592,8 +594,13 @@ export default function PhonesProvisioningPage() {
     }
   }
 
-  async function deletePhone(item) {
-    if (!window.confirm(`Delete phone ${formatMacDisplay(item.mac)} and its Telnyx credential?`)) return;
+  // Open the custom confirm dialog (project convention: no native window.confirm).
+  function deletePhone(item) {
+    setConfirmDeletePhone(item);
+  }
+
+  async function performDeletePhone(item) {
+    if (!item) return;
     try {
       const res = await fetch(`${API}/phones/${item.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
@@ -782,6 +789,29 @@ export default function PhonesProvisioningPage() {
             <AlertDialogAction onClick={confirmRebootPhones} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={rebooting}>
               {rebooting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconPower className="mr-2 h-4 w-4" />}
               Reboot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Custom confirm: Delete phone (replaces native window.confirm) */}
+      <AlertDialog open={confirmDeletePhone !== null} onOpenChange={(open) => { if (!open) setConfirmDeletePhone(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete phone?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeletePhone
+                ? <>This permanently deletes the phone <span className="font-medium text-foreground">{formatMacDisplay(confirmDeletePhone.mac)}</span> and its Telnyx credential. This action cannot be undone.</>
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const item = confirmDeletePhone; setConfirmDeletePhone(null); performDeletePhone(item); }}
+            >
+              Delete phone
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1694,6 +1724,8 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [enrollment, setEnrollment] = useState(null);
+  // Custom confirm dialog for bridge delete (no native window.confirm — project convention).
+  const [confirmDeleteBridge, setConfirmDeleteBridge] = useState(false);
   const assignedPhones = bridge ? phones.filter((p) => (p.local_bridge_id || p.settings?.local_bridge_id) === bridge.bridge_id) : [];
   const hasSelectedBridge = Boolean(bridge?.bridge_id);
 
@@ -1749,9 +1781,14 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
     }
   }
 
-  async function deleteBridge() {
+  // Open the custom confirm dialog (project convention: no native window.confirm).
+  function deleteBridge() {
     if (!bridge?.bridge_id || assignedPhones.length) return;
-    if (!window.confirm(`Delete bridge ${bridge.label || bridge.bridge_id}?`)) return;
+    setConfirmDeleteBridge(true);
+  }
+
+  async function performDeleteBridge() {
+    if (!bridge?.bridge_id || assignedPhones.length) return;
     setDeleting(true);
     try {
       const res = await fetch(`${API}/bridges?bridge_id=${encodeURIComponent(bridge.bridge_id)}`, { method: "DELETE" });
@@ -1840,6 +1877,31 @@ function BridgeEditor({ bridges = [], bridge, phones = [], refresh, onSelect }) 
           </div>
         ) : <p className="text-sm text-muted-foreground">Create or select a bridge to see its live status.</p>}
       </SettingCard>
+
+      {/* Custom confirm: Delete bridge (replaces native window.confirm) */}
+      <AlertDialog open={confirmDeleteBridge} onOpenChange={(open) => { if (!open) setConfirmDeleteBridge(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete bridge?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {bridge
+                ? <>This permanently deletes the bridge <span className="font-medium text-foreground">{bridge.label || bridge.bridge_id}</span>. This action cannot be undone.</>
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={() => { setConfirmDeleteBridge(false); performDeleteBridge(); }}
+            >
+              {deleting ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : <IconTrash className="mr-2 h-4 w-4" />}
+              Delete bridge
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
