@@ -50,8 +50,12 @@ export async function GET(request, { params }) {
         const validation = validateAiAgentTestFlow(flow, {
           expectAssistantId: workflow.ai_assistant_id,
         });
-        const blockingReasons = (validation.reasons || []).filter(
-          (reason) => reason === "missing_incoming_call" || reason === "missing_ai_assistant_start",
+        const blockingReasons = (validation.reasons || []).filter((reason) =>
+          [
+            "missing_incoming_call",
+            "missing_ai_assistant_start",
+            "assistant_mismatch",
+          ].includes(reason),
         );
         return {
           id: flow.id,
