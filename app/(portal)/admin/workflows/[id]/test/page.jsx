@@ -732,8 +732,12 @@ export default function TestAgentPage() {
   const listenerRequestedRef = useRef(false); // guard: only request one listener per test
   const listenerUnavailableWarnedRef = useRef(false); // suppress repeated WebRTC-not-connected warnings
   const listenerEnabledRef = useRef(true);
+  const telnyxClientRef = useRef(null);
+  const telnyxStatusRef = useRef(null);
   supervisorCallControlIdRef.current = supervisorCallControlId;
   listenerEnabledRef.current = listenerEnabled;
+  telnyxClientRef.current = telnyxClient;
+  telnyxStatusRef.current = telnyxStatus;
 
   // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
   const waitForAnalysisAndDelay = useCallback(async () => {
@@ -1608,7 +1612,9 @@ export default function TestAgentPage() {
     const runId = activeRunIdRef.current;
     const ledgerId = activeLedgerIdRef.current;
     if (!runId || !ledgerId) return;
-    if (telnyxStatus !== "connected" || !telnyxClient) {
+    const currentTelnyxClient = telnyxClientRef.current;
+    const currentTelnyxStatus = telnyxStatusRef.current;
+    if (currentTelnyxStatus !== "connected" || !currentTelnyxClient) {
       setListenerStatus("error");
       if (!listenerUnavailableWarnedRef.current) {
         listenerUnavailableWarnedRef.current = true;
@@ -1648,7 +1654,7 @@ export default function TestAgentPage() {
       setListenerStatus("error");
       console.error("[Voice listener] start failed:", err);
     }
-  }, [flowId, telnyxClient, telnyxStatus]);
+  }, [flowId]);
 
   // Auto-answer the inbound monitor (supervisor) WebRTC call when it arrives.
   useEffect(() => {
