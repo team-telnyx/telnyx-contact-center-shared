@@ -730,6 +730,7 @@ export default function TestAgentPage() {
   const supervisorCallControlIdRef = useRef(null);
   const supervisorWebrtcCallRef = useRef(null); // the WebRTC call object we auto-answer
   const listenerRequestedRef = useRef(false); // guard: only request one listener per test
+  const listenerUnavailableWarnedRef = useRef(false); // suppress repeated WebRTC-not-connected warnings
   const listenerEnabledRef = useRef(true);
   supervisorCallControlIdRef.current = supervisorCallControlId;
   listenerEnabledRef.current = listenerEnabled;
@@ -1573,6 +1574,7 @@ export default function TestAgentPage() {
   // Tear down the listener leg (server hangup + local cleanup).
   const stopListener = useCallback(async () => {
     listenerRequestedRef.current = false;
+    listenerUnavailableWarnedRef.current = false;
     const supId = supervisorCallControlIdRef.current;
     const webrtcCall = supervisorWebrtcCallRef.current;
     supervisorWebrtcCallRef.current = null;
@@ -1607,15 +1609,18 @@ export default function TestAgentPage() {
     const ledgerId = activeLedgerIdRef.current;
     if (!runId || !ledgerId) return;
     if (telnyxStatus !== "connected" || !telnyxClient) {
-      listenerRequestedRef.current = true;
       setListenerStatus("error");
-      notify({
-        title: "Audio listener unavailable",
-        description: "Your softphone (WebRTC) is not connected, so live audio can't be attached. The transcript still updates live.",
-        variant: "warning",
-      });
+      if (!listenerUnavailableWarnedRef.current) {
+        listenerUnavailableWarnedRef.current = true;
+        notify({
+          title: "Audio listener unavailable",
+          description: "Your softphone (WebRTC) is not connected, so live audio can't be attached. The transcript still updates live.",
+          variant: "warning",
+        });
+      }
       return;
     }
+    listenerUnavailableWarnedRef.current = false;
     listenerRequestedRef.current = true;
     setListenerStatus("connecting");
     try {
