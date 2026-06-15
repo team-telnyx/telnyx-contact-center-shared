@@ -9,6 +9,10 @@ import { QueueActivationPanel } from "@/components/contact-center/QueueActivatio
 import { CampaignActivationSelector } from "@/components/contact-center/CampaignActivationSelector";
 import { DEFAULT_USER_STATUS } from "@/config/user";
 import { notify } from "@/components/ToastNotify";
+import {
+  subscribeStatusStream,
+  subscribeStatusStreamState,
+} from "@/lib/status-stream-client";
 
 export function SiteHeader() {
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
@@ -95,12 +99,14 @@ export function SiteHeader() {
       loadCampaigns();
     }
 
-    // Set up SSE connection for real-time status updates.
-    // Status is delivered in real time via SSE. The /api/user/profile poll is
-    // only a fallback safety-net that runs WHILE the SSE stream is down, so a
-    // missed event cannot leave the header stuck on a stale status. When the
-    // stream is healthy we do not poll at all.
-    let statusEventSource = null;
+    // Real-time status/queue/campaign updates come from a SINGLE shared SSE
+    // connection (see lib/status-stream-client). All components multiplex over
+    // that one stream instead of each opening its own EventSource, which used
+    // to exhaust the browser's per-origin connection cap.
+    //
+    // The /api/user/profile poll is only a fallback safety-net that runs WHILE
+    // the shared stream is DOWN, so a missed event cannot leave the header
+    // stuck on a stale status. When the stream is healthy we do not poll.
     let statusRefreshInterval = null;
 
     const startFallbackPolling = () => {
@@ -119,110 +125,66 @@ export function SiteHeader() {
       }
     };
 
-    const connectStatusStream = () => {
-      try {
-        if (statusEventSource) {
-          statusEventSource.close();
-        }
-
-        statusEventSource = new EventSource("/api/user/status-stream");
-        statusEventSource.addEventListener("status_changed", (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            console.log("[SiteHeader] Received status_changed event:", data);
-            if (data.status) {
-              console.log(
-                `[SiteHeader] Updating status from "${status}" to "${data.status}"`,
-              );
-              setStatus(data.status);
-            }
-          } catch (err) {
-            console.error(
-              "[SiteHeader] Failed to parse status SSE message:",
-              err,
-            );
-          }
-        });
-
-        statusEventSource.addEventListener("queue_changed", async (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === "queue_created") {
-              // Notify user about new queue
-              notify({
-                title: "New queue available",
-                description: `${
-                  data.queue.displayName || data.queue.name
-                } has been added and is now available for activation.`,
-                variant: "info",
-              });
-              // Reload queues
-              if (loadQueuesRef.current) {
-                loadQueuesRef.current();
-              }
-            } else if (data.type === "queue_updated") {
-              // Reload queues when a queue is updated
-              if (loadQueuesRef.current) {
-                loadQueuesRef.current();
-              }
-            } else if (data.type === "queue_activation_changed") {
-              // Reload queues to update activation status (no toast notification)
-              if (loadQueuesRef.current) {
-                loadQueuesRef.current();
-              }
-            }
-          } catch (err) {
-            // Failed to parse queue SSE message
-          }
-        });
-
-        statusEventSource.addEventListener("campaign_changed", async (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (
-              data.type === "campaign_status_changed" ||
-              data.type === "campaign_activation_changed" ||
-              data.type === "campaign_updated"
-            ) {
-              if (loadCampaignsRef.current) {
-                loadCampaignsRef.current();
-              }
-            }
-          } catch (err) {
-            // Failed to parse campaign SSE message
-          }
-        });
-
-        statusEventSource.addEventListener("connected", () => {
-          // Stream is healthy again — stop the fallback poll and rely on SSE.
-          stopFallbackPolling();
-        });
-
-        statusEventSource.onerror = (error) => {
-          if (statusEventSource) {
-            statusEventSource.close();
-            statusEventSource = null;
-          }
-          // SSE is down — start the fallback poll so status cannot go stale,
-          // and attempt to reconnect. The poll is stopped on "connected".
-          startFallbackPolling();
-          setTimeout(connectStatusStream, 5000);
-        };
-      } catch (err) {
-        // Could not open the stream — fall back to polling and retry.
-        startFallbackPolling();
-        setTimeout(connectStatusStream, 5000);
-      }
-    };
+    const unsubscribers = [];
 
     if (hasAgentRole) {
-      connectStatusStream();
+      // Poll only while the shared SSE stream is down.
+      unsubscribers.push(
+        subscribeStatusStreamState((connected) => {
+          if (connected) {
+            stopFallbackPolling();
+          } else {
+            startFallbackPolling();
+          }
+        }),
+      );
+
+      unsubscribers.push(
+        subscribeStatusStream("status_changed", (data) => {
+          if (data?.status) {
+            setStatus(data.status);
+          }
+        }),
+      );
+
+      unsubscribers.push(
+        subscribeStatusStream("queue_changed", (data) => {
+          if (data?.type === "queue_created") {
+            notify({
+              title: "New queue available",
+              description: `${
+                data.queue?.displayName || data.queue?.name
+              } has been added and is now available for activation.`,
+              variant: "info",
+            });
+            loadQueuesRef.current?.();
+          } else if (
+            data?.type === "queue_updated" ||
+            data?.type === "queue_activation_changed"
+          ) {
+            loadQueuesRef.current?.();
+          }
+        }),
+      );
+
+      unsubscribers.push(
+        subscribeStatusStream("campaign_changed", (data) => {
+          if (
+            data?.type === "campaign_status_changed" ||
+            data?.type === "campaign_activation_changed" ||
+            data?.type === "campaign_updated"
+          ) {
+            loadCampaignsRef.current?.();
+          }
+        }),
+      );
     }
 
     return () => {
-      if (statusEventSource) {
-        statusEventSource.close();
-        statusEventSource = null;
+      for (const unsub of unsubscribers) {
+        try {
+          unsub();
+        } catch (_) {}
       }
       stopFallbackPolling();
     };

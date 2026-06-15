@@ -4,6 +4,10 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import WrapupCodesSheet from "./WrapupCodesSheet";
 import useWrapupSheetStore from "@/lib/stores/wrapup-sheet-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import {
+  subscribeStatusStream,
+  subscribeStatusStreamState,
+} from "@/lib/status-stream-client";
 
 /**
  * Global Wrapup Sheet Component
@@ -158,11 +162,31 @@ export function GlobalWrapupSheet() {
   // mounted after the status_changed event already fired, or the SSE event is
   // lost, this still sees Wrapup and recovers the disposition sheet.
   useEffect(() => {
+    // Initial reconciliation, then poll ONLY while the shared SSE stream is
+    // down. The Wrapup recovery itself is primarily driven by the SSE
+    // status_changed handler below; this poll is just a safety-net for the
+    // window where the stream is unavailable.
     loadAgentStatusForWrapupRecovery();
-    const timer = setInterval(() => {
-      loadAgentStatusForWrapupRecovery();
-    }, 5000);
-    return () => clearInterval(timer);
+    let timer = null;
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const unsubscribeState = subscribeStatusStreamState((connected) => {
+      if (connected) {
+        stop();
+      } else if (!timer) {
+        timer = setInterval(() => {
+          loadAgentStatusForWrapupRecovery();
+        }, 5000);
+      }
+    });
+    return () => {
+      stop();
+      unsubscribeState();
+    };
   }, [loadAgentStatusForWrapupRecovery]);
 
   // Customer-first hangups can leave the browser without a local WebRTC
@@ -170,11 +194,8 @@ export function GlobalWrapupSheet() {
   // status through /api/user/status-stream; use that as a recovery trigger to
   // open the disposition sheet from recent completed answered interactions.
   useEffect(() => {
-    let statusEventSource = null;
-
-    const handleStatusChanged = async (event) => {
+    const handleStatusChanged = async (data) => {
       try {
-        const data = JSON.parse(event.data || "{}");
         const status = data?.status;
         if (!status) return;
         setAgentStatus(status);
@@ -187,19 +208,7 @@ export function GlobalWrapupSheet() {
       }
     };
 
-    try {
-      statusEventSource = new EventSource("/api/user/status-stream");
-      statusEventSource.addEventListener("status_changed", handleStatusChanged);
-    } catch (err) {
-      console.error("[GlobalWrapupSheet] Failed to connect status stream:", err);
-    }
-
-    return () => {
-      if (statusEventSource) {
-        statusEventSource.removeEventListener("status_changed", handleStatusChanged);
-        statusEventSource.close();
-      }
-    };
+    return subscribeStatusStream("status_changed", handleStatusChanged);
   }, [loadInteractions, recoverWrapupFromInteractions]);
 
   useEffect(() => {
