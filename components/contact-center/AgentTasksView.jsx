@@ -25,6 +25,16 @@ import {
   IconEdit,
 } from "@tabler/icons-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import TaskEditSheet from "@/components/tasks/EditSheet";
@@ -58,6 +68,8 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
   const [totalCount, setTotalCount] = useState(0);
   const [identifiedContact, setIdentifiedContact] = useState(null);
   const [showTaskSheet, setShowTaskSheet] = useState(false);
+  // Custom confirm dialog: caller not registered (no native confirm — project convention).
+  const [confirmCreateContact, setConfirmCreateContact] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [prefillContactId, setPrefillContactId] = useState(null);
   const [contactsMap, setContactsMap] = useState(new Map());
@@ -338,20 +350,10 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
 
   async function handleCreateTask() {
     if (!identifiedContact) {
-      // Show option to create contact first
-      const shouldCreate = confirm(
-        "Caller is not registered. Would you like to create a contact first?",
-      );
-      if (shouldCreate) {
-        // Redirect to create contact (we'll handle this differently)
-        notify({
-          title: "Create Contact",
-          description:
-            "Please create a contact first, then create a task for them.",
-          variant: "info",
-        });
-        return;
-      }
+      // Caller not registered — ask via the custom confirm dialog whether to
+      // create a contact first (project convention: no native confirm).
+      setConfirmCreateContact(true);
+      return;
     }
     setShowTaskSheet(true);
   }
@@ -695,6 +697,37 @@ export function AgentTasksView({ selectedInteraction, onBackToInteraction }) {
           }
         />
       )}
+
+      {/* Custom confirm: caller not registered (replaces native confirm) */}
+      <AlertDialog open={confirmCreateContact} onOpenChange={(open) => { if (!open) setConfirmCreateContact(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Caller is not registered</AlertDialogTitle>
+            <AlertDialogDescription>
+              This caller isn&apos;t linked to a contact yet. Would you like to create a contact first, or continue and create the task without one?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => { setConfirmCreateContact(false); setShowTaskSheet(true); }}
+            >
+              Continue without contact
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmCreateContact(false);
+                notify({
+                  title: "Create Contact",
+                  description: "Please create a contact first, then create a task for them.",
+                  variant: "info",
+                });
+              }}
+            >
+              Create contact first
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
