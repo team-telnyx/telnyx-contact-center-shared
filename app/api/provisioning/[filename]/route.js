@@ -6,7 +6,7 @@ import {
   yealinkCommonConfig,
   vendorFromUserAgent,
 } from "@/lib/hardphones/config-generators.mjs";
-import { voiceRuntimeLogger, runtimePayload } from "@/lib/runtime-logging.mjs";
+import { recordProvisioningEvent, phoneProvisioningLogger } from "@/lib/hardphones/logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -63,15 +63,6 @@ function trustedPhoneSourceIp(request) {
   return isPrivatePhoneIp(sourceIp) && !isLikelyGatewayIp(sourceIp) ? sourceIp : null;
 }
 
-async function logEvent(pool, { phoneId = null, mac = null, eventType, detail = {} }) {
-  try {
-    await pool.query(
-      `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,
-      [phoneId, mac, eventType, JSON.stringify(detail)],
-    );
-  } catch {}
-}
-
 // GET /api/provisioning/[filename] — public zero-touch provisioning endpoint.
 // Phones fetch their config files here at boot (DHCP option 66/160 or vendor
 // redirect service points at https://<host>/api/provisioning/). Unknown MACs
@@ -91,7 +82,7 @@ export async function GET(request, { params }) {
 
   // Yealink common config — static fleet defaults, no credentials inside.
   if (resolved.kind === "common") {
-    await logEvent(pool, { eventType: "common_config_fetch", detail: { filename, userAgent } });
+    await recordProvisioningEvent(pool, { eventType: "common_config_fetch", detail: { filename, userAgent } });
     return new NextResponse(yealinkCommonConfig({ baseUrl: resolveProvisioningBaseUrl(request) }), {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -101,7 +92,7 @@ export async function GET(request, { params }) {
   // Polycom default master config — intentionally not served (unknown phones
   // must be added to inventory first).
   if (resolved.kind === "default-master") {
-    await logEvent(pool, { eventType: "unknown_phone_request", detail: { filename, userAgent } });
+    await recordProvisioningEvent(pool, { eventType: "unknown_phone_request", detail: { filename, userAgent } });
     return new NextResponse("Not found", { status: 404 });
   }
 
@@ -114,11 +105,11 @@ export async function GET(request, { params }) {
   const phone = rows[0];
 
   if (!phone) {
-    await logEvent(pool, { mac, eventType: "unknown_phone_request", detail: { filename, userAgent, uaVendor } });
+    await recordProvisioningEvent(pool, { mac, eventType: "unknown_phone_request", detail: { filename, userAgent, uaVendor } });
     return new NextResponse("Not found", { status: 404 });
   }
   if (phone.provisioning_state === "disabled") {
-    await logEvent(pool, { phoneId: phone.id, mac, eventType: "disabled_phone_request", detail: { filename } });
+    await recordProvisioningEvent(pool, { phoneId: phone.id, mac, eventType: "disabled_phone_request", detail: { filename } });
     return new NextResponse("Not found", { status: 404 });
   }
 
@@ -128,7 +119,7 @@ export async function GET(request, { params }) {
   const baseUrl = resolveBaseUrl(request);
   const config = buildConfigForPhone(phone, kind, { baseUrl });
   if (!config) {
-    voiceRuntimeLogger.warn("hardphone_config_generation_failed", runtimePayload({ operation: "hp_serve", detail: { vendor: phone.vendor, kind } }));
+    phoneProvisioningLogger.warn("hardphone_config_generation_failed", { operation: "hp_serve", phoneId: phone.id, mac, detail: { vendor: phone.vendor, kind } });
     return new NextResponse("Not found", { status: 404 });
   }
 
@@ -142,7 +133,7 @@ export async function GET(request, { params }) {
      WHERE id = $1`,
     [phone.id, userAgent.slice(0, 300) || null, phoneSourceIp],
   );
-  await logEvent(pool, {
+  await recordProvisioningEvent(pool, {
     phoneId: phone.id,
     mac,
     eventType: "config_served",

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { normalizeMac } from "@/lib/hardphones/config-generators.mjs";
+import { recordProvisioningEvent } from "@/lib/hardphones/logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -84,12 +85,12 @@ async function handleEvent(request, vendor) {
     [phoneId, ip, registrationStatus],
   );
   const eventType = registrationStatus ? "registration_status_event" : `phone_event_${vendor}`;
-  try {
-    await pool.query(
-      `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, $3, $4)`,
-      [phoneId, mac, eventType, JSON.stringify({ query: queryParams, body, detected_ip: ip, source_ip: sourceIp, registration_status: registrationStatus })],
-    );
-  } catch {}
+  await recordProvisioningEvent(pool, {
+    phoneId,
+    mac,
+    eventType,
+    detail: { query: queryParams, body, detected_ip: ip, source_ip: sourceIp, registration_status: registrationStatus },
+  });
   return NextResponse.json({ ok: true });
 }
 
