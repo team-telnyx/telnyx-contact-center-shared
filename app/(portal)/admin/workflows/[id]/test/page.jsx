@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { useTelnyx } from "@/components/telephony-provider";
 import {
   IconArrowLeft,
   IconPlayerPlay,
@@ -39,6 +40,7 @@ import {
   IconSend,
   IconVolume,
   IconVolumeOff,
+  IconHeadphones,
   IconMicrophone,
   IconMicrophoneOff,
   IconRefresh,
@@ -671,6 +673,11 @@ export default function TestAgentPage() {
   const [activeLedgerId, setActiveLedgerId] = useState(null);
   const [voiceTestStatus, setVoiceTestStatus] = useState("idle"); // dialing|ringing|answered|talking|completed|failed|abandoned
   const [voiceTranscript, setVoiceTranscript] = useState([]); // [{ role:'agent'|'caller', text, at }]
+  // Silent WebRTC listener (Telnyx monitor supervision) so the user can HEAR the live AI<->caller call
+  const { client: telnyxClient, status: telnyxStatus } = useTelnyx();
+  const [listenerEnabled, setListenerEnabled] = useState(true); // user preference: auto-attach listener
+  const [listenerStatus, setListenerStatus] = useState("off"); // off|connecting|ringing|listening|error
+  const [supervisorCallControlId, setSupervisorCallControlId] = useState(null);
   
   // TTS configuration
   const [ttsVoices, setTtsVoices] = useState({});
@@ -718,6 +725,14 @@ export default function TestAgentPage() {
   const activeLedgerIdRef = useRef(null);
   activeRunIdRef.current = activeRunId;
   activeLedgerIdRef.current = activeLedgerId;
+  // Listener refs
+  const listenerAudioRef = useRef(null); // hidden <audio> for the monitor leg
+  const supervisorCallControlIdRef = useRef(null);
+  const supervisorWebrtcCallRef = useRef(null); // the WebRTC call object we auto-answer
+  const listenerRequestedRef = useRef(false); // guard: only request one listener per test
+  const listenerEnabledRef = useRef(true);
+  supervisorCallControlIdRef.current = supervisorCallControlId;
+  listenerEnabledRef.current = listenerEnabled;
 
   // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
   const waitForAnalysisAndDelay = useCallback(async () => {
@@ -1530,6 +1545,149 @@ export default function TestAgentPage() {
     }
   }, []);
 
+  // --- Silent WebRTC listener (Telnyx monitor) ------------------------------
+  // Attach the monitor leg's remote audio to the hidden <audio> element so the
+  // user hears the live AI<->caller conversation. Listen-only: the mic is never
+  // sent into the call (monitor role on the Telnyx side).
+  const attachListenerAudio = useCallback((webrtcCall) => {
+    const audioEl = listenerAudioRef.current;
+    if (!webrtcCall || !audioEl) return;
+    try {
+      if (typeof webrtcCall.setAudioElement === "function") webrtcCall.setAudioElement(audioEl);
+      if (typeof webrtcCall.attachAudio === "function") webrtcCall.attachAudio(audioEl);
+      const remoteStream =
+        webrtcCall.remoteStream || webrtcCall.remoteMediaStream || webrtcCall.stream;
+      if (remoteStream && audioEl.srcObject !== remoteStream) audioEl.srcObject = remoteStream;
+      audioEl.autoplay = true;
+      audioEl.playsInline = true;
+      audioEl.muted = false;
+      const playResult = audioEl.play?.();
+      if (playResult?.catch) {
+        playResult.catch((e) => console.warn("[Voice listener] autoplay blocked:", e?.message || e));
+      }
+    } catch (e) {
+      console.error("[Voice listener] attach audio failed:", e);
+    }
+  }, []);
+
+  // Tear down the listener leg (server hangup + local cleanup).
+  const stopListener = useCallback(async () => {
+    listenerRequestedRef.current = false;
+    const supId = supervisorCallControlIdRef.current;
+    const webrtcCall = supervisorWebrtcCallRef.current;
+    supervisorWebrtcCallRef.current = null;
+    try {
+      if (webrtcCall?.hangup) webrtcCall.hangup();
+    } catch (_) {}
+    if (listenerAudioRef.current) {
+      try { listenerAudioRef.current.srcObject = null; } catch (_) {}
+    }
+    setSupervisorCallControlId(null);
+    supervisorCallControlIdRef.current = null;
+    setListenerStatus("off");
+    if (supId) {
+      try {
+        await fetch(`/api/admin/workflows/${flowId}/voice-test/listen`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ supervisorCallControlId: supId }),
+        });
+      } catch (err) {
+        console.error("[Voice listener] stop failed:", err);
+      }
+    }
+  }, [flowId]);
+
+  // Request a monitor leg for the running test. The browser receives it as an
+  // inbound WebRTC call and auto-answers it (see the notification effect below).
+  const startListener = useCallback(async () => {
+    if (listenerRequestedRef.current) return;
+    if (!listenerEnabledRef.current) return;
+    const runId = activeRunIdRef.current;
+    const ledgerId = activeLedgerIdRef.current;
+    if (!runId || !ledgerId) return;
+    if (telnyxStatus !== "connected" || !telnyxClient) {
+      setListenerStatus("error");
+      notify({
+        title: "Audio listener unavailable",
+        description: "Your softphone (WebRTC) is not connected, so live audio can't be attached. The transcript still updates live.",
+        variant: "warning",
+      });
+      return;
+    }
+    listenerRequestedRef.current = true;
+    setListenerStatus("connecting");
+    try {
+      const res = await fetch(`/api/admin/workflows/${flowId}/voice-test/listen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId, ledgerId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        listenerRequestedRef.current = false;
+        setListenerStatus("error");
+        notify({
+          title: "Couldn't attach audio listener",
+          description: typeof data?.error === "string" ? data.error : "Failed to start the listener.",
+          variant: "error",
+        });
+        return;
+      }
+      setSupervisorCallControlId(data.supervisorCallControlId);
+      supervisorCallControlIdRef.current = data.supervisorCallControlId;
+      setListenerStatus("ringing");
+    } catch (err) {
+      listenerRequestedRef.current = false;
+      setListenerStatus("error");
+      console.error("[Voice listener] start failed:", err);
+    }
+  }, [flowId, telnyxClient, telnyxStatus]);
+
+  // Auto-answer the inbound monitor (supervisor) WebRTC call when it arrives.
+  useEffect(() => {
+    if (!telnyxClient) return;
+    const onNotification = (notification) => {
+      try {
+        const call = notification?.call;
+        if (!call) return;
+        // Only act while we are waiting for a listener leg for this test.
+        if (!listenerRequestedRef.current || supervisorWebrtcCallRef.current) return;
+        const state = String(call.state || "").toLowerCase();
+        const direction = String(call.direction || "").toLowerCase();
+        const isInbound = direction === "inbound" || direction === "incoming" || state === "new" || state === "ringing";
+        const isRinging = state === "new" || state === "ringing" || state === "early";
+        if (isInbound && isRinging) {
+          supervisorWebrtcCallRef.current = call;
+          // Answer the monitor call; we only listen.
+          Promise.resolve(call.answer?.())
+            .then(() => {
+              setListenerStatus("listening");
+              [0, 150, 400, 800].forEach((d) =>
+                setTimeout(() => attachListenerAudio(supervisorWebrtcCallRef.current || call), d),
+              );
+            })
+            .catch((e) => {
+              console.error("[Voice listener] answer failed:", e);
+              setListenerStatus("error");
+              supervisorWebrtcCallRef.current = null;
+            });
+        } else if (["hangup", "destroy", "ended", "purge"].includes(state)) {
+          if (supervisorWebrtcCallRef.current === call) {
+            supervisorWebrtcCallRef.current = null;
+            setListenerStatus((prev) => (prev === "listening" ? "off" : prev));
+          }
+        }
+      } catch (e) {
+        console.error("[Voice listener] notification handler error:", e);
+      }
+    };
+    try { telnyxClient.on?.("telnyx.notification", onNotification); } catch (_) {}
+    return () => {
+      try { telnyxClient.off?.("telnyx.notification", onNotification); } catch (_) {}
+    };
+  }, [telnyxClient, attachListenerAudio]);
+
   // Poll the server for the current voice-test session state and render the live transcript
   const pollVoiceSession = useCallback(async () => {
     const runId = activeRunIdRef.current;
@@ -1551,9 +1709,20 @@ export default function TestAgentPage() {
         );
       }
 
+      // Once the AI assistant call is up, auto-attach the silent audio listener
+      // so the user can hear the live AI<->caller conversation.
+      if (
+        ["answered", "talking"].includes(data.status) &&
+        listenerEnabledRef.current &&
+        !listenerRequestedRef.current
+      ) {
+        startListener();
+      }
+
       // Stop polling on a terminal status
       if (["completed", "failed", "abandoned"].includes(data.status)) {
         stopVoicePolling();
+        stopListener();
         isTestRunningRef.current = false;
         setIsTestRunning(false);
         if (data.status === "failed" && data.error) {
@@ -1567,13 +1736,14 @@ export default function TestAgentPage() {
     } catch (err) {
       console.error("[Voice] Session poll error:", err);
     }
-  }, [flowId, stopVoicePolling]);
+  }, [flowId, stopVoicePolling, startListener, stopListener]);
 
   // Stop the server-side voice test (hang up + stop polling)
   const stopVoiceTest = useCallback(async () => {
     const runId = activeRunIdRef.current;
     const ledgerId = activeLedgerIdRef.current;
     stopVoicePolling();
+    stopListener();
     isTestRunningRef.current = false;
     setIsTestRunning(false);
     if (runId && ledgerId) {
@@ -1590,7 +1760,7 @@ export default function TestAgentPage() {
     setVoiceTestStatus((prev) =>
       ["completed", "failed", "abandoned"].includes(prev) ? prev : "completed"
     );
-  }, [flowId, stopVoicePolling]);
+  }, [flowId, stopVoicePolling, stopListener]);
 
   // Start the server-side voice call-flow test
   const startVoiceTest = useCallback(async () => {
@@ -1615,7 +1785,11 @@ export default function TestAgentPage() {
     setVoiceTestStatus("dialing");
     setIsTestRunning(true);
     isTestRunningRef.current = true;
-
+    // Reset listener state for a fresh test
+    listenerRequestedRef.current = false;
+    supervisorWebrtcCallRef.current = null;
+    setSupervisorCallControlId(null);
+    setListenerStatus(listenerEnabledRef.current ? "off" : "off");
     try {
       const res = await fetch(`/api/admin/workflows/${flowId}/voice-test/start`, {
         method: "POST",
@@ -1692,8 +1866,23 @@ export default function TestAgentPage() {
         clearInterval(voicePollTimerRef.current);
         voicePollTimerRef.current = null;
       }
+      // Best-effort: hang up the listener leg if one is active when leaving.
+      const supId = supervisorCallControlIdRef.current;
+      try {
+        if (supervisorWebrtcCallRef.current?.hangup) supervisorWebrtcCallRef.current.hangup();
+      } catch (_) {}
+      if (supId) {
+        try {
+          fetch(`/api/admin/workflows/${flowId}/voice-test/listen`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ supervisorCallControlId: supId }),
+            keepalive: true,
+          });
+        } catch (_) {}
+      }
     };
-  }, []);
+  }, [flowId]);
 
   if (loading) {
     return (
@@ -2011,6 +2200,28 @@ export default function TestAgentPage() {
                         <span>10s</span>
                       </div>
                     </div>
+
+                    {/* Live audio listener */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="listener-enabled" className="text-sm font-medium cursor-pointer">
+                          Listen to live audio
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Hear the AI↔caller call via your softphone (listen-only)
+                        </p>
+                      </div>
+                      <Switch
+                        id="listener-enabled"
+                        checked={listenerEnabled}
+                        onCheckedChange={(checked) => {
+                          setListenerEnabled(checked);
+                          listenerEnabledRef.current = checked;
+                          if (!checked) stopListener();
+                          else if (["answered", "talking"].includes(voiceTestStatus)) startListener();
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -2064,6 +2275,29 @@ export default function TestAgentPage() {
                   {isTestRunning ? "Test Running" : "Ready"}
                 </Badge>
               )}
+              {/* Live audio listener status (voice channel only) */}
+              {channel === "voice" && listenerEnabled && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "mb-3 w-full justify-center gap-1.5",
+                    listenerStatus === "listening" && "text-green-500 border-green-500",
+                    (listenerStatus === "connecting" || listenerStatus === "ringing") && "text-yellow-500 border-yellow-500",
+                    listenerStatus === "error" && "text-red-500 border-red-500",
+                    listenerStatus === "off" && "text-muted-foreground"
+                  )}
+                  title="Silent monitor: you hear the call but are not heard"
+                >
+                  <IconHeadphones className="size-3.5" />
+                  {listenerStatus === "listening" ? "Listening to live call" :
+                   listenerStatus === "ringing" ? "Connecting audio…" :
+                   listenerStatus === "connecting" ? "Requesting audio…" :
+                   listenerStatus === "error" ? "Audio unavailable" :
+                   isTestRunning ? "Audio idle" : "Audio listener ready"}
+                </Badge>
+              )}
+              {/* Hidden audio sink for the monitor leg */}
+              <audio ref={listenerAudioRef} autoPlay playsInline className="hidden" />
               <div className="space-y-3">
                 {!isTestRunning ? (
                   <Button
