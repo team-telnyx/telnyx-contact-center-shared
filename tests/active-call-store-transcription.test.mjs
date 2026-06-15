@@ -298,6 +298,61 @@ test("analysis updates for a reused server key target the split bubble", () => {
   assert.equal(transcriptions[2].sentiment, "neutral");
 });
 
+test("analysis updates prefer a newer exact reused server key over older split fallback", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-analysis",
+    transcript: "first stale utterance",
+    is_final: false,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-analysis-boundary",
+    transcript: "can you repeat that",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-analysis",
+    transcript: "second utterance",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-analysis-boundary-2",
+    transcript: "anything else",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-analysis",
+    transcript: "third exact utterance",
+    is_final: true,
+    speech_final: true,
+  });
+
+  store.updateTranscriptionAnalysis("cust-analysis", {
+    intent: "confirm_pickup",
+    sentiment: "positive",
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions[2].intent, null);
+  assert.equal(transcriptions[4].intent, "confirm_pickup");
+  assert.equal(transcriptions[4].sentiment, "positive");
+});
+
 test("consecutive interim chunks on the same leg still merge into one open bubble", () => {
   resetActiveCallStore();
   const store = useActiveCallStore.getState();
