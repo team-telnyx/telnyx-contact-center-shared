@@ -2090,14 +2090,17 @@ export default function TestAgentPage() {
                       )}
                       {!loadingFlows && selectedCallFlowId && (() => {
                         const sel = eligibleFlows.find((f) => f.id === selectedCallFlowId);
-                        if (sel && !sel.eligible) {
-                          const reasonLabel = (sel.reasons || [])
+                        const reasons = (sel?.reasons || []).filter(
+                          (r) => r !== "missing_incoming_call",
+                        );
+                        if (sel && reasons.length > 0) {
+                          const reasonLabel = reasons
                             .map((r) => FLOW_REASON_LABELS[r] || r)
                             .filter(Boolean)
                             .join(", ");
                           return (
                             <p className="text-xs text-yellow-500">
-                              Heads up: {reasonLabel || "this flow may not start an AI assistant or transcribe the call"}. The test may not get replies.
+                              Heads up: {reasonLabel}. The test will still run; replies need transcription on the assistant leg.
                             </p>
                           );
                         }
