@@ -13,12 +13,17 @@ test("GlobalWrapupSheet recovers customer-first hangups from authoritative Wrapu
 
   assert.match(
     src,
-    /new EventSource\(["']\/api\/user\/status-stream["']\)/,
-    "wrapup sheet must listen to the same authoritative status stream as the header",
+    /subscribeStatusStream\([\s\S]{0,40}["']status_changed["']/,
+    "wrapup sheet must listen to the shared authoritative status stream (same as the header)",
+  );
+  assert.doesNotMatch(
+    src,
+    /new EventSource\(\s*["'`]\/api\/user\/status-stream/,
+    "wrapup sheet must use the shared status-stream client, not its own EventSource to /api/user/status-stream",
   );
   assert.match(
     src,
-    /status\s*===\s*["']Wrapup["'][\s\S]{0,1200}addEventListener\(["']status_changed["']/,
+    /status\s*===\s*["']Wrapup["'][\s\S]{0,1200}subscribeStatusStream\(\s*["']status_changed["']/,
     "when DB-authoritative status changes to Wrapup, the sheet must start recovery even if WebRTC did not emit a local disconnect",
   );
   assert.match(

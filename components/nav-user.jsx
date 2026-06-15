@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import useCallsStore from "@/lib/stores/calls-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
 // No Link: SPA-style selection via hash
 
 // Helper function to get user initials
@@ -106,75 +107,14 @@ export function NavUser({ user, hideExtras }) {
 
   const [status, setStatus] = useState(DEFAULT_USER_STATUS);
 
-  // Subscribe to SSE stream for real-time status updates
+  // Subscribe to real-time status updates via the shared SSE client.
   useEffect(() => {
-    let eventSource = null;
-    let reconnectTimeout = null;
-
-    const connectStatusStream = () => {
-      try {
-        // Close existing connection if any
-        if (eventSource) {
-          eventSource.close();
-        }
-
-        eventSource = new EventSource("/api/user/status-stream");
-
-        eventSource.addEventListener("status_changed", (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.status && data.status !== status) {
-              console.log(
-                "[Status] Received status update via SSE:",
-                data.status
-              );
-              setStatus(data.status);
-            }
-          } catch (error) {
-            console.error("[Status] Error parsing SSE data:", error);
-          }
-        });
-
-        eventSource.addEventListener("connected", () => {
-          console.log("[Status] Connected to status stream");
-        });
-
-        eventSource.addEventListener("ping", () => {
-          // Keep-alive ping received
-        });
-
-        eventSource.onerror = (error) => {
-          console.warn("[Status] SSE connection error:", error);
-          // Close and reconnect after delay
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-          // Reconnect after 5 seconds
-          reconnectTimeout = setTimeout(() => {
-            connectStatusStream();
-          }, 5000);
-        };
-      } catch (error) {
-        console.error("[Status] Failed to connect to status stream:", error);
-        // Retry after delay
-        reconnectTimeout = setTimeout(() => {
-          connectStatusStream();
-        }, 5000);
+    const unsubscribe = subscribeStatusStream("status_changed", (data) => {
+      if (data?.status && data.status !== status) {
+        setStatus(data.status);
       }
-    };
-
-    // Connect to status stream for authenticated users
-    connectStatusStream();
-
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
+    });
+    return unsubscribe;
   }, []);
 
   async function updateStatusOnServer(nextStatus) {

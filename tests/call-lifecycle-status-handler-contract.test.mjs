@@ -132,28 +132,28 @@ test("site header periodically reconciles status from profile snapshot in case s
     /setInterval\([\s\S]*loadStatusRef\.current\(\)[\s\S]*5000/,
     "header should reload /api/user/profile so Busy cannot remain stale Available after missed SSE",
   );
-  // The poll must be a fallback that only runs while SSE is down: started from
-  // the error/catch paths, stopped once the stream reports "connected", and
-  // NOT armed unconditionally next to the initial connectStatusStream() call.
-  assert.match(
-    siteHeaderSource,
-    /onerror[\s\S]{0,400}startFallbackPolling\(\)/,
-    "header should start fallback polling when the SSE stream errors",
-  );
-  assert.match(
-    siteHeaderSource,
-    /addEventListener\(\s*["']connected["'][\s\S]{0,120}stopFallbackPolling\(\)/,
-    "header should stop fallback polling once the SSE stream is healthy",
-  );
-  const connectCall = siteHeaderSource.indexOf("connectStatusStream();");
-  const afterConnect = siteHeaderSource.slice(
-    connectCall,
-    connectCall + 200,
-  );
+  // Real-time updates come from the shared SSE client, not a per-component
+  // EventSource. The poll is a fallback driven by the shared connection state:
+  // started when the stream reports down, stopped when it reports connected.
   assert.doesNotMatch(
-    afterConnect,
-    /setInterval/,
-    "header must NOT arm the poll unconditionally alongside connectStatusStream(); polling is SSE-down fallback only",
+    siteHeaderSource,
+    /new EventSource\(/,
+    "header must use the shared status-stream client, not its own EventSource",
+  );
+  assert.match(
+    siteHeaderSource,
+    /subscribeStatusStreamState\(\s*\(connected\)\s*=>/,
+    "header should subscribe to shared SSE connection state",
+  );
+  assert.match(
+    siteHeaderSource,
+    /if \(connected\)\s*\{\s*stopFallbackPolling\(\)/,
+    "header should stop fallback polling when the shared stream is connected",
+  );
+  assert.match(
+    siteHeaderSource,
+    /else\s*\{\s*startFallbackPolling\(\)/,
+    "header should start fallback polling when the shared stream is down",
   );
 });
 

@@ -20,6 +20,7 @@ import {
 } from "@tabler/icons-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useCallsStore from "@/lib/stores/calls-store";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
 import { AgentDashboard } from "./AgentDashboard";
 import { AgentDataSources } from "./AgentDataSources";
 
@@ -677,15 +678,10 @@ export function AgentDesktop() {
     };
     loadUserInfo();
 
-    // Listen for status changes via SSE (same endpoint as site-header uses)
-    let statusEventSource = null;
-    try {
-      statusEventSource = new EventSource("/api/user/status-stream");
-      statusEventSource.addEventListener("status_changed", (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log("[AgentDesktop] Received status_changed event:", data);
-          if (data.status) {
+    // Listen for status changes via the shared SSE client (one connection for
+    // the whole app, see lib/status-stream-client).
+    const unsubscribeStatus = subscribeStatusStream("status_changed", (data) => {
+      if (data?.status) {
             console.log(
               `[AgentDesktop] Updating agent status to "${data.status}"`,
             );
@@ -761,22 +757,11 @@ export function AgentDesktop() {
                 );
               }, 100);
             }
-          }
-        } catch (err) {
-          console.error(
-            "[AgentDesktop] Failed to parse status SSE message:",
-            err,
-          );
-        }
-      });
-    } catch (err) {
-      console.error("[AgentDesktop] Failed to set up status SSE:", err);
-    }
+      }
+    });
 
     return () => {
-      if (statusEventSource) {
-        statusEventSource.close();
-      }
+      unsubscribeStatus();
     };
   }, []);
 

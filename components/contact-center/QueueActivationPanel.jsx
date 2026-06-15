@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { notify } from "@/components/ToastNotify";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
 
 export function QueueActivationPanel({ queues, onUpdate }) {
   const [open, setOpen] = useState(false);
@@ -22,58 +23,19 @@ export function QueueActivationPanel({ queues, onUpdate }) {
     setLocalQueues(queues);
   }, [queues]);
 
-  // Listen for queue changes via SSE
+  // Listen for queue changes via the shared SSE client.
   useEffect(() => {
-    let queueEventSource = null;
-    const connectQueueStream = () => {
-      try {
-        if (queueEventSource) {
-          queueEventSource.close();
+    return subscribeStatusStream("queue_changed", (data) => {
+      if (
+        data?.type === "queue_created" ||
+        data?.type === "queue_updated" ||
+        data?.type === "queue_activation_changed"
+      ) {
+        if (onUpdate) {
+          onUpdate();
         }
-
-        queueEventSource = new EventSource("/api/user/status-stream");
-        queueEventSource.addEventListener("queue_changed", (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (
-              data.type === "queue_created" ||
-              data.type === "queue_updated" ||
-              data.type === "queue_activation_changed"
-            ) {
-              // Reload queues when changes occur
-              if (onUpdate) {
-                onUpdate();
-              }
-            }
-          } catch (err) {
-            // Failed to parse queue SSE message
-          }
-        });
-
-        queueEventSource.addEventListener("connected", () => {
-          // Connected to queue stream
-        });
-
-        queueEventSource.onerror = (error) => {
-          if (queueEventSource) {
-            queueEventSource.close();
-            queueEventSource = null;
-          }
-          setTimeout(connectQueueStream, 5000);
-        };
-      } catch (err) {
-        setTimeout(connectQueueStream, 5000);
       }
-    };
-
-    connectQueueStream();
-
-    return () => {
-      if (queueEventSource) {
-        queueEventSource.close();
-        queueEventSource = null;
-      }
-    };
+    });
   }, [onUpdate]);
 
   const handleToggle = async (queueId, checked) => {

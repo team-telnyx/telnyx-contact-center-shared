@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { campaignModeBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
 import { notify } from "@/components/ToastNotify";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
 
 const CAMPAIGN_MODE_LABELS = {
   preview: "PREVIEW",
@@ -37,19 +38,15 @@ export function CampaignActivationSelector({ campaigns = [], onUpdate }) {
 
   useEffect(() => {
     if (!onUpdate) return undefined;
-    const events = new EventSource("/api/user/status-stream");
-    const handleCampaignChanged = async (event) => {
-      try {
-        const data = JSON.parse(event.data || "{}");
-        if (data.type === "campaign_status_changed" || data.type === "campaign_activation_changed" || data.type === "campaign_updated") {
-          await onUpdate();
-        }
-      } catch (_) {
-        // Ignore malformed SSE payloads.
+    return subscribeStatusStream("campaign_changed", (data) => {
+      if (
+        data?.type === "campaign_status_changed" ||
+        data?.type === "campaign_activation_changed" ||
+        data?.type === "campaign_updated"
+      ) {
+        onUpdate();
       }
-    };
-    events.addEventListener("campaign_changed", handleCampaignChanged);
-    return () => events.close();
+    });
   }, [onUpdate]);
 
   const activeCampaigns = useMemo(
