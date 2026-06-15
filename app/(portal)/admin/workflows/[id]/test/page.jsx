@@ -658,6 +658,7 @@ export default function TestAgentPage() {
   const activeCallRef = useRef(null); // Store active call for mute/unmute
   const audioContextRef = useRef(null);
   const mockMicRef = useRef(null); // Mock microphone for audio injection
+  const originalGetUserMediaRef = useRef(null); // Original browser microphone API while AUTO mode is patched
   const remoteAudioRef = useRef(null); // Remote audio element for AI voice
   const autoModeRef = useRef(isAutoMode); // Track auto mode in ref for callbacks
   const isTestRunningRef = useRef(false); // Track test running for async stop checks
@@ -693,6 +694,18 @@ export default function TestAgentPage() {
   const [analysisRetryTrigger, setAnalysisRetryTrigger] = useState(0);
   workflowItemStatusesRef.current = workflowItemStatuses;
   workflowSlotsFilledRef.current = workflowSlotsFilled;
+
+  const restoreMockMicrophone = useCallback(() => {
+    if (mockMicRef.current) {
+      mockMicRef.current.cleanup();
+      mockMicRef.current = null;
+    }
+
+    if (originalGetUserMediaRef.current && typeof navigator !== "undefined" && navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia = originalGetUserMediaRef.current;
+      originalGetUserMediaRef.current = null;
+    }
+  }, []);
   
   // Generate dynamic customer response via LLM (on-the-fly, no pre-generated scenario)
   const generateDynamicResponse = useCallback(async (lastAiMessage, conversationHistory) => {
@@ -1398,14 +1411,10 @@ export default function TestAgentPage() {
       voiceClientRef.current = null;
     }
     
-    // Clean up mock microphone
-    if (mockMicRef.current) {
-      mockMicRef.current.cleanup();
-      mockMicRef.current = null;
-    }
+    restoreMockMicrophone();
     
     setVoiceStatus("idle");
-  }, []);
+  }, [restoreMockMicrophone]);
 
   // Reset test - regenerate scenario for current selection
   const resetTest = useCallback(() => {
@@ -1430,12 +1439,8 @@ export default function TestAgentPage() {
     welcomeMessageReceivedRef.current = false;
     respondingInProgressRef.current = false;
     
-    // Clean up mock microphone
-    if (mockMicRef.current) {
-      mockMicRef.current.cleanup();
-      mockMicRef.current = null;
-    }
-  }, []);
+    restoreMockMicrophone();
+  }, [restoreMockMicrophone]);
 
   // Handle auto-response when AI finishes speaking
   const handleVoiceAutoResponse = useCallback(async () => {
@@ -1574,7 +1579,10 @@ export default function TestAgentPage() {
         mockMicRef.current = mockMic;
 
         // Override getUserMedia to return mock stream for WebRTC
-        const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+        if (!originalGetUserMediaRef.current) {
+          originalGetUserMediaRef.current = navigator.mediaDevices.getUserMedia;
+        }
+        const libGetUserMedia = originalGetUserMediaRef.current.bind(navigator.mediaDevices);
         navigator.mediaDevices.getUserMedia = async (constraints) => {
           if (constraints.audio) {
             console.log("[Voice] getUserMedia intercepted - returning mock stream");
@@ -1585,7 +1593,7 @@ export default function TestAgentPage() {
         };
       } else {
         console.log("[Voice] MANUAL mode - requesting microphone permissions...");
-        mockMicRef.current = null;
+        restoreMockMicrophone();
         
         // Request microphone permissions BEFORE connecting (like demo-portal)
         try {
@@ -1634,15 +1642,12 @@ export default function TestAgentPage() {
         setIsTestRunning(false);
         setIsMuted(false);
         activeCallRef.current = null;
-        // Cleanup mock mic
-        if (mockMicRef.current) {
-          mockMicRef.current.cleanup();
-          mockMicRef.current = null;
-        }
+        restoreMockMicrophone();
       });
 
       client.on("agent.error", (err) => {
         setVoiceStatus("error");
+        restoreMockMicrophone();
         let errorMessage = "An unknown error occurred";
         
         if (err) {
@@ -1771,11 +1776,7 @@ export default function TestAgentPage() {
       setVoiceStatus("error");
       setIsTestRunning(false);
       
-      // Cleanup mock mic on error
-      if (mockMicRef.current) {
-        mockMicRef.current.cleanup();
-        mockMicRef.current = null;
-      }
+      restoreMockMicrophone();
       
       let errorMessage = "An unknown error occurred";
       if (err) {
@@ -1805,7 +1806,7 @@ export default function TestAgentPage() {
       });
       console.error("[Voice Test] Failed to start:", err);
     }
-  }, [agentId, selectedPersona, handleVoiceAutoResponse, isAutoMode]);
+  }, [agentId, selectedPersona, handleVoiceAutoResponse, isAutoMode, restoreMockMicrophone]);
 
   if (loading) {
     return (
