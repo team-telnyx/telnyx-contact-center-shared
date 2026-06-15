@@ -23,7 +23,7 @@ test("online translation is implemented with Telnyx chat completions and workflo
   assert.doesNotMatch(router, /detectLanguage|Google Translate/);
   assert.match(webhookHandler, /detectLanguage/);
   assert.doesNotMatch(webhookHandler, /Google Translate/);
-  assert.match(router, /const callerLanguage = interaction\.metadata\?\.caller_language \|\| null/);
+  assert.match(router, /const callerLanguage = normalizeLanguageCode\(interaction\.metadata\?\.caller_language, \{ fallback: null \}\)/);
 });
 
 test("final translation updates stay attached to the finalized transcript bubble", () => {

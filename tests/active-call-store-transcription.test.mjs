@@ -148,3 +148,93 @@ test("contact center metadata updates keep agent assist language metadata live",
     agent_language: "pl",
   });
 });
+
+test("a customer utterance is NOT appended to a stale open bubble after the agent has spoken (turn boundary)", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  // 1) Customer speaks; speech_final is lost so the bubble never finalizes.
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-1",
+    transcript: "weighs around one hundred and fifty pounds, female, it's",
+    is_final: false,
+  });
+
+  // 2) Agent speaks across THREE finalized bubbles.
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-1",
+    transcript: "Sorry. Could you repeat",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-2",
+    transcript: "And what is, uh, the gender",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-3",
+    transcript: "What will be the facility name for the pickup?",
+    is_final: true,
+    speech_final: true,
+  });
+
+  // 3) Customer speaks again. Even though the server (under the lost-speech_final
+  //    failure mode) reused the SAME key, the client must start a NEW bubble.
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-1",
+    transcript: "Texas Health Presbyterian Hospital Dent",
+    is_final: false,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  // 5 bubbles: customer, agent x3, customer (new) — NOT 4 with a merged customer.
+  assert.equal(transcriptions.length, 5);
+
+  // The stale customer bubble was closed and keeps only its original text.
+  assert.equal(
+    transcriptions[0].transcript,
+    "weighs around one hundred and fifty pounds, female, it's",
+  );
+  assert.equal(transcriptions[0].isFinal, true);
+
+  // The new customer utterance is the LAST bubble, after the agent's lines.
+  const last = transcriptions[transcriptions.length - 1];
+  assert.equal(last.track, "inbound");
+  assert.equal(last.transcript, "Texas Health Presbyterian Hospital Dent");
+});
+
+test("consecutive interim chunks on the same leg still merge into one open bubble", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "same-bubble",
+    transcript: "I would",
+    is_final: false,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "same-bubble",
+    transcript: "I would like a transport",
+    is_final: false,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 1);
+  assert.equal(transcriptions[0].transcript, "I would like a transport");
+});
