@@ -9,7 +9,6 @@ import {
   canTransition,
   isCallGeneratorEnabled,
   handleGeneratorWebhookEvent,
-  originateGeneratedCall,
 } from "../lib/call-generator/engine.mjs";
 
 function poolWithSettings(settings) {
