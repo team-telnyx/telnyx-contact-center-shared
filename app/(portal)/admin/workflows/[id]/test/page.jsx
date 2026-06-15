@@ -1931,6 +1931,9 @@ export default function TestAgentPage() {
     );
   }
 
+  const selectedVoiceFlow = eligibleFlows.find((f) => f.id === selectedCallFlowId);
+  const selectedVoiceFlowCanRun = channel !== "voice" || !selectedCallFlowId || selectedVoiceFlow?.eligible !== false;
+
   return (
     <AdminPageShell>
       <AdminPageHeader title="Test AI Agent" badges={<Badge variant="secondary">{workflow?.name || "Workflow"}</Badge>} />
@@ -2098,9 +2101,12 @@ export default function TestAgentPage() {
                             .map((r) => FLOW_REASON_LABELS[r] || r)
                             .filter(Boolean)
                             .join(", ");
+                          const copy = sel.eligible
+                            ? `Heads up: ${reasonLabel}. The test will still run; replies need transcription on the assistant leg.`
+                            : `This flow can't run as an AI voice test: ${reasonLabel}. Choose a flow with a Start AI Assistant node.`;
                           return (
-                            <p className="text-xs text-yellow-500">
-                              Heads up: {reasonLabel}. The test will still run; replies need transcription on the assistant leg.
+                            <p className={cn("text-xs", sel.eligible ? "text-yellow-500" : "text-destructive")}>
+                              {copy}
                             </p>
                           );
                         }
@@ -2345,7 +2351,7 @@ export default function TestAgentPage() {
                     disabled={
                       channel === "chat"
                         ? !agentId
-                        : !selectedCallFlowId || !fromNumber.trim()
+                        : !selectedCallFlowId || !selectedVoiceFlowCanRun || !fromNumber.trim()
                     }
                   >
                     <IconPlayerPlay className="size-4 mr-2" />

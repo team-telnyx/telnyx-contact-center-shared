@@ -51,7 +51,7 @@ export async function GET(request, { params }) {
           expectAssistantId: workflow.ai_assistant_id,
         });
         const blockingReasons = (validation.reasons || []).filter(
-          (reason) => reason === "missing_incoming_call" || reason === "missing_ai_assistant_start" || reason === "assistant_mismatch",
+          (reason) => reason === "missing_incoming_call" || reason === "missing_ai_assistant_start",
         );
         return {
           id: flow.id,
