@@ -614,7 +614,7 @@ export default function TestAgentPage() {
   const [selectedPersona, setSelectedPersona] = useState("cooperative");
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
-  const [voiceResponseDelay, setVoiceResponseDelay] = useState(3000); // Delay before generating voice response (ms)
+  const [turnSettleMs, setTurnSettleMs] = useState(800); // Event-driven: silence window after agent settles into "listening" before the simulated caller replies (ms)
   const [isMuted, setIsMuted] = useState(false); // Microphone mute state (MANUAL mode)
   const [isTestRunning, setIsTestRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -667,6 +667,10 @@ export default function TestAgentPage() {
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
+  // Event-driven turn detection (replaces fixed response delay)
+  const turnSettleTimerRef = useRef(null); // Debounce timer armed when agent settles into "listening"
+  const lastTranscriptAtRef = useRef(0); // Timestamp of the most recent assistant transcript line
+  const agentStateRef = useRef("idle"); // Live agent state for async checks without stale closures
   const lastAnalyzedMessageIndexRef = useRef(-1);
   const workflowAnalysisInProgressRef = useRef(false);
   const chatProcessingRef = useRef(false); // Prevent double processAIResponse in chat
@@ -768,6 +772,12 @@ export default function TestAgentPage() {
   useEffect(() => {
     localAudioEnabledRef.current = localAudioEnabled;
   }, [localAudioEnabled]);
+
+  // Keep the turn-settle window live for event callbacks (avoids stale closures)
+  const turnSettleMsRef = useRef(turnSettleMs);
+  useEffect(() => {
+    turnSettleMsRef.current = turnSettleMs;
+  }, [turnSettleMs]);
 
   // Load TTS voices from API
   useEffect(() => {
@@ -1386,6 +1396,10 @@ export default function TestAgentPage() {
   const stopTest = useCallback(() => {
     chatProcessingRef.current = false;
     isTestRunningRef.current = false;
+    if (turnSettleTimerRef.current) {
+      clearTimeout(turnSettleTimerRef.current);
+      turnSettleTimerRef.current = null;
+    }
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
@@ -1420,6 +1434,10 @@ export default function TestAgentPage() {
   const resetTest = useCallback(() => {
     chatProcessingRef.current = false;
     isTestRunningRef.current = false;
+    if (turnSettleTimerRef.current) {
+      clearTimeout(turnSettleTimerRef.current);
+      turnSettleTimerRef.current = null;
+    }
     setIsTestRunning(false);
     setIsPaused(false);
     setIsGeneratingResponse(false);
@@ -1450,17 +1468,22 @@ export default function TestAgentPage() {
     respondingInProgressRef.current = true;
     
     try {
-      // Wait for configured delay to allow AI to send multiple transcript messages
-      // This prevents us from responding too quickly and interrupting the AI
-      console.log(`[Voice] Waiting ${voiceResponseDelay}ms before generating response...`);
-      await new Promise(r => setTimeout(r, voiceResponseDelay));
-      
+      // Turn completion is now event-driven: this handler is only invoked after the
+      // agent has stayed in "listening" for `turnSettleMs` with no new transcript lines
+      // (see the conversation.agent.state handler). No fixed delay needed here.
+      // Safety guard: if the agent resumed speaking/thinking in the meantime, bail out.
+      if (agentStateRef.current === "speaking" || agentStateRef.current === "thinking") {
+        console.log(`[Voice] Agent resumed (${agentStateRef.current}) before reply — aborting this turn`);
+        respondingInProgressRef.current = false;
+        return;
+      }
+
       if (!isTestRunningRef.current) {
         respondingInProgressRef.current = false;
         return;
       }
 
-      // Get the last AI message from transcript (after delay, we have all messages)
+      // Get the last AI message from transcript (turn is settled, all lines are in)
       const lastAiMessage = messagesRef.current
         .filter(m => m.role === "assistant")
         .pop()?.content;
@@ -1525,7 +1548,7 @@ export default function TestAgentPage() {
     } finally {
       respondingInProgressRef.current = false;
     }
-  }, [speakTextViaAudio, generateDynamicResponse, voiceResponseDelay]);
+  }, [speakTextViaAudio, generateDynamicResponse]);
 
   // Start voice test with audio injection
   const startVoiceTest = useCallback(async () => {
@@ -1642,6 +1665,11 @@ export default function TestAgentPage() {
         setIsTestRunning(false);
         setIsMuted(false);
         activeCallRef.current = null;
+        agentStateRef.current = "idle";
+        if (turnSettleTimerRef.current) {
+          clearTimeout(turnSettleTimerRef.current);
+          turnSettleTimerRef.current = null;
+        }
         restoreMockMicrophone();
       });
 
@@ -1685,29 +1713,63 @@ export default function TestAgentPage() {
         setAgentState(state);
 
         console.log(`[Voice] Agent: ${prevState || "init"} → ${state}`);
+        agentStateRef.current = state;
+
+        // Any time the agent is NOT idle-listening, cancel a pending reply trigger.
+        const cancelTurnSettle = () => {
+          if (turnSettleTimerRef.current) {
+            clearTimeout(turnSettleTimerRef.current);
+            turnSettleTimerRef.current = null;
+          }
+        };
 
         if (state === "speaking") {
+          // Agent (re)started talking — abort any armed reply; we are mid-turn.
+          cancelTurnSettle();
           // Mark greeting received when AI starts speaking for the first time
           if (!welcomeMessageReceivedRef.current) {
             welcomeMessageReceivedRef.current = true;
             setHasReceivedWelcomeMessage(true);
             console.log("[Voice] AI started speaking (greeting)");
           }
+        } else if (state === "thinking") {
+          // Agent is processing — definitely not the caller's turn yet.
+          cancelTurnSettle();
         } else if (state === "listening") {
-          // Auto-respond after AI finishes speaking (speaking → listening transition)
-          if (prevState === "speaking" && welcomeMessageReceivedRef.current) {
-            // Wait for AI to be ready to listen before responding
-            // Longer delay prevents message overlap
-            setTimeout(() => {
+          // Event-driven turn end: arm a debounce. The simulated caller replies only
+          // after the agent stays in "listening" for `turnSettleMs` with no new
+          // transcript lines and no return to speaking/thinking. This replaces the
+          // old fixed 3s + voiceResponseDelay guesswork.
+          if (welcomeMessageReceivedRef.current) {
+            cancelTurnSettle();
+            const armedAt = Date.now();
+            const tick = () => {
+              if (!isTestRunningRef.current || agentStateRef.current !== "listening") {
+                turnSettleTimerRef.current = null;
+                return;
+              }
+              // If a transcript line arrived after we armed, the turn isn't done — wait again.
+              const sinceLastLine = Date.now() - lastTranscriptAtRef.current;
+              const settle = turnSettleMsRef.current;
+              if (lastTranscriptAtRef.current > armedAt && sinceLastLine < settle) {
+                turnSettleTimerRef.current = setTimeout(tick, settle - sinceLastLine);
+                return;
+              }
+              turnSettleTimerRef.current = null;
               handleVoiceAutoResponse();
-            }, 3000);
+            };
+            turnSettleTimerRef.current = setTimeout(tick, turnSettleMsRef.current);
           }
         }
       });
 
       client.on("transcript.item", (item) => {
         const isAssistant = item.role === "assistant";
-        
+        if (isAssistant) {
+          // Record activity so the turn-settle debounce can detect "still talking".
+          lastTranscriptAtRef.current = Date.now();
+        }
+
         setMessages((prev) => [
           ...prev,
           {
@@ -2017,25 +2079,25 @@ export default function TestAgentPage() {
                       </SelectContent>
                     </Select>
 
-                    {/* Response Delay */}
+                    {/* Turn Settle Time */}
                     <div className="pt-2">
-                      <label className="text-sm font-medium">Response Delay</label>
+                      <label className="text-sm font-medium">Turn Settle Time</label>
                       <p className="text-xs text-muted-foreground mb-2">
-                        Wait time before generating response ({voiceResponseDelay / 1000}s)
+                        Silence after the agent stops speaking before the simulated caller replies ({(turnSettleMs / 1000).toFixed(1)}s). The reply is event-driven — it waits for the agent to settle, not a fixed delay.
                       </p>
                       <input
                         type="range"
-                        min="1000"
-                        max="8000"
-                        step="500"
-                        value={voiceResponseDelay}
-                        onChange={(e) => setVoiceResponseDelay(Number(e.target.value))}
+                        min="300"
+                        max="2000"
+                        step="100"
+                        value={turnSettleMs}
+                        onChange={(e) => setTurnSettleMs(Number(e.target.value))}
                         disabled={isTestRunning}
                         className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>1s</span>
-                        <span>8s</span>
+                        <span>0.3s</span>
+                        <span>2s</span>
                       </div>
                     </div>
                   </div>
