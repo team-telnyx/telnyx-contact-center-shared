@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { readFile, stat } from "fs/promises";
 import path from "path";
+import { getStorage } from "@/lib/storage/index.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const CONTENT_TYPES = new Map([
   [".png", "image/png"],
   [".jpg", "image/jpeg"],
@@ -13,29 +12,35 @@ const CONTENT_TYPES = new Map([
   [".svg", "image/svg+xml"],
 ]);
 
-function resolveMediaPath(parts = []) {
+/**
+ * Waliduje segmenty sciezki i zwraca bezpieczna nazwe pliku. Uploady to plaska
+ * przestrzen nazw (/media/<filename>), wiec bierzemy ostatni segment. Storage
+ * drivery dodatkowo kotwicza odczyt w swoim katalogu/prefiksie.
+ */
+function resolveFilename(parts = []) {
   const cleanParts = parts.map((part) => String(part || "")).filter(Boolean);
   if (!cleanParts.length || cleanParts.some((part) => part.includes("..") || part.includes("/") || part.includes("\\"))) return null;
-  const fullPath = path.join(MEDIA_DIR, ...cleanParts);
-  return fullPath.startsWith(MEDIA_DIR) ? fullPath : null;
+  return cleanParts[cleanParts.length - 1];
 }
 
 async function serveMedia(paramsPromise) {
   const params = await paramsPromise;
-  const fullPath = resolveMediaPath(params?.path || []);
-  if (!fullPath) return new NextResponse("Not Found", { status: 404 });
+  const filename = resolveFilename(params?.path || []);
+  if (!filename) return new NextResponse("Not Found", { status: 404 });
 
-  const ext = path.extname(fullPath).toLowerCase();
+  const ext = path.extname(filename).toLowerCase();
   const contentType = CONTENT_TYPES.get(ext);
   if (!contentType) return new NextResponse("Not Found", { status: 404 });
 
   try {
-    const [file, fileStat] = await Promise.all([readFile(fullPath), stat(fullPath)]);
-    return new NextResponse(file, {
+    const storage = await getStorage();
+    const obj = await storage.get(filename, contentType);
+    if (!obj) return new NextResponse("Not Found", { status: 404 });
+    return new NextResponse(obj.body, {
       status: 200,
       headers: {
-        "Content-Type": contentType,
-        "Content-Length": String(fileStat.size),
+        "Content-Type": obj.contentType || contentType,
+        "Content-Length": String(obj.size ?? obj.body?.length ?? 0),
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
@@ -52,18 +57,20 @@ export async function GET(_request, { params }) {
 
 export async function HEAD(_request, { params }) {
   const resolvedParams = await params;
-  const fullPath = resolveMediaPath(resolvedParams?.path || []);
-  if (!fullPath) return new NextResponse(null, { status: 404 });
-  const ext = path.extname(fullPath).toLowerCase();
+  const filename = resolveFilename(resolvedParams?.path || []);
+  if (!filename) return new NextResponse(null, { status: 404 });
+  const ext = path.extname(filename).toLowerCase();
   const contentType = CONTENT_TYPES.get(ext);
   if (!contentType) return new NextResponse(null, { status: 404 });
   try {
-    const fileStat = await stat(fullPath);
+    const storage = await getStorage();
+    const head = await storage.head(filename);
+    if (!head) return new NextResponse(null, { status: 404 });
     return new NextResponse(null, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Length": String(fileStat.size),
+        "Content-Length": String(head.size ?? 0),
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

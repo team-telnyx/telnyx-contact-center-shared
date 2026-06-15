@@ -4,11 +4,10 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
-import { mkdir, readdir, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { getStorage } from "@/lib/storage/index.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
-const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Map([["image/png", ".png"], ["image/jpeg", ".jpg"], ["image/webp", ".webp"], ["image/gif", ".gif"], ["image/svg+xml", ".svg"]]);
@@ -100,22 +99,25 @@ async function upsertMetadata({ filename, url, title, displayName, contentType, 
   return rows[0] || null;
 }
 async function listFiles() {
-  await mkdir(MEDIA_DIR, { recursive: true });
-  const [names, metadataRows] = await Promise.all([readdir(MEDIA_DIR), readMetadataRows()]);
+  const storage = await getStorage();
+  const [names, metadataRows] = await Promise.all([storage.list(), readMetadataRows()]);
   const byUrl = new Map();
   const metadataByUrl = new Map(metadataRows.filter(isImageAsset).map((row) => [row.url, row]));
   for (const name of names) {
     if (!/\.(png|jpe?g|webp|gif|svg)$/i.test(name)) continue;
-    const s = await stat(path.join(MEDIA_DIR, name));
+    const head = await storage.head(name).catch(() => null);
+    const s = head ? { size: head.size, mtime: head.updatedAt } : null;
     const url = `${PUBLIC_PREFIX}/${name}`;
     const item = normalizeAsset({ ...(metadataByUrl.get(url) || {}), filename: name, url }, s);
     if (item) byUrl.set(url, item);
   }
   for (const row of metadataRows) {
     if (!isImageAsset(row) || !row.url || byUrl.has(row.url)) continue;
-    const fileStat = String(row.url).startsWith(`${PUBLIC_PREFIX}/`)
-      ? await stat(path.join(MEDIA_DIR, path.basename(row.url))).catch(() => null)
-      : null;
+    let fileStat = null;
+    if (String(row.url).startsWith(`${PUBLIC_PREFIX}/`)) {
+      const head = await storage.head(path.basename(row.url)).catch(() => null);
+      fileStat = head ? { size: head.size, mtime: head.updatedAt } : null;
+    }
     const item = normalizeAsset(row, fileStat);
     if (item) byUrl.set(item.url, item);
   }
@@ -134,14 +136,13 @@ export async function POST(request) {
   if (!file || typeof file.arrayBuffer !== "function") return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
   if (!ALLOWED.has(file.type)) return NextResponse.json({ error: "Only PNG, JPG, WEBP, GIF, and SVG images are allowed" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "Image must be 5MB or smaller" }, { status: 400 });
-  await mkdir(MEDIA_DIR, { recursive: true });
   const ext = ALLOWED.get(file.type);
   const filename = `${safeBase(file.name)}-${Date.now().toString(36)}${ext}`;
-  const fullPath = path.join(MEDIA_DIR, filename);
-  if (!fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
-  await writeFile(fullPath, Buffer.from(await file.arrayBuffer()));
-  const url = `${PUBLIC_PREFIX}/${filename}`;
-  await upsertMetadata({ filename, url, title: titleFromFilename(file.name), displayName: titleFromFilename(file.name), contentType: file.type, size: file.size }).catch((err) => adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: err }) }));
+  const storage = await getStorage();
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const saved = await storage.put(filename, buffer, file.type);
+  const url = saved.url;
+  await upsertMetadata({ filename: saved.filename || filename, url, title: titleFromFilename(file.name), displayName: titleFromFilename(file.name), contentType: file.type, size: file.size }).catch((err) => adminRuntimeLogger.warn("runtime_warning", { ...runtimePayload({ error: err }) }));
   return NextResponse.json({ ok: true, media: { name: filename, filename, url, src: url, title: titleFromFilename(file.name), display_name: titleFromFilename(file.name), size: file.size, size_bytes: file.size, contentType: file.type, content_type: file.type }, mediaList: await listFiles() });
 }
 
@@ -155,9 +156,12 @@ export async function PATCH(request) {
   if (!isLocal && !isRemote) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
   const filename = filenameFromUrl(url);
   if (!filename || filename.includes("..")) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
-  const fullPath = isLocal ? path.join(MEDIA_DIR, filename) : null;
-  if (fullPath && !fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
-  const s = fullPath ? await stat(fullPath).catch(() => null) : null;
+  let s = null;
+  if (isLocal) {
+    const storage = await getStorage();
+    const head = await storage.head(filename).catch(() => null);
+    s = head ? { size: head.size, mtime: head.updatedAt } : null;
+  }
   try {
     const row = await upsertMetadata({ filename, url, title: title || titleFromFilename(filename), displayName: title || titleFromFilename(filename), size: s?.size });
     return NextResponse.json({ ok: true, media: normalizeAsset(row || { filename, url, title }, s) });
@@ -178,11 +182,8 @@ export async function DELETE(request) {
   const filename = filenameFromUrl(url);
   if (!filename || filename.includes("..")) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
   if (isLocal) {
-    const fullPath = path.join(MEDIA_DIR, filename);
-    if (!fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ error: "Invalid media URL" }, { status: 400 });
-    await unlink(fullPath).catch((err) => {
-      if (err?.code !== "ENOENT") throw err;
-    });
+    const storage = await getStorage();
+    await storage.remove(filename);
   }
   await deleteMetadata(url);
   return NextResponse.json({ ok: true, mediaList: await listFiles() });
