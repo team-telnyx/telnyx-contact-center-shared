@@ -260,6 +260,44 @@ test("split transcription bubbles with a reused server key keep later chunks mer
   assert.equal(transcriptions[2].originalTranscriptionKey, "cust-reused");
 });
 
+test("analysis updates for a reused server key target the split bubble", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-analysis",
+    transcript: "first stale utterance",
+    is_final: false,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-analysis-boundary",
+    transcript: "can you repeat that",
+    is_final: true,
+    speech_final: true,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-analysis",
+    transcript: "second utterance",
+    is_final: false,
+  });
+
+  store.updateTranscriptionAnalysis("cust-analysis", {
+    intent: "schedule_transport",
+    sentiment: "neutral",
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions[0].intent, null);
+  assert.equal(transcriptions[2].intent, "schedule_transport");
+  assert.equal(transcriptions[2].sentiment, "neutral");
+});
+
 test("consecutive interim chunks on the same leg still merge into one open bubble", () => {
   resetActiveCallStore();
   const store = useActiveCallStore.getState();
