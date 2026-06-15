@@ -1275,10 +1275,11 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
             ) : step.type === "workflow_testing" ? (
               <div className="space-y-3">
                 <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <LabelWithHint hint="Used by the Play preview button to test the selected voice. Click Generate sample to get an LLM one-liner (≤20 words) in the chosen persona, with the matching Expressive Mode tags embedded.">
-                      Preview sample text
-                    </LabelWithHint>
+                  <LabelWithHint hint="Used by the Play preview button to test the selected voice. Click Generate sample to get an LLM one-liner (≤20 words) in the chosen persona, with the matching Expressive Mode tags embedded.">
+                    Preview sample text
+                  </LabelWithHint>
+                  <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
+                  <div className="mt-2 flex justify-end">
                     <Button
                       size="sm"
                       variant="outline"
@@ -1291,7 +1292,6 @@ function ActionEditor({ draft, setDraft, actionId, editing, valid, saving, save,
                       Generate sample
                     </Button>
                   </div>
-                  <Textarea className="mt-1" rows={3} value={step.sample_text || DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} onChange={(e) => updateStep(index, { sample_text: e.target.value })} placeholder={DEFAULT_WORKFLOW_TESTING_SAMPLE_TEXT} />
                 </div>
                 <div>
                   <Label>Caller simulation voice</Label>
