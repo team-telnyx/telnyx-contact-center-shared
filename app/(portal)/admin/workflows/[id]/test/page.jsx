@@ -601,6 +601,33 @@ async function generateTTS(text, voice) {
   return audioUrl;
 }
 
+// ============================================
+// SERVER-SIDE VOICE CALL-FLOW TEST CONSTANTS
+// ============================================
+
+// Persona ids for the simulated caller (server-side call generator)
+const VOICE_PERSONAS = [
+  "neutral", "angry", "excited", "content", "sad", "scared", "happy",
+  "enthusiastic", "curious", "calm", "grateful", "affectionate", "sarcastic",
+  "surprised", "confident", "hesitant", "apologetic", "determined",
+  "frustrated", "disappointed",
+];
+
+// Map flow eligibility reason codes to human-readable hints
+const FLOW_REASON_LABELS = {
+  missing_ai_assistant_start: "no AI assistant node",
+  missing_agent_assist: "no Agent Assist (workflows) node",
+  missing_transcription: "transcription not enabled",
+  assistant_mismatch: "different assistant",
+};
+
+// Map server error codes to friendly messages
+const VOICE_START_ERROR_LABELS = {
+  flow_invalid: "Selected call flow is not valid for AI testing",
+  call_generator_disabled: "Enable the Call Generator master switch in Settings first",
+  workflow_has_no_assistant: "This workflow has no AI assistant assigned",
+};
+
 export default function TestAgentPage() {
   const router = useRouter();
   const params = useParams();
@@ -631,6 +658,19 @@ export default function TestAgentPage() {
   const [localAudioEnabled, setLocalAudioEnabled] = useState(true);
   const [agentState, setAgentState] = useState("idle");
   const [hasReceivedWelcomeMessage, setHasReceivedWelcomeMessage] = useState(false);
+
+  // Server-side voice call-flow test state
+  const [selectedCallFlowId, setSelectedCallFlowId] = useState("");
+  const [eligibleFlows, setEligibleFlows] = useState([]);
+  const [loadingFlows, setLoadingFlows] = useState(false);
+  const [fromNumber, setFromNumber] = useState("");
+  const [voicePersona, setVoicePersona] = useState("neutral");
+  const [expressive, setExpressive] = useState(false);
+  const [voiceReplyDelayMs, setVoiceReplyDelayMs] = useState(0);
+  const [activeRunId, setActiveRunId] = useState(null);
+  const [activeLedgerId, setActiveLedgerId] = useState(null);
+  const [voiceTestStatus, setVoiceTestStatus] = useState("idle"); // dialing|ringing|answered|talking|completed|failed|abandoned
+  const [voiceTranscript, setVoiceTranscript] = useState([]); // [{ role:'agent'|'caller', text, at }]
   
   // TTS configuration
   const [ttsVoices, setTtsVoices] = useState({});
@@ -673,6 +713,11 @@ export default function TestAgentPage() {
   customerDataRef.current = customerData;
   const messagesRef = useRef([]); // Track messages for async access without stale closures
   messagesRef.current = messages;
+  const voicePollTimerRef = useRef(null); // Polling interval for server-side voice test
+  const activeRunIdRef = useRef(null);
+  const activeLedgerIdRef = useRef(null);
+  activeRunIdRef.current = activeRunId;
+  activeLedgerIdRef.current = activeLedgerId;
 
   // Wait for workflow analysis to complete before sending next message (so LLM can fill slots)
   const waitForAnalysisAndDelay = useCallback(async () => {
@@ -755,6 +800,42 @@ export default function TestAgentPage() {
   useEffect(() => {
     localAudioEnabledRef.current = localAudioEnabled;
   }, [localAudioEnabled]);
+
+  // Fetch eligible call flows for server-side voice test (on mount if voice, and when switching to voice)
+  useEffect(() => {
+    if (channel !== "voice") return;
+    let cancelled = false;
+    async function loadFlows() {
+      setLoadingFlows(true);
+      try {
+        const res = await fetch(`/api/admin/workflows/${flowId}/voice-test/flows`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || "Failed to load call flows");
+        }
+        const flows = Array.isArray(data.flows) ? data.flows : [];
+        setEligibleFlows(flows);
+        // Auto-select first eligible flow if none selected
+        setSelectedCallFlowId((prev) => {
+          if (prev && flows.some((f) => f.id === prev && f.eligible)) return prev;
+          const firstEligible = flows.find((f) => f.eligible);
+          return firstEligible ? firstEligible.id : "";
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[Voice] Failed to load call flows:", err);
+          setEligibleFlows([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingFlows(false);
+      }
+    }
+    loadFlows();
+    return () => {
+      cancelled = true;
+    };
+  }, [channel, flowId]);
 
   // Load TTS voices from API
   useEffect(() => {
@@ -1437,375 +1518,182 @@ export default function TestAgentPage() {
     }
   }, []);
 
-  // Handle auto-response when AI finishes speaking
-  const handleVoiceAutoResponse = useCallback(async () => {
-    if (!autoModeRef.current || respondingInProgressRef.current) return;
-    if (!isTestRunningRef.current) return;
+  // ============================================
+  // SERVER-SIDE VOICE CALL-FLOW TEST
+  // ============================================
 
-    respondingInProgressRef.current = true;
-    
-    try {
-      // Wait for configured delay to allow AI to send multiple transcript messages
-      // This prevents us from responding too quickly and interrupting the AI
-      console.log(`[Voice] Waiting ${voiceResponseDelay}ms before generating response...`);
-      await new Promise(r => setTimeout(r, voiceResponseDelay));
-      
-      if (!isTestRunningRef.current) {
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Get the last AI message from transcript (after delay, we have all messages)
-      const lastAiMessage = messagesRef.current
-        .filter(m => m.role === "assistant")
-        .pop()?.content;
-
-      if (!lastAiMessage) {
-        console.log("[Voice] No AI message to respond to");
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Check for conversation ending phrases
-      // NOTE: Removed "thank you for calling" / "thanks for calling" - often used as greeting
-      const ENDING_PHRASES = [
-        "goodbye", "good bye", "have a great day", "have a nice day",
-        "take care", "end the call", "ending the call",
-      ];
-      const isEnding = ENDING_PHRASES.some(phrase => 
-        lastAiMessage.toLowerCase().includes(phrase)
-      );
-
-      if (isEnding) {
-        console.log("[Voice] Detected conversation ending, completing test");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-complete",
-            role: "system",
-            content: "✅ Test completed - conversation ended naturally",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      // Generate dynamic response based on AI message
-      console.log("[Voice] Generating response for:", lastAiMessage.substring(0, 50) + "...");
-      setIsGeneratingResponse(true);
-      
-      const conversationHistory = messagesRef.current
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => ({ role: m.role, content: m.content }));
-
-      const responseText = await generateDynamicResponse(lastAiMessage, conversationHistory);
-      setIsGeneratingResponse(false);
-
-      if (!responseText) {
-        console.error("[Voice] Failed to generate response");
-        respondingInProgressRef.current = false;
-        return;
-      }
-
-      console.log(`[Voice] Responding: "${responseText.substring(0, 50)}..."`);
-      setCurrentStep((prev) => prev + 1);
-      currentStepRef.current += 1;
-      
-      // Speak the response (this waits for audio injection to complete)
-      await speakTextViaAudio(responseText);
-      
-      // Wait for audio to be processed by AI
-      await new Promise((r) => setTimeout(r, 2000));
-    } finally {
-      respondingInProgressRef.current = false;
+  // Stop the live transcript polling loop
+  const stopVoicePolling = useCallback(() => {
+    if (voicePollTimerRef.current) {
+      clearInterval(voicePollTimerRef.current);
+      voicePollTimerRef.current = null;
     }
-  }, [speakTextViaAudio, generateDynamicResponse, voiceResponseDelay]);
+  }, []);
 
-  // Start voice test with audio injection
+  // Poll the server for the current voice-test session state and render the live transcript
+  const pollVoiceSession = useCallback(async () => {
+    const runId = activeRunIdRef.current;
+    const ledgerId = activeLedgerIdRef.current;
+    if (!runId || !ledgerId) return;
+    try {
+      const qs = new URLSearchParams({ runId, ledgerId }).toString();
+      const res = await fetch(`/api/admin/workflows/${flowId}/voice-test/session?${qs}`);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        console.error("[Voice] Session poll failed:", data?.error);
+        return;
+      }
+
+      if (data.status) setVoiceTestStatus(data.status);
+      if (Array.isArray(data.history)) {
+        setVoiceTranscript(
+          data.history.map((h) => ({ role: h.role, text: h.text, at: h.at }))
+        );
+      }
+
+      // Stop polling on a terminal status
+      if (["completed", "failed", "abandoned"].includes(data.status)) {
+        stopVoicePolling();
+        isTestRunningRef.current = false;
+        setIsTestRunning(false);
+        if (data.status === "failed" && data.error) {
+          notify({
+            title: "Voice test failed",
+            description: typeof data.error === "string" ? data.error : "The voice test failed.",
+            variant: "error",
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[Voice] Session poll error:", err);
+    }
+  }, [flowId, stopVoicePolling]);
+
+  // Stop the server-side voice test (hang up + stop polling)
+  const stopVoiceTest = useCallback(async () => {
+    const runId = activeRunIdRef.current;
+    const ledgerId = activeLedgerIdRef.current;
+    stopVoicePolling();
+    isTestRunningRef.current = false;
+    setIsTestRunning(false);
+    if (runId && ledgerId) {
+      try {
+        await fetch(`/api/admin/workflows/${flowId}/voice-test/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "stop", runId, ledgerId }),
+        });
+      } catch (err) {
+        console.error("[Voice] Failed to stop voice test:", err);
+      }
+    }
+    setVoiceTestStatus((prev) =>
+      ["completed", "failed", "abandoned"].includes(prev) ? prev : "completed"
+    );
+  }, [flowId, stopVoicePolling]);
+
+  // Start the server-side voice call-flow test
   const startVoiceTest = useCallback(async () => {
-    if (!agentId) {
+    if (!selectedCallFlowId) {
       notify({
-        title: "No Assistant Selected",
-        description: "Please select or create an AI assistant first.",
+        title: "Select a call flow",
+        description: "Choose an eligible call flow to test.",
+        variant: "error",
+      });
+      return;
+    }
+    if (!fromNumber.trim()) {
+      notify({
+        title: "From number required",
+        description: "Enter an E.164 phone number (e.g. +15551234567).",
         variant: "error",
       });
       return;
     }
 
+    setVoiceTranscript([]);
+    setVoiceTestStatus("dialing");
     setIsTestRunning(true);
-    setVoiceStatus("connecting");
-    setHasReceivedWelcomeMessage(false);
-    welcomeMessageReceivedRef.current = false;
-    respondingInProgressRef.current = false;
-    setCurrentStep(0);
-    currentStepRef.current = 0;
-    lastAnalyzedMessageIndexRef.current = -1;
-    setWorkflowItemStatuses({});
-    setWorkflowSlotsFilled({});
-    setCustomerData(null); // Reset customer data for new voice test session
-    setIsGeneratingResponse(false);
-    setIsMuted(false); // Reset mute state
-    
-    setMessages([
-      {
-        id: "system-voice-start",
-        role: "system",
-        content: `Starting voice test: ${selectedPersona} persona (${isAutoMode ? 'AUTO - TTS injection' : 'MANUAL - real microphone'})`,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+    isTestRunningRef.current = true;
 
     try {
-      // Dynamic import of TelnyxAIAgent
-      const { TelnyxAIAgent } = await import("@telnyx/ai-agent-lib");
-
-      const client = new TelnyxAIAgent({
-        agentId: agentId,
-        debug: true,
+      const res = await fetch(`/api/admin/workflows/${flowId}/voice-test/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          flowId: selectedCallFlowId,
+          fromNumber: fromNumber.trim(),
+          persona: voicePersona,
+          voice: ttsVoiceId || ttsVoice,
+          expressive,
+          replyDelayMs: voiceReplyDelayMs,
+          maxDurationSecs: 300,
+        }),
       });
+      const data = await res.json();
 
-      // AUTO MODE: Initialize mock microphone for TTS injection
-      // MANUAL MODE: Use real microphone directly (library handles it)
-      if (isAutoMode) {
-        console.log("[Voice] AUTO mode - initializing mock microphone for TTS injection...");
-        const mockMic = new MockMicrophone();
-        await mockMic.init();
-        mockMicRef.current = mockMic;
-
-        // Override getUserMedia to return mock stream for WebRTC
-        const libGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-        navigator.mediaDevices.getUserMedia = async (constraints) => {
-          if (constraints.audio) {
-            console.log("[Voice] getUserMedia intercepted - returning mock stream");
-            console.log(`[Voice] Mock stream status: ${mockMic.debugStreamStatus()}`);
-            return mockMic.getStream();
-          }
-          return libGetUserMedia(constraints);
-        };
-      } else {
-        console.log("[Voice] MANUAL mode - requesting microphone permissions...");
-        mockMicRef.current = null;
-        
-        // Request microphone permissions BEFORE connecting (like demo-portal)
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: true, 
-            video: false 
-          });
-          // Stop the stream - we just needed permission
-          stream.getTracks().forEach((track) => track.stop());
-          console.log("[Voice] MANUAL mode - microphone permissions granted");
-        } catch (audioError) {
-          console.error("[Voice] Microphone permission denied:", audioError);
-          notify({
-            title: "Microphone Required",
-            description: "Please allow microphone access for voice testing",
-            variant: "error",
-          });
-          setVoiceStatus("error");
-          setIsTestRunning(false);
-          return;
-        }
-      }
-
-      voiceClientRef.current = client;
-      let lastAgentState = null;
-
-      // Set up event handlers
-      const currentAutoMode = isAutoMode; // Capture for closure
-      client.on("agent.connected", () => {
-        setVoiceStatus("active");
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: "system-connected",
-            role: "system",
-            content: currentAutoMode 
-              ? "✅ Connected to AI Agent (AUTO mode - TTS injection)"
-              : "✅ Connected to AI Agent (MANUAL mode - real microphone)",
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      });
-
-      client.on("agent.disconnected", () => {
-        setVoiceStatus("idle");
-        setIsTestRunning(false);
-        setIsMuted(false);
-        activeCallRef.current = null;
-        // Cleanup mock mic
-        if (mockMicRef.current) {
-          mockMicRef.current.cleanup();
-          mockMicRef.current = null;
-        }
-      });
-
-      client.on("agent.error", (err) => {
-        setVoiceStatus("error");
-        let errorMessage = "An unknown error occurred";
-        
-        if (err) {
-          if (typeof err === 'string') {
-            errorMessage = err;
-          } else if (err.message) {
-            errorMessage = err.message;
-          } else if (err.description) {
-            errorMessage = err.description;
-          } else if (err.error?.message) {
-            errorMessage = err.error.message;
-          } else if (typeof err === 'object') {
-            if (err.code && err.message) {
-              errorMessage = `Error ${err.code}: ${err.message}`;
-            } else {
-              errorMessage = JSON.stringify(err);
-            }
-          } else {
-            errorMessage = String(err);
-          }
-        }
-        
+      if (!res.ok || !data.ok) {
+        const code = data?.error;
+        const friendly =
+          (code && VOICE_START_ERROR_LABELS[code]) ||
+          (typeof code === "string" ? code : "Failed to start voice test");
         notify({
-          title: "Voice Error",
-          description: errorMessage,
+          title: "Failed to start voice test",
+          description: data?.details ? `${friendly} (${data.details})` : friendly,
           variant: "error",
         });
-        console.error("[Voice Test] Agent error:", err);
-      });
-
-      // Handle agent state changes for auto-response
-      client.on("conversation.agent.state", (state) => {
-        const prevState = lastAgentState;
-        lastAgentState = state;
-        setAgentState(state);
-
-        console.log(`[Voice] Agent: ${prevState || "init"} → ${state}`);
-
-        if (state === "speaking") {
-          // Mark greeting received when AI starts speaking for the first time
-          if (!welcomeMessageReceivedRef.current) {
-            welcomeMessageReceivedRef.current = true;
-            setHasReceivedWelcomeMessage(true);
-            console.log("[Voice] AI started speaking (greeting)");
-          }
-        } else if (state === "listening") {
-          // Auto-respond after AI finishes speaking (speaking → listening transition)
-          if (prevState === "speaking" && welcomeMessageReceivedRef.current) {
-            // Wait for AI to be ready to listen before responding
-            // Longer delay prevents message overlap
-            setTimeout(() => {
-              handleVoiceAutoResponse();
-            }, 3000);
-          }
-        }
-      });
-
-      client.on("transcript.item", (item) => {
-        const isAssistant = item.role === "assistant";
-        
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: item.id || uniqueMessageId("transcript"),
-            role: isAssistant ? "assistant" : "user",
-            content: item.content,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-      });
-
-      // Handle conversation updates to connect remote audio stream
-      client.on("conversation.update", (conv) => {
-        console.log("[Voice] conversation.update:", conv?.call?.state, conv);
-        
-        if (conv?.call?.state === "active") {
-          console.log("[Voice] Call is active");
-          
-          // Store call reference for mute/unmute
-          activeCallRef.current = conv.call;
-          
-          // Connect remote audio stream so we can hear AI
-          if (conv.call.remoteStream && remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = conv.call.remoteStream;
-            console.log("[Voice] Remote audio stream connected");
-          }
-          
-          // Log local stream info for debugging
-          if (conv.call.localStream) {
-            const tracks = conv.call.localStream.getAudioTracks();
-            console.log(`[Voice] Local stream has ${tracks.length} audio tracks:`);
-            tracks.forEach((track, i) => {
-              console.log(`[Voice]   Track ${i}: enabled=${track.enabled}, muted=${track.muted}, readyState=${track.readyState}`);
-            });
-          } else {
-            console.warn("[Voice] NO LOCAL STREAM - microphone not connected!");
-          }
-        } else {
-          activeCallRef.current = null;
-        }
-      });
-
-      await client.connect();
-      await new Promise((r) => setTimeout(r, 1000));
-
-      // Start conversation - pass mock stream in AUTO mode, let library use real mic in MANUAL mode
-      const conversationOptions = {
-        callerName: "Voice Test Harness",
-      };
-      
-      if (isAutoMode && mockMicRef.current) {
-        const mockStream = mockMicRef.current.getStream();
-        console.log(`[Voice] AUTO mode - passing mock localStream: ${mockMicRef.current.debugStreamStatus()}`);
-        conversationOptions.localStream = mockStream;
-        conversationOptions.audio = true;
-      } else {
-        console.log("[Voice] MANUAL mode - library will request real microphone");
-        // Explicitly request audio - library will call getUserMedia
-        conversationOptions.audio = true;
+        setVoiceTestStatus("failed");
+        setIsTestRunning(false);
+        isTestRunningRef.current = false;
+        return;
       }
-      
-      await client.startConversation(conversationOptions);
 
-      console.log(`[Voice] Conversation started (${isAutoMode ? 'AUTO' : 'MANUAL'} mode) - waiting for AI greeting...`);
+      setActiveRunId(data.runId);
+      setActiveLedgerId(data.ledgerId);
+      activeRunIdRef.current = data.runId;
+      activeLedgerIdRef.current = data.ledgerId;
+      setVoiceTestStatus("ringing");
+
+      // Begin polling the session state
+      stopVoicePolling();
+      voicePollTimerRef.current = setInterval(() => {
+        pollVoiceSession();
+      }, 1500);
+      // Kick off an immediate poll
+      pollVoiceSession();
     } catch (err) {
-      setVoiceStatus("error");
-      setIsTestRunning(false);
-      
-      // Cleanup mock mic on error
-      if (mockMicRef.current) {
-        mockMicRef.current.cleanup();
-        mockMicRef.current = null;
-      }
-      
-      let errorMessage = "An unknown error occurred";
-      if (err) {
-        if (typeof err === 'string') {
-          errorMessage = err;
-        } else if (err.message) {
-          errorMessage = err.message;
-        } else if (err.description) {
-          errorMessage = err.description;
-        } else if (err.error?.message) {
-          errorMessage = err.error.message;
-        } else if (typeof err === 'object') {
-          if (err.code && err.message) {
-            errorMessage = `Error ${err.code}: ${err.message}`;
-          } else {
-            errorMessage = JSON.stringify(err);
-          }
-        } else {
-          errorMessage = String(err);
-        }
-      }
-      
+      console.error("[Voice] Failed to start voice test:", err);
       notify({
         title: "Failed to start voice test",
-        description: errorMessage,
+        description: err.message || "An unknown error occurred",
         variant: "error",
       });
-      console.error("[Voice Test] Failed to start:", err);
+      setVoiceTestStatus("failed");
+      setIsTestRunning(false);
+      isTestRunningRef.current = false;
     }
-  }, [agentId, selectedPersona, handleVoiceAutoResponse, isAutoMode]);
+  }, [
+    flowId,
+    selectedCallFlowId,
+    fromNumber,
+    voicePersona,
+    ttsVoiceId,
+    ttsVoice,
+    expressive,
+    voiceReplyDelayMs,
+    pollVoiceSession,
+    stopVoicePolling,
+  ]);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (voicePollTimerRef.current) {
+        clearInterval(voicePollTimerRef.current);
+        voicePollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -1952,11 +1840,63 @@ export default function TestAgentPage() {
                   />
                 </div>
 
-                {/* TTS Configuration (Voice channel + AUTO mode only) */}
-                {channel === "voice" && isAutoMode && (
+                {/* Voice channel: server-side call-flow test configuration */}
+                {channel === "voice" && (
                   <div className="space-y-3 pt-3 border-t">
+                    {/* Test call flow */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Test call flow</label>
+                      <Select
+                        value={selectedCallFlowId}
+                        onValueChange={setSelectedCallFlowId}
+                        disabled={isTestRunning || loadingFlows}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder={loadingFlows ? "Loading…" : "Select a call flow"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleFlows.map((flow) => {
+                            const reasonLabel = (flow.reasons || [])
+                              .map((r) => FLOW_REASON_LABELS[r] || r)
+                              .filter(Boolean)
+                              .join(", ");
+                            return (
+                              <SelectItem
+                                key={flow.id}
+                                value={flow.id}
+                                disabled={!flow.eligible}
+                              >
+                                {flow.name}
+                                {!flow.eligible && reasonLabel ? ` — ${reasonLabel}` : ""}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {!loadingFlows && !eligibleFlows.some((f) => f.eligible) && (
+                        <p className="text-xs text-muted-foreground">
+                          Create a call flow with Answer (transcription on) → Agent Assist (Workflows) → Start AI Assistant
+                        </p>
+                      )}
+                    </div>
+
+                    {/* From number */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">From number</label>
+                      <Input
+                        value={fromNumber}
+                        onChange={(e) => setFromNumber(e.target.value)}
+                        placeholder="+15551234567"
+                        disabled={isTestRunning}
+                        className="h-8"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        E.164 format (e.g. +15551234567)
+                      </p>
+                    </div>
+
                     <label className="text-sm font-medium">TTS Voice</label>
-                    
+
                     {/* Provider */}
                     <Select
                       value={ttsProvider}
@@ -2016,25 +1956,59 @@ export default function TestAgentPage() {
                       </SelectContent>
                     </Select>
 
-                    {/* Response Delay */}
+                    {/* Caller persona */}
+                    <div className="space-y-2 pt-2">
+                      <label className="text-sm font-medium">Caller persona</label>
+                      <Select
+                        value={voicePersona}
+                        onValueChange={setVoicePersona}
+                        disabled={isTestRunning}
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Persona" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {VOICE_PERSONAS.map((p) => (
+                            <SelectItem key={p} value={p}>
+                              {p.charAt(0).toUpperCase() + p.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Expressive mode */}
+                    <div className="flex items-center justify-between pt-2">
+                      <Label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">
+                        Expressive mode
+                      </Label>
+                      <Switch
+                        id="expressive-mode"
+                        checked={expressive}
+                        onCheckedChange={setExpressive}
+                        disabled={isTestRunning}
+                      />
+                    </div>
+
+                    {/* Reply delay */}
                     <div className="pt-2">
-                      <label className="text-sm font-medium">Response Delay</label>
+                      <label className="text-sm font-medium">Reply delay</label>
                       <p className="text-xs text-muted-foreground mb-2">
-                        Wait time before generating response ({voiceResponseDelay / 1000}s)
+                        Pause before the simulated caller answers ({(voiceReplyDelayMs / 1000).toFixed(1)}s)
                       </p>
                       <input
                         type="range"
-                        min="1000"
-                        max="8000"
+                        min="0"
+                        max="10000"
                         step="500"
-                        value={voiceResponseDelay}
-                        onChange={(e) => setVoiceResponseDelay(Number(e.target.value))}
+                        value={voiceReplyDelayMs}
+                        onChange={(e) => setVoiceReplyDelayMs(Number(e.target.value))}
                         disabled={isTestRunning}
                         className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-purple-500"
                       />
                       <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                        <span>1s</span>
-                        <span>8s</span>
+                        <span>0s</span>
+                        <span>10s</span>
                       </div>
                     </div>
                   </div>
@@ -2049,26 +2023,29 @@ export default function TestAgentPage() {
                   variant="outline"
                   className={cn(
                     "mb-3 w-full justify-center gap-1.5",
-                    agentState === "listening" && "text-blue-500 border-blue-500",
-                    agentState === "speaking" && "text-green-500 border-green-500",
-                    agentState === "thinking" && "text-yellow-500 border-yellow-500",
-                    agentState === "idle" && "text-muted-foreground",
-                    voiceStatus === "connecting" && "text-yellow-500 border-yellow-500",
-                    voiceStatus === "error" && "text-red-500 border-red-500"
+                    voiceTestStatus === "answered" && "text-blue-500 border-blue-500",
+                    voiceTestStatus === "talking" && "text-green-500 border-green-500",
+                    (voiceTestStatus === "dialing" || voiceTestStatus === "ringing") && "text-yellow-500 border-yellow-500",
+                    voiceTestStatus === "completed" && "text-emerald-500 border-emerald-500",
+                    (voiceTestStatus === "failed" || voiceTestStatus === "abandoned") && "text-red-500 border-red-500"
                   )}
                 >
                   <div className={cn(
                     "w-2 h-2 rounded-full",
-                    agentState === "listening" && "bg-blue-500",
-                    agentState === "speaking" && "bg-green-500 animate-pulse",
-                    agentState === "thinking" && "bg-yellow-500 animate-pulse",
-                    agentState === "idle" && "bg-muted-foreground",
-                    voiceStatus === "connecting" && "bg-yellow-500 animate-pulse",
-                    voiceStatus === "error" && "bg-red-500"
+                    voiceTestStatus === "answered" && "bg-blue-500",
+                    voiceTestStatus === "talking" && "bg-green-500 animate-pulse",
+                    (voiceTestStatus === "dialing" || voiceTestStatus === "ringing") && "bg-yellow-500 animate-pulse",
+                    voiceTestStatus === "completed" && "bg-emerald-500",
+                    (voiceTestStatus === "failed" || voiceTestStatus === "abandoned") && "bg-red-500"
                   )} />
-                  {voiceStatus === "connecting" ? "Connecting..." : 
-                   voiceStatus === "error" ? "Error" :
-                   agentState.charAt(0).toUpperCase() + agentState.slice(1)}
+                  {voiceTestStatus === "dialing" ? "Dialing" :
+                   voiceTestStatus === "ringing" ? "Ringing" :
+                   voiceTestStatus === "answered" ? "Answered" :
+                   voiceTestStatus === "talking" ? "Talking" :
+                   voiceTestStatus === "completed" ? "Completed" :
+                   voiceTestStatus === "failed" ? "Failed" :
+                   voiceTestStatus === "abandoned" ? "Abandoned" :
+                   "Connecting..."}
                 </Badge>
               ) : (
                 <Badge
@@ -2092,7 +2069,11 @@ export default function TestAgentPage() {
                   <Button
                     className="w-full"
                     onClick={channel === "chat" ? startChatTest : startVoiceTest}
-                    disabled={!agentId}
+                    disabled={
+                      channel === "chat"
+                        ? !agentId
+                        : !selectedCallFlowId || !fromNumber.trim()
+                    }
                   >
                     <IconPlayerPlay className="size-4 mr-2" />
                     Start Test
@@ -2121,7 +2102,7 @@ export default function TestAgentPage() {
                     <Button
                       variant="destructive"
                       className="w-full"
-                      onClick={stopTest}
+                      onClick={channel === "voice" ? stopVoiceTest : stopTest}
                     >
                       <IconX className="size-4 mr-2" />
                       Stop Test
@@ -2195,6 +2176,63 @@ export default function TestAgentPage() {
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <ScrollArea className="h-full">
                     <div className="space-y-1 py-4 px-4">
+                    {channel === "voice" ? (
+                      <>
+                        {/* Live call status line */}
+                        {(isTestRunning || voiceTranscript.length > 0) && (
+                          <div className="text-center text-xs text-muted-foreground py-2">
+                            {voiceTestStatus === "dialing" ? "Dialing…" :
+                             voiceTestStatus === "ringing" ? "Ringing…" :
+                             voiceTestStatus === "answered" ? "Answered" :
+                             voiceTestStatus === "talking" ? "Talking" :
+                             voiceTestStatus === "completed" ? "Completed" :
+                             voiceTestStatus === "failed" ? "Failed" :
+                             voiceTestStatus === "abandoned" ? "Abandoned" :
+                             "Idle"}
+                          </div>
+                        )}
+                        {voiceTranscript.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                            <IconPhone className="size-12 text-muted-foreground/50 mb-4" />
+                            <p className="text-sm text-muted-foreground">
+                              No transcript yet
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Click "Start Test" to place a test call
+                            </p>
+                          </div>
+                        ) : (
+                          voiceTranscript.map((turn, idx) => {
+                            const isCaller = turn.role === "caller";
+                            return (
+                              <div
+                                key={`voice-${idx}-${turn.at || ""}`}
+                                className={cn(
+                                  "flex",
+                                  isCaller ? "justify-end" : "justify-start"
+                                )}
+                              >
+                                <div
+                                  className={cn(
+                                    "max-w-[80%] rounded-lg px-3 py-2 text-sm",
+                                    isCaller
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted text-foreground"
+                                  )}
+                                >
+                                  <div className="text-[10px] uppercase tracking-wide opacity-70 mb-0.5">
+                                    {isCaller ? "Caller" : "Agent"}
+                                  </div>
+                                  {turn.text}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                        <div ref={messagesEndRef} />
+                      </>
+                    ) : (
+                      <>
                     {messages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center py-12">
                         <IconRobot className="size-12 text-muted-foreground/50 mb-4" />
@@ -2241,12 +2279,14 @@ export default function TestAgentPage() {
                       </div>
                     )}
                     <div ref={messagesEndRef} />
+                      </>
+                    )}
                     </div>
                   </ScrollArea>
                 </div>
 
-                {/* Input Area (Chat and Voice) */}
-                {isTestRunning && (
+                {/* Input Area (Chat only — voice uses the server-side call-flow test) */}
+                {isTestRunning && channel === "chat" && (
                   <div className="shrink-0 border-t p-4">
                     <div className="flex gap-2">
                       <Input
