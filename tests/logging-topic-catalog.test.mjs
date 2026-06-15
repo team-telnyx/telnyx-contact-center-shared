@@ -33,7 +33,7 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
   ]);
 
   const topics = flattenLoggingTopics();
-  assert.equal(topics.length, 47);
+  assert.equal(topics.length, 48);
   assert.equal(new Set(topics.map((topic) => topic.id)).size, topics.length);
   for (const topic of topics) {
     assert.match(topic.id, /^[a-z0-9-]+\.[a-z0-9-]+$/);
@@ -50,6 +50,7 @@ test("logging topic catalog exposes the approved two-level group taxonomy", asyn
     assert.equal(enabled[groupId], undefined, `${groupId} must not be persisted as a topic enabled flag`);
   }
   assert.equal(levels["platform.db"], "warn");
+  assert.equal(levels["platform.phone-provisioning"], "info");
   assert.equal(levels["telnyx.media"], "warn");
   assert.equal(levels["agent-assist.llm"], "warn");
   assert.equal(enabled["contact-center.routing"], true);
@@ -67,6 +68,7 @@ test("runtime config defaults are derived from canonical topic catalog", async (
 
   assert.equal(runtime.DEFAULT_TOPIC_LEVELS["platform.app"], "info");
   assert.equal(runtime.DEFAULT_TOPIC_LEVELS["platform.db"], "warn");
+  assert.equal(runtime.DEFAULT_TOPIC_LEVELS["platform.phone-provisioning"], "info");
   assert.equal(runtime.DEFAULT_TOPIC_LEVELS["security.auth"], "info");
   assert.equal(runtime.DEFAULT_TOPIC_LEVELS["voice.webhooks"], "info");
   assert.equal(runtime.DEFAULT_TOPIC_LEVELS["telnyx.media"], "warn");
@@ -74,11 +76,12 @@ test("runtime config defaults are derived from canonical topic catalog", async (
   assert.equal(runtime.DEFAULT_TOPIC_ENABLED["contact-center.transfer"], true);
 
   const config = runtime.normalizeRuntimeLoggingConfig({
-    topicLevels: { app: "debug", "telnyx.stt.media": "trace", "voice-flow": "warn" },
+    topicLevels: { app: "debug", "platform.phone-provisioning": "debug", "telnyx.stt.media": "trace", "voice-flow": "warn" },
     topicEnabled: { auth: false, "outbound-dialer": false },
   });
 
   assert.equal(config.topicLevels["platform.app"], "debug");
+  assert.equal(config.topicLevels["platform.phone-provisioning"], "debug");
   assert.equal(config.topicLevels["telnyx.media"], "trace");
   assert.equal(config.topicLevels["voice.flow"], "warn");
   assert.equal(config.topicEnabled["security.auth"], false);

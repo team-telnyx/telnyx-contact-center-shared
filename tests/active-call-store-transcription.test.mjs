@@ -213,6 +213,51 @@ test("a customer utterance is NOT appended to a stale open bubble after the agen
   const last = transcriptions[transcriptions.length - 1];
   assert.equal(last.track, "inbound");
   assert.equal(last.transcript, "Texas Health Presbyterian Hospital Dent");
+  assert.notEqual(last.id, transcriptions[0].id);
+  assert.notEqual(last.transcriptionKey, transcriptions[0].transcriptionKey);
+  assert.equal(last.originalTranscriptionKey, "cust-1");
+});
+
+test("split transcription bubbles with a reused server key keep later chunks merged", () => {
+  resetActiveCallStore();
+  const store = useActiveCallStore.getState();
+
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-reused",
+    transcript: "first stale utterance",
+    is_final: false,
+  });
+  store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "outbound",
+    transcription_key: "agent-boundary",
+    transcript: "can you repeat that",
+    is_final: true,
+    speech_final: true,
+  });
+  const splitId = store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-reused",
+    transcript: "second utterance",
+    is_final: false,
+  });
+  const updateId = store.addTranscription({
+    call_control_id: "call-control-1",
+    transcription_track: "inbound",
+    transcription_key: "cust-reused",
+    transcript: "second utterance updated",
+    is_final: false,
+  });
+
+  const { transcriptions } = useActiveCallStore.getState();
+  assert.equal(transcriptions.length, 3);
+  assert.equal(updateId, splitId);
+  assert.equal(transcriptions[2].transcript, "second utterance updated");
+  assert.equal(transcriptions[2].transcriptionKey, splitId);
+  assert.equal(transcriptions[2].originalTranscriptionKey, "cust-reused");
 });
 
 test("consecutive interim chunks on the same leg still merge into one open bubble", () => {
