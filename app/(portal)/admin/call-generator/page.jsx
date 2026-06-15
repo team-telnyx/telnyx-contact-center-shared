@@ -9,6 +9,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { notify } from "@/components/ToastNotify";
 import { AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
@@ -497,6 +507,10 @@ export default function AdminCallGeneratorPage() {
 
   const [selectedScenarioId, setSelectedScenarioId] = useState(null);
   const [selectedActionId, setSelectedActionId] = useState(null);
+  // Custom confirm dialogs for deletes (no native window.confirm — project convention).
+  // Each holds the pending item to delete, or null when closed.
+  const [confirmDeleteScenario, setConfirmDeleteScenario] = useState(null);
+  const [confirmDeleteAction, setConfirmDeleteAction] = useState(null);
   const [scenarioDraft, setScenarioDraft] = useState(emptyScenarioDraft());
   const [actionDraft, setActionDraft] = useState(emptyActionDraft());
   const [settingsDraft, setSettingsDraft] = useState(DEFAULT_SETTINGS);
@@ -637,8 +651,13 @@ export default function AdminCallGeneratorPage() {
     }
   }
 
-  async function deleteScenario(item) {
-    if (!window.confirm(`Delete scenario "${item.name}"?`)) return;
+  // Open the custom confirm dialog (project convention: no native window.confirm).
+  function deleteScenario(item) {
+    setConfirmDeleteScenario(item);
+  }
+
+  async function performDeleteScenario(item) {
+    if (!item) return;
     try {
       const res = await fetch(`${API}/scenarios/${item.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
@@ -696,8 +715,13 @@ export default function AdminCallGeneratorPage() {
     }
   }
 
-  async function deleteAction(item) {
-    if (!window.confirm(`Delete action "${item.name}"?`)) return;
+  // Open the custom confirm dialog (project convention: no native window.confirm).
+  function deleteAction(item) {
+    setConfirmDeleteAction(item);
+  }
+
+  async function performDeleteAction(item) {
+    if (!item) return;
     try {
       const res = await fetch(`${API}/actions/${item.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
@@ -855,6 +879,52 @@ export default function AdminCallGeneratorPage() {
           </div>
         </aside>
       </main>
+
+      {/* Custom confirm: Delete scenario (replaces native window.confirm) */}
+      <AlertDialog open={confirmDeleteScenario !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteScenario(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete scenario?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeleteScenario
+                ? <>This permanently deletes the scenario <span className="font-medium text-foreground">&quot;{confirmDeleteScenario.name}&quot;</span>. This action cannot be undone.</>
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const item = confirmDeleteScenario; setConfirmDeleteScenario(null); performDeleteScenario(item); }}
+            >
+              Delete scenario
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Custom confirm: Delete action (replaces native window.confirm) */}
+      <AlertDialog open={confirmDeleteAction !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete action?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmDeleteAction
+                ? <>This permanently deletes the action <span className="font-medium text-foreground">&quot;{confirmDeleteAction.name}&quot;</span>. This action cannot be undone.</>
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { const item = confirmDeleteAction; setConfirmDeleteAction(null); performDeleteAction(item); }}
+            >
+              Delete action
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminPageShell>
   );
 }
