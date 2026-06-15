@@ -50,14 +50,19 @@ export async function GET(request, { params }) {
         const validation = validateAiAgentTestFlow(flow, {
           expectAssistantId: workflow.ai_assistant_id,
         });
+        const blockingReasons = (validation.reasons || []).filter(
+          (reason) => reason === "missing_incoming_call" || reason === "missing_ai_assistant_start" || reason === "assistant_mismatch",
+        );
         return {
           id: flow.id,
           name: flow.name,
           webhook_url: flow.webhook_url || null,
           has_incoming_call: validation.hasIncomingCall,
-          // Eligible to ATTEMPT a test as long as it has an Incoming Call
-          // initiator. AI-assistant / transcription gaps are warnings only.
-          eligible: validation.hasIncomingCall,
+          // Keep this in sync with startAiAgentVoiceTest: flows that cannot
+          // actually start the selected assistant must not be auto-selected as
+          // eligible. Missing transcription remains a soft warning because the
+          // call can still run, but simulated replies will not fire.
+          eligible: blockingReasons.length === 0,
           reasons: (validation.reasons || []).filter((r) => r !== "missing_incoming_call"),
           has_ai_assistant: validation.hasAiAssistant,
           has_agent_assist: validation.hasAgentAssist,
