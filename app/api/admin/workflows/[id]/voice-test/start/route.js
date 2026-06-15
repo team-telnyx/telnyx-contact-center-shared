@@ -11,8 +11,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getAuthenticatedUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/role-utils";
 import { startAiAgentVoiceTest } from "@/lib/workflows/ai-agent-voice-test.mjs";
 
 const REASON_STATUS = {
@@ -28,9 +28,12 @@ const REASON_STATUS = {
 
 export async function POST(request, { params }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const user = await getAuthenticatedUser();
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!isAdmin(user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id } = await params;

@@ -16,6 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/role-utils";
 import { resolveWebrtcCredential } from "@/lib/telnyx-webrtc-credential.mjs";
 import {
   getAiAgentVoiceTestState,
@@ -39,6 +40,9 @@ export async function POST(request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    if (!isAdmin(user)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     let body = {};
     try {
@@ -47,10 +51,10 @@ export async function POST(request) {
       body = {};
     }
 
-    // Resolve the generated leg's call_control_id. Prefer an explicit value but
-    // fall back to the live state lookup (so the client can pass just runId).
-    let targetCallControlId = String(body.callControlId || "").trim() || null;
-    if (!targetCallControlId && (body.runId || body.ledgerId)) {
+    // Resolve the generated leg's call_control_id from the validated voice-test
+    // state. Do not trust arbitrary call_control_id values from the client.
+    let targetCallControlId = null;
+    if (body.runId || body.ledgerId) {
       const state = await getAiAgentVoiceTestState({
         runId: body.runId || null,
         ledgerId: body.ledgerId || null,

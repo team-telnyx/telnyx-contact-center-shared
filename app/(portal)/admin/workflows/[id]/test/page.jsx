@@ -1607,6 +1607,7 @@ export default function TestAgentPage() {
     const ledgerId = activeLedgerIdRef.current;
     if (!runId || !ledgerId) return;
     if (telnyxStatus !== "connected" || !telnyxClient) {
+      listenerRequestedRef.current = true;
       setListenerStatus("error");
       notify({
         title: "Audio listener unavailable",
@@ -1877,6 +1878,18 @@ export default function TestAgentPage() {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ supervisorCallControlId: supId }),
+            keepalive: true,
+          });
+        } catch (_) {}
+      }
+      const runId = activeRunIdRef.current;
+      const ledgerId = activeLedgerIdRef.current;
+      if (runId && ledgerId) {
+        try {
+          fetch(`/api/admin/workflows/${flowId}/voice-test/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "stop", runId, ledgerId }),
             keepalive: true,
           });
         } catch (_) {}
