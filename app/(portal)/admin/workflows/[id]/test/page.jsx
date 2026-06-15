@@ -617,6 +617,7 @@ const VOICE_PERSONAS = [
 
 // Map flow eligibility reason codes to human-readable hints
 const FLOW_REASON_LABELS = {
+  missing_incoming_call: "no Incoming Call initiator",
   missing_ai_assistant_start: "no AI assistant node",
   missing_agent_assist: "no Agent Assist (workflows) node",
   missing_transcription: "transcription not enabled",
@@ -2084,7 +2085,7 @@ export default function TestAgentPage() {
                       </Select>
                       {!loadingFlows && eligibleFlows.length === 0 && (
                         <p className="text-xs text-muted-foreground">
-                          No call flows found. Create a call flow with Answer (transcription on) → Start AI Assistant.
+                          No call flows with an Incoming Call initiator were found. Create a call flow that starts with Incoming Call → Answer (transcription on) → Start AI Assistant.
                         </p>
                       )}
                       {!loadingFlows && selectedCallFlowId && (() => {

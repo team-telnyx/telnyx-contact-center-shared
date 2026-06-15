@@ -20,6 +20,10 @@ function answerNode({ transcription = true } = {}) {
   return { id: "n1", data: { nodeType: "answer", config: transcription ? { transcription: true } : {} } };
 }
 
+function incomingCallNode() {
+  return { id: "n0", data: { nodeType: "incoming_call", config: {} } };
+}
+
 function agentAssistNode({ workflowId = "wf-1" } = {}) {
   return {
     id: "n2",
@@ -39,37 +43,53 @@ test("hidden scenario constants are stable UUID + sentinel name", () => {
 });
 
 test("validateAiAgentTestFlow accepts a complete AI-agent test flow", () => {
-  const v = validateAiAgentTestFlow(flow([answerNode(), agentAssistNode(), aiAssistantNode()]));
+  const v = validateAiAgentTestFlow(flow([incomingCallNode(), answerNode(), agentAssistNode(), aiAssistantNode()]));
   assert.equal(v.ok, true);
   assert.deepEqual(v.reasons, []);
+  assert.equal(v.hasIncomingCall, true);
   assert.equal(v.hasAiAssistant, true);
   assert.equal(v.hasAgentAssist, true);
   assert.equal(v.transcriptionActive, true);
   assert.equal(v.assistantId, "assistant-1");
 });
 
+test("validateAiAgentTestFlow accepts a minimal incoming_call → answer(STT) → ai_assistant_start flow (no agent_assist)", () => {
+  const v = validateAiAgentTestFlow(flow([incomingCallNode(), answerNode(), aiAssistantNode()]));
+  assert.equal(v.ok, true);
+  assert.deepEqual(v.reasons, []);
+  assert.equal(v.hasIncomingCall, true);
+  assert.equal(v.hasAgentAssist, false);
+});
+
+test("validateAiAgentTestFlow flags a flow missing the Incoming Call initiator", () => {
+  const v = validateAiAgentTestFlow(flow([answerNode(), aiAssistantNode()]));
+  assert.equal(v.ok, false);
+  assert.equal(v.hasIncomingCall, false);
+  assert.ok(v.reasons.includes("missing_incoming_call"));
+});
+
 test("validateAiAgentTestFlow flags a flow missing ai_assistant_start", () => {
-  const v = validateAiAgentTestFlow(flow([answerNode(), agentAssistNode()]));
+  const v = validateAiAgentTestFlow(flow([incomingCallNode(), answerNode(), agentAssistNode()]));
   assert.equal(v.ok, false);
   assert.ok(v.reasons.includes("missing_ai_assistant_start"));
 });
 
-test("validateAiAgentTestFlow no longer requires agent_assist (only AI assistant + transcription)", () => {
-  const v = validateAiAgentTestFlow(flow([answerNode(), aiAssistantNode()]));
+test("validateAiAgentTestFlow no longer requires agent_assist (only incoming call + AI assistant + transcription)", () => {
+  const v = validateAiAgentTestFlow(flow([incomingCallNode(), answerNode(), aiAssistantNode()]));
   assert.equal(v.ok, true);
   assert.ok(!v.reasons.includes("missing_agent_assist"));
   assert.equal(v.hasAgentAssist, false);
 });
 
 test("validateAiAgentTestFlow flags a flow missing transcription", () => {
-  const v = validateAiAgentTestFlow(flow([answerNode({ transcription: false }), agentAssistNode(), aiAssistantNode()]));
+  const v = validateAiAgentTestFlow(flow([incomingCallNode(), answerNode({ transcription: false }), agentAssistNode(), aiAssistantNode()]));
   assert.equal(v.ok, false);
   assert.ok(v.reasons.includes("missing_transcription"));
 });
 
 test("validateAiAgentTestFlow accepts ai_assistant_start-level transcription when answer has none", () => {
   const v = validateAiAgentTestFlow(
-    flow([answerNode({ transcription: false }), agentAssistNode(), aiAssistantNode({ transcription: true })]),
+    flow([incomingCallNode(), answerNode({ transcription: false }), agentAssistNode(), aiAssistantNode({ transcription: true })]),
   );
   assert.equal(v.transcriptionActive, true);
   assert.ok(!v.reasons.includes("missing_transcription"));
@@ -77,7 +97,7 @@ test("validateAiAgentTestFlow accepts ai_assistant_start-level transcription whe
 
 test("validateAiAgentTestFlow flags assistant id mismatch with the workflow's assistant", () => {
   const v = validateAiAgentTestFlow(
-    flow([answerNode(), agentAssistNode(), aiAssistantNode({ assistantId: "other-assistant" })]),
+    flow([incomingCallNode(), answerNode(), agentAssistNode(), aiAssistantNode({ assistantId: "other-assistant" })]),
     { expectAssistantId: "assistant-1" },
   );
   assert.equal(v.ok, false);
@@ -86,7 +106,7 @@ test("validateAiAgentTestFlow flags assistant id mismatch with the workflow's as
 
 test("validateAiAgentTestFlow ignores unresolved {{variable}} assistant ids for mismatch", () => {
   const v = validateAiAgentTestFlow(
-    flow([answerNode(), agentAssistNode(), aiAssistantNode({ assistantId: "{{assistant_id}}" })]),
+    flow([incomingCallNode(), answerNode(), agentAssistNode(), aiAssistantNode({ assistantId: "{{assistant_id}}" })]),
     { expectAssistantId: "assistant-1" },
   );
   assert.ok(!v.reasons.includes("assistant_mismatch"));

@@ -1,12 +1,12 @@
 /**
- * Eligible call flows for AI Agent voice testing.
+ * Call flows available for AI Agent voice testing.
  * GET /api/admin/workflows/[id]/voice-test/flows
  *
- * Returns the workflow's assistant id plus the list of voice flows, each tagged
- * with whether it is eligible to run an AI Agent voice test (has
- * ai_assistant_start + agent_assist[workflows] + transcription). The Test AI
- * Agent voice UI uses this to populate the "Test call flow" dropdown and to
- * explain why a flow is not selectable.
+ * Lists every voice flow that has an Incoming Call initiator (i.e. can be
+ * reached by dialing its SIP URI — the requirement for the test originate).
+ * Each flow is tagged with informational eligibility flags (AI assistant node
+ * present, transcription enabled) so the UI can warn — but never block —
+ * the user. The "Test call flow" dropdown is populated from this list.
  */
 
 import { NextResponse } from "next/server";
@@ -36,27 +36,36 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: "Workflow not found" }, { status: 404 });
     }
 
+    // voice_flows schema: id, username, name, description, telnyx_voice_app_id,
+    // webhook_url, nodes, edges, variables, metadata, created_at, updated_at.
+    // (No is_active column.)
     const { rows: flowRows } = await pool.query(
-      `SELECT id, name, nodes, edges, is_active, updated_at
+      `SELECT id, name, webhook_url, nodes, edges, updated_at
        FROM voice_flows
        ORDER BY updated_at DESC NULLS LAST, name ASC`,
     );
 
-    const flows = flowRows.map((flow) => {
-      const validation = validateAiAgentTestFlow(flow, {
-        expectAssistantId: workflow.ai_assistant_id,
-      });
-      return {
-        id: flow.id,
-        name: flow.name,
-        is_active: flow.is_active === true,
-        eligible: validation.ok,
-        reasons: validation.reasons,
-        has_ai_assistant: validation.hasAiAssistant,
-        has_agent_assist: validation.hasAgentAssist,
-        transcription_active: validation.transcriptionActive,
-      };
-    });
+    const flows = flowRows
+      .map((flow) => {
+        const validation = validateAiAgentTestFlow(flow, {
+          expectAssistantId: workflow.ai_assistant_id,
+        });
+        return {
+          id: flow.id,
+          name: flow.name,
+          webhook_url: flow.webhook_url || null,
+          has_incoming_call: validation.hasIncomingCall,
+          // Eligible to ATTEMPT a test as long as it has an Incoming Call
+          // initiator. AI-assistant / transcription gaps are warnings only.
+          eligible: validation.hasIncomingCall,
+          reasons: (validation.reasons || []).filter((r) => r !== "missing_incoming_call"),
+          has_ai_assistant: validation.hasAiAssistant,
+          has_agent_assist: validation.hasAgentAssist,
+          transcription_active: validation.transcriptionActive,
+        };
+      })
+      // Only flows reachable by dialing their SIP URI (Incoming Call initiator).
+      .filter((f) => f.has_incoming_call);
 
     return NextResponse.json({
       ok: true,
