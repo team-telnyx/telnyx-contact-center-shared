@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
+import { getStorage } from "@/lib/storage/index.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const PEXELS_API = "https://api.pexels.com/v1";
-const MEDIA_DIR = path.join(process.cwd(), "public", "media");
 const PUBLIC_PREFIX = "/media";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Map([
@@ -145,14 +143,13 @@ export async function POST(request) {
     const buffer = Buffer.from(await imageResponse.arrayBuffer());
     if (buffer.length > MAX_BYTES) return NextResponse.json({ ok: false, error: "Pexels image is larger than the 5MB media limit" }, { status: 413 });
 
-    await mkdir(MEDIA_DIR, { recursive: true });
     const ext = ALLOWED.get(contentType);
     const filename = `${safeBase(`${photo.title}-${photo.id}`)}-${Date.now().toString(36)}${ext}`;
-    const fullPath = path.join(MEDIA_DIR, filename);
-    if (!fullPath.startsWith(MEDIA_DIR)) return NextResponse.json({ ok: false, error: "Invalid filename" }, { status: 400 });
-    await writeFile(fullPath, buffer);
+    const storage = await getStorage();
+    const saved = await storage.put(filename, buffer, contentType);
+    const savedFilename = saved.filename || filename;
 
-    const url = `${PUBLIC_PREFIX}/${filename}`;
+    const url = saved.url || `${PUBLIC_PREFIX}/${savedFilename}`;
     const title = photo.title || `Pexels photo ${photo.id}`;
     const metadata = {
       source: "pexels",
@@ -163,8 +160,8 @@ export async function POST(request) {
       downloaded_from: imageUrl,
       license_url: "https://www.pexels.com/license/",
     };
-    const row = await upsertMetadata({ filename, url, title, displayName: title, contentType, size: buffer.length, metadata });
-    const media = { name: filename, filename, url, title, display_name: title, size: buffer.length, size_bytes: buffer.length, contentType, content_type: contentType, metadata: row?.metadata || metadata };
+    const row = await upsertMetadata({ filename: savedFilename, url, title, displayName: title, contentType, size: buffer.length, metadata });
+    const media = { name: savedFilename, filename: savedFilename, url, title, display_name: title, size: buffer.length, size_bytes: buffer.length, contentType, content_type: contentType, metadata: row?.metadata || metadata };
     return NextResponse.json({ ok: true, media, photo });
   } catch (err) {
     adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
