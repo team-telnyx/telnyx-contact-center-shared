@@ -58,6 +58,15 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { cn } from "@/lib/utils";
 import { getIntentLabel } from "@/lib/agent-assist/sentiment-analysis";
+// Shared, client-safe persona + Expressive Mode helpers. Same source of truth as
+// the Call Generator's "Workflow Testing" action, so the simulated caller behaves
+// identically here and in real call-flow workflow testing.
+import {
+  WORKFLOW_TESTING_PERSONAS,
+  normalizePersona,
+  voiceSupportsExpressive,
+  applyVoiceExpression,
+} from "@/lib/call-generator/persona-expression.mjs";
 
 // TTS options will be loaded dynamically from API
 
@@ -611,7 +620,11 @@ export default function TestAgentPage() {
   const [channel, setChannel] = useState("chat"); // "chat" or "voice"
   
   // Dynamic response generation (on-the-fly customer simulation)
-  const [selectedPersona, setSelectedPersona] = useState("cooperative");
+  // Persona vocabulary is shared with the Call Generator workflow tester
+  // (neutral default + the full Ultra-emotion-aligned persona list).
+  const [selectedPersona, setSelectedPersona] = useState("neutral");
+  const [personas, setPersonas] = useState(WORKFLOW_TESTING_PERSONAS); // [{id,name/label,instruction}]
+  const [expressive, setExpressive] = useState(false); // Expressive Mode: add Ultra/xAI TTS tags matching the persona
   const [customerData, setCustomerData] = useState(null); // Persisted fake data for this test session
   const [isGeneratingResponse, setIsGeneratingResponse] = useState(false); // Show "Customer is thinking..." indicator
   const [turnSettleMs, setTurnSettleMs] = useState(800); // Event-driven: silence window after agent settles into "listening" before the simulated caller replies (ms)
@@ -667,6 +680,8 @@ export default function TestAgentPage() {
   const respondingInProgressRef = useRef(false); // Prevent double responses
   const localAudioEnabledRef = useRef(true); // Track local audio playback
   const ttsVoiceRef = useRef("Minimax.speech-2.8-turbo.English_magnetic_voiced_man"); // Current TTS voice
+  const expressiveRef = useRef(false); // Expressive Mode, read by voice callbacks without stale closures
+  const selectedPersonaRef = useRef("neutral"); // Persona, read by voice callbacks / expression helper
   // Event-driven turn detection (replaces fixed response delay)
   const turnSettleTimerRef = useRef(null); // Debounce timer armed when agent settles into "listening"
   const lastTranscriptAtRef = useRef(0); // Timestamp of the most recent assistant transcript line
@@ -731,6 +746,11 @@ export default function TestAgentPage() {
           persona: selectedPersona,
           customerData: customerDataRef.current,
           filledSlots: workflowSlotsFilledRef.current,
+          // Voice + Expressive Mode let the simulated caller's reply carry the
+          // matching TTS expression tags (Ultra <emotion>, xAI speech tags),
+          // mirroring the Call Generator workflow tester.
+          voice: ttsVoiceRef.current,
+          expressive: expressiveRef.current,
         }),
       });
 
@@ -841,6 +861,47 @@ export default function TestAgentPage() {
     ttsVoiceRef.current = ttsVoiceId;
   }, [ttsVoiceId]);
 
+  // Keep expressive / persona refs in sync for voice callbacks (avoid stale closures)
+  useEffect(() => {
+    expressiveRef.current = expressive;
+  }, [expressive]);
+  useEffect(() => {
+    selectedPersonaRef.current = selectedPersona;
+  }, [selectedPersona]);
+
+  // If the selected voice does not support expression (not Ultra / xAI),
+  // Expressive Mode is meaningless — force it off so the toggle never silently
+  // injects tags the TTS would speak literally.
+  useEffect(() => {
+    if (!voiceSupportsExpressive(ttsVoiceId) && expressive) {
+      setExpressive(false);
+    }
+  }, [ttsVoiceId, expressive]);
+
+  // Load the shared persona list (same vocabulary as the Call Generator workflow
+  // tester). Falls back to the bundled WORKFLOW_TESTING_PERSONAS on failure.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPersonas() {
+      try {
+        const res = await fetch(`/api/admin/workflows/${flowId}/generate-response`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data?.personas) && data.personas.length > 0) {
+          setPersonas(data.personas);
+        }
+      } catch {
+        // keep bundled fallback
+      }
+    }
+    loadPersonas();
+    return () => {
+      cancelled = true;
+    };
+  }, [flowId]);
+
   // Reset model and voice when provider changes
   useEffect(() => {
     if (!ttsProvider || !ttsVoices[ttsProvider]) return;
@@ -926,14 +987,14 @@ export default function TestAgentPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Persona descriptions for UI
-  const PERSONA_DESCRIPTIONS = {
-    cooperative: "Friendly customer who answers questions directly",
-    frustrated: "Impatient customer, but still provides info",
-    confused: "Sometimes misunderstands, asks for clarification",
-    wants_transfer: "Prefers talking to a human agent",
-    verbose: "Talkative, provides extra context",
-  };
+  // Persona option helpers (driven by the shared persona list). Each persona has
+  // { id, name|label, instruction }; the description shown under the dropdown is
+  // the persona's behavioural instruction (neutral has none).
+  const personaLabel = (p) => p.name || p.label || p.id;
+  const currentPersona = personas.find((p) => p.id === selectedPersona);
+  const currentPersonaDescription =
+    currentPersona?.instruction?.trim() ||
+    (selectedPersona === "neutral" ? "Cooperative caller, neutral tone — no extra behavioural pressure." : "");
 
   const workflowStages = workflow?.stages ?? [];
   const totalWorkflowItems = workflowStages.reduce(
@@ -1307,8 +1368,19 @@ export default function TestAgentPage() {
       // Don't add message here - let transcript.item from Telnyx handle it
       // This prevents duplicate messages
 
+      // Expressive Mode: for Ultra voices prepend the persona's <emotion> tag,
+      // for xAI voices prepend a fitting speech tag, so the simulated caller
+      // sounds the part. Only when Expressive Mode is on and the voice family
+      // supports it. The expressive text is only used for TTS — the chat bubble
+      // and transcript keep the clean text.
+      const spokenText = applyVoiceExpression(text, {
+        voice: ttsVoiceRef.current,
+        persona: selectedPersonaRef.current,
+        expressive: expressiveRef.current,
+      });
+
       // Generate TTS audio with selected voice
-      const audioUrl = await generateTTS(text, ttsVoiceRef.current);
+      const audioUrl = await generateTTS(spokenText, ttsVoiceRef.current);
 
       // Start local playback immediately (in parallel with injection)
       // This ensures we hear our response at the same time it's being sent
@@ -1995,15 +2067,15 @@ export default function TestAgentPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cooperative">Cooperative Customer</SelectItem>
-                      <SelectItem value="frustrated">Frustrated Customer</SelectItem>
-                      <SelectItem value="confused">Confused Customer</SelectItem>
-                      <SelectItem value="wants_transfer">Wants Human Agent</SelectItem>
-                      <SelectItem value="verbose">Verbose Customer</SelectItem>
+                      {personas.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {personaLabel(p)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {PERSONA_DESCRIPTIONS[selectedPersona]}
+                    {currentPersonaDescription}
                   </p>
                 </div>
 
@@ -2100,6 +2172,29 @@ export default function TestAgentPage() {
                         ))}
                       </SelectContent>
                     </Select>
+
+                    {/* Expressive Mode — only meaningful for Telnyx Ultra and
+                        xAI voices, which support inline expression tags. The
+                        simulated caller's reply gets persona-matching <emotion>
+                        (Ultra) or speech tags (xAI), just like the Call Generator. */}
+                    {voiceSupportsExpressive(ttsVoiceId) && (
+                      <div className="flex items-center justify-between pt-1">
+                        <div className="pr-2">
+                          <Label htmlFor="expressive-mode" className="text-sm font-medium cursor-pointer">
+                            Expressive Mode
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Add {ttsVoiceId.startsWith("xAI.") ? "xAI speech" : "Ultra emotion"} tags matching the persona
+                          </p>
+                        </div>
+                        <Switch
+                          id="expressive-mode"
+                          checked={expressive}
+                          onCheckedChange={setExpressive}
+                          disabled={isTestRunning}
+                        />
+                      </div>
+                    )}
 
                     {/* Turn Settle Time */}
                     <div className="pt-2">
