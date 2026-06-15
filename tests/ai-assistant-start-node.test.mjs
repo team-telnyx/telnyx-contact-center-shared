@@ -4,11 +4,11 @@ import test from "node:test";
 
 import { VOICE_FLOW_NODES } from "../config/voice-flow-nodes.js";
 
-test("Start AI Assistant node config exposes send_message_history_updates as a boolean field", () => {
+test("Start AI Assistant node config exposes send_message_history_updates as a toggle field", () => {
   const field =
     VOICE_FLOW_NODES.ai_assistant_start.config.send_message_history_updates;
   assert.ok(field, "node config should declare send_message_history_updates");
-  assert.equal(field.type, "boolean");
+  assert.equal(field.type, "toggle");
   assert.equal(field.default, false);
   assert.equal(field.required, false);
   assert.match(

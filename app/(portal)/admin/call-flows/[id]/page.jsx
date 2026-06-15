@@ -26,6 +26,7 @@ import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -4121,6 +4122,24 @@ export default function FlowBuilderPage() {
                                       max={paramDef.max}
                                       className="mt-1"
                                     />
+                                  ) : paramDef.type === "toggle" ? (
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <Switch
+                                        checked={
+                                          nodeConfig[key] === true ||
+                                          nodeConfig[key] === "true"
+                                        }
+                                        onCheckedChange={(checked) =>
+                                          handleUpdateNodeConfig(key, checked)
+                                        }
+                                      />
+                                      <span className="text-xs text-muted-foreground">
+                                        {nodeConfig[key] === true ||
+                                        nodeConfig[key] === "true"
+                                          ? "Enabled"
+                                          : "Disabled"}
+                                      </span>
+                                    </div>
                                   ) : paramDef.type === "boolean" ? (
                                     <Select
                                       value={String(nodeConfig[key] || false)}

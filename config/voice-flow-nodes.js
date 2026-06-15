@@ -1721,7 +1721,7 @@ export const VOICE_FLOW_NODES = {
         placeholder: "Select AI Assistant...",
       },
       send_message_history_updates: {
-        type: "boolean",
+        type: "toggle",
         label: "Send Message History Updates",
         required: false,
         default: false,
