@@ -1720,6 +1720,14 @@ export const VOICE_FLOW_NODES = {
         required: true,
         placeholder: "Select AI Assistant...",
       },
+      send_message_history_updates: {
+        type: "boolean",
+        label: "Send Message History Updates",
+        required: false,
+        default: false,
+        description:
+          "When enabled, Telnyx sends a webhook whenever the conversation message history is updated (call.ai_assistant.message_history.updated). Defaults to No.",
+      },
     },
   },
 
