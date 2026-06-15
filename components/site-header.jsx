@@ -95,9 +95,30 @@ export function SiteHeader() {
       loadCampaigns();
     }
 
-    // Set up SSE connection for real-time status updates
+    // Set up SSE connection for real-time status updates.
+    // Status is delivered in real time via SSE. The /api/user/profile poll is
+    // only a fallback safety-net that runs WHILE the SSE stream is down, so a
+    // missed event cannot leave the header stuck on a stale status. When the
+    // stream is healthy we do not poll at all.
     let statusEventSource = null;
     let statusRefreshInterval = null;
+
+    const startFallbackPolling = () => {
+      if (statusRefreshInterval) return; // already polling
+      statusRefreshInterval = setInterval(() => {
+        if (loadStatusRef.current) {
+          loadStatusRef.current();
+        }
+      }, 5000);
+    };
+
+    const stopFallbackPolling = () => {
+      if (statusRefreshInterval) {
+        clearInterval(statusRefreshInterval);
+        statusRefreshInterval = null;
+      }
+    };
+
     const connectStatusStream = () => {
       try {
         if (statusEventSource) {
@@ -173,7 +194,8 @@ export function SiteHeader() {
         });
 
         statusEventSource.addEventListener("connected", () => {
-          // Connected to status stream
+          // Stream is healthy again — stop the fallback poll and rely on SSE.
+          stopFallbackPolling();
         });
 
         statusEventSource.onerror = (error) => {
@@ -181,20 +203,20 @@ export function SiteHeader() {
             statusEventSource.close();
             statusEventSource = null;
           }
+          // SSE is down — start the fallback poll so status cannot go stale,
+          // and attempt to reconnect. The poll is stopped on "connected".
+          startFallbackPolling();
           setTimeout(connectStatusStream, 5000);
         };
       } catch (err) {
+        // Could not open the stream — fall back to polling and retry.
+        startFallbackPolling();
         setTimeout(connectStatusStream, 5000);
       }
     };
 
     if (hasAgentRole) {
       connectStatusStream();
-      statusRefreshInterval = setInterval(() => {
-        if (loadStatusRef.current) {
-          loadStatusRef.current();
-        }
-      }, 5000);
     }
 
     return () => {
@@ -202,10 +224,7 @@ export function SiteHeader() {
         statusEventSource.close();
         statusEventSource = null;
       }
-      if (statusRefreshInterval) {
-        clearInterval(statusRefreshInterval);
-        statusRefreshInterval = null;
-      }
+      stopFallbackPolling();
     };
   }, [hasAgentRole]);
 

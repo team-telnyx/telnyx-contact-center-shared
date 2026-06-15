@@ -130,7 +130,30 @@ test("site header periodically reconciles status from profile snapshot in case s
   assert.match(
     siteHeaderSource,
     /setInterval\([\s\S]*loadStatusRef\.current\(\)[\s\S]*5000/,
-    "header should periodically reload /api/user/profile so Busy cannot remain stale Available after missed SSE",
+    "header should reload /api/user/profile so Busy cannot remain stale Available after missed SSE",
+  );
+  // The poll must be a fallback that only runs while SSE is down: started from
+  // the error/catch paths, stopped once the stream reports "connected", and
+  // NOT armed unconditionally next to the initial connectStatusStream() call.
+  assert.match(
+    siteHeaderSource,
+    /onerror[\s\S]{0,400}startFallbackPolling\(\)/,
+    "header should start fallback polling when the SSE stream errors",
+  );
+  assert.match(
+    siteHeaderSource,
+    /addEventListener\(\s*["']connected["'][\s\S]{0,120}stopFallbackPolling\(\)/,
+    "header should stop fallback polling once the SSE stream is healthy",
+  );
+  const connectCall = siteHeaderSource.indexOf("connectStatusStream();");
+  const afterConnect = siteHeaderSource.slice(
+    connectCall,
+    connectCall + 200,
+  );
+  assert.doesNotMatch(
+    afterConnect,
+    /setInterval/,
+    "header must NOT arm the poll unconditionally alongside connectStatusStream(); polling is SSE-down fallback only",
   );
 });
 
