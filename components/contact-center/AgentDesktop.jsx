@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Info, PhoneCall } from "lucide-react";
+import { notify } from "@/components/ToastNotify";
 import {
   IconAddressBook,
   IconBook,
@@ -121,8 +122,8 @@ function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
   const selected = codes.find((code) => code.wrapup_code_id === selectedCode);
   const requiresCallback = selected?.requires_callback === true;
   const submit = async () => {
-    if (!selectedCode) return alert("Select a disposition code");
-    if (requiresCallback && !callbackAt) return alert("Callback date/time is required");
+    if (!selectedCode) { notify({ title: "Disposition required", description: "Select a disposition code", variant: "warning" }); return; }
+    if (requiresCallback && !callbackAt) { notify({ title: "Callback required", description: "Callback date/time is required", variant: "warning" }); return; }
     setSubmitting(true);
     try {
       const res = await fetch("/api/contact-center/agent/campaigns/disposition", {
@@ -135,7 +136,7 @@ function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
       onSubmitted?.(data);
       onClose?.();
     } catch (err) {
-      alert(err.message || "Failed to save campaign disposition");
+      notify({ title: "Disposition save failed", description: err.message || "Failed to save campaign disposition", variant: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -1400,7 +1401,7 @@ export function AgentDesktop() {
     } catch (err) {
       pendingCampaignDispositionRef.current = null;
       campaignCallStartedRef.current = false;
-      alert(err.message || "Failed to start outbound call");
+      notify({ title: "Outbound call failed", description: err.message || "Failed to start outbound call", variant: "error" });
     } finally {
       setCampaignDialing(false);
     }

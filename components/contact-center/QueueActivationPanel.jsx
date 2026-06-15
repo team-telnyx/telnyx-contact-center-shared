@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { notify } from "@/components/ToastNotify";
 
 export function QueueActivationPanel({ queues, onUpdate }) {
   const [open, setOpen] = useState(false);
@@ -101,12 +102,12 @@ export function QueueActivationPanel({ queues, onUpdate }) {
           await onUpdate();
         }
       } else {
-        alert(data.error || "Failed to toggle queue");
+        notify({ title: "Queue update failed", description: data.error || "Failed to toggle queue", variant: "error" });
         // Revert optimistic update
         setLocalQueues(queues);
       }
     } catch (err) {
-      alert("Failed to toggle queue: " + (err.message || "Unknown error"));
+      notify({ title: "Queue update failed", description: err.message || "Unknown error", variant: "error" });
       // Revert optimistic update
       setLocalQueues(queues);
     } finally {
