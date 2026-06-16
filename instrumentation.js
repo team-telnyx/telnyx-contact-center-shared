@@ -1,3 +1,10 @@
+import {
+  allowsMaintenanceRole,
+  allowsStreamingRole,
+  allowsWorkerRole,
+  getProcessRole,
+} from "./lib/runtime/process-role.mjs";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { createDiagnosticLogger } = await import("./lib/diagnostic-logger.mjs");
@@ -26,17 +33,19 @@ export async function register() {
     const dbLogger = createDiagnosticLogger("platform.db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
     const streamingLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
 
+    const processRole = getProcessRole();
     const appPort = process.env.PORT || "3000";
     appLogger.info("application_starting", {
       nodeEnv: process.env.NODE_ENV || "development",
       nextRuntime: process.env.NEXT_RUNTIME,
+      processRole,
       pid: process.pid,
       port: appPort,
       message: `Application starting on port ${appPort}`,
     });
 
     // Only run on server-side
-    try {
+    if (allowsMaintenanceRole(processRole)) try {
       const { ensurePostgresSchema } = await import(
         "./lib/postgres-schema.mjs"
       );
@@ -99,30 +108,50 @@ export async function register() {
       appLogger.warn("postgres_schema_startup_error", {
         error: error?.message || String(error),
       });
+    } else {
+      appLogger.info("maintenance_startup_skipped_for_process_role", { processRole });
+    }
+
+    if (allowsWorkerRole(processRole)) {
+      try {
+        const { startCoordinator } = await import("./lib/contact-center/coordinator.js");
+        const started = await startCoordinator();
+        appLogger.info("coordinator_start_requested", { processRole, started });
+      } catch (coordinatorError) {
+        appLogger.warn("coordinator_start_failed", {
+          processRole,
+          error: coordinatorError?.message || String(coordinatorError),
+        });
+      }
     }
 
     // Start Streaming WebSocket server on separate port (default: main + 1 = 3001)
     // Used for Google Gemini Live, OpenAI Realtime, and Telnyx STT
-    try {
+    if (allowsStreamingRole(processRole)) try {
       const mainPort = parseInt(process.env.PORT || "3000", 10);
       const wsPort = parseInt(process.env.STREAMING_WS_PORT || String(mainPort + 1), 10);
       streamingLogger.info("streaming_ws_starting", {
+        processRole,
         port: wsPort,
         mainPort,
         message: `Streaming WS starting on port ${wsPort}`,
       });
       const { initStreamingWSServer } = await import("./lib/streaming-ws-handler.mjs");
-      initStreamingWSServer();
+      const startStreamingServer = initStreamingWSServer;
+      startStreamingServer();
       streamingLogger.info("streaming_ws_start_requested", {
         port: wsPort,
         message: `Streaming WS start requested on port ${wsPort}`,
       });
     } catch (err) {
       streamingLogger.warn("streaming_ws_start_failed", {
+        processRole,
         error: err?.message || String(err),
       });
+    } else {
+      streamingLogger.info("streaming_ws_skipped_for_process_role", { processRole });
     }
 
-    appLogger.info("application_startup_completed", { pid: process.pid });
+    appLogger.info("application_startup_completed", { pid: process.pid, processRole });
   }
 }

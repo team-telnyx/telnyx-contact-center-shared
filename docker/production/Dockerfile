@@ -47,6 +47,7 @@ RUN echo '#!/bin/bash\n\
 EXPOSE 3000
 
 ENV PORT=3000
+ENV PROCESS_ROLE=all
 
 # Start the application with the startup script
 CMD ["/app/start-prod.sh"]
