@@ -26,7 +26,13 @@ COPY . .
 # Install dependencies with Yarn
 RUN yarn install
 
-# Create startup script that waits for PostgreSQL, initializes schema, and seeds data
+# Build the Next.js production bundle at image build time. Containers must start
+# from this prebuilt artifact so HA rolling deploys do not take a node out for a
+# multi-minute runtime build.
+RUN yarn build
+
+# Create startup script that waits for PostgreSQL, initializes schema, and starts
+# the already-built application.
 RUN echo '#!/bin/bash\n\
   echo "Waiting for PostgreSQL to be ready..."\n\
   until pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER; do\n\
@@ -38,9 +44,7 @@ RUN echo '#!/bin/bash\n\
   echo "Initializing database schema..."\n\
   node scripts/ensure-pg.mjs\n\
   \n\
-  echo "Building application with database connection available..."\n\
-  yarn build\n\
-  \n\
+  echo "Starting prebuilt application..."\n\
   exec yarn start\n\
   ' > /app/start-prod.sh && chmod +x /app/start-prod.sh
 
