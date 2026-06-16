@@ -29,6 +29,12 @@ test("WS4-T2 SSE fan-out stays flag-gated and uses the existing event bus topic 
     /publish\(\s*`\$\{TOPICS\.SSE_PREFIX\}\$\{key\}`/,
     "broadcastToKey must publish cross-node events to sse:<key> when SSE_FANOUT=true",
   );
+  const publishBlock = sse.slice(sse.indexOf("function publishSseFanout"), sse.indexOf("export async function broadcastToKey"));
+  assert.doesNotMatch(
+    publishBlock,
+    /await\s+ensureSseFanoutSubscriber\(\)/,
+    "publishing cross-node events must not be blocked by local subscriber startup",
+  );
   assert.match(
     sse,
     /origin\s*===\s*SSE_INSTANCE_ID/,
