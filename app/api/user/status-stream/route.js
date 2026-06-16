@@ -114,6 +114,7 @@ export async function GET(request) {
           await writer.write(encoder.encode(message));
         } catch (error) {
           platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+          throw error;
         }
       };
 

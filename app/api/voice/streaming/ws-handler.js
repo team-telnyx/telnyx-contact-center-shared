@@ -1,6 +1,22 @@
 import WebSocket from "ws";
-import { getProviderConfig } from "@/config/ai-streaming-providers";
-import { voiceRuntimePayload, streamingLogger } from "@/lib/voice/logging.mjs";
+import { voiceRuntimePayload, streamingLogger } from "../../../../lib/voice/logging.mjs";
+
+const STREAMING_OPENAI_REALTIME_CONFIG = {
+  id: "openai-realtime",
+  model: "gpt-4o-realtime-preview",
+  voice: "alloy",
+  openai: {
+    voice: "alloy",
+    input_audio_transcription: {
+      model: "gpt-4o-transcribe",
+    },
+  },
+};
+
+function getProviderConfig(providerId) {
+  if (providerId === "openai-realtime") return STREAMING_OPENAI_REALTIME_CONFIG;
+  return null;
+}
 
 /**
  * Parse AI config from URL query param (ai_config=base64JSON)

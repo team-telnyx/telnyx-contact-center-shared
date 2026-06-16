@@ -205,6 +205,8 @@ EVENT_BUS=pg
 
 If using only app nodes without a separate streaming runtime, leave `PROCESS_ROLE=all` or route port `3001` from each app node to the WebSocket target group. If using dedicated streaming runtimes, set web nodes to `PROCESS_ROLE=web` so they do not also bind `STREAMING_WS_PORT`.
 
+Dedicated streaming runtimes do not start the Next.js HTTP server on `PORT`. They expose a lightweight health listener on `STREAMING_WS_PORT`; configure the WebSocket target group health check to `GET /api/health` or `GET /health` on that streaming port. Keep the application target group health check on the web nodes' `/api/health` endpoint.
+
 ## Deployment Flow
 
 A typical HA deployment flow is:
