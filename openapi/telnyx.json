@@ -57612,7 +57612,7 @@
           "Whatsapp Phone Numbers"
         ],
         "summary": "List Whatsapp phone numbers",
-        "operationId": "ListPhoneNumbers",
+        "operationId": "ListWhatsappPhoneNumbers",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageConsolidated"
