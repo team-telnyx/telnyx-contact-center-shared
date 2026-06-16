@@ -44,12 +44,24 @@ test("PGSSLMODE verify modes validate certificates by default", () => {
   });
 });
 
-test("PGSSLMODE TLS-capable modes enable SSL without certificate verification", () => {
-  for (const sslMode of ["allow", "prefer", "require", "no-verify"]) {
+test("PGSSLMODE TLS-required modes enable SSL without certificate verification", () => {
+  for (const sslMode of ["require", "no-verify"]) {
     assert.deepEqual(readPostgresSslConfig({ PGSSLMODE: sslMode }), {
       rejectUnauthorized: false,
     });
   }
+});
+
+test("PGSSLMODE opportunistic modes do not force TLS without fallback support", () => {
+  for (const sslMode of ["allow", "prefer"]) {
+    assert.equal(readPostgresSslConfig({ PGSSLMODE: sslMode }), false);
+  }
+});
+
+test("explicit Postgres SSL enables TLS even with opportunistic sslmodes", () => {
+  assert.deepEqual(readPostgresSslConfig({ PGSSLMODE: "prefer", POSTGRES_SSL: "true" }), {
+    rejectUnauthorized: false,
+  });
 });
 
 test("PGSSLMODE verify modes load configured TLS files", () => {
