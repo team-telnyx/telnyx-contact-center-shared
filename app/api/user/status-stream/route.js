@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { addSseClient, hasActiveClients, removeSseClient } from "@/lib/sse";
+import { addSseClient, removeSseClient } from "@/lib/sse";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import {
+  hasActiveSessionPresence,
+  registerSessionPresence,
+  removeSessionPresence,
+  touchSessionPresence,
+} from "@/lib/contact-center/session-presence";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 const globalAny = globalThis;
@@ -38,7 +44,7 @@ function schedulePresenceOffline({ userId, username, statusKey }) {
   clearPresenceOfflineTimer(userId);
   const timer = setTimeout(async function markOfflineAfterDisconnect() {
     presenceOfflineTimers.delete(String(userId));
-    if (hasActiveClients(statusKey)) return;
+    if (await hasActiveSessionPresence({ userId, fallbackKey: statusKey })) return;
     const previousStatus = await getCurrentAgentStatus(userId);
     if (previousStatus === "Offline") return;
     await setUserStatus({
@@ -90,6 +96,16 @@ export async function GET(request) {
       // Register this client for status and queue updates
       addSseClient(statusKey, writer);
       addSseClient(queueKey, writer);
+      let presenceConnectionId = null;
+      try {
+        const registeredPresence = await registerSessionPresence({
+          userId,
+          username: user.username,
+        });
+        presenceConnectionId = registeredPresence?.connectionId || null;
+      } catch (error) {
+        platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+      }
 
       // Send initial connection event
       const sendEvent = async (event, data) => {
@@ -138,6 +154,11 @@ export async function GET(request) {
         removeSseClient(statusKey, writer);
         removeSseClient(queueKey, writer);
         try {
+          await removeSessionPresence({ userId, connectionId: presenceConnectionId });
+        } catch (error) {
+          platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+        }
+        try {
           await writer.close();
         } catch (_) {}
         schedulePresenceOffline({
@@ -152,6 +173,11 @@ export async function GET(request) {
       pingInterval = setInterval(async () => {
         try {
           await sendEvent("ping", { timestamp: new Date().toISOString() });
+          try {
+            await touchSessionPresence({ userId, connectionId: presenceConnectionId });
+          } catch (error) {
+            platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+          }
           lastPingSuccess = Date.now();
           consecutiveFailures = 0;
         } catch (error) {

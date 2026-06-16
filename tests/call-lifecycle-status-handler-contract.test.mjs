@@ -32,8 +32,8 @@ test("status stream marks agent Offline only after all session streams disconnec
   );
   assert.match(
     statusStreamSource,
-    /hasActiveClients\(statusKey\)/,
-    "disconnect handler must not mark Offline while another tab/session stream is still connected",
+    /hasActiveSessionPresence\(\{\s*userId,\s*fallbackKey:\s*statusKey\s*\}\)/s,
+    "disconnect handler must not mark Offline while another local or cross-node session stream is still connected",
   );
   assert.match(
     statusStreamSource,
