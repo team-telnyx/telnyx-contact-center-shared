@@ -26,6 +26,20 @@ COPY . .
 # Install dependencies with Yarn
 RUN yarn install
 
+# NEXT_PUBLIC_* values are compiled into client bundles by `next build`. Keep
+# these as explicit build args so production compose can pass the same public
+# settings that are later mounted in `/app/.env` at runtime.
+ARG NEXT_PUBLIC_BASE_URL
+ARG NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+ARG NEXT_PUBLIC_STREAMING_PORT
+ARG NEXT_PUBLIC_TELNYX_WEBRTC_REGION
+ARG NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
+ENV NEXT_PUBLIC_RECAPTCHA_SITE_KEY=$NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+ENV NEXT_PUBLIC_STREAMING_PORT=$NEXT_PUBLIC_STREAMING_PORT
+ENV NEXT_PUBLIC_TELNYX_WEBRTC_REGION=$NEXT_PUBLIC_TELNYX_WEBRTC_REGION
+ENV NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES=$NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+
 # Build the Next.js production bundle at image build time. Containers must start
 # from this prebuilt artifact so HA rolling deploys do not take a node out for a
 # multi-minute runtime build.

@@ -25,6 +25,12 @@ services:
     build:
       context: ../../
       dockerfile: docker/production/Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
+        NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${NEXT_PUBLIC_RECAPTCHA_SITE_KEY:-}
+        NEXT_PUBLIC_STREAMING_PORT: ${NEXT_PUBLIC_STREAMING_PORT:-}
+        NEXT_PUBLIC_TELNYX_WEBRTC_REGION: ${NEXT_PUBLIC_TELNYX_WEBRTC_REGION:-}
+        NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES: ${NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES:-}
     image: telnyx-contact-center-prod
     container_name: telnyx-contact-center-app
     ports:
