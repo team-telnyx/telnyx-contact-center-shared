@@ -176,6 +176,8 @@ The same container image supports both single-node and HA/multi-node deployments
 | `GLOBAL_PRESENCE_TTL_MS` | `90000` | TTL for presence rows; expired rows protect against crashed nodes. |
 | `ROUTING_EVENT_DRIVEN` | `false` | Set `true` only when enabling the event-driven routing reactor. |
 | `COORDINATOR_SINGLETON` | `false` | Set `true` only on runtimes allowed to run leader-gated coordinator work. |
+| `OUTBOUND_POWER_PACING` | `false` | Set `true` only for WS5 power-campaign pacing tests; requires coordinator leadership so exactly one node dials. |
+| `OUTBOUND_PREDICTIVE_PACING` | `false` | Set `true` only for WS6 predictive pacing tests; keep off for first HA deploy unless explicitly validating predictive. |
 | `STORAGE_PROVIDER` | `local` / unset | Set `s3` in HA so media and uploads are shared across nodes. |
 | `WS_BASE_URL` | auto-derived | In HA, set the public WebSocket URL explicitly, for example `wss://cc-ha-ws.demotelnyx.com`. |
 
@@ -201,6 +203,9 @@ PROCESS_ROLE=worker
 COORDINATOR_SINGLETON=true
 ROUTING_EVENT_DRIVEN=true
 EVENT_BUS=pg
+# Enable only when intentionally validating outbound HA pacing:
+OUTBOUND_POWER_PACING=false
+OUTBOUND_PREDICTIVE_PACING=false
 ```
 
 If using only app nodes without a separate streaming runtime, leave `PROCESS_ROLE=all` or route port `3001` from each app node to the WebSocket target group. If using dedicated streaming runtimes, set web nodes to `PROCESS_ROLE=web` so they do not also bind `STREAMING_WS_PORT`.

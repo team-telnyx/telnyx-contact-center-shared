@@ -19,6 +19,8 @@ test("HA sample env documents multi-node runtime flags with safe single-node def
   assert.match(sample, /GLOBAL_PRESENCE_TTL_MS=90000/);
   assert.match(sample, /ROUTING_EVENT_DRIVEN=false/);
   assert.match(sample, /COORDINATOR_SINGLETON=false/);
+  assert.match(sample, /OUTBOUND_POWER_PACING=false/);
+  assert.match(sample, /OUTBOUND_PREDICTIVE_PACING=false/);
 });
 
 test("README-HA has an explicit HA runtime flag matrix and role split guidance", async () => {
@@ -29,6 +31,8 @@ test("README-HA has an explicit HA runtime flag matrix and role split guidance",
   assert.match(readme, /\| `SSE_FANOUT` \| `false` \|/);
   assert.match(readme, /\| `GLOBAL_PRESENCE` \| `false` \|/);
   assert.match(readme, /\| `EVENT_BUS` \| `pg` \|/);
+  assert.match(readme, /\| `OUTBOUND_POWER_PACING` \| `false` \|/);
+  assert.match(readme, /\| `OUTBOUND_PREDICTIVE_PACING` \| `false` \|/);
   assert.match(readme, /`PROCESS_ROLE=web`/);
   assert.match(readme, /`PROCESS_ROLE=streaming`/);
   assert.match(readme, /`PROCESS_ROLE=worker`/);
