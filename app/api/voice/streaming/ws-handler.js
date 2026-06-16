@@ -5,6 +5,18 @@ const STREAMING_OPENAI_REALTIME_CONFIG = {
   id: "openai-realtime",
   model: "gpt-4o-realtime-preview",
   voice: "alloy",
+  systemInstructions: `You are a helpful AI assistant for Telnyx, a leading communications platform as a service (CPaaS) provider.
+
+Your role is to assist customers with information about Telnyx products and services, including:
+- Voice APIs and programmable voice solutions
+- Messaging APIs (SMS, MMS, WhatsApp)
+- SIP trunking and connectivity
+- Number management and porting
+- WebRTC and real-time communications
+- Call control and IVR capabilities
+- AI and machine learning integrations
+
+Be friendly, professional, and concise. Provide accurate information about Telnyx offerings and help guide customers to the right solutions for their needs.`,
   openai: {
     voice: "alloy",
     input_audio_transcription: {
@@ -13,8 +25,16 @@ const STREAMING_OPENAI_REALTIME_CONFIG = {
   },
 };
 
+const STREAMING_GOOGLE_GEMINI_CONFIG = {
+  id: "google-gemini",
+  model: "gemini-2.5-flash-native-audio-latest",
+  voice: "Puck",
+  systemInstructions: STREAMING_OPENAI_REALTIME_CONFIG.systemInstructions,
+};
+
 function getProviderConfig(providerId) {
   if (providerId === "openai-realtime") return STREAMING_OPENAI_REALTIME_CONFIG;
+  if (providerId === "google-gemini") return STREAMING_GOOGLE_GEMINI_CONFIG;
   return null;
 }
 
