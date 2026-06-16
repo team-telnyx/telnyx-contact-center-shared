@@ -163,6 +163,48 @@ Typical secret sources:
 
 The application expects environment variables for database, authentication, Telnyx credentials, storage, and deployment-specific runtime configuration.
 
+## HA Runtime Flags
+
+The same container image supports both single-node and HA/multi-node deployments. Keep the defaults for local/single-node. Override only the flags needed for HA.
+
+| Variable | Safe default | HA value / guidance |
+|---|---:|---|
+| `PROCESS_ROLE` | `all` | `web` for HTTP/API/SSE nodes, `streaming` for WebSocket-only nodes, `worker` for coordinator/background workers. `all` keeps legacy single-container behavior. |
+| `EVENT_BUS` | `pg` | Use `pg`; PostgreSQL LISTEN/NOTIFY is the implemented cross-node adapter. |
+| `SSE_FANOUT` | `false` | Set `true` so status/dashboard SSE broadcasts fan out across nodes. |
+| `GLOBAL_PRESENCE` | `false` | Set `true` so `/api/user/status-stream` presence is tracked globally in Postgres. |
+| `GLOBAL_PRESENCE_TTL_MS` | `90000` | TTL for presence rows; expired rows protect against crashed nodes. |
+| `ROUTING_EVENT_DRIVEN` | `false` | Set `true` only when enabling the event-driven routing reactor. |
+| `COORDINATOR_SINGLETON` | `false` | Set `true` only on runtimes allowed to run leader-gated coordinator work. |
+| `STORAGE_PROVIDER` | `local` / unset | Set `s3` in HA so media and uploads are shared across nodes. |
+| `WS_BASE_URL` | auto-derived | In HA, set the public WebSocket URL explicitly, for example `wss://cc-ha-ws.demotelnyx.com`. |
+
+Recommended HA split for this deployment model. The explicit role values are `PROCESS_ROLE=web`, `PROCESS_ROLE=streaming`, and `PROCESS_ROLE=worker`:
+
+```env
+# Web app nodes behind the HTTPS app target group on port 3000
+PROCESS_ROLE=web
+STORAGE_PROVIDER=s3
+EVENT_BUS=pg
+SSE_FANOUT=true
+GLOBAL_PRESENCE=true
+WS_BASE_URL=wss://cc-ha-ws.demotelnyx.com
+STREAMING_WS_PORT=3001
+
+# Optional dedicated streaming runtime behind the WebSocket target group on port 3001
+PROCESS_ROLE=streaming
+STREAMING_WS_PORT=3001
+WS_BASE_URL=wss://cc-ha-ws.demotelnyx.com
+
+# Optional dedicated worker/coordinator runtime
+PROCESS_ROLE=worker
+COORDINATOR_SINGLETON=true
+ROUTING_EVENT_DRIVEN=true
+EVENT_BUS=pg
+```
+
+If using only app nodes without a separate streaming runtime, leave `PROCESS_ROLE=all` or route port `3001` from each app node to the WebSocket target group. If using dedicated streaming runtimes, set web nodes to `PROCESS_ROLE=web` so they do not also bind `STREAMING_WS_PORT`.
+
 ## Deployment Flow
 
 A typical HA deployment flow is:
