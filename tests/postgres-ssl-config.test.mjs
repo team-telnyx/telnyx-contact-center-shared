@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
 import { readPostgresSslConfig } from "../lib/postgres-ssl.mjs";
@@ -39,4 +42,38 @@ test("PGSSLMODE verify modes validate certificates by default", () => {
   assert.deepEqual(readPostgresSslConfig({ PGSSLMODE: "verify-ca" }), {
     rejectUnauthorized: true,
   });
+});
+
+test("PGSSLMODE TLS-capable modes enable SSL without certificate verification", () => {
+  for (const sslMode of ["allow", "prefer", "require", "no-verify"]) {
+    assert.deepEqual(readPostgresSslConfig({ PGSSLMODE: sslMode }), {
+      rejectUnauthorized: false,
+    });
+  }
+});
+
+test("PGSSLMODE verify modes load configured TLS files", () => {
+  const dir = mkdtempSync(join(tmpdir(), "postgres-ssl-config-"));
+  const rootCert = join(dir, "root.crt");
+  const clientCert = join(dir, "client.crt");
+  const clientKey = join(dir, "client.key");
+
+  writeFileSync(rootCert, "ca-cert");
+  writeFileSync(clientCert, "client-cert");
+  writeFileSync(clientKey, "client-key");
+
+  assert.deepEqual(
+    readPostgresSslConfig({
+      PGSSLMODE: "verify-full",
+      PGSSLROOTCERT: rootCert,
+      PGSSLCERT: clientCert,
+      PGSSLKEY: clientKey,
+    }),
+    {
+      rejectUnauthorized: true,
+      ca: "ca-cert",
+      cert: "client-cert",
+      key: "client-key",
+    },
+  );
 });
