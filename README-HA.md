@@ -70,7 +70,7 @@ The load balancer should:
 - Redirect `80` to `443` where appropriate.
 - Forward traffic to application nodes on the application port, normally `3000`.
 - If AI streaming, Telnyx STT streaming, or the hardphone bridge are used, also route the streaming WebSocket service. The app starts this on `STREAMING_WS_PORT`, or on `PORT + 1` when `STREAMING_WS_PORT` is unset, so the default is normally `3001`.
-- Set `WS_BASE_URL` to the public `wss://` URL that reaches the streaming WebSocket service, either through the same load balancer with path-based routing for `/streaming/*` or through a separate listener/target group for the streaming port.
+- Set `WS_BASE_URL` to the public `wss://` URL that reaches the streaming WebSocket service, either through the same load balancer with path-based routing or through a separate listener/target group for the streaming port. Path-based routing must send `/streaming/*` to the sidecar for AI/Telnyx streaming, and must also send `/hardphone-bridge/*` plus `/api/hardphone-bridge/*` to the sidecar when hardphone bridge support is enabled.
 - Use `/api/health` as the health check endpoint.
 - Treat HTTP `200-399` as healthy.
 - Use a health check timeout short enough to identify failed nodes quickly.
