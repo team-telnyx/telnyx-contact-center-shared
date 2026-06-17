@@ -438,6 +438,7 @@ export default function PhonesProvisioningPage() {
   const [selectedBridgeId, setSelectedBridgeId] = useState(null);
   const [selectedRebootIds, setSelectedRebootIds] = useState([]);
   const [pendingRebootIds, setPendingRebootIds] = useState([]);
+  const [pendingRebootHostOverrides, setPendingRebootHostOverrides] = useState({});
   const [rebooting, setRebooting] = useState(false);
   // Custom confirm dialog for phone delete (no native window.confirm — project convention).
   const [confirmDeletePhone, setConfirmDeletePhone] = useState(null);
@@ -629,22 +630,25 @@ export default function PhonesProvisioningPage() {
     }
   }
 
-  function requestRebootPhones(ids) {
+  function requestRebootPhones(ids, options = {}) {
     const phoneIds = ids && ids.length ? ids : selectedRebootIds;
     if (!phoneIds.length) return;
     setPendingRebootIds(phoneIds);
+    setPendingRebootHostOverrides(options.hostOverrides || {});
   }
 
   async function confirmRebootPhones() {
     const phoneIds = pendingRebootIds;
+    const hostOverrides = pendingRebootHostOverrides;
     if (!phoneIds.length) return;
     setPendingRebootIds([]);
+    setPendingRebootHostOverrides({});
     setRebooting(true);
     try {
       const res = await fetch(`${API}/phones/reboot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone_ids: phoneIds }),
+        body: JSON.stringify({ phone_ids: phoneIds, ...(Object.keys(hostOverrides).length ? { host_overrides: hostOverrides } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Remote reboot failed");
@@ -766,7 +770,7 @@ export default function PhonesProvisioningPage() {
           </div>
         </aside>
       </main>
-      <AlertDialog open={Boolean(pendingRebootIds.length)} onOpenChange={(open) => { if (!open) setPendingRebootIds([]); }}>
+      <AlertDialog open={Boolean(pendingRebootIds.length)} onOpenChange={(open) => { if (!open) { setPendingRebootIds([]); setPendingRebootHostOverrides({}); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reboot hardphone{pendingRebootIds.length === 1 ? "" : "s"}?</AlertDialogTitle>
@@ -779,7 +783,7 @@ export default function PhonesProvisioningPage() {
               {pendingRebootPhones.map((phone) => (
                 <div key={phone.id} className="flex items-center justify-between gap-3 py-1">
                   <span className="truncate">{phone.phone_name || phone.label || phone.model || "Hardphone"}</span>
-                  <span className="shrink-0 font-mono text-muted-foreground">{formatMacDisplay(phone.mac)}</span>
+                  <span className="text-muted-foreground">{pendingRebootHostOverrides[phone.id] || formatMacDisplay(phone.mac)}</span>
                 </div>
               ))}
             </div>
@@ -1429,7 +1433,10 @@ function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
-        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => rebootPhones?.([phone.id]), rebooting || !phone?.id)}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => {
+          const manualHost = reachableIp ? "" : hostOverride.trim();
+          rebootPhones?.([phone.id], manualHost ? { hostOverrides: { [phone.id]: manualHost } } : {});
+        }, rebooting || !phone?.id)}
       </div>
     </div>
   );

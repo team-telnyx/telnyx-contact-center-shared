@@ -34,6 +34,12 @@ function resolveBaseUrl(request) {
   }
 }
 
+function validHostOverride(value) {
+  const host = String(value || "").trim();
+  if (!host) return "";
+  return /^([a-z0-9.-]+|\d{1,3}(\.\d{1,3}){3})$/i.test(host) ? host : null;
+}
+
 export async function POST(request) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -42,6 +48,7 @@ export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const requestedIds = Array.isArray(body?.phone_ids) ? body.phone_ids.map((id) => String(id)).filter(Boolean) : [];
+    const hostOverrides = body?.host_overrides && typeof body.host_overrides === "object" && !Array.isArray(body.host_overrides) ? body.host_overrides : {};
     const all = body?.all === true;
     if (!all && !requestedIds.length) return NextResponse.json({ error: "phone_ids or all=true is required" }, { status: 400 });
 
@@ -51,7 +58,13 @@ export async function POST(request) {
 
     const results = [];
     for (const phone of phones) {
-      const result = await executeCtiAction(phone, "reboot", {}, { pool, baseUrl: resolveBaseUrl(request) });
+      const hostOverride = validHostOverride(hostOverrides[phone.id] || "");
+      if (hostOverride === null) {
+        results.push({ id: phone.id, mac: phone.mac, vendor: phone.vendor, model: phone.model, ok: false, reason: "Invalid phone IP/host override" });
+        continue;
+      }
+      const targetPhone = hostOverride ? { ...phone, last_ip: hostOverride, ip_address: hostOverride } : phone;
+      const result = await executeCtiAction(targetPhone, "reboot", {}, { pool, baseUrl: resolveBaseUrl(request) });
       results.push({ id: phone.id, mac: phone.mac, vendor: phone.vendor, model: phone.model, ok: Boolean(result.ok), reason: result.reason || null });
       await pool.query(
         `INSERT INTO hp_provisioning_events (phone_id, mac, event_type, detail) VALUES ($1, $2, 'cti_reboot', $3)`,

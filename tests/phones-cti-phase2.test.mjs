@@ -212,7 +212,9 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     const code = await src("app/api/admin/phones-provisioning/phones/reboot/route.js");
     assert.match(code, /requireAdmin/);
     assert.match(code, /phone_ids/);
-    assert.match(code, /executeCtiAction\(phone, "reboot"/);
+    assert.match(code, /executeCtiAction\(targetPhone, "reboot"/);
+    assert.match(code, /validHostOverride\(hostOverrides\[phone\.id\]/);
+    assert.match(code, /host_overrides/);
     assert.match(code, /cti_reboot/);
   });
 
@@ -274,7 +276,8 @@ describe("hard phones CTI driver layer (Phase 2)", () => {
     assert.match(code, /rebootPhones=\{requestRebootPhones\}/);
     assert.match(code, /rebooting=\{rebooting\}/);
     assert.match(code, /<PhoneMaintenanceActions phone=\{phone\} rebootPhones=\{rebootPhones\} rebooting=\{rebooting\}/);
-    assert.match(code, /hp-sip-reboot", \(\) => rebootPhones\?\.\(\[phone\.id\]\), rebooting \|\| !phone\?\.id\)/);
+    assert.match(code, /hp-sip-reboot", \(\) => \{[\s\S]*hostOverrides: \{ \[phone\.id\]: manualHost \}/);
+    assert.match(code, /pendingRebootHostOverrides/);
     assert.doesNotMatch(code, /const \[rebootOpen, setRebootOpen\] = useState\(false\)/);
     assert.doesNotMatch(code, /<AlertDialog open=\{rebootOpen\} onOpenChange=\{setRebootOpen\}>/);
     assert.doesNotMatch(code, /run\("reboot"\)\.then\(\(\) => setRebootOpen\(false\)\)/);
