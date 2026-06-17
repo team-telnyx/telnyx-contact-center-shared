@@ -245,7 +245,7 @@ send_ssm() {
 
   if [ "$status" != "Success" ]; then
     echo "SSM deploy failed on $instance_id with status $status" >&2
-    exit 5
+    return 5
   fi
 }
 
@@ -272,6 +272,7 @@ wait_target_state() {
 
 deploy_instance() {
   local instance_id="$1"
+  local deploy_status=0
   echo "Deploying $TARGET to $instance_id from $ARTIFACT"
 
   if [ "$TYPE" = "ha" ]; then
@@ -287,7 +288,11 @@ deploy_instance() {
     fi
   fi
 
-  send_ssm "$instance_id"
+  if send_ssm "$instance_id"; then
+    deploy_status=0
+  else
+    deploy_status=$?
+  fi
 
   if [ "$TYPE" = "ha" ]; then
     if [ -n "$APP_TG" ]; then
@@ -301,6 +306,8 @@ deploy_instance() {
       wait_target_state "$WS_TG" "$instance_id" healthy "$WS_PORT"
     fi
   fi
+
+  return "$deploy_status"
 }
 
 for instance_id in "${INSTANCE_IDS[@]}"; do

@@ -186,7 +186,11 @@ zstd -dc image.tar.zst | docker load
 
 echo "Recreating container $CONTAINER_NAME with $IMAGE_NAME"
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-run_container "$IMAGE_NAME"
+if ! run_container "$IMAGE_NAME"; then
+  echo "New image failed to start: $IMAGE_NAME" >&2
+  rollback || true
+  exit 5
+fi
 
 if ! wait_for_health; then
   echo "New image failed health checks: $IMAGE_NAME" >&2
