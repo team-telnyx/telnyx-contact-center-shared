@@ -1152,7 +1152,7 @@ function PhoneEditor({ draft, setDraft, editing, phone, valid, saving, bridges =
               <span className="text-xs text-muted-foreground">Last user agent</span>
               <span className="truncate text-xs">{phone.last_user_agent || "—"}</span>
             </div>
-            <PhoneMaintenanceActions phone={phone} rebooting={rebooting} />
+            <PhoneMaintenanceActions phone={phone} rebootPhones={rebootPhones} rebooting={rebooting} />
           </div>
         </SettingCard>
       ) : null}
@@ -1385,7 +1385,7 @@ function CtiIconButton({ action, label, icon: Icon, active = false, disabled = f
   );
 }
 
-function PhoneMaintenanceActions({ phone, rebooting = false }) {
+function PhoneMaintenanceActions({ phone, rebootPhones, rebooting = false }) {
   const [busy, setBusy] = useState(null);
   const reachableIp = phone?.last_ip || phone?.ip_address || "";
   const [hostOverride, setHostOverride] = useState("");
@@ -1429,7 +1429,7 @@ function PhoneMaintenanceActions({ phone, rebooting = false }) {
       <div className="grid grid-cols-3 gap-2" data-testid="hp-sip-registration-actions">
         {actionButton("status", "Check status", IconRefresh, "hp-sip-check-status")}
         {actionButton("reprovision", "Re-provision", IconWand, "hp-sip-reprovision")}
-        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => run("reboot"), rebooting || !phone?.id)}
+        {actionButton("reboot", "Reboot", IconPower, "hp-sip-reboot", () => rebootPhones?.([phone.id]), rebooting || !phone?.id)}
       </div>
     </div>
   );

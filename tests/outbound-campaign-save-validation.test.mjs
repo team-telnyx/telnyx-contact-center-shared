@@ -83,7 +83,7 @@ test("new campaign save caps required rotating FROM slots to runtime rotation li
 test("campaign save requires a Reference matching the selected mode", () => {
   const missingQueueReference = campaignSaveRequirements({
     ...baseCampaign,
-    mode: "preview",
+    mode: "power",
     handler_type: "queue",
     handler_ref: "",
   });

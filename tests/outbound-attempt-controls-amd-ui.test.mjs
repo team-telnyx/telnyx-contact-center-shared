@@ -66,7 +66,7 @@ test("campaign inventory keeps contact list names visible and removes readiness 
   const source = await sourcePromise;
   const campaignsView = functionSource(source, "CampaignsView", "ContactListsView");
 
-  assert.match(campaignsView, /columns=\{\["Name", "Status", "List", "Mode", "Actions"\]\}/, "campaign table should not render the Ready column");
+  assert.match(campaignsView, /columns=\{\["Name", "Mode", "State", "Contact List", "Active", "Actions"\]\}/, "campaign table should keep current inventory columns without the old Ready percentage column");
   assert.doesNotMatch(campaignsView, /"Ready"/, "Ready column header should be removed from Campaigns inventory");
   assert.doesNotMatch(campaignsView, /readiness\(c\)/, "Ready percentage cell should be removed with the column");
   assert.match(campaignsView, /campaignListName\(c, contactLists\)/, "List cell should resolve names from attached contactLists when the campaign payload lacks contact_list_name");
