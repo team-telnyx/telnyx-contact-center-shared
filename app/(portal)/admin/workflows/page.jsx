@@ -22,7 +22,9 @@ import {
   IconEdit,
   IconTrash,
   IconCopy,
+  IconDownload,
   IconPlus,
+  IconUpload,
 } from "@tabler/icons-react";
 import {
   Table,
@@ -147,6 +149,82 @@ export default function AdminWorkflowsPage() {
     }
   }
 
+  async function handleExport(workflow) {
+    try {
+      const res = await fetch(`/api/admin/workflows/${encodeURIComponent(workflow.id)}/export`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to export workflow");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = String(workflow.name || "agent_assist")
+        .replace(/[^a-z0-9]/gi, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+        .toLowerCase();
+      link.href = url;
+      link.download = `${safeName || "agent_assist"}_workflow.json`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      notify({
+        title: "Workflow exported",
+        description: "The workflow JSON bundle was downloaded without assistant settings.",
+        variant: "success",
+      });
+    } catch (err) {
+      notify({
+        title: "Export failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+
+    input.onchange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const bundle = JSON.parse(await file.text());
+        const res = await fetch("/api/admin/workflows/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bundle),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data?.error || "Failed to import workflow");
+
+        notify({
+          title: "Workflow imported",
+          description: "Imported workflow is inactive until you review and enable it.",
+          variant: "success",
+        });
+        load();
+      } catch (err) {
+        notify({
+          title: "Import failed",
+          description: String(err.message || err),
+          variant: "error",
+        });
+      }
+    };
+
+    input.click();
+  }
+
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   // Extract unique categories from current items
@@ -170,6 +248,10 @@ export default function AdminWorkflowsPage() {
   }
 
   const headerActions = <>
+    <Button variant="outline" onClick={handleImport}>
+      <IconUpload className="size-4 mr-1" />
+      Import
+    </Button>
     <Button
       variant="secondary"
       onClick={() =>
@@ -333,6 +415,14 @@ export default function AdminWorkflowsPage() {
                                 title="Duplicate workflow"
                               >
                                 <IconCopy className="size-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleExport(workflow)}
+                                className="inline-flex items-center text-violet-500"
+                                title="Export workflow"
+                              >
+                                <IconDownload className="size-4" />
                               </button>
                               <Dialog>
                                 <DialogTrigger asChild>
