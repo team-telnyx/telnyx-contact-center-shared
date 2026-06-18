@@ -5,6 +5,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { getRuntimeLoggingConfig } from "@/lib/logger/runtime-config.mjs";
 import { listLogFiles, queryLogEntries } from "@/lib/logger/log-reader.mjs";
+import { queryLiveLogEvents } from "@/lib/logger/live-store.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,33 @@ export async function GET(request) {
       const poll = async () => {
         if (closed) return;
         try {
+          if (config.liveEnabled === true) {
+            const result = await queryLiveLogEvents({
+              env: queryParam(request, "env"),
+              nodeName: queryParam(request, "nodeName"),
+              level: queryParam(request, "level"),
+              topic: queryParam(request, "topic"),
+              topics: queryParams(request, "topics"),
+              runId: queryParam(request, "runId"),
+              search: queryParam(request, "search"),
+              from: queryParam(request, "from"),
+              to: queryParam(request, "to"),
+              limit: queryParam(request, "limit") || 100,
+            });
+            if (!seen.size) {
+              result.entries.forEach((entry) => seen.add(entryKey(entry)));
+              send("ready", { ok: true, source: "postgres-live", entries: result.entries });
+              return;
+            }
+            for (let index = result.entries.length - 1; index >= 0; index -= 1) {
+              const entry = result.entries[index];
+              const key = entryKey(entry);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              if (!send("log", entry)) break;
+            }
+            return;
+          }
           const [latestFile] = await listLogFiles({ logDir, limit: 1 });
           if (!latestFile?.name) {
             send("heartbeat", { ok: true, file: null });
@@ -93,6 +121,7 @@ export async function GET(request) {
               level: queryParam(request, "level"),
               topic: queryParam(request, "topic"),
               topics: queryParams(request, "topics"),
+              nodeName: queryParam(request, "nodeName"),
               runId: queryParam(request, "runId"),
               search: queryParam(request, "search"),
               from: queryParam(request, "from"),
@@ -110,6 +139,7 @@ export async function GET(request) {
             level: queryParam(request, "level"),
             topic: queryParam(request, "topic"),
             topics: queryParams(request, "topics"),
+            nodeName: queryParam(request, "nodeName"),
             runId: queryParam(request, "runId"),
             search: queryParam(request, "search"),
             from: queryParam(request, "from"),

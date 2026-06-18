@@ -60,6 +60,13 @@ export async function PUT(request) {
       "fileEnabled",
       "rotationMode",
       "retentionDays",
+      "liveEnabled",
+      "liveTtlMinutes",
+      "archiveEnabled",
+      "archiveProvider",
+      "archiveBucket",
+      "archivePrefix",
+      "spoolEnabled",
       "topicLevels",
       "topicEnabled",
     ];

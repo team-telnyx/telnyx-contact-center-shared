@@ -76,6 +76,22 @@ test("queryLogEntries accepts multiple selected topics", async () => {
   assert.deepEqual(result.entries.map((entry) => entry.msg), ["webhook handled", "transcript", "matched route"]);
 });
 
+test("queryLogEntries filters file-backed JSONL logs by node metadata", async () => {
+  const { queryLogEntries } = await freshModule();
+  const dir = await makeLogDir();
+  await writeFile(path.join(dir, "app-2026-06-10.jsonl"), [
+    JSON.stringify({ time: "2026-06-10T10:00:00.000Z", level: "info", topic: "app", nodeName: "cc-ha-app-0", msg: "node zero" }),
+    JSON.stringify({ time: "2026-06-10T10:01:00.000Z", level: "info", topic: "app", nodeName: "cc-ha-app-1", msg: "node one" }),
+    JSON.stringify({ time: "2026-06-10T10:02:00.000Z", level: "info", topic: "app", nodeId: "i-node-2", msg: "node id" }),
+  ].join("\n"));
+
+  const byName = await queryLogEntries({ logDir: dir, file: "app-2026-06-10.jsonl", nodeName: "cc-ha-app-1", limit: 20 });
+  assert.deepEqual(byName.entries.map((entry) => entry.msg), ["node one"]);
+
+  const byId = await queryLogEntries({ logDir: dir, file: "app-2026-06-10.jsonl", nodeName: "i-node-2", limit: 20 });
+  assert.deepEqual(byId.entries.map((entry) => entry.msg), ["node id"]);
+});
+
 test("queryLogEntries is newest-first, bounded, and never reads path traversal filenames", async () => {
   const { queryLogEntries } = await freshModule();
   const dir = await makeLogDir();

@@ -5,6 +5,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { getRuntimeLoggingConfig } from "@/lib/logger/runtime-config.mjs";
 import { listLogFiles, queryLogEntries } from "@/lib/logger/log-reader.mjs";
+import { queryLiveLogEvents } from "@/lib/logger/live-store.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,21 @@ export async function GET(request) {
       const files = await listLogFiles({ logDir, limit: queryParam(request, "limit") || 30 });
       return noStore({ ok: true, files });
     }
+    if (mode === "live") {
+      const result = await queryLiveLogEvents({
+        env: queryParam(request, "env"),
+        nodeName: queryParam(request, "nodeName"),
+        level: queryParam(request, "level"),
+        topic: queryParam(request, "topic"),
+        topics: queryParams(request, "topics"),
+        runId: queryParam(request, "runId"),
+        search: queryParam(request, "search"),
+        from: queryParam(request, "from"),
+        to: queryParam(request, "to"),
+        limit: queryParam(request, "limit") || 100,
+      });
+      return noStore({ ok: true, ...result });
+    }
 
     const latestOnly = queryParam(request, "latest") === "1";
     const [latestFile] = latestOnly && !queryParam(request, "file") ? await listLogFiles({ logDir, limit: 1 }) : [];
@@ -56,6 +72,7 @@ export async function GET(request) {
       level: queryParam(request, "level"),
       topic: queryParam(request, "topic"),
       topics: queryParams(request, "topics"),
+      nodeName: queryParam(request, "nodeName"),
       runId: queryParam(request, "runId"),
       search: queryParam(request, "search"),
       from: queryParam(request, "from"),

@@ -58,7 +58,7 @@ const NAV_ITEMS = [
 ];
 const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 const LOGGING_FILTER_STATE_STORAGE_KEY = "admin.logging.filters.v1";
-const DEFAULT_LOG_FILTERS = { file: "", level: "", topics: [], runId: "", search: "", from: "", to: "", limit: "100" };
+const DEFAULT_LOG_FILTERS = { file: "", level: "", topics: [], nodeName: "", runId: "", search: "", from: "", to: "", limit: "100" };
 const badgeTone = {
   trace: "border-zinc-500/35 text-zinc-600 dark:text-zinc-300",
   debug: "border-violet-500/40 text-violet-700 dark:text-violet-300",
@@ -160,6 +160,10 @@ function mutableConfigPayload(config) {
   }
   const globalLevel = LEVELS.includes(config.globalLevel) ? config.globalLevel : "info";
   const rotationMode = ROTATION_MODES.includes(config.rotationMode) ? config.rotationMode : "daily";
+  const liveTtlMinutes = Number(config.liveTtlMinutes || 15);
+  if (!Number.isFinite(liveTtlMinutes) || liveTtlMinutes < 5 || liveTtlMinutes > 30) {
+    throw new Error("Live buffer TTL must be between 5 and 30 minutes");
+  }
   return {
     enabled: config.enabled === true,
     globalLevel,
@@ -169,6 +173,13 @@ function mutableConfigPayload(config) {
     fileEnabled: config.fileEnabled === true,
     rotationMode,
     retentionDays,
+    liveEnabled: config.liveEnabled === true,
+    liveTtlMinutes,
+    archiveEnabled: config.archiveEnabled === true,
+    archiveProvider: "s3",
+    archiveBucket: config.archiveBucket || "",
+    archivePrefix: config.archivePrefix || "logs",
+    spoolEnabled: config.spoolEnabled === true,
     topicLevels: config.topicLevels || {},
     topicEnabled: config.topicEnabled || {},
     redactionEnabled: true,
@@ -267,7 +278,8 @@ export default function AdminLoggingPage() {
 
       const effectiveFilters = { ...logFilters, ...filterOverrides };
       const params = new URLSearchParams();
-      if (active === "live" && !effectiveFilters.file) params.set("latest", "1");
+      if (active === "live" && config?.liveEnabled === true) params.set("mode", "live");
+      else if (active === "live" && !effectiveFilters.file) params.set("latest", "1");
       appendLogFilterParams(params, effectiveFilters);
       const entriesResponse = await fetch(`/api/admin/logging/logs?${params.toString()}`, { cache: "no-store" });
       const entriesData = await entriesResponse.json().catch(() => ({}));
@@ -279,7 +291,7 @@ export default function AdminLoggingPage() {
     } finally {
       setLogsLoading(false);
     }
-  }, [active, logFilters]);
+  }, [active, config?.liveEnabled, logFilters]);
 
   React.useEffect(() => {
     loadConfig();
@@ -305,6 +317,7 @@ export default function AdminLoggingPage() {
     appendLogFilterParams(params, {
       level: logFilters.level,
       topics: selectedTopics(logFilters),
+      nodeName: logFilters.nodeName,
       runId: logFilters.runId,
       search: logFilters.search,
       from: logFilters.from,
@@ -338,7 +351,7 @@ export default function AdminLoggingPage() {
       setLiveConnected(false);
       source.close();
     };
-  }, [active, logFilters.level, logFilters.topics, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
+  }, [active, logFilters.level, logFilters.topics, logFilters.nodeName, logFilters.runId, logFilters.search, logFilters.from, logFilters.to, logFilters.limit]);
 
   React.useEffect(() => {
     if (active !== "files") {
@@ -693,11 +706,11 @@ function SettingsView({ config, topicGroups, updateConfig, updateTopic, applyPre
 }
 
 function SettingsContext({ config, updateConfig, applyPreset, saving }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSettings} title="Global logging" subtitle="Runtime level and sinks"><div className="space-y-4"><div><Label className="mb-2 block text-sm font-medium">Global level</Label><LevelTabs value={config.globalLevel || "info"} onChange={(level) => updateConfig({ globalLevel: level })} compact /></div><ToggleRow label="Console logging" checked={config.consoleEnabled !== false} onCheckedChange={(checked) => updateConfig({ consoleEnabled: checked })} /><ToggleRow label="Pretty console" description="Keep pino-pretty for local operator readability." checked={config.consolePretty === true} onCheckedChange={(checked) => updateConfig({ consolePretty: checked })} /><ToggleRow label="Friendly console" description="Show one-line user-friendly console messages instead of expanded JSON object fields." checked={config.consoleFriendly === true} onCheckedChange={(checked) => updateConfig({ consoleFriendly: checked })} /><ToggleRow label="JSONL file logging" checked={config.fileEnabled === true} onCheckedChange={(checked) => updateConfig({ fileEnabled: checked })} /><ConfigSelect label="Rotation" value={config.rotationMode || "daily"} options={ROTATION_MODES.map((mode) => ({ value: mode, label: title(mode) }))} onChange={(rotationMode) => updateConfig({ rotationMode })} /><label className="space-y-2 text-sm"><span className="font-medium">Retention days</span><Input type="number" min="1" max="365" value={config.retentionDays || 14} onChange={(event) => updateConfig({ retentionDays: event.target.value })} /></label></div></SettingCard><SettingCard icon={IconAlertTriangle} title="Quick presets" subtitle="Debug presets ask for confirmation"><div className="space-y-2">{PRESETS.map((preset) => <Button key={preset.id} type="button" variant="outline" className="w-full justify-start" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)}>{preset.label}{preset.ttl ? <span className="ml-auto text-xs text-muted-foreground">{preset.ttl}m</span> : null}</Button>)}</div></SettingCard><SettingCard icon={IconShieldCheck} title="Read-only policy" subtitle="Backend-controlled values"><div className="space-y-2 text-xs text-muted-foreground"><div className="rounded-lg border bg-muted/20 p-3">Log directory/path are intentionally not editable from the browser.</div><div className="rounded-lg border bg-muted/20 p-3">Redaction is fail-closed and re-applied when reading historical log files.</div></div></SettingCard></div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconSettings} title="Global logging" subtitle="Runtime level and sinks"><div className="space-y-4"><div><Label className="mb-2 block text-sm font-medium">Global level</Label><LevelTabs value={config.globalLevel || "info"} onChange={(level) => updateConfig({ globalLevel: level })} compact /></div><ToggleRow label="Console logging" checked={config.consoleEnabled !== false} onCheckedChange={(checked) => updateConfig({ consoleEnabled: checked })} /><ToggleRow label="Pretty console" description="Keep pino-pretty for local operator readability." checked={config.consolePretty === true} onCheckedChange={(checked) => updateConfig({ consolePretty: checked })} /><ToggleRow label="Friendly console" description="Show one-line user-friendly console messages instead of expanded JSON object fields." checked={config.consoleFriendly === true} onCheckedChange={(checked) => updateConfig({ consoleFriendly: checked })} /><ToggleRow label="JSONL file logging" checked={config.fileEnabled === true} onCheckedChange={(checked) => updateConfig({ fileEnabled: checked })} /><ToggleRow label="Postgres live buffer" description="Store recent application log events for HA live viewing across nodes." checked={config.liveEnabled === true} onCheckedChange={(checked) => updateConfig({ liveEnabled: checked })} /><label className="space-y-2 text-sm"><span className="font-medium">Live buffer TTL</span><Input type="number" min="5" max="30" value={config.liveTtlMinutes || 15} onChange={(event) => updateConfig({ liveTtlMinutes: event.target.value })} /><span className="text-xs text-muted-foreground">Minutes to keep live application logs in Postgres (5–30).</span></label><ToggleRow label="Object archive" description="Archive JSONL chunks to provider-agnostic object storage." checked={config.archiveEnabled === true} onCheckedChange={(checked) => updateConfig({ archiveEnabled: checked })} /><ConfigSelect label="Archive provider" value={config.archiveProvider || "s3"} options={[{ value: "s3", label: "S3 compatible" }]} onChange={(archiveProvider) => updateConfig({ archiveProvider })} /><label className="space-y-2 text-sm"><span className="font-medium">Archive bucket</span><Input value={config.archiveBucket || ""} onChange={(event) => updateConfig({ archiveBucket: event.target.value })} placeholder="cc-prod-logs" /></label><label className="space-y-2 text-sm"><span className="font-medium">Archive prefix</span><Input value={config.archivePrefix || "logs"} onChange={(event) => updateConfig({ archivePrefix: event.target.value })} placeholder="logs/cc-prod" /></label><ToggleRow label="Local spool buffer" description="Keep a local emergency spool while archive uploads are unavailable. Directory is backend-owned via LOG_SPOOL_DIR." checked={config.spoolEnabled === true} onCheckedChange={(checked) => updateConfig({ spoolEnabled: checked })} /><ConfigSelect label="Rotation" value={config.rotationMode || "daily"} options={ROTATION_MODES.map((mode) => ({ value: mode, label: title(mode) }))} onChange={(rotationMode) => updateConfig({ rotationMode })} /><label className="space-y-2 text-sm"><span className="font-medium">Retention days</span><Input type="number" min="1" max="365" value={config.retentionDays || 14} onChange={(event) => updateConfig({ retentionDays: event.target.value })} /></label></div></SettingCard><SettingCard icon={IconAlertTriangle} title="Quick presets" subtitle="Debug presets ask for confirmation"><div className="space-y-2">{PRESETS.map((preset) => <Button key={preset.id} type="button" variant="outline" className="w-full justify-start" disabled={saving} onClick={() => applyPreset(preset.id, preset.ttl)}>{preset.label}{preset.ttl ? <span className="ml-auto text-xs text-muted-foreground">{preset.ttl}m</span> : null}</Button>)}</div></SettingCard><SettingCard icon={IconShieldCheck} title="Read-only policy" subtitle="Backend-controlled values"><div className="space-y-2 text-xs text-muted-foreground"><div className="rounded-lg border bg-muted/20 p-3">Log directory/path are intentionally not editable from the browser.</div><div className="rounded-lg border bg-muted/20 p-3">Redaction is fail-closed and re-applied when reading historical log files.</div></div></SettingCard></div>;
 }
 
 function LogFiltersPanel({ files, filters, currentFile, topicGroups, update, onApply, loading }) {
-  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topicGroups={topicGroups} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button type="button" className="w-full" onClick={() => onApply()} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Apply filters</Button></div></SettingCard>{currentFile ? <SettingCard icon={IconFileText} title="Current source" subtitle={currentFile.name}><div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Size</span><span>{formatBytes(currentFile.size)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Modified</span><span>{formatLogTime(currentFile.mtime || currentFile.modifiedAt)}</span></div></div></SettingCard> : null}</div>;
+  return <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4"><SettingCard icon={IconFilter} title="Filters" subtitle="Applied to the active log preview"><div className="space-y-3"><ConfigSelect label="File" value={filters.file || "__latest__"} options={[{ value: "__latest__", label: "Latest files" }, ...files.map((file) => ({ value: file.name, label: file.name }))]} onChange={(value) => update("file", value === "__latest__" ? "" : value)} /><ConfigSelect label="Level" value={filters.level || "__all__"} options={LOG_FILTER_LEVELS.map((level) => ({ value: level || "__all__", label: level || "All levels" }))} onChange={(value) => update("level", value === "__all__" ? "" : value)} /><TopicMultiSelect label="Topic" topicGroups={topicGroups} selectedTopics={filters.topics || []} onChange={(selected) => update("topics", selected)} /><label className="space-y-2 text-sm"><span className="font-medium">Node</span><Input placeholder="All nodes / cc-ha-app-0" value={filters.nodeName || ""} onChange={(event) => update("nodeName", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Run ID</span><Input placeholder="runId" value={filters.runId} onChange={(event) => update("runId", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">Search</span><div className="relative"><IconSearch className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="message, call ID, interaction ID…" value={filters.search} onChange={(event) => update("search", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") onApply(); }} /></div></label><div className="grid grid-cols-2 gap-2"><label className="space-y-2 text-sm"><span className="font-medium">From</span><Input type="datetime-local" value={filters.from} onChange={(event) => update("from", event.target.value)} /></label><label className="space-y-2 text-sm"><span className="font-medium">To</span><Input type="datetime-local" value={filters.to} onChange={(event) => update("to", event.target.value)} /></label></div><label className="space-y-2 text-sm"><span className="font-medium">Limit</span><Input type="number" min="1" max="500" value={filters.limit} onChange={(event) => update("limit", event.target.value)} /></label><Button type="button" className="w-full" onClick={() => onApply()} disabled={loading}>{loading ? <IconLoader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Apply filters</Button></div></SettingCard>{currentFile ? <SettingCard icon={IconFileText} title="Current source" subtitle={currentFile.name}><div className="space-y-2 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Size</span><span>{formatBytes(currentFile.size)}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Modified</span><span>{formatLogTime(currentFile.mtime || currentFile.modifiedAt)}</span></div></div></SettingCard> : null}</div>;
 }
 
 function TopicMultiSelect({ label, topicGroups, selectedTopics, onChange }) {
@@ -782,6 +795,7 @@ function LogEntryCard({ entry }) {
   const topic = entry.topic || entry.scope || "app";
   const message = entry.message || entry.msg || entry.event || "Log entry";
   const time = entry.time || entry.ts || entry.timestamp;
+  const nodeName = entry.nodeName || entry.node_name || "";
   const meta = Object.entries(entry).filter(([key]) => !["level", "severity", "topic", "scope", "msg", "message", "event", "time", "ts", "timestamp"].includes(key));
   const maxCompactMetaItems = 4;
   const compactMeta = meta.slice(0, maxCompactMetaItems);
@@ -807,6 +821,7 @@ function LogEntryCard({ entry }) {
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Badge variant="outline" className={badgeTone[level] || badgeTone.info}>{level.toUpperCase()}</Badge>
+          {nodeName ? <Badge variant="outline" className="shrink-0 bg-card font-mono text-[11px]">Node {nodeName}</Badge> : null}
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{topic}</span>
           <span className="line-clamp-1 min-w-0 break-all text-sm font-medium">{String(message)}</span>
         </div>
