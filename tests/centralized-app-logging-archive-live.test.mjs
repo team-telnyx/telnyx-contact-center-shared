@@ -147,6 +147,55 @@ test("application log sink shutdown flushes pending archive batches", async () =
   assert.match(putCalls[0].Body, /"msg":"queued"/);
 });
 
+test("application log sink shutdown waits for an active drain before flushing archives", async () => {
+  const putCalls = [];
+  let insertCalls = 0;
+  let releaseInsert;
+  let firstInsertStarted;
+  const firstInsertStartedPromise = new Promise((resolve) => { firstInsertStarted = resolve; });
+  const releaseInsertPromise = new Promise((resolve) => { releaseInsert = resolve; });
+  const pool = {
+    query: async (text) => {
+      if (/INSERT INTO app_log_live_events/i.test(String(text))) {
+        insertCalls += 1;
+        if (insertCalls === 1) {
+          firstInsertStarted();
+          await releaseInsertPromise;
+        }
+      }
+      return { rows: [{ id: insertCalls }] };
+    },
+  };
+  const { enqueueApplicationLogSinks, flushApplicationLogSinks } = await fresh(sinksUrl);
+  const config = {
+    liveEnabled: true,
+    archiveEnabled: true,
+    archiveProvider: "s3",
+    archiveBucket: "cc-ha-logs",
+    archivePrefix: "logs/cc-ha",
+    archiveBatchSize: 10,
+    archiveFlushMs: 60000,
+  };
+
+  enqueueApplicationLogSinks({ time: "2026-06-18T10:01:02.123Z", nodeName: "cc-ha-app-0", msg: "first" }, config, { pool });
+  await firstInsertStartedPromise;
+  enqueueApplicationLogSinks({ time: "2026-06-18T10:01:03.123Z", nodeName: "cc-ha-app-0", msg: "second" }, config, { pool });
+
+  let flushed = false;
+  const flushPromise = flushApplicationLogSinks({ pool, s3Client: { send: async (command) => putCalls.push(command.input) } }).then(() => { flushed = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(flushed, false);
+  assert.equal(putCalls.length, 0);
+
+  releaseInsert();
+  await flushPromise;
+
+  assert.equal(insertCalls, 2);
+  assert.equal(putCalls.length, 1);
+  assert.match(putCalls[0].Body, /"msg":"first"/);
+  assert.match(putCalls[0].Body, /"msg":"second"/);
+});
+
 test("local spool persists redacted JSONL through backend-owned spool directory", async () => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), "cc-log-spool-"));
   const previous = process.env.LOG_SPOOL_DIR;
