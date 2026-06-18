@@ -60,6 +60,7 @@ export async function GET(request) {
         from: queryParam(request, "from"),
         to: queryParam(request, "to"),
         limit: queryParam(request, "limit") || 100,
+        ttlMinutes: config.liveTtlMinutes,
       });
       return noStore({ ok: true, ...result });
     }

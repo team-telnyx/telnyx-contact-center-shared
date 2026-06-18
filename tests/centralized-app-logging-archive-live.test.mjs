@@ -60,7 +60,19 @@ test("queryLiveLogEvents honors multi-topic and time-window filters for live Pos
   assert.match(select.text, /topic = ANY/);
   assert.match(select.text, /event_time >=/);
   assert.match(select.text, /event_time <=/);
+  assert.match(select.text, /created_at >=/);
   assert.deepEqual(select.params[0], ["platform.app", "telnyx.streaming"]);
+});
+
+test("queryLiveLogEvents enforces live TTL retention during reads", async () => {
+  const { queryLiveLogEvents } = await fresh(liveStoreUrl);
+  const pool = fakePool();
+
+  await queryLiveLogEvents({ pool, ttlMinutes: 7, now: new Date("2026-06-18T10:20:00Z") });
+
+  const select = pool.queries.find((q) => /SELECT payload FROM app_log_live_events/i.test(q.text));
+  assert.match(select.text, /created_at >=/);
+  assert.equal(select.params.some((param) => param instanceof Date && param.toISOString() === "2026-06-18T10:13:00.000Z"), true);
 });
 
 test("object archive builds provider-agnostic env/date/node/run chunk keys and writes S3-compatible objects", async () => {
@@ -110,6 +122,29 @@ test("object archive queues bounded batches instead of writing one S3 object per
   assert.match(putCalls[0].Body, /"msg":"two"/);
   assert.equal(putCalls[0].Body.trim().split("\n").length, 2);
   assert.doesNotMatch(putCalls[0].Body, /secret-one/);
+});
+
+test("application log sink shutdown flushes pending archive batches", async () => {
+  const putCalls = [];
+  const { writeApplicationLogSinks, flushApplicationLogSinks } = await fresh(sinksUrl);
+  const config = {
+    archiveEnabled: true,
+    archiveProvider: "s3",
+    archiveBucket: "cc-ha-logs",
+    archivePrefix: "logs/cc-ha",
+    archiveBatchSize: 10,
+    archiveFlushMs: 60000,
+  };
+
+  await writeApplicationLogSinks(
+    { time: "2026-06-18T10:01:02.123Z", nodeName: "cc-ha-app-0", runId: "run-1", msg: "queued" },
+    config,
+    { pool: fakePool() },
+  );
+  await flushApplicationLogSinks({ s3Client: { send: async (command) => putCalls.push(command.input) } });
+
+  assert.equal(putCalls.length, 1);
+  assert.match(putCalls[0].Body, /"msg":"queued"/);
 });
 
 test("local spool persists redacted JSONL through backend-owned spool directory", async () => {

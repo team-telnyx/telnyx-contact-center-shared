@@ -9,6 +9,7 @@ import {
   getRuntimeLoggingConfig,
   tryLoadRuntimeLoggingConfigEarly,
 } from "../lib/logger/runtime-config.mjs";
+import { flushApplicationLogSinks } from "../lib/logger/app-log-sinks.mjs";
 import {
   allowsStreamingRole,
   allowsWebRole,
@@ -27,6 +28,10 @@ let runtimeLoggingConfig = await tryLoadRuntimeLoggingConfigEarly();
 let runtimeLoggingConfigRefreshAt = Date.now();
 let runtimeLoggingConfigRefreshInFlight = false;
 const RUNTIME_LOGGING_CONFIG_REFRESH_MS = 5000;
+
+async function flushLoggingSinksBeforeExit() {
+  await flushApplicationLogSinks().catch(() => null);
+}
 
 function refreshRuntimeLoggingConfigIfStale() {
   const now = Date.now();
@@ -65,7 +70,7 @@ async function waitUntilShutdown() {
     for (const signal of ["SIGINT", "SIGTERM"]) {
       process.once(signal, () => {
         logger.info("process_role_runtime_shutdown_signal", { signal, processRole });
-        resolve(signal);
+        flushLoggingSinksBeforeExit().finally(() => resolve(signal));
       });
     }
   });
@@ -184,16 +189,16 @@ function startWebRuntime() {
       logger.error("web_server_exited", payload);
     }
     if (signal) {
-      process.kill(process.pid, signal);
+      flushLoggingSinksBeforeExit().finally(() => process.kill(process.pid, signal));
     } else {
-      process.exit(code ?? 1);
+      flushLoggingSinksBeforeExit().finally(() => process.exit(code ?? 1));
     }
   });
 
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => {
       logger.info("web_server_shutdown_signal", { signal, processRole });
-      child.kill(signal);
+      flushLoggingSinksBeforeExit().finally(() => child.kill(signal));
     });
   }
 }

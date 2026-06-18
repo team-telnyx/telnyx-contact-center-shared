@@ -92,6 +92,7 @@ export async function GET(request) {
               from: queryParam(request, "from"),
               to: queryParam(request, "to"),
               limit: queryParam(request, "limit") || 100,
+              ttlMinutes: config.liveTtlMinutes,
             });
             if (!seen.size) {
               result.entries.forEach((entry) => seen.add(entryKey(entry)));
