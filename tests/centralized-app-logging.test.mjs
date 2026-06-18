@@ -58,9 +58,10 @@ test("runtime logging config exposes centralized app logging settings with live 
   }
 });
 
-test("managed archive bucket is derived from APP_ENV and account env", async () => {
+test("managed archive bucket prefers DEPLOY_GROUP over APP_ENV", async () => {
   const previous = { ...process.env };
-  process.env.APP_ENV = "cc-prod";
+  process.env.APP_ENV = "production";
+  process.env.DEPLOY_GROUP = "cc-prod";
   process.env.LOG_ARCHIVE_ACCOUNT_ID = "260957529682";
   try {
     const { managedArchiveBucketName, normalizeRuntimeLoggingConfig } = await fresh(runtimeConfigUrl);
