@@ -64,7 +64,6 @@ export async function PUT(request) {
       "liveTtlMinutes",
       "archiveEnabled",
       "archiveProvider",
-      "archiveBucket",
       "archivePrefix",
       "spoolEnabled",
       "topicLevels",
