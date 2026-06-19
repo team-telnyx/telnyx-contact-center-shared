@@ -130,6 +130,10 @@
       "description": "Connections operations"
     },
     {
+      "name": "Conversation Histories",
+      "description": "Semantic vector search over ingested conversation history records using kNN cosine similarity with multi-region fan-out."
+    },
+    {
       "name": "Conversations",
       "description": "Manage historical AI assistant conversations"
     },
@@ -4206,22 +4210,7 @@
         "operationId": "list_advanced_orders_v2",
         "responses": {
           "200": {
-            "description": "An array of Advanced Order Responses",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/AdvancedOrder"
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/ListAdvancedOrderResponse"
           },
           "400": {
             "$ref": "#/components/responses/numbers_BadRequestResponse"
@@ -4319,14 +4308,7 @@
         },
         "responses": {
           "200": {
-            "description": "An Advanced Order Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdvancedOrder"
-                }
-              }
-            }
+            "$ref": "#/components/responses/AdvancedOrderResponse"
           },
           "400": {
             "$ref": "#/components/responses/numbers_BadRequestResponse"
@@ -4369,14 +4351,7 @@
         ],
         "responses": {
           "200": {
-            "description": "An Advanced Order Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdvancedOrder"
-                }
-              }
-            }
+            "$ref": "#/components/responses/AdvancedOrderResponse"
           },
           "400": {
             "$ref": "#/components/responses/numbers_BadRequestResponse"
@@ -6971,6 +6946,303 @@
           }
         },
         "x-latency-category": "responsive"
+      }
+    },
+    "/ai/conversation_histories": {
+      "get": {
+        "summary": "Search conversation histories",
+        "description": "Performs semantic vector search across conversation history records.\n\n**How it works:**\n1. The query text is embedded into a 1024-dimensional vector using the multilingual-e5-large model.\n2. The vector is sent to regional OpenSearch clusters for kNN search using HNSW cosine similarity.\n3. When no region is specified, all regions are queried in parallel (fan-out) and results are merged by score.\n4. Results are ranked by cosine similarity score (descending) and truncated to `top_k`.\n\n**Authentication:** Requires a Telnyx API key via `Authorization: Bearer <key>`. Results are automatically scoped to the caller's organization \u2014 `organization_id` is injected from the auth token and cannot be overridden.\n\n**Chunking:** Records are split into chunks of up to 480 tokens with 64-token overlap at ingestion time. Each search result represents a single chunk, with `chunk_index` and `chunk_total` indicating its position within the original record.\n\n**Filtering:** Use `filter[field][operator]=value` query parameters to narrow results before vector search.\n\nTop-level filterable fields: `user_id`, `record_type`, `region`, `document_id`, `record_id`, `record_created_at`, `ingested_at`, `retention`\n\nNote: `retention` is filter-only \u2014 it can be used to narrow results but is not returned in the response body.\n\nMetadata fields: any field not in the list above is resolved to `data.metadata.<field>` in OpenSearch (e.g., `filter[language]=en` \u2192 `data.metadata.language`).\n\nSupported filter operators:\n- `eq` \u2014 exact match (default when no operator specified)\n- `in` \u2014 match any of comma-separated values\n- `gte`, `gt`, `lte`, `lt` \u2014 range comparisons (useful for date filtering)\n- `contains` \u2014 wildcard substring match\n\n**Examples:**\n```\nGET /v2/ai/conversation_histories?q=billing+issue&record_type=voice&top_k=10\nGET /v2/ai/conversation_histories?q=setup+guide&record_type=knowledge_base&region=USA&min_score=0.5\nGET /v2/ai/conversation_histories?q=refund&record_type=voice&filter[record_created_at][gte]=2026-01-01T00:00:00Z\nGET /v2/ai/conversation_histories?q=outage&record_type=voice&filter[region][in]=USA,DEU\nGET /v2/ai/conversation_histories?q=hold+time&record_type=voice&filter[language]=en\n```",
+        "operationId": "SearchConversationHistories",
+        "tags": [
+          "Conversation Histories"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Natural language search query. The text is embedded into a 1024-dimensional vector and compared against indexed record chunks using kNN cosine similarity.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "example": "customer called about billing issue"
+            }
+          },
+          {
+            "name": "record_type",
+            "in": "query",
+            "required": true,
+            "description": "The type of records to search. Each record type is stored in a separate vector index.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "voice",
+                "message",
+                "ai_pipeline_storage",
+                "knowledge_base"
+              ],
+              "example": "voice"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "description": "Restrict search to a specific region's OpenSearch cluster. When omitted, all regions are queried in parallel (fan-out) and results are merged by cosine similarity score.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "USA",
+                "DEU",
+                "AUS",
+                "UAE"
+              ],
+              "example": "USA"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of results to return. Defaults to 20, maximum 100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 10
+            }
+          },
+          {
+            "name": "min_score",
+            "in": "query",
+            "required": false,
+            "description": "Minimum cosine similarity score threshold (0.0 to 1.0). Results below this threshold are excluded.",
+            "schema": {
+              "type": "number",
+              "format": "float",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.0,
+              "example": 0.5
+            }
+          },
+          {
+            "name": "filter[user_id]",
+            "in": "query",
+            "required": false,
+            "description": "Filter to records owned by a specific user (exact match).",
+            "schema": {
+              "type": "string",
+              "example": "user-123"
+            }
+          },
+          {
+            "name": "filter[record_id]",
+            "in": "query",
+            "required": false,
+            "description": "Filter to chunks belonging to a specific parent record (exact match).",
+            "schema": {
+              "type": "string",
+              "example": "rec-001"
+            }
+          },
+          {
+            "name": "filter[document_id]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by document identifier (exact match). Populated for knowledge_base records.",
+            "schema": {
+              "type": "string",
+              "example": "doc-789"
+            }
+          },
+          {
+            "name": "filter[region][in]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by the region stored on the record. Comma-separated to match multiple regions (USA, DEU, AUS, UAE). Distinct from the `region` parameter, which selects which cluster(s) are queried.",
+            "schema": {
+              "type": "string",
+              "example": "USA,DEU"
+            }
+          },
+          {
+            "name": "filter[record_created_at][gte]",
+            "in": "query",
+            "required": false,
+            "description": "Only include records whose original creation time is on or after this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-01-01T00:00:00Z"
+            }
+          },
+          {
+            "name": "filter[record_created_at][lte]",
+            "in": "query",
+            "required": false,
+            "description": "Only include records whose original creation time is on or before this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-12-31T23:59:59Z"
+            }
+          },
+          {
+            "name": "filter[ingested_at][gte]",
+            "in": "query",
+            "required": false,
+            "description": "Only include records ingested (chunked, embedded, and indexed) on or after this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-01-01T00:00:00Z"
+            }
+          },
+          {
+            "name": "filter[ingested_at][lte]",
+            "in": "query",
+            "required": false,
+            "description": "Only include records ingested (chunked, embedded, and indexed) on or before this ISO 8601 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-12-31T23:59:59Z"
+            }
+          },
+          {
+            "name": "filter[retention]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by retention policy (exact match). Filter-only: not returned in the response body.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful search response with ranked conversation history chunks.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationHistoryResponse"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "rec-001_chunk_0",
+                      "record_id": "rec-001",
+                      "chunk_index": 0,
+                      "chunk_total": 3,
+                      "text": "Customer called regarding a billing discrepancy on their latest invoice. Agent confirmed the charge was correct and explained the prorated amount.",
+                      "score": 0.92,
+                      "record_type": "voice",
+                      "region": "USA",
+                      "user_id": "user-123",
+                      "organization_id": "org-456",
+                      "document_id": null,
+                      "record_created_at": "2026-05-28T12:00:00Z",
+                      "ingested_at": "2026-05-28T12:01:00Z",
+                      "metadata": {
+                        "source": "call-center",
+                        "language": "en"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "total_pages": 1,
+                    "total_results": 1,
+                    "page_number": 1,
+                    "page_size": 20
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters \u2014 unsupported record_type, invalid region, or malformed filter expression.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/transcriptions-search_Errors"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "400",
+                      "title": "Bad Request",
+                      "detail": "Invalid record_type: invalid. Must be one of: voice, message, ai_pipeline_storage, knowledge_base"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid authentication. Provide a valid Telnyx API key via the Authorization: Bearer header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/transcriptions-search_Errors"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "10004",
+                      "title": "Authentication failed",
+                      "detail": "The required authentication headers were either invalid or not included in the request."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed (e.g., missing required parameter).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/transcriptions-search_Errors"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server-side error \u2014 embeddings service unavailable, OpenSearch cluster unreachable, or internal processing failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/transcriptions-search_Errors"
+                },
+                "example": {
+                  "errors": [
+                    {
+                      "code": "10007",
+                      "title": "Unexpected error",
+                      "detail": "An unexpected error occured.",
+                      "meta": {
+                        "url": "https://developers.telnyx.com/docs/overview/errors/10007"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service not initialized \u2014 bootstrap still in progress.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/transcriptions-search_Errors"
+                }
+              }
+            }
+          }
+        },
+        "x-latency-category": "interactive"
       }
     },
     "/ai/conversations": {
@@ -13239,25 +13511,7 @@
         ],
         "responses": {
           "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/BulkSIMCardActionDetailed"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/PaginationMeta"
-                    }
-                  }
-                }
-              }
-            },
-            "description": "Successful Response"
+            "$ref": "#/components/responses/BulkSIMCardActionCollectionResponse"
           },
           "401": {
             "description": "Unauthorized"
@@ -16215,25 +16469,7 @@
         ],
         "responses": {
           "200": {
-            "description": "A list of channel zones",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/GcbChannelZone"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/PaginationMeta"
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/GetGcbChannelZonesRequestResponse"
           },
           "400": {
             "description": "Bad request"
@@ -18057,26 +18293,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Successful response with a list of connections.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "title": "List Connections Response",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Connection"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/connections_PaginationMeta"
-                    }
-                  }
-                }
-              }
-            }
+            "$ref": "#/components/responses/ListConnectionsResponse"
           },
           "400": {
             "$ref": "#/components/responses/connections_BadRequestResponse"
@@ -54930,14 +55147,7 @@
         },
         "responses": {
           "200": {
-            "description": "Successful response upon initiating an AI call.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InitiateAICallResult"
-                }
-              }
-            }
+            "$ref": "#/components/responses/InitiateAICallResponse"
           },
           "401": {
             "$ref": "#/components/responses/UnauthenticatedResponse"
@@ -57612,7 +57822,7 @@
           "Whatsapp Phone Numbers"
         ],
         "summary": "List Whatsapp phone numbers",
-        "operationId": "ListWhatsappPhoneNumbers",
+        "operationId": "ListPhoneNumbers",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageConsolidated"
@@ -64226,13 +64436,13 @@
             "created_before": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-01T00:00:00Z",
+              "example": "2021-01-02T00:00:00Z",
               "description": "Filter for audit events created before a specific date."
             },
             "created_after": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-01T00:00:00Z",
+              "example": "2021-01-02T00:00:00Z",
               "description": "Filter for audit events created after a specific date."
             }
           }
@@ -66612,6 +66822,16 @@
           }
         }
       },
+      "AdvancedOrderResponse": {
+        "description": "An Advanced Order Response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AdvancedOrder"
+            }
+          }
+        }
+      },
       "AuditLogsGenericErrorResponse": {
         "description": "Unexpected error.",
         "content": {
@@ -66695,6 +66915,27 @@
           }
         }
       },
+      "BulkSIMCardActionCollectionResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BulkSIMCardActionDetailed"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/PaginationMeta"
+                }
+              }
+            }
+          }
+        },
+        "description": "Successful Response"
+      },
       "ConflictErrorResponse": {
         "description": "Resource conflict or in use",
         "content": {
@@ -66754,6 +66995,37 @@
           }
         }
       },
+      "GetGcbChannelZonesRequestResponse": {
+        "description": "A list of channel zones",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GcbChannelZone"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/PaginationMeta"
+                }
+              }
+            }
+          }
+        }
+      },
+      "InitiateAICallResponse": {
+        "description": "Successful response upon initiating an AI call.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/InitiateAICallResult"
+            }
+          }
+        }
+      },
       "InternalServerErrorResponse": {
         "description": "Internal server error. An unexpected error occurred on the server. This is typically returned for unhandled exceptions or system failures.",
         "content": {
@@ -66769,6 +67041,46 @@
                   "detail": "Internal server error"
                 }
               ]
+            }
+          }
+        }
+      },
+      "ListAdvancedOrderResponse": {
+        "description": "An array of Advanced Order Responses",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdvancedOrder"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ListConnectionsResponse": {
+        "description": "Successful response with a list of connections.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "title": "List Connections Response",
+              "properties": {
+                "data": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Connection"
+                  }
+                },
+                "meta": {
+                  "$ref": "#/components/schemas/connections_PaginationMeta"
+                }
+              }
             }
           }
         }
@@ -85303,6 +85615,140 @@
         ],
         "title": "ConversationFlowReq",
         "type": "object"
+      },
+      "ConversationHistoryRecord": {
+        "type": "object",
+        "description": "A single search result representing one chunk of a conversation history record. Records are split into chunks of up to 480 tokens with 64-token overlap at ingestion time.",
+        "required": [
+          "id",
+          "record_id",
+          "chunk_index",
+          "chunk_total",
+          "text",
+          "score",
+          "record_type",
+          "region",
+          "user_id",
+          "organization_id",
+          "document_id",
+          "record_created_at",
+          "ingested_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique chunk identifier.",
+            "example": "rec-001_chunk_0"
+          },
+          "record_id": {
+            "type": "string",
+            "description": "Identifier of the parent record. Multiple chunks from the same record share this ID.",
+            "example": "rec-001"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "description": "Zero-based index of this chunk within the parent record.",
+            "example": 0
+          },
+          "chunk_total": {
+            "type": "integer",
+            "description": "Total number of chunks the parent record was split into.",
+            "example": 3
+          },
+          "text": {
+            "type": "string",
+            "description": "The text content of this chunk (up to 480 tokens).",
+            "example": "Customer called regarding a billing discrepancy on their latest invoice."
+          },
+          "score": {
+            "type": "number",
+            "format": "float",
+            "description": "Cosine similarity score between the query vector and this chunk's vector. Higher values indicate greater semantic relevance.",
+            "example": 0.92
+          },
+          "record_type": {
+            "type": "string",
+            "enum": [
+              "voice",
+              "message",
+              "ai_pipeline_storage",
+              "knowledge_base"
+            ],
+            "description": "Type of the record.",
+            "example": "voice"
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "USA",
+              "DEU",
+              "AUS",
+              "UAE"
+            ],
+            "description": "The region where this record is stored.",
+            "example": "USA"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "Identifier of the user who owns this record.",
+            "example": "user-123"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "Identifier of the organization that owns this record.",
+            "example": "org-456"
+          },
+          "document_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Document identifier. Present only for knowledge_base records; null for all other record types.",
+            "example": null
+          },
+          "record_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the original record was created (ISO 8601).",
+            "example": "2026-05-28T12:00:00Z"
+          },
+          "ingested_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the record was chunked, embedded, and indexed (ISO 8601).",
+            "example": "2026-05-28T12:01:00Z"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "default": {},
+            "description": "Arbitrary metadata attached to the record at ingestion time. Stored as a flat_object in OpenSearch and filterable via filter[field]=value query parameters.",
+            "example": {
+              "source": "call-center",
+              "language": "en"
+            }
+          }
+        }
+      },
+      "ConversationHistoryResponse": {
+        "type": "object",
+        "description": "Search response following the standard Telnyx V2 API format.",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Ranked list of matching text chunks, sorted by cosine similarity score descending.",
+            "items": {
+              "$ref": "#/components/schemas/ConversationHistoryRecord"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/transcriptions-search_PaginationMeta"
+          }
+        }
       },
       "ConversationInsight": {
         "type": "object",
@@ -145092,6 +145538,67 @@
         },
         "type": "object"
       },
+      "transcriptions-search_Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "transcriptions-search_Errors": {
+        "type": "object",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/transcriptions-search_Error"
+            }
+          }
+        }
+      },
+      "transcriptions-search_PaginationMeta": {
+        "type": "object",
+        "description": "Pagination metadata following the standard Telnyx V2 API format.",
+        "required": [
+          "total_pages",
+          "total_results",
+          "page_number",
+          "page_size"
+        ],
+        "properties": {
+          "total_pages": {
+            "type": "integer",
+            "description": "Total number of pages.",
+            "example": 1
+          },
+          "total_results": {
+            "type": "integer",
+            "description": "Total number of matching results across all queried regions (before top_k truncation).",
+            "example": 42
+          },
+          "page_number": {
+            "type": "integer",
+            "description": "Current page number (always 1 \u2014 this API does not support pagination, use top_k instead).",
+            "example": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "Number of results per page (equals the effective top_k value).",
+            "example": 20
+          }
+        }
+      },
       "usage-reports_ErrorResponse": {
         "type": "object",
         "properties": {
@@ -145967,6 +146474,11 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      },
+      "transcriptions-search_bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Telnyx API key. Results are automatically scoped to the authenticated user's organization."
       }
     }
   },
