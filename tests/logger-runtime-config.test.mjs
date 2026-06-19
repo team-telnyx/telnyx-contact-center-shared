@@ -95,19 +95,19 @@ test("getRuntimeLoggingConfig normalizes DB rows and honors cache TTL", async ()
 });
 
 
-test("environment overrides win over persisted runtime sink and console settings", async () => {
+test("environment defaults do not override persisted pretty/friendly console toggles", async () => {
   const previousLogDir = process.env.LOG_DIR;
   const previousPretty = process.env.LOG_CONSOLE_PRETTY;
   const previousFriendly = process.env.LOG_CONSOLE_FRIENDLY;
   const previousFile = process.env.LOG_FILE_ENABLED;
   process.env.LOG_DIR = "/tmp/contact-center-dev-logs";
-  process.env.LOG_CONSOLE_PRETTY = "1";
-  process.env.LOG_CONSOLE_FRIENDLY = "1";
+  process.env.LOG_CONSOLE_PRETTY = "0";
+  process.env.LOG_CONSOLE_FRIENDLY = "0";
   process.env.LOG_FILE_ENABLED = "1";
   try {
     const { getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
     resetRuntimeLoggingConfigCache();
-    const pool = createFakePool({ rows: [{ console_pretty: false, file_enabled: false, log_dir: "/app/logs" }] });
+    const pool = createFakePool({ rows: [{ console_pretty: true, console_friendly: true, file_enabled: false, log_dir: "/app/logs" }] });
 
     const config = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:00Z") });
 
@@ -124,6 +124,28 @@ test("environment overrides win over persisted runtime sink and console settings
     else process.env.LOG_CONSOLE_FRIENDLY = previousFriendly;
     if (previousFile === undefined) delete process.env.LOG_FILE_ENABLED;
     else process.env.LOG_FILE_ENABLED = previousFile;
+  }
+});
+
+test("environment pretty/friendly console values seed runtime defaults when no row is stored", async () => {
+  const previousPretty = process.env.LOG_CONSOLE_PRETTY;
+  const previousFriendly = process.env.LOG_CONSOLE_FRIENDLY;
+  process.env.LOG_CONSOLE_PRETTY = "1";
+  process.env.LOG_CONSOLE_FRIENDLY = "1";
+  try {
+    const { getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
+    resetRuntimeLoggingConfigCache();
+    const pool = createFakePool({ rows: [] });
+
+    const config = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:00Z") });
+
+    assert.equal(config.consolePretty, true);
+    assert.equal(config.consoleFriendly, true);
+  } finally {
+    if (previousPretty === undefined) delete process.env.LOG_CONSOLE_PRETTY;
+    else process.env.LOG_CONSOLE_PRETTY = previousPretty;
+    if (previousFriendly === undefined) delete process.env.LOG_CONSOLE_FRIENDLY;
+    else process.env.LOG_CONSOLE_FRIENDLY = previousFriendly;
   }
 });
 
