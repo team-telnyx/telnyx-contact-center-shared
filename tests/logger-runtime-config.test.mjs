@@ -149,6 +149,37 @@ test("environment pretty/friendly console values seed runtime defaults when no r
   }
 });
 
+test("managed archive buckets treat legacy logs prefix as unset and honor env prefix", async () => {
+  const previousBucket = process.env.LOG_ARCHIVE_BUCKET;
+  const previousPrefix = process.env.LOG_ARCHIVE_PREFIX;
+  const previousDeployGroup = process.env.DEPLOY_GROUP;
+  delete process.env.LOG_ARCHIVE_PREFIX;
+  process.env.LOG_ARCHIVE_BUCKET = "shared-runtime-logs";
+  process.env.DEPLOY_GROUP = "prod-eu";
+
+  try {
+    const { getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
+    resetRuntimeLoggingConfigCache();
+    const pool = createFakePool({ rows: [{ archive_bucket: "", archive_prefix: "logs" }] });
+
+    const defaulted = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:00Z") });
+    assert.equal(defaulted.archiveBucket, "shared-runtime-logs");
+    assert.equal(defaulted.archivePrefix, "prod-eu/logs");
+
+    process.env.LOG_ARCHIVE_PREFIX = "/custom/env/logs/";
+    resetRuntimeLoggingConfigCache();
+    const overridden = await getRuntimeLoggingConfig({ pool, forceRefresh: true, now: new Date("2026-06-06T10:00:01Z") });
+    assert.equal(overridden.archivePrefix, "custom/env/logs");
+  } finally {
+    if (previousBucket === undefined) delete process.env.LOG_ARCHIVE_BUCKET;
+    else process.env.LOG_ARCHIVE_BUCKET = previousBucket;
+    if (previousPrefix === undefined) delete process.env.LOG_ARCHIVE_PREFIX;
+    else process.env.LOG_ARCHIVE_PREFIX = previousPrefix;
+    if (previousDeployGroup === undefined) delete process.env.DEPLOY_GROUP;
+    else process.env.DEPLOY_GROUP = previousDeployGroup;
+  }
+});
+
 test("saveRuntimeLoggingConfig validates input, upserts config, writes audit, and resets cache", async () => {
   const { saveRuntimeLoggingConfig, getRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await freshModule();
   resetRuntimeLoggingConfigCache();
