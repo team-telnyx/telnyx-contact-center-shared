@@ -24,8 +24,13 @@ Environment overrides:
   CONTAINER_APP_PORT       default: 3000
   HOST_WS_PORT             default: 3001
   CONTAINER_WS_PORT        default: 3001
-  MEDIA_DIR                default: /home/ubuntu/apps/media if it exists
-  LOG_DIR                  default: /home/ubuntu/apps/logs if it exists
+  MEDIA_DIR                optional host dir to bind to /app/public/media
+  LOG_DIR                  optional host dir to bind to /app/logs
+
+By default this script does not create legacy /home/ubuntu/apps bind mounts.
+Use MEDIA_DIR/LOG_DIR only for deployments that intentionally need host-backed
+local filesystem media or log files. S3-backed media/log archive deployments
+should leave both unset.
   DOCKER_NETWORK           optional existing Docker network
   EXTRA_DOCKER_ARGS        optional extra args appended before image name
 USAGE
@@ -135,15 +140,11 @@ run_container() {
   if [ -n "$MEDIA_DIR" ]; then
     mkdir -p "$MEDIA_DIR"
     args+=(-v "$MEDIA_DIR:/app/public/media")
-  elif [ -d /home/ubuntu/apps/media ]; then
-    args+=(-v /home/ubuntu/apps/media:/app/public/media)
   fi
 
   if [ -n "$LOG_DIR" ]; then
     mkdir -p "$LOG_DIR"
     args+=(-v "$LOG_DIR:/app/logs")
-  elif [ -d /home/ubuntu/apps/logs ]; then
-    args+=(-v /home/ubuntu/apps/logs:/app/logs)
   fi
 
   if [ -n "$EXTRA_DOCKER_ARGS" ]; then

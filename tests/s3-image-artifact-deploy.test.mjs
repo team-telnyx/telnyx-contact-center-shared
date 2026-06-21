@@ -29,6 +29,13 @@ test('host deploy script verifies checksums, loads image, health checks, and can
   assert.match(deployHost, /CURRENT_IMAGE_FILE/);
 });
 
+test('host deploy script only bind-mounts media/log dirs when explicitly requested', () => {
+  assert.match(deployHost, /MEDIA_DIR[\s\S]*optional host dir to bind to \/app\/public\/media/);
+  assert.match(deployHost, /LOG_DIR[\s\S]*optional host dir to bind to \/app\/logs/);
+  assert.doesNotMatch(deployHost, /-d \/home\/ubuntu\/apps\/(media|logs)/);
+  assert.doesNotMatch(deployHost, /\/home\/ubuntu\/apps\/(media|logs):\/app/);
+});
+
 test('SSM deploy script supports single-node and HA rolling target groups', () => {
   assert.match(deploySsm, /AWS-RunShellScript/);
   assert.match(deploySsm, /deregister-targets/);
