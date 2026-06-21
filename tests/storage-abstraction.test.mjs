@@ -124,10 +124,12 @@ test("local driver: path traversal in filename cannot escape media dir", async (
 // ---------------------------------------------------------------------------
 // 3. S3 driver: keying / prefiks (bez realnego AWS — sprawdzamy strukture).
 // ---------------------------------------------------------------------------
-test("s3 driver: builds /media/<file> url and uses media/ key prefix", async () => {
-  // Sprawdzamy zrodlo: put zwraca url /media/<base>, klucz ma prefix media/
+test("s3 driver: builds /media/<file> url and uses configurable media key prefix", async () => {
+  // put zwraca url /media/<base>, klucz ma domyślny prefix media/ i opcjonalny STORAGE_PREFIX.
   const src = await readFile(new URL("lib/storage/s3-driver.mjs", repoRoot), "utf8");
-  assert.match(src, /const KEY_PREFIX = "media\/"/);
+  assert.match(src, /function mediaKeyPrefix\(\)/);
+  assert.match(src, /process\.env\.STORAGE_PREFIX/);
+  assert.match(src, /joinKeyPrefix\(process\.env\.STORAGE_PREFIX, "media"\)/);
   assert.match(src, /url: `\/media\/\$\{base\}`/);
   // Klucze tylko gdy podane -> inaczej instance role
   assert.match(src, /if \(c\.accessKeyId && c\.secretAccessKey\)/);

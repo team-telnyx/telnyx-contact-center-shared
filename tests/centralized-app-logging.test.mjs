@@ -72,6 +72,21 @@ test("managed archive bucket prefers DEPLOY_GROUP over APP_ENV", async () => {
   }
 });
 
+test("managed archive bucket can use shared FDE runtime bucket with per-env logs prefix", async () => {
+  const previous = { ...process.env };
+  process.env.APP_ENV = "cc-ha";
+  process.env.LOG_ARCHIVE_BUCKET = "fde-app-runtime-260957529682";
+  try {
+    const { managedArchiveBucketName, normalizeRuntimeLoggingConfig } = await fresh(runtimeConfigUrl);
+    const config = normalizeRuntimeLoggingConfig({ archiveEnabled: true, archiveProvider: "s3" });
+    assert.equal(managedArchiveBucketName(), "fde-app-runtime-260957529682");
+    assert.equal(config.archiveBucket, "fde-app-runtime-260957529682");
+    assert.equal(config.archivePrefix, "cc-ha/logs");
+  } finally {
+    process.env = previous;
+  }
+});
+
 test("logging config schema persists centralized app logging settings", async () => {
   const { ensureLoggingConfigSchema, saveRuntimeLoggingConfig, resetRuntimeLoggingConfigCache } = await fresh(runtimeConfigUrl);
   resetRuntimeLoggingConfigCache();
