@@ -42,8 +42,8 @@ test("runtime logging config exposes centralized app logging settings with live 
     assert.equal(low.liveTtlMinutes, 5);
     assert.equal(low.archiveEnabled, true);
     assert.equal(low.archiveProvider, "s3");
-    assert.equal(low.archiveBucket, "cc-ha-logs-260957529682");
-    assert.equal(low.managedArchiveBucket, "cc-ha-logs-260957529682");
+    assert.equal(low.archiveBucket, "cc-ha-260957529682");
+    assert.equal(low.managedArchiveBucket, "cc-ha-260957529682");
     assert.equal(low.archiveBucketManaged, true);
     assert.equal(low.archivePrefix, "logs/cc-ha");
     assert.equal(low.spoolEnabled, true);
@@ -52,7 +52,7 @@ test("runtime logging config exposes centralized app logging settings with live 
     assert.equal(high.archiveProvider, "s3");
     assert.equal(valid.liveTtlMinutes, 17);
     assert.equal(valid.archiveProvider, "s3");
-    assert.equal(valid.archiveBucket, "cc-ha-logs-260957529682");
+    assert.equal(valid.archiveBucket, "cc-ha-260957529682");
   } finally {
     process.env = previous;
   }
@@ -65,8 +65,8 @@ test("managed archive bucket prefers DEPLOY_GROUP over APP_ENV", async () => {
   process.env.LOG_ARCHIVE_ACCOUNT_ID = "260957529682";
   try {
     const { managedArchiveBucketName, normalizeRuntimeLoggingConfig } = await fresh(runtimeConfigUrl);
-    assert.equal(managedArchiveBucketName(), "cc-prod-logs-260957529682");
-    assert.equal(normalizeRuntimeLoggingConfig({ archiveBucket: "operator-picked-bucket" }).archiveBucket, "cc-prod-logs-260957529682");
+    assert.equal(managedArchiveBucketName(), "cc-prod-260957529682");
+    assert.equal(normalizeRuntimeLoggingConfig({ archiveBucket: "operator-picked-bucket" }).archiveBucket, "cc-prod-260957529682");
   } finally {
     process.env = previous;
   }
