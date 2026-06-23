@@ -89,379 +89,164 @@ yarn dev
 
 The application will be available at `http://localhost:3000`.
 
-## Docker Deployment
+## Production deployment architecture
 
-The application includes production-ready Docker configuration for easy deployment on virtual machines or cloud instances.
+Production deployments no longer build the application directly on the EC2 host with `docker compose up --build` or the legacy `docker/deploy.sh` workflow. The current production model is:
 
-### Architecture
-
-The Docker setup uses a multi-container architecture:
-
-- **PostgreSQL 17**: Database container with automatic schema initialization
-- **Next.js Application**: Production-optimized container with automatic build and startup
-- **Automatic Schema Setup**: Database schema is created automatically on first startup
-- **Health Checks**: Built-in health monitoring for both services
-
-### Quick Start on VM
-
-#### 1. Install Docker on Ubuntu VM
-
-If Docker is not already installed, run the installation script:
-
-```bash
-# Make the script executable
-chmod +x docker/install-docker.sh
-
-# Run the installation script (requires sudo)
-sudo ./docker/install-docker.sh
+```text
+GitHub repository ref
+  -> GitHub Actions workflow builds the production Docker image
+  -> workflow saves the image as image.tar.zst, checksum, and manifest.json
+  -> workflow uploads the immutable artifact to S3
+  -> FDE CLI or an SSM deployment command downloads the artifact on EC2
+  -> EC2 verifies checksum, docker-loads the image, recreates the app container
+  -> app connects to environment-specific PostgreSQL in Amazon RDS
 ```
 
-**Important:** After installation, you must **log out and log back in** for Docker group permissions to take effect.
+The important rule is that the Docker image is built once and then promoted. Runtime differences such as database host, secrets, Telnyx credentials, public URL, and health-check settings live in the environment file on each EC2 node, not in a rebuilt image.
 
-#### 2. Configure Environment Variables
+### Source repositories and deployment tooling
 
-Create the environment file for production:
+- Application repo: `team-telnyx/telnyx-contact-center`
+- Artifact workflow: `.github/workflows/build-s3-image-artifact.yml`
+- Dockerfile used by the workflow: `docker/production/Dockerfile`
+- Shared artifact bucket: `s3://fde-app-artifacts-260957529682`
+- Contact Center artifact prefix: `contact-center`
+- Operator tool: [FDE Infra CLI](https://github.com/team-telnyx/fde-infra-cli)
+- Detailed artifact guide: [`docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md`](docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md)
 
-```bash
-# Navigate to the docker production directory
-cd docker/production
+Use the FDE CLI for normal automated deployments. It discovers environments from EC2 `Fde*` tags, lists S3 artifacts, triggers the GitHub Actions artifact workflow when requested, deploys existing artifacts through AWS SSM, performs health checks, and supports rollback by redeploying a previous artifact.
 
-# Copy the sample.env as a reference (if available)
-# Or create .env file directly
-nano .env
-```
+### Runtime database model: PostgreSQL in Amazon RDS
 
-Required environment variables (minimum):
+Production environments use PostgreSQL in RDS rather than a PostgreSQL container managed by this repo. The application still runs schema initialization with `yarn ensure:pg` during container startup, but the database lifecycle belongs to RDS.
+
+Required runtime environment variables on each node include:
 
 ```env
-# Database Configuration
-POSTGRES_DB=telnyx_contact_center
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_secure_password_here
-
-# Application URLs
-NEXT_PUBLIC_BASE_URL=https://your-domain.com
-NEXTAUTH_URL=https://your-domain.com
-APP_BASE_URL=https://your-domain.com
-ALLOWED_ORIGINS=https://your-domain.com
-
-# Authentication
-NEXTAUTH_SECRET=your_secret_here_min_32_chars
-
-# Allowed email domains for user registration (comma-separated)
-# Domains will be automatically seeded to the database on startup
-ALLOWED_EMAIL_DOMAINS=yourdomain.com,subdomain.yourdomain.com
-
-# Default owner user account (created automatically on first deployment)
-# Email address for the default owner account (must match an allowed domain)
-DEFAULT_OWNER_EMAIL=owner@yourdomain.com
-
-# Password for the default owner account (minimum 8 characters)
-# IMPORTANT: Change this password after first login!
-DEFAULT_OWNER_PASSWORD=your_secure_password_here
-
-# Telnyx Configuration
-TELNYX_API_KEY=your_telnyx_api_key
-TELNYX_WEBHOOK_SECRET=your_webhook_secret
-TELNYX_CALL_CONTROL_ID=your_call_control_id
-
-# Database Connection (for app container)
-POSTGRES_HOST=postgres
+POSTGRES_HOST=<rds-endpoint>
 POSTGRES_PORT=5432
+POSTGRES_DB=<database-name>
+POSTGRES_USER=<database-user>
+POSTGRES_PASSWORD=<database-password>
+
+# TLS for RDS. PGSSLMODE=require is the normal FDE setting.
+PGSSLMODE=require
+# Optional stricter modes if root certs are provisioned:
+# PGSSLMODE=verify-ca
+# PGSSLMODE=verify-full
+# PGSSLROOTCERT=/path/to/rds-ca.pem
 ```
 
-For a complete list of all environment variables, see `sample.env` in the project root.
+Do not use `POSTGRES_HOST=postgres` in production; that value only applies to local Docker Compose setups with a database service. Do not create or destroy RDS data as part of application deployment. Backups, Multi-AZ, parameter groups, and destructive database operations must be handled explicitly at the infrastructure/RDS layer.
 
-#### 3. Deploy Using the Deployment Script
+### Runtime application configuration
 
-The deployment script handles building, starting, and health checking:
+Each EC2 node has an env file identified by the `FdeEnvFile` tag, for example `/opt/cc-prod/app.env` or `/opt/cc-ha/app.env`. Keep secrets and environment-specific values there:
+
+```env
+NODE_ENV=production
+NEXTAUTH_URL=https://<environment-url>
+APP_BASE_URL=https://<environment-url>
+NEXT_PUBLIC_BASE_URL=https://<environment-url>
+ALLOWED_ORIGINS=https://<environment-url>
+NEXTAUTH_SECRET=<long-random-secret>
+
+TELNYX_API_KEY=<telnyx-api-key>
+TELNYX_WEBHOOK_SECRET=<webhook-secret>
+TELNYX_CALL_CONTROL_ID=<call-control-connection-id>
+
+ALLOWED_EMAIL_DOMAINS=example.com
+DEFAULT_OWNER_EMAIL=owner@example.com
+DEFAULT_OWNER_PASSWORD=<initial-password-change-after-login>
+```
+
+`NEXT_PUBLIC_*` variables are compiled into the browser bundle during the GitHub Actions build. Keep them shared or intentionally configured in repository/environment variables if the same image is promoted across multiple environments. Server-only values can differ per EC2 node via `FdeEnvFile`.
+
+### FDE EC2 tag contract
+
+FDE CLI discovers deploy targets from EC2 tags. A Contact Center node should have tags like:
+
+```text
+FdeManagedBy=fde
+FdeRole=app
+FdeApp=contact-center
+FdeDisplayName=Contact Center
+FdeEnv=cc-prod                  # or cc-ha for HA
+FdeDeployMode=single-node        # or ha
+FdeGithubOwner=team-telnyx
+FdeGithubRepo=telnyx-contact-center
+FdeGithubWorkflow=build-s3-image-artifact.yml
+FdeArtifactBucket=fde-app-artifacts-260957529682
+FdeArtifactPrefix=contact-center
+FdeImageName=telnyx-contact-center
+FdeContainer=telnyx-contact-center-app
+FdeEnvFile=/opt/cc-prod/app.env
+FdeAppPort=3000
+FdeWsPort=3001                  # optional, when WebSocket sidecar/port is used
+FdeHealthPath=/api/health
+FdePublicUrl=https://<environment-url>
+```
+
+See the [FDE Infra CLI README](https://github.com/team-telnyx/fde-infra-cli#fde-ec2-app-tag-standard) for the full tag standard, required IAM permissions, and onboarding checklist.
+
+### Build a new immutable artifact
+
+Preferred path: use FDE CLI and select `Application artifacts` → `Build new artifact`.
+
+Equivalent GitHub CLI command, if you are intentionally triggering a build:
 
 ```bash
-# Navigate to project root
-cd /path/to/telnyx-contact-center
-
-# Make the deploy script executable
-chmod +x docker/deploy.sh
-
-# Deploy to production (preserves database data)
-./docker/deploy.sh production
-
-# OR deploy with fresh database (WARNING: deletes all data)
-./docker/deploy.sh production --fresh
+gh workflow run build-s3-image-artifact.yml \
+  --repo team-telnyx/telnyx-contact-center \
+  -f ref=master \
+  -f artifact_bucket=fde-app-artifacts-260957529682 \
+  -f artifact_prefix=contact-center \
+  -f aws_region=us-east-2 \
+  -f image_name=telnyx-contact-center
 ```
 
-**Deployment Options:**
+The workflow creates an immutable prefix such as:
 
-- `./docker/deploy.sh production` - Normal deployment, preserves existing database
-- `./docker/deploy.sh production --fresh` - Fresh deployment, recreates database from scratch
+```text
+s3://fde-app-artifacts-260957529682/contact-center/<short-sha>/
+├── image.tar.zst
+├── image.tar.zst.sha256
+└── manifest.json
+```
 
-#### 4. Verify Deployment
+Do not manually create replacement artifacts from a workstation or EC2 host unless an operator explicitly authorizes bypassing the pipeline.
 
-After deployment, check the service status:
+### Deploy or roll back an existing artifact
+
+Preferred path: use FDE CLI and select `Application artifacts` → `Deploy existing artifact / rollback`.
+
+The CLI will:
+
+1. discover the selected environment and nodes from EC2 tags,
+2. show available S3 artifact prefixes and manifests,
+3. send an AWS SSM command to the target node(s),
+4. download and checksum-verify the artifact,
+5. load the Docker image,
+6. recreate only the application container with the node's existing env file,
+7. check `http://127.0.0.1:<FdeAppPort><FdeHealthPath>`, and
+8. for HA environments, deploy nodes sequentially.
+
+Rollback is the same operation using a previously successful S3 artifact prefix. The deployment path is intentionally artifact-based; do not run `docker compose up --build` on production EC2 to roll forward or roll back.
+
+### Local development and local Docker Compose
+
+Local development is unchanged:
 
 ```bash
-# Navigate to production directory
-cd docker/production
-
-# Check container status
-docker compose ps
-
-# View logs
-docker compose logs -f
-
-# Check application health
-curl http://localhost:3000/api/health
+yarn install
+cp sample.env .env.local
+# edit local PostgreSQL/Telnyx/auth settings
+yarn ensure:pg
+yarn dev
 ```
 
-### Manual Docker Deployment
-
-If you prefer manual deployment without the script:
-
-```bash
-# Navigate to production directory
-cd docker/production
-
-# Build and start services
-docker compose up --build -d
-
-# View logs
-docker compose logs -f
-
-# Stop services
-docker compose down
-
-# Stop and remove volumes (WARNING: deletes database)
-docker compose down -v
-```
-
-### Docker Scripts Reference
-
-#### `docker/install-docker.sh`
-
-Installs Docker and Docker Compose on Ubuntu/Debian systems.
-
-**Usage:**
-
-```bash
-sudo ./docker/install-docker.sh
-```
-
-**What it does:**
-
-- Updates system packages
-- Installs Docker Engine and Docker Compose plugin
-- Adds current user to docker group
-- Configures firewall (UFW) for ports 22, 80, 443, 3000
-- Enables Docker to start on boot
-
-**Important:** After running, log out and log back in for docker group changes to take effect.
-
-#### `docker/deploy.sh`
-
-Deploys the application using Docker Compose.
-
-**Usage:**
-
-```bash
-./docker/deploy.sh [environment] [--fresh]
-```
-
-**Parameters:**
-
-- `environment`: Currently supports `production` only
-- `--fresh`: Optional flag to recreate database from scratch (deletes all data)
-
-**What it does:**
-
-- Checks Docker permissions and access
-- Loads environment variables from `.env` file
-- Stops existing containers (preserves database unless `--fresh` is used)
-- Builds and starts services
-- Waits for PostgreSQL to be healthy
-- Checks application health endpoint
-- Provides useful commands for monitoring
-
-**Example:**
-
-```bash
-# Normal deployment (preserves database)
-./docker/deploy.sh production
-
-# Fresh deployment (recreates database)
-./docker/deploy.sh production --fresh
-```
-
-### Docker Directory Structure
-
-```
-docker/
-├── production/              # Production environment configuration
-│   ├── compose.yaml        # Docker Compose configuration
-│   ├── Dockerfile          # Application Docker image definition
-│   ├── init-schema.sql     # PostgreSQL initialization script
-│   └── .env                # Environment variables (create this)
-├── deploy.sh               # Deployment script
-├── install-docker.sh       # Docker installation script for Ubuntu
-└── README.md               # Detailed Docker documentation
-```
-
-### Docker Compose Services
-
-#### PostgreSQL Service
-
-- **Image:** `postgres:17-alpine`
-- **Port:** `5432`
-- **Volume:** `postgres_data` (persistent storage)
-- **Health Check:** Automatic PostgreSQL readiness check
-- **Initialization:** Runs `init-schema.sql` on first startup
-
-#### Application Service
-
-- **Build:** Uses `docker/production/Dockerfile`
-- **Port:** `3000`
-- **Dependencies:** Waits for PostgreSQL to be healthy
-- **Startup Process:**
-  1. Waits for PostgreSQL to be ready
-  2. Initializes database schema (`yarn ensure:pg`)
-  3. Builds Next.js application (`yarn build`)
-  4. Starts production server (`yarn start`)
-- **Health Check:** Checks `/api/health` endpoint every 30 seconds
-
-### Docker Management Commands
-
-#### View Logs
-
-```bash
-cd docker/production
-
-# All services
-docker compose logs -f
-
-# Specific service
-docker compose logs -f app
-docker compose logs -f postgres
-```
-
-#### Check Status
-
-```bash
-cd docker/production
-
-# Service status
-docker compose ps
-
-# Health check
-curl http://localhost:3000/api/health
-```
-
-#### Database Access
-
-```bash
-cd docker/production
-
-# Connect to database
-docker compose exec postgres psql -U postgres -d telnyx_contact_center
-
-# Run SQL command
-docker compose exec postgres psql -U postgres -d telnyx_contact_center -c "SELECT COUNT(*) FROM users;"
-
-# Create database backup
-docker compose exec postgres pg_dump -U postgres telnyx_contact_center > backup.sql
-
-# Restore database backup
-docker compose exec -T postgres psql -U postgres telnyx_contact_center < backup.sql
-```
-
-#### Restart Services
-
-```bash
-cd docker/production
-
-# Restart all services
-docker compose restart
-
-# Restart specific service
-docker compose restart app
-docker compose restart postgres
-```
-
-#### Stop and Clean Up
-
-```bash
-cd docker/production
-
-# Stop services (preserves data)
-docker compose stop
-
-# Stop and remove containers (preserves volumes)
-docker compose down
-
-# Stop and remove everything including volumes (WARNING: deletes database)
-docker compose down -v
-
-# Remove images
-docker compose down --rmi all
-```
-
-### Troubleshooting Docker Deployment
-
-#### Permission Denied Errors
-
-```bash
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Log out and log back in, then verify
-docker run hello-world
-```
-
-#### Database Connection Failed
-
-```bash
-# Check if PostgreSQL is running
-docker compose ps postgres
-
-# Check PostgreSQL logs
-docker compose logs postgres
-
-# Verify environment variables
-docker compose exec app env | grep POSTGRES
-```
-
-#### Application Won't Start
-
-```bash
-# Check application logs
-docker compose logs app
-
-# Verify environment variables are loaded
-docker compose exec app env | grep TELNYX
-
-# Manually run schema initialization
-docker compose exec app node scripts/ensure-pg.mjs
-```
-
-#### Port Already in Use
-
-```bash
-# Check what's using the port
-sudo lsof -i :3000
-sudo lsof -i :5432
-
-# Stop conflicting services or change ports in compose.yaml
-```
-
-### Production Considerations
-
-1. **Reverse Proxy**: Use Nginx or similar for SSL termination and routing
-2. **Firewall**: Configure firewall rules for ports 22 (SSH), 80 (HTTP), 443 (HTTPS)
-3. **Backups**: Set up regular database backups
-4. **Monitoring**: Configure log aggregation and monitoring tools
-5. **Secrets**: Use Docker secrets or external secret management in production
-6. **SSL/TLS**: Configure SSL certificates for HTTPS
-7. **Domain Configuration**: Point your domain to the VM's public IP
-
-For detailed Docker documentation, see `docker/README.md`.
+The `docker/` directory remains useful for local experiments and historical reference, but production deployment is governed by GitHub Actions artifacts, S3, RDS, EC2 tags, and FDE CLI.
 
 ## Database Schema
 

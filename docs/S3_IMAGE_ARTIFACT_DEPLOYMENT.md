@@ -32,21 +32,21 @@ Create or choose a private artifact bucket, for example:
 
 ```bash
 aws s3api create-bucket \
-  --bucket cc-build-artifacts \
+  --bucket fde-app-artifacts-260957529682 \
   --region us-east-2 \
   --create-bucket-configuration LocationConstraint=us-east-2
 
 aws s3api put-public-access-block \
-  --bucket cc-build-artifacts \
+  --bucket fde-app-artifacts-260957529682 \
   --public-access-block-configuration \
   BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 
 aws s3api put-bucket-versioning \
-  --bucket cc-build-artifacts \
+  --bucket fde-app-artifacts-260957529682 \
   --versioning-configuration Status=Enabled
 
 aws s3api put-bucket-encryption \
-  --bucket cc-build-artifacts \
+  --bucket fde-app-artifacts-260957529682 \
   --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 ```
 
@@ -68,15 +68,15 @@ the artifact prefix:
     {
       "Effect": "Allow",
       "Action": ["s3:PutObject", "s3:GetObject"],
-      "Resource": "arn:aws:s3:::cc-build-artifacts/telnyx-contact-center/*"
+      "Resource": "arn:aws:s3:::fde-app-artifacts-260957529682/contact-center/*"
     },
     {
       "Effect": "Allow",
       "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
-      "Resource": "arn:aws:s3:::cc-build-artifacts",
+      "Resource": "arn:aws:s3:::fde-app-artifacts-260957529682",
       "Condition": {
         "StringLike": {
-          "s3:prefix": ["telnyx-contact-center/*"]
+          "s3:prefix": ["contact-center/*"]
         }
       }
     }
@@ -95,15 +95,15 @@ Every deploy target needs read-only access to the same prefix:
     {
       "Effect": "Allow",
       "Action": ["s3:GetObject"],
-      "Resource": "arn:aws:s3:::cc-build-artifacts/telnyx-contact-center/*"
+      "Resource": "arn:aws:s3:::fde-app-artifacts-260957529682/contact-center/*"
     },
     {
       "Effect": "Allow",
       "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
-      "Resource": "arn:aws:s3:::cc-build-artifacts",
+      "Resource": "arn:aws:s3:::fde-app-artifacts-260957529682",
       "Condition": {
         "StringLike": {
-          "s3:prefix": ["telnyx-contact-center/*"]
+          "s3:prefix": ["contact-center/*"]
         }
       }
     },
@@ -132,6 +132,12 @@ The operator that runs `scripts/deploy-artifact-ssm.sh` needs:
 - for HA only: `elasticloadbalancing:RegisterTargets`,
   `elasticloadbalancing:DeregisterTargets`, `elasticloadbalancing:DescribeTargetHealth`
 
+## Recommended operator path: FDE Infra CLI
+
+For routine operations, use [FDE Infra CLI](https://github.com/team-telnyx/fde-infra-cli) instead of running the low-level scripts directly. The CLI discovers Contact Center environments from EC2 `Fde*` tags, lists known S3 artifacts, triggers this GitHub Actions workflow when an operator explicitly asks for a new build, deploys selected artifacts via AWS SSM, checks health, and supports rollback by selecting an older artifact prefix.
+
+Low-level commands below document what the CLI automates and are useful for break-glass/debugging, but they should not replace the normal artifact-based workflow.
+
 ## Build an artifact
 
 From GitHub:
@@ -139,15 +145,15 @@ From GitHub:
 ```bash
 gh workflow run build-s3-image-artifact.yml \
   -f ref=master \
-  -f artifact_bucket=cc-build-artifacts \
-  -f artifact_prefix=telnyx-contact-center \
+  -f artifact_bucket=fde-app-artifacts-260957529682 \
+  -f artifact_prefix=contact-center \
   -f aws_region=us-east-2
 ```
 
 The workflow summary prints the immutable S3 prefix, for example:
 
 ```text
-s3://cc-build-artifacts/telnyx-contact-center/9f3a1c7d2e44
+s3://fde-app-artifacts-260957529682/contact-center/9f3a1c7d2e44
 ```
 
 Each prefix contains:
@@ -178,7 +184,7 @@ configured because migration target is HA.
 ```bash
 ./scripts/deploy-artifact-ssm.sh \
   --target legacy-cc-prod \
-  --artifact s3://cc-build-artifacts/telnyx-contact-center/9f3a1c7d2e44 \
+  --artifact s3://fde-app-artifacts-260957529682/contact-center/9f3a1c7d2e44 \
   --config deploy/targets.json
 ```
 
@@ -202,7 +208,7 @@ healthy target status before moving to the next node.
 ```bash
 ./scripts/deploy-artifact-ssm.sh \
   --target cc-ha \
-  --artifact s3://cc-build-artifacts/telnyx-contact-center/9f3a1c7d2e44 \
+  --artifact s3://fde-app-artifacts-260957529682/contact-center/9f3a1c7d2e44 \
   --config deploy/targets.json
 ```
 
@@ -215,7 +221,7 @@ sudo APP_NAME=telnyx-contact-center \
   CONTAINER_NAME=telnyx-contact-center-app \
   ENV_FILE=/opt/telnyx-contact-center/app.env \
   ./scripts/deploy-from-s3.sh \
-  s3://cc-build-artifacts/telnyx-contact-center/9f3a1c7d2e44
+  s3://fde-app-artifacts-260957529682/contact-center/9f3a1c7d2e44
 ```
 
 ## Rollback
@@ -225,7 +231,7 @@ Fast rollback is just deploying a previous artifact prefix:
 ```bash
 ./scripts/deploy-artifact-ssm.sh \
   --target legacy-cc-prod \
-  --artifact s3://cc-build-artifacts/telnyx-contact-center/<previous-short-sha> \
+  --artifact s3://fde-app-artifacts-260957529682/contact-center/<previous-short-sha> \
   --config deploy/targets.json
 ```
 
