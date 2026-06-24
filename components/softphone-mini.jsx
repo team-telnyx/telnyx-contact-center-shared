@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
+import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
 import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
 import { getHeadsetControlService } from "@/lib/headsets/client-headset-service";
 
@@ -1516,6 +1517,7 @@ export default function SoftphoneMini() {
       }`}
     >
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      <HeadsetStatusBadge />
       <button
         className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white hover:bg-zinc-700"
         title="Select number from contacts"

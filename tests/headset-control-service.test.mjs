@@ -250,6 +250,7 @@ describe("EPOS adapter contract", () => {
     assert.deepEqual(sent.map((message) => message.Event), [
       "EstablishConnection",
       "SPLoggedIn",
+      "ActiveDeviceChanged",
       "IncomingCall",
       "InCallAccepted",
       "MuteHeadset",
@@ -259,6 +260,6 @@ describe("EPOS adapter contract", () => {
       "CallEnded",
     ]);
     assert.equal(sent[0].SPName, "Telnyx Contact Center");
-    assert.equal(sent[2].CallID, "call-1");
+    assert.equal(sent[3].CallID, "call-1");
   });
 });

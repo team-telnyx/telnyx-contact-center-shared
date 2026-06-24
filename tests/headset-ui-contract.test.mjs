@@ -7,22 +7,33 @@ import { fileURLToPath } from "node:url";
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = (rel) => readFileSync(join(repoRoot, rel), "utf8");
 
-test("site header exposes the headset integration badge next to softphone controls", () => {
+test("softphone mini owns the headset control trigger immediately before contact picker", () => {
   const siteHeader = src("components/site-header.jsx");
-  assert.match(siteHeader, /from\s+["']@\/components\/headsets\/HeadsetStatusBadge["']/);
-  assert.match(siteHeader, /<HeadsetStatusBadge\s*\/?>/);
-  assert.match(siteHeader, /<SoftphoneMini\s*\/?>/);
+  const softphoneMini = src("components/softphone-mini.jsx");
+  assert.doesNotMatch(siteHeader, /HeadsetStatusBadge/);
+  assert.match(softphoneMini, /from\s+["']@\/components\/headsets\/HeadsetStatusBadge["']/);
+  assert.match(softphoneMini, /<HeadsetStatusBadge\s*\/?>\s*<button[\s\S]*?title="Select number from contacts"/);
 });
 
-test("headset status badge initializes the shared Jabra/EPOS headset service behind a browser feature flag", () => {
+test("headset UI uses the shared Jabra/EPOS service and a right-side sheet", () => {
   const badge = src("components/headsets/HeadsetStatusBadge.jsx");
   const clientService = src("lib/headsets/client-headset-service.js");
   assert.match(badge, /initHeadsetControlService/);
   assert.match(badge, /isHeadsetIntegrationEnabled/);
   assert.match(badge, /requestPermission\("jabra"\)/);
+  assert.match(badge, /SheetContent[\s\S]*side="right"/);
+  assert.doesNotMatch(badge, /DialogContent/);
   assert.match(clientService, /createJabraAdapter/);
   assert.match(clientService, /createEposAdapter/);
   assert.match(clientService, /NEXT_PUBLIC_HEADSET_INTEGRATION_ENABLED/);
+});
+
+test("headset sheet ships EPOS BTD 800 and MB Pro 2 catalog artwork", () => {
+  const catalog = src("lib/headsets/headset-device-catalog.js");
+  assert.match(catalog, /BTD 800 USB for Lync/);
+  assert.match(catalog, /MB Pro 2/);
+  assert.match(catalog, /\/images\/headsets\/epos\/btd-800-usb\.png/);
+  assert.match(catalog, /\/images\/headsets\/epos\/mb-pro-2\.png/);
 });
 
 test("softphone mini bridges headset commands and softphone state through the shared headset service", () => {
