@@ -51652,23 +51652,33 @@
             "name": "credential_type",
             "in": "query",
             "required": true,
-            "description": "The kind of credential to look up. Only `uac_external_credential` is supported today.",
+            "description": "The kind of credential to look up. `uac_external_credential` is keyed by `connection_id`; `telephony_credential` is keyed by `username`.",
             "schema": {
               "type": "string",
               "enum": [
-                "uac_external_credential"
+                "uac_external_credential",
+                "telephony_credential"
               ]
             }
           },
           {
             "name": "connection_id",
             "in": "query",
-            "required": true,
-            "description": "Identifier of the UAC connection to look up.",
+            "required": false,
+            "description": "Identifier of the UAC connection to look up. Required when `credential_type` is `uac_external_credential`.",
             "schema": {
               "type": "string"
             },
             "example": "1234567890"
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "required": false,
+            "description": "SIP username of the telephony credential to look up. Required when `credential_type` is `telephony_credential`.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -57822,7 +57832,7 @@
           "Whatsapp Phone Numbers"
         ],
         "summary": "List Whatsapp phone numbers",
-        "operationId": "ListWhatsappPhoneNumbers",
+        "operationId": "ListPhoneNumbers",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageConsolidated"
@@ -64436,13 +64446,13 @@
             "created_before": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-02T00:00:00Z",
+              "example": "2021-01-04T00:00:00Z",
               "description": "Filter for audit events created before a specific date."
             },
             "created_after": {
               "type": "string",
               "format": "date-time",
-              "example": "2021-01-02T00:00:00Z",
+              "example": "2021-01-04T00:00:00Z",
               "description": "Filter for audit events created after a specific date."
             }
           }
@@ -123591,7 +123601,7 @@
         "properties": {
           "connection_id": {
             "type": "string",
-            "description": "Identifier of the UAC connection."
+            "description": "Identifier of the connection associated with the credential."
           },
           "connection_name": {
             "type": "string",
@@ -123601,7 +123611,8 @@
             "type": "string",
             "description": "The credential type that was looked up.",
             "enum": [
-              "uac_external_credential"
+              "uac_external_credential",
+              "telephony_credential"
             ]
           },
           "credential_username": {
@@ -123632,7 +123643,7 @@
           },
           "sip_registration_details": {
             "type": "object",
-            "description": "Detailed registration information reported by the registrar.",
+            "description": "Detailed registration information reported by the registrar. The populated fields depend on `credential_type`.",
             "properties": {
               "auth_retries": {
                 "type": "integer",
@@ -123657,6 +123668,26 @@
               "sip_uri_user_host": {
                 "type": "string",
                 "description": "SIP URI user@host of the registered contact."
+              },
+              "ua_ip": {
+                "type": "string",
+                "description": "IP address of the registered user agent (telephony_credential)."
+              },
+              "ua_port": {
+                "type": "integer",
+                "description": "Port of the registered user agent (telephony_credential)."
+              },
+              "transport": {
+                "type": "string",
+                "description": "Transport used for the registration, e.g. UDP/TCP/TLS (telephony_credential)."
+              },
+              "node": {
+                "type": "string",
+                "description": "Registrar node handling the registration (telephony_credential)."
+              },
+              "last_modified": {
+                "type": "string",
+                "description": "Timestamp when the registration row was last modified (telephony_credential)."
               }
             }
           }
@@ -130521,6 +130552,33 @@
           }
         }
       },
+      "TranscriptionEngineParakeetConfig": {
+        "type": "object",
+        "title": "Transcription engine Parakeet config",
+        "properties": {
+          "transcription_engine": {
+            "type": "string",
+            "enum": [
+              "Parakeet"
+            ],
+            "description": "Engine identifier for Parakeet transcription service"
+          },
+          "transcription_model": {
+            "description": "The model to use for transcription.",
+            "type": "string",
+            "enum": [
+              "parakeet/tdt-0.6b-v3"
+            ],
+            "default": "parakeet/tdt-0.6b-v3"
+          },
+          "interim_results": {
+            "type": "boolean",
+            "description": "Whether to send also interim results. If set to false, only final results will be sent.",
+            "default": false,
+            "example": true
+          }
+        }
+      },
       "TranscriptionEngineSonioxConfig": {
         "type": "object",
         "title": "Transcription engine Soniox config",
@@ -131057,6 +131115,7 @@
               "AssemblyAI",
               "Speechmatics",
               "Soniox",
+              "Parakeet",
               "A",
               "B"
             ],
@@ -131090,6 +131149,9 @@
                 "$ref": "#/components/schemas/TranscriptionEngineSonioxConfig"
               },
               {
+                "$ref": "#/components/schemas/TranscriptionEngineParakeetConfig"
+              },
+              {
                 "$ref": "#/components/schemas/TranscriptionEngineAConfig"
               },
               {
@@ -131107,6 +131169,7 @@
                 "AssemblyAI": "#/components/schemas/TranscriptionEngineAssemblyaiConfig",
                 "Speechmatics": "#/components/schemas/TranscriptionEngineSpeechmaticsConfig",
                 "Soniox": "#/components/schemas/TranscriptionEngineSonioxConfig",
+                "Parakeet": "#/components/schemas/TranscriptionEngineParakeetConfig",
                 "A": "#/components/schemas/TranscriptionEngineAConfig",
                 "B": "#/components/schemas/TranscriptionEngineBConfig"
               }
