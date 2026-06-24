@@ -120,6 +120,55 @@ describe("headset control service", () => {
       remoteNumber: null,
     });
   });
+
+  it("does not let one adapter's disconnect clear another adapter's connected device", async () => {
+    const emitted = [];
+    let eposDeviceChange;
+    let jabraDeviceChange;
+    const epos = {
+      vendor: "epos",
+      async init() {},
+      onCommand() { return () => {}; },
+      onDeviceChange(callback) { eposDeviceChange = callback; return () => {}; },
+    };
+    const jabra = {
+      vendor: "jabra",
+      async init() {},
+      onCommand() { return () => {}; },
+      onDeviceChange(callback) { jabraDeviceChange = callback; return () => {}; },
+    };
+
+    const service = createHeadsetControlService({ adapters: [epos, jabra] });
+    service.onDeviceChange((device) => emitted.push(device));
+    await service.init();
+
+    eposDeviceChange({ vendor: "epos", model: "Sennheiser BTD 800 USB for Lync", connectionState: "connected" });
+    jabraDeviceChange(null);
+
+    assert.equal(service.getDevice().model, "Sennheiser BTD 800 USB for Lync");
+    assert.equal(emitted.at(-1).model, "Sennheiser BTD 800 USB for Lync");
+  });
+
+  it("forwards adapter diagnostics without changing the selected device", async () => {
+    const diagnostics = [];
+    let diagnosticHandler;
+    const adapter = {
+      vendor: "epos",
+      async init() {},
+      onCommand() { return () => {}; },
+      onDeviceChange() { return () => {}; },
+      onDiagnostic(callback) { diagnosticHandler = callback; return () => {}; },
+    };
+
+    const service = createHeadsetControlService({ adapters: [adapter] });
+    service.onDiagnostic((diagnostic) => diagnostics.push(diagnostic));
+    await service.init();
+
+    diagnosticHandler({ message: "EPOS HeadsetDisconnected notification", level: "warn" });
+
+    assert.deepEqual(diagnostics, [{ message: "EPOS HeadsetDisconnected notification", level: "warn", vendor: "epos" }]);
+    assert.equal(service.getDevice(), null);
+  });
 });
 
 describe("Jabra adapter contract", () => {
@@ -242,6 +291,7 @@ describe("EPOS adapter contract", () => {
       WebSocketImpl: FailingWebSocket,
       url: "wss://127.0.0.1:41088",
       reconnectDelayMs: 0,
+      activeDevicePollMs: 0,
     });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
@@ -268,7 +318,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center", activeDevicePollMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -291,5 +341,68 @@ describe("EPOS adapter contract", () => {
     ]);
     assert.equal(sent[0].SPName, "Telnyx Contact Center");
     assert.equal(sent[3].CallID, "call-1");
+  });
+
+  it("polls EPOS ActiveDeviceChanged so plug/unplug changes appear without refreshing", async () => {
+    const sent = [];
+    class FakeWebSocket {
+      constructor() {
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send(payload) {
+        sent.push(JSON.parse(payload));
+      }
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, activeDevicePollMs: 5, reconnectDelayMs: 0 });
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 14));
+    await adapter.dispose();
+
+    assert.ok(sent.filter((message) => message.Event === "ActiveDeviceChanged").length >= 2);
+  });
+
+  it("keeps an EPOS device connected until a disconnect notification is confirmed", async () => {
+    const devices = [];
+    const diagnostics = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({
+      WebSocketImpl: FakeWebSocket,
+      reconnectDelayMs: 0,
+      disconnectConfirmationMs: 20,
+      activeDevicePollMs: 0,
+    });
+    adapter.onDeviceChange((device) => devices.push(device));
+    adapter.onDiagnostic((diagnostic) => diagnostics.push(diagnostic));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification" }) });
+
+    assert.equal(devices.at(-1).model, "Sennheiser BTD 800 USB for Lync");
+    assert.equal(diagnostics.some((item) => /HeadsetDisconnected/.test(item.message)), true);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    assert.equal(devices.at(-1).connectionState, "service-connected");
   });
 });

@@ -21,6 +21,8 @@ test("headset UI uses the shared Jabra/EPOS service and a right-side sheet", () 
   assert.match(badge, /initHeadsetControlService/);
   assert.match(badge, /isHeadsetIntegrationEnabled/);
   assert.match(badge, /requestPermission\("jabra"\)/);
+  assert.match(badge, /onDiagnostic/);
+  assert.match(badge, /recordDiagnostic\(diagnostic\.message/);
   assert.match(badge, /SheetContent[\s\S]*side="right"/);
   assert.doesNotMatch(badge, /DialogContent/);
   assert.match(clientService, /createJabraAdapter/);

@@ -126,6 +126,9 @@ export function HeadsetStatusBadge() {
     const unsubscribeCommand = service.onCommand((command) => {
       if (!cancelled) recordCommand(command);
     });
+    const unsubscribeDiagnostic = service.onDiagnostic?.((diagnostic) => {
+      if (!cancelled) recordDiagnostic(diagnostic.message || String(diagnostic), diagnostic.level || "info");
+    }) || (() => {});
 
     initHeadsetControlService().then(() => {
       if (!cancelled && !service.getDevice()) setStatus("disconnected");
@@ -140,6 +143,7 @@ export function HeadsetStatusBadge() {
       cancelled = true;
       unsubscribeDevice();
       unsubscribeCommand();
+      unsubscribeDiagnostic();
       if (serviceRef.current === service) serviceRef.current = null;
     };
   }, [enabled, recordCommand, recordDiagnostic, setDevice, setEnabled, setStatus]);
