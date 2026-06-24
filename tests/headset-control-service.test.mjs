@@ -506,8 +506,44 @@ describe("EPOS adapter contract", () => {
     socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
     socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", ProductID: "0xA055" }) });
 
+    assert.equal(devices.at(-1).id, "0xA055");
     assert.equal(devices.at(-1).productId, "0xA055");
     assert.equal(devices.at(-1).connectionState, "connected");
+  });
+
+  it("compares EPOS product IDs before confirming catalog-only device disconnects", async () => {
+    const devices = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", ProductID: "0xA055" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", ProductID: "0xBEEF" }) });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(devices.at(-1).productId, "0xA055");
+    assert.equal(devices.at(-1).connectionState, "connected");
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", ProductID: "0xA055" }) });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(devices.at(-1).connectionState, "service-connected");
   });
 
   it("ignores ActiveDeviceChanged acknowledgements and empty notifications as device updates", async () => {
