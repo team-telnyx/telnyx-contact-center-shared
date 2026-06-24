@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import SoftphoneMini from "@/components/softphone-mini";
+import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
 import { StatusSelector } from "@/components/contact-center/StatusSelector";
 import { QueueActivationPanel } from "@/components/contact-center/QueueActivationPanel";
 import { CampaignActivationSelector } from "@/components/contact-center/CampaignActivationSelector";
@@ -261,6 +262,7 @@ export function SiteHeader() {
               <Separator orientation="vertical" className="h-6" />
             </>
           )}
+          <HeadsetStatusBadge />
           <SoftphoneMini />
         </div>
       </div>
