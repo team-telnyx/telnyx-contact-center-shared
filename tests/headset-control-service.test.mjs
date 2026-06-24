@@ -80,6 +80,34 @@ describe("headset control service", () => {
     assert.deepEqual(emitted[0], { type: "mute", muted: true, source: "headset", vendor: "epos" });
   });
 
+  it("keeps other headset adapters available when one vendor fails to initialize", async () => {
+    const initCalls = [];
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      const jabra = {
+        vendor: "jabra",
+        async init() { initCalls.push("jabra"); },
+        onCommand() { return () => {}; },
+        onDeviceChange() { return () => {}; },
+      };
+      const epos = {
+        vendor: "epos",
+        async init() { initCalls.push("epos"); throw new Error("EPOS Connect unavailable"); },
+        onCommand() { return () => {}; },
+        onDeviceChange() { return () => {}; },
+      };
+
+      const service = createHeadsetControlService({ adapters: [jabra, epos] });
+      await service.init();
+      await service.init();
+
+      assert.deepEqual(initCalls, ["jabra", "epos", "epos"]);
+    } finally {
+      console.warn = warn;
+    }
+  });
+
   it("keeps set mute/hold actions idempotent instead of exposing only toggles", () => {
     assert.deepEqual(normalizeSoftphoneState({ muted: true, held: true }), {
       callId: null,
@@ -143,6 +171,58 @@ describe("Jabra adapter contract", () => {
       ["setMute", false],
       ["setHold", false],
     ]);
+  });
+
+  it("emits Jabra answer/reject results and uses unmute/resume fallbacks", async () => {
+    const calls = [];
+    const emitted = [];
+    let resolveIncomingCall;
+    const incomingCallResult = new Promise((resolve) => { resolveIncomingCall = resolve; });
+    const fakeMultiCallControl = {
+      signalIncomingCall: (timeout) => { calls.push(["signalIncomingCall", timeout]); return incomingCallResult; },
+      endCall: async () => calls.push(["endCall"]),
+      mute: async () => calls.push(["mute"]),
+      unmute: async () => calls.push(["unmute"]),
+      hold: async () => calls.push(["hold"]),
+      resume: async () => calls.push(["resume"]),
+      muteState: { subscribe() { return { unsubscribe() {} }; } },
+      holdState: { subscribe() { return { unsubscribe() {} }; } },
+      swapRequest: { subscribe() { return { unsubscribe() {} }; } },
+    };
+    const fakeJabra = {
+      RequestedBrowserTransport: { CHROME_EXTENSION_WITH_WEB_HID_FALLBACK: "transport" },
+      async createApi() {
+        return {
+          transportContext: "chrome-extension",
+          deviceAdded: { subscribe(cb) { cb({ name: "Jabra Engage 50", productId: 1, serialNumber: "SN1" }); return { unsubscribe() {} }; } },
+          deviceRemoved: { subscribe() { return { unsubscribe() {} }; } },
+        };
+      },
+      EasyCallControlFactory: class {
+        supportsEasyCallControl() { return true; }
+        async createMultiCallControl() { return fakeMultiCallControl; }
+      },
+    };
+
+    const adapter = createJabraAdapter({ jabra: fakeJabra, incomingRingTimeoutMs: 45000 });
+    adapter.onCommand((command) => emitted.push(command));
+    await adapter.init();
+    await adapter.setSoftphoneState({ ringing: true, muted: true, held: true, active: false });
+    await adapter.setSoftphoneState({ ringing: false, muted: false, held: false, active: false });
+
+    resolveIncomingCall(true);
+    await incomingCallResult;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(calls, [
+      ["signalIncomingCall", 45000],
+      ["mute"],
+      ["hold"],
+      ["endCall"],
+      ["unmute"],
+      ["resume"],
+    ]);
+    assert.deepEqual(emitted, [{ type: HEADSET_COMMANDS.ANSWER, source: "headset" }]);
   });
 });
 
