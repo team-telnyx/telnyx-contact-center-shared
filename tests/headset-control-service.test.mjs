@@ -273,6 +273,43 @@ describe("Jabra adapter contract", () => {
     ]);
     assert.deepEqual(emitted, [{ type: HEADSET_COMMANDS.ANSWER, source: "headset" }]);
   });
+
+  it("emits a Jabra reject command when the headset rejects an incoming call", async () => {
+    const emitted = [];
+    let resolveIncomingCall;
+    const incomingCallResult = new Promise((resolve) => { resolveIncomingCall = resolve; });
+    const fakeMultiCallControl = {
+      signalIncomingCall: () => incomingCallResult,
+      muteState: { subscribe() { return { unsubscribe() {} }; } },
+      holdState: { subscribe() { return { unsubscribe() {} }; } },
+      swapRequest: { subscribe() { return { unsubscribe() {} }; } },
+    };
+    const fakeJabra = {
+      RequestedBrowserTransport: { CHROME_EXTENSION_WITH_WEB_HID_FALLBACK: "transport" },
+      async createApi() {
+        return {
+          transportContext: "chrome-extension",
+          deviceAdded: { subscribe(cb) { cb({ name: "Jabra Engage 50", productId: 1, serialNumber: "SN1" }); return { unsubscribe() {} }; } },
+          deviceRemoved: { subscribe() { return { unsubscribe() {} }; } },
+        };
+      },
+      EasyCallControlFactory: class {
+        supportsEasyCallControl() { return true; }
+        async createMultiCallControl() { return fakeMultiCallControl; }
+      },
+    };
+
+    const adapter = createJabraAdapter({ jabra: fakeJabra });
+    adapter.onCommand((command) => emitted.push(command));
+    await adapter.init();
+    await adapter.setSoftphoneState({ ringing: true, active: false });
+
+    resolveIncomingCall(false);
+    await incomingCallResult;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(emitted, [{ type: HEADSET_COMMANDS.REJECT, source: "headset" }]);
+  });
 });
 
 describe("EPOS adapter contract", () => {
@@ -400,6 +437,44 @@ describe("EPOS adapter contract", () => {
 
     assert.equal(devices.at(-1).model, "Sennheiser BTD 800 USB for Lync");
     assert.equal(diagnostics.some((item) => /HeadsetDisconnected/.test(item.message)), true);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    assert.equal(devices.at(-1).connectionState, "service-connected");
+  });
+
+  it("treats empty EPOS ActiveDeviceChanged payloads as no active headset", async () => {
+    const devices = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({
+      WebSocketImpl: FakeWebSocket,
+      reconnectDelayMs: 0,
+      disconnectConfirmationMs: 20,
+      activeDevicePollMs: 0,
+    });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "ActiveDeviceChanged", EventType: "Notification" }) });
+
+    assert.equal(devices.at(-1).connectionState, "service-connected");
+    assert.equal(devices.some((device) => device?.id === "connected"), false);
 
     await new Promise((resolve) => setTimeout(resolve, 25));
 
