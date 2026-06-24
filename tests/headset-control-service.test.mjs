@@ -392,6 +392,7 @@ describe("EPOS adapter contract", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
     socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
 
     await adapter.setSoftphoneState({ callId: "call-1", direction: "incoming", ringing: true, active: false, muted: false, held: false });
     await adapter.setSoftphoneState({ callId: "call-1", direction: "incoming", ringing: false, active: true, muted: true, held: true });
@@ -410,6 +411,40 @@ describe("EPOS adapter contract", () => {
       "CallEnded",
     ]);
     assert.equal(sent[2].CallID, "call-1");
+  });
+
+  it("queues EPOS softphone state until the login acknowledgement completes", async () => {
+    const sent = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send(payload) {
+        sent.push(JSON.parse(payload));
+      }
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await adapter.setSoftphoneState({ callId: "call-queued", direction: "incoming", ringing: true, active: false, muted: false, held: false });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+
+    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn"]);
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
+
+    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "IncomingCall"]);
+    assert.equal(sent[2].CallID, "call-queued");
   });
 
   it("uses EPOS notifications for plug/unplug and does not poll ActiveDeviceChanged", async () => {
@@ -438,12 +473,41 @@ describe("EPOS adapter contract", () => {
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
     socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
     socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync", HeadsetPath: "device-a" }) });
 
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     assert.equal(devices.at(-1).model, "Sennheiser BTD 800 USB for Lync");
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "ActiveDeviceChanged"]);
+  });
+
+  it("treats EPOS product IDs as headset identity for catalog-only device notifications", async () => {
+    const devices = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", ProductID: "0xA055" }) });
+
+    assert.equal(devices.at(-1).productId, "0xA055");
+    assert.equal(devices.at(-1).connectionState, "connected");
   });
 
   it("ignores ActiveDeviceChanged acknowledgements and empty notifications as device updates", async () => {
@@ -508,6 +572,36 @@ describe("EPOS adapter contract", () => {
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync", HeadsetPath: "device-a" }) });
     assert.equal(diagnostics.some((item) => /confirming active device/.test(item.message)), true);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(devices.at(-1).connectionState, "service-connected");
+  });
+
+  it("does not cancel a pending EPOS disconnect when another headset disconnects", async () => {
+    const devices = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync", HeadsetPath: "device-a" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", HeadsetType: "Sennheiser BTD 800 USB for Lync", HeadsetPath: "device-a" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", HeadsetType: "Other", HeadsetPath: "device-b" }) });
 
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(devices.at(-1).connectionState, "service-connected");
