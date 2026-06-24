@@ -227,21 +227,51 @@ describe("Jabra adapter contract", () => {
 });
 
 describe("EPOS adapter contract", () => {
+  it("surfaces EPOS service-ready and service-missing states instead of silently hiding websocket failures", async () => {
+    const devices = [];
+    class FailingWebSocket {
+      constructor() {
+        this.readyState = 0;
+        queueMicrotask(() => this.onerror?.(new Error("connection refused")));
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({
+      WebSocketImpl: FailingWebSocket,
+      url: "wss://127.0.0.1:41088",
+      reconnectDelayMs: 0,
+    });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await adapter.dispose();
+
+    assert.equal(devices.at(-1).connectionState, "service-missing");
+  });
+
   it("sends SDK-service websocket messages for call, mute, hold, and resume state", async () => {
     const sent = [];
+    const devices = [];
     class FakeWebSocket {
-      constructor(url) {
-        this.url = url;
-        setTimeout(() => this.onopen?.(), 0);
+      constructor() {
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
       }
-      send(message) {
-        sent.push(JSON.parse(message));
+      send(payload) {
+        sent.push(JSON.parse(payload));
       }
       close() {}
     }
 
     const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await adapter.setSoftphoneState({ callId: "call-1", direction: "incoming", ringing: true, active: false, muted: false, held: false });
     await adapter.setSoftphoneState({ callId: "call-1", direction: "incoming", ringing: false, active: true, muted: true, held: true });
     await adapter.setSoftphoneState({ callId: "call-1", direction: "incoming", ringing: false, active: true, muted: false, held: false });

@@ -116,7 +116,12 @@ export function HeadsetStatusBadge() {
     serviceRef.current = service;
 
     const unsubscribeDevice = service.onDeviceChange((nextDevice) => {
-      if (!cancelled) setDevice(nextDevice);
+      if (!cancelled) {
+        setDevice(nextDevice);
+        const state = nextDevice?.connectionState || "disconnected";
+        const label = nextDevice?.model || nextDevice?.productName || nextDevice?.vendorLabel || "headset";
+        recordDiagnostic(`${label}: ${state}`, state === "service-missing" || state === "disconnected" ? "warn" : "info");
+      }
     });
     const unsubscribeCommand = service.onCommand((command) => {
       if (!cancelled) recordCommand(command);
