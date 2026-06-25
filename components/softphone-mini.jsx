@@ -31,7 +31,7 @@ import { TransferModal } from "@/components/contact-center/TransferModal";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
 import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
-import { getHeadsetControlService } from "@/lib/headsets/client-headset-service";
+import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -154,16 +154,18 @@ export default function SoftphoneMini() {
       activeCall?.id ||
       null;
 
-    service.setSoftphoneState({
-      callId,
-      direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
-      ringing: Boolean(isRinging),
-      active: Boolean(isCallConnected),
-      muted: Boolean(callUI.isMuted),
-      held: Boolean(callUI.isHeld),
-      remoteDisplayName: incomingFromName || outboundCallerName || null,
-      remoteNumber: incomingFromNumber || toNumber || null,
-    }).catch(() => {});
+    initHeadsetControlService()
+      .then((initializedService) => initializedService?.setSoftphoneState({
+        callId,
+        direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+        ringing: Boolean(isRinging),
+        active: Boolean(isCallConnected),
+        muted: Boolean(callUI.isMuted),
+        held: Boolean(callUI.isHeld),
+        remoteDisplayName: incomingFromName || outboundCallerName || null,
+        remoteNumber: incomingFromNumber || toNumber || null,
+      }))
+      .catch(() => {});
   }, [
     activeCall,
     callUI.isHeld,

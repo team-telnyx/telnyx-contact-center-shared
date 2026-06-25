@@ -363,7 +363,7 @@ describe("EPOS adapter contract", () => {
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection"]);
-    assert.equal(sent[0].SPName, "Softphone::Telnyx Contact Center");
+    assert.equal(sent[0].SPName, "Telnyx Contact Center");
     assert.equal(sent[0].RedialSupport, "No");
     assert.equal(sent[0].OffHookSupport, "No");
     assert.equal(sent[0].DNDOption, "No");

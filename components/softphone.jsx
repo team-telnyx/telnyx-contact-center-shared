@@ -27,7 +27,7 @@ import {
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
-import { getHeadsetControlService } from "@/lib/headsets/client-headset-service";
+import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -183,16 +183,18 @@ export function Softphone() {
       activeCall?.id ||
       null;
 
-    service.setSoftphoneState({
-      callId,
-      direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
-      ringing: Boolean(isRinging),
-      active: Boolean(isCallConnected),
-      muted: Boolean(callUI.isMuted),
-      held: Boolean(callUI.isHeld),
-      remoteDisplayName: incomingCallerName || outboundCallerName || null,
-      remoteNumber: incomingCallerNumber || toNumber || null,
-    }).catch(() => {});
+    initHeadsetControlService()
+      .then((initializedService) => initializedService?.setSoftphoneState({
+        callId,
+        direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+        ringing: Boolean(isRinging),
+        active: Boolean(isCallConnected),
+        muted: Boolean(callUI.isMuted),
+        held: Boolean(callUI.isHeld),
+        remoteDisplayName: incomingCallerName || outboundCallerName || null,
+        remoteNumber: incomingCallerNumber || toNumber || null,
+      }))
+      .catch(() => {});
   }, [
     activeCall,
     callUI.isHeld,
