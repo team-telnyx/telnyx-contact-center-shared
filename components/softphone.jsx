@@ -27,6 +27,8 @@ import {
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
+import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
+import { getHeadsetControlService } from "@/lib/headsets/client-headset-service";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
   const normalize = (value) =>
@@ -171,6 +173,67 @@ export function Softphone() {
   const displayedFromNumber = isIncomingCall
     ? incomingCallerDisplay || fromNumber
     : fromNumber;
+
+  useEffect(() => {
+    const service = getHeadsetControlService();
+    if (!service) return;
+
+    const callId =
+      activeCall?.callControlId ||
+      activeCall?.call_control_id ||
+      activeCall?.id ||
+      null;
+
+    service.setSoftphoneState({
+      callId,
+      direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+      ringing: Boolean(isRinging),
+      active: Boolean(isCallConnected),
+      muted: Boolean(callUI.isMuted),
+      held: Boolean(callUI.isHeld),
+      remoteDisplayName: incomingCallerName || outboundCallerName || null,
+      remoteNumber: incomingCallerNumber || toNumber || null,
+    }).catch(() => {});
+  }, [
+    activeCall,
+    callUI.isHeld,
+    callUI.isMuted,
+    incomingCallerName,
+    incomingCallerNumber,
+    isCallConnected,
+    isIncomingCall,
+    isOutboundCall,
+    isRinging,
+    outboundCallerName,
+    toNumber,
+  ]);
+
+  useEffect(() => {
+    const service = getHeadsetControlService();
+    if (!service) return;
+
+    return service.onCommand((command) => {
+      if (command.type === HEADSET_COMMANDS.ANSWER && isRinging) {
+        handleAnswerCall();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.REJECT && isRinging) {
+        handleRejectCall();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.HANGUP && activeCall) {
+        hangup();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.MUTE && activeCall && command.muted !== callUI.isMuted) {
+        toggleMute();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.HOLD && activeCall && command.held !== callUI.isHeld) {
+        toggleHold();
+      }
+    });
+  }, [activeCall, callUI.isHeld, callUI.isMuted, isRinging]);
 
 
   const remoteAudioRef = useRef(null);

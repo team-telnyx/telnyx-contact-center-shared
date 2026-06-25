@@ -410,9 +410,13 @@ describe("EPOS adapter contract", () => {
       "CallHold",
       "UnmuteHeadset",
       "HeldCallResumed",
+      "HeldCallResumed",
+      "UnmuteHeadset",
       "CallEnded",
     ]);
     assert.equal(sent[4].CallID, "call-1");
+    assert.equal(sent[6].CallID, undefined);
+    assert.equal(sent[10].CallID, undefined);
   });
 
   it("queues EPOS softphone state until the login acknowledgement completes", async () => {
@@ -447,6 +451,37 @@ describe("EPOS adapter contract", () => {
 
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "SystemInformation", "ActiveDeviceChanged", "IncomingCall"]);
     assert.equal(sent[4].CallID, "call-queued");
+  });
+
+  it("uses the EPOS OutgoingCall event for connected outbound softphone calls", async () => {
+    const sent = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send(payload) {
+        sent.push(JSON.parse(payload));
+      }
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
+
+    await adapter.setSoftphoneState({ callId: "call-out", direction: "outgoing", ringing: false, active: true, muted: false, held: false });
+
+    assert.equal(sent.at(-1).Event, "OutgoingCall");
+    assert.equal(sent.at(-1).CallID, "call-out");
   });
 
   it("uses EPOS notifications plus active-device reconciliation for plug/unplug", async () => {
@@ -669,7 +704,6 @@ describe("EPOS adapter contract", () => {
       WebSocketImpl: FakeWebSocket,
       reconnectDelayMs: 0,
       disconnectConfirmationMs: 20,
-      mediaDevicePollMs: 0,
       transientDisconnectGraceMs: 5000,
       now: () => currentTime,
     });
@@ -686,7 +720,7 @@ describe("EPOS adapter contract", () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(devices.at(-1).model, "Sennheiser SC230 USB CTRL II");
     assert.equal(devices.at(-1).connectionState, "connected");
-    assert.equal(diagnostics.some((item) => /ignoring transient disconnect/.test(item.message)), true);
+    assert.equal(diagnostics.some((item) => /deferring transient disconnect confirmation/.test(item.message)), true);
   });
 
   it("uses browser media-device changes as a fallback when EPOS does not push plug events", async () => {
@@ -719,7 +753,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, mediaDevices, reconnectDelayMs: 0, mediaDevicePollMs: 0 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, mediaDevices, reconnectDelayMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
