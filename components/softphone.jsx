@@ -27,7 +27,6 @@ import {
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { notify } from "@/components/ToastNotify";
-import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
 import { getHeadsetControlService } from "@/lib/headsets/client-headset-service";
 
 const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
@@ -207,33 +206,6 @@ export function Softphone() {
     outboundCallerName,
     toNumber,
   ]);
-
-  useEffect(() => {
-    const service = getHeadsetControlService();
-    if (!service) return;
-
-    return service.onCommand((command) => {
-      if (command.type === HEADSET_COMMANDS.ANSWER && isRinging) {
-        handleAnswerCall();
-        return;
-      }
-      if (command.type === HEADSET_COMMANDS.REJECT && isRinging) {
-        handleRejectCall();
-        return;
-      }
-      if (command.type === HEADSET_COMMANDS.HANGUP && activeCall) {
-        hangup();
-        return;
-      }
-      if (command.type === HEADSET_COMMANDS.MUTE && activeCall && command.muted !== callUI.isMuted) {
-        toggleMute();
-        return;
-      }
-      if (command.type === HEADSET_COMMANDS.HOLD && activeCall && command.held !== callUI.isHeld) {
-        toggleHold();
-      }
-    });
-  }, [activeCall, callUI.isHeld, callUI.isMuted, isRinging]);
 
 
   const remoteAudioRef = useRef(null);
