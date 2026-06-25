@@ -364,6 +364,9 @@ describe("EPOS adapter contract", () => {
     socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection"]);
     assert.equal(sent[0].SPName, "Softphone::Telnyx Contact Center");
+    assert.equal(sent[0].RedialSupport, "No");
+    assert.equal(sent[0].OffHookSupport, "No");
+    assert.equal(sent[0].DNDOption, "No");
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
     assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn"]);
@@ -482,6 +485,79 @@ describe("EPOS adapter contract", () => {
 
     assert.equal(sent.at(-1).Event, "OutgoingCall");
     assert.equal(sent.at(-1).CallID, "call-out");
+  });
+
+  it("maps EPOS held-call off-hook events to resume instead of answer", async () => {
+    const commands = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    adapter.onCommand((command) => commands.push(command));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
+
+    await adapter.setSoftphoneState({ callId: "call-held", direction: "incoming", ringing: false, active: true, muted: false, held: true });
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "OffHook", EventType: "Request", CallID: "call-held" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "InCallAcceptedOnOffhook", EventType: "Notification", CallID: "call-held" }) });
+
+    assert.deepEqual(commands.map((command) => command.type), [HEADSET_COMMANDS.HOLD, HEADSET_COMMANDS.HOLD]);
+    assert.deepEqual(commands.map((command) => command.held), [false, false]);
+  });
+
+  it("maps EPOS request-style headset controls for resume, hangup, and mute", async () => {
+    const commands = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, url: "wss://127.0.0.1:41088", softphoneName: "Telnyx Contact Center" });
+    adapter.onCommand((command) => commands.push(command));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "EstablishConnection", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
+
+    await adapter.setSoftphoneState({ callId: "call-active", direction: "incoming", ringing: false, active: true, muted: false, held: true });
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeldCallResumed", EventType: "Request", CallID: "call-active" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "MuteSoftphone", EventType: "Request", CallID: "call-active" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "UnmuteSoftphone", EventType: "Request", CallID: "call-active" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "CallEnded", EventType: "Request", CallID: "call-active" }) });
+
+    assert.deepEqual(commands.map((command) => command.type), [
+      HEADSET_COMMANDS.HOLD,
+      HEADSET_COMMANDS.MUTE,
+      HEADSET_COMMANDS.MUTE,
+      HEADSET_COMMANDS.HANGUP,
+    ]);
+    assert.deepEqual(commands.map((command) => command.held ?? command.muted ?? null), [false, true, false, null]);
   });
 
   it("uses EPOS notifications plus active-device reconciliation for plug/unplug", async () => {

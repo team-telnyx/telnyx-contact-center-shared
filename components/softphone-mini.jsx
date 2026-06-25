@@ -1285,10 +1285,12 @@ export default function SoftphoneMini() {
 
       if (isHeld) {
         activeCall.unhold?.() || activeCall.resume?.();
+        storeSetHeld(false);
         // Update status to 'active' to track hold resume
         updateStatus("active");
       } else {
         activeCall.hold?.() || activeCall.pause?.();
+        storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");
       }
