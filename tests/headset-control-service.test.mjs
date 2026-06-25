@@ -449,7 +449,7 @@ describe("EPOS adapter contract", () => {
     assert.equal(sent[4].CallID, "call-queued");
   });
 
-  it("uses EPOS notifications for plug/unplug and does not poll ActiveDeviceChanged", async () => {
+  it("uses EPOS notifications plus active-device reconciliation for plug/unplug", async () => {
     const sent = [];
     const devices = [];
     let socket;
@@ -468,7 +468,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -502,7 +502,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -531,7 +531,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -566,7 +566,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -597,7 +597,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     adapter.onDiagnostic((diagnostic) => diagnostics.push(diagnostic));
     await adapter.init();
@@ -633,7 +633,7 @@ describe("EPOS adapter contract", () => {
       close() {}
     }
 
-    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20 });
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0, disconnectConfirmationMs: 20, transientDisconnectGraceMs: 0 });
     adapter.onDeviceChange((device) => devices.push(device));
     await adapter.init();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -645,6 +645,93 @@ describe("EPOS adapter contract", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(devices.at(-1).connectionState, "service-connected");
+  });
+
+  it("keeps a just-detected EPOS headset when EPOS emits an immediate transient disconnect", async () => {
+    const devices = [];
+    const diagnostics = [];
+    let socket;
+    let currentTime = 1000;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({
+      WebSocketImpl: FakeWebSocket,
+      reconnectDelayMs: 0,
+      disconnectConfirmationMs: 20,
+      mediaDevicePollMs: 0,
+      transientDisconnectGraceMs: 5000,
+      now: () => currentTime,
+    });
+    adapter.onDeviceChange((device) => devices.push(device));
+    adapter.onDiagnostic((diagnostic) => diagnostics.push(diagnostic));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetConnected", EventType: "Notification", HeadsetName: "Sennheiser SC230 USB CTRL II", HeadsetPath: "Sennheiser SC230 USB CTRL II", HeadsetType: "Sennheiser SC230 USB CTRL II" }) });
+    currentTime += 10;
+    socket.onmessage?.({ data: JSON.stringify({ Event: "HeadsetDisconnected", EventType: "Notification", HeadsetName: "Sennheiser SC230 USB CTRL II", HeadsetPath: "Sennheiser SC230 USB CTRL II", HeadsetType: "Sennheiser SC230 USB CTRL II" }) });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(devices.at(-1).model, "Sennheiser SC230 USB CTRL II");
+    assert.equal(devices.at(-1).connectionState, "connected");
+    assert.equal(diagnostics.some((item) => /ignoring transient disconnect/.test(item.message)), true);
+  });
+
+  it("uses browser media-device changes as a fallback when EPOS does not push plug events", async () => {
+    const devices = [];
+    const sent = [];
+    let socket;
+    let deviceChangeHandler;
+    const mediaDevices = {
+      addEventListener(event, handler) {
+        if (event === "devicechange") deviceChangeHandler = handler;
+      },
+      removeEventListener() {},
+      async enumerateDevices() {
+        return [
+          { kind: "audioinput", label: "Sennheiser SC230 USB CTRL II", deviceId: "mic-1" },
+          { kind: "audiooutput", label: "MacBook Speakers", deviceId: "speaker-1" },
+        ];
+      },
+    };
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send(payload) { sent.push(JSON.parse(payload)); }
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, mediaDevices, reconnectDelayMs: 0, mediaDevicePollMs: 0 });
+    adapter.onDeviceChange((device) => devices.push(device));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.onmessage?.({ data: JSON.stringify({ Event: "SocketConnected", EventType: "Notification", ReturnCode: 0 }) });
+
+    deviceChangeHandler?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(devices.at(-1).model, "Sennheiser SC230 USB CTRL II");
+    assert.equal(devices.at(-1).transport, "browser-media-device");
+    assert.equal(devices.at(-1).connectionState, "connected");
+    assert.equal(sent.map((message) => message.Event).includes("ActiveDeviceChanged"), true);
   });
 
   it("maps EPOS headset-originated mute events and ignores acknowledgements for app-sent mute commands", async () => {
