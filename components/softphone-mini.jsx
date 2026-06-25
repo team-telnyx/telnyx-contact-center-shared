@@ -121,6 +121,7 @@ export default function SoftphoneMini() {
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [interaction, setInteraction] = useState(null);
   const [outboundCallerName, setOutboundCallerName] = useState("");
+  const headsetStatePublishVersionRef = useRef(0);
   const formatCallerIdentity = (name, number) => {
     const normalizedName = String(name || "").trim();
     const normalizedNumber = String(number || "").trim();
@@ -148,6 +149,10 @@ export default function SoftphoneMini() {
     const service = getHeadsetControlService();
     if (!service) return;
 
+    const publishVersion = headsetStatePublishVersionRef.current + 1;
+    headsetStatePublishVersionRef.current = publishVersion;
+    let isStale = false;
+
     const callId =
       activeCall?.callControlId ||
       activeCall?.call_control_id ||
@@ -155,17 +160,24 @@ export default function SoftphoneMini() {
       null;
 
     initHeadsetControlService()
-      .then((initializedService) => initializedService?.setSoftphoneState({
-        callId,
-        direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
-        ringing: Boolean(isRinging),
-        active: Boolean(isCallConnected),
-        muted: Boolean(callUI.isMuted),
-        held: Boolean(callUI.isHeld),
-        remoteDisplayName: incomingFromName || outboundCallerName || null,
-        remoteNumber: incomingFromNumber || toNumber || null,
-      }))
+      .then((initializedService) => {
+        if (isStale || headsetStatePublishVersionRef.current !== publishVersion) return null;
+        return initializedService?.setSoftphoneState({
+          callId,
+          direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+          ringing: Boolean(isRinging),
+          active: Boolean(isCallConnected),
+          muted: Boolean(callUI.isMuted),
+          held: Boolean(callUI.isHeld),
+          remoteDisplayName: incomingFromName || outboundCallerName || null,
+          remoteNumber: incomingFromNumber || toNumber || null,
+        });
+      })
       .catch(() => {});
+
+    return () => {
+      isStale = true;
+    };
   }, [
     activeCall,
     callUI.isHeld,
