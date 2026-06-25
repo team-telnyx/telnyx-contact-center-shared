@@ -402,6 +402,8 @@ describe("EPOS adapter contract", () => {
     assert.deepEqual(sent.map((message) => message.Event), [
       "EstablishConnection",
       "SPLoggedIn",
+      "SystemInformation",
+      "ActiveDeviceChanged",
       "IncomingCall",
       "InCallAccepted",
       "MuteHeadset",
@@ -410,7 +412,7 @@ describe("EPOS adapter contract", () => {
       "HeldCallResumed",
       "CallEnded",
     ]);
-    assert.equal(sent[2].CallID, "call-1");
+    assert.equal(sent[4].CallID, "call-1");
   });
 
   it("queues EPOS softphone state until the login acknowledgement completes", async () => {
@@ -443,8 +445,8 @@ describe("EPOS adapter contract", () => {
 
     socket.onmessage?.({ data: JSON.stringify({ Event: "SPLoggedIn", EventType: "Acknowledgement", ReturnCode: 0 }) });
 
-    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "IncomingCall"]);
-    assert.equal(sent[2].CallID, "call-queued");
+    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "SystemInformation", "ActiveDeviceChanged", "IncomingCall"]);
+    assert.equal(sent[4].CallID, "call-queued");
   });
 
   it("uses EPOS notifications for plug/unplug and does not poll ActiveDeviceChanged", async () => {
@@ -479,7 +481,9 @@ describe("EPOS adapter contract", () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     assert.equal(devices.at(-1).model, "Sennheiser BTD 800 USB for Lync");
-    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "ActiveDeviceChanged"]);
+    assert.equal(devices.at(-1).connectionState, "service-connected");
+    assert.equal(devices.at(-1).deviceRole, "dongle");
+    assert.deepEqual(sent.map((message) => message.Event), ["EstablishConnection", "SPLoggedIn", "SystemInformation", "ActiveDeviceChanged", "ActiveDeviceChanged"]);
   });
 
   it("treats EPOS product IDs as headset identity for catalog-only device notifications", async () => {
@@ -641,6 +645,37 @@ describe("EPOS adapter contract", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 25));
     assert.equal(devices.at(-1).connectionState, "service-connected");
+  });
+
+  it("maps EPOS headset-originated mute events and ignores acknowledgements for app-sent mute commands", async () => {
+    const emitted = [];
+    let socket;
+    class FakeWebSocket {
+      constructor() {
+        socket = this;
+        this.readyState = 0;
+        queueMicrotask(() => {
+          this.readyState = 1;
+          this.onopen?.();
+        });
+      }
+      send() {}
+      close() {}
+    }
+
+    const adapter = createEposAdapter({ WebSocketImpl: FakeWebSocket, reconnectDelayMs: 0 });
+    adapter.onCommand((command) => emitted.push(command));
+    await adapter.init();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    socket.onmessage?.({ data: JSON.stringify({ Event: "MuteHeadset", EventType: "Acknowledgement", ReturnCode: 0 }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "MuteSoftphone", EventType: "Notification" }) });
+    socket.onmessage?.({ data: JSON.stringify({ Event: "UnmuteSoftphone", EventType: "Notification" }) });
+
+    assert.deepEqual(emitted, [
+      { type: HEADSET_COMMANDS.MUTE, muted: true, source: "headset" },
+      { type: HEADSET_COMMANDS.MUTE, muted: false, source: "headset" },
+    ]);
   });
 });
 

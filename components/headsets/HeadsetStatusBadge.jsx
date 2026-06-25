@@ -174,8 +174,10 @@ export function HeadsetStatusBadge() {
           aria-label="Headset controls"
         >
           <Headphones className="h-4 w-4" />
-          {status === "connected" || status === "service-connected" ? (
+          {status === "connected" ? (
             <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-background bg-emerald-400" />
+          ) : status === "service-connected" ? (
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-background bg-sky-400" />
           ) : status === "error" || status === "service-missing" || status === "disconnected" ? (
             <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border border-background bg-amber-400" />
           ) : null}
