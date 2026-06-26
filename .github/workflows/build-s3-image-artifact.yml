@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifact
-          docker save "${{ steps.meta.outputs.tag }}" | zstd -T0 -19 -o artifact/image.tar.zst
+          docker save "${{ steps.meta.outputs.tag }}" | zstd -T0 -3 -o artifact/image.tar.zst
           (cd artifact && sha256sum image.tar.zst > image.tar.zst.sha256)
           cat > artifact/manifest.json <<EOF
           {
