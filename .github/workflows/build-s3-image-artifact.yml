@@ -157,6 +157,43 @@ jobs:
           aws s3 cp artifact/image.tar.zst.sha256 "${{ steps.meta.outputs.s3_prefix }}/image.tar.zst.sha256" --only-show-errors
           aws s3 cp artifact/manifest.json "${{ steps.meta.outputs.s3_prefix }}/manifest.json" --content-type application/json --only-show-errors
 
+      - name: Keep only the latest 5 S3 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          bucket = os.environ["ARTIFACT_BUCKET"]
+          prefix = os.environ["ARTIFACT_PREFIX"].strip("/")
+          keep = 5
+
+          def aws_json(*args):
+              return json.loads(subprocess.check_output(["aws", *args], text=True))
+
+          objects = aws_json("s3api", "list-objects-v2", "--bucket", bucket, "--prefix", f"{prefix}/", "--output", "json").get("Contents", [])
+          manifests = sorted(
+              [obj for obj in objects if obj.get("Key", "").endswith("/manifest.json")],
+              key=lambda obj: obj.get("LastModified", ""),
+              reverse=True,
+          )
+          stale_prefixes = [obj["Key"].rsplit("/", 1)[0] for obj in manifests[keep:]]
+          for artifact_prefix in stale_prefixes:
+              stale_objects = aws_json("s3api", "list-objects-v2", "--bucket", bucket, "--prefix", f"{artifact_prefix}/", "--output", "json").get("Contents", [])
+              keys = [{"Key": obj["Key"]} for obj in stale_objects]
+              for idx in range(0, len(keys), 1000):
+                  subprocess.check_call([
+                      "aws", "s3api", "delete-objects",
+                      "--bucket", bucket,
+                      "--delete", json.dumps({"Objects": keys[idx:idx + 1000], "Quiet": True}),
+                      "--output", "json",
+                  ])
+              print(f"Deleted stale artifact prefix s3://{bucket}/{artifact_prefix}/")
+          print(f"Retained {min(len(manifests), keep)} newest artifact prefixes for s3://{bucket}/{prefix}/")
+          PY
+
       - name: Upload small manifest artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
