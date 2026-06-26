@@ -67,7 +67,7 @@ the artifact prefix:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::fde-app-artifacts-260957529682/contact-center/*"
     },
     {
