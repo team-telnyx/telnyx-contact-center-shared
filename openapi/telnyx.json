@@ -131,7 +131,7 @@
     },
     {
       "name": "Conversation Histories",
-      "description": "Semantic vector search over ingested conversation history records using kNN cosine similarity with multi-region fan-out."
+      "description": "Semantic vector search over ingested conversation history records with multi-region fan-out."
     },
     {
       "name": "Conversations",
@@ -6951,7 +6951,7 @@
     "/ai/conversation_histories": {
       "get": {
         "summary": "Search conversation histories",
-        "description": "Performs semantic vector search across conversation history records.\n\n**How it works:**\n1. The query text is embedded into a 1024-dimensional vector using the multilingual-e5-large model.\n2. The vector is sent to regional OpenSearch clusters for kNN search using HNSW cosine similarity.\n3. When no region is specified, all regions are queried in parallel (fan-out) and results are merged by score.\n4. Results are ranked by cosine similarity score (descending) and truncated to `top_k`.\n\n**Authentication:** Requires a Telnyx API key via `Authorization: Bearer <key>`. Results are automatically scoped to the caller's organization \u2014 `organization_id` is injected from the auth token and cannot be overridden.\n\n**Chunking:** Records are split into chunks of up to 480 tokens with 64-token overlap at ingestion time. Each search result represents a single chunk, with `chunk_index` and `chunk_total` indicating its position within the original record.\n\n**Filtering:** Use `filter[field][operator]=value` query parameters to narrow results before vector search.\n\nTop-level filterable fields: `user_id`, `record_type`, `region`, `document_id`, `record_id`, `record_created_at`, `ingested_at`, `retention`\n\nNote: `retention` is filter-only \u2014 it can be used to narrow results but is not returned in the response body.\n\nMetadata fields: any field not in the list above is resolved to `data.metadata.<field>` in OpenSearch (e.g., `filter[language]=en` \u2192 `data.metadata.language`).\n\nSupported filter operators:\n- `eq` \u2014 exact match (default when no operator specified)\n- `in` \u2014 match any of comma-separated values\n- `gte`, `gt`, `lte`, `lt` \u2014 range comparisons (useful for date filtering)\n- `contains` \u2014 wildcard substring match\n\n**Examples:**\n```\nGET /v2/ai/conversation_histories?q=billing+issue&record_type=voice&top_k=10\nGET /v2/ai/conversation_histories?q=setup+guide&record_type=knowledge_base&region=USA&min_score=0.5\nGET /v2/ai/conversation_histories?q=refund&record_type=voice&filter[record_created_at][gte]=2026-01-01T00:00:00Z\nGET /v2/ai/conversation_histories?q=outage&record_type=voice&filter[region][in]=USA,DEU\nGET /v2/ai/conversation_histories?q=hold+time&record_type=voice&filter[language]=en\n```",
+        "description": "Performs semantic vector search across conversation history records.\n\n**How it works:**\n1. The query text is embedded into a 1024-dimensional vector using the multilingual-e5-large model.\n2. The vector is compared against indexed record chunks using semantic similarity search.\n3. When no region is specified, all regions are queried in parallel (fan-out) and results are merged by score.\n4. Results are ranked by similarity score (descending) and paginated via `page[number]` / `page[size]`.\n\n**Authentication:** Requires a Telnyx API key via `Authorization: Bearer <key>`. Results are automatically scoped to the caller's organization \u2014 `organization_id` is injected from the auth token and cannot be overridden.\n\n**Chunking:** Records are split into chunks of up to 480 tokens with 64-token overlap at ingestion time. Each search result represents a single chunk, with `chunk_index` and `chunk_total` indicating its position within the original record.\n\n**Filtering:** Use `filter[field][operator]=value` query parameters to narrow results before vector search.\n\nTop-level filterable fields: `user_id`, `region`, `record_id`, `record_created_at`, `ingested_at`, `retention`\n\nNote: `retention` is filter-only \u2014 it can be used to narrow results but is not returned in the response body.\n\nMetadata fields: any field not in the list above is resolved to `data.metadata.<field>` (e.g., `filter[language]=en` \u2192 `data.metadata.language`).\n\nSupported filter operators:\n- `eq` \u2014 exact match (default when no operator specified)\n- `in` \u2014 match any of comma-separated values\n- `gte`, `gt`, `lte`, `lt` \u2014 range comparisons (useful for date filtering)\n- `contains` \u2014 wildcard substring match\n\n**Examples:**\n```\nGET /v2/ai/conversation_histories?q=billing+issue&page[size]=10\nGET /v2/ai/conversation_histories?q=setup+guide&region=USA&min_score=0.5\nGET /v2/ai/conversation_histories?q=refund&filter[record_created_at][gte]=2026-01-01T00:00:00Z\nGET /v2/ai/conversation_histories?q=outage&filter[region][in]=USA,DEU\nGET /v2/ai/conversation_histories?q=hold+time&filter[language]=en\n```",
         "operationId": "SearchConversationHistories",
         "tags": [
           "Conversation Histories"
@@ -6961,7 +6961,7 @@
             "name": "q",
             "in": "query",
             "required": true,
-            "description": "Natural language search query. The text is embedded into a 1024-dimensional vector and compared against indexed record chunks using kNN cosine similarity.",
+            "description": "Natural language search query. The text is embedded into a 1024-dimensional vector and compared against indexed record chunks using semantic similarity.",
             "schema": {
               "type": "string",
               "minLength": 1,
@@ -6969,26 +6969,10 @@
             }
           },
           {
-            "name": "record_type",
-            "in": "query",
-            "required": true,
-            "description": "The type of records to search. Each record type is stored in a separate vector index.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "voice",
-                "message",
-                "ai_pipeline_storage",
-                "knowledge_base"
-              ],
-              "example": "voice"
-            }
-          },
-          {
             "name": "region",
             "in": "query",
             "required": false,
-            "description": "Restrict search to a specific region's OpenSearch cluster. When omitted, all regions are queried in parallel (fan-out) and results are merged by cosine similarity score.",
+            "description": "Restrict search to a specific region. When omitted, all regions are queried in parallel (fan-out) and results are merged by similarity score.",
             "schema": {
               "type": "string",
               "enum": [
@@ -7001,10 +6985,22 @@
             }
           },
           {
-            "name": "top_k",
+            "name": "page[number]",
             "in": "query",
             "required": false,
-            "description": "Maximum number of results to return. Defaults to 20, maximum 100.",
+            "description": "Page number to return (1-based). Defaults to 1.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "example": 1
+            }
+          },
+          {
+            "name": "page[size]",
+            "in": "query",
+            "required": false,
+            "description": "Number of results per page. Defaults to 20, maximum 100.",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -7045,16 +7041,6 @@
             "schema": {
               "type": "string",
               "example": "rec-001"
-            }
-          },
-          {
-            "name": "filter[document_id]",
-            "in": "query",
-            "required": false,
-            "description": "Filter by document identifier (exact match). Populated for knowledge_base records.",
-            "schema": {
-              "type": "string",
-              "example": "doc-789"
             }
           },
           {
@@ -7138,11 +7124,9 @@
                       "chunk_total": 3,
                       "text": "Customer called regarding a billing discrepancy on their latest invoice. Agent confirmed the charge was correct and explained the prorated amount.",
                       "score": 0.92,
-                      "record_type": "voice",
                       "region": "USA",
                       "user_id": "user-123",
                       "organization_id": "org-456",
-                      "document_id": null,
                       "record_created_at": "2026-05-28T12:00:00Z",
                       "ingested_at": "2026-05-28T12:01:00Z",
                       "metadata": {
@@ -7162,7 +7146,7 @@
             }
           },
           "400": {
-            "description": "Invalid request parameters \u2014 unsupported record_type, invalid region, or malformed filter expression.",
+            "description": "Invalid request parameters \u2014 invalid region or malformed filter expression.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7173,7 +7157,7 @@
                     {
                       "code": "400",
                       "title": "Bad Request",
-                      "detail": "Invalid record_type: invalid. Must be one of: voice, message, ai_pipeline_storage, knowledge_base"
+                      "detail": "Invalid region: invalid. Must be one of: USA, DEU, AUS, UAE"
                     }
                   ]
                 }
@@ -7210,7 +7194,7 @@
             }
           },
           "500": {
-            "description": "Server-side error \u2014 embeddings service unavailable, OpenSearch cluster unreachable, or internal processing failure.",
+            "description": "Server-side error \u2014 embeddings service unavailable, search backend unreachable, or internal processing failure.",
             "content": {
               "application/json": {
                 "schema": {
@@ -85636,11 +85620,9 @@
           "chunk_total",
           "text",
           "score",
-          "record_type",
           "region",
           "user_id",
           "organization_id",
-          "document_id",
           "record_created_at",
           "ingested_at"
         ],
@@ -85676,17 +85658,6 @@
             "description": "Cosine similarity score between the query vector and this chunk's vector. Higher values indicate greater semantic relevance.",
             "example": 0.92
           },
-          "record_type": {
-            "type": "string",
-            "enum": [
-              "voice",
-              "message",
-              "ai_pipeline_storage",
-              "knowledge_base"
-            ],
-            "description": "Type of the record.",
-            "example": "voice"
-          },
           "region": {
             "type": "string",
             "enum": [
@@ -85708,14 +85679,6 @@
             "description": "Identifier of the organization that owns this record.",
             "example": "org-456"
           },
-          "document_id": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Document identifier. Present only for knowledge_base records; null for all other record types.",
-            "example": null
-          },
           "record_created_at": {
             "type": "string",
             "format": "date-time",
@@ -85732,7 +85695,7 @@
             "type": "object",
             "additionalProperties": true,
             "default": {},
-            "description": "Arbitrary metadata attached to the record at ingestion time. Stored as a flat_object in OpenSearch and filterable via filter[field]=value query parameters.",
+            "description": "Arbitrary metadata attached to the record at ingestion time. Filterable via filter[field]=value query parameters.",
             "example": {
               "source": "call-center",
               "language": "en"
@@ -145647,17 +145610,17 @@
           },
           "total_results": {
             "type": "integer",
-            "description": "Total number of matching results across all queried regions (before top_k truncation).",
+            "description": "Total number of matching results across all queried regions.",
             "example": 42
           },
           "page_number": {
             "type": "integer",
-            "description": "Current page number (always 1 \u2014 this API does not support pagination, use top_k instead).",
+            "description": "Current page number (1-based), matching the requested page[number].",
             "example": 1
           },
           "page_size": {
             "type": "integer",
-            "description": "Number of results per page (equals the effective top_k value).",
+            "description": "Number of results per page, matching the requested page[size].",
             "example": 20
           }
         }
