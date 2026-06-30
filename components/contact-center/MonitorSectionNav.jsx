@@ -5,6 +5,7 @@ import {
   IconActivity,
   IconTrendingUp,
   IconUsers,
+  IconLayoutDashboard,
 } from "@tabler/icons-react";
 import { SectionRail } from "@/components/ui/section-rail";
 
@@ -15,6 +16,7 @@ export const MONITOR_ACTIVE_SECTION_STORAGE_KEY =
   "supervisor.monitor.activeSection";
 
 export const MONITOR_RAIL_ITEMS = [
+  { id: "overview", label: "Overview", icon: IconLayoutDashboard, description: "Real-time contact center performance dashboard" },
   { id: "dashboard", label: "Dashboard", icon: IconActivity, description: "Today's contact center picture and live signals" },
   { id: "agents", label: "Agents", icon: IconUsers, description: "Agent status and live calls" },
   { id: "queues", label: "Queues", icon: IconTrendingUp, description: "Queue performance and waiting calls" },

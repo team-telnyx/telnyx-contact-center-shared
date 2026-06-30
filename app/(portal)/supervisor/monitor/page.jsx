@@ -87,6 +87,7 @@ import {
   MONITOR_ACTIVE_SECTION_STORAGE_KEY,
   MONITOR_RAIL_ITEMS,
 } from "@/components/contact-center/MonitorSectionNav";
+import { OverviewDashboardView } from "@/components/contact-center/OverviewDashboardView";
 
 const MONITOR_UI_STATE_STORAGE_KEYS = {
   activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY,
@@ -678,7 +679,7 @@ export default function MonitorPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("overview");
   const [expandedQueueId, setExpandedQueueId] = useState(null);
   const [queueCallsMap, setQueueCallsMap] = useState({});
   const [loadingQueueCalls, setLoadingQueueCalls] = useState(new Set());
@@ -2022,7 +2023,13 @@ export default function MonitorPage() {
         <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
           <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
           <section className="h-full min-h-0 overflow-hidden pr-1">
-            {activeTab === "dashboard" ? (
+            {activeTab === "overview" ? (
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                  <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+                </CardContent>
+              </Card>
+            ) : activeTab === "dashboard" ? (
               <Card className="flex h-full min-h-0 flex-col overflow-hidden">
                 <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
                   <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
