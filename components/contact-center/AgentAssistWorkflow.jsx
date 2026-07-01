@@ -54,6 +54,7 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
 import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
+import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
 
 /**
  * AgentAssistWorkflow Component
@@ -424,6 +425,21 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
     });
   }, [stages, itemStatuses, slotsFilled, transcriptions]);
 
+  // Click slot -> jump transcript to exact utterance
+  const [jumpTarget, setJumpTarget] = useState({ transcriptId: null, nonce: 0 });
+  const requestJumpToUtterance = useCallback((sourceUtterance) => {
+    const id = findTranscriptIdForUtterance(transcriptions, sourceUtterance);
+    if (!id) {
+      notify({
+        title: "Transcript not found",
+        description: "No matching utterance in the transcript yet",
+        variant: "info",
+      });
+      return;
+    }
+    setJumpTarget((prev) => ({ transcriptId: id, nonce: prev.nonce + 1 }));
+  }, [transcriptions]);
+
   // Loading state
   if (isLoading && !session) {
     return (
@@ -505,6 +521,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           slotsFilled={slotsFilled}
           showLlmConfidence={showLlmConfidence}
           showExpandedStages={assistConfig.show_expanded_stages === true}
+          onJumpToUtterance={requestJumpToUtterance}
         />
 
         {/* Center: Live Transcription */}
@@ -513,6 +530,7 @@ export function AgentAssistWorkflow({ interactionId, workflowId, interaction }) 
           translationConfig={interaction?.metadata?.agent_assist_config || {}}
           interactionId={interactionId}
           showSttConfidence={showSttConfidence}
+          jumpTarget={jumpTarget}
         />
 
         {/* Right: Suggested Response (single) */}
@@ -844,7 +862,7 @@ function getStageVerificationAlert(stage, itemStatuses, completedBlinkStageIds =
 /**
  * Workflow Stages Card with Accordions
  */
-function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true, showExpandedStages = false }) {
+function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem, onSkipItem, aiSlotsDetails = {}, slotsFilled = {}, showLlmConfidence = true, showExpandedStages = false, onJumpToUtterance }) {
   // Track which stage is expanded (user can manually toggle)
   const [expandedStage, setExpandedStage] = useState(null);
   const [expandedStages, setExpandedStages] = useState([]);
@@ -1083,6 +1101,8 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                           const aiSlotInfo = item.slot_name ? aiSlotsDetails[item.slot_name] : null;
                           const isAiFilled = completedBy === "ai" || (aiSlotInfo?.value && !completedBy);
                           const isAgentFilled = completedBy === "agent";
+                          // Source utterance used to jump to the matching transcript bubble
+                          const sourceUtteranceForJump = status?.source_transcript || aiSlotInfo?.source_utterance || null;
 
                           return (
                             <div
@@ -1173,9 +1193,26 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                       </div>
                                     ) : slotValue ? (
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-sm font-medium text-foreground">
-                                          {slotValue}
-                                        </span>
+                                        {sourceUtteranceForJump ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              title="Jump to transcript"
+                                              className="text-sm font-medium truncate hover:underline cursor-pointer text-left"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                onJumpToUtterance?.(sourceUtteranceForJump);
+                                              }}
+                                            >
+                                              {slotValue}
+                                            </button>
+                                            <MessageSquare className="h-3 w-3 text-muted-foreground shrink-0" aria-hidden="true" />
+                                          </>
+                                        ) : (
+                                          <span className="text-sm font-medium text-foreground">
+                                            {slotValue}
+                                          </span>
+                                        )}
                                         {/* Source indicator: AI or Agent */}
                                         {isAiFilled ? (
                                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-600 dark:text-violet-400 border-violet-500/40 bg-violet-500/10" title="Filled by AI Assistant">
@@ -1318,14 +1355,59 @@ function ItemTypeBadge({ type }) {
 /**
  * Live Transcription Card with chat bubbles
  */
-function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId, showSttConfidence = true }) {
+function LiveTranscriptionCard({ transcriptions, translationConfig, interactionId, showSttConfidence = true, jumpTarget }) {
   const scrollRef = useRef(null);
   const endRef = useRef(null);
+  const bubbleRefs = useRef({});
+  const [highlightedId, setHighlightedId] = useState(null);
+  const highlightTimeoutRef = useRef(null);
+  const rafIdRef = useRef(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcriptions]);
+
+  // Jump to (and highlight) the transcript bubble matching a slot's source utterance
+  useEffect(() => {
+    if (!jumpTarget || !jumpTarget.transcriptId) return;
+    const id = jumpTarget.transcriptId;
+    const el = bubbleRefs.current[id];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      // Radix ScrollArea viewport fallback: ensure the scroll container aligns too
+      const viewport = el.closest("[data-radix-scroll-area-viewport]");
+      if (viewport && typeof viewport.scrollTo === "function") {
+        const elRect = el.getBoundingClientRect();
+        const vpRect = viewport.getBoundingClientRect();
+        const offset = elRect.top - vpRect.top - (vpRect.height - elRect.height) / 2;
+        viewport.scrollTo({ top: viewport.scrollTop + offset, behavior: "smooth" });
+      }
+    }
+    // Defer the highlight state set out of the synchronous effect body (react-hooks/set-state-in-effect).
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      setHighlightedId(id);
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+      highlightTimeoutRef.current = setTimeout(() => {
+        setHighlightedId(null);
+        highlightTimeoutRef.current = null;
+      }, 2200);
+    });
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+        highlightTimeoutRef.current = null;
+      }
+    };
+  }, [jumpTarget]);
 
   return (
     <Card className="flex-1 basis-0 min-w-0 flex flex-col overflow-hidden border border-border">
@@ -1352,13 +1434,25 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
               </div>
             ) : (
               transcriptions.map((t) => (
-                <TranscriptionBubble
+                <div
                   key={t.id}
-                  transcription={t}
-                  translationConfig={translationConfig}
-                  interactionId={interactionId}
-                  showSttConfidence={showSttConfidence}
-                />
+                  data-transcript-id={t.id}
+                  ref={(node) => {
+                    if (node) {
+                      bubbleRefs.current[t.id] = node;
+                    } else {
+                      delete bubbleRefs.current[t.id];
+                    }
+                  }}
+                >
+                  <TranscriptionBubble
+                    transcription={t}
+                    translationConfig={translationConfig}
+                    interactionId={interactionId}
+                    showSttConfidence={showSttConfidence}
+                    isHighlighted={highlightedId === t.id}
+                  />
+                </div>
               ))
             )}
             <div ref={endRef} />
@@ -1372,7 +1466,7 @@ function LiveTranscriptionCard({ transcriptions, translationConfig, interactionI
 /**
  * Single transcription bubble
  */
-function TranscriptionBubble({ transcription, translationConfig, interactionId, showSttConfidence = true }) {
+function TranscriptionBubble({ transcription, translationConfig, interactionId, showSttConfidence = true, isHighlighted = false }) {
   const isCustomer = transcription.track === "inbound";
   const sentiment = transcription.sentiment;
   const sentimentScore = transcription.sentimentScore;
@@ -1447,7 +1541,7 @@ function TranscriptionBubble({ transcription, translationConfig, interactionId, 
           isCustomer
             ? "bg-sky-500/10 border-sky-500/20 rounded-tl-sm"
             : "bg-emerald-500/10 border-emerald-500/20 text-foreground rounded-tr-sm"
-        } ${isInterim ? "opacity-70" : ""}`}
+        } ${isInterim ? "opacity-70" : ""} ${isHighlighted ? "ring-2 ring-violet-500/60 bg-violet-500/5 transition-all" : ""}`}
       >
         <p className="text-sm leading-relaxed">{transcription.transcript}</p>
       </div>
