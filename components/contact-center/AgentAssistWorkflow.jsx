@@ -54,6 +54,7 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { normalizeLanguageCode as normalizeBaseLanguageCode } from "@/lib/language-code-utils";
 import { resolveSuggestedResponseTarget } from "@/lib/agent-assist/suggestion-target-resolver.mjs";
+import { appendUniqueSuggestion } from "@/lib/agent-assist/suggestion-dedup.mjs";
 import { findTranscriptIdForUtterance } from "@/lib/agent-assist/slot-utterance-match.mjs";
 
 /**
@@ -1819,7 +1820,10 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
   const [generatingSuggestion, setGeneratingSuggestion] = useState(false);
   const scrollRef = useRef(null);
   const endRef = useRef(null);
-  const lastItemIdRef = useRef(null);
+  // Set of target keys already generated this session. Using a set (not a single
+  // last-key ref) prevents the same guide being appended twice when the resolved
+  // target oscillates back to a previously-suggested one (A -> B -> A).
+  const generatedTargetKeysRef = useRef(new Set());
   const prevAiDataReceivedRef = useRef(false);
   // Track whether the handoff greeting has already been sent (or is in-flight)
   // to avoid race condition where suggestions.length===0 still sees 0 mid-flight
@@ -1837,7 +1841,7 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
     if (isAiAssisted && aiDataReceived && !prevAiDataReceivedRef.current) {
       prevAiDataReceivedRef.current = true;
       setSuggestions([]);
-      lastItemIdRef.current = null; // force regeneration for the new currentSlot
+      generatedTargetKeysRef.current.clear(); // force regeneration for the new currentSlot
       handoffGreetingSentRef.current = false; // reset handoff greeting flag on AI data arrival
       if (onSuggestionsChange) onSuggestionsChange([]);
     }
@@ -1862,9 +1866,11 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
       itemStatus?.extracted_value ?? itemStatus?.value ?? "none",
     ].join(":");
     
-    // Only add suggestion if this is a new item/target mode/context
-    if (lastItemIdRef.current !== targetKey) {
-      lastItemIdRef.current = targetKey;
+    // Only generate for a target key we haven't already generated for. A set
+    // (rather than just the previous key) is what prevents duplicate guides when
+    // the resolved target oscillates back to a previously-suggested one.
+    if (!generatedTargetKeysRef.current.has(targetKey)) {
+      generatedTargetKeysRef.current.add(targetKey);
       
       // Generate suggestion asynchronously
       // Mark handoff greeting as sent immediately (before async) to prevent
@@ -1882,10 +1888,14 @@ function SuggestedResponseCard({ currentSlot, onSuggestionsChange, isAiAssisted,
         itemStatus,
       })
         .then((newSuggestion) => {
+          if (!newSuggestion) return;
           setSuggestions((prev) => {
-            const updated = [...prev, newSuggestion];
-            // Notify parent of suggestion change
-            if (onSuggestionsChange) {
+            // appendUniqueSuggestion returns the same reference when the guide is
+            // a duplicate, so identical guidance never renders twice even if two
+            // distinct target keys produce the same text.
+            const updated = appendUniqueSuggestion(prev, newSuggestion);
+            // Notify parent only when a new (non-duplicate) suggestion was added.
+            if (updated !== prev && onSuggestionsChange) {
               onSuggestionsChange(updated);
             }
             return updated;
