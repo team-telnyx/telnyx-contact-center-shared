@@ -220,6 +220,7 @@ export async function POST(request) {
                  extracted_value = $2,
                  confidence_score = $3,
                  source_transcript = $4,
+                 alternatives = NULL,
                  updated_at = NOW()
              WHERE session_id = $5 AND item_id = $6`,
             [
@@ -254,6 +255,7 @@ export async function POST(request) {
                  extracted_value = $2,
                  confidence_score = $3,
                  source_transcript = $4,
+                 alternatives = NULL,
                  updated_at = NOW()
              WHERE session_id = $5 AND item_id = $6`,
             [

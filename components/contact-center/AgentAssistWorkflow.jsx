@@ -1241,6 +1241,27 @@ function WorkflowStagesCard({ stages, itemStatuses, isAnalyzing, onCompleteItem,
                                             LLM {Math.round(confidenceScore * 100)}%
                                           </Badge>
                                         )}
+                                        {isLowConfidence && Array.isArray(status.alternatives) && status.alternatives.length > 0 && (
+                                          <div className="flex flex-col gap-1 w-full mt-1">
+                                            {status.alternatives.map((alt, altIdx) => (
+                                              <Button
+                                                key={altIdx}
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-5 px-2 text-[10px] justify-start border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleConfirmSuggestedSlot(item.id, alt.value);
+                                                }}
+                                                title={`Use this alternative (${Math.round((alt.confidence ?? 0) * 100)}% confidence)`}
+                                              >
+                                                {alt.value}
+                                                <span className="ml-1 text-amber-500/80">{Math.round((alt.confidence ?? 0) * 100)}%</span>
+                                              </Button>
+                                            ))}
+                                          </div>
+                                        )}
                                         {isLowConfidence && (
                                           <Button
                                             size="sm"

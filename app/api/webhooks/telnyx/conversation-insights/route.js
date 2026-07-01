@@ -295,8 +295,8 @@ async function updateWorkflowSession(sessionId, data, workflow) {
       }
 
       await pool.query(
-        `INSERT INTO aa_workflow_item_status (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript)
-         VALUES ($1, $2, 'completed', $3, $4, NOW(), 'ai', $5)
+        `INSERT INTO aa_workflow_item_status (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript, alternatives)
+         VALUES ($1, $2, 'completed', $3, $4, NOW(), 'ai', $5, $6::jsonb)
          ON CONFLICT (session_id, item_id) 
          DO UPDATE SET
            status = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.status ELSE 'completed' END,
@@ -305,6 +305,7 @@ async function updateWorkflowSession(sessionId, data, workflow) {
            completed_at = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.completed_at ELSE NOW() END,
            completed_by = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN 'agent' ELSE 'ai' END,
            source_transcript = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.source_transcript ELSE $5 END,
+           alternatives = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.alternatives ELSE $6::jsonb END,
            updated_at = NOW()`,
         [
           sessionId,
@@ -312,6 +313,7 @@ async function updateWorkflowSession(sessionId, data, workflow) {
           typeof value === "string" ? value : JSON.stringify(value),
           confidence || null,
           slotData?.source_utterance || null,
+          Array.isArray(slotData?.alternatives) && slotData.alternatives.length > 0 ? JSON.stringify(slotData.alternatives) : null,
         ]
       );
     }

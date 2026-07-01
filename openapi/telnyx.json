@@ -154,10 +154,6 @@
       "description": "Customer Service Record operations"
     },
     {
-      "name": "DIR References",
-      "description": "Submit and manage the two business references and one financial reference that vouch for a DIR. References are contacted to confirm the business identity during vetting."
-    },
-    {
       "name": "Data Migration",
       "description": "Migrate data from an external provider into Telnyx Cloud Storage"
     },
@@ -188,10 +184,6 @@
     {
       "name": "Dynamic Emergency Endpoints",
       "description": "Dynamic Emergency Endpoints"
-    },
-    {
-      "name": "Email Verification",
-      "description": "Verify ownership of a DIR's authorizer email. A short code is emailed and confirmed; the email must be verified before references can be submitted."
     },
     {
       "name": "Embeddings",
@@ -20498,149 +20490,6 @@
         "x-latency-category": "responsive"
       }
     },
-    "/dir/{dir_id}/references": {
-      "get": {
-        "tags": [
-          "DIR References"
-        ],
-        "summary": "List a DIR's references",
-        "operationId": "listDirReferences",
-        "description": "List the business and financial references submitted for a DIR.\n\nReturns the two business references (slots 0 and 1) followed by the single financial reference. Each entry carries only the customer-supplied details (name, title, organization, relationship, phone, email, timezone). Returns an empty list when no references were submitted.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The DIR's references.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReferenceList"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      },
-      "post": {
-        "tags": [
-          "DIR References"
-        ],
-        "summary": "Submit a DIR's references",
-        "operationId": "submitDirReferences",
-        "description": "Submit the two business references and one financial reference for a DIR.\n\nThe DIR's authorizer email must be verified first (see the email-verification endpoint). Until it is, this returns `409` and no references are stored.\n\nThe request body carries exactly two business references plus one financial reference. On success the references are stored and the response echoes them in the same shape as the GET. Submitting again converges on the already-stored references rather than erroring.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReferenceSubmissionRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "The stored references.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReferenceList"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "409": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
-    "/dir/{dir_id}/references/{ref_type}/{slot}": {
-      "patch": {
-        "tags": [
-          "DIR References"
-        ],
-        "summary": "Update a DIR reference",
-        "operationId": "updateDirReference",
-        "description": "Partially update one reference, addressed by the DIR id plus the reference's type (business or financial) and slot.\n\nCosmetic fields (full name, job title, organization, relationship, email) are always editable. The phone number and timezone may only be changed while a scheduled call has not yet been dialed; if a call is in progress or all attempts are complete, those fields are locked. Changing the timezone reschedules any pending call into the new local calling window.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          },
-          {
-            "name": "ref_type",
-            "in": "path",
-            "required": true,
-            "description": "Reference type to address.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "business",
-                "financial"
-              ],
-              "example": "business"
-            }
-          },
-          {
-            "name": "slot",
-            "in": "path",
-            "required": true,
-            "description": "Reference slot. Business references use slots 0 and 1; the financial reference uses slot 0.",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 1,
-              "example": 0
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReferenceUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The updated reference.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReferenceWrapped"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "404": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
     "/dir/{dir_id}/submit": {
       "post": {
         "summary": "Submit a DIR for vetting",
@@ -20669,119 +20518,6 @@
             "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           },
           "4XX": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
-    "/dir/{dir_id}/verify_email": {
-      "get": {
-        "tags": [
-          "Email Verification"
-        ],
-        "summary": "Get email-ownership verification status",
-        "operationId": "getDirEmailVerificationStatus",
-        "description": "Whether the DIR's current authorizer email has been verified.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The current verification state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailVerificationStatusWrapped"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      },
-      "post": {
-        "tags": [
-          "Email Verification"
-        ],
-        "summary": "Send an email-ownership verification code",
-        "operationId": "requestDirEmailVerification",
-        "description": "Email a 6-digit code to the DIR's authorizer email to confirm ownership of that address.\n\nThe code expires in 15 minutes. Requesting a new code invalidates any previous one. Resends are rate limited (a short cooldown plus a daily cap). Submit the code to `POST /dir/{dir_id}/verify_email/confirm`.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A code was emailed; the current verification state is returned.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailVerificationStatusWrapped"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "404": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "429": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "503": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
-    "/dir/{dir_id}/verify_email/confirm": {
-      "post": {
-        "tags": [
-          "Email Verification"
-        ],
-        "summary": "Confirm an email-ownership verification code",
-        "operationId": "confirmDirEmailVerification",
-        "description": "Submit the 6-digit code that was emailed to the DIR's authorizer email. On success the authorizer email is marked verified.\n\nFor security, any failure (wrong, expired, already-used, or too many attempts) returns the same generic message.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/DirId"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EmailVerificationConfirmRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The authorizer email is verified.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EmailVerificationStatusWrapped"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
-          },
-          "404": {
             "$ref": "#/components/responses/branded-calling_GenericErrorResponse"
           }
         },
@@ -58177,40 +57913,6 @@
         "x-latency-category": "responsive"
       }
     },
-    "/v2/whatsapp/phone_numbers/{phone_number}/conversation_window": {
-      "get": {
-        "tags": [
-          "Whatsapp Phone Numbers"
-        ],
-        "summary": "Get conversation window status for a phone number",
-        "description": "Returns whether the 24-hour conversation window is currently open for a given source/destination pair. If window_active is false, only template messages may be sent.",
-        "operationId": "GetWhatsappConversationWindow",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WhatsappPhoneNumber"
-          },
-          {
-            "name": "destination_number",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "+353894650851"
-            },
-            "description": "Destination phone number in E.164 format"
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/WhatsappConversationWindowResponse"
-          },
-          "4XX": {
-            "$ref": "#/components/responses/messaging_GenericErrorResponse"
-          }
-        },
-        "x-latency-category": "responsive"
-      }
-    },
     "/v2/whatsapp/phone_numbers/{phone_number}/profile": {
       "get": {
         "tags": [
@@ -67998,21 +67700,6 @@
               "properties": {
                 "data": {
                   "$ref": "#/components/schemas/WhatsappCallingSettingsData"
-                }
-              }
-            }
-          }
-        }
-      },
-      "WhatsappConversationWindowResponse": {
-        "description": "Successful response with Whatsapp conversation window status",
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "properties": {
-                "data": {
-                  "$ref": "#/components/schemas/WhatsappConversationWindowData"
                 }
               }
             }
@@ -92534,12 +92221,6 @@
           "language": {
             "$ref": "#/components/schemas/DeepgramNova2TranscriptionLanguage"
           },
-          "smart_format": {
-            "type": "boolean",
-            "default": true,
-            "example": false,
-            "description": "Enable Deepgram's smart formatting (capitalization, punctuation, and digit normalization). Note: Telnyx defaults this to `true`, overriding Deepgram's underlying default of `false` \u2014 omit the field to get a smart-formatted transcript, or set it to `false` to receive the raw lowercase transcript without punctuation."
-          },
           "keywords_boosting": {
             "type": "object",
             "description": "Keywords and their respective intensifiers (boosting values) to improve transcription accuracy for specific words or phrases. The intensifier should be a numeric value. Example: `{\"snuffleupagus\": 5, \"systrom\": 2, \"krieger\": 1}`.",
@@ -92553,23 +92234,8 @@
               "systrom": 2,
               "krieger": 1
             }
-          },
-          "hints": {
-            "type": "array",
-            "description": "Nova-2 keyword biasing without intensifiers. Up to 100 terms to bias recognition toward. For weighted biasing, use `keywords_boosting` instead. Nova-2-only; use `keyterms` on Nova-3.",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 100,
-            "default": [],
-            "example": [
-              "Telnyx",
-              "LiveKit",
-              "VoIP"
-            ]
           }
         },
-        "additionalProperties": false,
         "required": [
           "transcription_engine",
           "transcription_model"
@@ -92578,12 +92244,6 @@
           "transcription_engine": "Deepgram",
           "transcription_model": "deepgram/nova-2",
           "language": "en",
-          "smart_format": false,
-          "hints": [
-            "Telnyx",
-            "LiveKit",
-            "VoIP"
-          ],
           "keywords_boosting": {
             "snuffleupagus": 5,
             "systrom": 2,
@@ -92687,12 +92347,6 @@
           "language": {
             "$ref": "#/components/schemas/DeepgramNova3TranscriptionLanguage"
           },
-          "smart_format": {
-            "type": "boolean",
-            "default": true,
-            "example": false,
-            "description": "Enable Deepgram's smart formatting (capitalization, punctuation, and digit normalization). Note: Telnyx defaults this to `true`, overriding Deepgram's underlying default of `false` \u2014 omit the field to get a smart-formatted transcript, or set it to `false` to receive the raw lowercase transcript without punctuation."
-          },
           "keywords_boosting": {
             "type": "object",
             "description": "Keywords and their respective intensifiers (boosting values) to improve transcription accuracy for specific words or phrases. The intensifier should be a numeric value. Example: `{\"snuffleupagus\": 5, \"systrom\": 2, \"krieger\": 1}`.",
@@ -92706,23 +92360,8 @@
               "systrom": 2,
               "krieger": 1
             }
-          },
-          "keyterms": {
-            "type": "array",
-            "description": "Nova-3 keyterm prompting. Up to 100 domain-specific terms or brand names to bias recognition toward. Nova-3-only; use `hints` on Nova-2.",
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 100,
-            "default": [],
-            "example": [
-              "Telnyx",
-              "LiveKit",
-              "VoIP"
-            ]
           }
         },
-        "additionalProperties": false,
         "required": [
           "transcription_engine",
           "transcription_model"
@@ -92731,12 +92370,6 @@
           "transcription_engine": "Deepgram",
           "transcription_model": "deepgram/nova-3",
           "language": "en",
-          "smart_format": false,
-          "keyterms": [
-            "Telnyx",
-            "LiveKit",
-            "VoIP"
-          ],
           "keywords_boosting": {
             "snuffleupagus": 5,
             "systrom": 2,
@@ -94689,68 +94322,6 @@
               "$ref": "#/components/schemas/EligibilityNumberResponse"
             },
             "description": "List of phone numbers with their eligibility status."
-          }
-        }
-      },
-      "EmailVerificationConfirmRequest": {
-        "type": "object",
-        "required": [
-          "code"
-        ],
-        "properties": {
-          "code": {
-            "type": "string",
-            "minLength": 6,
-            "maxLength": 6,
-            "pattern": "^\\d{6}$",
-            "description": "The 6-digit code sent to the authorizer email.",
-            "example": "482915"
-          }
-        }
-      },
-      "EmailVerificationStatus": {
-        "type": "object",
-        "description": "Verification state for a DIR's authorizer email.",
-        "required": [
-          "record_type",
-          "email_verified",
-          "status"
-        ],
-        "properties": {
-          "record_type": {
-            "type": "string",
-            "enum": [
-              "email_verification"
-            ],
-            "description": "Always `email_verification`.",
-            "example": "email_verification",
-            "readOnly": true
-          },
-          "email_verified": {
-            "type": "boolean",
-            "description": "Whether the DIR's authorizer email has been confirmed.",
-            "example": false
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "sent",
-              "verified",
-              "unverified"
-            ],
-            "description": "`sent` after a code is emailed; `verified` after a successful confirm; `unverified` when no verification is in progress.",
-            "example": "sent"
-          }
-        }
-      },
-      "EmailVerificationStatusWrapped": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/EmailVerificationStatus"
           }
         }
       },
@@ -102346,9 +101917,15 @@
           },
           "StatusCallbackEvent": {
             "description": "The call events for which Telnyx should send a webhook. Multiple events can be defined when separated by a space.",
-            "example": "initiated answered",
+            "example": "initiated",
             "default": "completed",
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "initiated",
+              "ringing",
+              "answered",
+              "completed"
+            ]
           },
           "MachineDetection": {
             "description": "Enables Answering Machine Detection.",
@@ -119319,245 +118896,6 @@
         },
         "example": {
           "sip_address": "sip:username@sip.non-telnyx-address.com"
-        }
-      },
-      "Reference": {
-        "type": "object",
-        "description": "A reference (business or financial) on a DIR, in the customer-facing shape. No internal identifiers are exposed.",
-        "required": [
-          "record_type",
-          "ref_type",
-          "slot",
-          "full_name",
-          "phone_e164",
-          "timezone"
-        ],
-        "properties": {
-          "record_type": {
-            "type": "string",
-            "enum": [
-              "dir_reference"
-            ],
-            "description": "Always `dir_reference`.",
-            "example": "dir_reference",
-            "readOnly": true
-          },
-          "ref_type": {
-            "type": "string",
-            "enum": [
-              "business",
-              "financial"
-            ],
-            "description": "Whether this is a business reference or the financial reference.",
-            "example": "business"
-          },
-          "slot": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "Position within the reference type. Business references occupy slots 0 and 1; the financial reference occupies slot 0.",
-            "example": 0
-          },
-          "full_name": {
-            "type": "string",
-            "maxLength": 255,
-            "description": "Full name of the reference contact.",
-            "example": "Dana Reyes"
-          },
-          "job_title": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Job title of the reference contact.",
-            "example": "VP of Operations"
-          },
-          "organization": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Organization the reference contact belongs to.",
-            "example": "Acme Logistics"
-          },
-          "relationship_to_registrant": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "How the reference contact is related to the registering business.",
-            "example": "Supplier"
-          },
-          "phone_e164": {
-            "type": "string",
-            "description": "Reference phone number in E.164 format.",
-            "example": "+14155550123"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "nullable": true,
-            "description": "Reference contact email address.",
-            "example": "dana.reyes@example.com"
-          },
-          "timezone": {
-            "type": "string",
-            "description": "IANA timezone id for the reference. Calls are only placed within the reference's local 8am-9pm window.",
-            "example": "America/New_York"
-          }
-        }
-      },
-      "ReferenceInput": {
-        "type": "object",
-        "description": "One reference supplied at submit. The reference type is implied by the field that carries it (business_references vs financial_reference).",
-        "required": [
-          "full_name",
-          "phone_e164",
-          "email",
-          "timezone"
-        ],
-        "properties": {
-          "full_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255,
-            "description": "Full name of the reference contact.",
-            "example": "Dana Reyes"
-          },
-          "job_title": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Job title of the reference contact.",
-            "example": "VP of Operations"
-          },
-          "organization": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Organization the reference contact belongs to.",
-            "example": "Acme Logistics"
-          },
-          "relationship_to_registrant": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "How the reference contact is related to the registering business.",
-            "example": "Supplier"
-          },
-          "phone_e164": {
-            "type": "string",
-            "pattern": "^\\+[1-9]\\d{1,14}$",
-            "description": "Reference phone number in E.164 format, e.g. +14155550123.",
-            "example": "+14155550123"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "description": "Reference contact email address. Required: the reference is emailed scheduling and dial-in notices.",
-            "example": "dana.reyes@example.com"
-          },
-          "timezone": {
-            "type": "string",
-            "description": "IANA timezone id for the reference (e.g. America/New_York). Required: calls are only placed within the reference's local 8am-9pm window.",
-            "example": "America/New_York"
-          }
-        }
-      },
-      "ReferenceList": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Reference"
-            }
-          }
-        }
-      },
-      "ReferenceSubmissionRequest": {
-        "type": "object",
-        "description": "Exactly two business references plus one financial reference. The DIR's authorizer email must be verified before this is accepted.",
-        "required": [
-          "business_references",
-          "financial_reference"
-        ],
-        "properties": {
-          "business_references": {
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "description": "Exactly two business references.",
-            "items": {
-              "$ref": "#/components/schemas/ReferenceInput"
-            }
-          },
-          "financial_reference": {
-            "$ref": "#/components/schemas/ReferenceInput"
-          }
-        }
-      },
-      "ReferenceUpdateRequest": {
-        "type": "object",
-        "minProperties": 1,
-        "description": "Partial update for a single reference; supply at least one field. Cosmetic fields are always editable. phone_e164 and timezone may only be changed while a scheduled call has not yet been dialed.",
-        "properties": {
-          "full_name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255,
-            "description": "Full name of the reference contact.",
-            "example": "Dana Reyes"
-          },
-          "job_title": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Job title of the reference contact.",
-            "example": "VP of Operations"
-          },
-          "organization": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "Organization the reference contact belongs to.",
-            "example": "Acme Logistics"
-          },
-          "relationship_to_registrant": {
-            "type": "string",
-            "maxLength": 255,
-            "nullable": true,
-            "description": "How the reference contact is related to the registering business.",
-            "example": "Supplier"
-          },
-          "phone_e164": {
-            "type": "string",
-            "pattern": "^\\+[1-9]\\d{1,14}$",
-            "description": "Reference phone number in E.164 format.",
-            "example": "+14155550123"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "description": "Reference contact email address.",
-            "example": "dana.reyes@example.com"
-          },
-          "timezone": {
-            "type": "string",
-            "description": "IANA timezone id for the reference.",
-            "example": "America/New_York"
-          }
-        }
-      },
-      "ReferenceWrapped": {
-        "type": "object",
-        "required": [
-          "data"
-        ],
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/Reference"
-          }
         }
       },
       "RefreshReputationRequest": {
@@ -140972,33 +140310,6 @@
                 }
               }
             }
-          }
-        }
-      },
-      "WhatsappConversationWindowData": {
-        "type": "object",
-        "properties": {
-          "window_active": {
-            "type": "boolean",
-            "description": "Whether the 24-hour conversation window is currently open",
-            "example": true
-          },
-          "window_expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the window closes. Null if no active window.",
-            "example": "2026-06-30T16:00:00Z"
-          },
-          "last_user_message_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "Timestamp of the last inbound message that opened the window",
-            "example": "2026-06-29T15:53:00Z"
-          },
-          "window_type": {
-            "type": "string",
-            "description": "Window type. Currently always 24h when present.",
-            "example": "24h"
           }
         }
       },
