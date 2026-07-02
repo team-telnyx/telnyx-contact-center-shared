@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireSupervisorOrAdmin() {
   const session = await getServerSession(authOptions);
@@ -69,7 +70,7 @@ export async function GET(request, { params }) {
     const data = await res.json();
     return NextResponse.json(data);
   } catch (err) {
-    console.error("[Scheduled Events API] Error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: err.message || "Failed to fetch scheduled event" },
       { status: 500 }
@@ -126,7 +127,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Scheduled Events API] Error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: err.message || "Failed to delete scheduled event" },
       { status: 500 }

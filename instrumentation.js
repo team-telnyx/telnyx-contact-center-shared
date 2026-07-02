@@ -1,20 +1,91 @@
+import {
+  allowsMaintenanceRole,
+  allowsStreamingRole,
+  allowsWorkerRole,
+  getProcessRole,
+} from "./lib/runtime/process-role.mjs";
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { createDiagnosticLogger } = await import("./lib/diagnostic-logger.mjs");
+    const {
+      getRuntimeLoggingConfig,
+      tryLoadRuntimeLoggingConfigEarly,
+    } = await import("./lib/logger/runtime-config.mjs");
+    const { checkPostgresStatus } = await import("./lib/postgres.mjs");
+    const loadRuntimeLoggingConfigEarly = () => tryLoadRuntimeLoggingConfigEarly();
+
+    const bootstrapFileEnabled = !["0", "false", "no", "off"].includes(
+      String(process.env.LOG_FILE_ENABLED || "").toLowerCase(),
+    );
+    const bootstrapLoggingConfig = {
+      fileEnabled: bootstrapFileEnabled,
+      logDir:
+        process.env.LOG_DIR ||
+        process.env.LOG_FILE_DIR ||
+        (process.env.NODE_ENV === "production" ? "/app/logs" : `${process.cwd()}/logs`),
+      logFilePath: process.env.LOG_FILE_PATH || "",
+      rotationMode: process.env.LOG_ROTATION_MODE || "daily",
+    };
+
+    let runtimeLoggingConfig = await loadRuntimeLoggingConfigEarly();
+    const appLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const dbLogger = createDiagnosticLogger("platform.db", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+    const streamingLogger = createDiagnosticLogger("platform.app", { config: bootstrapLoggingConfig, getConfig: () => runtimeLoggingConfig });
+
+    const processRole = getProcessRole();
+    const appPort = process.env.PORT || "3000";
+    appLogger.info("application_starting", {
+      nodeEnv: process.env.NODE_ENV || "development",
+      nextRuntime: process.env.NEXT_RUNTIME,
+      processRole,
+      pid: process.pid,
+      port: appPort,
+      message: `Application starting on port ${appPort}`,
+    });
+
     // Only run on server-side
-    try {
+    if (allowsMaintenanceRole(processRole)) try {
       const { ensurePostgresSchema } = await import(
         "./lib/postgres-schema.mjs"
       );
 
       // Ensure schema is created/updated on startup
       // This runs once when the server starts
-      console.log("[Instrumentation] Ensuring PostgreSQL schema...");
+      appLogger.info("postgres_schema_ensure_start", {});
       const success = await ensurePostgresSchema();
 
       if (success) {
-        console.log("[Instrumentation] PostgreSQL schema ensured successfully");
+        appLogger.info("postgres_schema_ensure_ok", {});
       } else {
-        console.warn("[Instrumentation] Failed to ensure PostgreSQL schema");
+        appLogger.warn("postgres_schema_ensure_failed", {});
+      }
+
+      try {
+        runtimeLoggingConfig = await getRuntimeLoggingConfig({ forceRefresh: true });
+        const runtimeLogger = createDiagnosticLogger("platform.app", { config: runtimeLoggingConfig });
+        runtimeLogger.info("runtime_logging_config_loaded", {
+          consoleEnabled: runtimeLoggingConfig.consoleEnabled,
+          consolePretty: runtimeLoggingConfig.consolePretty,
+          fileEnabled: runtimeLoggingConfig.fileEnabled,
+          logDir: runtimeLoggingConfig.logDir,
+          rotationMode: runtimeLoggingConfig.rotationMode,
+          retentionDays: runtimeLoggingConfig.retentionDays,
+        });
+      } catch (loggingConfigError) {
+        appLogger.warn("runtime_logging_config_load_failed", {
+          error: loggingConfigError?.message || String(loggingConfigError),
+        });
+      }
+
+      try {
+        const status = await checkPostgresStatus();
+        const runtimeDbLogger = createDiagnosticLogger("platform.db", runtimeLoggingConfig ? { config: runtimeLoggingConfig } : {});
+        runtimeDbLogger[status.ready ? "info" : "error"]("postgres_startup_status", status);
+      } catch (statusError) {
+        dbLogger.error("postgres_startup_status_failed", {
+          error: statusError?.message || String(statusError),
+        });
       }
 
       // Clean up ghost calls after schema is ensured
@@ -22,26 +93,65 @@ export async function register() {
         const { cleanupGhostCalls } = await import(
           "./lib/contact-center/ghost-call-cleanup.mjs"
         );
-        console.log("[Instrumentation] Starting ghost call cleanup...");
+        appLogger.info("ghost_call_cleanup_start", {});
         const cleanupResult = await cleanupGhostCalls();
-        console.log(
-          `[Instrumentation] Ghost call cleanup completed:`,
-          cleanupResult
-        );
+        appLogger.info("ghost_call_cleanup_completed", cleanupResult);
       } catch (cleanupError) {
         // Don't fail startup if cleanup fails
-        console.warn(
-          "[Instrumentation] Ghost call cleanup failed:",
-          cleanupError.message
-        );
+        appLogger.warn("ghost_call_cleanup_failed", {
+          error: cleanupError?.message || String(cleanupError),
+        });
       }
     } catch (error) {
       // Don't fail startup if schema initialization fails
       // It might fail if PostgreSQL is not available yet
-      console.warn(
-        "[Instrumentation] Error ensuring PostgreSQL schema:",
-        error.message
-      );
+      appLogger.warn("postgres_schema_startup_error", {
+        error: error?.message || String(error),
+      });
+    } else {
+      appLogger.info("maintenance_startup_skipped_for_process_role", { processRole });
     }
+
+    if (allowsWorkerRole(processRole)) {
+      try {
+        const { startCoordinator } = await import("./lib/contact-center/coordinator.js");
+        const started = await startCoordinator();
+        appLogger.info("coordinator_start_requested", { processRole, started });
+      } catch (coordinatorError) {
+        appLogger.warn("coordinator_start_failed", {
+          processRole,
+          error: coordinatorError?.message || String(coordinatorError),
+        });
+      }
+    }
+
+    // Start Streaming WebSocket server on separate port (default: main + 1 = 3001)
+    // Used for Google Gemini Live, OpenAI Realtime, and Telnyx STT
+    if (allowsStreamingRole(processRole)) try {
+      const mainPort = parseInt(process.env.PORT || "3000", 10);
+      const wsPort = parseInt(process.env.STREAMING_WS_PORT || String(mainPort + 1), 10);
+      streamingLogger.info("streaming_ws_starting", {
+        processRole,
+        port: wsPort,
+        mainPort,
+        message: `Streaming WS starting on port ${wsPort}`,
+      });
+      const { initStreamingWSServer } = await import("./lib/streaming-ws-handler.mjs");
+      const startStreamingServer = initStreamingWSServer;
+      startStreamingServer();
+      streamingLogger.info("streaming_ws_start_requested", {
+        port: wsPort,
+        message: `Streaming WS start requested on port ${wsPort}`,
+      });
+    } catch (err) {
+      streamingLogger.warn("streaming_ws_start_failed", {
+        processRole,
+        error: err?.message || String(err),
+      });
+    } else {
+      streamingLogger.info("streaming_ws_skipped_for_process_role", { processRole });
+    }
+
+    appLogger.info("application_startup_completed", { pid: process.pid, processRole });
   }
 }

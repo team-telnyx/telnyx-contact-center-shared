@@ -18,6 +18,7 @@ import {
   getAllQueueStates,
   getAllAgentStates,
 } from "@/lib/contact-center/state-manager";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export async function GET(request) {
   try {
@@ -63,7 +64,7 @@ export async function GET(request) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("[Monitor] Error getting dashboard data:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       {
         error: "Internal server error",

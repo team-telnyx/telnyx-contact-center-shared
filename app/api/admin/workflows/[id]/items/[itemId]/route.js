@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 // PUT /api/admin/workflows/[id]/items/[itemId] - Update item
 export async function PUT(request, { params }) {
@@ -144,7 +145,7 @@ export async function PUT(request, { params }) {
       item,
     });
   } catch (error) {
-    console.error("[Admin Workflow Items] PUT error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to update item" },
       { status: 500 }
@@ -203,7 +204,7 @@ export async function DELETE(request, { params }) {
       message: "Item deleted successfully",
     });
   } catch (error) {
-    console.error("[Admin Workflow Items] DELETE error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to delete item" },
       { status: 500 }

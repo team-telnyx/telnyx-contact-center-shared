@@ -1,0 +1,12 @@
+services:
+  hardphone-bridge:
+    build: .
+    image: telnyx-contact-center-hardphone-bridge:local
+    container_name: telnyx-hardphone-bridge
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env

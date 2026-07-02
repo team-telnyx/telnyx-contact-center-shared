@@ -24,6 +24,7 @@ export function VariableInput({
   value = "",
   onChange,
   availableVariables = [],
+  availableSecrets = [],
   webhookSchema = null,
   placeholder = "",
   className = "",
@@ -70,7 +71,8 @@ export function VariableInput({
 
     if (lastOpenBraces !== -1) {
       const beforeBraces = value.substring(0, lastOpenBraces);
-      const newValue = `${beforeBraces}{{${varName}}}${textAfterCursor}`;
+      const insertedValue = varName.startsWith("{{") ? varName : `{{${varName}}}`;
+      const newValue = `${beforeBraces}${insertedValue}${textAfterCursor}`;
 
       onChange(newValue);
       setShowPicker(false);
@@ -78,13 +80,19 @@ export function VariableInput({
       // Set cursor position after the inserted variable
       setTimeout(() => {
         if (inputRef.current) {
-          const newPos = beforeBraces.length + varName.length + 4; // 4 for {{}}
+          const newPos = beforeBraces.length + insertedValue.length;
           inputRef.current.setSelectionRange(newPos, newPos);
           inputRef.current.focus();
         }
       }, 0);
     }
   };
+
+  const secretSuggestions = availableSecrets.map((secret) => ({
+    value: `{{#integration_secret}}${secret.name}{{/integration_secret}}`,
+    label: secret.name,
+    description: secret.description || "Integration secret",
+  }));
 
   // Get filtered variables based on search term
   const getFilteredVariables = () => {
@@ -125,6 +133,17 @@ export function VariableInput({
     return vars;
   };
 
+  const getFilteredSecrets = () => {
+    const lowerSearch = searchTerm.toLowerCase();
+    if (!lowerSearch) return secretSuggestions;
+    return secretSuggestions.filter(
+      (secret) =>
+        secret.label.toLowerCase().includes(lowerSearch) ||
+        secret.description.toLowerCase().includes(lowerSearch),
+    );
+  };
+
+  const filteredSecrets = getFilteredSecrets();
   const filteredVars = getFilteredVariables();
 
   return (
@@ -138,29 +157,52 @@ export function VariableInput({
         {...props}
       />
 
-      {showPicker && filteredVars.length > 0 && (
+      {showPicker && (filteredSecrets.length > 0 || filteredVars.length > 0) && (
         <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-auto">
           <Command>
             <CommandList>
-              <CommandGroup heading="Variables">
-                {filteredVars.map((v) => (
-                  <CommandItem
-                    key={v.value}
-                    value={v.value}
-                    onSelect={() => handleSelectVariable(v.value)}
-                    className="cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-mono text-sm">{v.label}</span>
-                      {v.description && (
-                        <span className="text-xs text-muted-foreground">
-                          {v.description}
+              {filteredSecrets.length > 0 && (
+                <CommandGroup heading="Secrets">
+                  {filteredSecrets.map((secret) => (
+                    <CommandItem
+                      key={secret.value}
+                      value={secret.value}
+                      onSelect={() => handleSelectVariable(secret.value)}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-mono text-sm text-telnyx-green">
+                          {secret.label}
                         </span>
-                      )}
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+                        <span className="text-xs text-muted-foreground">
+                          {secret.description}
+                        </span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+              {filteredVars.length > 0 && (
+                <CommandGroup heading="Variables">
+                  {filteredVars.map((v) => (
+                    <CommandItem
+                      key={v.value}
+                      value={v.value}
+                      onSelect={() => handleSelectVariable(v.value)}
+                      className="cursor-pointer"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-mono text-sm">{v.label}</span>
+                        {v.description && (
+                          <span className="text-xs text-muted-foreground">
+                            {v.description}
+                          </span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
             </CommandList>
           </Command>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,8 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconPhone,
+  IconDownload,
+  IconUpload,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -262,6 +265,82 @@ export default function CallFlowsPage() {
     }
   }
 
+  async function handleExport(id, name) {
+    try {
+      const res = await fetch(`/api/voice/flows/${id}/export`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to export flow");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${String(name || "call_flow")
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase()}_flow.json`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      notify({
+        title: "Success",
+        description: "Flow exported successfully",
+        variant: "success",
+      });
+    } catch (error) {
+      console.error("Error exporting flow:", error);
+      notify({
+        title: "Error",
+        description: error.message || "Failed to export flow",
+        variant: "error",
+      });
+    }
+  }
+
+  async function handleImport() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+
+    input.onchange = async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const data = JSON.parse(await file.text());
+        const res = await fetch("/api/voice/flows/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+
+        if (!res.ok || !result.ok) {
+          throw new Error(result.error || "Failed to import flow");
+        }
+
+        notify({
+          title: "Success",
+          description: "Flow imported successfully",
+          variant: "success",
+        });
+        loadFlows();
+      } catch (error) {
+        console.error("Error importing flow:", error);
+        notify({
+          title: "Error",
+          description: error.message || "Failed to import flow",
+          variant: "error",
+        });
+      }
+    };
+
+    input.click();
+  }
+
   const totalPages = Math.ceil(total / pageSize);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
@@ -283,21 +362,24 @@ export default function CallFlowsPage() {
     );
   }
 
+  const headerActions = <>
+    <Button variant="outline" size="sm" onClick={handleImport}>
+      <IconUpload className="h-4 w-4 mr-2" />
+      Import
+    </Button>
+    <Button size="sm" onClick={handleCreate}>
+      <IconPlus className="h-4 w-4 mr-2" />
+      Create Flow
+    </Button>
+  </>;
+
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Call Flows" badges={<Badge variant="secondary">{total} flows</Badge>} actions={headerActions} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconGitBranch className="size-6 text-telnyx-green" /> Call Flows
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleCreate}>
-                <IconPlus className="h-4 w-4 mr-2" />
-                Create Flow
-              </Button>
-            </div>
-          </div>
 
           <div className="mb-4">
             <Input
@@ -357,7 +439,9 @@ export default function CallFlowsPage() {
                             ? flow.nodes.find(
                                 (node) =>
                                   node.data?.nodeType === "incoming_call" ||
-                                  node.data?.nodeType === "http_request"
+                                  node.data?.nodeType === "http_request" ||
+                                  node.data?.nodeType === "form_submit" ||
+                                  node.data?.nodeType === "outbound_campaign"
                               )
                             : null;
 
@@ -376,7 +460,7 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "incoming_call") {
                             return (
-                              <Badge className="bg-telnyx-green/10 text-telnyx-green border-telnyx-green/20 hover:bg-telnyx-green/20 dark:bg-telnyx-green/20 dark:text-telnyx-green dark:border-telnyx-green/30">
+                              <Badge className="border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-300">
                                 Incoming Call
                               </Badge>
                             );
@@ -384,8 +468,24 @@ export default function CallFlowsPage() {
 
                           if (initiatorType === "http_request") {
                             return (
-                              <Badge className="bg-orange-500/10 text-orange-600 border-orange-500/20 hover:bg-orange-500/20 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30">
+                              <Badge className="border-orange-500/20 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400">
                                 HTTP Request
+                              </Badge>
+                            );
+                          }
+
+                          if (initiatorType === "form_submit") {
+                            return (
+                              <Badge className="border-violet-500/20 bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 dark:border-violet-500/30 dark:bg-violet-500/20 dark:text-violet-300">
+                                Form Submit
+                              </Badge>
+                            );
+                          }
+
+                          if (initiatorType === "outbound_campaign") {
+                            return (
+                              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                Outbound Campaign
                               </Badge>
                             );
                           }
@@ -479,6 +579,13 @@ export default function CallFlowsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => handleExport(flow.id, flow.name)}
+                          >
+                            <IconDownload className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() =>
                               handleDeleteClick(flow.id, flow.name)
                             }
@@ -563,6 +670,8 @@ export default function CallFlowsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

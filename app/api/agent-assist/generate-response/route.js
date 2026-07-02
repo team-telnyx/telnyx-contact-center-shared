@@ -78,7 +78,6 @@ Generate a suggested response for the agent (max 5 sentences, use markdown forma
         ],
         model: "openai/gpt-4o",
         temperature: 0.7,
-        max_tokens: 500,
         stream: true,
       }),
     });

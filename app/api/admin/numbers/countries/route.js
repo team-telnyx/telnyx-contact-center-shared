@@ -69,6 +69,7 @@ const countryNames = {
 
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -103,7 +104,7 @@ export async function GET(request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[Countries API] Telnyx error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to fetch phone numbers from Telnyx" },
         { status: res.status }
@@ -131,7 +132,7 @@ export async function GET(request) {
 
     return NextResponse.json({ countries });
   } catch (error) {
-    console.error("[Countries API] Error:", error);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }

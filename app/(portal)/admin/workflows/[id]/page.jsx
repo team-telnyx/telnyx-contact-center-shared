@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,6 +97,7 @@ export default function WorkflowEditorPage() {
     category: "",
     is_active: false,
     llm_model: "openai/gpt-4o",
+    llm_confidence_threshold: 0.95,
   });
   
   // LLM models
@@ -250,6 +252,7 @@ export default function WorkflowEditorPage() {
         category: data.workflow.category || "",
         is_active: data.workflow.is_active,
         llm_model: data.workflow.llm_model || "openai/gpt-4o",
+        llm_confidence_threshold: data.workflow.llm_confidence_threshold ?? 0.95,
       });
       const workflowStages = data.workflow.stages || data.stages || [];
       setStages(workflowStages);
@@ -599,10 +602,22 @@ export default function WorkflowEditorPage() {
   async function saveWorkflow() {
     setSaving(true);
     try {
+      if (workflowForm.llm_confidence_threshold === null || workflowForm.llm_confidence_threshold === "") {
+        throw new Error("LLM confidence threshold must be a number between 0 and 1.");
+      }
+      const confidenceThreshold = Number(workflowForm.llm_confidence_threshold);
+      if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
+        throw new Error("LLM confidence threshold must be a number between 0 and 1.");
+      }
+      const workflowPayload = {
+        ...workflowForm,
+        llm_confidence_threshold: Math.round(confidenceThreshold * 100) / 100,
+      };
+
       const res = await fetch(`/api/admin/workflows/${workflowId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(workflowForm),
+        body: JSON.stringify(workflowPayload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to save workflow");
@@ -901,19 +916,34 @@ export default function WorkflowEditorPage() {
 
   if (loading) {
     return (
-      <div className="px-4 lg:px-6 space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="h-[600px]" />
-          <Skeleton className="h-[600px]" />
-          <Skeleton className="h-[600px]" />
-        </div>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Workflow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageContent>
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-48" />
+            <div className="grid grid-cols-3 gap-4">
+              <Skeleton className="h-[600px]" />
+              <Skeleton className="h-[600px]" />
+              <Skeleton className="h-[600px]" />
+            </div>
+          </div>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
   return (
-    <div className="px-4 lg:px-6 h-[calc(100vh-120px)] flex flex-col">
+    <AdminPageShell>
+      <AdminPageHeader
+        title={workflow?.name || "Workflow Editor"}
+        badges={workflow?.is_active ? (
+          <Badge className="border-green-500 text-green-600" variant="outline">Active</Badge>
+        ) : (
+          <Badge className="border-gray-400 text-gray-500" variant="outline">Inactive</Badge>
+        )}
+      />
+      <AdminPageContent className="flex flex-col">
+        <div className="flex min-h-[calc(100vh-220px)] flex-1 flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -1245,6 +1275,37 @@ export default function WorkflowEditorPage() {
                 Model used for workflow analysis and suggestions
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-llm-confidence-threshold">LLM Confidence Threshold</Label>
+              <Input
+                id="edit-llm-confidence-threshold"
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={workflowForm.llm_confidence_threshold}
+                onChange={(e) =>
+                  setWorkflowForm((f) => ({
+                    ...f,
+                    llm_confidence_threshold: e.target.value,
+                  }))
+                }
+                onBlur={() =>
+                  setWorkflowForm((f) => {
+                    if (f.llm_confidence_threshold === "") return f;
+                    const value = Number(f.llm_confidence_threshold);
+                    if (!Number.isFinite(value)) return { ...f, llm_confidence_threshold: 0.95 };
+                    return {
+                      ...f,
+                      llm_confidence_threshold: Math.min(1, Math.max(0, Math.round(value * 100) / 100)),
+                    };
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Default: 0.95. Auto-filled LLM slots below this threshold stay red until the agent confirms or edits them.
+              </p>
+            </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-active">Active</Label>
               <Switch
@@ -1335,7 +1396,7 @@ export default function WorkflowEditorPage() {
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
             <DialogDescription>
-              Create a new item in the "{selectedStage?.name}" stage.
+              Create a new item in the &quot;{selectedStage?.name}&quot; stage.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
@@ -1705,7 +1766,9 @@ export default function WorkflowEditorPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
 
@@ -2025,17 +2088,17 @@ function ItemEditor({ item, onSave }) {
                   key={hint}
                   variant="outline"
                   className={cn(
-                    "flex items-center gap-1 pr-1 border-2",
+                    "flex max-w-full items-start gap-1 whitespace-normal break-words pr-1 text-left leading-relaxed border-2",
                     color.border,
                     color.text
                   )}
                 >
-                  {hint}
+                  <span className="min-w-0 flex-1 break-words">{hint}</span>
                   <button
                     type="button"
                     onClick={() => removeHint(hint)}
                     className={cn(
-                      "ml-1 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
+                      "ml-1 shrink-0 rounded-full p-0.5 transition-colors hover:bg-destructive hover:text-destructive-foreground",
                       color.text
                     )}
                   >

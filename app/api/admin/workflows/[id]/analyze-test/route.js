@@ -10,6 +10,27 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+
+function normalizeConfidenceThreshold(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
+    return 0.95;
+  }
+  return Math.round(numericValue * 100) / 100;
+}
+
+function normalizeSpeakerType(speaker) {
+  if (speaker === "inbound" || speaker === "customer") return "customer";
+  if (speaker === "outbound" || speaker === "agent") return "agent";
+  return null;
+}
+
+function hasMeaningfulExtractedValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
 
 // POST /api/admin/workflows/[id]/analyze-test
 export async function POST(request, { params }) {
@@ -38,9 +59,9 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Fetch workflow (includes llm_model for analysis)
+    // Fetch workflow (includes LLM model and confidence threshold for analysis)
     const { rows: [workflow] } = await pool.query(
-      `SELECT id, llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT id, llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
       [workflowId]
     );
 
@@ -52,6 +73,7 @@ export async function POST(request, { params }) {
     }
 
     const llmModel = workflow.llm_model || "openai/gpt-4o";
+    const confidenceThreshold = normalizeConfidenceThreshold(workflow.llm_confidence_threshold);
 
     const { rows: stages } = await pool.query(
       `SELECT * FROM aa_workflow_stages WHERE workflow_id = $1 ORDER BY order_index`,
@@ -117,12 +139,7 @@ export async function POST(request, { params }) {
     });
 
     // Apply completion_trigger and confidence threshold (same logic as live API)
-    const speakerType =
-      speaker === "inbound" || speaker === "customer"
-        ? "customer"
-        : speaker === "outbound" || speaker === "agent"
-        ? "agent"
-        : null;
+    const speakerType = normalizeSpeakerType(speaker);
 
     const updates = [];
     const newSlotsFilled = { ...slotsFilled };
@@ -132,16 +149,18 @@ export async function POST(request, { params }) {
       if (!item) continue;
 
       const completionTrigger = item.completion_trigger || getDefaultCompletionTrigger(item.type);
-      let shouldComplete = false;
-      if (completionTrigger === "either") {
-        shouldComplete = true;
-      } else if (completionTrigger === "customer" && speakerType === "customer") {
-        shouldComplete = true;
-      } else if (completionTrigger === "agent" && speakerType === "agent") {
-        shouldComplete = true;
+      const shouldComplete =
+        Boolean(speakerType) &&
+        (completionTrigger === "either" ||
+          (completionTrigger === "customer" && speakerType === "customer") ||
+          (completionTrigger === "agent" && speakerType === "agent"));
+      const hasExtractedSlotValue = item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
+
+      if (!shouldComplete || !hasExtractedSlotValue) {
+        continue;
       }
 
-      if (shouldComplete && completed.confidence >= 0.85) {
+      if (completed.confidence >= confidenceThreshold) {
         updates.push({
           item_id: completed.item_id,
           status: "completed",
@@ -152,13 +171,15 @@ export async function POST(request, { params }) {
         if (item.slot_name && completed.extracted_value) {
           newSlotsFilled[item.slot_name] = completed.extracted_value;
         }
-      } else if (completed.confidence >= 0.60) {
+      } else {
         updates.push({
           item_id: completed.item_id,
           status: "suggested",
           confidence: completed.confidence,
           extracted_value: completed.extracted_value,
           source_text: completed.source_text,
+          low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
+          confidence_threshold: confidenceThreshold,
         });
       }
     }
@@ -172,7 +193,7 @@ export async function POST(request, { params }) {
       sentimentScore: analysisResult.sentiment_score,
     });
   } catch (error) {
-    console.error("[Workflow Test Analyze] Error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to analyze transcript" },
       { status: 500 }

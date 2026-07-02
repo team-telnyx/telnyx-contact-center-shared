@@ -1,0 +1,35 @@
+{
+  "cc-ha": {
+    "type": "ha",
+    "region": "us-east-2",
+    "instance_tag": "App=cc-ha",
+    "app_name": "cc-ha",
+    "container_name": "cc-ha-app",
+    "env_file": "/opt/cc-ha/app.env",
+    "health_url": "http://127.0.0.1:3000/api/health",
+    "host_app_port": 3000,
+    "container_app_port": 3000,
+    "host_ws_port": 3001,
+    "container_ws_port": 3001,
+    "media_dir": "/home/ubuntu/apps/media",
+    "log_dir": "/home/ubuntu/apps/logs",
+    "app_target_group_arn": "arn:aws:elasticloadbalancing:us-east-2:ACCOUNT_ID:targetgroup/cc-ha-app/CHANGE_ME",
+    "ws_target_group_arn": "arn:aws:elasticloadbalancing:us-east-2:ACCOUNT_ID:targetgroup/cc-ha-ws/CHANGE_ME",
+    "alb_drain_seconds": 30
+  },
+  "legacy-cc-prod": {
+    "type": "single-node",
+    "region": "us-east-2",
+    "instance_ids": ["i-CHANGE_ME"],
+    "app_name": "telnyx-contact-center",
+    "container_name": "telnyx-contact-center-app",
+    "env_file": "/opt/telnyx-contact-center/app.env",
+    "health_url": "http://127.0.0.1:3000/api/health",
+    "host_app_port": 3000,
+    "container_app_port": 3000,
+    "host_ws_port": 3001,
+    "container_ws_port": 3001,
+    "media_dir": "/home/ubuntu/apps/media",
+    "log_dir": "/home/ubuntu/apps/logs"
+  }
+}

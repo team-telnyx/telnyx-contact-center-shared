@@ -84,28 +84,40 @@ export function ContactCenterStreamProvider({ children }) {
                 useActiveCallStore.getState().addTranscription;
               if (addTranscription && data.transcription) {
                 addTranscription({
+                  transcription_key:
+                    data.transcription.transcription_key || data.transcriptionKey,
                   transcript: data.transcription.transcript,
                   is_final: data.transcription.is_final,
+                  speech_final: data.transcription.speech_final,
                   transcription_track: data.transcription.track,
                   call_control_id: data.callControlId,
+                  confidence: data.transcription.confidence,
+                  source: data.transcription.source,
+                  provider: data.transcription.provider,
+                  model: data.transcription.model,
+                  language: data.transcription.language,
+                  translation: data.transcription.translation || null,
                 });
 
                 const updateTranscriptionAnalysis =
                   useActiveCallStore.getState().updateTranscriptionAnalysis;
                 if (updateTranscriptionAnalysis && data.transcription.intent) {
-                  const transcriptions =
-                    useActiveCallStore.getState().transcriptions;
-                  const lastTranscription =
-                    transcriptions[transcriptions.length - 1];
-                  if (lastTranscription) {
-                    updateTranscriptionAnalysis(lastTranscription.id, {
+                  updateTranscriptionAnalysis(
+                    data.transcription.transcription_key || data.transcriptionKey,
+                    {
                       intent: data.transcription.intent,
                       sentiment: data.transcription.sentiment,
                       sentimentScore: data.transcription.sentimentScore,
                       tags: data.transcription.tags || [],
-                    });
-                  }
+                    }
+                  );
                 }
+              }
+            } else if (data.type === "transcription_update") {
+              const updateTranscriptionAnalysis =
+                useActiveCallStore.getState().updateTranscriptionAnalysis;
+              if (updateTranscriptionAnalysis && data.transcriptionKey) {
+                updateTranscriptionAnalysis(data.transcriptionKey, data.updates || {});
               }
             } else if (data.type === "interaction_updated") {
               if (data.callControlId && data.updates) {
@@ -123,7 +135,15 @@ export function ContactCenterStreamProvider({ children }) {
                       data.updates.metadata?.ai_call_control_id ||
                       callData.aiCallControlId ||
                       null,
+                    metadata: data.updates.metadata || callData.metadata || {},
                   });
+                }
+              }
+              if (data.updates?.metadata) {
+                const activeState = useActiveCallStore.getState();
+                const activeInteractionId = activeState.contactCenter?.interactionId;
+                if (!data.interactionId || !activeInteractionId || data.interactionId === activeInteractionId) {
+                  activeState.setContactCenterMetadata?.({ metadata: data.updates.metadata });
                 }
               }
               // Dispatch event to trigger interaction list refresh

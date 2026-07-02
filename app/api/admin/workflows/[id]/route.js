@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { syncWorkflowInsights, deleteWorkflowInsights } from "@/lib/telnyx-insights";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
 // GET /api/admin/workflows/[id] - Get workflow with stages and items
 export async function GET(request, { params }) {
@@ -83,7 +84,7 @@ export async function GET(request, { params }) {
       workflow,
     });
   } catch (error) {
-    console.error("[Admin Workflows] GET [id] error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to fetch workflow" },
       { status: 500 }
@@ -110,7 +111,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, description, category, is_active, llm_model, ai_assistant_id, syncInsights } = body;
+    const { name, description, category, is_active, llm_model, llm_confidence_threshold, ai_assistant_id, syncInsights } = body;
 
     // Build dynamic update query
     const updates = [];
@@ -136,6 +137,23 @@ export async function PUT(request, { params }) {
     if (llm_model !== undefined) {
       updates.push(`llm_model = $${paramIndex++}`);
       values.push(llm_model);
+    }
+    if (llm_confidence_threshold !== undefined) {
+      if (llm_confidence_threshold === null || llm_confidence_threshold === "") {
+        return NextResponse.json(
+          { error: "Invalid llm_confidence_threshold. Must be a number between 0 and 1." },
+          { status: 400 }
+        );
+      }
+      const confidenceThreshold = Number(llm_confidence_threshold);
+      if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
+        return NextResponse.json(
+          { error: "Invalid llm_confidence_threshold. Must be a number between 0 and 1." },
+          { status: 400 }
+        );
+      }
+      updates.push(`llm_confidence_threshold = $${paramIndex++}`);
+      values.push(Math.round(confidenceThreshold * 100) / 100);
     }
     if (ai_assistant_id !== undefined) {
       updates.push(`ai_assistant_id = $${paramIndex++}`);
@@ -208,7 +226,7 @@ export async function PUT(request, { params }) {
           if (baseUrl) {
             const webhookUrl = `${baseUrl.replace(/\/$/, "")}/api/webhooks/telnyx/conversation-insights`;
             
-            console.log(`[Admin Workflows] Syncing insights for workflow: ${workflow.name}`);
+            workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
             const insightResult = await syncWorkflowInsights(workflowWithStages, webhookUrl);
 
             // Update workflow with insight IDs
@@ -236,7 +254,7 @@ export async function PUT(request, { params }) {
           }
         }
       } catch (syncErr) {
-        console.warn("[Admin Workflows] Warning: Failed to sync insights:", syncErr.message);
+        workflowLogger.warn("admin_workflow_warning", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
         // Don't fail the update if insight sync fails
       }
     }
@@ -247,7 +265,7 @@ export async function PUT(request, { params }) {
       insightsSynced,
     });
   } catch (error) {
-    console.error("[Admin Workflows] PUT [id] error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to update workflow" },
       { status: 500 }
@@ -305,12 +323,12 @@ export async function DELETE(request, { params }) {
     if (existing.insight_group_id || existing.insight_slots_id || 
         existing.insight_summary_id || existing.insight_sentiment_id) {
       try {
-        console.log(`[Admin Workflows] Cleaning up insights for workflow: ${existing.name}`);
+        workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
         await deleteWorkflowInsights(existing);
         insightsDeleted = true;
       } catch (cleanupErr) {
         // Log but don't fail deletion if insight cleanup fails
-        console.warn("[Admin Workflows] Warning: Failed to clean up insights:", cleanupErr.message);
+        workflowLogger.warn("admin_workflow_warning", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       }
     }
 
@@ -323,7 +341,7 @@ export async function DELETE(request, { params }) {
       insightsDeleted,
     });
   } catch (error) {
-    console.error("[Admin Workflows] DELETE [id] error:", error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to delete workflow" },
       { status: 500 }

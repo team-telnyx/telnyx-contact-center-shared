@@ -117,7 +117,7 @@ Voice flow configs support variable interpolation:
 
 ### Notifications
 
-**CRITICAL**: Always use `notify` from `@/components/ToastNotify`, never import `toast` from `sonner` directly.
+**CRITICAL**: Always use `notify` from `@/components/ToastNotify`; do not import or add external toast libraries.
 
 ```javascript
 import { notify } from "@/components/ToastNotify";

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export async function GET(request, { params }) {
   try {
@@ -40,7 +41,7 @@ export async function GET(request, { params }) {
 
     if (!recordingResponse.ok) {
       const errorText = await recordingResponse.text();
-      console.error("[Recording Stream API] Telnyx error:", errorText);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch recording" },
         { status: recordingResponse.status }
@@ -73,7 +74,7 @@ export async function GET(request, { params }) {
     const audioResponse = await fetch(audioUrl, fetchOptions);
 
     if (!audioResponse.ok) {
-      console.error("[Recording Stream API] Failed to fetch audio from storage");
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch audio file" },
         { status: audioResponse.status }
@@ -115,7 +116,7 @@ export async function GET(request, { params }) {
       headers,
     });
   } catch (error) {
-    console.error("[Recording Stream API] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 }

@@ -11,8 +11,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { syncWorkflowInsights } from "@/lib/telnyx-insights";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
 
-const LOG_PREFIX = "[Sync Insights]";
 
 /**
  * Get webhook URL for insights from environment
@@ -33,13 +33,15 @@ function getInsightsWebhookUrl() {
  * Creates Insight Group and 3 Insight Templates (slots, summary, sentiment).
  */
 export async function POST(request, { params }) {
+  let workflowId;
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id: workflowId } = await params;
+    ({ id: workflowId } = await params);
     
     const pool = getPostgresPool();
     if (!pool) {
@@ -130,7 +132,7 @@ export async function POST(request, { params }) {
 
     // If force, clear existing insight IDs to force recreation
     if (force) {
-      console.log(`${LOG_PREFIX} Force mode - will recreate insights`);
+      workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       workflowWithStages.insight_group_id = null;
       workflowWithStages.insight_slots_id = null;
       workflowWithStages.insight_summary_id = null;
@@ -139,10 +141,10 @@ export async function POST(request, { params }) {
 
     // Get webhook URL
     const webhookUrl = getInsightsWebhookUrl();
-    console.log(`${LOG_PREFIX} Using webhook URL: ${webhookUrl}`);
+    workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
 
     // Sync insights with Telnyx
-    console.log(`${LOG_PREFIX} Syncing insights for workflow: ${workflow.name}`);
+    workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     const result = await syncWorkflowInsights(workflowWithStages, webhookUrl);
 
     // Update workflow with new insight IDs
@@ -167,9 +169,9 @@ export async function POST(request, { params }) {
     if (result.groupId && workflow.ai_assistant_id) {
       try {
         await updateAssistantInsightSettings(workflow.ai_assistant_id, result.groupId);
-        console.log(`${LOG_PREFIX} Updated assistant ${workflow.ai_assistant_id} with insight group ${result.groupId}`);
+        workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       } catch (err) {
-        console.warn(`${LOG_PREFIX} Warning: Failed to update assistant insight settings:`, err.message);
+        workflowLogger.warn("admin_workflow_warning", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
         // Continue - insights are still synced
       }
     }
@@ -179,7 +181,7 @@ export async function POST(request, { params }) {
       ? "created"
       : "updated";
 
-    console.log(`${LOG_PREFIX} Sync complete for workflow ${workflow.name}: ${action}`);
+    workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
 
     return NextResponse.json({
       ok: true,
@@ -191,7 +193,7 @@ export async function POST(request, { params }) {
       webhook_url: webhookUrl,
     });
   } catch (error) {
-    console.error(`${LOG_PREFIX} Error:`, error);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: error.message || "Failed to sync insights" },
       { status: 500 }

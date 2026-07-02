@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { Pool } from "pg";
 import { ensurePostgresSchema } from "../lib/postgres-schema.mjs";
+import { readPostgresSslConfig } from "../lib/postgres-ssl.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,7 +46,7 @@ async function createDatabase(config) {
     database: "postgres", // Connect to default postgres database
     user: config.user,
     password: config.password,
-    ssl: false,
+    ssl: readPostgresSslConfig(),
   });
 
   try {

@@ -1,0 +1,190 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFile } from "node:fs/promises";
+
+import {
+  campaignAgentAssistConfig,
+  campaignAssignmentPayload,
+  isCampaignInsideTimeSetWindow,
+  isPreviewProgressiveMode,
+  resolveCampaignContactPhone,
+} from "../lib/outbound-dialer/agent-campaigns.js";
+
+test("preview/progressive campaign assignment payload exposes contact record, callable number and 30s progressive auto-dial metadata", () => {
+  const assignedAt = "2026-05-18T10:00:00.000Z";
+  const payload = campaignAssignmentPayload({
+    now: new Date(assignedAt),
+    campaign: {
+      id: "campaign-1",
+      name: "Renewals",
+      mode: "progressive",
+      attached_form_id: "form-1",
+      metadata: { contact_list_numbers: ["mobile", "phone"] },
+    },
+    ledger: {
+      id: "attempt-1",
+      created_at: assignedAt,
+      metadata: { assigned_at: assignedAt },
+    },
+    contact: {
+      id: "contact-1",
+      row_data: { first_name: "Anna", mobile: "48 600 700 800" },
+      contact_methods: {},
+    },
+  });
+
+  assert.equal(payload.campaign_mode, "progressive");
+  assert.equal(payload.to_number, "+48600700800");
+  assert.deepEqual(payload.contact_record, { first_name: "Anna", mobile: "48 600 700 800" });
+  assert.equal(payload.auto_dial_seconds, 30);
+  assert.equal(payload.auto_dial_at, "2026-05-18T10:00:30.000Z");
+  assert.deepEqual(payload.agent_assist_config, {
+    enabled: true,
+    assist_type: "forms",
+    form_ids: ["form-1"],
+    auto_open_forms: true,
+    source: "outbound_campaign",
+  });
+});
+
+test("preview campaign payload does not include progressive timer and workflow attachment wins over forms", () => {
+  const payload = campaignAssignmentPayload({
+    campaign: {
+      id: "campaign-2",
+      name: "Callbacks",
+      mode: "preview",
+      attached_form_id: "form-1",
+      metadata: { attached_workflow_id: "workflow-1" },
+    },
+    ledger: { id: "attempt-2", created_at: "2026-05-18T10:00:00.000Z", metadata: {} },
+    contact: {
+      id: "contact-2",
+      row_data: { phone: "+15551234567" },
+      contact_methods: {},
+    },
+  });
+
+  assert.equal(payload.campaign_mode, "preview");
+  assert.equal(payload.auto_dial_at, null);
+  assert.equal(payload.auto_dial_seconds, null);
+  assert.equal(payload.agent_assist_config.assist_type, "workflows");
+  assert.equal(payload.agent_assist_config.workflow_id, "workflow-1");
+});
+
+test("agent campaign helpers only expose preview/progressive modes and resolve phone fields from campaign metadata", () => {
+  assert.equal(isPreviewProgressiveMode("preview"), true);
+  assert.equal(isPreviewProgressiveMode("progressive"), true);
+  assert.equal(isPreviewProgressiveMode("predictive"), false);
+  assert.equal(resolveCampaignContactPhone(
+    { metadata: { contact_list_numbers: ["mobile"] } },
+    { row_data: { phone: "+15550001111", mobile: "+15550002222" }, contact_methods: {} },
+  ), "+15550002222");
+  assert.equal(campaignAgentAssistConfig({ metadata: {} }).assist_type, "kb_articles");
+});
+
+test("site header renders campaign selector next to agent status selector", async () => {
+  const source = await readFile(new URL("../components/site-header.jsx", import.meta.url), "utf8");
+  const agentControlsStart = source.indexOf("<StatusSelector value={status} onChange={handleStatusChange} />");
+  const queueControlsStart = source.indexOf("<QueueActivationPanel", agentControlsStart);
+  const controlsSource = source.slice(agentControlsStart, queueControlsStart);
+
+  assert.match(source, /CampaignActivationSelector/);
+  assert.match(source, /\/api\/contact-center\/agent\/campaigns/);
+  assert.match(controlsSource, /<CampaignActivationSelector/);
+});
+
+test("agent desktop polls assigned campaign records and dials progressive records after countdown", async () => {
+  const source = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /\/api\/contact-center\/agent\/campaigns\/next/);
+  assert.match(source, /campaignAssignment/);
+  assert.match(source, /auto_dial_at/);
+  assert.match(source, /\/api\/contact-center\/agent\/campaigns\/dial/);
+  assert.match(source, /Outbound Campaign Record/);
+  assert.match(source, /Start outbound call/);
+});
+
+test("campaign activation trigger summarizes active campaigns like queue activation", async () => {
+  const source = await readFile(new URL("../components/contact-center/CampaignActivationSelector.jsx", import.meta.url), "utf8");
+
+  assert.match(source, /`Campaigns \$\{activeCampaigns\.length\}\/\$\{localCampaigns\.length\}`/);
+  assert.doesNotMatch(source, /activeCampaigns\[0\]\.name/);
+});
+
+test("agent campaign claiming skips campaigns outside their configured time set window", () => {
+  const campaign = {
+    metadata: { contactable_time_set_id: "time-set-1" },
+    time_set_timezone: "UTC",
+    time_set_windows: [
+      { day: "mon", enabled: true, start: "09:00", end: "17:00" },
+    ],
+  };
+
+  assert.equal(
+    isCampaignInsideTimeSetWindow(campaign, new Date("2026-05-18T10:30:00.000Z")),
+    true,
+  );
+  assert.equal(
+    isCampaignInsideTimeSetWindow(campaign, new Date("2026-05-18T18:30:00.000Z")),
+    false,
+  );
+});
+
+test("agent campaign claiming only applies active reusable campaign resources", async () => {
+  const source = await readFile(new URL("../lib/outbound-dialer/agent-campaigns.js", import.meta.url), "utf8");
+
+  assert.match(source, /FROM outbound_time_sets\s+WHERE id = \$1 AND status = 'active'/);
+  assert.match(source, /FROM outbound_contact_filters\s+WHERE id = \$1 AND status = 'active'/);
+  assert.match(source, /outbound_dnc_lists l ON l\.id = e\.dnc_list_id AND l\.status = 'active'/);
+});
+
+test("agent campaign preview uses WebRTC softphone dialing, preserves assist content and waits for hangup before disposition", async () => {
+  const agentDesktopSource = await readFile(new URL("../components/contact-center/AgentDesktop.jsx", import.meta.url), "utf8");
+  const softphoneSource = await readFile(new URL("../components/softphone-mini.jsx", import.meta.url), "utf8");
+  const dialRouteSource = await readFile(new URL("../app/api/contact-center/agent/campaigns/dial/route.js", import.meta.url), "utf8");
+  const componentStart = agentDesktopSource.indexOf("function OutboundCampaignRecord");
+  const componentEnd = agentDesktopSource.indexOf("function CampaignDispositionSheet", componentStart);
+  const recordSource = agentDesktopSource.slice(componentStart, componentEnd);
+
+  assert.match(recordSource, /<details/);
+  assert.match(recordSource, /<summary/);
+  assert.match(recordSource, /bg-card/);
+  assert.match(recordSource, /dark:bg-black/);
+  assert.match(recordSource, /Start outbound call/);
+  assert.doesNotMatch(recordSource, /bg-neutral-900\/80|text-neutral-100/);
+  assert.doesNotMatch(recordSource, /bg-orange-50|orange-950|text-orange|bg-orange/);
+
+  assert.match(agentDesktopSource, /softphone:start-call/);
+  assert.match(softphoneSource, /softphone:start-call/);
+  assert.match(softphoneSource, /client\.newCall/);
+  assert.match(softphoneSource, /customHeaders/);
+  assert.doesNotMatch(dialRouteSource, /executeAgentlessAttempt/);
+
+  assert.match(agentDesktopSource, /pendingCampaignDispositionRef/);
+  assert.match(agentDesktopSource, /END_STATUSES/);
+  assert.match(agentDesktopSource, /setCampaignDispositionAssignment\(pendingCampaignDispositionRef\.current\)/);
+  assert.doesNotMatch(agentDesktopSource, /setCampaignDispositionAssignment\(assignment\);\s*\n\s*setCampaignAssignment\(null\)/);
+
+  assert.match(agentDesktopSource, /updateAgentStatus\("On Outbound Call"\)/);
+  assert.match(agentDesktopSource, /campaignPreviewInteraction/);
+  assert.match(agentDesktopSource, /agent_assist_config: campaignAssignment\.agent_assist_config/);
+  assert.match(agentDesktopSource, /<InteractionDetail interaction=\{campaignPreviewInteraction\}/);
+});
+
+test("campaign configuration form exposes one grouped Agent Script selector for preview/progressive agent desktop", async () => {
+  const source = await readFile(new URL("../app/(portal)/supervisor/outbound-dialer/page.jsx", import.meta.url), "utf8");
+  const formStart = source.indexOf("function CampaignSettingsForm");
+  const formEnd = source.indexOf("function parseTtsVoiceString", formStart);
+  assert.ok(formStart > -1 && formEnd > formStart, "CampaignSettingsForm should exist");
+  const formSource = source.slice(formStart, formEnd);
+
+  assert.match(formSource, /const showAgentScript = \["preview", "progressive"\]\.includes\(mode\)/);
+  assert.match(formSource, /<AgentScriptSelect[\s\S]*label="Agent Script"/);
+  assert.match(source, /CommandGroup heading="Forms"/);
+  assert.match(source, /CommandGroup heading="Workflows"/);
+  assert.match(formSource, /attached_form_id/);
+  assert.match(formSource, /attached_workflow_id/);
+  assert.match(formSource, /Agent desktop/);
+  assert.doesNotMatch(formSource, /Agent desktop shows the selected form or workflow for preview\/progressive records\./);
+  assert.doesNotMatch(formSource, /<ConfigSelect label="Agent Script"/);
+});

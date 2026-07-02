@@ -7,12 +7,15 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomBytes, pbkdf2Sync } from "crypto";
 import { createUserTelephonyCredentials } from "@/lib/telnyx-credentials";
 import { verifyRecaptcha, isRecaptchaConfigured } from "@/lib/recaptcha";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail, REDACTED } from "@/lib/auth-logging.mjs";
 
 export async function loginAction(prevState, formData) {
-  const username = (formData.get("username") || "").toString();
+  const username = normalizeAuthEmail(formData.get("username"));
   const password = (formData.get("password") || "").toString();
+  logAuthEvent("info", "signin_attempt", { method: "credentials", email: username });
   const user = await authenticateUser(username, password);
   if (!user) {
+    logAuthEvent("warn", "signin_failed", { method: "credentials", email: username, reason: "invalid_credentials" });
     return { ok: false, error: "Invalid credentials" };
   }
 
@@ -31,17 +34,18 @@ export async function loginAction(prevState, formData) {
           telephonyCredentialsId: credential.id,
           telephonyUserName: credential.username || credential.sip_username,
         });
-        console.log(
-          "[Login] Created missing telephony credentials for user:",
-          username,
-          credential.id
-        );
+        logAuthEvent("info", "auth_telephony_credentials_created", {
+          ...authUserPayload(user, username),
+          credentialId: credential.id,
+          source: "login_action",
+        });
       }
     } catch (credErr) {
-      console.error(
-        "[Login] Failed to create telephony credentials:",
-        credErr.message
-      );
+      logAuthEvent("warn", "auth_telephony_credentials_failed", {
+        ...authUserPayload(user, username),
+        source: "login_action",
+        ...authErrorPayload(credErr),
+      });
       // Continue login even if credential creation fails
     }
   }
@@ -61,6 +65,7 @@ export async function loginAction(prevState, formData) {
   await PgDb.updateUserById(String(user.id || user._id), {
     refresh_tokens: [{ refreshToken: await hashToken(refreshToken) }],
   });
+  logAuthEvent("info", "signin_success", { method: "credentials", ...authUserPayload(user, username) });
   const { cookies } = await import("next/headers");
   (await cookies()).set({
     name: "session",
@@ -85,17 +90,18 @@ export async function loginAction(prevState, formData) {
 
 export async function signupAction(formData) {
   try {
-    const username = (formData.get("username") || "").toString();
+    const username = normalizeAuthEmail(formData.get("username"));
     const password = (formData.get("password") || "").toString();
     const firstName = (formData.get("firstName") || "").toString();
     const lastName = (formData.get("lastName") || "").toString();
     const mobile = (formData.get("mobile") || "").toString();
     const recaptchaToken = (formData.get("recaptchaToken") || "").toString();
+    logAuthEvent("info", "signup_attempt", { method: "local", email: username });
 
     // Verify reCAPTCHA if configured
     if (isRecaptchaConfigured()) {
       if (!recaptchaToken) {
-        console.error("[reCAPTCHA] Token missing from request");
+        logAuthEvent("warn", "signup_failed", { method: "local", email: username, reason: "recaptcha_missing", recaptchaToken: REDACTED });
         return { ok: false, error: "Security verification required" };
       }
 
@@ -106,10 +112,12 @@ export async function signupAction(formData) {
       );
 
       if (!verificationResult.success) {
-        console.error(
-          "[reCAPTCHA] Verification failed:",
-          verificationResult.error
-        );
+        logAuthEvent("warn", "signup_failed", {
+          method: "local",
+          email: username,
+          reason: "recaptcha_failed",
+          recaptchaError: verificationResult.error,
+        });
         return {
           ok: false,
           error:
@@ -117,14 +125,17 @@ export async function signupAction(formData) {
         };
       }
 
-      console.log(
-        `[reCAPTCHA] Verification passed with score: ${verificationResult.score}`
-      );
+      logAuthEvent("info", "signup_recaptcha_passed", {
+        method: "local",
+        email: username,
+        recaptchaScore: verificationResult.score,
+      });
     } else {
-      console.warn("[reCAPTCHA] Not configured, skipping verification");
+      logAuthEvent("warn", "signup_recaptcha_skipped", { method: "local", email: username, reason: "not_configured" });
     }
 
     if (!username || !password || !firstName || !lastName || !mobile) {
+      logAuthEvent("warn", "signup_failed", { method: "local", email: username, reason: "missing_required_fields" });
       return { ok: false, error: "Missing required fields" };
     }
     const strong =
@@ -132,10 +143,15 @@ export async function signupAction(formData) {
       /[A-Z]/.test(password) &&
       /[^A-Za-z0-9]/.test(password) &&
       password.length >= 8;
-    if (!strong) return { ok: false, error: "Password too weak" };
+    if (!strong) {
+      logAuthEvent("warn", "signup_failed", { method: "local", email: username, reason: "weak_password" });
+      return { ok: false, error: "Password too weak" };
+    }
     const at = username.indexOf("@");
-    if (at < 1 || at === username.length - 1)
+    if (at < 1 || at === username.length - 1) {
+      logAuthEvent("warn", "signup_failed", { method: "local", email: username, reason: "invalid_email" });
       return { ok: false, error: "Invalid email" };
+    }
     const domain = username.slice(at + 1).toLowerCase();
 
     const pool = getPostgresPool();
@@ -145,10 +161,16 @@ export async function signupAction(formData) {
         [domain]
       )
     ).rows?.[0];
-    if (!domainDoc) return { ok: false, error: "Email domain not allowed" };
+    if (!domainDoc) {
+      logAuthEvent("warn", "signup_failed", { method: "local", email: username, domain, reason: "domain_not_allowed" });
+      return { ok: false, error: "Email domain not allowed" };
+    }
 
     const existing = await PgDb.findUserByUsername(username);
-    if (existing) return { ok: false, error: "User already exists" };
+    if (existing) {
+      logAuthEvent("warn", "signup_failed", { method: "local", email: username, reason: "user_exists" });
+      return { ok: false, error: "User already exists" };
+    }
 
     const salt = randomBytes(32).toString("hex");
     const hash = pbkdf2Sync(password, salt, 25000, 64, "sha256").toString(
@@ -188,17 +210,20 @@ export async function signupAction(formData) {
           telephonyCredentialsId: credential.id,
           telephonyUserName: credential.username || credential.sip_username,
         });
-        console.log(
-          "[Signup] Created telephony credentials for user:",
-          username,
-          credential.id
-        );
+        logAuthEvent("info", "auth_telephony_credentials_created", {
+          userId: String(id),
+          email: username,
+          credentialId: credential.id,
+          source: "signup_action",
+        });
       }
     } catch (credErr) {
-      console.error(
-        "[Signup] Failed to create telephony credentials:",
-        credErr.message
-      );
+      logAuthEvent("warn", "auth_telephony_credentials_failed", {
+        userId: String(id),
+        email: username,
+        source: "signup_action",
+        ...authErrorPayload(credErr),
+      });
       // Continue even if credential creation fails (user signup should still succeed)
     }
 
@@ -213,26 +238,37 @@ export async function signupAction(formData) {
       );
 
       if (!emailResult.success) {
-        console.error(
-          "[Signup] Failed to send activation email:",
-          emailResult.error
-        );
+        logAuthEvent("warn", "signup_activation_email_failed", {
+          userId: String(id),
+          email: username,
+          emailError: emailResult.error,
+        });
       }
     } catch (emailErr) {
-      console.error("[Signup] Activation email error:", emailErr);
+      logAuthEvent("warn", "signup_activation_email_failed", {
+        userId: String(id),
+        email: username,
+        ...authErrorPayload(emailErr),
+      });
       // Continue even if email fails
     }
 
+    logAuthEvent("info", "signup_success", { userId: String(id), email: username, method: "local" });
     return { ok: true, id: String(id) };
   } catch (err) {
+    logAuthEvent("error", "signup_failed", { reason: "server_error", ...authErrorPayload(err) });
     return { ok: false, error: "Server error" };
   }
 }
 
 export async function forgotPasswordAction(formData) {
   try {
-    const username = (formData.get("username") || "").toString().trim();
-    if (!username) return { ok: false, error: "Missing email" };
+    const username = normalizeAuthEmail(formData.get("username"));
+    logAuthEvent("info", "password_reset_requested", { email: username, source: "server_action" });
+    if (!username) {
+      logAuthEvent("warn", "password_reset_request_failed", { reason: "missing_email", source: "server_action" });
+      return { ok: false, error: "Missing email" };
+    }
 
     // Find user
     const user = await PgDb.findUserByUsername(username);
@@ -240,6 +276,7 @@ export async function forgotPasswordAction(formData) {
     // For security, don't disclose if user exists or not
     if (!user) {
       // Return success even if user doesn't exist
+      logAuthEvent("info", "password_reset_request_hidden_user", { email: username, userExists: false, source: "server_action" });
       return { ok: true };
     }
 
@@ -268,16 +305,18 @@ export async function forgotPasswordAction(formData) {
     );
 
     if (!emailResult.success) {
-      console.error(
-        "[Forgot Password] Failed to send email:",
-        emailResult.error
-      );
+      logAuthEvent("warn", "password_reset_email_failed", {
+        ...authUserPayload(user, username),
+        source: "server_action",
+        emailError: emailResult.error,
+      });
       // Still return success to not disclose if email sending failed
+    } else {
+      logAuthEvent("info", "password_reset_email_sent", { ...authUserPayload(user, username), source: "server_action" });
     }
-
     return { ok: true };
   } catch (err) {
-    console.error("[Forgot Password] Error:", err);
+    logAuthEvent("error", "password_reset_request_failed", { reason: "server_error", source: "server_action", ...authErrorPayload(err) });
     return { ok: false, error: "Failed to request reset" };
   }
 }

@@ -2,6 +2,22 @@ import { NextResponse } from "next/server";
 import { verifyAccessToken, verifyRefreshToken, hashToken } from "@/lib/jwt";
 import { PgDb } from "@/lib/pgdb";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authErrorPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
+
+async function getCurrentAgentStatus(userId) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool || !userId) return "Unknown";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Unknown";
+  } catch (_) {
+    return "Unknown";
+  }
+}
 
 export async function POST(request) {
   const res = NextResponse.json({ ok: true });
@@ -21,6 +37,12 @@ export async function POST(request) {
       if (p2?.sub) userId = p2.sub;
     }
     const refreshToRevoke = refreshCookie || headerMatch?.[1] || null;
+    let revokedRefreshToken = false;
+    await logAuthEvent("info", "logout_attempt", {
+      userId: userId ? String(userId) : undefined,
+      hasRefreshToken: Boolean(refreshToRevoke),
+      source: "api",
+    });
     if (userId && refreshToRevoke) {
       const user = await PgDb.findUserById(String(userId));
       const list = Array.isArray(user?.refresh_tokens)
@@ -29,15 +51,17 @@ export async function POST(request) {
       const hashed = await hashToken(refreshToRevoke);
       const newList = list.filter((t) => t?.refreshToken !== hashed);
       await PgDb.updateUserById(String(userId), { refresh_tokens: newList });
+      revokedRefreshToken = newList.length !== list.length;
 
       // Set user status to Offline on logout
       if (user) {
         try {
+          const previousStatus = await getCurrentAgentStatus(userId);
           await setUserStatus({
             userId: String(userId),
             username: user.username,
             status: "Offline",
-            previousStatus: user.status,
+            previousStatus,
           });
         } catch (_) {}
       }
@@ -103,11 +127,19 @@ export async function POST(request) {
           }
         }
       } catch (activityError) {
-        console.error("[Logout] Failed to log logout activity:", activityError);
+        await logAuthEvent("warn", "logout_activity_failed", { userId: String(userId), source: "api", ...authErrorPayload(activityError) });
         // Don't fail logout if activity logging fails
       }
     }
-  } catch (_) {}
+    await logAuthEvent("info", "logout_success", {
+      userId: userId ? String(userId) : undefined,
+      source: "api",
+      hasRefreshToken: Boolean(refreshToRevoke),
+      revokedRefreshToken,
+    });
+  } catch (error) {
+    await logAuthEvent("warn", "logout_failed", { source: "api", ...authErrorPayload(error) });
+  }
 
   res.cookies.set({
     name: "session",

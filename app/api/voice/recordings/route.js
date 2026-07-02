@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/voice/recordings
@@ -68,7 +69,7 @@ export async function GET(request) {
           }
         } else {
           const errorText = await callRes.text();
-          console.error("[Recordings] Failed to fetch call info:", errorText);
+          voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
           return NextResponse.json(
             {
               ok: false,
@@ -78,7 +79,7 @@ export async function GET(request) {
           );
         }
       } catch (fetchError) {
-        console.error("[Recordings] Error fetching call info:", fetchError);
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         return NextResponse.json(
           { ok: false, error: "Failed to fetch call information" },
           { status: 500 },
@@ -113,7 +114,7 @@ export async function GET(request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[Recordings] Telnyx error:", errorText);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch recordings from Telnyx" },
         { status: res.status },
@@ -127,7 +128,7 @@ export async function GET(request) {
       meta: data?.meta || {},
     });
   } catch (error) {
-    console.error("[Recordings] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch recordings" },
       { status: 500 },

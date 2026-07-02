@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { IconActivity, IconX, IconCopy, IconCheck } from "@tabler/icons-react";
-import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import AiConversationCostsTab from "@/components/contact-center/AiConversationCostsTab";
+import { notify } from "@/components/ToastNotify";
 import { Tool, ToolContent } from "@/components/ai-elements/tool";
 import {
   CodeBlock,
@@ -206,12 +209,12 @@ export default function InteractionDetailsSheet({
 
           setSessionWithCallControlId(updatedSession);
         } else {
-          toast.error(data.error || "Failed to load call events");
+          notify({ title: data.error || "Failed to load call events", variant: "error" });
           setEventsMessage("Failed to load call events.");
         }
       } catch (error) {
         console.error("Error fetching call events:", error);
-        toast.error("Failed to load call events");
+        notify({ title: "Failed to load call events", variant: "error" });
         setEventsMessage("Failed to load call events.");
       } finally {
         setLoading(false);
@@ -225,18 +228,18 @@ export default function InteractionDetailsSheet({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedField(label);
-      toast.success(`${label} copied to clipboard`);
+      notify({ title: `${label} copied to clipboard`, variant: "success" });
       setTimeout(() => setCopiedField(null), 2000);
     } catch (error) {
-      toast.error("Failed to copy to clipboard");
+      notify({ title: "Failed to copy to clipboard", variant: "error" });
     }
   };
 
-  if (!open || !session) return null;
+  if (!open || !session || typeof document === "undefined") return null;
 
   const sessionData = sessionWithCallControlId || session;
 
-  return (
+  return createPortal(
     <div className="fixed inset-y-0 right-0 w-2xl bg-background dark:bg-zinc-900 border-l shadow-2xl z-50 flex flex-col animate-in slide-in-from-right">
       <div className="p-4">
         <div className="flex items-center justify-between">
@@ -353,16 +356,22 @@ export default function InteractionDetailsSheet({
         </Card>
       </div>
 
-      <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">Call Events</h3>
-          <Badge variant="outline" className="text-xs">
-            {events.length}
-          </Badge>
+      <Tabs defaultValue="events" className="flex-1 min-h-0 flex flex-col">
+        <div className="px-4 pt-4 pb-2">
+          <TabsList>
+            <TabsTrigger value="events" className="flex items-center gap-1.5">
+              Call Events
+              <Badge variant="outline" className="text-xs ml-1">{events.length}</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="costs">Costs</TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <TabsContent value="costs" className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          <AiConversationCostsTab conversation={interaction} />
+        </TabsContent>
+
+        <TabsContent value="events" className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, idx) => (
@@ -407,7 +416,9 @@ export default function InteractionDetailsSheet({
             ))}
           </div>
         )}
-      </div>
-    </div>
+        </TabsContent>
+      </Tabs>
+    </div>,
+    document.body
   );
 }

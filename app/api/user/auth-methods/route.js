@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authLogger, securityErrorPayload, securityUserPayload } from "@/lib/security-logging.mjs";
 
 export async function GET() {
   try {
@@ -56,7 +57,7 @@ export async function GET() {
       hasFacebook,
     });
   } catch (error) {
-    console.error("[Auth Methods] Error:", error);
+    authLogger.error("auth_methods_load_failed", { ...securityErrorPayload(error), ...securityUserPayload(null, session?.user?.email) });
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

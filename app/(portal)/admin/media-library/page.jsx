@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -169,35 +170,33 @@ export default function AdminMediaLibraryPage() {
     );
   }, [items, filters.q]);
 
+  const headerActions = <>
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setFilters({
+          q: "",
+        })
+      }
+    >
+      Clear
+    </Button>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+    <Button onClick={handleNewMedia} variant="default">
+      <IconPlus className="size-4 mr-2" />
+      Upload Media
+    </Button>
+  </>;
+
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Media Library" badges={<Badge variant="secondary">{total} assets</Badge>} actions={headerActions} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconFileMusic className="size-6 text-telnyx-green" /> Media
-              Library
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  setFilters({
-                    q: "",
-                  })
-                }
-              >
-                Clear
-              </Button>
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-              <Button onClick={handleNewMedia} variant="default">
-                <IconPlus className="size-4 mr-2" />
-                Upload Media
-              </Button>
-            </div>
-          </div>
           <div className="grid grid-cols-6 gap-2 items-end">
             <div>
               <label className="text-xs">Search</label>
@@ -433,7 +432,9 @@ export default function AdminMediaLibraryPage() {
           />
         </div>
       )}
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }
 

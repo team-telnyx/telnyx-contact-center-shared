@@ -20,11 +20,12 @@ import {
 import { Play, Pause } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import AiConversationMessagesTab from "./AiConversationMessagesTab";
 import AiConversationInsightsTab from "./AiConversationInsightsTab";
 import AiConversationMetadataTab from "./AiConversationMetadataTab";
 import AiConversationDynamicVariablesTab from "./AiConversationDynamicVariablesTab";
+import AiConversationCostsTab from "./AiConversationCostsTab";
 
 const AI_HEADER_NAME = "x-ai-call-id";
 
@@ -460,7 +461,7 @@ export default function AiConversationSheet({
 
       wavesurfer.on("error", (error) => {
         console.error("WaveSurfer error:", error);
-        toast.error("Failed to load recording");
+        notify({ title: "Failed to load recording", variant: "error" });
       });
 
       try {
@@ -489,11 +490,11 @@ export default function AiConversationSheet({
           wavesurfer.load(audioUrl);
         } else {
           console.warn("No recording URL or ID available");
-          toast.error("No recording URL available");
+          notify({ title: "No recording URL available", variant: "error" });
         }
       } catch (error) {
         console.error("Error loading recording:", error);
-        toast.error("Failed to load recording");
+        notify({ title: "Failed to load recording", variant: "error" });
       }
     }, 100);
 
@@ -686,6 +687,7 @@ export default function AiConversationSheet({
               <TabsTrigger value="insights">Insights</TabsTrigger>
               <TabsTrigger value="metadata">Metadata</TabsTrigger>
               <TabsTrigger value="dynamic">Dynamic Variables</TabsTrigger>
+              <TabsTrigger value="costs">Costs</TabsTrigger>
             </TabsList>
 
             <TabsContent
@@ -755,6 +757,13 @@ export default function AiConversationSheet({
                 useDemoApiKey={usedDemoApiKey}
                 hasAiCallControlId={hasAiCallControlId}
               />
+            </TabsContent>
+
+            <TabsContent
+              value="costs"
+              className="flex-1 min-h-0 overflow-auto py-2"
+            >
+              <AiConversationCostsTab conversation={conversation || interaction} useDemoApiKey={usedDemoApiKey} />
             </TabsContent>
           </Tabs>
 

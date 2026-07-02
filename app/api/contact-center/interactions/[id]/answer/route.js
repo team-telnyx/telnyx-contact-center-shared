@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { bridgeCallToAgent } from "@/lib/contact-center/webrtc-bridge";
 import { broadcastToKey } from "@/lib/sse";
+import { interactionsLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 
 /**
  * POST /api/contact-center/interactions/:id/answer
@@ -79,20 +80,13 @@ export async function POST(request, { params }) {
         let fromDisplayName = null;
         if (interaction.from_number) {
           try {
-            console.log(
-              "[AnswerInteraction] 🔍 Looking up contact for phone number:",
-              interaction.from_number
-            );
+            interactionsLogger.debug("interaction_diagnostic_0", {});
             // Use findContactByPhoneNumber which checks all phone columns
             const contact = await PgDb.findContactByPhoneNumber(
               interaction.from_number
             );
             if (contact) {
-              console.log("[AnswerInteraction] ✅ Contact found:", {
-                display_name: contact.display_name,
-                first_name: contact.first_name,
-                last_name: contact.last_name,
-              });
+              interactionsLogger.debug("interaction_diagnostic_1", {});
 
               // Prefer display_name if available, otherwise use first_name + last_name
               if (contact.display_name) {
@@ -106,32 +100,19 @@ export async function POST(request, { params }) {
               }
 
               if (fromDisplayName) {
-                console.log(
-                  "[AnswerInteraction] ✅ Using caller name:",
-                  fromDisplayName
-                );
+                interactionsLogger.debug("interaction_diagnostic_2", {});
               } else {
-                console.warn(
-                  "[AnswerInteraction] ⚠️ Contact found but no name fields available"
-                );
+                interactionsLogger.warn("interaction_warning_3", {});
               }
             } else {
-              console.log(
-                "[AnswerInteraction] ❌ No contact found for phone number:",
-                interaction.from_number
-              );
+              interactionsLogger.debug("interaction_diagnostic_4", {});
             }
           } catch (err) {
             // Contacts table might not exist, that's okay
-            console.error(
-              "[AnswerInteraction] ❌ Error looking up contact:",
-              err
-            );
+            interactionsLogger.error("interaction_error_5", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
           }
         } else {
-          console.log(
-            "[AnswerInteraction] ⚠️ No from_number in interaction, skipping contact lookup"
-          );
+          interactionsLogger.debug("interaction_diagnostic_6", {});
         }
 
         const bridgeResult = await bridgeCallToAgent(
@@ -163,7 +144,7 @@ export async function POST(request, { params }) {
           agentCallControlId: bridgeResult.agentCallControlId,
         });
       } catch (err) {
-        console.error("[AnswerInteraction] Bridge error:", err);
+        interactionsLogger.error("interaction_error_7", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
         return NextResponse.json(
           { ok: false, error: err.message || "Failed to bridge call" },
           { status: 500 }
@@ -179,7 +160,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ ok: true });
     }
   } catch (err) {
-    console.error("[AnswerInteraction] Error:", err);
+    interactionsLogger.error("interaction_error_8", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 }

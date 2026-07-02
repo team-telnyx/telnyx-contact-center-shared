@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import useCallsStore from "@/lib/stores/calls-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
 // No Link: SPA-style selection via hash
 
 // Helper function to get user initials
@@ -104,91 +105,16 @@ export function NavUser({ user, hideExtras }) {
     } catch (_) {}
   }
 
-  const [status, setStatus] = useState(
-    (typeof window !== "undefined" && localStorage.getItem("user.status")) ||
-      DEFAULT_USER_STATUS
-  );
+  const [status, setStatus] = useState(DEFAULT_USER_STATUS);
 
+  // Subscribe to real-time status updates via the shared SSE client.
   useEffect(() => {
-    try {
-      const ls = localStorage.getItem("user.status");
-      if (ls && ls !== status) setStatus(ls);
-    } catch (_) {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Subscribe to SSE stream for real-time status updates
-  useEffect(() => {
-    let eventSource = null;
-    let reconnectTimeout = null;
-
-    const connectStatusStream = () => {
-      try {
-        // Close existing connection if any
-        if (eventSource) {
-          eventSource.close();
-        }
-
-        eventSource = new EventSource("/api/user/status-stream");
-
-        eventSource.addEventListener("status_changed", (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.status && data.status !== status) {
-              console.log(
-                "[Status] Received status update via SSE:",
-                data.status
-              );
-              setStatus(data.status);
-              try {
-                localStorage.setItem("user.status", data.status);
-              } catch (_) {}
-            }
-          } catch (error) {
-            console.error("[Status] Error parsing SSE data:", error);
-          }
-        });
-
-        eventSource.addEventListener("connected", () => {
-          console.log("[Status] Connected to status stream");
-        });
-
-        eventSource.addEventListener("ping", () => {
-          // Keep-alive ping received
-        });
-
-        eventSource.onerror = (error) => {
-          console.warn("[Status] SSE connection error:", error);
-          // Close and reconnect after delay
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-          // Reconnect after 5 seconds
-          reconnectTimeout = setTimeout(() => {
-            connectStatusStream();
-          }, 5000);
-        };
-      } catch (error) {
-        console.error("[Status] Failed to connect to status stream:", error);
-        // Retry after delay
-        reconnectTimeout = setTimeout(() => {
-          connectStatusStream();
-        }, 5000);
+    const unsubscribe = subscribeStatusStream("status_changed", (data) => {
+      if (data?.status && data.status !== status) {
+        setStatus(data.status);
       }
-    };
-
-    // Connect to status stream for authenticated users
-    connectStatusStream();
-
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-      }
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
+    });
+    return unsubscribe;
   }, []);
 
   async function updateStatusOnServer(nextStatus) {
@@ -197,11 +123,11 @@ export function NavUser({ user, hideExtras }) {
       await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({
+          status: nextStatus,
+          system: nextStatus === "Offline",
+        }),
       });
-    } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
     } catch (_) {}
   }
 
@@ -216,7 +142,7 @@ export function NavUser({ user, hideExtras }) {
 
     try {
       try {
-        updateStatusOnServer("Offline");
+        await updateStatusOnServer("Offline");
       } catch (_) {}
 
       try {
@@ -230,7 +156,6 @@ export function NavUser({ user, hideExtras }) {
       try {
         localStorage.removeItem("nav-main.selected");
         localStorage.removeItem("webrtc.token.cache");
-        localStorage.removeItem("user.status");
       } catch (_) {}
 
       // Try to call logout API to clear server-side session and refresh tokens

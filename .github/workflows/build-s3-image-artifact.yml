@@ -1,0 +1,220 @@
+name: Build S3 image artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build
+        required: true
+        default: master
+      artifact_bucket:
+        description: S3 bucket for immutable Docker image tarballs
+        required: true
+      artifact_prefix:
+        description: Prefix inside bucket
+        required: true
+        default: telnyx-contact-center
+      aws_region:
+        description: AWS region for the artifact bucket
+        required: true
+        default: us-east-2
+      image_name:
+        description: Docker image repository/name inside the tarball
+        required: true
+        default: telnyx-contact-center
+      platforms:
+        description: Docker platform to build
+        required: true
+        default: linux/amd64
+      retention_days:
+        description: GitHub Actions summary artifact retention
+        required: true
+        default: "7"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: build-s3-image-artifact-${{ github.event.inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build, compress, and upload Docker image tarball
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      ARTIFACT_BUCKET: ${{ github.event.inputs.artifact_bucket }}
+      ARTIFACT_PREFIX: ${{ github.event.inputs.artifact_prefix }}
+      AWS_REGION: ${{ github.event.inputs.aws_region }}
+      IMAGE_NAME: ${{ github.event.inputs.image_name }}
+      DOCKER_PLATFORM: ${{ github.event.inputs.platforms }}
+      # NEXT_PUBLIC_* values are compiled into the Next.js client bundle. Keep
+      # these repository/environment variables empty or shared when the same
+      # image must run on HA and legacy PROD with only runtime .env changes.
+      NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL || '' }}
+      NEXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '' }}
+      NEXT_PUBLIC_STREAMING_PORT: ${{ vars.NEXT_PUBLIC_STREAMING_PORT || '' }}
+      NEXT_PUBLIC_TELNYX_WEBRTC_REGION: ${{ vars.NEXT_PUBLIC_TELNYX_WEBRTC_REGION || '' }}
+      NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES: ${{ vars.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES || '' }}
+
+    steps:
+      - name: Check required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${AWS_ROLE_TO_ASSUME:-}" ]; then
+            echo "Set repository/environment variable AWS_ROLE_TO_ASSUME to the artifact writer role ARN." >&2
+            exit 1
+          fi
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+
+      - name: Checkout requested ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          fetch-depth: 0
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Install zstd
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd
+
+      - name: Set Docker metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          ref_name="${GITHUB_REF_NAME:-${{ github.event.inputs.ref }}}"
+          tag="${IMAGE_NAME}:${short_sha}"
+          s3_prefix="s3://${ARTIFACT_BUCKET}/${ARTIFACT_PREFIX}/${short_sha}"
+
+          {
+            echo "sha=${sha}"
+            echo "short_sha=${short_sha}"
+            echo "ref_name=${ref_name}"
+            echo "tag=${tag}"
+            echo "s3_prefix=${s3_prefix}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build production Docker image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --platform "${DOCKER_PLATFORM}" \
+            --file docker/production/Dockerfile \
+            --build-arg NEXT_PUBLIC_BASE_URL="${NEXT_PUBLIC_BASE_URL}" \
+            --build-arg NEXT_PUBLIC_RECAPTCHA_SITE_KEY="${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}" \
+            --build-arg NEXT_PUBLIC_STREAMING_PORT="${NEXT_PUBLIC_STREAMING_PORT}" \
+            --build-arg NEXT_PUBLIC_TELNYX_WEBRTC_REGION="${NEXT_PUBLIC_TELNYX_WEBRTC_REGION}" \
+            --build-arg NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES="${NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES}" \
+            --tag "${{ steps.meta.outputs.tag }}" \
+            .
+
+      - name: Save, compress, checksum, and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifact
+          docker save "${{ steps.meta.outputs.tag }}" | zstd -T0 -3 -o artifact/image.tar.zst
+          (cd artifact && sha256sum image.tar.zst > image.tar.zst.sha256)
+          cat > artifact/manifest.json <<EOF
+          {
+            "app": "telnyx-contact-center",
+            "git_sha": "${{ steps.meta.outputs.sha }}",
+            "short_sha": "${{ steps.meta.outputs.short_sha }}",
+            "ref": "${{ github.event.inputs.ref }}",
+            "source_repository": "${{ github.repository }}",
+            "source_run_id": "${{ github.run_id }}",
+            "image": "${{ steps.meta.outputs.tag }}",
+            "docker_platform": "${DOCKER_PLATFORM}",
+            "artifact": "${{ steps.meta.outputs.s3_prefix }}/image.tar.zst",
+            "checksum": "${{ steps.meta.outputs.s3_prefix }}/image.tar.zst.sha256",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "next_public_base_url": "${NEXT_PUBLIC_BASE_URL}",
+            "next_public_streaming_port": "${NEXT_PUBLIC_STREAMING_PORT}"
+          }
+          EOF
+
+      - name: Upload artifact to S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws s3 cp artifact/image.tar.zst "${{ steps.meta.outputs.s3_prefix }}/image.tar.zst" --only-show-errors
+          aws s3 cp artifact/image.tar.zst.sha256 "${{ steps.meta.outputs.s3_prefix }}/image.tar.zst.sha256" --only-show-errors
+          aws s3 cp artifact/manifest.json "${{ steps.meta.outputs.s3_prefix }}/manifest.json" --content-type application/json --only-show-errors
+
+      - name: Keep only the latest 5 S3 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          bucket = os.environ["ARTIFACT_BUCKET"]
+          prefix = os.environ["ARTIFACT_PREFIX"].strip("/")
+          keep = 5
+
+          def aws_json(*args):
+              return json.loads(subprocess.check_output(["aws", *args], text=True))
+
+          objects = aws_json("s3api", "list-objects-v2", "--bucket", bucket, "--prefix", f"{prefix}/", "--output", "json").get("Contents", [])
+          manifests = sorted(
+              [obj for obj in objects if obj.get("Key", "").endswith("/manifest.json")],
+              key=lambda obj: obj.get("LastModified", ""),
+              reverse=True,
+          )
+          stale_prefixes = [obj["Key"].rsplit("/", 1)[0] for obj in manifests[keep:]]
+          for artifact_prefix in stale_prefixes:
+              stale_objects = aws_json("s3api", "list-objects-v2", "--bucket", bucket, "--prefix", f"{artifact_prefix}/", "--output", "json").get("Contents", [])
+              keys = [{"Key": obj["Key"]} for obj in stale_objects]
+              for idx in range(0, len(keys), 1000):
+                  subprocess.check_call([
+                      "aws", "s3api", "delete-objects",
+                      "--bucket", bucket,
+                      "--delete", json.dumps({"Objects": keys[idx:idx + 1000], "Quiet": True}),
+                      "--output", "json",
+                  ])
+              print(f"Deleted stale artifact prefix s3://{bucket}/{artifact_prefix}/")
+          print(f"Retained {min(len(manifests), keep)} newest artifact prefixes for s3://{bucket}/{prefix}/")
+          PY
+
+      - name: Upload small manifest artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc-s3-image-artifact-${{ steps.meta.outputs.short_sha }}
+          path: |
+            artifact/manifest.json
+            artifact/image.tar.zst.sha256
+          retention-days: ${{ github.event.inputs.retention_days }}
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "## Telnyx Contact Center image artifact"
+            echo
+            echo "- Image: \`${{ steps.meta.outputs.tag }}\`"
+            echo "- Git SHA: \`${{ steps.meta.outputs.sha }}\`"
+            echo "- S3 prefix: \`${{ steps.meta.outputs.s3_prefix }}\`"
+            echo
+            echo "Deploy example:"
+            echo '```bash'
+            echo "./scripts/deploy-artifact-ssm.sh --target legacy-cc-prod --artifact ${{ steps.meta.outputs.s3_prefix }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

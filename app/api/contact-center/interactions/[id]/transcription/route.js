@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { hasRole } from "@/lib/role-utils";
+import { interactionsLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 
 function calculateSummary(transcriptions) {
   if (!Array.isArray(transcriptions) || transcriptions.length === 0) {
@@ -148,7 +149,7 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("[InteractionTranscription] Error:", error);
+    interactionsLogger.error("interaction_error_0", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Failed to store transcription data" },
       { status: 500 }

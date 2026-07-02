@@ -4,10 +4,160 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { InteractionsList } from "./InteractionsList";
 import { InteractionDetail } from "./InteractionDetail";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
 import { Info, PhoneCall } from "lucide-react";
+import { notify } from "@/components/ToastNotify";
+import {
+  IconAddressBook,
+  IconBook,
+  IconChecklist,
+  IconDeviceDesktop,
+  IconFileText,
+  IconGauge,
+  IconWorld,
+} from "@tabler/icons-react";
 import useActiveCallStore from "@/lib/stores/active-call-store";
 import useCallsStore from "@/lib/stores/calls-store";
+import { subscribeStatusStream } from "@/lib/status-stream-client";
+import { AgentDashboard } from "./AgentDashboard";
 import { AgentDataSources } from "./AgentDataSources";
+
+const AGENT_RAIL_ITEMS = [
+  { id: "desktop", label: "Desktop", icon: IconDeviceDesktop, description: "Live interaction workspace" },
+  { id: "dashboard", label: "Dashboard", icon: IconGauge, description: "Performance overview" },
+  { id: "forms", label: "Forms", icon: IconFileText, description: "Queue forms" },
+  { id: "web-pages", label: "Web Pages", icon: IconWorld, description: "External portals" },
+  { id: "contacts", label: "Contacts", icon: IconAddressBook, description: "Search contacts" },
+  { id: "tasks", label: "Tasks", icon: IconChecklist, description: "Manage tasks" },
+  { id: "kb-articles", label: "KB Articles", icon: IconBook, description: "Knowledge base" },
+];
+
+const DATA_SOURCE_VIEW_LABELS = {
+  contacts: "Contacts",
+  tasks: "Tasks",
+  forms: "Forms",
+  "web-pages": "Web Pages",
+  "kb-articles": "KB Articles",
+};
+
+const END_STATUSES = new Set(["ended", "hangup", "completed", "terminated", "destroy", "failed", "idle"]);
+
+async function updateAgentStatus(nextStatus) {
+  try {
+    const res = await fetch("/api/contact-center/agent/status", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to update agent status");
+    }
+  } catch (_) {}
+}
+
+function OutboundCampaignRecord({ assignment, countdownSeconds, dialing, onDial }) {
+  if (!assignment) return null;
+  const record = assignment.contact_record || {};
+  const previewFields = Object.entries(record).filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "").slice(0, 12);
+  const isProgressive = assignment.campaign_mode === "progressive";
+  return (
+    <details className="group rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:border-zinc-800 dark:bg-black dark:text-zinc-100" open={false}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:bg-muted/60 dark:hover:bg-zinc-900 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:text-zinc-400">Outbound Campaign Record</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <h3 className="truncate text-base font-semibold text-foreground dark:text-zinc-50">{assignment.campaign_name || "Campaign"}</h3>
+            <span className="font-mono text-sm text-muted-foreground dark:text-zinc-300">{assignment.to_number || "No phone number"}</span>
+            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-semibold uppercase text-muted-foreground dark:border-zinc-700 dark:text-zinc-400">{assignment.campaign_mode}</span>
+            {isProgressive ? <span className="font-mono text-sm font-semibold text-foreground dark:text-zinc-200">Auto dial in {Math.max(0, countdownSeconds ?? 0)}s</span> : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="shrink-0 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDial?.();
+          }}
+          disabled={dialing || !assignment.to_number}
+        >
+          {dialing ? "Starting outbound call..." : "Start outbound call"}
+        </button>
+      </summary>
+      <div className="border-t border-border px-4 pb-4 pt-3 dark:border-zinc-800">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {previewFields.map(([key, value]) => (
+            <div key={key} className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+              <div className="text-[11px] uppercase text-muted-foreground dark:text-zinc-500">{key.replace(/_/g, " ")}</div>
+              <div className="font-medium text-foreground dark:text-zinc-100">{String(value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function CampaignDispositionSheet({ assignment, open, onClose, onSubmitted }) {
+  const [codes, setCodes] = useState([]);
+  const [selectedCode, setSelectedCode] = useState("");
+  const [callbackAt, setCallbackAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    if (!open || !assignment?.campaign_id) return;
+    fetch(`/api/contact-center/agent/campaigns/disposition?campaignId=${encodeURIComponent(assignment.campaign_id)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        const nextCodes = data.dispositionCodes || [];
+        setCodes(nextCodes);
+        setSelectedCode(nextCodes[0]?.wrapup_code_id || "");
+      })
+      .catch(() => setCodes([]));
+  }, [open, assignment?.campaign_id]);
+  if (!open || !assignment) return null;
+  const selected = codes.find((code) => code.wrapup_code_id === selectedCode);
+  const requiresCallback = selected?.requires_callback === true;
+  const submit = async () => {
+    if (!selectedCode) { notify({ title: "Disposition required", description: "Select a disposition code", variant: "warning" }); return; }
+    if (requiresCallback && !callbackAt) { notify({ title: "Callback required", description: "Callback date/time is required", variant: "warning" }); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/contact-center/agent/campaigns/disposition", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attemptId: assignment.id, dispositionCodeId: selectedCode, callback_at: callbackAt ? new Date(callbackAt).toISOString() : null, notes }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || "Failed to save campaign disposition");
+      onSubmitted?.(data);
+      onClose?.();
+    } catch (err) {
+      notify({ title: "Disposition save failed", description: err.message || "Failed to save campaign disposition", variant: "error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose?.(); }}>
+    <SheetContent side="right" className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0">
+      <SheetHeader className="px-6 py-4 border-b">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Campaign Disposition</p>
+        <SheetTitle className="text-xl font-bold text-telnyx-green">Wrap up campaign record</SheetTitle>
+        <p className="text-sm text-muted-foreground">Select the campaign outcome for {assignment.to_number}. This updates retry, completion, or suppression state.</p>
+      </SheetHeader>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 p-5">
+        <div className="space-y-2"><label className="text-sm font-medium">Disposition code</label><Select value={selectedCode || undefined} onValueChange={setSelectedCode}><SelectTrigger><SelectValue placeholder="Select code" /></SelectTrigger><SelectContent>{codes.map((code) => <SelectItem key={code.wrapup_code_id} value={code.wrapup_code_id}>{code.wrapup_code_name || code.wrapup_code_id}</SelectItem>)}</SelectContent></Select>{selected ? <p className="text-xs text-muted-foreground">{selected.classification?.replace(/_/g, " ")} {selected.business_category && selected.business_category !== "none" ? `· ${selected.business_category}` : ""}</p> : null}</div>
+        {requiresCallback ? <div className="space-y-2"><label className="text-sm font-medium">Callback date/time</label><input type="datetime-local" className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={callbackAt} onChange={(event) => setCallbackAt(event.target.value)} /></div> : null}
+        <div className="space-y-2"><label className="text-sm font-medium">Notes</label><textarea className="min-h-24 w-full rounded-md border bg-background px-3 py-2 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional notes for supervisor/reporting" /></div>
+      </div>
+      <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2"><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={onClose} disabled={submitting}>Cancel</button><button type="button" className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" onClick={submit} disabled={submitting}>{submitting ? "Saving..." : "Submit disposition"}</button></SheetFooter>
+    </SheetContent>
+  </Sheet>;
+}
 
 export function AgentDesktop() {
   const [selectedInteraction, setSelectedInteraction] = useState(null);
@@ -15,6 +165,15 @@ export function AgentDesktop() {
   const [dbInteractions, setDbInteractions] = useState([]);
   const [currentUsername, setCurrentUsername] = useState(null);
   const [agentStatus, setAgentStatus] = useState(null); // Track agent's current status
+  const [agentForms, setAgentForms] = useState([]);
+  const [selectedAgentFormId, setSelectedAgentFormId] = useState("");
+  const [campaignAssignment, setCampaignAssignment] = useState(null);
+  const [campaignDispositionAssignment, setCampaignDispositionAssignment] = useState(null);
+  const [campaignCountdownSeconds, setCampaignCountdownSeconds] = useState(null);
+  const [campaignDialing, setCampaignDialing] = useState(false);
+  const campaignDialedAttemptRef = useRef(null);
+  const pendingCampaignDispositionRef = useRef(null);
+  const campaignCallStartedRef = useRef(false);
   const lastRefreshAttemptRef = useRef(new Map()); // Track refresh attempts to avoid infinite loops
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
@@ -162,7 +321,7 @@ export function AgentDesktop() {
           matchKeys.delete(null);
           matchKeys.delete("");
 
-          return !filteredDbInteractions.some((interaction) => {
+          const hasDbMatch = filteredDbInteractions.some((interaction) => {
             const metadata = interaction.metadata || {};
             const interactionKeys = new Set([
               interaction.id,
@@ -176,6 +335,37 @@ export function AgentDesktop() {
             }
             return false;
           });
+
+          if (hasDbMatch) return false;
+
+          // Guard against client-side orphan calls: if the DB has no active
+          // interaction for this call and the authoritative agent status is not
+          // call-engaged, do not synthesize a store-only interaction forever.
+          // This covers missed WebRTC hangup/disconnect events after the DB has
+          // already completed the call and returned the agent to Available.
+          const nonCallStatuses = new Set([
+            "Available",
+            "Away",
+            "Offline",
+            "Agent Not Answering",
+          ]);
+          const startedAt = call.callStartTime || call.createdAt || call.startedAt;
+          const startedMs = startedAt ? new Date(startedAt).getTime() : 0;
+          const isRecentlyCreated = startedMs && Date.now() - startedMs < 5000;
+          if (
+            currentAgentStatus &&
+            nonCallStatuses.has(currentAgentStatus) &&
+            !isRecentlyCreated
+          ) {
+            console.log(
+              `[AgentDesktop] Suppressing stale store-only call ${
+                call.callControlId || call.interactionId || call.callSessionId
+              } because agent status is ${currentAgentStatus} and DB has no active interaction`,
+            );
+            return false;
+          }
+
+          return true;
         })
         .map((call) => ({
           id: call.interactionId || `temp-${call.callControlId}`,
@@ -488,24 +678,16 @@ export function AgentDesktop() {
     };
     loadUserInfo();
 
-    // Listen for status changes via SSE (same endpoint as site-header uses)
-    let statusEventSource = null;
-    try {
-      statusEventSource = new EventSource("/api/user/status-stream");
-      statusEventSource.addEventListener("status_changed", (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log("[AgentDesktop] Received status_changed event:", data);
-          if (data.status) {
+    // Listen for status changes via the shared SSE client (one connection for
+    // the whole app, see lib/status-stream-client).
+    const unsubscribeStatus = subscribeStatusStream("status_changed", (data) => {
+      if (data?.status) {
             console.log(
               `[AgentDesktop] Updating agent status to "${data.status}"`,
             );
             setAgentStatus(data.status);
 
             // Persist status to localStorage so softphone can check it
-            try {
-              localStorage.setItem("user.status", data.status);
-            } catch (_) {}
 
             // CRITICAL: When status changes to "Agent Not Answering", clear active call stores immediately
             // This ensures the UI is cleared even if WebRTC client hasn't received hangup event yet
@@ -575,22 +757,11 @@ export function AgentDesktop() {
                 );
               }, 100);
             }
-          }
-        } catch (err) {
-          console.error(
-            "[AgentDesktop] Failed to parse status SSE message:",
-            err,
-          );
-        }
-      });
-    } catch (err) {
-      console.error("[AgentDesktop] Failed to set up status SSE:", err);
-    }
+      }
+    });
 
     return () => {
-      if (statusEventSource) {
-        statusEventSource.close();
-      }
+      unsubscribeStatus();
     };
   }, []);
 
@@ -668,14 +839,7 @@ export function AgentDesktop() {
   }, [callInteractionId, callTranscriptions]);
 
   useEffect(() => {
-    const endedStatuses = [
-      "hangup",
-      "ended",
-      "destroy",
-      "terminated",
-      "failed",
-    ];
-    const isEnded = endedStatuses.includes(callStatus);
+    const isEnded = END_STATUSES.has(callStatus);
     const wasActive = lastStatusRef.current && lastStatusRef.current !== "idle";
     const isCleared = callStatus === "idle" && wasActive;
     const wasDisconnected =
@@ -695,9 +859,16 @@ export function AgentDesktop() {
       }, 300);
     }
 
-    // Trigger wrapup check if call ended, cleared, or disconnected
+    // Trigger wrapup/disposition check if call ended, cleared, or disconnected
     if (!isEnded && !isCleared && !wasDisconnected) {
       return;
+    }
+
+    // Campaign disposition follows the same timing as wrap-up: only after WebRTC hangup/clear.
+    if (pendingCampaignDispositionRef.current && campaignCallStartedRef.current) {
+      setCampaignDispositionAssignment(pendingCampaignDispositionRef.current);
+      pendingCampaignDispositionRef.current = null;
+      campaignCallStartedRef.current = false;
     }
 
     const interactionId =
@@ -765,36 +936,12 @@ export function AgentDesktop() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, check timeout again before defaulting
+        // If still no interaction found after retry, skip wrapup. Wrapup requires
+        // positive evidence that the interaction was answered/connected.
         if (!interaction) {
-          try {
-            const timeoutCheckRes = await fetch(
-              `/api/contact-center/interactions/${encodeURIComponent(
-                interactionId,
-              )}/timeout-check`,
-              { cache: "no-store" },
-            );
-            if (timeoutCheckRes.ok) {
-              const timeoutData = await timeoutCheckRes.json();
-              if (timeoutData.timeoutReEnqueued === true) {
-                console.log(
-                  `[AgentDesktop] Skipping wrapup for interaction ${interactionId} - timeout re-enqueued (no interaction found)`,
-                );
-                return;
-              }
-            }
-          } catch (timeoutCheckErr) {
-            // Continue if check fails
-          }
-
-          // Default to opening wrapup sheet only if not timeout
-          lastWrapupInteractionRef.current = interactionId;
-          // Use global wrapup sheet store
-          import("@/lib/stores/wrapup-sheet-store").then((module) => {
-            module.default
-              .getState()
-              .openWrapup(interactionId, lastTranscriptionsRef.current || []);
-          });
+          console.log(
+            `[AgentDesktop] No interaction evidence; not opening wrapup for ${interactionId}`,
+          );
           return;
         }
 
@@ -959,8 +1106,17 @@ export function AgentDesktop() {
   // Listen for manual disconnect events and open global wrapup sheet
   useEffect(() => {
     const handleCallDisconnected = async (event) => {
-      const { interactionId, transcriptions } = event.detail || {};
+      const {
+        interactionId,
+        transcriptions,
+        rejectedBeforeAnswer = false,
+        wasAnswered,
+      } = event.detail || {};
       if (!interactionId) return;
+
+      if (rejectedBeforeAnswer || wasAnswered === false) {
+        return;
+      }
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === interactionId) {
@@ -999,7 +1155,9 @@ export function AgentDesktop() {
             .openWrapup(interactionId, transcriptions || []);
         }
       } else {
-        // If interaction not found, assume it was answered and show wrapup
+        // If interaction has not hydrated locally yet, preserve the normal
+        // answered-call fallback. Explicit pre-answer disconnects are filtered
+        // above by rejectedBeforeAnswer/wasAnswered === false.
         lastWrapupInteractionRef.current = interactionId;
         // Use global wrapup sheet store
         const { default: useWrapupSheetStore } = await import(
@@ -1024,7 +1182,7 @@ export function AgentDesktop() {
     };
   }, [interactions]);
 
-  const [activeView, setActiveView] = useState("interaction-details");
+  const [activeView, setActiveView] = useState("desktop");
   const [isHydrated, setIsHydrated] = useState(false);
   const previousInteractionsRef = useRef([]);
   const hasRestoredStateRef = useRef(false);
@@ -1035,7 +1193,7 @@ export function AgentDesktop() {
     if (typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("agent-desktop.activeView");
-        if (saved && ["interaction-details", "contacts", "tasks", "kb-articles", "web-pages"].includes(saved)) {
+        if (saved && ["desktop", "dashboard", "forms", "web-pages", "contacts", "tasks", "kb-articles"].includes(saved)) {
           setActiveView(saved);
         }
       } catch (_) {}
@@ -1113,7 +1271,7 @@ export function AgentDesktop() {
     // Only switch to interaction details if it's a new incoming call
     // OR if the user manually selected a different interaction (not the restored one)
     if (isNewIncomingCall || !isRestoredSelection) {
-      setActiveView("interaction-details");
+      setActiveView("desktop");
     }
   }, [selectedInteraction?.id, selectedInteraction?.state]);
 
@@ -1148,7 +1306,7 @@ export function AgentDesktop() {
       const newCall = newIncomingCalls[0];
       
       // Switch to interaction details view
-      setActiveView("interaction-details");
+      setActiveView("desktop");
       
       // Also auto-select the new call if no call is currently selected
       // or if the currently selected call is not an incoming call
@@ -1173,96 +1331,223 @@ export function AgentDesktop() {
     previousInteractionsRef.current = interactions;
   }, [interactions]);
 
+  const refreshCampaignAssignment = useCallback(async () => {
+    try {
+      const res = await fetch("/api/contact-center/agent/campaigns/next", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setCampaignAssignment(data.assignment || null);
+        if (data.assignment?.id) {
+          campaignDialedAttemptRef.current = null;
+        }
+      }
+    } catch (err) {
+      // Agent may simply have no active campaign assignment.
+    }
+  }, []);
+
+  const dialCampaignAssignment = useCallback(async (assignment = campaignAssignment) => {
+    if (!assignment?.id || campaignDialing) return;
+    setCampaignDialing(true);
+    try {
+      const res = await fetch("/api/contact-center/agent/campaigns/dial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attemptId: assignment.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || data.execution?.reason || "Failed to prepare outbound call");
+      campaignDialedAttemptRef.current = assignment.id;
+      pendingCampaignDispositionRef.current = assignment;
+      campaignCallStartedRef.current = true;
+      await updateAgentStatus("On Outbound Call");
+      setAgentStatus("On Outbound Call");
+      window.dispatchEvent(new CustomEvent("softphone:start-call", {
+        detail: {
+          toNumber: data.execution?.to_number || assignment.to_number,
+          fromNumber: assignment.from_number || assignment.caller_id || null,
+          callerName: assignment.campaign_name || "Campaign",
+          customHeaders: [
+            { name: "X-Outbound-Attempt-Id", value: assignment.id },
+            { name: "X-Outbound-Campaign-Id", value: assignment.campaign_id },
+            { name: "X-Outbound-Campaign-Mode", value: assignment.campaign_mode },
+          ].filter((header) => header.value),
+          metadata: {
+            outbound_attempt_id: assignment.id,
+            outbound_campaign_id: assignment.campaign_id,
+            outbound_campaign_name: assignment.campaign_name,
+            agent_assist_config: assignment.agent_assist_config,
+          },
+        },
+      }));
+      setCampaignAssignment(null);
+      setCampaignCountdownSeconds(null);
+      setActiveView("desktop");
+    } catch (err) {
+      pendingCampaignDispositionRef.current = null;
+      campaignCallStartedRef.current = false;
+      notify({ title: "Outbound call failed", description: err.message || "Failed to start outbound call", variant: "error" });
+    } finally {
+      setCampaignDialing(false);
+    }
+  }, [campaignAssignment, campaignDialing]);
+
+  useEffect(() => {
+    refreshCampaignAssignment();
+    const interval = setInterval(refreshCampaignAssignment, 10000);
+    return () => clearInterval(interval);
+  }, [refreshCampaignAssignment]);
+
+  useEffect(() => {
+    if (!campaignAssignment?.auto_dial_at) {
+      setCampaignCountdownSeconds(null);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((new Date(campaignAssignment.auto_dial_at).getTime() - Date.now()) / 1000));
+      setCampaignCountdownSeconds(remaining);
+      if (remaining <= 0 && campaignAssignment.campaign_mode === "progressive" && campaignDialedAttemptRef.current !== campaignAssignment.id) {
+        campaignDialedAttemptRef.current = campaignAssignment.id;
+        dialCampaignAssignment(campaignAssignment);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [campaignAssignment, dialCampaignAssignment]);
+
+  const campaignPreviewInteraction = campaignAssignment ? {
+    id: `campaign-preview-${campaignAssignment.id}`,
+    direction: "outbound",
+    state: "preview",
+    interaction_type: "voice",
+    is_contact_center: true,
+    from_number: campaignAssignment.from_number || campaignAssignment.caller_id || "",
+    to_number: campaignAssignment.to_number || "",
+    from_name: campaignAssignment.campaign_name || "Campaign",
+    metadata: {
+      outbound_attempt_id: campaignAssignment.id,
+      outbound_campaign_id: campaignAssignment.campaign_id,
+      outbound_campaign_name: campaignAssignment.campaign_name,
+      preview_only: true,
+      agent_assist_config: campaignAssignment.agent_assist_config,
+      contact_record: campaignAssignment.contact_record || {},
+    },
+  } : null;
+
+  const detailTitle =
+    activeView === "desktop"
+      ? "Interaction Details"
+      : activeView === "dashboard"
+      ? "Dashboard"
+      : DATA_SOURCE_VIEW_LABELS[activeView] || "Interaction Details";
+  const DetailIcon =
+    AGENT_RAIL_ITEMS.find((item) => item.id === activeView)?.icon || Info;
+
   return (
-    <div className="flex gap-4 h-full w-full overflow-hidden max-w-full">
-      {/* Left Panel - Two stacked cards */}
-      <div className="w-80 shrink-0 flex flex-col gap-4 h-full min-h-0">
-        {/* Interactions Card */}
-        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <InteractionsList
-            interactions={
-              Array.isArray(interactions) ? interactions.filter(Boolean) : []
-            }
-            selectedId={selectedInteraction?.id}
-            onSelect={(interaction) => {
-              setSelectedInteraction(interaction);
-              // When user manually selects an interaction, switch to details view
-              // This overrides any restored state
-              setActiveView("interaction-details");
-              // Clear saved state since user made a manual selection
-              savedSelectedInteractionIdRef.current = null;
-            }}
-            webrtcCallState={useActiveCallStore()}
-            currentUsername={currentUsername}
-          />
-        </Card>
+    <>
+    <div
+      className={SECTION_RAIL_PAGE_GRID_CLASS}
+      style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} 320px minmax(0, 1fr)` }}
+    >
+      <SectionRail
+        items={AGENT_RAIL_ITEMS}
+        activeId={activeView}
+        onSelect={setActiveView}
+        ariaLabel="Agent workspace sections"
+      />
 
-        {/* Data Sources Card */}
-        <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <AgentDataSources
-            view={null}
-            selectedInteraction={selectedInteraction}
-            activeView={activeView}
-            onTileClick={setActiveView}
-          />
-        </Card>
-      </div>
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+        <InteractionsList
+          interactions={Array.isArray(interactions) ? interactions.filter(Boolean) : []}
+          selectedId={selectedInteraction?.id}
+          onSelect={(interaction) => {
+            setSelectedInteraction(interaction);
+            setActiveView("desktop");
+            savedSelectedInteractionIdRef.current = null;
+          }}
+          webrtcCallState={useActiveCallStore()}
+          currentUsername={currentUsername}
+        />
+      </Card>
 
-      {/* Right Panel - Interaction Details or Data Source View */}
-      <Card className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {activeView === "web-pages" ? (
+      <Card className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <DetailIcon className="h-4 w-4 text-primary" />
+              </div>
+              <h2 className="truncate text-base font-semibold text-foreground">{detailTitle}</h2>
+              {activeView === "forms" && agentForms.length ? (
+                <Select
+                  value={selectedAgentFormId || undefined}
+                  onValueChange={setSelectedAgentFormId}
+                >
+                  <SelectTrigger className="h-8 w-[240px]">
+                    <SelectValue placeholder="Select form" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agentForms.map((form) => (
+                      <SelectItem key={form.id} value={form.id}>
+                        {form.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {activeView === "dashboard" ? (
+          <div className="flex-1 overflow-y-auto">
+            <AgentDashboard className="p-4 lg:p-5" />
+          </div>
+        ) : activeView === "desktop" ? (
+          selectedInteraction ? (
+            <InteractionDetail interaction={selectedInteraction} />
+          ) : campaignAssignment ? (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <OutboundCampaignRecord
+                assignment={campaignAssignment}
+                countdownSeconds={campaignCountdownSeconds ?? campaignAssignment.auto_dial_seconds}
+                dialing={campaignDialing}
+                onDial={() => dialCampaignAssignment(campaignAssignment)}
+              />
+              {campaignPreviewInteraction ? <div className="min-h-[420px] overflow-hidden rounded-xl border bg-background"><InteractionDetail interaction={campaignPreviewInteraction} /></div> : null}
+            </div>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
+              <PhoneCall className="h-10 w-10 text-gray-500" />
+              <p>Waiting for a call...</p>
+            </div>
+          )
+        ) : (
           <AgentDataSources
             view={activeView}
             selectedInteraction={selectedInteraction}
+            selectedFormId={selectedAgentFormId}
+            onSelectedFormIdChange={setSelectedAgentFormId}
+            onFormsLoaded={setAgentForms}
+            hideFormsHeader={activeView === "forms"}
             onBackToInteraction={() => {
-              setActiveView("interaction-details");
-              // Clear saved selection ref since user manually navigated back
+              setActiveView("desktop");
               savedSelectedInteractionIdRef.current = null;
             }}
           />
-        ) : (
-          <>
-            <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-md bg-primary/10">
-                    <Info className="h-4 w-4 text-primary" />
-                  </div>
-                  <h2 className="text-base font-semibold text-foreground">
-                    {activeView === "interaction-details"
-                      ? "Interaction Details"
-                      : activeView === "contacts"
-                      ? "Contacts"
-                      : activeView === "tasks"
-                      ? "Tasks"
-                      : "KB Articles"}
-                  </h2>
-                </div>
-              </div>
-            </div>
-            {activeView === "interaction-details" ? (
-              selectedInteraction ? (
-                <InteractionDetail interaction={selectedInteraction} />
-              ) : (
-                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground gap-2">
-                  <PhoneCall className="h-10 w-10 text-gray-500" />
-                  <p>Waiting for a call...</p>
-                </div>
-              )
-            ) : (
-              <AgentDataSources
-                view={activeView}
-                selectedInteraction={selectedInteraction}
-                onBackToInteraction={() => {
-                  setActiveView("interaction-details");
-                  // Clear saved selection ref since user manually navigated back
-                  savedSelectedInteractionIdRef.current = null;
-                }}
-              />
-            )}
-          </>
         )}
       </Card>
     </div>
+    <CampaignDispositionSheet
+      assignment={campaignDispositionAssignment}
+      open={Boolean(campaignDispositionAssignment)}
+      onClose={() => setCampaignDispositionAssignment(null)}
+      onSubmitted={() => {
+        setCampaignDispositionAssignment(null);
+        refreshCampaignAssignment();
+      }}
+    />
+    </>
   );
 }

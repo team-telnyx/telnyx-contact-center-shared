@@ -6,12 +6,11 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import {
-  updateAgentStatus,
-  updateAgentQueues,
-} from "@/lib/contact-center/state-manager";
+import { updateAgentQueues } from "@/lib/contact-center/state-manager";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
+import { ensureAgentStatusState, setUserStatus } from "@/lib/contact-center/user-status";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
 
 export async function POST(request) {
   try {
@@ -32,9 +31,15 @@ export async function POST(request) {
       );
     }
 
-    // Get user info
+    // Get user identity and Contact Center authoritative status
     const userResult = await pool.query(
-      `SELECT username, agent_status FROM users WHERE id = $1`,
+      `SELECT
+          u.username,
+          s.agent_status AS current_agent_status,
+          s.active_queue_ids
+         FROM users u
+         LEFT JOIN cc_agent_state s ON s.user_id = u.id
+        WHERE u.id = $1`,
       [userId],
     );
 
@@ -45,8 +50,9 @@ export async function POST(request) {
     const user = userResult.rows[0];
     const username = user.username;
 
-    // Update agent status if provided
-    const effectiveStatus = status || user.agent_status;
+    // Update agent status if provided. If no cc_agent_state row exists yet,
+    // mirror the users table default so queue-only activation can route calls.
+    const effectiveStatus = status || user.current_agent_status || "Available";
     if (status) {
       // Validate status
       // Get valid statuses from database
@@ -65,7 +71,7 @@ export async function POST(request) {
             validStatuses = statusResult.rows.map((row) => row.name);
           }
         } catch (error) {
-          console.error("[AgentStatus] Error fetching statuses:", error);
+          statusLogger.error("status_catalog_fetch_failed", contactCenterErrorPayload(error));
           // Use fallback statuses
         }
       }
@@ -80,38 +86,34 @@ export async function POST(request) {
         );
       }
 
-      // Update in database
-      await pool.query(
-        `UPDATE users SET agent_status = $1, updated_at = NOW() WHERE id = $2`,
-        [status, userId],
-      );
-
-      // Update in state manager
-      await updateAgentStatus(userId, status, username);
-
-      // Update agent state table
-      await pool.query(
-        `INSERT INTO cc_agent_state (user_id, username, agent_status, last_status_change, last_activity)
-         VALUES ($1, $2, $3, NOW(), NOW())
-         ON CONFLICT (user_id) DO UPDATE SET
-           agent_status = EXCLUDED.agent_status,
-           last_status_change = NOW(),
-           last_activity = NOW()`,
-        [userId, username, status],
-      );
+      await setUserStatus({
+        userId,
+        username,
+        status,
+        previousStatus: user.current_agent_status || null,
+      });
     }
 
     // Update queue assignments if provided
     if (queueIds !== undefined && Array.isArray(queueIds)) {
       updateAgentQueues(userId, queueIds, isActive !== false);
 
-      // Update agent state table
-      await pool.query(
-        `UPDATE cc_agent_state 
-         SET active_queue_ids = $1, last_activity = NOW()
-         WHERE user_id = $2`,
-        [queueIds, userId],
-      );
+      const currentActiveQueueIds = Array.isArray(user.active_queue_ids)
+        ? user.active_queue_ids
+        : [];
+      const updatedActiveQueueIds =
+        isActive === false
+          ? currentActiveQueueIds.filter((id) => !queueIds.includes(id))
+          : [...new Set([...currentActiveQueueIds, ...queueIds])];
+
+      // Ensure agent state exists and update active queues without changing an
+      // existing Contact Center status.
+      await ensureAgentStatusState({
+        userId,
+        username,
+        status: effectiveStatus,
+        activeQueueIds: updatedActiveQueueIds,
+      });
     }
 
     const shouldOfferQueuedCalls =
@@ -125,21 +127,22 @@ export async function POST(request) {
           queueIds: status ? null : queueIds,
         });
       } catch (error) {
-        console.error(
-          "[AgentStatus] Failed to offer queued calls after status change:",
-          error,
-        );
+        statusLogger.error("queued_call_offer_after_status_change_failed", {
+          ...agentPayload({ agentUserId: userId, agentUsername: username }),
+          queueCount: Array.isArray(queueIds) ? queueIds.length : undefined,
+          ...contactCenterErrorPayload(error),
+        });
       }
     }
 
     return NextResponse.json({
       success: true,
       userId,
-      status: status || user.agent_status,
+      status: effectiveStatus,
       queueIds: queueIds || [],
     });
   } catch (error) {
-    console.error("[Routing] Error updating agent status:", error);
+    statusLogger.error("agent_status_route_update_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
       {
         error: "Internal server error",

@@ -6,6 +6,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
+import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
 // Support both admin session and API key authentication
 async function requireAuth(request) {
@@ -142,6 +143,16 @@ export async function POST(request) {
   const body = await request.json();
   const id = body.id || randomUUID();
   const now = new Date().toISOString();
+  let customData;
+  try {
+    customData = normalizeCustomDataValue(body.custom_data);
+  } catch (err) {
+    const error = err?.message || "Custom data must be a valid JSON object";
+    if (auth.type === "api_key") {
+      return jsonError(error, 400);
+    }
+    return NextResponse.json({ error }, { status: 400 });
+  }
 
   // Validate required fields
   if (!body.title || !body.task_type) {
@@ -204,6 +215,7 @@ export async function POST(request) {
     flow_id: body.flow_id || null,
     due_date: body.due_date || null,
     metadata: body.metadata || {},
+    custom_data: customData,
     tags: Array.isArray(body.tags) ? body.tags : body.tags ? [body.tags] : [],
     created_at: now,
     updated_at: now,
@@ -215,9 +227,9 @@ export async function POST(request) {
         id, title, description, task_type, status, priority,
         caller_name, caller_phone, caller_email, contact_id,
         created_by, assigned_to, call_control_id, interaction_id, flow_id,
-        due_date, metadata, tags, created_at, updated_at
+        due_date, metadata, custom_data, tags, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
       ) RETURNING *
     `;
     const result = await pool.query(query, [
@@ -238,6 +250,7 @@ export async function POST(request) {
       taskData.flow_id,
       taskData.due_date,
       JSON.stringify(taskData.metadata),
+      JSON.stringify(taskData.custom_data),
       taskData.tags,
       taskData.created_at,
       taskData.updated_at,

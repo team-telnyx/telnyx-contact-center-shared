@@ -8,6 +8,27 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { analyzeWorkflowTranscript } from "@/lib/agent-assist/workflow-analyzer";
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+
+function normalizeConfidenceThreshold(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > 1) {
+    return 0.95;
+  }
+  return Math.round(numericValue * 100) / 100;
+}
+
+function normalizeSpeakerType(speaker) {
+  if (speaker === "inbound" || speaker === "customer") return "customer";
+  if (speaker === "outbound" || speaker === "agent") return "agent";
+  return null;
+}
+
+function hasMeaningfulExtractedValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+}
 
 // POST /api/agent-assist/workflow/analyze - Analyze transcript
 export async function POST(request) {
@@ -52,6 +73,11 @@ export async function POST(request) {
     }
 
     if (!workflowSession) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId,
+        interactionId,
+        reason: "no_active_workflow_session",
+      }));
       return NextResponse.json({
         ok: true,
         message: "No active workflow session found",
@@ -59,7 +85,32 @@ export async function POST(request) {
       });
     }
 
-    // Get pending items for current and upcoming stages
+    let assistConfig = {};
+    if (workflowSession.interaction_id) {
+      const { rows: [interaction] } = await pool.query(
+        `SELECT metadata FROM cc_interactions WHERE id = $1`,
+        [workflowSession.interaction_id]
+      );
+      assistConfig = interaction?.metadata?.agent_assist_config || {};
+    }
+
+    if (assistConfig.auto_detect_completion === false) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        reason: "auto_detect_completion_disabled",
+      }));
+      return NextResponse.json({
+        ok: true,
+        message: "Auto-detect completion is disabled",
+        updates: [],
+      });
+    }
+
+    // Get unfinished items for current and upcoming stages.
+    // Include suggested rows so a later, clearer utterance can replace a low-confidence
+    // suggestion instead of freezing the slot until the agent edits it manually.
     const { rows: pendingItems } = await pool.query(
       `SELECT 
         i.id as item_id,
@@ -77,12 +128,31 @@ export async function POST(request) {
        JOIN aa_workflow_stages s ON i.stage_id = s.id
        JOIN aa_workflow_item_status ist ON ist.item_id = i.id AND ist.session_id = $1
        WHERE s.workflow_id = $2 
-         AND ist.status = 'pending'
+         AND ist.status IN ('pending', 'suggested')
        ORDER BY s.order_index, i.order_index`,
       [workflowSession.id, workflowSession.workflow_id]
     );
 
-    if (pendingItems.length === 0) {
+    const speakerType = normalizeSpeakerType(speaker);
+    const relevantPendingItems = pendingItems
+      .filter((item) => {
+        const completionTrigger = item.completion_trigger || "agent";
+        return (
+          Boolean(speakerType) &&
+          (completionTrigger === "either" || completionTrigger === speakerType)
+        );
+      })
+      .slice(0, 12);
+
+    if (relevantPendingItems.length === 0) {
+      workflowLogger.info("workflow_analysis_skipped", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        reason: "no_relevant_pending_items",
+        pendingItems: pendingItems.length,
+        speaker: speaker || null,
+      }));
       return NextResponse.json({
         ok: true,
         message: "No pending items to analyze",
@@ -93,20 +163,23 @@ export async function POST(request) {
     // Get current slots filled
     const slotsFilled = workflowSession.slots_filled || {};
 
-    // Get workflow's llm_model
+    // Get workflow's LLM model and confidence threshold
     const { rows: [workflow] } = await pool.query(
-      `SELECT llm_model FROM aa_workflows WHERE id = $1`,
+      `SELECT llm_model, llm_confidence_threshold FROM aa_workflows WHERE id = $1`,
       [workflowSession.workflow_id]
     );
     const llmModel = workflow?.llm_model || "openai/gpt-4o";
+    const confidenceThreshold = normalizeConfidenceThreshold(workflow?.llm_confidence_threshold);
 
     // Call LLM analyzer (using workflow's configured model)
     const analysisResult = await analyzeWorkflowTranscript({
       transcript,
       speaker: speaker || "unknown",
-      pendingItems,
+      pendingItems: relevantPendingItems,
       slotsFilled,
       model: llmModel,
+      includeIntent: assistConfig.enable_intent_recognition === true,
+      includeSentiment: assistConfig.enable_sentiment_analysis === true,
     });
 
     // Process completed items
@@ -118,25 +191,26 @@ export async function POST(request) {
 
       for (const completed of analysisResult.completed_items || []) {
         // Get item details including completion_trigger
-        const item = pendingItems.find(p => p.item_id === completed.item_id);
+        const item = relevantPendingItems.find(p => p.item_id === completed.item_id);
         if (!item) continue;
         
         // Check if completion_trigger matches speaker
-        const speakerType = speaker === "inbound" ? "customer" : speaker === "outbound" ? "agent" : null;
         const completionTrigger = item.completion_trigger || "agent";
-        
-        // Determine if we should complete based on trigger
-        let shouldComplete = false;
-        if (completionTrigger === "either") {
-          shouldComplete = true;
-        } else if (completionTrigger === "customer" && speakerType === "customer") {
-          shouldComplete = true;
-        } else if (completionTrigger === "agent" && speakerType === "agent") {
-          shouldComplete = true;
+        const shouldComplete =
+          Boolean(speakerType) &&
+          (completionTrigger === "either" ||
+            (completionTrigger === "customer" && speakerType === "customer") ||
+            (completionTrigger === "agent" && speakerType === "agent"));
+        const hasExtractedSlotValue = item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
+
+        // Ignore wrong-speaker detections and empty slot hits. This prevents an agent's
+        // question or prompt hint from completing a customer-owned slot with a blank value.
+        if (!shouldComplete || !hasExtractedSlotValue) {
+          continue;
         }
         
-        // Only auto-complete if confidence is high enough AND trigger matches
-        if (shouldComplete && completed.confidence >= 0.85) {
+        // Only auto-complete if confidence is high enough; otherwise persist a suggestion.
+        if (completed.confidence >= confidenceThreshold) {
           // Update item status
           await client.query(
             `UPDATE aa_workflow_item_status 
@@ -146,6 +220,7 @@ export async function POST(request) {
                  extracted_value = $2,
                  confidence_score = $3,
                  source_transcript = $4,
+                 alternatives = NULL,
                  updated_at = NOW()
              WHERE session_id = $5 AND item_id = $6`,
             [
@@ -170,14 +245,38 @@ export async function POST(request) {
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
           });
-        } else if (completed.confidence >= 0.60) {
-          // Add as suggestion (don't auto-complete)
+        } else {
+          // Persist as suggestion (don't auto-complete) so the agent can confirm or correct it
+          await client.query(
+            `UPDATE aa_workflow_item_status
+             SET status = $1::varchar,
+                 completed_at = NULL,
+                 completed_by = 'ai',
+                 extracted_value = $2,
+                 confidence_score = $3,
+                 source_transcript = $4,
+                 alternatives = NULL,
+                 updated_at = NOW()
+             WHERE session_id = $5 AND item_id = $6`,
+            [
+              'suggested',
+              completed.extracted_value || null,
+              completed.confidence,
+              transcript,
+              workflowSession.id,
+              completed.item_id,
+            ]
+          );
+
           updates.push({
             item_id: completed.item_id,
             status: "suggested",
             confidence: completed.confidence,
             extracted_value: completed.extracted_value,
             source_text: completed.source_text,
+            completed_by: "ai",
+            low_confidence: completed.confidence < confidenceThreshold,
+            confidence_threshold: confidenceThreshold,
             completion_trigger_pending: !shouldComplete,
           });
         }
@@ -226,6 +325,17 @@ export async function POST(request) {
 
       await client.query("COMMIT");
 
+      workflowLogger.info("workflow_analysis_completed", agentAssistRuntimePayload({
+        sessionId: workflowSession.id,
+        interactionId: workflowSession.interaction_id,
+        workflowId: workflowSession.workflow_id,
+        updates: updates.length,
+        completionPercentage,
+        speaker: speaker || null,
+        transcriptLength: transcript.length,
+        confidenceThreshold,
+      }));
+
       return NextResponse.json({
         ok: true,
         updates,
@@ -242,7 +352,7 @@ export async function POST(request) {
       client.release();
     }
   } catch (error) {
-    console.error("[Agent Assist Workflow] Analyze error:", error);
+    workflowLogger.error("agent_assist_workflow", agentAssistRuntimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof parseError !== "undefined" ? parseError : typeof aiErr !== "undefined" ? aiErr : undefined, sessionId: typeof sessionId !== "undefined" ? sessionId : typeof workflowSession !== "undefined" ? workflowSession?.id : undefined, interactionId: typeof interactionId !== "undefined" ? interactionId : undefined, workflowId: typeof workflowId !== "undefined" ? workflowId : typeof workflow !== "undefined" ? workflow?.id : undefined, itemId: typeof itemId !== "undefined" ? itemId : typeof id !== "undefined" ? id : undefined, slotName: typeof slotName !== "undefined" ? slotName : typeof name !== "undefined" ? name : undefined, language: typeof language !== "undefined" ? language : typeof targetLanguage !== "undefined" ? targetLanguage : undefined, provider: typeof provider !== "undefined" ? provider : "telnyx", reason: typeof reason !== "undefined" ? reason : undefined, status: typeof status !== "undefined" ? status : undefined, statusCode: typeof response !== "undefined" ? response?.status : undefined }));
     return NextResponse.json(
       { error: error.message || "Failed to analyze transcript" },
       { status: 500 }

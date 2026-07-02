@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
+  SheetFooter,
 } from "@/components/ui/sheet";
 import {
   Conversation,
@@ -16,11 +18,18 @@ import {
   MessageAvatar,
   MessageContent,
 } from "@/components/ai-elements/message";
-import { IconUser, IconPhone, IconFileText, IconX, IconClipboard, IconMessage } from "@tabler/icons-react";
+import {
+  IconUser,
+  IconHeadset,
+  IconFileText,
+  IconClipboard,
+  IconMessages,
+} from "@tabler/icons-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SheetFooter } from "@/components/ui/sheet";
+import DiarizedTranscript from "./DiarizedTranscript";
 
 /**
  * Format timestamp in seconds to MM:SS format
@@ -31,6 +40,13 @@ function formatTimestamp(seconds) {
   const mins = Math.floor(total / 60);
   const secs = total % 60;
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatConfidence(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  const normalized = num > 1 ? num / 100 : num;
+  return `${Math.round(Math.max(0, Math.min(1, normalized)) * 100)}%`;
 }
 
 /**
@@ -115,99 +131,142 @@ export default function TranscriptionSheet({
   transcriptionText,
   transcriptionSegments,
   transcriptionSummary,
+  speakerTurns = [],
+  details = null,
   open,
   onOpenChange,
+  playbackTime = 0,
+  playbackPlaying = false,
+  onSeekRecording = null,
 }) {
   const messages = useMemo(() => {
     return parseTranscription(transcriptionText, transcriptionSegments);
   }, [transcriptionText, transcriptionSegments]);
 
+  const hasSpeakerTurns = Array.isArray(speakerTurns) && speakerTurns.length > 0;
+  const speakerCount = hasSpeakerTurns
+    ? new Set(speakerTurns.map((turn) => turn.speaker)).size
+    : 0;
+  const confidenceLabel = formatConfidence(details?.confidence);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col">
-        <SheetHeader>
+      <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-2xl">
+        <SheetHeader className="border-b border-border/60 px-6 py-4">
           <SheetTitle className="flex items-center gap-2">
-            <IconFileText className="h-5 w-5 text-telnyx-green" />
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300">
+              <IconMessages className="h-4.5 w-4.5" />
+            </span>
             Call Transcription
           </SheetTitle>
+          <SheetDescription>
+            {hasSpeakerTurns
+              ? "Diarized conversation with speaker turns and timestamps."
+              : "Conversation reconstructed from transcription segments."}
+          </SheetDescription>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {details?.model && (
+              <Badge variant="outline" className="border-border/70 bg-muted/40 font-mono text-[10px]">
+                {details.model}
+              </Badge>
+            )}
+            {hasSpeakerTurns && (
+              <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">
+                {speakerCount} speakers · {speakerTurns.length} turns
+              </Badge>
+            )}
+            {confidenceLabel && (
+              <Badge variant="outline" className="border-border/70 bg-muted/40 text-[10px]">
+                Confidence {confidenceLabel}
+              </Badge>
+            )}
+          </div>
         </SheetHeader>
-        <div className="flex-1 min-h-0 flex flex-col gap-4 mt-4 px-4">
+        <div className="mt-0 flex min-h-0 flex-1 flex-col gap-4 px-4 pt-4">
           {/* Summary Card */}
           {transcriptionSummary && (
-            <Card className="mx-0">
+            <Card className="mx-0 border-border/70 bg-muted/20">
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <IconClipboard className="h-4 w-4 text-telnyx-green" />
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <IconClipboard className="h-4 w-4 text-violet-500" />
                   Call Summary
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                   {transcriptionSummary}
                 </p>
               </CardContent>
             </Card>
           )}
 
-          {/* Transcription Messages Card */}
-          <Card className="flex-1 min-h-0 flex flex-col mx-0">
+          {/* Conversation Card */}
+          <Card className="mx-0 flex min-h-0 flex-1 flex-col border-border/70">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <IconMessage className="h-4 w-4 text-telnyx-green" />
-                Transcription
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <IconFileText className="h-4 w-4 text-violet-500" />
+                {hasSpeakerTurns ? "Speaker Timeline" : "Transcription"}
               </CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0 p-0">
-              <ScrollArea className="h-full px-4 pb-4">
-                {messages.length === 0 ? (
-                  <div className="text-sm text-muted-foreground p-4 text-center">
+            <CardContent className="min-h-0 flex-1 p-0">
+              <ScrollArea className="h-full">
+                {hasSpeakerTurns ? (
+                  <DiarizedTranscript
+                    speakerTurns={speakerTurns}
+                    currentTime={playbackTime}
+                    isPlaying={playbackPlaying}
+                    onSeek={onSeekRecording}
+                  />
+                ) : messages.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
                     No transcription available
                   </div>
                 ) : (
-                  <Conversation>
-                    <ConversationContent>
-                      {messages.map((msg, index) => {
-                        const isLeft = msg.side === "left";
-                        return (
-                          <Message
-                            key={index}
-                            from={isLeft ? "user" : "assistant"}
-                          >
-                            <MessageAvatar
-                              className={
-                                isLeft
-                                  ? "ring-emerald-500"
-                                  : "ring-telnyx-green"
-                              }
-                              icon={
-                                isLeft ? (
-                                  <IconUser className="size-4 text-emerald-600" />
-                                ) : (
-                                  <IconPhone className="size-4 text-telnyx-green" />
-                                )
-                              }
-                            />
-                            <MessageContent variant="contained" className="flex items-end justify-between gap-2">
-                              <div className="whitespace-pre-wrap flex-1">{msg.text}</div>
-                              {msg.timestamp && (
-                                <div className="text-xs text-muted-foreground opacity-70 shrink-0">
-                                  {msg.timestamp}
-                                </div>
-                              )}
-                            </MessageContent>
-                          </Message>
-                        );
-                      })}
-                    </ConversationContent>
-                  </Conversation>
+                  <div className="px-4 pb-4">
+                    <Conversation>
+                      <ConversationContent>
+                        {messages.map((msg, index) => {
+                          const isLeft = msg.side === "left";
+                          return (
+                            <Message
+                              key={index}
+                              from={isLeft ? "user" : "assistant"}
+                            >
+                              <MessageAvatar
+                                className={
+                                  isLeft
+                                    ? "ring-emerald-500"
+                                    : "ring-telnyx-green"
+                                }
+                                icon={
+                                  isLeft ? (
+                                    <IconUser className="size-4 text-emerald-600" />
+                                  ) : (
+                                    <IconHeadset className="size-4 text-telnyx-green" />
+                                  )
+                                }
+                              />
+                              <MessageContent variant="contained" className="flex items-end justify-between gap-2">
+                                <div className="flex-1 whitespace-pre-wrap">{msg.text}</div>
+                                {msg.timestamp && (
+                                  <div className="shrink-0 text-xs text-muted-foreground opacity-70">
+                                    {msg.timestamp}
+                                  </div>
+                                )}
+                              </MessageContent>
+                            </Message>
+                          );
+                        })}
+                      </ConversationContent>
+                    </Conversation>
+                  </div>
                 )}
               </ScrollArea>
             </CardContent>
           </Card>
-
         </div>
 
-        <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
+        <SheetFooter className="flex flex-row justify-end gap-2 border-t px-6 py-4">
           <Button onClick={() => onOpenChange(false)}>
             Close
           </Button>
@@ -216,4 +275,3 @@ export default function TranscriptionSheet({
     </Sheet>
   );
 }
-

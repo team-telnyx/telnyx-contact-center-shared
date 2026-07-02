@@ -12,11 +12,16 @@ import {
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { IconKey } from "@tabler/icons-react";
+import {
+  TRANSCRIPTION_PROVIDERS as VOICE_TRANSCRIPTION_PROVIDERS,
+  getDefaultTranscriptionLanguage,
+} from "@/config/voice";
 
-// Language code to language name mapping
+// Language code to language name mapping for common labels. Unknown codes fall back to the raw code.
 const LANGUAGE_NAMES = {
-  // Common languages
+  auto: "Auto (experimental)",
+  auto_detect: "Auto Detect",
+  multi: "Multilingual (No audio hint)",
   en: "English",
   "en-US": "English (United States)",
   "en-GB": "English (United Kingdom)",
@@ -51,9 +56,6 @@ const LANGUAGE_NAMES = {
   "sv-SE": "Swedish (Sweden)",
   pl: "Polish",
   tr: "Turkish",
-  el: "Greek",
-  he: "Hebrew",
-  iw: "Hebrew",
   th: "Thai",
   "th-TH": "Thai (Thailand)",
   vi: "Vietnamese",
@@ -77,483 +79,260 @@ const LANGUAGE_NAMES = {
   uk: "Ukrainian",
   ca: "Catalan",
   yue: "Cantonese",
-  // Additional languages
+  cmn: "Mandarin",
+  "ar_en": "Arabic & English",
+  "cmn_en": "Mandarin & English",
+  "cmn_en_ms_ta": "Mandarin, English, Malay & Tamil",
+  "en_ms": "English & Malay",
+  "en_ta": "English & Tamil",
   af: "Afrikaans",
-  "af-ZA": "Afrikaans (South Africa)",
   sq: "Albanian",
-  am: "Amharic",
-  "am-ET": "Amharic (Ethiopia)",
-  hy: "Armenian",
   az: "Azerbaijani",
-  eu: "Basque",
+  ba: "Bashkir",
+  be: "Belarusian",
   bn: "Bengali",
   bs: "Bosnian",
-  my: "Burmese",
-  fil: "Filipino",
+  eo: "Esperanto",
   gl: "Galician",
-  ka: "Georgian",
   gu: "Gujarati",
-  is: "Icelandic",
-  jv: "Javanese",
-  kn: "Kannada",
+  ia: "Interlingua",
+  ga: "Irish",
   kk: "Kazakh",
-  km: "Khmer",
-  lo: "Lao",
-  la: "Latin",
+  kn: "Kannada",
   mk: "Macedonian",
   ml: "Malayalam",
-  mr: "Marathi",
-  mi: "Maori",
   mn: "Mongolian",
-  ne: "Nepali",
-  fa: "Persian",
+  mr: "Marathi",
+  mt: "Maltese",
   pa: "Punjabi",
-  si: "Sinhala",
-  ss: "Swati",
-  st: "Southern Sotho",
-  su: "Sundanese",
   sw: "Swahili",
   ta: "Tamil",
   te: "Telugu",
-  tn: "Tswana",
-  ts: "Tsonga",
-  ur: "Urdu",
-  uz: "Uzbek",
-  ve: "Venda",
-  xh: "Xhosa",
-  zu: "Zulu",
-  be: "Belarusian",
-  br: "Breton",
-  cy: "Welsh",
-  fo: "Faroese",
-  ht: "Haitian Creole",
-  lb: "Luxembourgish",
-  mt: "Maltese",
-  nn: "Norwegian Nynorsk",
-  oc: "Occitan",
-  ps: "Pashto",
-  sa: "Sanskrit",
-  sd: "Sindhi",
-  sn: "Shona",
-  so: "Somali",
-  tg: "Tajik",
-  tk: "Turkmen",
   tl: "Tagalog",
-  tt: "Tatar",
-  yi: "Yiddish",
-  yo: "Yoruba",
-  bo: "Tibetan",
-  as: "Assamese",
-  mg: "Malagasy",
-  ga: "Irish",
-  nb: "Norwegian Bokmål",
-  wuu: "Wu Chinese",
-  auto: "Auto Detect",
-  auto_detect: "Auto Detect",
+  ug: "Uyghur",
+  cy: "Welsh",
+  fil: "Filipino",
+  fa: "Persian",
+  he: "Hebrew",
 };
 
-// Provider configurations
+function getLanguageLabel(code) {
+  if (!code) return "";
+  if (LANGUAGE_NAMES[code]) return LANGUAGE_NAMES[code];
+
+  try {
+    const locale = new Intl.Locale(code.replace(/_/g, "-"));
+    const languageNames = new Intl.DisplayNames(undefined, { type: "language" });
+    const regionNames = new Intl.DisplayNames(undefined, { type: "region" });
+    const languageLabel = languageNames.of(locale.language);
+    const regionLabel = locale.region ? regionNames.of(locale.region) : "";
+
+    if (languageLabel && regionLabel) return `${languageLabel} (${regionLabel})`;
+    if (languageLabel) return languageLabel;
+  } catch {
+    // Fall through to the raw code for provider-specific composite values.
+  }
+
+  return code;
+}
+
 const TRANSCRIPTION_PROVIDERS = [
-  { value: "Google", label: "Google" },
-  { value: "Telnyx", label: "Telnyx" },
+  { value: "Telnyx", label: "Telnyx / OpenAI / Distil-Whisper" },
   { value: "Deepgram", label: "Deepgram" },
-  { value: "Azure", label: "Azure" },
+  { value: "AssemblyAI", label: "AssemblyAI" },
+  { value: "Speechmatics", label: "Speechmatics" },
+  { value: "Soniox", label: "Soniox" },
+  { value: "xAI", label: "xAI" },
+  { value: "Google", label: "Google (legacy)" },
 ];
 
-// Models per provider
-const PROVIDER_MODELS = {
-  Google: [
-    { value: "latest_long", label: "Latest Long" },
-    { value: "latest_short", label: "Latest Short" },
-    { value: "command_and_search", label: "Command and Search" },
-    { value: "phone_call", label: "Phone Call" },
-    { value: "video", label: "Video" },
-    { value: "default", label: "Default" },
-    { value: "medical_conversation", label: "Medical Conversation" },
-    { value: "medical_dictation", label: "Medical Dictation" },
-  ],
-  Telnyx: [
-    { value: "openai/whisper-tiny", label: "Whisper Tiny" },
-    { value: "openai/whisper-large-v3-turbo", label: "Whisper Large V3 Turbo" },
-  ],
-  Deepgram: [
-    { value: "deepgram/nova-2", label: "Nova 2" },
-    { value: "deepgram/nova-3", label: "Nova 3" },
-  ],
-};
-
-// Languages per provider/model
-const PROVIDER_LANGUAGES = {
-  Google: [
-    "af",
-    "sq",
-    "am",
-    "ar",
-    "hy",
-    "az",
-    "eu",
-    "bn",
-    "bs",
-    "bg",
-    "my",
-    "ca",
-    "yue",
-    "zh",
-    "hr",
-    "cs",
-    "da",
-    "nl",
-    "en",
-    "et",
-    "fil",
-    "fi",
-    "fr",
-    "gl",
-    "ka",
-    "de",
-    "el",
-    "gu",
-    "iw",
-    "hi",
-    "hu",
-    "is",
-    "id",
-    "it",
-    "ja",
-    "jv",
-    "kn",
-    "kk",
-    "km",
-    "ko",
-    "lo",
-    "lv",
-    "lt",
-    "mk",
-    "ms",
-    "ml",
-    "mr",
-    "mn",
-    "ne",
-    "no",
-    "fa",
-    "pl",
-    "pt",
-    "pa",
-    "ro",
-    "ru",
-    "rw",
-    "sr",
-    "si",
-    "sk",
-    "sl",
-    "ss",
-    "st",
-    "es",
-    "su",
-    "sw",
-    "sv",
-    "ta",
-    "te",
-    "th",
-    "tn",
-    "tr",
-    "ts",
-    "uk",
-    "ur",
-    "uz",
-    "ve",
-    "vi",
-    "xh",
-    "zu",
-  ],
-  Telnyx: [
-    "en",
-    "zh",
-    "de",
-    "es",
-    "ru",
-    "ko",
-    "fr",
-    "ja",
-    "pt",
-    "tr",
-    "pl",
-    "ca",
-    "nl",
-    "ar",
-    "sv",
-    "it",
-    "id",
-    "hi",
-    "fi",
-    "vi",
-    "he",
-    "uk",
-    "el",
-    "ms",
-    "cs",
-    "ro",
-    "da",
-    "hu",
-    "ta",
-    "no",
-    "th",
-    "ur",
-    "hr",
-    "bg",
-    "lt",
-    "la",
-    "mi",
-    "ml",
-    "cy",
-    "sk",
-    "te",
-    "fa",
-    "lv",
-    "bn",
-    "sr",
-    "az",
-    "sl",
-    "kn",
-    "et",
-    "mk",
-    "br",
-    "eu",
-    "is",
-    "hy",
-    "ne",
-    "mn",
-    "bs",
-    "kk",
-    "sq",
-    "sw",
-    "gl",
-    "mr",
-    "pa",
-    "si",
-    "km",
-    "sn",
-    "yo",
-    "so",
-    "af",
-    "oc",
-    "ka",
-    "be",
-    "tg",
-    "sd",
-    "gu",
-    "am",
-    "yi",
-    "lo",
-    "uz",
-    "fo",
-    "ht",
-    "ps",
-    "tk",
-    "nn",
-    "mt",
-    "sa",
-    "lb",
-    "my",
-    "bo",
-    "tl",
-    "mg",
-    "as",
-    "tt",
-  ],
-  "Deepgram-nova-2": [
-    "bg",
-    "ca",
-    "zh",
-    "zh-CN",
-    "zh-Hans",
-    "zh-TW",
-    "zh-Hant",
-    "zh-HK",
-    "cs",
-    "da",
-    "da-DK",
-    "nl",
-    "en",
-    "en-US",
-    "en-AU",
-    "en-GB",
-    "en-NZ",
-    "en-IN",
-    "et",
-    "fi",
-    "nl-BE",
-    "fr",
-    "fr-CA",
-    "de",
-    "de-CH",
-    "el",
-    "hi",
-    "hu",
-    "id",
-    "it",
-    "ja",
-    "ko",
-    "ko-KR",
-    "lv",
-    "lt",
-    "ms",
-    "no",
-    "pl",
-    "pt",
-    "pt-BR",
-    "pt-PT",
-    "ro",
-    "ru",
-    "sk",
-    "es",
-    "es-419",
-    "sv",
-    "sv-SE",
-    "th",
-    "th-TH",
-    "tr",
-    "uk",
-    "vi",
-    "auto_detect",
-  ],
-  "Deepgram-nova-3": [
-    "en",
-    "en-US",
-    "en-AU",
-    "en-GB",
-    "en-IN",
-    "en-NZ",
-    "de",
-    "nl",
-    "sv",
-    "sv-SE",
-    "da",
-    "da-DK",
-    "es",
-    "es-419",
-    "fr",
-    "fr-CA",
-    "pt",
-    "pt-BR",
-    "pt-PT",
-    "auto_detect",
-  ],
-  Azure: [
-    "af",
-    "am",
-    "ar",
-    "bg",
-    "bn",
-    "bs",
-    "ca",
-    "cs",
-    "cy",
-    "da",
-    "de",
-    "el",
-    "en",
-    "es",
-    "et",
-    "eu",
-    "fa",
-    "fi",
-    "fr",
-    "ga",
-    "gl",
-    "gu",
-    "he",
-    "hi",
-    "hr",
-    "hu",
-    "hy",
-    "id",
-    "is",
-    "it",
-    "ja",
-    "ka",
-    "kk",
-    "km",
-    "kn",
-    "ko",
-    "lo",
-    "lt",
-    "lv",
-    "mk",
-    "ml",
-    "mn",
-    "mr",
-    "ms",
-    "mt",
-    "my",
-    "nb",
-    "ne",
-    "nl",
-    "pl",
-    "ps",
-    "pt",
-    "ro",
-    "ru",
-    "si",
-    "sk",
-    "sl",
-    "so",
-    "sq",
-    "sr",
-    "sv",
-    "sw",
-    "ta",
-    "te",
-    "th",
-    "tr",
-    "uk",
-    "ur",
-    "uz",
-    "vi",
-    "wuu",
-    "yue",
-    "zh",
-    "zu",
-    "auto",
-  ],
-};
-
-// Azure regions
-const AZURE_REGIONS = [
-  { value: "australiaeast", label: "Australia East" },
-  { value: "centralindia", label: "Central India" },
-  { value: "eastus", label: "East US" },
-  { value: "northcentralus", label: "North Central US" },
-  { value: "westeurope", label: "West Europe" },
-  { value: "westus2", label: "West US 2" },
+const GOOGLE_MODELS = [
+  { value: "phone_call", label: "Phone Call" },
+  { value: "latest_long", label: "Latest Long" },
+  { value: "latest_short", label: "Latest Short" },
+  { value: "command_and_search", label: "Command and Search" },
+  { value: "video", label: "Video" },
+  { value: "default", label: "Default" },
+  { value: "medical_conversation", label: "Medical Conversation" },
+  { value: "medical_dictation", label: "Medical Dictation" },
 ];
+
+const GOOGLE_LANGUAGES = [
+  "af",
+  "sq",
+  "am",
+  "ar",
+  "hy",
+  "az",
+  "eu",
+  "bn",
+  "bs",
+  "bg",
+  "my",
+  "ca",
+  "yue",
+  "zh",
+  "hr",
+  "cs",
+  "da",
+  "nl",
+  "en",
+  "et",
+  "fil",
+  "fi",
+  "fr",
+  "gl",
+  "ka",
+  "de",
+  "el",
+  "gu",
+  "iw",
+  "hi",
+  "hu",
+  "is",
+  "id",
+  "it",
+  "ja",
+  "jv",
+  "kn",
+  "kk",
+  "km",
+  "ko",
+  "lo",
+  "lv",
+  "lt",
+  "mk",
+  "ms",
+  "ml",
+  "mr",
+  "mn",
+  "ne",
+  "no",
+  "fa",
+  "pl",
+  "pt",
+  "pa",
+  "ro",
+  "ru",
+  "rw",
+  "sr",
+  "si",
+  "sk",
+  "sl",
+  "ss",
+  "st",
+  "es",
+  "su",
+  "sw",
+  "sv",
+  "ta",
+  "te",
+  "th",
+  "tn",
+  "tr",
+  "ts",
+  "uk",
+  "ur",
+  "uz",
+  "ve",
+  "vi",
+  "xh",
+  "zu",
+];
+
+const INTERIM_RESULTS_MODELS = new Set([
+  "deepgram/nova-2",
+  "deepgram/nova-3",
+  "assemblyai/universal-streaming",
+  "speechmatics/standard",
+  "soniox/stt-rt-v4",
+  "xai/grok-stt",
+]);
+
+function getEngineForModel(modelName) {
+  const provider = VOICE_TRANSCRIPTION_PROVIDERS.find((p) => p.model_name === modelName);
+  switch (provider?.provider) {
+    case "deepgram":
+      return "Deepgram";
+    case "assemblyai":
+      return "AssemblyAI";
+    case "speechmatics":
+      return "Speechmatics";
+    case "soniox":
+      return "Soniox";
+    case "xai":
+      return "xAI";
+    case "openai":
+    case "distil-whisper":
+    case "telnyx":
+      return "Telnyx";
+    default:
+      return "Telnyx";
+  }
+}
+
+function getModelsForProvider(provider) {
+  if (provider === "Google") return GOOGLE_MODELS;
+  return VOICE_TRANSCRIPTION_PROVIDERS
+    .filter(
+      (p) =>
+        p.voiceApiSupported !== false &&
+        getEngineForModel(p.model_name) === provider
+    )
+    .map((p) => ({ value: p.model_name, label: p.label || p.model_name }));
+}
 
 function getLanguagesForProviderModel(provider, model) {
-  if (provider === "Deepgram") {
-    if (model === "deepgram/nova-3") {
-      return PROVIDER_LANGUAGES["Deepgram-nova-3"];
-    }
-    return PROVIDER_LANGUAGES["Deepgram-nova-2"];
-  }
-  return PROVIDER_LANGUAGES[provider] || [];
+  if (provider === "Google") return GOOGLE_LANGUAGES;
+  const found = VOICE_TRANSCRIPTION_PROVIDERS.find((p) => p.model_name === model);
+  return found?.languages || [];
+}
+
+function supportsInterimResults(provider, model) {
+  return provider === "Google" || INTERIM_RESULTS_MODELS.has(model);
+}
+
+function getDefaultInterimResults(provider) {
+  return provider === "Google";
+}
+
+function getDefaultVoiceApiLanguage(provider, model) {
+  const languages = getLanguagesForProviderModel(provider, model);
+  if (languages.includes("en")) return "en";
+  if (languages.includes("auto_detect")) return "auto_detect";
+  if (languages.includes("auto")) return "auto";
+  return getDefaultTranscriptionLanguage(model, "en");
+}
+
+function coerceCurrentModelIntoOptions(provider, model, models) {
+  if (!model || models.some((m) => m.value === model)) return models;
+  return [{ value: model, label: `${model} (saved value)` }, ...models];
 }
 
 export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Read from transcription_engine_config first (new structure), then fall back to flat structure (backward compatibility)
   const engineConfig = config.transcription_engine_config || {};
-  const initialProvider = config.transcription_engine || "Google";
+  const savedModel = engineConfig.transcription_model || config.transcription_model || "";
+  const initialProvider = config.transcription_engine || (savedModel ? getEngineForModel(savedModel) : "Deepgram");
 
   // Determine initial model based on provider
   let initialModel = "";
   if (initialProvider === "Google") {
-    initialModel = engineConfig.model || config.model || "";
-  } else if (initialProvider === "Telnyx" || initialProvider === "Deepgram") {
-    initialModel =
-      engineConfig.transcription_model || config.transcription_model || "";
+    initialModel = engineConfig.model || config.model || "phone_call";
+  } else if (initialProvider === "Deepgram") {
+    initialModel = savedModel || "deepgram/nova-3";
+  } else {
+    initialModel = savedModel || getModelsForProvider(initialProvider)[0]?.value || "";
   }
 
   // Determine initial language
-  const initialLanguage = engineConfig.language || config.language || "en";
+  const initialLanguage =
+    engineConfig.language ||
+    config.language ||
+    getDefaultVoiceApiLanguage(
+      initialProvider,
+      initialModel || (initialProvider === "Deepgram" ? "deepgram/nova-3" : ""),
+    );
 
   const [provider, setProvider] = useState(initialProvider);
   const [model, setModel] = useState(initialModel);
@@ -564,77 +343,54 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
 
   // Google-specific parameters
   const [interimResults, setInterimResults] = useState(
-    config.interim_results ?? false
+    engineConfig.interim_results ??
+      config.interim_results ??
+      getDefaultInterimResults(initialProvider)
+  );
+  const [hasInterimResultsConfig, setHasInterimResultsConfig] = useState(
+    engineConfig.interim_results !== undefined ||
+      config.interim_results !== undefined
   );
   const [enableSpeakerDiarization, setEnableSpeakerDiarization] = useState(
-    config.enable_speaker_diarization ?? false
+    engineConfig.enable_speaker_diarization ??
+      config.enable_speaker_diarization ??
+      false
   );
   const [minSpeakerCount, setMinSpeakerCount] = useState(
-    config.min_speaker_count ?? 2
+    engineConfig.min_speaker_count ?? config.min_speaker_count ?? 2
   );
   const [maxSpeakerCount, setMaxSpeakerCount] = useState(
-    config.max_speaker_count ?? 6
+    engineConfig.max_speaker_count ?? config.max_speaker_count ?? 6
   );
   const [profanityFilter, setProfanityFilter] = useState(
-    config.profanity_filter ?? false
+    engineConfig.profanity_filter ?? config.profanity_filter ?? false
   );
-  const [useEnhanced, setUseEnhanced] = useState(config.use_enhanced ?? false);
-
-  // Azure-specific parameters
-  const [azureRegion, setAzureRegion] = useState(
-    engineConfig.region || config.region || "eastus"
+  const [useEnhanced, setUseEnhanced] = useState(
+    engineConfig.use_enhanced ?? config.use_enhanced ?? false
   );
-  const [azureApiKeyRef, setAzureApiKeyRef] = useState(
-    engineConfig.api_key_ref || config.api_key_ref || ""
-  );
-  const [azureSecrets, setAzureSecrets] = useState([]);
-  const [loadingAzureSecrets, setLoadingAzureSecrets] = useState(false);
 
   // Ref to track the last config we processed to avoid unnecessary updates
   const lastConfigRef = useRef(JSON.stringify(config));
 
-  // Load secrets for Azure
-  useEffect(() => {
-    if (provider === "Azure") {
-      async function loadSecrets() {
-        try {
-          setLoadingAzureSecrets(true);
-          const res = await fetch("/api/integration-secrets", {
-            cache: "no-store",
-          });
-          const data = await res.json();
-          if (res.ok && data?.ok) {
-            const secretsList = (data.secrets || []).map((s) => ({
-              id: s.identifier,
-              name: s.identifier,
-            }));
-            setAzureSecrets(secretsList);
-          }
-        } catch (err) {
-          console.error("Failed to load secrets:", err);
-        } finally {
-          setLoadingAzureSecrets(false);
-        }
-      }
-      loadSecrets();
-    } else {
-      setAzureSecrets([]);
-    }
-  }, [provider]);
-
   // Get available models for current provider
   const availableModels = useMemo(() => {
-    return PROVIDER_MODELS[provider] || [];
-  }, [provider]);
+    return coerceCurrentModelIntoOptions(
+      provider,
+      model,
+      getModelsForProvider(provider)
+    );
+  }, [provider, model]);
 
   // Get available languages for current provider/model
   const availableLanguages = useMemo(() => {
     const langs = getLanguagesForProviderModel(provider, model);
     return langs.map((code) => ({
       value: code,
-      label: LANGUAGE_NAMES[code] || code,
+      label: getLanguageLabel(code),
     }));
   }, [provider, model]);
+
+  const interimResultsSupported = supportsInterimResults(provider, model);
 
   // Sync state from config on mount or when config changes externally
   useEffect(() => {
@@ -649,9 +405,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const engineConfig = config.transcription_engine_config || {};
     const currentProvider = config.transcription_engine;
     const isGoogle = currentProvider === "Google";
-    const isAzure = currentProvider === "Azure";
-    const isTelnyx = currentProvider === "Telnyx";
-    const isDeepgram = currentProvider === "Deepgram";
 
     if (currentProvider && currentProvider !== provider) {
       setProvider(currentProvider);
@@ -661,7 +414,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     if (isGoogle) {
       const newModel = engineConfig.model || config.model || "";
       setModel(newModel);
-    } else if (isTelnyx || isDeepgram) {
+    } else {
       const newModel =
         engineConfig.transcription_model || config.transcription_model || "";
       setModel(newModel);
@@ -675,14 +428,19 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       setTranscriptionTracks(config.transcription_tracks);
     }
 
+    const hasNestedInterimResults = engineConfig.interim_results !== undefined;
+    const hasFlatInterimResults = config.interim_results !== undefined;
+    setHasInterimResultsConfig(hasNestedInterimResults || hasFlatInterimResults);
+    if (hasNestedInterimResults) {
+      setInterimResults(engineConfig.interim_results);
+    } else if (hasFlatInterimResults) {
+      setInterimResults(config.interim_results);
+    } else {
+      setInterimResults(getDefaultInterimResults(currentProvider));
+    }
+
     // Google-specific parameters - read from transcription_engine_config first, then flat structure
     if (isGoogle) {
-      if (engineConfig.interim_results !== undefined) {
-        setInterimResults(engineConfig.interim_results);
-      } else if (config.interim_results !== undefined) {
-        setInterimResults(config.interim_results);
-      }
-
       if (engineConfig.enable_speaker_diarization !== undefined) {
         setEnableSpeakerDiarization(engineConfig.enable_speaker_diarization);
       } else if (config.enable_speaker_diarization !== undefined) {
@@ -714,13 +472,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       }
     }
 
-    // Azure-specific parameters
-    if (isAzure) {
-      const newRegion = engineConfig.region || config.region || "eastus";
-      setAzureRegion(newRegion);
-      const newApiKeyRef = engineConfig.api_key_ref || config.api_key_ref || "";
-      setAzureApiKeyRef(newApiKeyRef);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
@@ -744,8 +495,24 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const currentProfanityFilter =
       overrides.profanity_filter ?? profanityFilter;
     const currentUseEnhanced = overrides.use_enhanced ?? useEnhanced;
-    const currentAzureRegion = overrides.azureRegion ?? azureRegion;
-    const currentAzureApiKeyRef = overrides.azureApiKeyRef ?? azureApiKeyRef;
+    const configuredEngineConfig = config.transcription_engine_config || {};
+    const configProvider =
+      config.transcription_engine || configuredEngineConfig.transcription_engine;
+    const configHasInterimResults =
+      configProvider === currentProvider &&
+      (configuredEngineConfig.interim_results !== undefined ||
+        config.interim_results !== undefined);
+    const shouldIncludeInterimResults =
+      supportsInterimResults(currentProvider, currentModel) &&
+      (overrides.interim_results !== undefined ||
+        hasInterimResultsConfig ||
+        configHasInterimResults);
+    const currentLanguages = getLanguagesForProviderModel(
+      currentProvider,
+      currentModel
+    );
+    const shouldIncludeLanguage =
+      currentLanguage && currentLanguages.includes(currentLanguage);
 
     // Always include transcription_engine and transcription_tracks at top level
     newConfig.transcription_engine = currentProvider;
@@ -755,9 +522,11 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     if (currentProvider === "Google") {
       newConfig.transcription_engine_config = {
         transcription_engine: "Google",
-        ...(currentLanguage && { language: currentLanguage }),
+        ...(shouldIncludeLanguage && { language: currentLanguage }),
         ...(currentModel && { model: currentModel }),
-        interim_results: currentInterimResults,
+        ...(shouldIncludeInterimResults && {
+          interim_results: currentInterimResults,
+        }),
         enable_speaker_diarization: currentEnableSpeakerDiarization,
         min_speaker_count: currentMinSpeakerCount,
         max_speaker_count: currentMaxSpeakerCount,
@@ -773,33 +542,15 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       delete newConfig.max_speaker_count;
       delete newConfig.profanity_filter;
       delete newConfig.use_enhanced;
-    } else if (currentProvider === "Azure") {
+    } else {
+      // Telnyx, Deepgram, AssemblyAI, Speechmatics, Soniox and xAI share the transcription_model shape.
       newConfig.transcription_engine_config = {
-        transcription_engine: "Azure",
-        region: currentAzureRegion,
-        ...(currentLanguage && { language: currentLanguage }),
-        ...(currentAzureApiKeyRef && { api_key_ref: currentAzureApiKeyRef }),
-      };
-      // Remove flat params from top level
-      delete newConfig.language;
-      delete newConfig.region;
-      delete newConfig.api_key_ref;
-    } else if (currentProvider === "Telnyx") {
-      // Telnyx: transcription_engine_config with transcription_engine, transcription_model, and language
-      newConfig.transcription_engine_config = {
-        transcription_engine: "Telnyx",
+        transcription_engine: currentProvider,
         ...(currentModel && { transcription_model: currentModel }),
-        ...(currentLanguage && { language: currentLanguage }),
-      };
-      // Remove flat params from top level
-      delete newConfig.transcription_model;
-      delete newConfig.language;
-    } else if (currentProvider === "Deepgram") {
-      // Deepgram: transcription_engine_config with transcription_engine, transcription_model (required), and language
-      newConfig.transcription_engine_config = {
-        transcription_engine: "Deepgram",
-        transcription_model: currentModel || "deepgram/nova-2", // Required field, use default if not set
-        ...(currentLanguage && { language: currentLanguage }),
+        ...(shouldIncludeLanguage && { language: currentLanguage }),
+        ...(shouldIncludeInterimResults && {
+          interim_results: currentInterimResults,
+        }),
       };
       // Remove flat params from top level
       delete newConfig.transcription_model;
@@ -815,28 +566,31 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
   // Update config when provider changes
   const handleProviderChangeInternal = (newProvider) => {
     // Set default model for the provider (if provider has models)
-    const models = PROVIDER_MODELS[newProvider] || [];
+    const models = getModelsForProvider(newProvider);
     const newModel = models.length > 0 ? models[0].value : "";
 
-    // Reset Azure region to default when switching to Azure
-    const newAzureRegion =
-      newProvider === "Azure" && azureRegion === "" ? "eastus" : azureRegion;
 
     // Reset language to default if not available in new provider
     const langs = getLanguagesForProviderModel(newProvider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : langs.includes("en")
-      ? "en"
-      : langs[0] || "en";
+      : getDefaultVoiceApiLanguage(newProvider, newModel);
+    const shouldSetProviderInterimDefault =
+      !hasInterimResultsConfig && getDefaultInterimResults(newProvider);
+    const newInterimResults = shouldSetProviderInterimDefault
+      ? getDefaultInterimResults(newProvider)
+      : interimResults;
 
     // Update state
     setProvider(newProvider);
     setModel(newModel);
-    if (newProvider === "Azure" && azureRegion === "") {
-      setAzureRegion("eastus");
-    }
     setLanguage(newLanguage);
+    if (shouldSetProviderInterimDefault) {
+      // Keep provider defaults scoped to the provider switch. Do not mark the
+      // value as user-configured, otherwise Google's default can leak when
+      // exploring other providers that also support interim results.
+      setInterimResults(newInterimResults);
+    }
 
     // Build config with new values directly
     onChange?.(
@@ -844,7 +598,9 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
         provider: newProvider,
         model: newModel,
         language: newLanguage,
-        azureRegion: newAzureRegion,
+        ...(shouldSetProviderInterimDefault && {
+          interim_results: newInterimResults,
+        }),
       })
     );
   };
@@ -855,9 +611,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     const langs = getLanguagesForProviderModel(provider, newModel);
     const newLanguage = langs.includes(language)
       ? language
-      : langs.includes("en")
-      ? "en"
-      : langs[0];
+      : getDefaultVoiceApiLanguage(provider, newModel);
 
     // Update state
     setModel(newModel);
@@ -884,33 +638,35 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
     onChange?.(buildConfig({ transcription_tracks: newTracks }));
   };
 
-  // Update config when Google-specific parameters change
-  const handleGoogleParamChange = (paramName, value) => {
+  // Update config when advanced transcription parameters change
+  const handleAdvancedParamChange = (paramName, value) => {
+    const nextValue = value === "indeterminate" ? false : value;
     const updates = {};
     switch (paramName) {
       case "interim_results":
-        setInterimResults(value);
-        updates.interim_results = value;
+        setHasInterimResultsConfig(true);
+        setInterimResults(nextValue);
+        updates.interim_results = nextValue;
         break;
       case "enable_speaker_diarization":
-        setEnableSpeakerDiarization(value);
-        updates.enable_speaker_diarization = value;
+        setEnableSpeakerDiarization(nextValue);
+        updates.enable_speaker_diarization = nextValue;
         break;
       case "min_speaker_count":
-        setMinSpeakerCount(value);
-        updates.min_speaker_count = value;
+        setMinSpeakerCount(nextValue);
+        updates.min_speaker_count = nextValue;
         break;
       case "max_speaker_count":
-        setMaxSpeakerCount(value);
-        updates.max_speaker_count = value;
+        setMaxSpeakerCount(nextValue);
+        updates.max_speaker_count = nextValue;
         break;
       case "profanity_filter":
-        setProfanityFilter(value);
-        updates.profanity_filter = value;
+        setProfanityFilter(nextValue);
+        updates.profanity_filter = nextValue;
         break;
       case "use_enhanced":
-        setUseEnhanced(value);
-        updates.use_enhanced = value;
+        setUseEnhanced(nextValue);
+        updates.use_enhanced = nextValue;
         break;
     }
     onChange?.(buildConfig(updates));
@@ -966,24 +722,26 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
       )}
 
       {/* Language Selection with Filter */}
-      <div>
-        <Label>Language</Label>
-        <div className="mt-1">
-          <Combobox
-            options={availableLanguages}
-            value={language}
-            onChange={handleLanguageChangeInternal}
-            placeholder="Select language"
-            emptyLabel="No language found"
-            searchable={true}
-            triggerClassName="w-full"
-          />
+      {availableLanguages.length > 0 && (
+        <div>
+          <Label>Language</Label>
+          <div className="mt-1">
+            <Combobox
+              options={availableLanguages}
+              value={language}
+              onChange={handleLanguageChangeInternal}
+              placeholder="Select language"
+              emptyLabel="No language found"
+              searchable={true}
+              triggerClassName="w-full"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Language for speech recognition ({availableLanguages.length}{" "}
+            available)
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Language for speech recognition ({availableLanguages.length}{" "}
-          available)
-        </p>
-      </div>
+      )}
 
       {/* Transcription Tracks (for all providers) */}
       <div>
@@ -1006,32 +764,35 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
         </p>
       </div>
 
+      {/* Advanced settings supported by multiple providers */}
+      {interimResultsSupported && (
+        <div className="space-y-4 pt-2 border-t">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="interim_results"
+              checked={interimResults}
+              onCheckedChange={(checked) =>
+                handleAdvancedParamChange("interim_results", checked)
+              }
+            />
+            <Label
+              htmlFor="interim_results"
+              className="text-sm font-normal cursor-pointer"
+            >
+              Interim Results
+            </Label>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2 ml-6">
+            Send interim transcription updates before the final result.
+          </p>
+        </div>
+      )}
+
       {/* Google-specific parameters */}
       {provider === "Google" && (
         <>
           <div className="space-y-4 pt-2 border-t">
             <h4 className="text-sm font-medium">Google Advanced Settings</h4>
-
-            {/* Interim Results */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="interim_results"
-                checked={interimResults}
-                onCheckedChange={(checked) =>
-                  handleGoogleParamChange("interim_results", checked)
-                }
-              />
-              <Label
-                htmlFor="interim_results"
-                className="text-sm font-normal cursor-pointer"
-              >
-                Interim Results
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground -mt-2 ml-6">
-              Whether to send also interim results. If set to false, only final
-              results will be sent.
-            </p>
 
             {/* Enable Speaker Diarization */}
             <div className="flex items-center space-x-2">
@@ -1039,7 +800,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                 id="enable_speaker_diarization"
                 checked={enableSpeakerDiarization}
                 onCheckedChange={(checked) =>
-                  handleGoogleParamChange("enable_speaker_diarization", checked)
+                  handleAdvancedParamChange("enable_speaker_diarization", checked)
                 }
               />
               <Label
@@ -1063,7 +824,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                   min="1"
                   value={minSpeakerCount}
                   onChange={(e) =>
-                    handleGoogleParamChange(
+                    handleAdvancedParamChange(
                       "min_speaker_count",
                       parseInt(e.target.value, 10) || 2
                     )
@@ -1086,7 +847,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                   min="1"
                   value={maxSpeakerCount}
                   onChange={(e) =>
-                    handleGoogleParamChange(
+                    handleAdvancedParamChange(
                       "max_speaker_count",
                       parseInt(e.target.value, 10) || 6
                     )
@@ -1105,7 +866,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                 id="profanity_filter"
                 checked={profanityFilter}
                 onCheckedChange={(checked) =>
-                  handleGoogleParamChange("profanity_filter", checked)
+                  handleAdvancedParamChange("profanity_filter", checked)
                 }
               />
               <Label
@@ -1125,7 +886,7 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
                 id="use_enhanced"
                 checked={useEnhanced}
                 onCheckedChange={(checked) =>
-                  handleGoogleParamChange("use_enhanced", checked)
+                  handleAdvancedParamChange("use_enhanced", checked)
                 }
               />
               <Label
@@ -1142,90 +903,6 @@ export default function TranscriptionNodeEditor({ config = {}, onChange }) {
           </div>
         </>
       )}
-
-      {/* Azure-specific parameters */}
-      {provider === "Azure" && (
-        <>
-          <div className="space-y-4 pt-2 border-t">
-            <h4 className="text-sm font-medium">Azure Settings</h4>
-
-            {/* Region Selection */}
-            <div>
-              <Label>
-                Region <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={azureRegion}
-                onValueChange={(value) => {
-                  setAzureRegion(value);
-                  onChange?.(buildConfig({ azureRegion: value }));
-                }}
-              >
-                <SelectTrigger className="w-full mt-1">
-                  <SelectValue placeholder="Select region" />
-                </SelectTrigger>
-                <SelectContent>
-                  {AZURE_REGIONS.map((region) => (
-                    <SelectItem key={region.value} value={region.value}>
-                      {region.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Azure region to use for speech recognition
-              </p>
-            </div>
-
-            {/* API Key Reference */}
-            <div>
-              <Label>API Key Reference</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  value={azureApiKeyRef}
-                  onChange={(e) => {
-                    const newValue = e.target.value;
-                    setAzureApiKeyRef(newValue);
-                    onChange?.(buildConfig({ azureApiKeyRef: newValue }));
-                  }}
-                  placeholder="Optional: Reference to API key for authentication"
-                  className="flex-1"
-                />
-                {azureSecrets.length > 0 && (
-                  <Select
-                    onValueChange={(secretName) => {
-                      setAzureApiKeyRef(secretName);
-                      onChange?.(buildConfig({ azureApiKeyRef: secretName }));
-                    }}
-                  >
-                    <SelectTrigger className="h-10 w-10 p-0 border-0 bg-transparent [&>svg]:hidden">
-                      <div className="h-10 w-10 p-0 flex items-center justify-center">
-                        <IconKey className="h-4 w-4 text-telnyx-green" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {azureSecrets.map((secret) => (
-                        <SelectItem key={secret.id} value={secret.name}>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-sm">
-                              {secret.name}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Reference to the API key for authentication. See integration
-                secrets documentation for details. Optional as defaults are
-                available for some regions.
-              </p>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+  </div>
   );
 }

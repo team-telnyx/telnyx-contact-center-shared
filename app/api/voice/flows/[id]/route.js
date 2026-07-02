@@ -10,6 +10,8 @@ import {
 import { unassignPhoneNumberFromApp } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { validateFlow } from "@/lib/voice-flow-validator";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +62,7 @@ export async function GET(request, { params }) {
       flow: flowResponse,
     });
   } catch (error) {
-    console.error("[API] Error getting flow:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to get flow" },
       { status: 500 }
@@ -115,6 +117,19 @@ export async function PUT(request, { params }) {
     else if (body.variables !== undefined) updates.variables = body.variables;
     if (body.metadata !== undefined) updates.metadata = body.metadata;
 
+    if (updates.nodes !== undefined || updates.edges !== undefined) {
+      const validation = validateFlow({
+        nodes: updates.nodes !== undefined ? updates.nodes : existingFlow.nodes || [],
+        edges: updates.edges !== undefined ? updates.edges : existingFlow.edges || [],
+      });
+      if (!validation.valid) {
+        return NextResponse.json(
+          { ok: false, error: validation.errors.join("\n"), validation },
+          { status: 400 }
+        );
+      }
+    }
+
     // Update voice application if name changed or SIP subdomain needs to be set
     if (existingFlow.telnyx_voice_app_id) {
       try {
@@ -137,7 +152,7 @@ export async function PUT(request, { params }) {
           voiceAppUpdates
         );
       } catch (error) {
-        console.error("[API] Failed to update voice application:", error);
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         // Don't fail the flow update if voice app update fails
       }
     }
@@ -162,7 +177,7 @@ export async function PUT(request, { params }) {
       flow: flowResponse,
     });
   } catch (error) {
-    console.error("[API] Error updating flow:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to update flow" },
       { status: 500 }
@@ -213,14 +228,9 @@ export async function DELETE(request, { params }) {
       for (const phoneNumber of phoneNumbers) {
         try {
           await unassignPhoneNumberFromApp(phoneNumber.phone_number_id);
-          console.log(
-            `[API] Unassigned phone number ${phoneNumber.phone_number} from flow ${flowId}`
-          );
+          voiceRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         } catch (error) {
-          console.error(
-            `[API] Failed to unassign phone number ${phoneNumber.phone_number_id}:`,
-            error
-          );
+          voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
           // Continue with other phone numbers even if one fails
         }
       }
@@ -228,14 +238,9 @@ export async function DELETE(request, { params }) {
       // Delete Telnyx Voice Application
       try {
         await deleteVoiceApplication(flow.telnyx_voice_app_id);
-        console.log(
-          `[API] Deleted voice application ${flow.telnyx_voice_app_id} for flow ${flowId}`
-        );
+        voiceRuntimeLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       } catch (error) {
-        console.error(
-          `[API] Failed to delete voice application ${flow.telnyx_voice_app_id}:`,
-          error
-        );
+        voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         // Continue with flow deletion even if voice app deletion fails
       }
     }
@@ -255,7 +260,7 @@ export async function DELETE(request, { params }) {
       deleted: true,
     });
   } catch (error) {
-    console.error("[API] Error deleting flow:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to delete flow" },
       { status: 500 }

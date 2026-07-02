@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * GET /api/contact-center/queues/[queueId]/calls
@@ -208,7 +209,7 @@ export async function GET(request, { params }) {
       calls,
     });
   } catch (error) {
-    console.error("[QueueCalls] Error fetching queue calls:", error);
+    queuesLogger.error("queuecalls", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch queue calls" },
       { status: 500 },

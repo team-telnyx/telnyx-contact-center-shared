@@ -15,6 +15,9 @@ import {
 import { PgDb } from "@/lib/pgdb";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { randomUUID } from "crypto";
+import { promoteReservation } from "@/lib/contact-center/reservation-manager.js";
+import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status.js";
+import { agentPayload, callPayload, contactCenterErrorPayload, queuePayload, routingLogger } from "@/lib/contact-center/logging.mjs";
 
 export async function POST(request) {
   try {
@@ -130,6 +133,7 @@ export async function POST(request) {
     const routingResult = await routeCall(queueId, {
       required_skills: requiredSkills || queue.skill_requirements || {},
       priority: priority || queue.priority || 0,
+      interactionId,
       callControlId,
       callSessionId,
     });
@@ -138,12 +142,31 @@ export async function POST(request) {
       // Assign call to agent
       const assignedAt = new Date();
 
+      const metadataUpdates = routingResult.reservationId
+        ? { reservationId: routingResult.reservationId }
+        : {};
+
       await pool.query(
-        `UPDATE cc_interactions 
-         SET agent_username = $1, state = 'ringing', assigned_at = $2, updated_at = NOW()
-         WHERE id = $3`,
-        [routingResult.agent.username, assignedAt, interactionId]
+        `UPDATE cc_interactions
+         SET agent_username = $1,
+             state = 'ringing',
+             assigned_at = $2,
+             metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+             updated_at = NOW()
+         WHERE id = $4`,
+        [routingResult.agent.username, assignedAt, JSON.stringify(metadataUpdates), interactionId]
       );
+
+      if (routingResult.reservationId) {
+        await promoteReservation(routingResult.reservationId, "ringing");
+      }
+
+      await handleAgentCallLifecycleStatus({
+        event: "ringing",
+        userId: routingResult.agent.id,
+        username: routingResult.agent.username,
+        interaction: { id: interactionId, agent_username: routingResult.agent.username },
+      });
 
       assignCallToAgent(
         queueId,
@@ -170,7 +193,15 @@ export async function POST(request) {
           "call_routed"
         );
       } catch (sseError) {
-        console.error("[Routing] Failed to broadcast routing event:", sseError);
+        routingLogger.error("routing_event_broadcast_failed", {
+          ...callPayload({ interactionId, callControlId, callSessionId }),
+          ...queuePayload({ queueId, queueName: queue.name }),
+          ...agentPayload({
+            agentUserId: routingResult.agent.id,
+            agentUsername: routingResult.agent.username,
+          }),
+          ...contactCenterErrorPayload(sseError),
+        });
       }
 
       return NextResponse.json({
@@ -190,7 +221,7 @@ export async function POST(request) {
       });
     }
   } catch (error) {
-    console.error("[Routing] Error routing call:", error);
+    routingLogger.error("route_call_request_failed", contactCenterErrorPayload(error));
     return NextResponse.json(
       {
         error: "Internal server error",

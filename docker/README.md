@@ -1,3 +1,5 @@
+> **Production deployment note:** This Docker Compose documentation is retained for local experiments and historical reference. Current production deployments use GitHub Actions to build immutable Docker image artifacts, store them in S3, and deploy them with [FDE Infra CLI](https://github.com/team-telnyx/fde-infra-cli) to EC2 nodes that use PostgreSQL in RDS. Start with the root [`README.md`](../README.md) and [`docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md`](../docs/S3_IMAGE_ARTIFACT_DEPLOYMENT.md) before using any legacy Docker scripts.
+
 # Telnyx Contact Center - Docker Deployment
 
 This directory contains Docker configurations for deploying the Telnyx Contact Center application.

@@ -1,0 +1,445 @@
+import { NextResponse } from "next/server";
+import { getAuthenticatedUser } from "@/lib/auth-server";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { buildFormContext } from "@/lib/forms/form-context";
+import { createFormSubmission } from "@/lib/forms/form-submissions";
+import {
+  FORM_COMPONENT_REGISTRY,
+  getFieldVariableName,
+  normalizeFormDefinition,
+} from "@/lib/forms/form-schema";
+import {
+  DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE,
+  validateVariableName,
+} from "@/lib/variable-utils";
+import { VoiceFlowDb } from "@/lib/pgdb-voice-flows";
+import { determineNextNodes, executeFlowNode } from "@/lib/voice-flow-engine";
+import {
+  addNodeActivation,
+  addNodeExecutionEvent,
+  addWebhookEvent,
+} from "@/lib/call-monitor-store";
+
+const FORM_DATA_ACTION_NODE_TYPES = new Set([
+  "form_submit",
+  "set_variable",
+  "condition",
+  "switch",
+  "logic_gate",
+  "http_request_action",
+  "data_action",
+  "form_submit_status",
+  "flow_end",
+]);
+
+function safeJson(value, fallback) {
+  if (Array.isArray(value) || (value && typeof value === "object"))
+    return value;
+  if (typeof value !== "string") return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function configuredPayloadVariable(node) {
+  const candidate =
+    node?.data?.config?.payloadVariable ||
+    node?.data?.config?.payloadVariableName ||
+    DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE;
+  const trimmed = typeof candidate === "string" ? candidate.trim() : "";
+  return validateVariableName(trimmed).valid
+    ? trimmed
+    : DEFAULT_FORM_SUBMIT_PAYLOAD_VARIABLE;
+}
+
+function normalizeSubmittedFieldValue(field, value) {
+  if (field.type === "checkbox") {
+    const hasOptions = Array.isArray(field.options) && field.options.length > 0;
+    if (hasOptions) {
+      if (Array.isArray(value)) return value;
+      if (value === undefined || value === null || value === "") return [];
+      return [value];
+    }
+    return Boolean(value);
+  }
+  if (field.type === "switch") return Boolean(value);
+  if (field.type === "slider") {
+    const number = Number(Array.isArray(value) ? value[0] : value);
+    return Number.isFinite(number) ? number : null;
+  }
+  if (
+    Array.isArray(value) &&
+    ["text", "textarea", "select", "radio", "hidden", "datetime"].includes(
+      field.type,
+    )
+  )
+    return value[0] ?? "";
+  return value;
+}
+
+function isUnresolvedTemplateString(value) {
+  return typeof value === "string" && /^\s*{{[^}]+}}\s*$/.test(value);
+}
+
+function fallbackForUnresolvedTemplate(field, value, { interaction, submission }) {
+  if (!isUnresolvedTemplateString(value)) return value;
+  const token = value.replace(/^\s*{{\s*/, "").replace(/\s*}}\s*$/, "");
+  const variableName = field?.variableName || "";
+  const fieldId = field?.id || "";
+  const looksLikeInteractionId =
+    token === "interaction.id" ||
+    token.endsWith(".interaction.id") ||
+    variableName === "interaction_id" ||
+    fieldId.endsWith("interaction_id");
+
+  if (looksLikeInteractionId) {
+    return interaction?.id || submission?.id || "";
+  }
+
+  return "";
+}
+
+function buildFormSubmitPayload({
+  form,
+  submission,
+  values,
+  contextObj,
+  interaction,
+  button,
+  flowId,
+}) {
+  const normalizedForm = normalizeFormDefinition(form || {});
+  const submittedValues = values && typeof values === "object" ? values : {};
+  const fields = {};
+  const variables = {};
+  const fieldMetadata = [];
+  const dataFields = (normalizedForm.schema?.fields || []).filter(
+    (field) => FORM_COMPONENT_REGISTRY[field.type]?.data,
+  );
+
+  for (const field of dataFields) {
+    const hasValue = Object.prototype.hasOwnProperty.call(
+      submittedValues,
+      field.id,
+    );
+    const rawValue = hasValue
+      ? submittedValues[field.id]
+      : (field.defaultValue ?? null);
+    const normalizedValue = normalizeSubmittedFieldValue(field, rawValue);
+    const value = fallbackForUnresolvedTemplate(field, normalizedValue, {
+      interaction,
+      submission,
+    });
+    const variableName = getFieldVariableName(field, dataFields);
+    fields[field.id] = value;
+    variables[variableName] = value;
+    fieldMetadata.push({
+      id: field.id,
+      variableName,
+      label: field.label || field.id,
+      type: field.type,
+      required: Boolean(field.required),
+      present: hasValue,
+    });
+  }
+
+  return {
+    form: {
+      id: form?.id || null,
+      name: form?.name || "",
+      slug: form?.slug || "",
+      version: form?.version || null,
+    },
+    submission: {
+      id: submission?.id || null,
+      status: submission?.status || null,
+      created_at: submission?.created_at || null,
+    },
+    button: button
+      ? {
+          id: button.id || null,
+          label: button.label || null,
+          type: button.type || null,
+          dataActionFlowId:
+            button.props?.dataActionFlowId ||
+            button.props?.dataActionId ||
+            flowId ||
+            "",
+          dataActionLabel: button.props?.dataActionLabel || "",
+        }
+      : null,
+    action: { flowId: flowId || "" },
+    values: fields,
+    variables,
+    submittedValues,
+    fields: fieldMetadata,
+    context: contextObj || {},
+    interaction: interaction || {},
+  };
+}
+
+async function executeFormDataAction({
+  flowId,
+  submission,
+  form,
+  values,
+  contextObj,
+  interaction,
+  button,
+}) {
+  if (!flowId) return null;
+  const flowRow = await VoiceFlowDb.getFlowById(flowId, null);
+  if (!flowRow)
+    return {
+      ok: false,
+      success: false,
+      status: "error",
+      message: "Data action flow not found.",
+    };
+
+  const flow = {
+    ...flowRow,
+    nodes: safeJson(flowRow.nodes, []),
+    edges: safeJson(flowRow.edges, []),
+    variables: safeJson(flowRow.variables, {}),
+  };
+  const startNode = flow.nodes.find(
+    (node) => node?.data?.nodeType === "form_submit",
+  );
+  if (!startNode)
+    return {
+      ok: false,
+      success: false,
+      status: "error",
+      message: "Selected flow is not a Form Submit data action.",
+    };
+
+  const monitorRunId = `form:${submission?.id || Date.now()}`;
+  const callControlId = monitorRunId;
+  const payloadVariable = configuredPayloadVariable(startNode);
+  const formSubmitPayload = buildFormSubmitPayload({
+    form,
+    submission,
+    values,
+    contextObj,
+    interaction,
+    button,
+    flowId,
+  });
+  const event = {
+    data: {
+      event_type: "form.submit",
+      occurred_at: new Date().toISOString(),
+      payload: {
+        monitor_run_id: monitorRunId,
+        form_id: form.id,
+        form_name: form.name,
+        submission_id: submission?.id,
+        button_id: button?.id || null,
+        button_label: button?.label || null,
+        data: values,
+        payload_variable: payloadVariable,
+        form_payload: formSubmitPayload,
+        form_variables: formSubmitPayload.variables,
+        context: contextObj,
+        interaction_id: interaction?.id || null,
+      },
+    },
+  };
+  const executionState = {
+    flowId,
+    callControlId,
+    variables: {
+      form_id: form.id,
+      form_name: form.name,
+      submission_id: submission?.id,
+      button_id: button?.id || "",
+      button_label: button?.label || "",
+      form_data: values || {},
+      form_variables: formSubmitPayload.variables,
+      form_context: contextObj || {},
+      interaction: interaction || {},
+      [payloadVariable]: formSubmitPayload,
+    },
+    globalVariables: flow.variables || {},
+    lastOutput: 0,
+  };
+
+  addWebhookEvent(callControlId, "form.submit", event, flowId);
+  addNodeActivation(flowId, startNode.id, callControlId);
+  addNodeExecutionEvent(
+    callControlId,
+    "form_submit",
+    startNode.id,
+    startNode.data?.label || "Form Submit",
+    {
+      monitor_run_id: monitorRunId,
+      payload_variable: payloadVariable,
+      payload: formSubmitPayload,
+      output_path: "Submitted (0)",
+    },
+    true,
+    0,
+    flowId,
+  );
+
+  let queue = determineNextNodes(flow, startNode, event, executionState);
+  let status = null;
+  let finalResult = { success: true, output: 0, variables: {} };
+  let steps = 0;
+
+  while (queue.length && steps < 25) {
+    const node = queue.shift();
+    steps += 1;
+    const nodeType = node?.data?.nodeType || node?.type;
+    if (!FORM_DATA_ACTION_NODE_TYPES.has(nodeType)) {
+      return {
+        ok: false,
+        success: false,
+        status: "error",
+        message: `Unsupported node in form data action: ${nodeType}`,
+      };
+    }
+    const result = await executeFlowNode(
+      node,
+      callControlId,
+      event,
+      executionState,
+    );
+    finalResult = result || finalResult;
+    if (result?.variables)
+      executionState.variables = {
+        ...executionState.variables,
+        ...result.variables,
+      };
+    executionState.lastOutput = Number.isInteger(result?.output)
+      ? result.output
+      : result?.success === false
+        ? 1
+        : 0;
+    if (result?.formSubmitStatus) {
+      status = result.formSubmitStatus;
+      break;
+    }
+    if (nodeType === "flow_end") break;
+    queue.push(...determineNextNodes(flow, node, event, executionState));
+  }
+
+  if (!status) {
+    status =
+      finalResult?.success === false
+        ? {
+            status: "error",
+            success: false,
+            message: finalResult.error || "Data action failed.",
+          }
+        : {
+            status: "success",
+            success: true,
+            message: "Data action completed.",
+          };
+  }
+  return {
+    ok: status.success !== false,
+    ...status,
+    variables: executionState.variables,
+  };
+}
+
+export async function GET(request, context) {
+  const user = await getAuthenticatedUser();
+  if (!user)
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  const { id } = await context.params;
+  const pool = getPostgresPool();
+  if (!pool)
+    return NextResponse.json(
+      { ok: false, error: "Server not ready" },
+      { status: 500 },
+    );
+  const { searchParams } = new URL(request.url);
+  const interactionId = searchParams.get("interactionId");
+  const args = [id];
+  let where = "form_id=$1";
+  if (interactionId) {
+    args.push(interactionId);
+    where += ` AND interaction_id=$2`;
+  }
+  const { rows } = await pool.query(
+    `SELECT * FROM form_submissions WHERE ${where} ORDER BY created_at DESC LIMIT 50`,
+    args,
+  );
+  return NextResponse.json({ ok: true, submissions: rows });
+}
+export async function POST(request, context) {
+  const user = await getAuthenticatedUser();
+  if (!user)
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401 },
+    );
+  const { id } = await context.params;
+  const pool = getPostgresPool();
+  if (!pool)
+    return NextResponse.json(
+      { ok: false, error: "Server not ready" },
+      { status: 500 },
+    );
+  const body = await request.json();
+  const { rows } = await pool.query(
+    `SELECT * FROM form_definitions WHERE id=$1 AND status='published'`,
+    [id],
+  );
+  const form = rows[0];
+  if (!form)
+    return NextResponse.json(
+      { ok: false, error: "Form not found" },
+      { status: 404 },
+    );
+  let interaction = null;
+  if (body.interactionId) {
+    const res = await pool.query(`SELECT * FROM cc_interactions WHERE id=$1`, [
+      body.interactionId,
+    ]);
+    interaction = res.rows[0] || null;
+  }
+  const contextObj = body.context || buildFormContext(interaction || {});
+  const result = await createFormSubmission(pool, {
+    form,
+    data: body.data || {},
+    context: contextObj,
+    interaction: interaction || { agent_username: user.username || user.email },
+    status: body.status || "submitted",
+  });
+  if (!result.validation.ok)
+    return NextResponse.json({ ok: false, ...result }, { status: 400 });
+
+  const dataActionFlowId =
+    body.dataActionFlowId ||
+    body.dataActionId ||
+    body.button?.props?.dataActionFlowId ||
+    "";
+  let dataAction = null;
+  if (dataActionFlowId) {
+    dataAction = await executeFormDataAction({
+      flowId: dataActionFlowId,
+      submission: result.submission,
+      form,
+      values: body.data || {},
+      contextObj,
+      interaction: interaction || {},
+      button: body.button || null,
+    });
+  }
+
+  const ok = dataAction ? dataAction.ok !== false : true;
+  return NextResponse.json(
+    { ok, ...result, dataAction },
+    { status: ok ? 200 : 400 },
+  );
+}

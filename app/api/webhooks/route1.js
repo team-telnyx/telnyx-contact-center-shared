@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 
 // Import the original handler
 import { POST as originalPOST } from "../voice/webhook/route";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export async function POST(request) {
   try {
@@ -37,24 +38,7 @@ export async function POST(request) {
       parsedBody?.payload?.call_session_id ||
       null;
 
-    console.log("[webhooks] 📥 Incoming webhook to /api/webhooks:", {
-      url,
-      method,
-      eventType,
-      callControlId,
-      callSessionId,
-      headers: {
-        "content-type": headers["content-type"],
-        "x-telnyx-signature": headers["x-telnyx-signature"]
-          ? "present"
-          : "missing",
-        "x-telnyx-timestamp": headers["x-telnyx-timestamp"],
-        "user-agent": headers["user-agent"],
-      },
-      bodySize: rawBody.length,
-      bodyPreview:
-        rawBody.length > 500 ? rawBody.substring(0, 500) + "..." : rawBody,
-    });
+    platformApiLogger.info("runtime_diagnostic", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
 
     // Create a new Request with the same body to forward to the original handler
     // (since we already consumed the original request's body stream)
@@ -67,7 +51,7 @@ export async function POST(request) {
     // Forward to the original handler
     return await originalPOST(newRequest);
   } catch (err) {
-    console.error("[webhooks] ❌ Error in /api/webhooks wrapper:", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     // If we got here, the body was already consumed, so we can't forward
     // Return error response
     return NextResponse.json(

@@ -1447,7 +1447,7 @@ export const WEBHOOK_PAYLOAD_SCHEMAS = {
     stt_model: {
       type: "string",
       description: "The speech-to-text model used in the conversation.",
-      example: "distil-whisper/distil-large-v2",
+      example: "deepgram/flux",
     },
     tts_provider: {
       type: "string",
@@ -1496,12 +1496,41 @@ export function getWebhookSchema(eventType) {
 export function getSchemaPath(schema) {
   if (!schema) return [];
 
-  return Object.entries(schema).map(([fieldName, fieldDef]) => ({
-    path: `payload.${fieldName}`,
-    type: fieldDef.type || "string",
-    description: fieldDef.description || "",
-    example: fieldDef.example,
-  }));
+  const examplePayload = {};
+  const fieldMetadata = new Map();
+
+  Object.entries(schema).forEach(([fieldName, fieldDef]) => {
+    const path = `payload.${fieldName}`;
+    examplePayload[fieldName] = Object.prototype.hasOwnProperty.call(fieldDef, "example")
+      ? fieldDef.example
+      : getExampleValueForSchemaField(fieldDef);
+    fieldMetadata.set(path, fieldDef);
+  });
+
+  return extractPathsFromObject(examplePayload, "payload", 10).map((field) => {
+    const metadata = fieldMetadata.get(field.path);
+    return {
+      ...field,
+      description: metadata?.description || field.description || "",
+    };
+  });
+}
+
+function getExampleValueForSchemaField(fieldDef = {}) {
+  switch (fieldDef.type) {
+    case "array":
+      return [];
+    case "object":
+      return {};
+    case "number":
+      return 0;
+    case "boolean":
+      return false;
+    case "null":
+      return null;
+    default:
+      return "";
+  }
 }
 
 /**
@@ -1551,15 +1580,9 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
         const newPath = currentPath ? `${currentPath}.${key}` : key;
 
         // Add leaf nodes
-        if (
-          value === null ||
-          typeof value !== "object" ||
-          Array.isArray(value)
-        ) {
+        if (value === null || typeof value !== "object") {
           let type = "string";
-          if (Array.isArray(value)) {
-            type = "array";
-          } else if (typeof value === "number") {
+          if (typeof value === "number") {
             type = "number";
           } else if (typeof value === "boolean") {
             type = "boolean";
@@ -1572,6 +1595,34 @@ export function extractPathsFromObject(obj, prefix = "payload", maxDepth = 5) {
             type,
             example: value,
           });
+        } else if (Array.isArray(value)) {
+          paths.push({
+            path: newPath,
+            type: "array",
+            example: value,
+          });
+
+          if (value.length > 0 && depth < maxDepth) {
+            const sampleItem = value.find(
+              (item) => item !== null && item !== undefined,
+            );
+            const itemPath = `${newPath}[]`;
+
+            if (
+              sampleItem !== undefined &&
+              sampleItem !== null &&
+              typeof sampleItem === "object" &&
+              !Array.isArray(sampleItem)
+            ) {
+              traverse(sampleItem, itemPath, depth + 1);
+            } else if (sampleItem !== undefined && sampleItem !== null) {
+              paths.push({
+                path: itemPath,
+                type: Array.isArray(sampleItem) ? "array" : typeof sampleItem,
+                example: sampleItem,
+              });
+            }
+          }
         } else {
           // Traverse deeper for objects
           traverse(value, newPath, depth + 1);

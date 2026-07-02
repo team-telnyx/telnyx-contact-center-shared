@@ -24,21 +24,21 @@ export const CodeBlock = ({
   showLineNumbers = false,
   className,
   children,
-  maxHeight,
+  maxHeight = 360,
   ...props
 }) => (
   <CodeBlockContext.Provider value={{ code }}>
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-md border bg-background text-foreground",
+        "relative w-full max-w-full overflow-auto rounded-md border bg-background text-foreground",
         className
       )}
       style={{ maxHeight }}
       {...props}
     >
-      <div className="relative">
+      <div className="relative min-w-max">
         <SyntaxHighlighter
-          className="overflow-hidden dark:hidden"
+          className="overflow-visible dark:hidden"
           codeTagProps={{
             className: "font-mono",
           }}
@@ -62,7 +62,7 @@ export const CodeBlock = ({
           {code}
         </SyntaxHighlighter>
         <SyntaxHighlighter
-          className="hidden overflow-hidden dark:block"
+          className="hidden overflow-visible dark:block"
           codeTagProps={{
             className: "font-mono",
           }}
@@ -85,12 +85,12 @@ export const CodeBlock = ({
         >
           {code}
         </SyntaxHighlighter>
-        {children && (
-          <div className="absolute top-2 right-2 flex items-center gap-2">
-            {children}
-          </div>
-        )}
       </div>
+      {children && (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+          {children}
+        </div>
+      )}
     </div>
   </CodeBlockContext.Provider>
 );
@@ -127,7 +127,7 @@ export const CodeBlockCopyButton = ({
   return (
     <Button
       className={cn(
-        "shrink-0",
+        "h-7 w-7 shrink-0 border bg-background/90 shadow-sm backdrop-blur hover:bg-muted",
         isCopied ? "text-telnyx-green" : undefined,
         className
       )}

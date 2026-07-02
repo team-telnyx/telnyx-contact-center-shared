@@ -3,10 +3,9 @@ import { verifyTelnyxSignature } from "@/lib/telnyx-webhooks";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { broadcastToKey } from "@/lib/sse";
 import { findWorkflowByInsightGroup } from "@/lib/telnyx-insights";
+import { telnyxErrorPayload, telnyxResourcePayload, telnyxWebhookLogger } from "@/lib/telnyx-ai-logging.mjs";
 
 export const dynamic = "force-dynamic";
-
-const LOG_PREFIX = "[Insights Webhook]";
 
 /**
  * Find interaction by call identifiers
@@ -204,7 +203,7 @@ function parseInsightResults(results, workflow) {
         data.slots = filterValidSlots(parsed?.slots || {});
         data.completedStages = parsed?.completed_stages || [];
       } catch (err) {
-        console.error(`${LOG_PREFIX} Failed to parse slots result:`, err);
+        telnyxWebhookLogger.warn("conversation_insight_slots_parse_failed", { ...telnyxResourcePayload({ insightId }), ...telnyxErrorPayload(err) });
       }
     } else if (insightId === workflow.insight_summary_id) {
       // Summary insight - markdown text
@@ -296,8 +295,8 @@ async function updateWorkflowSession(sessionId, data, workflow) {
       }
 
       await pool.query(
-        `INSERT INTO aa_workflow_item_status (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript)
-         VALUES ($1, $2, 'completed', $3, $4, NOW(), 'ai', $5)
+        `INSERT INTO aa_workflow_item_status (session_id, item_id, status, extracted_value, confidence_score, completed_at, completed_by, source_transcript, alternatives)
+         VALUES ($1, $2, 'completed', $3, $4, NOW(), 'ai', $5, $6::jsonb)
          ON CONFLICT (session_id, item_id) 
          DO UPDATE SET
            status = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.status ELSE 'completed' END,
@@ -306,6 +305,7 @@ async function updateWorkflowSession(sessionId, data, workflow) {
            completed_at = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.completed_at ELSE NOW() END,
            completed_by = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN 'agent' ELSE 'ai' END,
            source_transcript = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.source_transcript ELSE $5 END,
+           alternatives = CASE WHEN aa_workflow_item_status.completed_by = 'agent' THEN aa_workflow_item_status.alternatives ELSE $6::jsonb END,
            updated_at = NOW()`,
         [
           sessionId,
@@ -313,6 +313,7 @@ async function updateWorkflowSession(sessionId, data, workflow) {
           typeof value === "string" ? value : JSON.stringify(value),
           confidence || null,
           slotData?.source_utterance || null,
+          Array.isArray(slotData?.alternatives) && slotData.alternatives.length > 0 ? JSON.stringify(slotData.alternatives) : null,
         ]
       );
     }
@@ -378,9 +379,9 @@ async function broadcastAiHandoffData(interaction, sessionId, data) {
     // Also broadcast to contact-center agent stream
     await broadcastToKey(`contact-center:agent:${agent.username}`, payload);
 
-    console.log(`${LOG_PREFIX} Broadcasted AI handoff data to agent ${agent.username}`);
+    telnyxWebhookLogger.info("conversation_insight_handoff_broadcasted", { ...telnyxResourcePayload({ interactionId: interaction.id, sessionId }) });
   } catch (err) {
-    console.error(`${LOG_PREFIX} Failed to broadcast to agent:`, err);
+    telnyxWebhookLogger.error("conversation_insight_handoff_broadcast_failed", { ...telnyxResourcePayload({ interactionId: interaction?.id, sessionId }), ...telnyxErrorPayload(err) });
   }
 }
 
@@ -426,7 +427,7 @@ export async function POST(request) {
     const signatureValid = await verifyTelnyxSignature(request, rawBody);
     
     if (!apiKeyValid && !signatureValid) {
-      console.warn(`${LOG_PREFIX} [${requestId}] REJECTED - invalid signature`);
+      telnyxWebhookLogger.warn("conversation_insight_rejected", { requestId, reason: "invalid_signature" });
       return NextResponse.json(
         { ok: false, error: "Unauthorized - invalid signature" },
         { status: 401 }
@@ -438,7 +439,7 @@ export async function POST(request) {
     try {
       payload = JSON.parse(rawBody);
     } catch (err) {
-      console.error(`${LOG_PREFIX} [${requestId}] Invalid JSON payload`);
+      telnyxWebhookLogger.warn("conversation_insight_invalid_json", { requestId, ...telnyxErrorPayload(err) });
       return NextResponse.json(
         { ok: false, error: "Invalid JSON" },
         { status: 400 }
@@ -465,12 +466,12 @@ export async function POST(request) {
     const insightGroupId = eventPayload.insight_group_id;
     const results = eventPayload.results || [];
 
-    console.log(`${LOG_PREFIX} [${requestId}] Processing insights: group=${insightGroupId}, results=${results?.length || 0}`);
+    telnyxWebhookLogger.info("conversation_insight_processing_started", { requestId, ...telnyxResourcePayload({ groupId: insightGroupId }), resultCount: results?.length || 0 });
 
     // Find workflow by insight_group_id
     const workflow = await findWorkflowByInsightGroup(insightGroupId);
     if (!workflow) {
-      console.warn(`${LOG_PREFIX} No workflow found for insight_group_id: ${insightGroupId}`);
+      telnyxWebhookLogger.warn("conversation_insight_workflow_not_found", { requestId, ...telnyxResourcePayload({ groupId: insightGroupId }) });
       // Store event anyway for debugging
       await storeHandoffEvent({
         aiCallControlId: callControlId,
@@ -499,7 +500,7 @@ export async function POST(request) {
     });
 
     if (!interaction) {
-      console.log(`${LOG_PREFIX} Interaction not found yet, stored event for later processing`);
+      telnyxWebhookLogger.info("conversation_insight_interaction_pending", { requestId, ...telnyxResourcePayload({ eventId, groupId: insightGroupId }) });
       return NextResponse.json({
         ok: true,
         processed: false,
@@ -523,7 +524,7 @@ export async function POST(request) {
       await broadcastAiHandoffData(interaction, session.id, parsedData);
 
       const duration = Date.now() - startTime;
-      console.log(`${LOG_PREFIX} Processed in ${duration}ms - session updated: ${session.id}`);
+      telnyxWebhookLogger.info("conversation_insight_session_updated", { requestId, ...telnyxResourcePayload({ eventId, interactionId: interaction.id, sessionId: session.id }), durationMs: duration, slotCount: Object.keys(parsedData.slots).length });
 
       return NextResponse.json({
         ok: true,
@@ -547,7 +548,7 @@ export async function POST(request) {
       }
 
       const duration = Date.now() - startTime;
-      console.log(`${LOG_PREFIX} Processed in ${duration}ms - stored for pending session`);
+      telnyxWebhookLogger.info("conversation_insight_pending_session_stored", { requestId, ...telnyxResourcePayload({ eventId, interactionId: interaction.id }), durationMs: duration, slotCount: Object.keys(parsedData.slots).length });
 
       return NextResponse.json({
         ok: true,
@@ -559,7 +560,7 @@ export async function POST(request) {
       });
     }
   } catch (err) {
-    console.error(`${LOG_PREFIX} Error processing webhook:`, err);
+    telnyxWebhookLogger.error("conversation_insight_processing_failed", { requestId, ...telnyxErrorPayload(err) });
     return NextResponse.json(
       { ok: false, error: err.message || String(err) },
       { status: 500 }

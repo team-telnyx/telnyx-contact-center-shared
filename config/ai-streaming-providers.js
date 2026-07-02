@@ -3,11 +3,78 @@
  * Configuration for Google Gemini Live and OpenAI Realtime streaming
  */
 
+
+import { TRANSCRIPTION_PROVIDERS } from "./voice";
+import { getLanguageByCode } from "@/lib/languages";
+import { normalizeLanguageCode } from "@/lib/language-code-utils";
+
+const GOOGLE_STANDALONE_STT_LANGUAGE_CODES = [
+  "en-US",
+  "en-GB",
+  "pl-PL",
+  "de-DE",
+  "fr-FR",
+  "es-ES",
+  "it-IT",
+  "nl-NL",
+  "pt-PT",
+  "pt-BR",
+  "uk-UA",
+  "ar-AE",
+];
+
+function toLanguageOption(code) {
+  const normalizedCode = normalizeLanguageCode(code, { fallback: code });
+  const language = getLanguageByCode(normalizedCode);
+  return {
+    value: normalizedCode,
+    label: `${language.flag} ${language.name}`,
+  };
+}
+
+function normalizeStandaloneSttModel(model) {
+  if (!model) return "";
+  const value = String(model);
+  if (value === "nova-2") return "deepgram/nova-2";
+  if (value === "nova-3") return "deepgram/nova-3";
+  if (value === "flux") return "deepgram/flux";
+  return value;
+}
+
+function standaloneSttLanguagesForModel(model) {
+  const normalizedModel = normalizeStandaloneSttModel(model);
+  if (["phone_call", "latest_long", "default"].includes(normalizedModel)) {
+    return GOOGLE_STANDALONE_STT_LANGUAGE_CODES.map(toLanguageOption);
+  }
+  const provider = TRANSCRIPTION_PROVIDERS.find(
+    (entry) => entry.model_name === normalizedModel,
+  );
+  const seen = new Set();
+  return (provider?.languages || [])
+    .map(toLanguageOption)
+    .filter((option) => {
+      if (!option.value || seen.has(option.value)) return false;
+      seen.add(option.value);
+      return true;
+    });
+}
+
+export const TELNYX_STT_LANGUAGE_OPTIONS_BY_MODEL = Object.fromEntries(
+  TRANSCRIPTION_PROVIDERS.map((provider) => [
+    provider.model_name,
+    standaloneSttLanguagesForModel(provider.model_name),
+  ]),
+);
+
+function telnyxSttLanguagesForModel(model) {
+  return standaloneSttLanguagesForModel(model);
+}
+
 export const AI_STREAMING_PROVIDERS = {
   "google-gemini": {
     id: "google-gemini",
     label: "Google Gemini Live",
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-2.5-flash-native-audio-latest",
     voice: "Puck", // Default generative voice
     systemInstructions: `You are a helpful AI assistant for Telnyx, a leading communications platform as a service (CPaaS) provider.
 
@@ -28,8 +95,6 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       stream_codec: "PCMU", // 8kHz PCMU (G.711 μ-law)
       stream_bidirectional_mode: "rtp", // RTP mode with base64-encoded payloads in JSON
       stream_bidirectional_codec: "PCMU", // PCMU for responses
-      stream_bidirectional_sampling_rate: 8000, // 8kHz sampling
-      stream_bidirectional_target_legs: "opposite", // Send AI audio to caller
     },
 
     // Gemini Live API configuration
@@ -55,7 +120,7 @@ Be friendly, professional, and concise. Provide accurate information about Telny
   "openai-realtime": {
     id: "openai-realtime",
     label: "OpenAI Realtime",
-    model: "gpt-4o-realtime-preview-2024-10-01",
+    model: "gpt-4o-realtime-preview",
     voice: "alloy", // Options: alloy, echo, shimmer
     systemInstructions: `You are a helpful AI assistant for Telnyx, a leading communications platform as a service (CPaaS) provider.
 
@@ -76,8 +141,6 @@ Be friendly, professional, and concise. Provide accurate information about Telny
       stream_codec: "PCMU", // G.711 μ-law (8kHz)
       stream_bidirectional_mode: "rtp", // RTP mode with base64-encoded payloads in JSON
       stream_bidirectional_codec: "PCMU", // PCMU for responses (g711_ulaw)
-      stream_bidirectional_sampling_rate: 8000, // 8kHz sampling for g711_ulaw
-      stream_bidirectional_target_legs: "opposite", // Send AI audio to caller
     },
 
     // OpenAI Realtime API configuration
@@ -95,6 +158,191 @@ Be friendly, professional, and concise. Provide accurate information about Telny
         prefix_padding_ms: 300,
         silence_duration_ms: 200,
       },
+    },
+  },
+
+  "telnyx-stt-google-phone-call": {
+    id: "telnyx-stt-google-phone-call",
+    label: "Telnyx STT WS — Google phone_call (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google phone_call. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Google",
+      model: "phone_call",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("phone_call"),
+    },
+  },
+
+  "telnyx-stt-google-latest-long": {
+    id: "telnyx-stt-google-latest-long",
+    label: "Telnyx STT WS — Google latest_long (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google latest_long. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Google",
+      model: "latest_long",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("latest_long"),
+    },
+  },
+
+  "telnyx-stt-google-default": {
+    id: "telnyx-stt-google-default",
+    label: "Telnyx STT WS — Google default (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Google default. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Google",
+      model: "default",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("default"),
+    },
+  },
+
+  "telnyx-stt-xai-grok": {
+    id: "telnyx-stt-xai-grok",
+    label: "Telnyx STT WS — xAI Grok STT (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using xAI Grok STT. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "xAI",
+      model: "xai/grok-stt",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("xai/grok-stt"),
+    },
+  },
+
+  "telnyx-stt-deepgram-nova-2": {
+    id: "telnyx-stt-deepgram-nova-2",
+    label: "Telnyx STT WS — Deepgram Nova 2 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 2 with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Deepgram",
+      model: "deepgram/nova-2",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("deepgram/nova-2"),
+    },
+  },
+
+  "telnyx-stt-deepgram-nova-3": {
+    id: "telnyx-stt-deepgram-nova-3",
+    label: "Telnyx STT WS — Deepgram Nova 3 (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Nova 3 with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Deepgram",
+      model: "deepgram/nova-3",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("deepgram/nova-3"),
+    },
+  },
+
+  "telnyx-stt-deepgram-flux": {
+    id: "telnyx-stt-deepgram-flux",
+    label: "Telnyx STT WS — Deepgram Flux (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Deepgram Flux with native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Deepgram",
+      model: "deepgram/flux",
+      language: "auto",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      supported_languages: telnyxSttLanguagesForModel("deepgram/flux"),
+    },
+  },
+
+  "telnyx-stt-speechmatics-standard": {
+    id: "telnyx-stt-speechmatics-standard",
+    label: "Telnyx STT WS — Speechmatics standard (PCMU telco)",
+    description: "Standalone Telnyx Speech-to-Text WebSocket using Speechmatics standard. Compatibility-tested for native PCMU/mulaw @ 8 kHz telco audio.",
+    type: "telnyx-stt",
+    telnyx: {
+      // Each call leg streams its own inbound audio; outbound/both start a second stream on the agent leg.
+      stream_track: "inbound_track",
+      stream_codec: "PCMU",
+    },
+    telnyxStt: {
+      enabled: true,
+      transcription_tracks: "both",
+      transcription_engine: "Speechmatics",
+      model: "speechmatics/standard",
+      language: "en",
+      input_format: "mulaw",
+      sample_rate: 8000,
+      interim_results: true,
+      endpointing: 300,
+      supported_languages: telnyxSttLanguagesForModel("speechmatics/standard"),
     },
   },
 };

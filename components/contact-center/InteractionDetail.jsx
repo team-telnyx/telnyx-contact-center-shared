@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { AgentAssist } from "./AgentAssist";
 import { AgentAssistWorkflow } from "./AgentAssistWorkflow";
+import { AgentFormsView } from "./AgentFormsView";
+import { AgentWebPagesView } from "./AgentWebPagesView";
 import { Sparkles } from "lucide-react";
 
 /**
@@ -11,6 +13,8 @@ import { Sparkles } from "lucide-react";
  * Displays Agent Assist based on configuration:
  * - KB Articles mode: shows knowledge base article suggestions
  * - Workflows mode: shows full-width guided workflow (no tabs)
+ * - Forms mode: opens selected/queue-assigned forms
+ * - Web Pages mode: opens selected admin web pages
  * 
  * Configuration is read from:
  * 1. interaction.metadata.agent_assist_config (set by call flow node)
@@ -63,6 +67,15 @@ export function InteractionDetail({ interaction }) {
 
   const assistType = assistConfig?.assist_type || "kb_articles";
   const workflowId = assistConfig?.workflow_id;
+  const formIds = assistConfig?.form_ids || (assistConfig?.form_id ? [assistConfig.form_id] : []);
+  const legacyWebPageId = Array.isArray(assistConfig?.web_page_ids)
+    ? assistConfig.web_page_ids.find(Boolean)
+    : null;
+  const webPageIds = assistConfig?.web_page_id
+    ? [assistConfig.web_page_id]
+    : legacyWebPageId
+      ? [legacyWebPageId]
+      : [];
 
   // Workflows mode - full width workflow view without tabs
   if (assistType === "workflows" && workflowId) {
@@ -72,6 +85,31 @@ export function InteractionDetail({ interaction }) {
           interactionId={interaction.id} 
           workflowId={workflowId}
           interaction={interaction}
+        />
+      </div>
+    );
+  }
+
+  if ((assistType === "forms" || assistType === "form") && (formIds.length > 0 || assistConfig?.auto_open_forms !== false)) {
+    return (
+      <div className="flex flex-col h-full overflow-hidden p-3">
+        <AgentFormsView
+          selectedInteraction={interaction}
+          formIds={formIds}
+          autoOpenOnly={assistConfig?.auto_open_forms !== false}
+          hideHeader
+          showCards={false}
+        />
+      </div>
+    );
+  }
+
+  if (assistType === "web_pages" || assistType === "web_page") {
+    return (
+      <div className="flex flex-col h-full overflow-hidden p-3">
+        <AgentWebPagesView
+          selectedInteraction={interaction}
+          webPageIds={webPageIds}
         />
       </div>
     );

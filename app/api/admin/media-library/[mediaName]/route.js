@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -55,7 +56,7 @@ export async function GET(request, { params }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[Media Library] GET error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to fetch media file" },
         { status: response.status }
@@ -65,7 +66,7 @@ export async function GET(request, { params }) {
     const data = await response.json();
     return NextResponse.json({ ok: true, data: data.data || data });
   } catch (err) {
-    console.error("[Media Library] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load media file" },
       { status: 500 }
@@ -101,7 +102,7 @@ export async function DELETE(request, { params }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[Media Library] DELETE error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to delete media file" },
         { status: response.status }
@@ -110,7 +111,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Media Library] DELETE error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to delete media file" },
       { status: 500 }

@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { PgDb } from "@/lib/pgdb";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { broadcastToKey } from "@/lib/sse";
+import { transferLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 import {
   addTimelineEvent,
   TimelineEventTypes,
@@ -62,45 +63,19 @@ export async function POST(request, { params }) {
     // This is stored in webrtc-bridge.js when the call is transferred to the agent
     if (interaction.metadata?.original_call_control_id) {
       transferCallControlId = interaction.metadata.original_call_control_id;
-      console.log(
-        `[TransferById] ✅ Using original_call_control_id from metadata: ${transferCallControlId} (interaction.call_control_id is WebRTC leg: ${interaction.call_control_id})`,
-      );
+      transferLogger.debug("transfer_diagnostic_0", {});
     } else if (!isInbound && interaction.metadata?.pstn_call_control_id) {
       // Priority 2: Outbound call - use PSTN leg from metadata
       transferCallControlId = interaction.metadata.pstn_call_control_id;
-      console.log(
-        `[TransferById] ✅ Outbound call - Using PSTN leg call_control_id: ${transferCallControlId}`,
-      );
+      transferLogger.debug("transfer_diagnostic_1", {});
     } else {
       // Fallback: Use interaction.call_control_id (should only happen if call wasn't transferred to agent)
-      console.warn(
-        `[TransferById] ⚠️ No original_call_control_id in metadata, using interaction.call_control_id: ${transferCallControlId}. This may fail if call was transferred to agent.`,
-      );
+      transferLogger.warn("transfer_warning_2", {});
     }
 
-    console.log(`[TransferById] Transfer call leg selection:`, {
-      interactionId: id,
-      interactionCallControlId: interaction.call_control_id,
-      metadataOriginalCallControlId:
-        interaction.metadata?.original_call_control_id,
-      metadataAgentCallControlId: interaction.metadata?.agent_call_control_id,
-      metadataPstnCallControlId: interaction.metadata?.pstn_call_control_id,
-      finalTransferCallControlId: transferCallControlId,
-      direction: interaction.direction,
-      isInbound,
-    });
+    transferLogger.debug("transfer_diagnostic_3", {});
 
-    console.log(`[Transfer] Transfer call leg selection:`, {
-      interactionId: id,
-      interactionCallControlId: interaction.call_control_id,
-      metadataOriginalCallControlId:
-        interaction.metadata?.original_call_control_id,
-      metadataAgentCallControlId: interaction.metadata?.agent_call_control_id,
-      metadataPstnCallControlId: interaction.metadata?.pstn_call_control_id,
-      finalTransferCallControlId: transferCallControlId,
-      direction: interaction.direction,
-      isInbound,
-    });
+    transferLogger.debug("transfer_diagnostic_4", {});
 
     const apiKey = process.env.TELNYX_API_KEY;
     if (!apiKey) {
@@ -209,10 +184,7 @@ export async function POST(request, { params }) {
 
           if (!clientStateResponse.ok) {
             const errorText = await clientStateResponse.text();
-            console.error(
-              "[Transfer] Failed to update client_state:",
-              errorText,
-            );
+            transferLogger.error("transfer_error_5", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
             return NextResponse.json(
               {
                 ok: false,
@@ -262,7 +234,7 @@ export async function POST(request, { params }) {
               transferHistory = [];
             }
           } catch (e) {
-            console.warn("[Transfer] Failed to parse transfer_history:", e);
+            transferLogger.warn("transfer_warning_6", {});
             transferHistory = [];
           }
         }
@@ -342,7 +314,7 @@ export async function POST(request, { params }) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("[Transfer] Telnyx API error:", errorText);
+      transferLogger.error("transfer_error_7", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       return NextResponse.json(
         { ok: false, error: errorText },
         { status: response.status },
@@ -362,7 +334,7 @@ export async function POST(request, { params }) {
             transferHistory = [];
           }
         } catch (e) {
-          console.warn("[Transfer] Failed to parse transfer_history:", e);
+          transferLogger.warn("transfer_warning_8", {});
           transferHistory = [];
         }
       }
@@ -406,7 +378,7 @@ export async function POST(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[TransferById] Error:", err);
+    transferLogger.error("transfer_error_9", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Server error" },
       { status: 500 },

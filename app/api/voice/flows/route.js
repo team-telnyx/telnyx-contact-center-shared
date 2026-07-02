@@ -8,6 +8,8 @@ import {
 } from "@/lib/telnyx-voice-apps";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { validateFlow } from "@/lib/voice-flow-validator";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -109,10 +111,7 @@ export async function GET(request) {
 
             if (!res.ok) {
               const errorText = await res.text();
-              console.error(
-                `[API] Failed to fetch phone numbers for voice app ${flow.telnyx_voice_app_id}:`,
-                errorText
-              );
+              voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
               break;
             }
 
@@ -132,10 +131,7 @@ export async function GET(request) {
             phone_numbers: allPhoneNumbers.map((pn) => pn.phone_number),
           };
         } catch (error) {
-          console.error(
-            `[API] Error fetching phone numbers for voice app ${flow.telnyx_voice_app_id}:`,
-            error
-          );
+          voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
           return {
             ...flow,
             phone_numbers_count: 0,
@@ -153,7 +149,7 @@ export async function GET(request) {
       pageSize,
     });
   } catch (error) {
-    console.error("[API] Error listing flows:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to list flows" },
       { status: 500 }
@@ -187,6 +183,16 @@ export async function POST(request) {
       metadata: body.metadata || {},
     };
 
+    if (flowData.nodes.length > 0) {
+      const validation = validateFlow({ nodes: flowData.nodes, edges: flowData.edges });
+      if (!validation.valid) {
+        return NextResponse.json(
+          { ok: false, error: validation.errors.join("\n"), validation },
+          { status: 400 }
+        );
+      }
+    }
+
     // Generate webhook URL
     const flowId = body.id || require("crypto").randomUUID();
     const baseUrl = getBaseUrl();
@@ -204,7 +210,7 @@ export async function POST(request) {
         flowId
       );
     } catch (error) {
-      console.error("[API] Failed to create voice application:", error);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         {
           ok: false,
@@ -226,7 +232,7 @@ export async function POST(request) {
       flow,
     });
   } catch (error) {
-    console.error("[API] Error creating flow:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Failed to create flow" },
       { status: 500 }

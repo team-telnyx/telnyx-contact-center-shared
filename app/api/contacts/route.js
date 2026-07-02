@@ -6,6 +6,7 @@ import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
 import { randomUUID } from "crypto";
+import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
 // Support both admin session and API key authentication
 async function requireAuth(request) {
@@ -123,6 +124,16 @@ export async function POST(request) {
   const body = await request.json();
   const id = body.id || randomUUID();
   const now = new Date().toISOString();
+  let customData;
+  try {
+    customData = normalizeCustomDataValue(body.custom_data);
+  } catch (err) {
+    const error = err?.message || "Custom data must be a valid JSON object";
+    if (auth.type === "api_key") {
+      return jsonError(error, 400);
+    }
+    return NextResponse.json({ error }, { status: 400 });
+  }
 
   // Validate required fields
   if (
@@ -162,6 +173,7 @@ export async function POST(request) {
     address_zip: body.address_zip || null,
     address_country: body.address_country || null,
     notes: body.notes || null,
+    custom_data: customData,
     created_by: auth.type === "session" ? auth.user.id : null,
     created_at: now,
     updated_at: now,
@@ -174,9 +186,9 @@ export async function POST(request) {
         phone, mobile, business_phone_1, business_phone_2, home_phone_1, home_phone_2,
         email_address_1, email_address_2,
         address_street, address_city, address_state, address_zip, address_country,
-        notes, created_by, created_at, updated_at
+        notes, custom_data, created_by, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
       ) RETURNING *
     `;
     const result = await pool.query(query, [
@@ -201,6 +213,7 @@ export async function POST(request) {
       contactData.address_zip,
       contactData.address_country,
       contactData.notes,
+      JSON.stringify(contactData.custom_data),
       contactData.created_by,
       contactData.created_at,
       contactData.updated_at,

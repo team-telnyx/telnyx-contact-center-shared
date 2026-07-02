@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import React, { Fragment, useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,12 +18,12 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconUsers,
   IconEdit,
   IconTrash,
   IconInfoCircle,
   IconStar,
   IconStarFilled,
+  IconUserPlus,
 } from "@tabler/icons-react";
 import {
   Table,
@@ -154,6 +155,7 @@ function SkillsInfoCell({ user }) {
   );
 }
 
+
 export default function AdminUsersPage() {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
@@ -166,6 +168,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(false);
   const [editUserId, setEditUserId] = useState(null);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [addUserOpen, setAddUserOpen] = useState(false);
 
   const query = useMemo(() => {
     const sp = new URLSearchParams();
@@ -258,26 +261,29 @@ export default function AdminUsersPage() {
     return Array.from(roleSet).sort();
   }, [items]);
 
+  const headerActions = <>
+    <Button size="sm" className="gap-2" onClick={() => setAddUserOpen(true)}>
+      <IconUserPlus className="size-4" />
+      Add User
+    </Button>
+    <Button
+      variant="secondary"
+      onClick={() => setFilters({ role: "all", q: "" })}
+    >
+      Clear
+    </Button>
+    <Button onClick={() => load()} disabled={loading}>
+      {loading ? "Loading…" : "Refresh"}
+    </Button>
+  </>;
+
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Users" badges={<Badge variant="secondary">{total} users</Badge>} actions={headerActions} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <Card className="w-full">
         <CardContent className="space-y-4 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-semibold flex items-center gap-2">
-              <IconUsers className="size-6 text-telnyx-green" /> Users
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setFilters({ role: "all", q: "" })}
-              >
-                Clear
-              </Button>
-              <Button onClick={() => load()} disabled={loading}>
-                {loading ? "Loading…" : "Refresh"}
-              </Button>
-            </div>
-          </div>
           <div className="flex gap-2 items-end">
             <div style={{ width: "20%", minWidth: 0 }}>
               <label className="text-xs">Name</label>
@@ -565,6 +571,15 @@ export default function AdminUsersPage() {
         </div>
       </Card>
 
+      {/* Add User Sheet (create mode) */}
+      <EditSheet
+        userId={null}
+        createMode={true}
+        open={addUserOpen}
+        onOpenChange={setAddUserOpen}
+        onSaved={() => { setAddUserOpen(false); load(); }}
+      />
+
       {/* Edit Sheet */}
       <EditSheet
         open={showEditSheet}
@@ -572,6 +587,8 @@ export default function AdminUsersPage() {
         userId={editUserId}
         onSaveComplete={load}
       />
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

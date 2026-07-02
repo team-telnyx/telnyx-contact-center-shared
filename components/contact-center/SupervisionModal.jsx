@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -109,6 +109,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
   const userInitiatedSupervisionRef = useRef(false);
   // Flag to track if we've already attempted to auto-answer the supervisor call
   const autoAnswerAttemptedRef = useRef(false);
+  const supervisorRemoteAudioRef = useRef(null);
 
   // Update refs when state changes
   useEffect(() => {
@@ -200,6 +201,38 @@ export function SupervisionModal({ open, onOpenChange, call }) {
 
     return false;
   }, [supervisorCallControlId, activeCall, supervisorNumber]);
+
+  const hydrateSupervisorAudio = useCallback((supervisorCall) => {
+    const audioEl = supervisorRemoteAudioRef.current;
+    if (!supervisorCall || !audioEl) return;
+
+    try {
+      if (typeof supervisorCall.setAudioElement === "function") {
+        supervisorCall.setAudioElement(audioEl);
+      }
+      if (typeof supervisorCall.attachAudio === "function") {
+        supervisorCall.attachAudio(audioEl);
+      }
+
+      const remoteStream =
+        supervisorCall.remoteStream || supervisorCall.remoteMediaStream || supervisorCall.stream;
+      if (remoteStream && audioEl.srcObject !== remoteStream) {
+        audioEl.srcObject = remoteStream;
+      }
+
+      audioEl.autoplay = true;
+      audioEl.playsInline = true;
+      audioEl.muted = false;
+      const playResult = audioEl.play?.();
+      if (playResult?.catch) {
+        playResult.catch((error) => {
+          console.warn("[SupervisionModal] Supervisor audio autoplay blocked:", error);
+        });
+      }
+    } catch (error) {
+      console.error("[SupervisionModal] Failed to hydrate supervisor audio:", error);
+    }
+  }, []);
 
   // Determine supervisor call state from store or call object
   const supervisorCallState = useMemo(() => {
@@ -385,19 +418,24 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         const currentCall = useActiveCallStore.getState().call;
         if (currentCall && currentCall.answer) {
           try {
-            currentCall.answer();
-            updateStatus("answered");
+            Promise.resolve(currentCall.answer?.())
+              .then(() => {
+                updateStatus("answered");
 
-            // Force audio attachment with multiple retries
-            const retryDelays = [100, 300, 500, 1000];
-            retryDelays.forEach((delay) => {
-              setTimeout(() => {
-                const callForAudio = useActiveCallStore.getState().call;
-                if (callForAudio && callForAudio.attachAudio) {
-                  callForAudio.attachAudio();
-                }
-              }, delay);
-            });
+                // Force audio attachment with multiple retries after Telnyx answer resolves.
+                const retryDelays = [0, 100, 300, 500, 1000];
+                retryDelays.forEach((delay) => {
+                  setTimeout(() => {
+                    const callForAudio = useActiveCallStore.getState().call;
+                    hydrateSupervisorAudio(callForAudio);
+                  }, delay);
+                });
+              })
+              .catch((err) => {
+                console.error("[SupervisionModal] Error auto-answering call:", err);
+                // Reset flag on error so we can retry if needed
+                autoAnswerAttemptedRef.current = false;
+              });
           } catch (err) {
             console.error("[SupervisionModal] Error auto-answering call:", err);
             // Reset flag on error so we can retry if needed
@@ -416,6 +454,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
     callStatus,
     updateStatus,
     supervisorNumber,
+    hydrateSupervisorAudio,
   ]);
 
   // Reset auto-answer flag when supervisor call ends or supervision is cleared
@@ -908,21 +947,23 @@ export function SupervisionModal({ open, onOpenChange, call }) {
       return;
     }
     try {
-      activeCall.answer?.();
+      Promise.resolve(activeCall.answer?.())
+        .then(() => {
+          // Update status (same as mini phone)
+          updateStatus("answered");
 
-      // Update status (same as mini phone)
-      updateStatus("answered");
-
-      // Force audio attachment with multiple retries (same as mini phone)
-      const retryDelays = [100, 300, 500, 1000];
-      retryDelays.forEach((delay) => {
-        setTimeout(() => {
-          const currentCall = activeCall || supervisorWebRTCCall;
-          if (currentCall && currentCall.attachAudio) {
-            currentCall.attachAudio();
-          }
-        }, delay);
-      });
+          // Force audio attachment with multiple retries (same as mini phone)
+          const retryDelays = [0, 100, 300, 500, 1000];
+          retryDelays.forEach((delay) => {
+            setTimeout(() => {
+              const currentCall = activeCall || supervisorWebRTCCall;
+              hydrateSupervisorAudio(currentCall);
+            }, delay);
+          });
+        })
+        .catch((err) => {
+          console.error("[SupervisionModal] Error answering call:", err);
+        });
     } catch (err) {
       console.error("[SupervisionModal] Error answering call:", err);
     }
@@ -1287,6 +1328,7 @@ export function SupervisionModal({ open, onOpenChange, call }) {
         onOpenChange(newOpen);
       }}
     >
+      <audio ref={supervisorRemoteAudioRef} autoPlay playsInline className="hidden" />
       <DialogContent
         className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
         onInteractOutside={(e) => {

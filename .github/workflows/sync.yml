@@ -1,3 +1,7 @@
+# Skip auto-sync when the push commit message contains `[skip sync]`.
+# Mirrors the standard `[skip ci]` convention. Use during branch cleanup,
+# migrations, or any change you don't want replicated to child repos.
+# workflow_dispatch (manual trigger) is never affected.
 name: Sync to child repos
 
 on:
@@ -8,6 +12,8 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    # Only skip on push events; workflow_dispatch always runs.
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip sync]')
     steps:
       - name: Checkout mother repo
         uses: actions/checkout@v4

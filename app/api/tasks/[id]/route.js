@@ -5,6 +5,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
 import { requireAiApiKey, jsonOk, jsonError } from "@/app/api/_utils/ai-auth";
+import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
 
 // Support both admin session and API key authentication
 async function requireAuth(request) {
@@ -95,6 +96,16 @@ export async function PATCH(request, { params }) {
   }
 
   const body = await request.json();
+  let customData;
+  try {
+    customData = normalizeCustomDataValue(body.custom_data, { allowUndefined: true });
+  } catch (err) {
+    const error = err?.message || "Custom data must be a valid JSON object";
+    if (auth.type === "api_key") {
+      return jsonError(error, 400);
+    }
+    return NextResponse.json({ error }, { status: 400 });
+  }
   const updates = [];
   const vals = [];
   let i = 1;
@@ -123,6 +134,9 @@ export async function PATCH(request, { params }) {
   maybeSet("flow_id", body.flow_id);
   maybeSet("due_date", body.due_date);
   maybeSet("metadata", body.metadata, true);
+  if (customData !== undefined) {
+    maybeSet("custom_data", customData, true);
+  }
   if (body.tags !== undefined) {
     maybeSet(
       "tags",

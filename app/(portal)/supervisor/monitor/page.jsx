@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,14 +23,29 @@ import {
   IconCheck,
   IconX,
   IconRefresh,
-  IconArrowLeft,
   IconFilter,
   IconEye,
   IconStar,
   IconStarFilled,
   IconArrowDown,
+  IconChartBar,
+  IconSparkles,
+  IconPhoneIncoming,
+  IconGauge,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconPlayerStop,
 } from "@tabler/icons-react";
 import { ChevronDownIcon } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { notify } from "@/components/ToastNotify";
 import {
   Dialog,
@@ -41,8 +56,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SectionRail, SECTION_RAIL_PAGE_GRID_CLASS, SECTION_RAIL_WIDTH } from "@/components/ui/section-rail";
+import {
+  SupervisorPageHeader,
+  SupervisorPageShell,
+} from "@/components/contact-center/SupervisorPageLayout";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -62,6 +82,43 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { campaignModeBadgeClass } from "@/lib/outbound-dialer/agent-campaigns-view-model";
+import {
+  MONITOR_ACTIVE_SECTION_STORAGE_KEY,
+  MONITOR_RAIL_ITEMS,
+} from "@/components/contact-center/MonitorSectionNav";
+import { OverviewDashboardView } from "@/components/contact-center/OverviewDashboardView";
+
+const MONITOR_UI_STATE_STORAGE_KEYS = {
+  activeSection: MONITOR_ACTIVE_SECTION_STORAGE_KEY,
+};
+
+const neutralActionClass = "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
+const CAMPAIGN_MODE_LABELS = {
+  preview: "PREVIEW",
+  progressive: "PROGRESSIVE",
+};
+
+function CampaignStatusIcon({ status }) {
+  const value = String(status || "").toLowerCase();
+  if (value === "running") return <IconPlayerPlay className="h-3.5 w-3.5 text-emerald-500" aria-label="Running" />;
+  if (value === "paused") return <IconPlayerPause className="h-3.5 w-3.5 text-amber-500" aria-label="Paused" />;
+  return <IconPlayerStop className="h-3.5 w-3.5 text-rose-500" aria-label="Stopped" />;
+}
+
+function campaignModeLabel(mode) {
+  const value = String(mode || "").toLowerCase();
+  return CAMPAIGN_MODE_LABELS[value] || value.toUpperCase();
+}
+
+function CampaignPriorityBadge({ priority }) {
+  return (
+    <Badge variant="outline" className="gap-1 text-xs uppercase border-amber-500/40 text-amber-600 dark:text-amber-300">
+      <IconStarFilled className="h-3 w-3" />
+      {priority || 3}
+    </Badge>
+  );
+}
 
 // Component to display skills with relaxation indicator
 function RelaxationIndicator({ requiredSkills, relaxedSkills, isRelaxed }) {
@@ -218,6 +275,374 @@ function AgentSkillsIndicator({ agentUserId }) {
   );
 }
 
+
+function pct(value, total) {
+  if (!total || total <= 0) return 0;
+  return Math.max(0, Math.min(100, Math.round((Number(value || 0) / Number(total || 1)) * 100)));
+}
+
+function formatShortNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function OverviewMetricCard({ icon: Icon, label, value, detail, progress = 0, chip = "Live", tone = "slate" }) {
+  const tones = {
+    slate: "from-slate-500/15 to-zinc-500/5 text-slate-700 dark:text-slate-200",
+    emerald: "from-emerald-500/15 to-teal-500/5 text-emerald-700 dark:text-emerald-300",
+    sky: "from-sky-500/15 to-blue-500/5 text-sky-700 dark:text-sky-300",
+    violet: "from-violet-500/15 to-fuchsia-500/5 text-violet-700 dark:text-violet-300",
+  };
+
+  return (
+    <Card className="overflow-hidden border bg-background/85 shadow-sm transition hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <span className={`rounded-2xl bg-gradient-to-br p-3 ${tones[tone] || tones.slate}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <Badge variant="outline" className="bg-background/70 text-[11px]">
+            {chip}
+          </Badge>
+        </div>
+        <div className="mt-5 text-3xl font-semibold tracking-tight">{value}</div>
+        <div className="text-sm font-medium text-muted-foreground">{label}</div>
+        <div className="mt-4 space-y-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{detail}</span>
+            <span>{progress}%</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatDurationShort(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds || 0)));
+  if (total >= 3600) return `${Math.floor(total / 3600)}h ${Math.floor((total % 3600) / 60)}m`;
+  if (total >= 60) return `${Math.floor(total / 60)}m ${total % 60}s`;
+  return `${total}s`;
+}
+
+function MiniSignalTile({ label, value, detail }) {
+  return (
+    <div className="rounded-2xl border bg-card/70 p-4">
+      <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+    </div>
+  );
+}
+
+function MonitorDashboardView({ overall, agents, queues, timestamp }) {
+  const [today, setToday] = useState(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+
+  // Today aggregates come from the analytics dashboard-today report so the
+  // dashboard consolidates the former Statistics tiles into a single view.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadToday() {
+      try {
+        const from = new Date();
+        from.setHours(0, 0, 0, 0);
+        const sp = new URLSearchParams();
+        sp.set("report", "dashboard-today");
+        sp.set("from", from.toISOString());
+        sp.set("to", new Date().toISOString());
+        const res = await fetch(`/api/contact-center/analytics?${sp.toString()}`, { cache: "no-store" });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload?.error || "Failed to load today statistics");
+        if (!cancelled) setToday(payload.data || null);
+      } catch (error) {
+        if (!cancelled) {
+          setToday(null);
+          notify({ title: "Dashboard load failed", description: String(error.message || error), variant: "error" });
+        }
+      } finally {
+        if (!cancelled) setTodayLoading(false);
+      }
+    }
+    loadToday();
+    const interval = setInterval(loadToday, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const todayTotals = today?.totals || {};
+  const totalCalls = Number(todayTotals.total ?? overall.calls?.total ?? 0);
+  const answered = Number(todayTotals.answered ?? overall.calls?.answered ?? 0);
+  const abandoned = Number(todayTotals.abandoned ?? overall.calls?.abandoned ?? 0);
+  const outbound = Number(todayTotals.outbound ?? overall.calls?.outbound ?? 0);
+  const avgWait = Math.round(Number(todayTotals.avgWaitSeconds ?? overall.calls?.avgWaitTimeSeconds ?? 0));
+  const avgHandle = Math.round(Number(todayTotals.avgHandleSeconds ?? overall.calls?.avgHandleTimeSeconds ?? 0));
+
+  const active = overall.calls?.active || 0;
+  const totalAgents = agents.length || overall.agents?.totalActive || 0;
+  const available = overall.agents?.available || agents.filter((a) => a.status === "Available").length;
+  const busy = overall.agents?.busy || agents.filter((a) => Number(a.currentCalls || 0) > 0).length;
+  const waiting = overall.queues?.totalWaitingCalls || queues.reduce((sum, q) => sum + Number(q.realtime?.waitingCalls || 0), 0);
+  const activeQueues = queues.filter((q) => Number(q.realtime?.activeCalls || 0) > 0 || Number(q.realtime?.waitingCalls || 0) > 0).length;
+  const answerRate = pct(answered, Math.max(totalCalls, answered + abandoned));
+  const occupancy = pct(busy, Math.max(totalAgents, available + busy));
+  const queuePressure = pct(waiting, Math.max(waiting + active, 1));
+
+  const hourly = today?.hourly || [];
+  const topAgents = today?.topAgents || [];
+  const topWrapupCodes = today?.topWrapupCodes || [];
+  const todayQueues = today?.queues || [];
+  const maxAgentHandled = Math.max(...topAgents.map((a) => a.handled), 1);
+  const maxCodeTotal = Math.max(...topWrapupCodes.map((c) => c.total), 1);
+
+  const healthRows = [
+    { label: "Today answer rate", value: answered, total: Math.max(totalCalls, answered + abandoned), hint: `${answered} answered · ${abandoned} abandoned` },
+    { label: "Realtime agent occupancy", value: busy, total: Math.max(totalAgents, available + busy), hint: `${available} available · ${busy} busy` },
+    { label: "Live queue pressure", value: waiting, total: Math.max(waiting + active, 1), hint: `${waiting} waiting · ${active} active calls` },
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Today realtime command center</p>
+            <h2 className="mt-1 text-2xl font-semibold tracking-tight">Contact center today at a glance</h2>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Current-day call statistics, top performers, and contact reasons — live tiles stay fed by the monitor stream for active calls, queue pressure, and agent availability.
+            </p>
+          </div>
+          <Badge variant="outline" className="bg-background/70 px-3 py-1 text-xs">
+            {timestamp ? `Updated ${new Date(timestamp).toLocaleTimeString()}` : "Waiting for live data"}
+          </Badge>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <OverviewMetricCard icon={IconPhoneIncoming} label="Total calls" value={formatShortNumber(totalCalls)} detail={`${answered} answered · ${abandoned} abandoned`} progress={pct(totalCalls, Math.max(totalCalls, 1))} chip="Today" tone="sky" />
+          <OverviewMetricCard icon={IconCheck} label="Answered" value={formatShortNumber(answered)} detail={`${answerRate}% answer rate`} progress={answerRate} chip="Today" tone="emerald" />
+          <OverviewMetricCard icon={IconAlertCircle} label="Abandoned" value={formatShortNumber(abandoned)} detail={`${pct(abandoned, Math.max(totalCalls, 1))}% of today volume`} progress={pct(abandoned, Math.max(totalCalls, 1))} chip="Today" tone="amber" />
+          <OverviewMetricCard icon={IconClock} label="Avg wait" value={formatDurationShort(avgWait)} detail={`Avg handle ${formatDurationShort(avgHandle)}`} progress={pct(avgWait, Math.max(avgWait, 1))} chip="Today" tone="violet" />
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <MiniSignalTile label="Active calls" value={formatShortNumber(active)} detail="Connected or ringing now" />
+          <MiniSignalTile label="Waiting" value={formatShortNumber(waiting)} detail={`${activeQueues} of ${queues.length} queues active`} />
+          <MiniSignalTile label="Agents" value={`${available}/${totalAgents}`} detail={`${busy} busy now`} />
+          <MiniSignalTile label="Occupancy" value={`${occupancy}%`} detail="Busy agents now" />
+          <MiniSignalTile label="Today SLA" value={`${answerRate}%`} detail="Answered vs abandoned" />
+          <MiniSignalTile label="Outbound" value={formatShortNumber(outbound)} detail="Today outbound calls" />
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <GraphCard title="Today call volume by hour" description="Answered and abandoned interactions per hour for the current day.">
+          {todayLoading ? (
+            <Skeleton className="h-[260px] w-full" />
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={hourly.length ? hourly : [{ label: "No calls yet", answered: 0, abandoned: 0 }]} margin={{ left: -20, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted) / 0.18)" }} />
+                <Bar dataKey="answered" name="answered" stackId="calls" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="abandoned" name="abandoned" stackId="calls" fill="#f97316" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </GraphCard>
+
+        <Card className="border bg-background/85 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconGauge className="h-5 w-5 text-sky-600" />
+              Operations health
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {healthRows.map((row) => (
+              <div key={row.label} className="rounded-2xl border bg-card/70 p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <div className="font-semibold">{row.label}</div>
+                    <div className="text-xs text-muted-foreground">{row.hint}</div>
+                  </div>
+                  <div className="text-2xl font-semibold">{pct(row.value, row.total)}%</div>
+                </div>
+                <Progress value={pct(row.value, row.total)} className="mt-3 h-2" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="border bg-background/85 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconStar className="h-5 w-5 text-amber-500" />
+              Top performers today
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Agents ranked by handled interactions for the current day.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {todayLoading ? (
+              <>
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </>
+            ) : topAgents.length ? (
+              topAgents.map((agent, index) => (
+                <div key={agent.username} className="rounded-2xl border bg-card/70 p-3" data-testid="top-performer-row">
+                  <div className="flex items-center gap-3">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${index === 0 ? "bg-amber-500/15 text-amber-600" : index === 1 ? "bg-zinc-400/15 text-zinc-500" : index === 2 ? "bg-orange-700/15 text-orange-700" : "bg-muted text-muted-foreground"}`}>
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{agent.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {agent.handled} handled · AHT {formatDurationShort(agent.avgHandleSeconds)} · talk {formatDurationShort(agent.talkSeconds)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-semibold">{formatShortNumber(agent.handled)}</div>
+                      <div className="text-xs text-muted-foreground">calls</div>
+                    </div>
+                  </div>
+                  <Progress value={pct(agent.handled, maxAgentHandled)} className="mt-2 h-1.5" />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No handled interactions yet today.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border bg-background/85 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconChartBar className="h-5 w-5 text-violet-600" />
+              Top wrap-up codes today
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">Why customers called today — the most used dispositions.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {todayLoading ? (
+              <>
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </>
+            ) : topWrapupCodes.length ? (
+              topWrapupCodes.map((code) => (
+                <div key={code.codeId} className="rounded-2xl border bg-card/70 p-3" data-testid="top-wrapup-row">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="truncate font-medium">{code.codeName}</span>
+                    <span className="shrink-0 font-semibold">{formatShortNumber(code.total)}</span>
+                  </div>
+                  <Progress value={pct(code.total, maxCodeTotal)} className="mt-2 h-1.5" />
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No wrap-up codes recorded yet today.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border bg-background/85 shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <IconTrendingUp className="h-5 w-5 text-emerald-600" />
+            Queues today
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">Per-queue volume and answer rate for the current day.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Queue</TableHead>
+                <TableHead className="text-right">Calls</TableHead>
+                <TableHead className="text-right">Answered</TableHead>
+                <TableHead className="text-right">Abandoned</TableHead>
+                <TableHead className="text-right">Answer rate</TableHead>
+                <TableHead className="text-right">Avg wait</TableHead>
+                <TableHead className="text-right">Waiting now</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {todayQueues.length ? (
+                todayQueues.map((queue) => {
+                  const liveQueue = queues.find((q) => (q.queueName || q.name || q.displayName) === queue.queueName);
+                  const waitingNow = Number(liveQueue?.realtime?.waitingCalls ?? liveQueue?.currentQueueSize ?? 0);
+                  return (
+                    <TableRow key={queue.queueName}>
+                      <TableCell className="font-medium">{queue.queueName}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.total)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.answered)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(queue.abandoned)}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline" className={`bg-transparent ${queue.answerRatePct >= 80 ? "border-green-500 text-green-600" : queue.answerRatePct >= 50 ? "border-amber-500 text-amber-600" : "border-red-500 text-red-500"}`}>
+                          {queue.answerRatePct}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">{formatDurationShort(queue.avgWaitSeconds)}</TableCell>
+                      <TableCell className="text-right">{formatShortNumber(waitingNow)}</TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow><TableCell colSpan={7} className="text-center text-sm">No interactions yet today.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function getQueueAvgWaitSeconds(queue) {
+  return Number(
+    queue.avgWaitTimeSeconds
+      ?? queue.averageWaitTime
+      ?? queue.realtime?.avgWaitSeconds
+      ?? queue.today?.avgWaitTimeSeconds
+      ?? 0,
+  );
+}
+
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-xl">
+      <div className="mb-1 font-semibold">{label}</div>
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div key={entry.dataKey} className="flex min-w-32 items-center justify-between gap-4">
+            <span className="capitalize text-muted-foreground">{String(entry.name || entry.dataKey).replace(/([A-Z])/g, " $1")}</span>
+            <span className="font-semibold">{Number(entry.value || 0).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GraphCard({ title, description, children }) {
+  return (
+    <Card className="border bg-background/85 shadow-sm">
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 export default function MonitorPage() {
   // Helper function to format idle time in seconds to human-readable format
   const formatIdleTime = (seconds) => {
@@ -246,15 +671,18 @@ export default function MonitorPage() {
   const [connected, setConnected] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [agentQueues, setAgentQueues] = useState([]);
+  const [agentCampaigns, setAgentCampaigns] = useState([]);
   const [loadingQueues, setLoadingQueues] = useState(false);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [availableStatuses, setAvailableStatuses] = useState([]);
   const [highlightedCells, setHighlightedCells] = useState(new Set());
-  const [activeTab, setActiveTab] = useState("agents");
-  const [selectedQueue, setSelectedQueue] = useState(null);
-  const [queueCalls, setQueueCalls] = useState([]);
-  const [loadingQueueCalls, setLoadingQueueCalls] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [expandedQueueId, setExpandedQueueId] = useState(null);
+  const [queueCallsMap, setQueueCallsMap] = useState({});
+  const [loadingQueueCalls, setLoadingQueueCalls] = useState(new Set());
   const [expandedAgentId, setExpandedAgentId] = useState(null);
   const [agentCallsMap, setAgentCallsMap] = useState({});
   const [agentActiveCallsMap, setAgentActiveCallsMap] = useState({});
@@ -271,15 +699,80 @@ export default function MonitorPage() {
   const [supervisionModalOpen, setSupervisionModalOpen] = useState(false);
   const [selectedCallForSupervision, setSelectedCallForSupervision] =
     useState(null);
-  const selectedQueueRef = useRef(null);
+  const expandedQueueIdRef = useRef(null);
+  const expandedAgentIdRef = useRef(null);
+  const monitorUiStateHydratedRef = useRef(false);
   const loadQueueCallsRef = useRef(null);
+  const loadAgentCallsRef = useRef(null);
   const isLoadingDashboardRef = useRef(false);
   const isPageVisibleRef = useRef(true);
   const pollIntervalRef = useRef(null);
 
   useEffect(() => {
-    selectedQueueRef.current = selectedQueue;
-  }, [selectedQueue]);
+    try {
+      const requestedActiveTab = new URLSearchParams(window.location.search).get("section");
+      if (requestedActiveTab && MONITOR_RAIL_ITEMS.some((item) => item.id === requestedActiveTab)) {
+        setActiveTab(requestedActiveTab);
+        return;
+      }
+
+      const savedActiveTab = localStorage.getItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection);
+      if (savedActiveTab && MONITOR_RAIL_ITEMS.some((item) => item.id === savedActiveTab)) setActiveTab(savedActiveTab);
+    } catch {
+      // Ignore storage errors so supervisor monitoring still works without persisted UI state.
+    } finally {
+      window.setTimeout(() => { monitorUiStateHydratedRef.current = true; }, 0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!monitorUiStateHydratedRef.current) return;
+    try { localStorage.setItem(MONITOR_UI_STATE_STORAGE_KEYS.activeSection, activeTab); } catch {}
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("section") !== activeTab) {
+        url.searchParams.set("section", activeTab);
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    expandedQueueIdRef.current = expandedQueueId;
+  }, [expandedQueueId]);
+
+  useEffect(() => {
+    expandedAgentIdRef.current = expandedAgentId;
+  }, [expandedAgentId]);
+
+  function invalidateExpandedAgentCalls(userId) {
+    if (!userId) return;
+    const normalizedUserId = String(userId);
+    const isExpandedAgent =
+      String(expandedAgentIdRef.current || "") === normalizedUserId;
+
+    if (!isExpandedAgent) {
+      setAgentCallsMap((prev) => {
+        if (!prev[normalizedUserId]) return prev;
+        const next = { ...prev };
+        delete next[normalizedUserId];
+        return next;
+      });
+      setAgentActiveCallsMap((prev) => {
+        if (!prev[normalizedUserId]) return prev;
+        const next = { ...prev };
+        delete next[normalizedUserId];
+        return next;
+      });
+      return;
+    }
+
+    setTimeout(() => {
+      if (isPageVisibleRef.current && loadAgentCallsRef.current) {
+        loadAgentCallsRef.current(String(userId), { force: true, silent: true });
+      }
+    }, 100);
+  }
 
   // Handle page visibility to prevent excessive requests when page wakes up
   useEffect(() => {
@@ -359,6 +852,9 @@ export default function MonitorPage() {
             if (updatedAgent) {
               if (prevAgent.activeQueues !== updatedAgent.activeQueues) {
                 highlightCell(`agent-${String(prevAgent.userId)}-queues`);
+              }
+              if (prevAgent.activeCampaigns !== updatedAgent.activeCampaigns) {
+                highlightCell(`agent-${String(prevAgent.userId)}-campaigns`);
               }
               if (prevAgent.currentCalls !== updatedAgent.currentCalls) {
                 highlightCell(`agent-${String(prevAgent.userId)}-calls`);
@@ -466,19 +962,19 @@ export default function MonitorPage() {
             },
           };
 
-          // Check if selected queue needs to be refreshed
+          // Check if expanded queue needs to be refreshed
           // Only refresh if page is visible to prevent queued requests
-          const selectedQueue = selectedQueueRef.current;
+          const expandedQueueId = expandedQueueIdRef.current;
           if (
-            selectedQueue?.id &&
+            expandedQueueId &&
             loadQueueCallsRef.current &&
             isPageVisibleRef.current
           ) {
             const prevQueue = prevQueues.find(
-              (queue) => String(queue.queueId) === String(selectedQueue.id),
+              (queue) => String(queue.queueId) === String(expandedQueueId),
             );
             const nextQueue = updateQueues.find(
-              (queue) => String(queue.queueId) === String(selectedQueue.id),
+              (queue) => String(queue.queueId) === String(expandedQueueId),
             );
             const queueChanged =
               prevQueue &&
@@ -493,7 +989,7 @@ export default function MonitorPage() {
               setTimeout(() => {
                 // Double-check visibility before executing
                 if (isPageVisibleRef.current && loadQueueCallsRef.current) {
-                  loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+                  loadQueueCallsRef.current(expandedQueueId, { silent: true });
                 }
               }, 0);
             }
@@ -513,6 +1009,7 @@ export default function MonitorPage() {
         // Update only the specific agent's status
         if (update.userId && update.status) {
           updateAgentStatus(update.userId, update.status);
+          invalidateExpandedAgentCalls(update.userId);
         }
       } catch (error) {
         console.error("[Monitor] Error handling status change:", error);
@@ -553,6 +1050,22 @@ export default function MonitorPage() {
       }
     });
 
+    eventSource.addEventListener("campaign_changed", (event) => {
+      try {
+        const update = JSON.parse(event.data);
+        if (update.userId && Array.isArray(update.campaignIds)) {
+          updateAgentCampaigns(update.userId, update.campaignIds);
+          if (selectedAgent && String(selectedAgent.userId) === String(update.userId)) {
+            loadAgentCampaigns(update.userId);
+          }
+        } else if (selectedAgent?.userId) {
+          loadAgentCampaigns(selectedAgent.userId);
+        }
+      } catch (error) {
+        console.error("[Monitor] Error handling campaign change:", error);
+      }
+    });
+
     // Listen for interaction updates (e.g., when calls are answered)
     eventSource.addEventListener("interaction_updated", (event) => {
       // Skip updates when page is hidden to prevent queued requests
@@ -562,19 +1075,25 @@ export default function MonitorPage() {
 
       try {
         const update = JSON.parse(event.data);
-        // If we have a selected queue and the interaction belongs to it, refresh queue calls
-        const selectedQueue = selectedQueueRef.current;
+        if (update.previousAgentUserId) {
+          invalidateExpandedAgentCalls(update.previousAgentUserId);
+        }
+        if (update.agentUserId) {
+          invalidateExpandedAgentCalls(update.agentUserId);
+        }
+        // If an expanded queue contains the interaction, refresh its inline calls
+        const expandedQueueId = expandedQueueIdRef.current;
         if (
-          selectedQueue?.id &&
+          expandedQueueId &&
           update.queueId &&
-          String(selectedQueue.id) === String(update.queueId) &&
+          String(expandedQueueId) === String(update.queueId) &&
           loadQueueCallsRef.current
         ) {
           // Refresh queue calls to get updated state, answeredAt, etc.
           setTimeout(() => {
             // Double-check visibility before executing
             if (isPageVisibleRef.current && loadQueueCallsRef.current) {
-              loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+              loadQueueCallsRef.current(expandedQueueId, { silent: true });
             }
           }, 100); // Small delay to ensure DB is updated
         }
@@ -755,6 +1274,66 @@ export default function MonitorPage() {
     });
   }
 
+  function updateAgentCampaigns(userId, campaignIds) {
+    const userIdStr = String(userId);
+    highlightCell(`agent-${userIdStr}-campaigns`);
+
+    setData((prevData) => {
+      if (!prevData || !prevData.agents?.stats) return prevData;
+      const activeCampaignIds = Array.isArray(campaignIds) ? campaignIds.map(String) : [];
+      return {
+        ...prevData,
+        agents: {
+          ...prevData.agents,
+          stats: prevData.agents.stats.map((agent) =>
+            String(agent.userId) === userIdStr
+              ? { ...agent, activeCampaigns: activeCampaignIds.length, activeCampaignIds }
+              : agent,
+          ),
+        },
+      };
+    });
+  }
+
+  async function loadAgentCampaigns(userId) {
+    try {
+      setLoadingCampaigns(true);
+      const res = await fetch(`/api/contact-center/agent/campaigns?userId=${userId}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load campaigns");
+      const payload = await res.json();
+      setAgentCampaigns(payload.campaigns || []);
+    } catch (error) {
+      console.error("[Monitor] Error loading agent campaigns:", error);
+      notify({ title: "Failed to load campaigns", description: error.message, variant: "error" });
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  }
+
+  async function toggleCampaignActivation(campaignId, currentlyActivated) {
+    try {
+      if (!selectedAgent) throw new Error("No agent selected");
+      const nextCampaigns = agentCampaigns.map((campaign) =>
+        campaign.id === campaignId ? { ...campaign, activated: !currentlyActivated } : campaign,
+      );
+      const campaignIds = nextCampaigns.filter((campaign) => campaign.activated).map((campaign) => campaign.id);
+      const res = await fetch("/api/contact-center/agent/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedAgent.userId, campaignIds }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to update campaigns");
+      }
+      setAgentCampaigns(nextCampaigns);
+      updateAgentCampaigns(selectedAgent.userId, campaignIds);
+    } catch (error) {
+      console.error("[Monitor] Error toggling campaign:", error);
+      notify({ title: "Update failed", description: error.message, variant: "error" });
+    }
+  }
+
   async function loadAgentQueues(userId) {
     try {
       setLoadingQueues(true);
@@ -828,8 +1407,11 @@ export default function MonitorPage() {
 
   async function loadQueueCalls(queueId, options = {}) {
     const { silent = false } = options;
+    const queueIdKey = String(queueId);
     try {
-      if (!silent) setLoadingQueueCalls(true);
+      if (!silent) {
+        setLoadingQueueCalls((prev) => new Set(prev).add(queueIdKey));
+      }
       const res = await fetch(`/api/contact-center/queues/${queueId}/calls`, {
         cache: "no-store",
       });
@@ -838,8 +1420,10 @@ export default function MonitorPage() {
       }
       const data = await res.json();
       if (data.ok) {
-        setQueueCalls((prev) => mergeQueueCalls(prev, data.calls || []));
-        if (!silent) setSelectedQueue(data.queue);
+        setQueueCallsMap((prev) => ({
+          ...prev,
+          [queueIdKey]: mergeQueueCalls(prev[queueIdKey] || [], data.calls || []),
+        }));
       } else {
         throw new Error(data.error || "Failed to load queue calls");
       }
@@ -853,7 +1437,13 @@ export default function MonitorPage() {
         });
       }
     } finally {
-      if (!silent) setLoadingQueueCalls(false);
+      if (!silent) {
+        setLoadingQueueCalls((prev) => {
+          const next = new Set(prev);
+          next.delete(queueIdKey);
+          return next;
+        });
+      }
     }
   }
 
@@ -861,31 +1451,33 @@ export default function MonitorPage() {
     loadQueueCallsRef.current = loadQueueCalls;
   });
 
-  // Periodically refresh queue calls to update relaxed skills
+  // Periodically refresh expanded queue calls to update relaxed skills
   // Pause when page is hidden to prevent queued requests
   useEffect(() => {
-    if (!selectedQueue?.id) return;
+    if (!expandedQueueId) return;
 
     // Refresh every 5 seconds to update relaxed skills based on wait time
     // This ensures queued calls show updated relaxed skill requirements
     const interval = setInterval(() => {
       // Only refresh when page is visible
       if (isPageVisibleRef.current && loadQueueCallsRef.current) {
-        loadQueueCallsRef.current(selectedQueue.id, { silent: true });
+        loadQueueCallsRef.current(expandedQueueId, { silent: true });
       }
     }, 5000); // Refresh every 5 seconds
 
     return () => clearInterval(interval);
-  }, [selectedQueue?.id]);
+  }, [expandedQueueId]);
 
-  async function loadAgentCalls(userId) {
-    // Don't reload if already loaded
-    if (agentCallsMap[userId]) {
+  async function loadAgentCalls(userId, { force = false, silent = false } = {}) {
+    // Don't reload if already loaded unless a live update invalidates the cached call list
+    if (!force && agentCallsMap[userId]) {
       return;
     }
 
     try {
-      setLoadingAgentCalls((prev) => new Set(prev).add(userId));
+      if (!silent) {
+        setLoadingAgentCalls((prev) => new Set(prev).add(userId));
+      }
       const res = await fetch(`/api/contact-center/agents/${userId}/calls`, {
         cache: "no-store",
       });
@@ -907,19 +1499,42 @@ export default function MonitorPage() {
       }
     } catch (error) {
       console.error("[Monitor] Error loading agent calls:", error);
-      notify({
-        title: "Failed to load agent calls",
-        description: error.message,
-        variant: "error",
-      });
+      if (!silent) {
+        notify({
+          title: "Failed to load agent calls",
+          description: error.message,
+          variant: "error",
+        });
+      }
     } finally {
-      setLoadingAgentCalls((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
+      if (!silent) {
+        setLoadingAgentCalls((prev) => {
+          const next = new Set(prev);
+          next.delete(userId);
+          return next;
+        });
+      }
     }
   }
+
+  useEffect(() => {
+    loadAgentCallsRef.current = loadAgentCalls;
+  });
+
+  // Periodically refresh the expanded agent's active calls, matching the queue
+  // calls safety net. Interaction SSE is still the primary path, but a missed
+  // or incomplete event must not leave the expanded row stuck at ringing.
+  useEffect(() => {
+    if (!expandedAgentId) return;
+
+    const interval = setInterval(() => {
+      if (isPageVisibleRef.current && loadAgentCallsRef.current) {
+        loadAgentCallsRef.current(expandedAgentId, { force: true, silent: true });
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [expandedAgentId]);
 
   async function toggleQueueActivation(queueId, currentlyActivated) {
     try {
@@ -1109,481 +1724,324 @@ export default function MonitorPage() {
     return true;
   });
 
-  return (
-    <div className="px-4 lg:px-4 py-4 pb-2 space-y-6">
-      {/* Connection Status */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <IconActivity className="size-6 text-telnyx-green" />
-          Supervisory Console
-        </h1>
-        <div className="flex items-center gap-3">
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => {
-              setActiveTab(value);
-              // Clear selected queue when switching tabs to ensure proper view rendering
-              if (selectedQueue) {
-                setSelectedQueue(null);
-                setQueueCalls([]);
-              }
-            }}
-          >
-            <TabsList>
-              <TabsTrigger value="agents" className="flex items-center gap-2">
-                <IconUsers className="h-4 w-4" />
-                Agents
-              </TabsTrigger>
-              <TabsTrigger value="queues" className="flex items-center gap-2">
-                <IconTrendingUp className="h-4 w-4" />
-                Queues
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <Button
-            onClick={() => {
-              setLoading(true);
-              loadDashboard();
-            }}
-            disabled={loading}
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <IconRefresh
-              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-            />
-            {loading ? "Loading..." : "Refresh"}
-          </Button>
-          <Badge
-            variant="outline"
-            className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold ${
-              connected
-                ? "border-green-500 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20"
-                : "border-red-500 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20"
-            }`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                connected ? "bg-green-500 animate-pulse" : "bg-red-500"
-              }`}
-            />
-            {connected ? "Connected" : "Disconnected"}
-          </Badge>
-        </div>
-      </div>
+  const filteredAgentMetrics = {
+    total: agents.length,
+    available: agents.filter((agent) => agent.status === "Available").length,
+    busy: agents.filter((agent) => agent.status === "Busy" || Number(agent.currentCalls || 0) > 0).length,
+    activeCalls: agents.reduce((sum, agent) => sum + Number(agent.currentCalls || 0), 0),
+    activeQueues: agents.reduce((sum, agent) => sum + Number(agent.activeQueues || 0), 0),
+    completedToday: agents.reduce((sum, agent) => sum + Number(agent.today?.completedCalls || 0), 0),
+  };
+  filteredAgentMetrics.availability = pct(filteredAgentMetrics.available, Math.max(filteredAgentMetrics.total, 1));
+  filteredAgentMetrics.occupancy = pct(filteredAgentMetrics.busy, Math.max(filteredAgentMetrics.total, 1));
 
-      {/* Overall Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <Card className="border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
-              Total Calls Today
-            </CardTitle>
-            <IconPhone className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-blue-900 dark:text-blue-100">
-              {overall.calls?.total || 0}
-            </div>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-              {overall.calls?.answered || 0} answered,{" "}
-              {overall.calls?.abandoned || 0} abandoned
+  const queueViewMetrics = queues.reduce(
+    (acc, queue) => {
+      const waiting = Number(queue.realtime?.waitingCalls || 0);
+      const active = Number(queue.realtime?.activeCalls || 0);
+      const availableAgents = Number(queue.agents?.available || 0);
+      const busyAgents = Number(queue.agents?.busy || 0);
+      const totalCalls = Number(queue.today?.totalCalls || 0);
+      const answeredCalls = Number(queue.today?.answeredCalls || 0);
+      const serviceLevelDenominator = Number(queue.today?.completedCalls ?? answeredCalls ?? totalCalls ?? 0);
+      const serviceLevel = Number(queue.today?.serviceLevelPercentage || 0);
+
+      acc.total += 1;
+      acc.waiting += waiting;
+      acc.active += active;
+      acc.availableAgents += availableAgents;
+      acc.busyAgents += busyAgents;
+      acc.longestWait = Math.max(acc.longestWait, Number(queue.realtime?.longestWaitSeconds || 0));
+      acc.totalCalls += totalCalls;
+      acc.answeredCalls += answeredCalls;
+      if (Number.isFinite(serviceLevel) && serviceLevelDenominator > 0) {
+        acc.serviceLevelWeightedSum += serviceLevel * serviceLevelDenominator;
+        acc.serviceLevelDenominator += serviceLevelDenominator;
+      }
+      return acc;
+    },
+    {
+      total: 0,
+      waiting: 0,
+      active: 0,
+      availableAgents: 0,
+      busyAgents: 0,
+      longestWait: 0,
+      totalCalls: 0,
+      answeredCalls: 0,
+      serviceLevelWeightedSum: 0,
+      serviceLevelDenominator: 0,
+    },
+  );
+  queueViewMetrics.serviceLevel = queueViewMetrics.serviceLevelDenominator
+    ? Math.round(queueViewMetrics.serviceLevelWeightedSum / queueViewMetrics.serviceLevelDenominator)
+    : pct(queueViewMetrics.answeredCalls, Math.max(queueViewMetrics.totalCalls, 1));
+  queueViewMetrics.pressure = pct(queueViewMetrics.waiting, Math.max(queueViewMetrics.waiting + queueViewMetrics.active, 1));
+
+  const selectMonitorSection = (value) => {
+    setActiveTab(value);
+    // Clear expanded queue when switching tabs to ensure proper view rendering
+    if (expandedQueueId) {
+      setExpandedQueueId(null);
+    }
+  };
+
+  const toggleExpandedQueue = (queueId) => {
+    if (String(expandedQueueId || "") === String(queueId)) {
+      setExpandedQueueId(null);
+      return;
+    }
+    setExpandedQueueId(queueId);
+    if (!queueCallsMap[String(queueId)]) {
+      loadQueueCalls(queueId);
+    }
+  };
+
+  const openSkillMatchDetails = async (call, queueId) => {
+    setSelectedCallForSkills(call);
+    setSkillMatchDialogOpen(true);
+    setLoadingAgentsForSkills(true);
+    try {
+      const res = await fetch(`/api/contact-center/queues/${queueId}/agents`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableAgentsForSkills(data.agents || []);
+      }
+    } catch (error) {
+      console.error("[Monitor] Error loading agents:", error);
+    } finally {
+      setLoadingAgentsForSkills(false);
+    }
+  };
+
+  const renderQueueCallsPanel = (queue) => {
+    const queueId = String(queue.queueId);
+    const calls = queueCallsMap[queueId] || [];
+    const visibleCalls = calls.slice(0, 10);
+    const loadingCalls = loadingQueueCalls.has(queueId);
+
+    return (
+      <div className="rounded-2xl border border-border/70 bg-muted/30 p-4 dark:bg-zinc-900/70" data-testid="queue-calls-accordion-panel">
+        <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h4 className="text-sm font-semibold">Recent calls in this queue</h4>
+            <p className="text-xs text-muted-foreground">
+              Showing max 10 calls inside the expanded queue row. The list scrolls when more calls are present.
             </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-green-500 bg-green-50/50 dark:bg-green-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
-              Active Agents
-            </CardTitle>
-            <IconUsers className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-green-900 dark:text-green-100">
-              {overall.agents?.totalActive || 0}
-            </div>
-            <p className="text-xs text-green-600 dark:text-green-400 mt-0.5">
-              {overall.agents?.available || 0} available,{" "}
-              {overall.agents?.busy || 0} busy
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
-              Active Calls
-            </CardTitle>
-            <IconActivity className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-purple-900 dark:text-purple-100">
-              {overall.calls?.active || 0}
-            </div>
-            <p className="text-xs text-purple-600 dark:text-purple-400 mt-0.5">
-              {overall.queues?.totalWaitingCalls || 0} waiting in queues
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-orange-500 bg-orange-50/50 dark:bg-orange-950/20">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-4 px-4">
-            <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
-              Avg Wait Time
-            </CardTitle>
-            <IconClock className="h-4 w-4 text-orange-600 dark:text-orange-400 shrink-0" />
-          </CardHeader>
-          <CardContent className="pt-2 px-4 pb-4">
-            <div className="text-4xl font-bold text-orange-900 dark:text-orange-100">
-              {Math.round(overall.calls?.avgWaitTimeSeconds || 0)}s
-            </div>
-            <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-              Avg handle: {Math.round(overall.calls?.avgHandleTimeSeconds || 0)}
-              s
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Statistics Section */}
-      <Card className="mb-0 flex flex-col h-[calc(100vh-360px)] min-h-[100px]">
-        <CardHeader className="shrink-0">
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              {selectedQueue ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedQueue(null);
-                      setQueueCalls([]);
-                    }}
-                    className="mr-2 -ml-2"
-                  >
-                    <IconArrowLeft className="h-4 w-4 mr-1" />
-                    Back
-                  </Button>
-                  <IconTrendingUp className="size-5" />
-                  {selectedQueue.displayName || selectedQueue.name} - Calls
-                </>
-              ) : activeTab === "agents" ? (
-                <>
-                  <IconUsers className="size-5" />
-                  Agent Statistics
-                </>
-              ) : (
-                <>
-                  <IconTrendingUp className="size-5" />
-                  Queue Statistics
-                </>
-              )}
-            </CardTitle>
-            {data?.timestamp && (
-              <div className="text-xs text-muted-foreground">
-                Last updated: {new Date(data.timestamp).toLocaleString()}
-              </div>
-            )}
           </div>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto min-h-0 pb-2 px-6">
-          {selectedQueue ? (
-            <>
-              {loadingQueueCalls ? (
-                <div className="space-y-2">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : (
-                <div className="overflow-x-auto h-full -mx-6 px-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>From</TableHead>
-                        <TableHead>To</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>Agent</TableHead>
-                        <TableHead>Required Skills</TableHead>
-                        <TableHead>Priority</TableHead>
-                        <TableHead>Wait Time</TableHead>
-                        <TableHead>Talk Time</TableHead>
-                        <TableHead>Waiting Reason</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {queueCalls.length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={10}
-                            className="text-center text-muted-foreground py-4"
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+              {queue.realtime?.waitingCalls || 0} waiting
+            </Badge>
+            <Badge variant="outline" className="border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+              {queue.realtime?.activeCalls || 0} active
+            </Badge>
+          </div>
+        </div>
+
+        {loadingCalls ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : calls.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/80 py-8 text-center text-sm text-muted-foreground">
+            No calls found for this queue
+          </div>
+        ) : (
+          <div className="max-h-[360px] overflow-y-auto rounded-xl border border-border/60 bg-background/70 dark:bg-zinc-950/60">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur dark:bg-zinc-950/95">
+                <TableRow>
+                  <TableHead>From</TableHead>
+                  <TableHead>To</TableHead>
+                  <TableHead>State</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Required Skills</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Wait Time</TableHead>
+                  <TableHead>Talk Time</TableHead>
+                  <TableHead>Waiting Reason</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleCalls.map((call) => {
+                  const waitTimeSeconds = call.enqueuedAt
+                    ? call.answeredAt
+                      ? Math.max(0, Math.floor((new Date(call.answeredAt).getTime() - new Date(call.enqueuedAt).getTime()) / 1000))
+                      : Math.max(0, Math.floor((currentTime.getTime() - new Date(call.enqueuedAt).getTime()) / 1000))
+                    : call.waitSeconds || 0;
+                  const talkTimeSeconds = call.answeredAt
+                    ? Math.max(0, Math.floor((currentTime.getTime() - new Date(call.answeredAt).getTime()) / 1000))
+                    : call.talkSeconds || 0;
+                  const displayState =
+                    call.state && ["completed", "abandoned", "failed"].includes(call.state.toLowerCase())
+                      ? call.state
+                      : call.answeredAt && ["ringing", "bridging", "answered"].includes(call.state)
+                      ? "connected"
+                      : call.state;
+                  const stateColor =
+                    displayState === "completed"
+                      ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
+                      : displayState === "abandoned"
+                      ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
+                      : displayState === "answered" || displayState === "connected" || displayState === "active"
+                      ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
+                      : displayState === "enqueued" || displayState === "queued" || displayState === "ringing"
+                      ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
+                      : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
+                  const waitingReason = !call.answeredAt && !call.agentUsername
+                    ? call.routingMetadata?.skillMatch?.matchRatio < 1 && Object.keys(call.requiredSkills || {}).length > 0
+                      ? "Skills not matched"
+                      : "No agents available"
+                    : null;
+
+                  return (
+                    <TableRow key={call.id || call.callControlId || call.callSessionId} className="hover:bg-muted/50">
+                      <TableCell>{call.fromNumber || "—"}</TableCell>
+                      <TableCell>{call.toNumber || "—"}</TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-md border bg-transparent px-2.5 py-0.5 text-xs font-medium ${stateColor}`}>
+                          {displayState || "unknown"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{call.agentName || call.agentUsername || "—"}</span>
+                          {call.agentUserId && <AgentSkillsIndicator agentUserId={call.agentUserId} />}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {call.requiredSkills && Object.keys(call.requiredSkills).length > 0 ? (
+                          <RelaxationIndicator requiredSkills={call.requiredSkills} relaxedSkills={call.relaxedSkills} isRelaxed={call.isRelaxed} />
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {call.priority && call.priority >= 1 && call.priority <= 5 ? (
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: 5 }, (_, i) => {
+                              const filled = i + 1 <= call.priority;
+                              return filled ? <IconStarFilled key={i} className="h-4 w-4 text-yellow-400" /> : <IconStar key={i} className="h-4 w-4 text-gray-300" />;
+                            })}
+                            <span className="ml-1 text-xs text-muted-foreground">({call.priority})</span>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell>{waitTimeSeconds > 0 ? formatDurationShort(waitTimeSeconds) : "—"}</TableCell>
+                      <TableCell>{talkTimeSeconds > 0 ? formatDurationShort(talkTimeSeconds) : "—"}</TableCell>
+                      <TableCell>
+                        {waitingReason ? (
+                          <div className="flex items-center gap-2">
+                            <span>{waitingReason}</span>
+                            {waitingReason === "Skills not matched" && (
+                              <button
+                                onClick={() => openSkillMatchDetails(call, queue.queueId)}
+                                className="text-muted-foreground transition-colors hover:text-foreground"
+                                title="View skill matching details"
+                              >
+                                <IconInfoCircle className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {call.answeredAt || call.agentUsername || call.agentName ? (
+                          <button
+                            onClick={() => {
+                              setSelectedCallForSupervision(call);
+                              setSupervisionModalOpen(true);
+                            }}
+                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            title="Supervise this call"
                           >
-                            No calls found for this queue
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        queueCalls.map((call) => {
-                          // Calculate real-time wait time
-                          // Wait time stops when call is answered
-                          const waitTimeSeconds = call.enqueuedAt
-                            ? call.answeredAt
-                              ? Math.max(
-                                  0,
-                                  Math.floor(
-                                    (new Date(call.answeredAt).getTime() -
-                                      new Date(call.enqueuedAt).getTime()) /
-                                      1000,
-                                  ),
-                                )
-                              : Math.max(
-                                  0,
-                                  Math.floor(
-                                    (currentTime.getTime() -
-                                      new Date(call.enqueuedAt).getTime()) /
-                                      1000,
-                                  ),
-                                )
-                            : call.waitSeconds || 0;
+                            <IconEye className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {calls.length > 10 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Showing 10 of {calls.length} calls. Scroll within this panel for operational triage.
+          </p>
+        )}
+      </div>
+    );
+  };
 
-                          // Calculate real-time talk time
-                          // Talk time starts when call is answered and continues until now (or completed)
-                          const talkTimeSeconds = call.answeredAt
-                            ? Math.max(
-                                0,
-                                Math.floor(
-                                  (currentTime.getTime() -
-                                    new Date(call.answeredAt).getTime()) /
-                                    1000,
-                                ),
-                              )
-                            : call.talkSeconds || 0;
+  return (
+    <SupervisorPageShell>
+        <SupervisorPageHeader
+          title="Supervisory Console"
+          badges={(
+            <Badge
+              variant="outline"
+              className={`flex items-center gap-1.5 px-3 py-1 font-semibold ${
+                connected
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
+              {connected ? "Connected" : "Disconnected"}
+            </Badge>
+          )}
+          actions={(
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setLoading(true);
+                loadDashboard();
+              }}
+              disabled={loading}
+            >
+              <IconRefresh className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              {loading ? "Loading…" : "Refresh"}
+            </Button>
+          )}
+        />
 
-                          // Determine state - if answered but state is still ringing/bridging, show as connected
-                          // Also normalize "answered" state to "connected" for consistency
-                          // But don't override terminal states (completed, abandoned, failed)
-                          const displayState =
-                            call.state &&
-                            ["completed", "abandoned", "failed"].includes(
-                              call.state.toLowerCase(),
-                            )
-                              ? call.state
-                              : call.answeredAt &&
-                                (call.state === "ringing" ||
-                                  call.state === "bridging" ||
-                                  call.state === "answered")
-                              ? "connected"
-                              : call.state;
+        <main className={SECTION_RAIL_PAGE_GRID_CLASS} style={{ gridTemplateColumns: `${SECTION_RAIL_WIDTH} minmax(0,1fr)` }}>
+          <SectionRail items={MONITOR_RAIL_ITEMS} activeId={activeTab} onSelect={selectMonitorSection} ariaLabel="Supervisor monitor sections" />
+          <section className="h-full min-h-0 overflow-hidden pr-1">
+            {activeTab === "overview" ? (
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                  <OverviewDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+                </CardContent>
+              </Card>
+            ) : activeTab === "dashboard" ? (
+              <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+                <CardContent className="flex-1 min-h-0 overflow-y-auto p-6">
+                  <MonitorDashboardView overall={overall} agents={allAgents} queues={queues} timestamp={data?.timestamp} />
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+      {/* Statistics Section */}
+      <Card className="mb-0 flex h-full min-h-0 flex-col overflow-hidden">
+        <CardContent className="flex-1 overflow-y-auto min-h-0 p-6">
+          {activeTab === "agents" ? (
 
-                          const stateColor =
-                            displayState === "completed"
-                              ? "text-green-600 border-green-600 dark:text-green-400 dark:border-green-400"
-                              : displayState === "abandoned"
-                              ? "text-red-600 border-red-600 dark:text-red-400 dark:border-red-400"
-                              : displayState === "answered" ||
-                                displayState === "connected" ||
-                                displayState === "active"
-                              ? "text-blue-600 border-blue-600 dark:text-blue-400 dark:border-blue-400"
-                              : displayState === "enqueued" ||
-                                displayState === "queued" ||
-                                displayState === "ringing"
-                              ? "text-yellow-600 border-yellow-600 dark:text-yellow-400 dark:border-yellow-400"
-                              : "text-gray-600 border-gray-600 dark:text-gray-400 dark:border-gray-400";
-
-                          // Determine waiting reason
-                          const getWaitingReason = () => {
-                            if (
-                              !displayState ||
-                              !["queued", "enqueued", "ringing"].includes(
-                                displayState,
-                              )
-                            ) {
-                              return null;
-                            }
-
-                            if (!call.agentUsername) {
-                              // Check if it's a skills matching issue
-                              const routingMetadata =
-                                call.routingMetadata || {};
-                              const skillMatch = routingMetadata.skillMatch;
-                              const requiredSkills = call.requiredSkills || {};
-
-                              if (
-                                skillMatch &&
-                                skillMatch.matchRatio !== undefined &&
-                                skillMatch.matchRatio < 1 &&
-                                Object.keys(requiredSkills).length > 0
-                              ) {
-                                return {
-                                  type: "no_skills_matching",
-                                  skillMatch,
-                                  requiredSkills,
-                                };
-                              }
-
-                              return { type: "no_agents_available" };
-                            }
-
-                            return null;
-                          };
-
-                          const waitingReason = getWaitingReason();
-
-                          return (
-                            <TableRow key={call.id}>
-                              <TableCell>{call.fromNumber || "—"}</TableCell>
-                              <TableCell>{call.toNumber || "—"}</TableCell>
-                              <TableCell>
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${stateColor} bg-transparent`}
-                                >
-                                  {displayState || "unknown"}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span>
-                                    {call.agentName ||
-                                      call.agentUsername ||
-                                      "—"}
-                                  </span>
-                                  {call.agentUserId && (
-                                    <AgentSkillsIndicator
-                                      agentUserId={call.agentUserId}
-                                    />
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                {selectedQueue?.routingStrategy ===
-                                  "Skill-based" &&
-                                call.requiredSkills &&
-                                Object.keys(call.requiredSkills).length > 0 ? (
-                                  <RelaxationIndicator
-                                    requiredSkills={call.requiredSkills}
-                                    relaxedSkills={call.relaxedSkills}
-                                    isRelaxed={call.isRelaxed}
-                                  />
-                                ) : (
-                                  "—"
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {call.priority &&
-                                call.priority >= 1 &&
-                                call.priority <= 5 ? (
-                                  <div className="flex items-center gap-1">
-                                    {Array.from({ length: 5 }, (_, i) => {
-                                      const starValue = i + 1;
-                                      const filled = starValue <= call.priority;
-                                      return (
-                                        <span key={i}>
-                                          {filled ? (
-                                            <IconStarFilled className="w-4 h-4 text-yellow-400" />
-                                          ) : (
-                                            <IconStar className="w-4 h-4 text-gray-300" />
-                                          )}
-                                        </span>
-                                      );
-                                    })}
-                                    <span className="text-xs text-muted-foreground ml-1">
-                                      ({call.priority})
-                                    </span>
-                                  </div>
-                                ) : (
-                                  "—"
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {waitTimeSeconds > 0
-                                  ? `${Math.round(waitTimeSeconds)}s`
-                                  : "—"}
-                              </TableCell>
-                              <TableCell>
-                                {talkTimeSeconds > 0
-                                  ? `${Math.round(talkTimeSeconds)}s`
-                                  : "—"}
-                              </TableCell>
-                              <TableCell>
-                                {waitingReason ? (
-                                  <div className="flex items-center gap-2">
-                                    <span>
-                                      {waitingReason.type ===
-                                      "no_skills_matching"
-                                        ? "Skills not matched"
-                                        : "No agents available"}
-                                    </span>
-                                    {waitingReason.type ===
-                                      "no_skills_matching" && (
-                                      <button
-                                        onClick={async () => {
-                                          setSelectedCallForSkills(call);
-                                          setSkillMatchDialogOpen(true);
-                                          // Fetch available agents for the queue
-                                          if (selectedQueue?.id) {
-                                            setLoadingAgentsForSkills(true);
-                                            try {
-                                              const res = await fetch(
-                                                `/api/contact-center/queues/${selectedQueue.id}/agents`,
-                                                { cache: "no-store" },
-                                              );
-                                              if (res.ok) {
-                                                const data = await res.json();
-                                                setAvailableAgentsForSkills(
-                                                  data.agents || [],
-                                                );
-                                              }
-                                            } catch (error) {
-                                              console.error(
-                                                "[Monitor] Error loading agents:",
-                                                error,
-                                              );
-                                            } finally {
-                                              setLoadingAgentsForSkills(false);
-                                            }
-                                          }
-                                        }}
-                                        className="text-muted-foreground hover:text-foreground transition-colors"
-                                        title="View skill matching details"
-                                      >
-                                        <IconInfoCircle className="h-4 w-4" />
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  "—"
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {/* Only show supervision button for answered calls (not queued) */}
-                                {call.answeredAt ||
-                                call.agentUsername ||
-                                call.agentName ? (
-                                  <button
-                                    onClick={() => {
-                                      setSelectedCallForSupervision(call);
-                                      setSupervisionModalOpen(true);
-                                    }}
-                                    className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
-                                    title="Supervise this call"
-                                  >
-                                    <IconEye className="h-4 w-4" />
-                                  </button>
-                                ) : (
-                                  "—"
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </>
-          ) : activeTab === "agents" ? (
             <>
               {loading ? (
                 <div className="space-y-2">
@@ -1592,9 +2050,32 @@ export default function MonitorPage() {
                   <Skeleton className="h-10 w-full" />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          <IconSparkles className="h-4 w-4 text-telnyx-green" />
+                          Agent operations
+                        </div>
+                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Live roster command surface</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Fast snapshot of filtered agents, availability, live workload, and today's completions.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <OverviewMetricCard icon={IconUsers} label="Roster coverage" value={formatShortNumber(filteredAgentMetrics.total)} detail={`${allAgents.length} total · ${selectedStatuses.length + selectedQueues.length + (agentNameFilter ? 1 : 0)} filters`} progress={pct(filteredAgentMetrics.total, Math.max(allAgents.length, 1))} chip="Filtered" tone="slate" />
+                      <OverviewMetricCard icon={IconCheck} label="Available now" value={formatShortNumber(filteredAgentMetrics.available)} detail={`${filteredAgentMetrics.availability}% ready to route`} progress={filteredAgentMetrics.availability} chip="Realtime" tone="emerald" />
+                      <OverviewMetricCard icon={IconPhone} label="Live conversations" value={formatShortNumber(filteredAgentMetrics.activeCalls)} detail={`${filteredAgentMetrics.occupancy}% occupancy · ${filteredAgentMetrics.busy} busy`} progress={filteredAgentMetrics.occupancy} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconTrendingUp} label="Queue activations" value={formatShortNumber(filteredAgentMetrics.activeQueues)} detail={`${filteredAgentMetrics.completedToday} completed today`} progress={pct(filteredAgentMetrics.activeQueues, Math.max(filteredAgentMetrics.total * 3, 1))} chip="Today" tone="violet" />
+                    </div>
+                  </div>
+
                   {/* Filters */}
-                  <div className="flex flex-wrap items-center gap-3 pb-2 border-b">
+                  <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                    <CardContent className="p-4">
+                      <div className="flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2">
                       <IconFilter className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">Filters:</span>
@@ -1775,7 +2256,9 @@ export default function MonitorPage() {
                       <IconX className="h-4 w-4 mr-1" />
                       Clear filters
                     </Button>
-                  </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Agents Table */}
                   {agents.length === 0 ? (
@@ -1785,7 +2268,9 @@ export default function MonitorPage() {
                         : "No agents match the selected filters"}
                     </p>
                   ) : (
-                    <div className="overflow-x-auto h-full -mx-6 px-6">
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto h-full">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1793,6 +2278,7 @@ export default function MonitorPage() {
                             <TableHead>Status</TableHead>
                             <TableHead>Idle Time</TableHead>
                             <TableHead>Active Queues</TableHead>
+                            <TableHead>Active Campaigns</TableHead>
                             <TableHead>Current Calls</TableHead>
                             <TableHead>Today: Total</TableHead>
                             <TableHead>Today: Completed</TableHead>
@@ -1962,6 +2448,31 @@ export default function MonitorPage() {
                                   <TableCell
                                     className={
                                       highlightedCells.has(
+                                        `agent-${agentId}-campaigns`,
+                                      )
+                                        ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span>{agent.activeCampaigns || 0}</span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedAgent(agent);
+                                          setCampaignDialogOpen(true);
+                                          loadAgentCampaigns(agent.userId);
+                                        }}
+                                        className="text-muted-foreground hover:text-foreground transition-colors"
+                                        title="View campaign activations"
+                                      >
+                                        <IconInfoCircle className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={
+                                      highlightedCells.has(
                                         `agent-${agentId}-calls`,
                                       )
                                         ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
@@ -1988,7 +2499,7 @@ export default function MonitorPage() {
                                 {isExpanded && (
                                   <TableRow>
                                     <TableCell
-                                      colSpan={8}
+                                      colSpan={9}
                                       className="p-0 border-t bg-muted/30"
                                     >
                                       <div className="px-4 py-2">
@@ -2140,7 +2651,9 @@ export default function MonitorPage() {
                           })}
                         </TableBody>
                       </Table>
-                    </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
                 </div>
               )}
@@ -2153,128 +2666,178 @@ export default function MonitorPage() {
                   <Skeleton className="h-10 w-full" />
                   <Skeleton className="h-10 w-full" />
                 </div>
-              ) : queues.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No queues configured or enabled
-                </p>
               ) : (
-                <div className="overflow-x-auto h-full -mx-6 px-6">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Queue Name</TableHead>
-                        <TableHead>Waiting</TableHead>
-                        <TableHead>Active</TableHead>
-                        <TableHead>Agents</TableHead>
-                        <TableHead>Longest Wait</TableHead>
-                        <TableHead>Today: Total</TableHead>
-                        <TableHead>Today: Answered</TableHead>
-                        <TableHead>Service Level</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {queues.map((queue) => (
-                        <TableRow key={queue.queueId}>
-                          <TableCell className="font-medium">
-                            <button
-                              onClick={() => loadQueueCalls(queue.queueId)}
-                              className="text-left text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                            >
-                              {queue.queueName || queue.queueId}
-                            </button>
-                          </TableCell>
-                          <TableCell
-                            className={
-                              highlightedCells.has(
-                                `queue-${queue.queueId}-waiting`,
-                              )
-                                ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                : ""
-                            }
-                          >
-                            <Badge
-                              variant={
-                                queue.realtime?.waitingCalls > 10
-                                  ? "destructive"
-                                  : queue.realtime?.waitingCalls > 5
-                                  ? "secondary"
-                                  : "outline"
-                              }
-                            >
-                              {queue.realtime?.waitingCalls || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell
-                            className={
-                              highlightedCells.has(
-                                `queue-${queue.queueId}-active`,
-                              )
-                                ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
-                                : ""
-                            }
-                          >
-                            {queue.realtime?.activeCalls || 0}
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-xs">
-                              <div className="text-green-600">
-                                {queue.agents?.available || 0} avail
-                              </div>
-                              <div className="text-orange-600">
-                                {queue.agents?.busy || 0} busy
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {queue.realtime?.longestWaitSeconds
-                              ? `${Math.round(
-                                  queue.realtime.longestWaitSeconds,
-                                )}s`
-                              : "—"}
-                          </TableCell>
-                          <TableCell>{queue.today?.totalCalls || 0}</TableCell>
-                          <TableCell>
-                            {queue.today?.answeredCalls || 0}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              {queue.today?.serviceLevelPercentage >= 80 ? (
-                                <Badge
-                                  variant="default"
-                                  className="bg-green-600"
-                                >
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              ) : queue.today?.serviceLevelPercentage >= 60 ? (
-                                <Badge variant="secondary">
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              ) : (
-                                <Badge variant="destructive">
-                                  {queue.today?.serviceLevelPercentage.toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:bg-zinc-950/70" data-testid="queue-pressure-card">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                          <IconGauge className="h-4 w-4 text-telnyx-green" />
+                          Queue command center
+                        </div>
+                        <h3 className="mt-2 text-xl font-semibold tracking-tight">Routing pressure and service health</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Dark-theme queue cards show waiting load, active calls, agent supply, and today's service level.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <OverviewMetricCard icon={IconTrendingUp} label="Queues monitored" value={formatShortNumber(queueViewMetrics.total)} detail={`${queueViewMetrics.availableAgents} available agents`} progress={pct(queueViewMetrics.total, Math.max(queues.length, 1))} chip="Realtime" tone="slate" />
+                      <OverviewMetricCard icon={IconClock} label="Waiting callers" value={formatShortNumber(queueViewMetrics.waiting)} detail={`Longest wait ${formatDurationShort(queueViewMetrics.longestWait)}`} progress={queueViewMetrics.pressure} chip="Live" tone="amber" />
+                      <OverviewMetricCard icon={IconPhoneIncoming} label="Active calls" value={formatShortNumber(queueViewMetrics.active)} detail={`${queueViewMetrics.busyAgents} busy agents`} progress={pct(queueViewMetrics.active, Math.max(queueViewMetrics.active + queueViewMetrics.waiting, 1))} chip="Realtime" tone="sky" />
+                      <OverviewMetricCard icon={IconCheck} label="Service level" value={`${queueViewMetrics.serviceLevel}%`} detail={`${queueViewMetrics.answeredCalls}/${queueViewMetrics.totalCalls} answered today`} progress={queueViewMetrics.serviceLevel} chip="Today" tone="emerald" />
+                    </div>
+                  </div>
+
+                  {queues.length === 0 ? (
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="py-10">
+                        <p className="text-sm text-muted-foreground text-center">
+                          No queues configured or enabled
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto h-full">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Queue Name</TableHead>
+                                <TableHead>Waiting</TableHead>
+                                <TableHead>Active</TableHead>
+                                <TableHead>Agents</TableHead>
+                                <TableHead>Longest Wait</TableHead>
+                                <TableHead>Today: Total</TableHead>
+                                <TableHead>Today: Answered</TableHead>
+                                <TableHead>Service Level</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {queues.map((queue) => {
+                                const queueId = String(queue.queueId);
+                                const isExpanded = String(expandedQueueId || "") === queueId;
+                                return (
+                                  <React.Fragment key={queue.queueId}>
+                                    <TableRow className="hover:bg-muted/50">
+                                      <TableCell className="font-medium">
+                                        <button
+                                          onClick={() => toggleExpandedQueue(queue.queueId)}
+                                          className="flex items-center gap-2 text-left text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                          aria-expanded={isExpanded}
+                                        >
+                                          <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                                          {queue.queueName || queue.queueId}
+                                        </button>
+                                      </TableCell>
+                                      <TableCell
+                                        className={
+                                          highlightedCells.has(
+                                            `queue-${queue.queueId}-waiting`,
+                                          )
+                                            ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                            : ""
+                                        }
+                                      >
+                                        <Badge
+                                          variant={
+                                            queue.realtime?.waitingCalls > 10
+                                              ? "destructive"
+                                              : queue.realtime?.waitingCalls > 5
+                                              ? "secondary"
+                                              : "outline"
+                                          }
+                                        >
+                                          {queue.realtime?.waitingCalls || 0}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell
+                                        className={
+                                          highlightedCells.has(
+                                            `queue-${queue.queueId}-active`,
+                                          )
+                                            ? "border border-orange-400 dark:border-orange-500 rounded transition-colors duration-1000"
+                                            : ""
+                                        }
+                                      >
+                                        {queue.realtime?.activeCalls || 0}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="grid gap-1 text-xs">
+                                          <span className="text-green-600 dark:text-green-400">
+                                            {queue.agents?.available || 0} avail
+                                          </span>
+                                          <span className="text-orange-600 dark:text-orange-400">
+                                            {queue.agents?.busy || 0} busy
+                                          </span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        {queue.realtime?.longestWaitSeconds
+                                          ? formatDurationShort(queue.realtime.longestWaitSeconds)
+                                          : "—"}
+                                      </TableCell>
+                                      <TableCell>{queue.today?.totalCalls || 0}</TableCell>
+                                      <TableCell>
+                                        {queue.today?.answeredCalls || 0}
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-1">
+                                          {queue.today?.serviceLevelPercentage >= 80 ? (
+                                            <Badge
+                                              variant="default"
+                                              className="bg-green-600"
+                                            >
+                                              {queue.today?.serviceLevelPercentage.toFixed(
+                                                1,
+                                              )}
+                                              %
+                                            </Badge>
+                                          ) : queue.today?.serviceLevelPercentage >= 60 ? (
+                                            <Badge variant="secondary">
+                                              {queue.today?.serviceLevelPercentage.toFixed(
+                                                1,
+                                              )}
+                                              %
+                                            </Badge>
+                                          ) : (
+                                            <Badge variant="destructive">
+                                              {queue.today?.serviceLevelPercentage?.toFixed
+                                                ? queue.today.serviceLevelPercentage.toFixed(1)
+                                                : "0.0"}
+                                              %
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                    {isExpanded && (
+                                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                                        <TableCell colSpan={8} className="p-4">
+                                          {renderQueueCallsPanel(queue)}
+                                        </TableCell>
+                                      </TableRow>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
             </>
           )}
         </CardContent>
       </Card>
+              </>
+            )}
+          </section>
+        </main>
 
       {/* Status Change Dialog */}
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
@@ -2470,6 +3033,69 @@ export default function MonitorPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Campaign Management Dialog */}
+      <Dialog open={campaignDialogOpen} onOpenChange={setCampaignDialogOpen}>
+        <DialogContent
+          className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col p-0"
+          style={{
+            backgroundColor: "var(--sheet, var(--muted))",
+            color: "var(--sheet-foreground, var(--foreground))",
+            borderColor: "var(--sheet-border, var(--border))",
+          }}
+        >
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle>
+              Active Campaigns
+              {selectedAgent && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  {selectedAgent.firstName || selectedAgent.first_name
+                    ? `${selectedAgent.firstName || selectedAgent.first_name} ${selectedAgent.lastName || selectedAgent.last_name || ""}`.trim()
+                    : selectedAgent.username}
+                </span>
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              Manage Preview and Progressive campaign activations. Agents may be activated regardless of campaign status; records are served when the campaign is running.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <Card className="mx-5 my-4">
+              <CardContent className="p-6">
+                {loadingCampaigns ? (
+                  <div className="space-y-2 py-4">
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                    <div className="h-10 bg-muted animate-pulse rounded" />
+                  </div>
+                ) : agentCampaigns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No Preview or Progressive campaigns available</p>
+                ) : (
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    {agentCampaigns.map((campaign) => (
+                      <div key={campaign.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{campaign.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                            <CampaignStatusIcon status={campaign.status} />
+                            <Badge variant="outline" className={`text-xs uppercase ${campaignModeBadgeClass(campaign.mode)}`}>
+                              {campaignModeLabel(campaign.mode)}
+                            </Badge>
+                            <CampaignPriorityBadge priority={campaign.priority} />
+                          </div>
+                        </div>
+                        <Switch checked={campaign.activated === true} onCheckedChange={() => toggleCampaignActivation(campaign.id, campaign.activated === true)} className="ml-4" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Skill Matching Details Dialog */}
       <Dialog
         open={skillMatchDialogOpen}
@@ -2644,6 +3270,6 @@ export default function MonitorPage() {
         onOpenChange={setSupervisionModalOpen}
         call={selectedCallForSupervision}
       />
-    </div>
+    </SupervisorPageShell>
   );
 }

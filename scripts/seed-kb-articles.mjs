@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { readFileSync } from "fs";
 import { Pool } from "pg";
+import { readPostgresSslConfig } from "../lib/postgres-ssl.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,7 +43,7 @@ async function seedKbArticles() {
     database: config.database,
     user: config.user,
     password: config.password,
-    ssl: false,
+    ssl: readPostgresSslConfig(),
   });
 
   try {

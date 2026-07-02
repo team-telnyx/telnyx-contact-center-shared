@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,7 +89,10 @@ export default function NewWorkflowPage() {
   }
 
   return (
-    <div className="px-4 lg:px-6">
+    <AdminPageShell>
+      <AdminPageHeader title="Create New Workflow" badges={<Badge variant="secondary">Workflow builder</Badge>} />
+      <AdminPageContent>
+        <div className="space-y-4">
       <div className="mb-4">
         <Button
           variant="ghost"
@@ -185,6 +190,8 @@ export default function NewWorkflowPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+        </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

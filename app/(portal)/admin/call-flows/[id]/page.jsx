@@ -22,9 +22,11 @@ import ReactFlow, {
   getBezierPath,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import { AdminPageContent, AdminPageHeader, AdminPageShell } from "@/components/contact-center/WorkspacePageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -130,6 +132,7 @@ import {
   IconLoader2,
   IconSettings,
   IconList,
+  IconTools,
 } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import {
@@ -150,6 +153,7 @@ import SetVariableNodeEditor, {
 } from "@/components/voice-flow/SetVariableNodeEditor";
 import LogicGateNodeEditor from "@/components/voice-flow/LogicGateNodeEditor";
 import HttpRequestNodeEditor from "@/components/voice-flow/HttpRequestNodeEditor";
+import McpToolNodeEditor from "@/components/voice-flow/McpToolNodeEditor";
 import DataActionsNodeEditor from "@/components/voice-flow/DataActionsNodeEditor";
 import ReferNodeEditor from "@/components/voice-flow/ReferNodeEditor";
 import DialNodeEditor from "@/components/voice-flow/DialNodeEditor";
@@ -158,13 +162,19 @@ import AnswerNodeEditor from "@/components/voice-flow/AnswerNodeEditor";
 import EnqueueNodeEditor from "@/components/voice-flow/EnqueueNodeEditor";
 import SetQueueOptionsNodeEditor from "@/components/voice-flow/SetQueueOptionsNodeEditor";
 import AgentAssistNodeEditor from "@/components/voice-flow/AgentAssistNodeEditor";
+import ClientStateUpdateNodeEditor from "@/components/voice-flow/ClientStateUpdateNodeEditor";
 import { EdgeVariableMapper } from "@/components/voice-flow/EdgeVariableMapper";
 import { VariableInput } from "@/components/voice-flow/VariableInput";
 import { validateFlow } from "@/lib/voice-flow-validator";
 import {
+  createCallFlowDirtySnapshot,
+  hasCallFlowDirtyState,
+} from "@/lib/voice-flow-dirty-state";
+import {
   getAllVariableNames,
   checkDuplicateVariableName,
 } from "@/lib/variable-utils";
+import { getMcpResponseVariablePayload } from "@/lib/mcp/mcp-argument-builder";
 import { cn } from "@/lib/utils";
 import { CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tool, ToolContent, ToolHeader } from "@/components/ai-elements/tool";
@@ -276,6 +286,9 @@ const getNodeExecutionIcon = (nodeType) => {
   if (type === "data_action") {
     return <IconDatabase className="size-4 text-teal-500" />;
   }
+  if (type === "mcp_tool") {
+    return <IconTools className="size-4 text-emerald-500" />;
+  }
   if (type === "condition") {
     return <IconGitBranch className="size-4 text-yellow-500" />;
   }
@@ -293,9 +306,16 @@ const getNodeExecutionIcon = (nodeType) => {
 };
 
 // Custom ToolHeader for webhooks with icons
-function WebhookToolHeader({ eventType, direction, timestamp, className }) {
+function WebhookToolHeader({ eventType, direction, timestamp, source, label, className }) {
   const Icon = getWebhookIcon(eventType);
   const isSent = direction === "sent";
+  const isTelnyxStandaloneStt = source === "telnyx_standalone_stt_websocket";
+  const isVoiceApiTranscriptionWebhook = eventType === "call.transcription";
+  const displayLabel = isTelnyxStandaloneStt
+    ? label || "Telnyx Standalone STT Event"
+    : isVoiceApiTranscriptionWebhook
+      ? "Voice API In-call Transcription Webhook"
+      : eventType;
 
   // Format timestamp with milliseconds
   const formatTimestamp = (ts) => {
@@ -328,7 +348,12 @@ function WebhookToolHeader({ eventType, direction, timestamp, className }) {
       <div className="flex items-center justify-between w-full gap-4">
         <div className="flex items-center gap-2">
           {Icon}
-          <span className="font-medium text-sm">{eventType}</span>
+          <span className="font-medium text-sm">{displayLabel}</span>
+          {isTelnyxStandaloneStt && (
+            <Badge className="gap-1.5 rounded-full text-xs" variant="outline">
+              WebSocket
+            </Badge>
+          )}
           <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
             {isSent ? (
               <>
@@ -424,6 +449,59 @@ function NodeExecutionToolHeader({
   );
 }
 
+function getJsonObjectPreview(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return JSON.stringify(value, null, 2);
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return JSON.stringify(parsed, null, 2);
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function formatInlineValue(value) {
+  if (typeof value === "string") return value;
+  if (value === undefined) return "undefined";
+  return JSON.stringify(value);
+}
+
+function formatJsonCodeValue(value) {
+  if (typeof value === "string") {
+    const jsonPreview = getJsonObjectPreview(value);
+    return jsonPreview || value;
+  }
+  return JSON.stringify(value ?? null, null, 2);
+}
+
+function JsonCodeView({ value, className = "mt-1", maxHeight }) {
+  return (
+    <CodeBlock
+      code={formatJsonCodeValue(value)}
+      language="json"
+      className={className}
+      maxHeight={maxHeight}
+    >
+      <CodeBlockCopyButton />
+    </CodeBlock>
+  );
+}
+
 // Render node execution details based on node type
 function renderNodeExecutionDetails(nodeType, details, success) {
   if (!details) {
@@ -436,31 +514,97 @@ function renderNodeExecutionDetails(nodeType, details, success) {
 
   // Set Variable Node
   if (nodeType === "set_variable") {
+    const resultJsonPreview = success
+      ? getJsonObjectPreview(details.result)
+      : null;
+
     return (
-      <div className="p-3 space-y-2 text-sm">
-        <div>
+      <div className="p-3 space-y-3 text-sm">
+        <div className="space-y-1">
           <span className="font-semibold">Variable Name:</span>
-          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
+          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
             {details.variable_name}
           </code>
         </div>
-        <div>
+        <div className="space-y-1">
           <span className="font-semibold">Expression:</span>
-          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
+          <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
             {details.expression}
           </code>
         </div>
         {success ? (
-          <div>
+          <div className="space-y-1 border-t pt-3">
             <span className="font-semibold">Result:</span>
-            <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs">
-              {JSON.stringify(details.result)}
-            </code>
+            {resultJsonPreview ? (
+              <CodeBlock
+                code={resultJsonPreview}
+                language="json"
+                className="mt-1"
+              >
+                <CodeBlockCopyButton />
+              </CodeBlock>
+            ) : (
+              <code className="ml-2 bg-muted px-2 py-0.5 rounded text-xs break-all">
+                {formatInlineValue(details.result)}
+              </code>
+            )}
           </div>
         ) : (
-          <div className="text-destructive">
+          <div className="text-destructive border-t pt-3">
             <span className="font-semibold">Error:</span>
             <span className="ml-2">{details.error}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // MCP Tool Node
+  if (nodeType === "mcp_tool") {
+    const responsePayload = details.response_payload !== undefined
+      ? details.response_payload
+      : getMcpResponseVariablePayload(details.response);
+
+    return (
+      <div className="p-3 space-y-3 text-sm">
+        <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Server</div>
+            <code className="break-all">{details.server_id || "—"}</code>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tool</div>
+            <code className="break-all">{details.tool_name || "—"}</code>
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="font-semibold text-xs uppercase text-muted-foreground">
+            Request Payload
+          </div>
+          <JsonCodeView value={details.request || {}} maxHeight={280} className="mt-1 max-h-72 overflow-auto" />
+        </div>
+
+        {success ? (
+          <div className="space-y-1 border-t pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-semibold text-xs uppercase text-muted-foreground">
+                Response Payload
+              </div>
+              {details.response_variable && (
+                <Badge variant="outline" className="text-[10px]">
+                  → {details.response_variable}
+                </Badge>
+              )}
+            </div>
+            <JsonCodeView value={responsePayload} maxHeight={360} className="mt-1 max-h-96 overflow-auto" />
+          </div>
+        ) : (
+          <div className="space-y-1 border-t pt-3">
+            <div className="font-semibold text-xs uppercase text-muted-foreground">
+              Response Payload
+            </div>
+            <JsonCodeView value={responsePayload || details.error || {}} maxHeight={360} className="mt-1 max-h-96 overflow-auto" />
           </div>
         )}
       </div>
@@ -1190,6 +1334,17 @@ function VariableCard({
   );
 }
 
+function normalizeAiAssistants(payload) {
+  const rows = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.data) ? payload.data : [];
+  return rows
+    .map((assistant) => ({
+      id: String(assistant?.id || assistant?.assistant_id || "").trim(),
+      name: assistant?.name || assistant?.display_name || assistant?.id || "Untitled assistant",
+      status: assistant?.status || "active",
+    }))
+    .filter((assistant) => assistant.id);
+}
+
 export default function FlowBuilderPage() {
   const params = useParams();
   const router = useRouter();
@@ -1311,17 +1466,51 @@ export default function FlowBuilderPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  const hasCallerLanguageParameterBeforeNode = useCallback(
+    (nodeId) => {
+      if (!nodeId) return false;
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      const incomingByTarget = new Map();
+      for (const edge of edges) {
+        if (!incomingByTarget.has(edge.target)) incomingByTarget.set(edge.target, []);
+        incomingByTarget.get(edge.target).push(edge.source);
+      }
+
+      const visited = new Set();
+      const stack = [...(incomingByTarget.get(nodeId) || [])];
+      while (stack.length > 0) {
+        const currentId = stack.pop();
+        if (!currentId || visited.has(currentId)) continue;
+        visited.add(currentId);
+        const current = byId.get(currentId);
+        const nodeType = current?.data?.nodeType || current?.type;
+        const config = current?.data?.config || {};
+        if (nodeType === "client_state_update") {
+          const updateMode = config.update_mode || "predefined";
+          if (updateMode === "predefined" && (config.predefined_key || "caller_language") === "caller_language") {
+            return true;
+          }
+          if (updateMode === "custom" && config.custom_key === "caller_language") {
+            return true;
+          }
+          if (updateMode === "raw_json" && /"caller_language"\s*:/.test(config.raw_json || "")) {
+            return true;
+          }
+        }
+        stack.push(...(incomingByTarget.get(currentId) || []));
+      }
+      return false;
+    },
+    [nodes, edges],
+  );
+
+
   const reactFlowWrapper = useRef(null);
   const contextMenuRef = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
   // Store initial state for comparison
-  const initialStateRef = useRef({
-    name: "",
-    description: "",
-    nodes: [],
-    edges: [],
-  });
+  const initialStateRef = useRef(null);
 
   const handleDeleteEdge = useCallback(
     (edgeId) => {
@@ -1574,13 +1763,16 @@ export default function FlowBuilderPage() {
         setNodes(nodesWithCallbacks);
         setEdges(edgesWithCallbacks);
 
-        // Store initial state
-        initialStateRef.current = {
+        // Store initial state after applying the same editor/runtime defaults used by ReactFlow.
+        // Dirty checks must ignore runtime-only callbacks/measurements, otherwise simply
+        // opening an existing flow appears as an unsaved change.
+        initialStateRef.current = createCallFlowDirtySnapshot({
           name: flow.name,
           description: flow.description || "",
-          nodes: JSON.parse(JSON.stringify(flow.nodes || [])),
-          edges: JSON.parse(JSON.stringify(flow.edges || [])),
-        };
+          nodes: nodesWithCallbacks,
+          edges: edgesWithCallbacks,
+          globalVariables: flow.globalVariables || {},
+        });
       } catch (error) {
         console.error("Error loading flow:", error);
         notify({
@@ -1633,7 +1825,22 @@ export default function FlowBuilderPage() {
     loadQueues();
   }, []);
 
-  // AI assistants not available in contact center - leave empty
+  // Load AI assistants for Start AI Assistant node
+  useEffect(() => {
+    async function loadAiAssistants() {
+      try {
+        const res = await fetch("/api/ai/assistants?pageSize=1000");
+        const data = await res.json();
+        if (res.ok) {
+          setAiAssistants(normalizeAiAssistants(data));
+        }
+      } catch (error) {
+        console.error("Error loading AI assistants:", error);
+      }
+    }
+
+    loadAiAssistants();
+  }, []);
 
   // Validate flow whenever nodes/edges or queues change
   useEffect(() => {
@@ -1641,12 +1848,14 @@ export default function FlowBuilderPage() {
     setValidation(result);
   }, [nodes, edges, queues]);
 
-  // Check if flow has an initiator (incoming_call or http_request)
+  // Check if flow has an initiator (incoming_call/http_request/form_submit/outbound_campaign)
   const hasInitiator = useMemo(() => {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit" ||
+        node.data?.nodeType === "outbound_campaign",
     );
   }, [nodes]);
 
@@ -1764,16 +1973,21 @@ export default function FlowBuilderPage() {
 
   // Track unsaved changes
   useEffect(() => {
-    if (!initialStateRef.current.name) return; // Skip if not loaded yet
+    if (!initialStateRef.current) return; // Skip if not loaded yet
 
-    const hasChanges =
-      flowName !== initialStateRef.current.name ||
-      flowDescription !== initialStateRef.current.description ||
-      JSON.stringify(nodes) !== JSON.stringify(initialStateRef.current.nodes) ||
-      JSON.stringify(edges) !== JSON.stringify(initialStateRef.current.edges);
+    const hasChanges = hasCallFlowDirtyState(
+      {
+        name: flowName,
+        description: flowDescription,
+        nodes,
+        edges,
+        globalVariables,
+      },
+      initialStateRef.current,
+    );
 
     setHasUnsavedChanges(hasChanges);
-  }, [flowName, flowDescription, nodes, edges]);
+  }, [flowName, flowDescription, nodes, edges, globalVariables]);
 
   // Auto-save when Set Variable expression is saved
   useEffect(() => {
@@ -1854,14 +2068,21 @@ export default function FlowBuilderPage() {
         if (data && data.ok) {
           const webhooks = data.webhooks || [];
 
-          // Find the latest call.initiated event to detect new calls
-          const latestInitiated = webhooks
-            .filter((w) => w.event_type === "call.initiated")
+          // Find the latest run-start event to detect new phone-call or form-submit runs.
+          // Phone calls start with call.initiated; Form Submit data actions use a
+          // synthetic monitor id (form:<submission_id>) and start with form.submit.
+          const latestRunStart = webhooks
+            .filter(
+              (w) =>
+                w.event_type === "call.initiated" ||
+                w.event_type === "form.submit",
+            )
             .pop();
 
           const newCallControlId =
-            latestInitiated?.call_control_id ||
-            latestInitiated?.payload?.data?.payload?.call_control_id ||
+            latestRunStart?.call_control_id ||
+            latestRunStart?.payload?.data?.payload?.call_control_id ||
+            latestRunStart?.payload?.data?.payload?.monitor_run_id ||
             webhooks[webhooks.length - 1]?.call_control_id ||
             null;
 
@@ -1956,14 +2177,29 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit" ||
+        node.data?.nodeType === "outbound_campaign",
     );
 
     if (!hasInitiator) {
       notify({
         title: "Error",
         description:
-          "Cannot save flow: An initiator node (Incoming Call or HTTP Request) is required. Please add an initiator node first.",
+          "Cannot save flow: An initiator node (Incoming Call, HTTP Request, Form Submit, or Outbound Campaign) is required. Please add an initiator node first.",
+        variant: "error",
+      });
+      return;
+    }
+
+    const currentValidation = validateFlow({ nodes, edges }, queues);
+    setValidation(currentValidation);
+    if (!currentValidation.valid) {
+      notify({
+        title: "Validation error",
+        description:
+          currentValidation.errors[0] ||
+          "Cannot save flow until validation errors are fixed.",
         variant: "error",
       });
       return;
@@ -2042,12 +2278,13 @@ export default function FlowBuilderPage() {
       }
 
       // Update initial state after successful save
-      initialStateRef.current = {
+      initialStateRef.current = createCallFlowDirtySnapshot({
         name: flowName,
         description: flowDescription,
-        nodes: JSON.parse(JSON.stringify(nodes)),
-        edges: JSON.parse(JSON.stringify(edges)),
-      };
+        nodes,
+        edges,
+        globalVariables,
+      });
       setHasUnsavedChanges(false);
 
       // Update voice app name display in incoming_call nodes
@@ -2208,7 +2445,9 @@ export default function FlowBuilderPage() {
     return nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit" ||
+        node.data?.nodeType === "outbound_campaign",
     );
   }, [nodes]);
 
@@ -2220,7 +2459,9 @@ export default function FlowBuilderPage() {
     const hasInitiator = nodes.some(
       (node) =>
         node.data?.nodeType === "incoming_call" ||
-        node.data?.nodeType === "http_request",
+        node.data?.nodeType === "http_request" ||
+        node.data?.nodeType === "form_submit" ||
+        node.data?.nodeType === "outbound_campaign",
     );
 
     // Check if trying to add an initiator node when one already exists
@@ -2242,7 +2483,7 @@ export default function FlowBuilderPage() {
         notify({
           title: "Error",
           description:
-            "Please add an initiator node (Incoming Call or HTTP Request) first before adding other nodes to the flow.",
+            "Please add an initiator node (Incoming Call, HTTP Request, Form Submit, or Outbound Campaign) first before adding other nodes to the flow.",
           variant: "error",
         });
         return;
@@ -2274,6 +2515,9 @@ export default function FlowBuilderPage() {
       }
     } else if (nodeType === "http_request") {
       defaultConfig.endpoint_path = `${baseUrl}/api/voice/flows/trigger/${flowId}`;
+    } else if (nodeType === "form_submit") {
+      defaultConfig.description =
+        defaultConfig.description || "Run from an Agent Desktop form button";
     } else if (nodeType === "dial") {
       // Auto-populate webhook URL for Dial node to continue flow execution
       defaultConfig.webhook_url = `${baseUrl}/api/voice/webhook/flows/${flowId}`;
@@ -2440,27 +2684,35 @@ export default function FlowBuilderPage() {
   // Show loading state while checking authorization
   if (checkingAuth || !isAuthorized) {
     return (
-      <div className="px-4 lg:px-6">
-        <Card className="w-full">
-          <CardContent className="space-y-4 pt-6">
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-full" />
-              <Skeleton className="h-96 w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Authorizing</Badge>} />
+        <AdminPageContent>
+          <Card className="w-full">
+            <CardContent className="space-y-4 pt-6">
+              <div className="space-y-2">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-96 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
-          <span>Loading flow...</span>
-        </div>
-      </div>
+      <AdminPageShell>
+        <AdminPageHeader title="Call Flow Editor" badges={<Badge variant="secondary">Loading</Badge>} />
+        <AdminPageContent>
+          <div className="flex h-full items-center justify-center">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <IconLoader2 className="h-4 w-4 text-green-500 animate-spin" />
+              <span>Loading flow...</span>
+            </div>
+          </div>
+        </AdminPageContent>
+      </AdminPageShell>
     );
   }
 
@@ -2469,8 +2721,17 @@ export default function FlowBuilderPage() {
     : null;
 
   return (
-    <div className="px-0 lg:px-6 py-0">
-      <Card className="w-full" style={{ height: "90vh" }}>
+    <AdminPageShell>
+      <AdminPageHeader
+        title={flowName || "Call Flow Editor"}
+        badges={hasUnsavedChanges ? (
+          <Badge variant="outline" className="border-orange-500 text-orange-700 dark:text-orange-300">Unsaved</Badge>
+        ) : (
+          <Badge variant="outline" className="border-emerald-500 text-emerald-700 dark:text-emerald-300">Saved</Badge>
+        )}
+      />
+      <AdminPageContent>
+        <Card className="w-full" style={{ height: "calc(100vh - 220px)" }}>
         <CardContent className="p-0 h-full">
           <div className="flex h-full">
             {/* Left Sidebar - Node Palette & Variables */}
@@ -2633,7 +2894,9 @@ export default function FlowBuilderPage() {
                     const hasInitiator = nodes.some(
                       (node) =>
                         node.data?.nodeType === "incoming_call" ||
-                        node.data?.nodeType === "http_request",
+                        node.data?.nodeType === "http_request" ||
+                        node.data?.nodeType === "form_submit" ||
+                        node.data?.nodeType === "outbound_campaign",
                     );
 
                     if (!hasInitiator) {
@@ -2652,7 +2915,7 @@ export default function FlowBuilderPage() {
                   })()}
                   <Button
                     onClick={handleSave}
-                    disabled={saving || !validation.valid}
+                    disabled={saving}
                     variant="default"
                     className={
                       hasUnsavedChanges
@@ -2687,9 +2950,11 @@ export default function FlowBuilderPage() {
                   nodeTypes={nodeTypes}
                   edgeTypes={edgeTypes}
                   fitView
+                  proOptions={{ hideAttribution: true }}
+                  className="call-flow-canvas"
                 >
                   <Background />
-                  <Controls />
+                  <Controls className="call-flow-controls" />
                   <Panel
                     position="bottom-right"
                     className="bg-card border rounded p-2 text-xs"
@@ -2997,6 +3262,13 @@ export default function FlowBuilderPage() {
                             "StreamingStartNodeEditor" ? (
                             <StreamingStartNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                              hasCallerLanguageParameterBefore={hasCallerLanguageParameterBeforeNode(selectedNode.id)}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
@@ -3194,6 +3466,34 @@ export default function FlowBuilderPage() {
                               selectedNodeId={selectedNode?.id}
                             />
                           ) : selectedNodeDef.customEditor ===
+                            "McpToolNodeEditor" ? (
+                            <McpToolNodeEditor
+                              config={nodeConfig}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
+                                  );
+                                }
+                              }}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                            />
+                          ) : selectedNodeDef.customEditor ===
                             "DataActionsNodeEditor" ? (
                             <DataActionsNodeEditor
                               config={nodeConfig}
@@ -3224,6 +3524,34 @@ export default function FlowBuilderPage() {
                               edges={edges}
                               globalVariables={globalVariables}
                               selectedNodeId={selectedNode?.id}
+                            />
+                          ) : selectedNodeDef.customEditor ===
+                            "ClientStateUpdateNodeEditor" ? (
+                            <ClientStateUpdateNodeEditor
+                              config={nodeConfig}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
+                              onChange={(newConfig) => {
+                                setNodeConfig(newConfig);
+                                if (selectedNode) {
+                                  setNodes((nds) =>
+                                    nds.map((node) =>
+                                      node.id === selectedNode.id
+                                        ? {
+                                            ...node,
+                                            data: {
+                                              ...node.data,
+                                              config: newConfig,
+                                            },
+                                          }
+                                        : node,
+                                    ),
+                                  );
+                                }
+                              }}
                             />
                           ) : selectedNodeDef.customEditor ===
                             "ReferNodeEditor" ? (
@@ -3329,6 +3657,8 @@ export default function FlowBuilderPage() {
                             "AnswerNodeEditor" ? (
                             <AnswerNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
+                              hasCallerLanguageParameterBefore={hasCallerLanguageParameterBeforeNode(selectedNode.id)}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
@@ -3439,6 +3769,12 @@ export default function FlowBuilderPage() {
                             "AgentAssistNodeEditor" ? (
                             <AgentAssistNodeEditor
                               config={nodeConfig}
+                              currentUserEmail={userEmail}
+                              availableVariables={getAllVariableNames({
+                                nodes,
+                                edges,
+                                globalVariables,
+                              })}
                               onChange={(newConfig) => {
                                 setNodeConfig(newConfig);
                                 if (selectedNode) {
@@ -3786,6 +4122,24 @@ export default function FlowBuilderPage() {
                                       max={paramDef.max}
                                       className="mt-1"
                                     />
+                                  ) : paramDef.type === "toggle" ? (
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <Switch
+                                        checked={
+                                          nodeConfig[key] === true ||
+                                          nodeConfig[key] === "true"
+                                        }
+                                        onCheckedChange={(checked) =>
+                                          handleUpdateNodeConfig(key, checked)
+                                        }
+                                      />
+                                      <span className="text-xs text-muted-foreground">
+                                        {nodeConfig[key] === true ||
+                                        nodeConfig[key] === "true"
+                                          ? "Enabled"
+                                          : "Disabled"}
+                                      </span>
+                                    </div>
                                   ) : paramDef.type === "boolean" ? (
                                     <Select
                                       value={String(nodeConfig[key] || false)}
@@ -4162,7 +4516,9 @@ export default function FlowBuilderPage() {
                     navigator.clipboard.writeText(currentCallControlId);
                     notify({
                       title: "Success",
-                      description: "Call Control ID copied to clipboard",
+                      description: currentCallControlId.startsWith("form:")
+                        ? "Monitor Run ID copied to clipboard"
+                        : "Call Control ID copied to clipboard",
                       variant: "success",
                     });
                   }}
@@ -4184,7 +4540,7 @@ export default function FlowBuilderPage() {
                 <IconActivity className="h-12 w-12 mb-4 opacity-50" />
                 <p className="text-sm">No webhook events yet</p>
                 <p className="text-xs mt-1">
-                  Webhook events will appear here when calls are received
+                  Events will appear here when calls or form submits run
                 </p>
               </div>
             ) : (
@@ -4227,6 +4583,8 @@ export default function FlowBuilderPage() {
                         eventType={item.event_type}
                         direction={item.direction}
                         timestamp={item.timestamp}
+                        source={item.source || item.payload?.source}
+                        label={item.payload?.label}
                       />
                       <ToolContent>
                         <CodeBlock
@@ -4404,7 +4762,9 @@ export default function FlowBuilderPage() {
                       setCopiedField("call_control_id");
                       notify({
                         title: "Copied",
-                        description: "Call Control ID copied to clipboard",
+                        description: currentCallControlId.startsWith("form:")
+                          ? "Monitor Run ID copied to clipboard"
+                          : "Call Control ID copied to clipboard",
                         variant: "success",
                       });
                       setTimeout(() => setCopiedField(null), 2000);
@@ -4428,7 +4788,7 @@ export default function FlowBuilderPage() {
                 <IconActivity className="h-12 w-12 mb-4 opacity-50" />
                 <p className="text-sm">No webhook events yet</p>
                 <p className="text-xs mt-1">
-                  Webhook events will appear here when calls are received for
+                  Events will appear here when calls or form submits run for
                   this flow
                 </p>
               </div>
@@ -4472,6 +4832,8 @@ export default function FlowBuilderPage() {
                         eventType={item.event_type}
                         direction={item.direction}
                         timestamp={item.timestamp}
+                        source={item.source || item.payload?.source}
+                        label={item.payload?.label}
                       />
                       <ToolContent>
                         <CodeBlock
@@ -4489,6 +4851,7 @@ export default function FlowBuilderPage() {
           </div>
         </div>
       )}
-    </div>
+      </AdminPageContent>
+    </AdminPageShell>
   );
 }

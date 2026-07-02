@@ -18,7 +18,6 @@ import {
   IconChevronRight,
   IconChevronsLeft,
   IconChevronsRight,
-  IconCalendar,
   IconEye,
   IconTrash,
   IconPlus,
@@ -37,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import {
@@ -53,6 +52,14 @@ import {
 import PreviewSheet from "@/components/scheduled-events/PreviewSheet";
 import CreateSheet from "@/components/scheduled-events/CreateSheet";
 import AiConversationSheet from "@/components/contact-center/AiConversationSheet";
+import {
+  SupervisorPageContent,
+  SupervisorPageHeader,
+  SupervisorPageShell,
+} from "@/components/contact-center/SupervisorPageLayout";
+
+const neutralActionClass =
+  "bg-zinc-950 text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200";
 
 export default function SupervisorScheduledEventsPage() {
   const [mounted, setMounted] = useState(false);
@@ -136,9 +143,7 @@ export default function SupervisorScheduledEventsPage() {
       setItems(filteredItems);
       setTotal(filteredItems.length);
     } catch (err) {
-      toast.error("Load failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Load failed", description: String(err.message || err), variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -217,18 +222,14 @@ export default function SupervisorScheduledEventsPage() {
         },
       );
       if (r.ok) {
-        toast.success("Event deleted successfully");
+        notify({ title: "Event deleted successfully", variant: "success" });
         load();
       } else {
         const d = await r.json().catch(() => ({}));
-        toast.error("Delete failed", {
-          description: d?.error || "",
-        });
+        notify({ title: "Delete failed", description: d?.error || "", variant: "error" });
       }
     } catch (err) {
-      toast.error("Delete failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Delete failed", description: String(err.message || err), variant: "error" });
     }
   }
 
@@ -347,9 +348,9 @@ export default function SupervisorScheduledEventsPage() {
   }
 
   function downloadTemplate() {
-    const template = `assistant_id,telnyx_conversation_channel,telnyx_end_user_target,telnyx_agent_target,scheduled_at_fixed_datetime,text
-assistant_12345678,phone_call,+15551234567,+15559876543,2025-12-31T12:00:00Z,
-assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello! This is a reminder.`;
+    const template = `assistant_id,telnyx_conversation_channel,telnyx_end_user_target,telnyx_agent_target,scheduled_at_fixed_datetime,max_retries_client_errors,retry_interval_secs,text
+assistant_12345678,phone_call,+15551234567,+15559876543,2025-12-31T12:00:00Z,2,300,
+assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,0,,Hello! This is a reminder.`;
 
     const blob = new Blob([template], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -390,9 +391,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
 
   function handleFileSelect(file) {
     if (!file.name.endsWith(".csv")) {
-      toast.error("Invalid file type", {
-        description: "Please select a CSV file",
-      });
+      notify({ title: "Invalid file type", description: "Please select a CSV file", variant: "error" });
       return;
     }
     setImportFile(file);
@@ -408,7 +407,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
 
   async function handleImport() {
     if (!importFile) {
-      toast.error("Please select a CSV file");
+      notify({ title: "Please select a CSV file", variant: "error" });
       return;
     }
 
@@ -417,7 +416,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
       const text = await importFile.text();
       const lines = text.split("\n").filter((l) => l.trim());
       if (lines.length < 2) {
-        toast.error("CSV file is empty or has no data rows");
+        notify({ title: "CSV file is empty or has no data rows", variant: "error" });
         setImporting(false);
         return;
       }
@@ -449,15 +448,12 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
 
       const { results } = data;
       if (results.success > 0) {
-        toast.success(`Successfully imported ${results.success} events`);
+        notify({ title: `Successfully imported ${results.success} events`, variant: "success" });
       }
       if (results.failed > 0) {
-        toast.error(`Failed to import ${results.failed} events`, {
-          description:
-            results.errors.length > 0
+        notify({ title: `Failed to import ${results.failed} events`, description: results.errors.length > 0
               ? `Row ${results.errors[0].row}: ${results.errors[0].error}`
-              : "",
-        });
+              : "", variant: "error" });
       }
 
       setShowImportDialog(false);
@@ -468,9 +464,7 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
       }
       load();
     } catch (err) {
-      toast.error("Import failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Import failed", description: String(err.message || err), variant: "error" });
     } finally {
       setImporting(false);
     }
@@ -481,43 +475,43 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
   const canNext = page < totalPages;
 
   return (
-    <div className="px-4 lg:px-6">
-      <Card>
-        <CardContent className="py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <IconCalendar className="size-6 text-telnyx-green" />
-              <h1 className="text-2xl font-semibold">Scheduled Events</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={downloadTemplate}
-                className="gap-2"
-              >
-                <IconDownload className="size-4" />
-                Template
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowImportDialog(true)}
-                className="gap-2"
-              >
-                <IconUpload className="size-4" />
-                Import CSV
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setShowCreateSheet(true)}
-                className="gap-2"
-              >
-                <IconPlus className="size-4" />
-                Add Event
-              </Button>
-            </div>
-          </div>
+    <SupervisorPageShell>
+      <SupervisorPageHeader
+        title="Scheduled Events"
+        actions={(
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={downloadTemplate}
+              className="gap-2"
+            >
+              <IconDownload className="size-4" />
+              Template
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowImportDialog(true)}
+              className="gap-2"
+            >
+              <IconUpload className="size-4" />
+              Import CSV
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setShowCreateSheet(true)}
+              className={`gap-2 ${neutralActionClass}`}
+            >
+              <IconPlus className="size-4" />
+              Add Event
+            </Button>
+          </>
+        )}
+      />
+      <SupervisorPageContent>
+        <Card className="shadow-sm">
+          <CardContent className="py-6">
 
           {/* Filters */}
           <div className="flex items-end gap-4 mb-4">
@@ -838,8 +832,9 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </SupervisorPageContent>
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
@@ -869,6 +864,14 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
               <li>
                 <strong>scheduled_at_fixed_datetime</strong>: ISO 8601 datetime
                 (required)
+              </li>
+              <li>
+                <strong>max_retries_client_errors</strong>: Retries on busy,
+                no-answer, failed, or canceled calls; 0-10 (optional, default 0)
+              </li>
+              <li>
+                <strong>retry_interval_secs</strong>: Delay between retries in
+                seconds; 60-86400 (required when retries are greater than 0)
               </li>
               <li>
                 <strong>text</strong>: SMS text (optional, required for sms_chat
@@ -993,6 +996,6 @@ assistant_12345678,sms_chat,+15551234567,+15559876543,2025-12-31T13:00:00Z,Hello
           }}
         />
       )}
-    </div>
+    </SupervisorPageShell>
   );
 }

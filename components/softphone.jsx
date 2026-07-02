@@ -26,6 +26,31 @@ import {
 } from "lucide-react";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
 import { TransferModal } from "@/components/contact-center/TransferModal";
+import { notify } from "@/components/ToastNotify";
+import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
+
+const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
+  const normalize = (value) =>
+    ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+
+  if (typeof window !== "undefined") {
+    try {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue !== null) {
+        return normalize(storedValue);
+      }
+    } catch (_) {}
+  }
+
+  return normalize(envValue);
+};
+
+const getWebrtcExperimentalOptions = () => ({
+  prefetchIceCandidates: readWebrtcBooleanFlag(
+    "webrtc.prefetchIceCandidates",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+  ),
+});
 
 function CircleButton({ children, onClick, disabled, className, title }) {
   return (
@@ -59,16 +84,17 @@ function isValidDialTo(value) {
 }
 
 export function Softphone() {
-  const { client } = useTelnyx();
+  const { client, region, regions, setRegion } = useTelnyx();
 
   // Zustand stores - call state (shared with mini phone)
   const activeCall = useActiveCall();
+  const hasActiveCall = Boolean(activeCall);
   const isRinging = useIsRinging();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
-  const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
-  );
+  const activeCallDirection = useActiveCallStore((state) => state.direction);
+  const activeCallFromNumber = useActiveCallStore((state) => state.fromNumber);
+  const activeCallFromName = useActiveCallStore((state) => state.fromName);
 
   // Zustand stores - dial state
   const {
@@ -84,6 +110,7 @@ export function Softphone() {
     updateStatus,
     setMuted: storeSetMuted,
     setHeld: storeSetHeld,
+    setCallerInfo,
     clearActiveCall,
     isContactCenterCall,
     getCallDuration,
@@ -115,68 +142,132 @@ export function Softphone() {
   const [selectedSpeakerId, setSelectedSpeakerId] = useState("");
   const [showMicList, setShowMicList] = useState(false);
   const [showSpkList, setShowSpkList] = useState(false);
+  const [showRegionList, setShowRegionList] = useState(false);
   const [showDtmf, setShowDtmf] = useState(false);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [interaction, setInteraction] = useState(null);
+  const [sipUri, setSipUri] = useState("");
+  const [outboundCallerName, setOutboundCallerName] = useState("");
+  const formatCallerIdentity = (name, number) => {
+    const normalizedName = String(name || "").trim();
+    const normalizedNumber = String(number || "").trim();
+    if (normalizedName && normalizedNumber && normalizedName !== normalizedNumber) {
+      return `${normalizedName} (${normalizedNumber})`;
+    }
+    return normalizedNumber || normalizedName;
+  };
+
+  const interactionFromNumber =
+    interaction?.from_number || interaction?.fromNumber || interaction?.caller_number || "";
+  const remoteCallerNumber = activeCall?.options?.remoteCallerNumber || activeCall?.remoteCallerNumber || "";
+  const remoteCallerName = activeCall?.options?.remoteCallerName || activeCall?.remoteCallerName || "";
+  const incomingCallerNumber = remoteCallerNumber || interactionFromNumber || activeCallFromNumber || "";
+  const incomingCallerName = remoteCallerName || activeCallFromName || interaction?.from_name || interaction?.fromName || "";
+  const incomingCallerDisplay = formatCallerIdentity(incomingCallerName, incomingCallerNumber);
+  const isIncomingCall =
+    activeCall &&
+    (activeCallDirection === "inbound" || activeCallDirection === "incoming");
+  const isOutboundCall = activeCall && activeCallDirection === "outbound";
+  const displayedFromNumber = isIncomingCall
+    ? incomingCallerDisplay || fromNumber
+    : fromNumber;
+
+  useEffect(() => {
+    const service = getHeadsetControlService();
+    if (!service) return;
+
+    const callId =
+      activeCall?.callControlId ||
+      activeCall?.call_control_id ||
+      activeCall?.id ||
+      null;
+
+    initHeadsetControlService()
+      .then((initializedService) => initializedService?.setSoftphoneState({
+        callId,
+        direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+        ringing: Boolean(isRinging),
+        active: Boolean(isCallConnected),
+        muted: Boolean(callUI.isMuted),
+        held: Boolean(callUI.isHeld),
+        remoteDisplayName: incomingCallerName || outboundCallerName || null,
+        remoteNumber: incomingCallerNumber || toNumber || null,
+      }))
+      .catch(() => {});
+  }, [
+    activeCall,
+    callUI.isHeld,
+    callUI.isMuted,
+    incomingCallerName,
+    incomingCallerNumber,
+    isCallConnected,
+    isIncomingCall,
+    isOutboundCall,
+    isRinging,
+    outboundCallerName,
+    toNumber,
+  ]);
+
 
   const remoteAudioRef = useRef(null);
   const lastFetchedInteractionIdRef = useRef(null);
-  const autoStatusRef = useRef({
-    lastSent: null,
-    forcedBusy: false,
-  });
 
-  const updateUserStatus = async (nextStatus) => {
-    if (autoStatusRef.current.lastSent === nextStatus) return;
-    autoStatusRef.current.lastSent = nextStatus;
+  useEffect(() => {
+    if (hasActiveCall) {
+      setShowRegionList(false);
+    }
+  }, [hasActiveCall]);
+
+  const copySipUri = async () => {
+    if (!sipUri) {
+      notify({ title: "WebRTC SIP URI is not configured for this profile", variant: "error" });
+      return;
+    }
+
     try {
-      await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, system: true }),
-      });
-    } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
+      await navigator.clipboard.writeText(sipUri);
+      notify({ title: "WebRTC URI copied", description: sipUri, variant: "success" });
+    } catch (_) {
+      notify({ title: "Failed to copy WebRTC URI", variant: "error" });
+    }
   };
 
-  // Auto-set agent status based on call activity
   useEffect(() => {
-    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
-    if (hasActiveCall) {
-      autoStatusRef.current.forcedBusy = true;
-      updateUserStatus("Busy");
-      return;
-    }
-    let wrapupOpen = false;
-    try {
-      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
-    } catch (_) {}
-    if (wrapupOpen) {
-      return;
-    }
-    if (autoStatusRef.current.forcedBusy) {
-      autoStatusRef.current.forcedBusy = false;
+    let cancelled = false;
 
-      // CRITICAL: Don't auto-revert to "Available" if status is "Agent Not Answering"
-      // Agent must manually change their status after not answering a call
-      let currentStatus = null;
+    (async () => {
       try {
-        currentStatus = localStorage.getItem("user.status");
-      } catch (_) {}
+        const res = await fetch("/api/user/profile", { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        const user = data?.data || data?.user || data || {};
+        const telephonyUserName = user.telephony_user_name || "";
+        const callerName = [
+          user.first_name || user.firstName,
+          user.last_name || user.lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
 
-      if (currentStatus === "Agent Not Answering") {
-        console.log(
-          "[Softphone] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
-        );
-        return;
+        if (!cancelled) {
+          setOutboundCallerName(callerName);
+          setSipUri(
+            telephonyUserName ? `sip:${telephonyUserName}@sip.telnyx.com` : ""
+          );
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setOutboundCallerName("");
+          setSipUri("");
+        }
       }
+    })();
 
-      updateUserStatus("Available");
-    }
-  }, [activeCall, activeCallsCount]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const applyContactCenterMetadata = (interaction) => {
     if (!interaction?.id) return;
     useActiveCallStore.getState().setContactCenterMetadata({
@@ -413,6 +504,35 @@ export function Softphone() {
             return;
           }
 
+          const callDirection =
+            call.direction || notification?.call?.direction || "";
+          const isIncoming =
+            callDirection === "outbound"
+              ? false
+              : callDirection === "inbound" ||
+                callDirection === "incoming" ||
+                (!activeCall && callState.toLowerCase() === "ringing");
+          const remoteCallerNumber =
+            call.options?.remoteCallerNumber || call.remoteCallerNumber || "";
+          const remoteCallerName =
+            call.options?.remoteCallerName || call.remoteCallerName || "";
+
+          if (isIncoming && (remoteCallerNumber || remoteCallerName)) {
+            const storeState = useActiveCallStore.getState();
+            const storeCallControlId =
+              storeState.call?.callControlId ||
+              storeState.call?.call_control_id ||
+              storeState.call?.id;
+            const notificationCallControlId =
+              call.callControlId || call.call_control_id || call.id;
+            if (!storeCallControlId || storeCallControlId === notificationCallControlId) {
+              setCallerInfo({
+                fromNumber: remoteCallerNumber || undefined,
+                fromName: remoteCallerName || undefined,
+              });
+            }
+          }
+
           // For active calls, update status and attach audio
           if (activeCall && call && callState) {
             const lowerState = callState.toLowerCase();
@@ -434,7 +554,7 @@ export function Softphone() {
         client.off?.("telnyx.notification", onNotification);
       } catch (_) {}
     };
-  }, [client, activeCall, hydrateRemoteAudio]);
+  }, [client, activeCall, hydrateRemoteAudio, setCallerInfo]);
 
   async function handleCallEnd() {
     try {
@@ -527,6 +647,21 @@ export function Softphone() {
     let from = (fromNumber || "").trim();
     if (!client || !to || activeCall) return;
 
+    let callerName = outboundCallerName;
+    if (!callerName) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (callerName) {
+          setOutboundCallerName(callerName);
+        }
+      } catch (_) {}
+    }
+
     // If fromNumber is empty, try to get mainFromNumber as fallback
     if (!from) {
       try {
@@ -548,11 +683,17 @@ export function Softphone() {
         client.enableMicrophone?.();
       } catch (_) {}
 
+      const experimentalOptions = getWebrtcExperimentalOptions();
+      console.log("[webrtc] Starting outbound call", experimentalOptions);
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
+        callerName: callerName || undefined,
         audio: true,
         video: false,
+        ...(experimentalOptions.prefetchIceCandidates && {
+          prefetchIceCandidates: true,
+        }),
       });
 
       // Set active call in store (outbound call)
@@ -723,10 +864,12 @@ export function Softphone() {
 
       if (isHeld) {
         activeCall.unhold?.() || activeCall.resume?.();
-        // Update status to 'active' to track hold resume
+        // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
+        storeSetHeld(false);
       } else {
         activeCall.hold?.() || activeCall.pause?.();
+        storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");
       }
@@ -776,72 +919,37 @@ export function Softphone() {
   async function handleRejectCall() {
     try {
       if (!activeCall) {
-        console.error("[Softphone] No call to reject");
         return;
       }
 
-      // Get the original call control ID from the active call store
-      // This was extracted from X-Original-Call-Control-Id header when the call was set
-      const originalCallControlId =
-        useActiveCallStore.getState().originalCallControlId;
+      const storeState = useActiveCallStore.getState();
+      const interactionId = storeState?.contactCenter?.interactionId;
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
 
-      // If we have the original call control ID, use it for hangup
-      if (originalCallControlId) {
-        console.log(
-          "[Softphone] Using originalCallControlId from store:",
-          originalCallControlId
+      // Queue inbound reject is a pre-answer agent no-answer signal.
+      // Never hang up the original caller leg from the browser: the backend webhook
+      // must see the agent leg hangup and requeue the caller.
+      if (interactionId || callControlId) {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              callControlId,
+              transcriptions: storeState.transcriptions || [],
+              rejectedBeforeAnswer: true,
+              wasAnswered: false,
+            },
+          })
         );
-        try {
-          // Hangup the original call leg using Telnyx API
-          const response = await fetch(`/api/voice/call-action`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "hangup",
-              callControlId: originalCallControlId,
-            }),
-          });
-
-          const result = await response.json();
-          if (!response.ok) {
-            console.error(
-              "[Softphone] Failed to hangup original call leg:",
-              result
-            );
-          } else {
-            console.log(
-              "[Softphone] Successfully hung up original call leg via custom header"
-            );
-          }
-        } catch (err) {
-          console.error("[Softphone] Error calling hangup API:", err);
-        }
-      } else if (interaction?.id) {
-        // Fallback: If we have an interaction, hangup via API
-        try {
-          const response = await fetch(
-            `/api/contact-center/interactions/${interaction.id}/hangup`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-            }
-          );
-
-          const result = await response.json();
-          if (!response.ok) {
-            console.error(
-              "[Softphone] Failed to hangup original call leg:",
-              result
-            );
-          }
-        } catch (err) {
-          console.error("[Softphone] Error calling hangup API:", err);
-        }
       }
 
       activeCall.hangup?.();
     } catch (err) {
-      console.error("[Softphone] Error rejecting call:", err);
+      // Error rejecting call
     }
   }
 
@@ -1119,6 +1227,58 @@ export function Softphone() {
       <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
       <div className="relative flex flex-col items-center gap-4 rounded-2xl bg-zinc-900 p-4 text-white shadow-xl">
         {/* Device selectors */}
+        <div className="absolute left-3 top-3">
+          <div className="relative">
+            <button
+              className={clsx(
+                "flex min-w-[112px] items-center justify-between gap-1 rounded-md border border-zinc-700 bg-zinc-900/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-200 hover:bg-zinc-800",
+                hasActiveCall && "cursor-not-allowed opacity-50 hover:bg-zinc-900/60"
+              )}
+              onClick={() => {
+                if (hasActiveCall) return;
+                setShowRegionList((v) => !v);
+                setShowMicList(false);
+                setShowSpkList(false);
+              }}
+              disabled={hasActiveCall}
+              title={
+                hasActiveCall
+                  ? "Cannot change WebRTC region during an active call"
+                  : "Select WebRTC region"
+              }
+            >
+              <span>{regions.find((r) => r.value === region)?.label || "AUTO"}</span>
+              <IconChevronDown className="h-3 w-3" />
+            </button>
+            {showRegionList && !hasActiveCall && (
+              <div className="absolute left-0 z-10 mt-2 w-36 rounded-md border border-zinc-700 bg-zinc-900 p-1 text-xs shadow-xl">
+                <div className="px-2 py-1 text-[11px] text-zinc-400">
+                  WebRTC Region
+                </div>
+                <div className="max-h-64 overflow-auto">
+                  {regions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setRegion(option.value);
+                        setShowRegionList(false);
+                      }}
+                      className={clsx(
+                        "flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left hover:bg-zinc-800 text-[10px]",
+                        region === option.value && "bg-zinc-800"
+                      )}
+                    >
+                      <span className="truncate">{option.label}</span>
+                      {region === option.value && (
+                        <span className="text-emerald-400">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         <div className="absolute right-3 top-3 flex items-center gap-2">
           <div className="relative">
             <button
@@ -1126,6 +1286,7 @@ export function Softphone() {
               onClick={() => {
                 setShowMicList((v) => !v);
                 setShowSpkList(false);
+                setShowRegionList(false);
               }}
               title="Select microphone"
             >
@@ -1165,6 +1326,7 @@ export function Softphone() {
               onClick={() => {
                 setShowSpkList((v) => !v);
                 setShowMicList(false);
+                setShowRegionList(false);
               }}
               title="Select speaker"
             >
@@ -1198,7 +1360,7 @@ export function Softphone() {
           </div>
         </div>
 
-        <div className="w-full mt-5">
+        <div className="w-full mt-8">
           <label className="mb-1 block text-[11px] text-zinc-300">To</label>
           <div className="flex items-center gap-2">
             <button
@@ -1224,11 +1386,18 @@ export function Softphone() {
         <div className="w-full">
           <label className="mb-1 block text-[11px] text-zinc-300">From</label>
           <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900/60 px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-zinc-500 cursor-not-allowed"
+            className={clsx(
+              "w-full rounded-lg border bg-zinc-900/60 px-2.5 py-1.5 text-[10px] outline-none cursor-not-allowed",
+              isIncomingCall
+                ? "border-orange-500/50 text-orange-500 focus:border-orange-500"
+                : isOutboundCall
+                ? "border-emerald-500/50 text-white focus:border-emerald-500"
+                : "border-zinc-700 text-white focus:border-zinc-500"
+            )}
             placeholder="Phone number or SIP URI"
-            value={fromNumber}
+            value={displayedFromNumber || ""}
             readOnly
-            title="Voice number from your profile"
+            title={isIncomingCall ? `Incoming caller: ${displayedFromNumber || ""}` : "Voice number from your profile"}
             inputMode="text"
           />
         </div>

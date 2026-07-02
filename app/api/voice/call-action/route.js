@@ -6,6 +6,7 @@ import {
   shouldChunk,
   cancelQueue,
 } from "@/lib/contact-center/speak-queue";
+import { voiceRuntimePayload, callControlLogger } from "@/lib/voice/logging.mjs";
 
 /**
  * POST /api/voice/call-action
@@ -73,8 +74,8 @@ export async function POST(request) {
       `/calls/${encodeURIComponent(callControlId)}/actions/${action}`
     );
 
-    // Prepare request body
-    const requestBody = { ...params };
+    // Prepare compact action parameters for the provider request.
+    const actionParams = { ...params };
 
     // Make the API call to Telnyx
     const resp = await fetch(url, {
@@ -83,7 +84,7 @@ export async function POST(request) {
         Authorization: `Bearer ${telnyxApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(actionParams),
     });
 
     const data = await resp.json().catch(() => ({}));
@@ -93,7 +94,7 @@ export async function POST(request) {
         data?.errors?.[0]?.detail ||
         data?.message ||
         "Failed to execute action";
-      console.error("[CallAction] Telnyx API error:", errorMsg);
+      callControlLogger.error("callaction", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: errorMsg },
         { status: resp.status }
@@ -105,7 +106,7 @@ export async function POST(request) {
       data: data.data || data,
     });
   } catch (err) {
-    console.error("[CallAction] Error:", err);
+    callControlLogger.error("callaction", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: err?.message || "Server error" },
       { status: 500 }

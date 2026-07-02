@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { interactionsLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 
 /**
  * GET /api/contact-center/interactions/[id]/timeout-check
@@ -42,7 +43,7 @@ export async function GET(request, { params }) {
       metadata: metadata,
     });
   } catch (err) {
-    console.error("[TimeoutCheck] Error:", err);
+    interactionsLogger.error("interaction_error_0", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Failed to check timeout status" },
       { status: 500 },

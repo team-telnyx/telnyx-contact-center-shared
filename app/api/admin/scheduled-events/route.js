@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireSupervisorOrAdmin() {
   const session = await getServerSession(authOptions);
@@ -104,10 +105,7 @@ export async function GET(request) {
           });
         }
       } catch (err) {
-        console.error(
-          `Failed to fetch events for assistant ${assistant.id}:`,
-          err
-        );
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       }
     }
 
@@ -131,7 +129,7 @@ export async function GET(request) {
       pageSize,
     });
   } catch (err) {
-    console.error("[Scheduled Events API] Error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: err.message || "Failed to fetch scheduled events" },
       { status: 500 }
@@ -162,6 +160,8 @@ export async function POST(request) {
       scheduled_at_fixed_datetime,
       text,
       conversation_metadata,
+      max_retries_client_errors,
+      retry_interval_secs,
     } = body;
 
     if (!assistant_id) {
@@ -199,14 +199,61 @@ export async function POST(request) {
       );
     }
 
+    const maxRetriesClientErrors = Number(max_retries_client_errors ?? 0);
+    const retryIntervalSecs =
+      retry_interval_secs === undefined ||
+      retry_interval_secs === null ||
+      retry_interval_secs === ""
+        ? null
+        : Number(retry_interval_secs);
+
+    if (
+      !Number.isInteger(maxRetriesClientErrors) ||
+      maxRetriesClientErrors < 0 ||
+      maxRetriesClientErrors > 10
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "max_retries_client_errors must be an integer between 0 and 10",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (
+      retryIntervalSecs !== null &&
+      (!Number.isInteger(retryIntervalSecs) ||
+        retryIntervalSecs < 60 ||
+        retryIntervalSecs > 86400)
+    ) {
+      return NextResponse.json(
+        { error: "retry_interval_secs must be an integer between 60 and 86400" },
+        { status: 400 }
+      );
+    }
+
+    if (maxRetriesClientErrors > 0 && retryIntervalSecs === null) {
+      return NextResponse.json(
+        {
+          error:
+            "retry_interval_secs is required when max_retries_client_errors is greater than 0",
+        },
+        { status: 400 }
+      );
+    }
+
     // Build request payload
     const payload = {
       telnyx_conversation_channel,
       telnyx_end_user_target,
       telnyx_agent_target,
       scheduled_at_fixed_datetime,
+      max_retries_client_errors: maxRetriesClientErrors,
     };
 
+    if (retryIntervalSecs !== null)
+      payload.retry_interval_secs = retryIntervalSecs;
     if (text) payload.text = text;
     if (conversation_metadata)
       payload.conversation_metadata = conversation_metadata;
@@ -225,7 +272,7 @@ export async function POST(request) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[Scheduled Events API] Telnyx error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: `Telnyx API error: ${errorText}` },
         { status: res.status }
@@ -235,7 +282,7 @@ export async function POST(request) {
     const data = await res.json();
     return NextResponse.json({ ok: true, data }, { status: 201 });
   } catch (err) {
-    console.error("[Scheduled Events API] Error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: err.message || "Failed to create scheduled event" },
       { status: 500 }

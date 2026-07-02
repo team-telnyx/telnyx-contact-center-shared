@@ -29,6 +29,32 @@ import {
 } from "lucide-react";
 import { TransferModal } from "@/components/contact-center/TransferModal";
 import { NumberSelectionModal } from "@/components/contact-center/NumberSelectionModal";
+import { HeadsetStatusBadge } from "@/components/headsets/HeadsetStatusBadge";
+import { HEADSET_COMMANDS } from "@/lib/headsets/headset-control-service.mjs";
+import { getHeadsetControlService, initHeadsetControlService } from "@/lib/headsets/client-headset-service";
+
+const readWebrtcBooleanFlag = (storageKey, envValue = "false") => {
+  const normalize = (value) =>
+    ["1", "true", "yes", "on"].includes(String(value || "").toLowerCase());
+
+  if (typeof window !== "undefined") {
+    try {
+      const storedValue = localStorage.getItem(storageKey);
+      if (storedValue !== null) {
+        return normalize(storedValue);
+      }
+    } catch (_) {}
+  }
+
+  return normalize(envValue);
+};
+
+const getWebrtcExperimentalOptions = () => ({
+  prefetchIceCandidates: readWebrtcBooleanFlag(
+    "webrtc.prefetchIceCandidates",
+    process.env.NEXT_PUBLIC_TELNYX_WEBRTC_PREFETCH_ICE_CANDIDATES
+  ),
+});
 
 function isValidE164(number) {
   return /^\+?[1-9]\d{6,14}$/.test(String(number || "").trim());
@@ -52,9 +78,7 @@ export default function SoftphoneMini() {
   const callerInfo = useCallerInfo();
   const callUI = useCallUI();
   const callStatus = useActiveCallStore((state) => state.status);
-  const activeCallsCount = useCallsStore(
-    (state) => state.getActiveCalls().length
-  );
+  const activeCallDirection = useActiveCallStore((state) => state.direction);
 
   // Zustand stores - dial state
   const { toNumber, setToNumber: setDialToNumber } = useDialStore();
@@ -66,6 +90,7 @@ export default function SoftphoneMini() {
     setMuted: storeSetMuted,
     setHeld: storeSetHeld,
     setCallerName,
+    setCallerInfo,
     clearActiveCall,
     isContactCenterCall,
     getCallDuration,
@@ -95,64 +120,107 @@ export default function SoftphoneMini() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showNumberModal, setShowNumberModal] = useState(false);
   const [interaction, setInteraction] = useState(null);
-  const fromRef = useRef("");
-  const audioRef = useRef(null);
-  const autoStatusRef = useRef({
-    lastSent: null,
-    forcedBusy: false,
-  });
-
-  const updateUserStatus = async (nextStatus) => {
-    if (autoStatusRef.current.lastSent === nextStatus) return;
-    autoStatusRef.current.lastSent = nextStatus;
-    try {
-      await fetch("/api/user/profile", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, system: true }),
-      });
-    } catch (_) {}
-    try {
-      localStorage.setItem("user.status", nextStatus);
-    } catch (_) {}
+  const [outboundCallerName, setOutboundCallerName] = useState("");
+  const headsetStatePublishVersionRef = useRef(0);
+  const formatCallerIdentity = (name, number) => {
+    const normalizedName = String(name || "").trim();
+    const normalizedNumber = String(number || "").trim();
+    if (normalizedName && normalizedNumber && normalizedName !== normalizedNumber) {
+      return `${normalizedName} (${normalizedNumber})`;
+    }
+    return normalizedNumber || normalizedName;
   };
 
-  // Auto-set agent status based on call activity
+  const interactionFromNumber =
+    interaction?.from_number || interaction?.fromNumber || interaction?.caller_number || "";
+  const remoteCallerNumber = activeCall?.options?.remoteCallerNumber || activeCall?.remoteCallerNumber || "";
+  const remoteCallerName = activeCall?.options?.remoteCallerName || activeCall?.remoteCallerName || "";
+  const incomingFromNumber = remoteCallerNumber || interactionFromNumber || callerInfo?.fromNumber || "";
+  const incomingFromName = remoteCallerName || callerInfo?.fromName || interaction?.from_name || interaction?.fromName || "";
+  const incomingCallerDisplay = formatCallerIdentity(incomingFromName, incomingFromNumber);
+  const isIncomingCall =
+    activeCall &&
+    (activeCallDirection === "inbound" || activeCallDirection === "incoming");
+  const isOutboundCall = activeCall && activeCallDirection === "outbound";
+  const miniInputDisplay = isIncomingCall && incomingCallerDisplay ? incomingCallerDisplay : toInput;
+  const shouldMarqueeMiniInput = Boolean(isIncomingCall && incomingCallerDisplay && incomingCallerDisplay.length > 18);
+
   useEffect(() => {
-    const hasActiveCall = Boolean(activeCall) || activeCallsCount > 0;
-    if (hasActiveCall) {
-      autoStatusRef.current.forcedBusy = true;
-      updateUserStatus("Busy");
-      return;
-    }
-    let wrapupOpen = false;
-    try {
-      wrapupOpen = localStorage.getItem("cc.wrapup.open") === "true";
-    } catch (_) {}
-    if (wrapupOpen) {
-      return;
-    }
-    if (autoStatusRef.current.forcedBusy) {
-      autoStatusRef.current.forcedBusy = false;
+    const service = getHeadsetControlService();
+    if (!service) return;
 
-      // CRITICAL: Don't auto-revert to "Available" if status is "Agent Not Answering"
-      // Agent must manually change their status after not answering a call
-      let currentStatus = null;
-      try {
-        currentStatus = localStorage.getItem("user.status");
-      } catch (_) {}
+    const publishVersion = headsetStatePublishVersionRef.current + 1;
+    headsetStatePublishVersionRef.current = publishVersion;
+    let isStale = false;
 
-      if (currentStatus === "Agent Not Answering") {
-        console.log(
-          "[SoftphoneMini] Skipping auto-revert to Available - agent status is 'Agent Not Answering'"
-        );
+    const callId =
+      activeCall?.callControlId ||
+      activeCall?.call_control_id ||
+      activeCall?.id ||
+      null;
+
+    initHeadsetControlService()
+      .then((initializedService) => {
+        if (isStale || headsetStatePublishVersionRef.current !== publishVersion) return null;
+        return initializedService?.setSoftphoneState({
+          callId,
+          direction: isIncomingCall ? "incoming" : isOutboundCall ? "outgoing" : null,
+          ringing: Boolean(isRinging),
+          active: Boolean(isCallConnected),
+          muted: Boolean(callUI.isMuted),
+          held: Boolean(callUI.isHeld),
+          remoteDisplayName: incomingFromName || outboundCallerName || null,
+          remoteNumber: incomingFromNumber || toNumber || null,
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      isStale = true;
+    };
+  }, [
+    activeCall,
+    callUI.isHeld,
+    callUI.isMuted,
+    incomingFromName,
+    incomingFromNumber,
+    isCallConnected,
+    isIncomingCall,
+    isOutboundCall,
+    isRinging,
+    outboundCallerName,
+    toNumber,
+  ]);
+
+  useEffect(() => {
+    const service = getHeadsetControlService();
+    if (!service) return;
+
+    return service.onCommand((command) => {
+      if (command.type === HEADSET_COMMANDS.ANSWER && isRinging) {
+        handleAnswerCall();
         return;
       }
+      if (command.type === HEADSET_COMMANDS.REJECT && isRinging) {
+        handleRejectCall();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.HANGUP && activeCall) {
+        hangup();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.MUTE && activeCall && command.muted !== callUI.isMuted) {
+        toggleMute();
+        return;
+      }
+      if (command.type === HEADSET_COMMANDS.HOLD && activeCall && command.held !== callUI.isHeld) {
+        toggleHold();
+      }
+    });
+  }, [activeCall, callUI.isHeld, callUI.isMuted, isRinging]);
 
-      updateUserStatus("Available");
-    }
-  }, [activeCall, activeCallsCount]);
-
+  const fromRef = useRef("");
+  const audioRef = useRef(null);
   // Fetch interaction when call is active
   // This works for BOTH contact center calls AND by looking up any incoming call
   // Track the last interaction we fetched to prevent repeated API calls
@@ -360,7 +428,14 @@ export default function SoftphoneMini() {
             const callDirection =
               call.direction || notification?.call?.direction || "";
             const fromNumber =
-              call.from || call.callerId || call.caller_id || "";
+              call.options?.remoteCallerNumber ||
+              call.remoteCallerNumber ||
+              call.from ||
+              call.callerId ||
+              call.caller_id ||
+              "";
+            const fromName =
+              call.options?.remoteCallerName || call.remoteCallerName || "";
 
             // Determine if this is an incoming call
             // Priority:
@@ -381,6 +456,25 @@ export default function SoftphoneMini() {
             // Only show answer UI for truly incoming calls
             const isIncomingCall =
               isIncoming && (callState === "new" || callState === "ringing");
+
+            // WebRTC SDK remote caller fields are the source of truth for inbound UI.
+            if (isIncoming && (fromNumber || fromName)) {
+              const storeState = useActiveCallStore.getState();
+              if (storeState.call) {
+                const storeCallControlId =
+                  storeState.call.callControlId ||
+                  storeState.call.call_control_id ||
+                  storeState.call.id;
+                const notificationCallControlId =
+                  call.callControlId || call.call_control_id || call.id;
+                if (!storeCallControlId || storeCallControlId === notificationCallControlId) {
+                  setCallerInfo({
+                    fromNumber: fromNumber || undefined,
+                    fromName: fromName || undefined,
+                  });
+                }
+              }
+            }
 
             // For outbound calls, attach audio when call becomes active
             if (callDirection === "outbound" && activeCall) {
@@ -418,11 +512,12 @@ export default function SoftphoneMini() {
                   // Lookup if this is a contact center call or direct call
                   const metadata = await lookupCallMetadata(callControlId);
                   metadata.direction = "inbound";
-                  metadata.fromNumber = fromNumber;
+                  if (fromNumber) metadata.fromNumber = fromNumber;
+                  if (fromName) metadata.fromName = fromName;
 
                   // Try to get caller name from SSE store first
                   const storedInfo = await getStoredCallerInfo(fromNumber);
-                  if (storedInfo?.fromName) {
+                  if (!metadata.fromName && storedInfo?.fromName) {
                     metadata.fromName = storedInfo.fromName;
                   }
                   if (storedInfo?.originalCallControlId) {
@@ -564,7 +659,7 @@ export default function SoftphoneMini() {
         client.off?.("telnyx.notification", onNotification);
       } catch (_) {}
     };
-  }, [client, activeCall, setActiveCall, setCallerName]);
+  }, [client, activeCall, setActiveCall, setCallerInfo, setCallerName]);
 
   useEffect(() => {
     // Ensure audio element is configured and unlock audio context
@@ -623,6 +718,11 @@ export default function SoftphoneMini() {
         const data = await res.json();
         const mobile = data?.user?.mobile || "";
         const voice = data?.user?.voiceNumber || "";
+        const callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        setOutboundCallerName(callerName);
         const mainFromNumber = data?.user?.mainFromNumber || "";
 
         // Only set mobile as toNumber if there's no existing toNumber in the store
@@ -1056,10 +1156,25 @@ export default function SoftphoneMini() {
     }
   }
 
-  async function startCall() {
-    const to = (toNumber || "").trim();
-    let from = fromRef.current || "";
+  async function startCall(overrides = {}) {
+    const to = (overrides.toNumber || toNumber || "").trim();
+    let from = overrides.fromNumber || fromRef.current || "";
     if (!client || !to || activeCall) return;
+
+    let callerName = overrides.callerName || outboundCallerName;
+    if (!callerName) {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = await res.json();
+        callerName = [data?.user?.firstName, data?.user?.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        if (callerName) {
+          setOutboundCallerName(callerName);
+        }
+      } catch (_) {}
+    }
 
     // If fromNumber is empty, try to get mainFromNumber as fallback
     if (!from) {
@@ -1083,19 +1198,43 @@ export default function SoftphoneMini() {
         client.enableMicrophone?.();
       } catch (_) {}
 
+      const experimentalOptions = getWebrtcExperimentalOptions();
+      console.log("[webrtc] Starting outbound call", experimentalOptions);
       const call = client.newCall({
         destinationNumber: to,
         callerNumber: from || undefined,
+        callerName: callerName || undefined,
         audio: true,
         video: false,
+        ...(overrides.customHeaders ? { customHeaders: overrides.customHeaders } : {}),
+        ...(experimentalOptions.prefetchIceCandidates && {
+          prefetchIceCandidates: true,
+        }),
       });
 
       // Set active call in store (outbound call, no contact center metadata)
       setActiveCall(call, {
         direction: "outbound",
         fromNumber: from,
+        fromName: callerName || undefined,
         toNumber: to,
+        ...(overrides.metadata || {}),
       });
+
+      const outboundCallControlId = call.callControlId || call.call_control_id || call.id;
+      if (outboundCallControlId) {
+        useCallsStore.getState().addCall({
+          callControlId: outboundCallControlId,
+          callSessionId: call.callSessionId || call.call_session_id,
+          direction: "outbound",
+          status: call.state || "trying",
+          fromName: callerName || undefined,
+          fromNumber: from,
+          toNumber: to,
+          assignedAt: Date.now(),
+          metadata: overrides.metadata || {},
+        });
+      }
 
       // Immediately update status to ensure UI reflects dialing state
       const initialState = call.state || "trying";
@@ -1120,6 +1259,19 @@ export default function SoftphoneMini() {
       clearActiveCall();
     }
   }
+
+  useEffect(() => {
+    const handleSoftphoneStartCall = (event) => {
+      const detail = event.detail || {};
+      if (!detail.toNumber) return;
+      startCall(detail);
+      try {
+        toggle?.();
+      } catch (_) {}
+    };
+    window.addEventListener("softphone:start-call", handleSoftphoneStartCall);
+    return () => window.removeEventListener("softphone:start-call", handleSoftphoneStartCall);
+  }, [client, activeCall, toNumber, outboundCallerName]);
 
   async function toggleMute() {
     try {
@@ -1147,10 +1299,12 @@ export default function SoftphoneMini() {
 
       if (isHeld) {
         activeCall.unhold?.() || activeCall.resume?.();
-        // Update status to 'active' to track hold resume
+        // Update status before clearing held state so resume metrics close the hold interval
         updateStatus("active");
+        storeSetHeld(false);
       } else {
         activeCall.hold?.() || activeCall.pause?.();
+        storeSetHeld(true);
         // Update status to 'held' to track hold start
         updateStatus("held");
       }
@@ -1209,57 +1363,45 @@ export default function SoftphoneMini() {
         return;
       }
 
-      // Get the original call control ID from the active call store
-      // This was extracted from X-Original-Call-Control-Id header when the call was set
-      const originalCallControlId =
-        useActiveCallStore.getState().originalCallControlId;
+      const storeState = useActiveCallStore.getState();
+      const interactionId = storeState?.contactCenter?.interactionId;
+      const callControlId =
+        storeState.callControlId ||
+        storeState.call?.callControlId ||
+        storeState.call?.call_control_id ||
+        storeState.call?.id;
 
-      // If we have the original call control ID, use it for hangup
-      if (originalCallControlId) {
-        try {
-          // Hangup the original call leg using Telnyx API
-          const response = await fetch(`/api/voice/call-action`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "hangup",
-              callControlId: originalCallControlId,
-            }),
-          });
-
-          const result = await response.json();
-          if (!response.ok) {
-            // Failed to hangup original call leg
-          }
-        } catch (err) {
-          // Error calling hangup API
-        }
-      } else if (interaction?.id) {
-        // Fallback: If we have an interaction, hangup via API
-        try {
-          const response = await fetch(
-            `/api/contact-center/interactions/${interaction.id}/hangup`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-            }
-          );
-
-          const result = await response.json();
-          if (!response.ok) {
-            // Failed to hangup original call leg
-          }
-        } catch (err) {
-          // Error calling hangup API
-        }
+      // Queue inbound reject is a pre-answer agent no-answer signal.
+      // Never hang up the original caller leg from the browser: the backend webhook
+      // must see the agent leg hangup and requeue the caller.
+      if (interactionId || callControlId) {
+        window.dispatchEvent(
+          new CustomEvent("contact-center:call-disconnected", {
+            detail: {
+              interactionId,
+              callControlId,
+              transcriptions: storeState.transcriptions || [],
+              rejectedBeforeAnswer: true,
+              wasAnswered: false,
+            },
+          })
+        );
       }
 
-      // Hangup the WebRTC leg
       activeCall.hangup?.();
-
-      // handleCallEnd will be called by the hangup event
+      clearActiveCall();
+      if (callControlId) {
+        useCallsStore.getState().removeCall(callControlId);
+      }
+      if (interactionId) {
+        useCallsStore.getState().removeCall(interactionId);
+      }
+      window.dispatchEvent(
+        new CustomEvent("contact-center:refresh-interactions")
+      );
     } catch (err) {
       // Error rejecting call
+      clearActiveCall();
     }
   }
 
@@ -1391,6 +1533,7 @@ export default function SoftphoneMini() {
       }`}
     >
       <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      <HeadsetStatusBadge />
       <button
         className="h-7 w-7 rounded-full grid place-items-center bg-zinc-700/70 text-white hover:bg-zinc-700"
         title="Select number from contacts"
@@ -1398,14 +1541,40 @@ export default function SoftphoneMini() {
       >
         <IconContact className="h-4 w-4" />
       </button>
-      <input
-        value={toInput}
-        readOnly
-        placeholder="Phone number or SIP URI"
-        className="w-40 rounded border border-border bg-background px-2 py-1 text-xs outline-none cursor-pointer"
-        onClick={() => setShowNumberModal(true)}
-        title="Click to select number"
-      />
+      <button
+        type="button"
+        disabled={Boolean(isIncomingCall && incomingCallerDisplay)}
+        className={`relative h-[30px] w-40 overflow-hidden rounded border bg-background px-2 py-1 text-left text-xs outline-none ${
+          isIncomingCall && incomingCallerDisplay
+            ? "cursor-not-allowed border-orange-500/50 text-orange-500"
+            : isOutboundCall
+            ? "cursor-pointer border-emerald-500/50 text-foreground"
+            : "cursor-pointer border-border text-foreground"
+        }`}
+        onClick={() => {
+          if (!(isIncomingCall && incomingCallerDisplay)) {
+            setShowNumberModal(true);
+          }
+        }}
+        title={isIncomingCall && incomingCallerDisplay ? `From: ${incomingCallerDisplay}` : "Click to select number"}
+      >
+        <span
+          className={shouldMarqueeMiniInput ? "inline-block whitespace-nowrap" : "block truncate"}
+          style={
+            shouldMarqueeMiniInput
+              ? { animation: "miniPhoneCallerMarquee 6s ease-in-out infinite alternate" }
+              : undefined
+          }
+        >
+          {miniInputDisplay || "Phone number or SIP URI"}
+        </span>
+      </button>
+      <style jsx global>{`
+        @keyframes miniPhoneCallerMarquee {
+          0%, 25% { transform: translateX(0); }
+          75%, 100% { transform: translateX(calc(-100% + 9rem)); }
+        }
+      `}</style>
       {/* Show answer/reject buttons for incoming ringing calls */}
       {isRinging ? (
         <>

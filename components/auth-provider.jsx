@@ -48,11 +48,6 @@ export function AuthProvider({ children }) {
         const val = String(data.user.theme);
         if (["light", "dark", "system"].includes(val)) setTheme(val);
       }
-      if (data?.isAuth && data?.user?.status) {
-        try {
-          localStorage.setItem("user.status", String(data.user.status));
-        } catch (_) {}
-      }
     } catch (_) {
       setState({ isAuth: false, user: null });
     }

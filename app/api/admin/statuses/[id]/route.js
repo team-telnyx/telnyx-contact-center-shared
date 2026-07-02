@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -42,7 +43,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json(res.rows[0]);
   } catch (err) {
-    console.error("[Statuses] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load status" },
       { status: 500 }
@@ -108,7 +109,7 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Statuses] PUT error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (err.code === "23505") {
       return NextResponse.json(
         { error: "A status with this name already exists" },
@@ -135,9 +136,13 @@ export async function DELETE(request, { params }) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   try {
-    // Check if status is in use
+    // Check if status is in use. Runtime agent status is stored in cc_agent_state;
+    // users.agent_status is a removed legacy column.
     const usageRes = await pool.query(
-      `SELECT COUNT(*) as count FROM users WHERE agent_status = (SELECT name FROM cc_user_statuses WHERE id = $1)`,
+      `SELECT COUNT(*) as count
+       FROM cc_agent_state ast
+       JOIN cc_user_statuses status ON status.name = ast.agent_status
+       WHERE status.id = $1`,
       [id]
     );
     const usageCount = parseInt(usageRes.rows[0]?.count || "0", 10);
@@ -155,7 +160,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Statuses] DELETE error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to delete status" },
       { status: 500 }

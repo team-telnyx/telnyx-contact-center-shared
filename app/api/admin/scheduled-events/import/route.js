@@ -4,6 +4,7 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireSupervisorOrAdmin() {
   const session = await getServerSession(authOptions);
@@ -58,6 +59,8 @@ export async function POST(request) {
         telnyx_agent_target,
         scheduled_at_fixed_datetime,
         text,
+        max_retries_client_errors,
+        retry_interval_secs,
       } = event;
 
       // Validate required fields
@@ -117,14 +120,59 @@ export async function POST(request) {
         continue;
       }
 
+      const maxRetriesClientErrors = Number(max_retries_client_errors || 0);
+      const retryIntervalSecs = retry_interval_secs
+        ? Number(retry_interval_secs)
+        : null;
+
+      if (
+        !Number.isInteger(maxRetriesClientErrors) ||
+        maxRetriesClientErrors < 0 ||
+        maxRetriesClientErrors > 10
+      ) {
+        results.failed++;
+        results.errors.push({
+          row: i + 1,
+          error: "max_retries_client_errors must be an integer between 0 and 10",
+        });
+        continue;
+      }
+
+      if (
+        retryIntervalSecs !== null &&
+        (!Number.isInteger(retryIntervalSecs) ||
+          retryIntervalSecs < 60 ||
+          retryIntervalSecs > 86400)
+      ) {
+        results.failed++;
+        results.errors.push({
+          row: i + 1,
+          error: "retry_interval_secs must be an integer between 60 and 86400",
+        });
+        continue;
+      }
+
+      if (maxRetriesClientErrors > 0 && retryIntervalSecs === null) {
+        results.failed++;
+        results.errors.push({
+          row: i + 1,
+          error:
+            "retry_interval_secs is required when max_retries_client_errors is greater than 0",
+        });
+        continue;
+      }
+
       // Build payload
       const payload = {
         telnyx_conversation_channel,
         telnyx_end_user_target,
         telnyx_agent_target,
         scheduled_at_fixed_datetime: datetime.toISOString(),
+        max_retries_client_errors: maxRetriesClientErrors,
       };
 
+      if (retryIntervalSecs !== null)
+        payload.retry_interval_secs = retryIntervalSecs;
       if (text) payload.text = text;
 
       // Create the scheduled event
@@ -165,7 +213,7 @@ export async function POST(request) {
       results,
     });
   } catch (err) {
-    console.error("[Scheduled Events Import API] Error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: err.message || "Failed to import scheduled events" },
       { status: 500 }

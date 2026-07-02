@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 // Static list of popular US area codes
 const US_AREA_CODES = [
@@ -312,7 +313,7 @@ export async function GET(request) {
 
     return NextResponse.json(US_AREA_CODES);
   } catch (error) {
-    console.error("[Area Codes API] Error:", error);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }

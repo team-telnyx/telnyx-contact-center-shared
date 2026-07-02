@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { wrapupLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 import {
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { handleAgentCallLifecycleStatus } from "@/lib/contact-center/agent-call-lifecycle-status";
 
 async function getUsernameForUserId(userId) {
   const pool = getPostgresPool();
@@ -62,6 +64,14 @@ export async function POST(request, { params }) {
       return NextResponse.json(
         { ok: false, error: "Invalid wrapup action" },
         { status: 400 },
+      );
+    }
+
+    const wasAnswered = Boolean(interaction.answered_at);
+    if (action === "start" && !wasAnswered) {
+      return NextResponse.json(
+        { ok: false, error: "Wrapup requires an answered call" },
+        { status: 409 },
       );
     }
 
@@ -146,9 +156,19 @@ export async function POST(request, { params }) {
     }
 
     await PgDb.updateInteractionById(id, updates);
+
+    if (interaction.agent_username) {
+      await handleAgentCallLifecycleStatus({
+        event: action === "start" ? "disconnected" : "wrapup-ended",
+        userId: user.id,
+        username: interaction.agent_username,
+        interaction,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[Wrapup] POST error:", err);
+    wrapupLogger.error("wrapup_error_0", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { ok: false, error: "Failed to update wrapup status" },
       { status: 500 },

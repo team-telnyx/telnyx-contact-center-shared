@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { VariableInput } from "./VariableInput";
 import { VariableTextarea } from "./VariableTextarea";
 import {
@@ -23,7 +24,6 @@ import {
   IconList,
   IconCode,
   IconAlertCircle,
-  IconKey,
   IconExternalLink,
 } from "@tabler/icons-react";
 import {
@@ -76,6 +76,8 @@ export default function HttpRequestNodeEditor({
   const [queryParamsExpanded, setQueryParamsExpanded] = useState(false);
   const [bodyParamsExpanded, setBodyParamsExpanded] = useState(false);
   const [availableSecrets, setAvailableSecrets] = useState([]);
+  const latestConfigRef = useRef(config);
+  latestConfigRef.current = config;
 
   // Load available secrets
   const loadSecrets = async () => {
@@ -128,13 +130,6 @@ export default function HttpRequestNodeEditor({
     handleChange("headers", newHeaders);
   };
 
-  // Insert secret reference into header value
-  const insertSecretReference = (headerKey, secretName) => {
-    const currentValue = headers[headerKey] || "";
-    const secretReference = `{{#integration_secret}}${secretName}{{/integration_secret}}`;
-    const newValue = currentValue + secretReference;
-    updateHeaderValue(headerKey, newValue);
-  };
 
   // Path Parameters handlers
   const addPathParam = () => {
@@ -230,6 +225,7 @@ export default function HttpRequestNodeEditor({
           value={url}
           onChange={(value) => handleChange("url", value)}
           availableVariables={availableVariables}
+          availableSecrets={availableSecrets}
           placeholder="https://api.example.com/endpoint"
           className="mt-1"
         />
@@ -290,46 +286,22 @@ export default function HttpRequestNodeEditor({
                   className="flex items-start gap-2 p-2 border rounded-md bg-card"
                 >
                   <div className="flex-1 space-y-1">
-                    <div className="text-xs font-medium">{key}</div>
+                    <Badge
+                      variant="outline"
+                      className="w-fit text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                    >
+                      {key}
+                    </Badge>
                     <VariableInput
                       value={value}
                       onChange={(newValue) => updateHeaderValue(key, newValue)}
                       availableVariables={availableVariables}
+                      availableSecrets={availableSecrets}
                       placeholder="Header value"
                       className="text-xs"
                     />
                   </div>
                   <div className="flex items-center gap-1">
-                    {/* Secrets Dropdown */}
-                    {availableSecrets.length > 0 && (
-                      <Select
-                        onValueChange={(secretName) => {
-                          insertSecretReference(key, secretName);
-                        }}
-                      >
-                        <SelectTrigger className="h-8 w-8 p-0 border-0 bg-transparent [&>svg]:hidden">
-                          <div className="h-8 w-8 p-0 flex items-center justify-center">
-                            <IconKey className="h-4 w-4 text-telnyx-green" />
-                          </div>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableSecrets.map((secret) => (
-                            <SelectItem key={secret.id} value={secret.name}>
-                              <div className="flex flex-col">
-                                <span className="font-mono text-sm">
-                                  {secret.name}
-                                </span>
-                                {secret.description && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {secret.description}
-                                  </span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
                     <Button
                       type="button"
                       size="sm"
@@ -356,6 +328,7 @@ export default function HttpRequestNodeEditor({
                 value={newHeaderValue}
                 onChange={setNewHeaderValue}
                 availableVariables={availableVariables}
+                availableSecrets={availableSecrets}
                 placeholder="Header value"
                 className="text-xs"
               />
@@ -409,13 +382,19 @@ export default function HttpRequestNodeEditor({
                   className="flex items-start gap-2 p-2 border rounded-md bg-card"
                 >
                   <div className="flex-1 space-y-1">
-                    <div className="text-xs font-medium">{key}</div>
+                    <Badge
+                      variant="outline"
+                      className="w-fit text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                    >
+                      {key}
+                    </Badge>
                     <VariableInput
                       value={value}
                       onChange={(newValue) =>
                         updatePathParamValue(key, newValue)
                       }
                       availableVariables={availableVariables}
+                      availableSecrets={availableSecrets}
                       placeholder="Path value"
                       className="text-xs"
                     />
@@ -445,6 +424,7 @@ export default function HttpRequestNodeEditor({
                 value={newPathParamValue}
                 onChange={setNewPathParamValue}
                 availableVariables={availableVariables}
+                availableSecrets={availableSecrets}
                 placeholder="Parameter value"
                 className="text-xs"
               />
@@ -498,13 +478,19 @@ export default function HttpRequestNodeEditor({
                   className="flex items-start gap-2 p-2 border rounded-md bg-card"
                 >
                   <div className="flex-1 space-y-1">
-                    <div className="text-xs font-medium">{key}</div>
+                    <Badge
+                      variant="outline"
+                      className="w-fit text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                    >
+                      {key}
+                    </Badge>
                     <VariableInput
                       value={value}
                       onChange={(newValue) =>
                         updateQueryParamValue(key, newValue)
                       }
                       availableVariables={availableVariables}
+                      availableSecrets={availableSecrets}
                       placeholder="Query value"
                       className="text-xs"
                     />
@@ -534,6 +520,7 @@ export default function HttpRequestNodeEditor({
                 value={newQueryValue}
                 onChange={setNewQueryValue}
                 availableVariables={availableVariables}
+                availableSecrets={availableSecrets}
                 placeholder="Parameter value"
                 className="text-xs"
               />
@@ -612,6 +599,7 @@ export default function HttpRequestNodeEditor({
                   value={body}
                   onChange={(value) => handleChange("body", value)}
                   availableVariables={availableVariables}
+                  availableSecrets={availableSecrets}
                   placeholder='{"key": "{{value}}"}'
                   rows={6}
                   className="font-mono text-xs"
@@ -633,13 +621,19 @@ export default function HttpRequestNodeEditor({
                         className="flex items-start gap-2 p-2 border rounded-md bg-card"
                       >
                         <div className="flex-1 space-y-1">
-                          <div className="text-xs font-medium">{key}</div>
+                          <Badge
+                            variant="outline"
+                            className="w-fit text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                          >
+                            {key}
+                          </Badge>
                           <VariableInput
                             value={value}
                             onChange={(newValue) =>
                               updateBodyParamValue(key, newValue)
                             }
                             availableVariables={availableVariables}
+                            availableSecrets={availableSecrets}
                             placeholder="Parameter value"
                             className="text-xs"
                           />
@@ -669,6 +663,7 @@ export default function HttpRequestNodeEditor({
                       value={newBodyParamValue}
                       onChange={setNewBodyParamValue}
                       availableVariables={availableVariables}
+                      availableSecrets={availableSecrets}
                       placeholder="Parameter value"
                       className="text-xs"
                     />
@@ -778,6 +773,15 @@ export default function HttpRequestNodeEditor({
         onOpenChange={setTestModalOpen}
         config={config}
         availableVariables={availableVariables}
+        onTestSuccess={(testResponse) => {
+          onChange({
+            ...latestConfigRef.current,
+            testResponse: {
+              ...testResponse,
+              testedAt: new Date().toISOString(),
+            },
+          });
+        }}
       />
     </div>
   );

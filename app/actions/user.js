@@ -3,6 +3,23 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { revalidatePath } from "next/cache";
+
+async function getCurrentAgentStatus(userId) {
+  if (!userId) return "Available";
+  try {
+    const pool = getPostgresPool();
+    if (!pool) return "Available";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Available";
+  } catch (_) {
+    return "Available";
+  }
+}
 
 export async function getProfileAction() {
   try {
@@ -19,13 +36,14 @@ export async function getProfileAction() {
       user = await PgDb.findUserByUsername(email);
     }
     if (!user) return { ok: false, error: "Not found" };
+    const status = await getCurrentAgentStatus(user.id);
     const sanitized = {
       id: String(user.id),
       firstName: user.first_name || user.firstName || "",
       lastName: user.last_name || user.lastName || "",
       nick: user.nick || "",
       language: user.language || "en-US",
-      status: user.status || "Available - ACD",
+      status,
       mobile: user.mobile || "",
       smsNumber: user.sms_number || user.smsNumber || "",
       voiceNumber: user.voice_number || user.voiceNumber || "",
@@ -46,30 +64,17 @@ export async function updateProfileAction(formData) {
     const email = session?.user?.email || null;
     if (!userId && !email) return { ok: false, error: "Unauthorized" };
 
-    const idForQuery = userId
-      ? userId
-      : (await PgDb.findUserByUsername(email))?.id;
-    if (!idForQuery) return { ok: false, error: "Unauthorized" };
-
-    // Verify user exists before updating
-    const current = await PgDb.findUserById(idForQuery);
-    if (!current) {
-      // Try to find by email as fallback
-      const userByEmail = email ? await PgDb.findUserByUsername(email) : null;
-      if (userByEmail) {
-        // Use the ID from email lookup instead
-        const actualId = String(userByEmail.id);
-        const updateResult = await updateProfileWithId(
-          actualId,
-          formData,
-          current
-        );
-        return updateResult;
-      }
-      return { ok: false, error: "User not found" };
+    let current = null;
+    if (userId) {
+      current = await PgDb.findUserById(userId);
     }
-
-    return await updateProfileWithId(String(idForQuery), formData, current);
+    if (!current && email) {
+      current = await PgDb.findUserByUsername(email);
+    }
+    
+    if (!current) return { ok: false, error: "Unauthorized" };
+    
+    return await updateProfileWithId(String(current.id), formData, current);
   } catch (err) {
     return { ok: false, error: err.message || "Server error" };
   }
@@ -126,6 +131,9 @@ async function updateProfileWithId(idForQuery, formData, current) {
     const userId = String(idForQuery);
     await PgDb.updateUserById(userId, update);
 
+    revalidatePath("/");
+    revalidatePath("/profile");
+
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message || "Server error" };
@@ -138,20 +146,27 @@ export async function uploadProfilePictureAction(dataUrl) {
     const userId = session?.user?.id || null;
     const email = session?.user?.email || null;
     if (!userId && !email) return { ok: false, error: "Unauthorized" };
-    let idForQuery = userId;
-    if (!idForQuery && email) {
-      const found = await PgDb.findUserByUsername(email);
-      idForQuery = found?.id;
+
+    let current = null;
+    if (userId) {
+      current = await PgDb.findUserById(userId);
     }
-    if (!idForQuery) return { ok: false, error: "Unauthorized" };
+    if (!current && email) {
+      current = await PgDb.findUserByUsername(email);
+    }
+    if (!current) return { ok: false, error: "Unauthorized" };
 
     if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) {
       return { ok: false, error: "Invalid image data" };
     }
 
     // Ensure ID is a string
-    const userIdStr = String(idForQuery);
+    const userIdStr = String(current.id);
     await PgDb.updateUserById(userIdStr, { profilePictureUri: dataUrl });
+
+    revalidatePath("/");
+    revalidatePath("/profile");
+
     return { ok: true, profilePictureUri: dataUrl };
   } catch (err) {
     return { ok: false, error: "Upload failed" };

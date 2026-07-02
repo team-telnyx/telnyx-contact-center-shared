@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
+import { authErrorPayload, authUserPayload, logAuthEvent, normalizeAuthEmail } from "@/lib/auth-logging.mjs";
 
 export async function POST(request) {
   try {
     const body = await request.json();
     const { token } = body;
+    logAuthEvent("info", "account_activation_attempt", { activationToken: "[REDACTED]", source: "api" });
 
     if (!token) {
+      logAuthEvent("warn", "account_activation_failed", { reason: "missing_token", activationToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Missing activation token" },
         { status: 400 }
@@ -24,6 +27,7 @@ export async function POST(request) {
     const user = result.rows?.[0];
 
     if (!user) {
+      logAuthEvent("warn", "account_activation_failed", { reason: "invalid_token", activationToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Invalid activation token" },
         { status: 400 }
@@ -32,6 +36,7 @@ export async function POST(request) {
 
     // Check if already verified
     if (user.verified) {
+      logAuthEvent("info", "account_activation_success", { ...authUserPayload(user), alreadyActivated: true, source: "api" });
       return NextResponse.json({
         success: true,
         alreadyActivated: true,
@@ -42,6 +47,7 @@ export async function POST(request) {
     // Check if token has expired
     const tokenExpires = new Date(user.activation_token_expires);
     if (tokenExpires < new Date()) {
+      logAuthEvent("warn", "account_activation_failed", { ...authUserPayload(user), reason: "expired_token", activationToken: "[REDACTED]", source: "api" });
       return NextResponse.json(
         { success: false, error: "Activation token has expired" },
         { status: 400 }
@@ -55,12 +61,13 @@ export async function POST(request) {
       activation_token_expires: null,
     });
 
+    logAuthEvent("info", "account_activation_success", { ...authUserPayload(user), source: "api" });
     return NextResponse.json({
       success: true,
       message: "Account activated successfully",
     });
   } catch (error) {
-    console.error("[Account Activation] Error:", error);
+    logAuthEvent("error", "account_activation_failed", { reason: "server_error", source: "api", ...authErrorPayload(error) });
     return NextResponse.json(
       { success: false, error: "Server error" },
       { status: 500 }

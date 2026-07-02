@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * GET /api/contact-center/agents/[userId]/calls
@@ -43,8 +44,16 @@ export async function GET(request, { params }) {
 
     // Get agent info
     const agentResult = await pool.query(
-      `SELECT id, username, first_name, last_name, agent_status, max_concurrent_calls 
-       FROM users WHERE id = $1`,
+      `SELECT
+         u.id,
+         u.username,
+         u.first_name,
+         u.last_name,
+         ast.agent_status,
+         u.max_concurrent_calls
+       FROM users u
+       LEFT JOIN cc_agent_state ast ON ast.user_id = u.id
+       WHERE u.id = $1`,
       [userId],
     );
 
@@ -92,10 +101,13 @@ export async function GET(request, { params }) {
         q.display_name as queue_name
       FROM cc_interactions i
       LEFT JOIN cc_queues q ON i.queue_id = q.id
+      LEFT JOIN users agent_user ON agent_user.username = i.agent_username
+      LEFT JOIN cc_agent_state agent_state ON agent_state.user_id = agent_user.id
       WHERE i.agent_username = $1
         AND i.completed_at IS NULL
         AND i.abandoned_at IS NULL
         AND i.state != 'queued'
+        AND COALESCE(agent_state.agent_status, '') <> 'Agent Not Answering'
         AND COALESCE(i.metadata->>'timeout_re_enqueued', '') != 'true'
         AND COALESCE(i.metadata->>'is_consult_call', 'false') <> 'true'
         AND i.assigned_at IS NOT NULL
@@ -212,7 +224,7 @@ export async function GET(request, { params }) {
       },
     });
   } catch (error) {
-    console.error("[AgentCalls] Error fetching agent calls:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch agent calls" },
       { status: 500 },

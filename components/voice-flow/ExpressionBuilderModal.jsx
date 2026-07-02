@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from "react";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -22,7 +31,6 @@ import {
   IconCheck,
   IconAlertCircle,
   IconPlayerPlay,
-  IconX,
   IconPlus,
   IconInfoCircle,
   IconCode,
@@ -56,10 +64,13 @@ export function ExpressionBuilderModal({
   onOpenChange,
   initialExpression = "",
   availableVariables = [],
+  testPayloadOptions = [],
   onApply,
 }) {
   const [expression, setExpression] = useState(initialExpression);
   const [testData, setTestData] = useState("");
+  const [isEditingTestData, setIsEditingTestData] = useState(true);
+  const [selectedPayloadId, setSelectedPayloadId] = useState("manual-json");
   const [testResult, setTestResult] = useState(null);
   const [accordionValue, setAccordionValue] = useState("string");
 
@@ -73,6 +84,41 @@ export function ExpressionBuilderModal({
 
   // Get all available functions
   const allFunctions = getAvailableFunctions();
+
+  const groupedTestPayloadOptions = testPayloadOptions.reduce((groups, option) => {
+    const group = option.group || "Saved payloads";
+    if (!groups[group]) {
+      groups[group] = [];
+    }
+    groups[group].push(option);
+    return groups;
+  }, {});
+
+  const handleSelectTestPayload = (payloadId) => {
+    setSelectedPayloadId(payloadId);
+    setTestResult(null);
+
+    if (payloadId === "manual-json") {
+      setIsEditingTestData(true);
+      return;
+    }
+
+    const option = testPayloadOptions.find((item) => item.id === payloadId);
+    if (!option) return;
+
+    setTestData(JSON.stringify(option.payload, null, 2));
+    setIsEditingTestData(false);
+  };
+
+  const hasPreviewableTestData = (() => {
+    if (isEditingTestData || !testData.trim()) return false;
+    try {
+      JSON.parse(testData);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  })();
 
   // Function categories
   const categories = [
@@ -348,7 +394,7 @@ export function ExpressionBuilderModal({
             </div>
 
             {/* Right Column - Expression Editor & Testing */}
-            <div className="space-y-4 flex flex-col min-h-0 overflow-hidden">
+            <div className="space-y-4 flex flex-col min-h-0 overflow-y-auto pr-2">
               {/* Expression Textarea */}
               <div className="min-w-0">
                 <Label className="text-sm font-semibold mb-2 block">
@@ -420,23 +466,91 @@ export function ExpressionBuilderModal({
               )}
 
               {/* Test Expression */}
-              <div className="border rounded-md p-4 bg-muted/30 flex-1 flex flex-col min-h-0">
-                <Label className="text-sm font-semibold mb-3 block">
-                  Test Data (provide a JSON object)
-                </Label>
+              <div className="border rounded-md p-4 bg-muted/30 flex flex-col">
+                <div className="mb-3 space-y-2">
+                  <Label className="text-sm font-semibold block">
+                    Test Data (provide a JSON object)
+                  </Label>
+                  {testPayloadOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Select
+                        value={selectedPayloadId}
+                        onValueChange={handleSelectTestPayload}
+                      >
+                        <SelectTrigger className="w-full bg-background">
+                          <SelectValue placeholder="Choose a saved payload" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-80">
+                          <SelectItem value="manual-json">Manual JSON / custom test data</SelectItem>
+                          {Object.entries(groupedTestPayloadOptions).map(
+                            ([group, options]) => (
+                              <SelectGroup key={group}>
+                                <SelectLabel>{group}</SelectLabel>
+                                {options.map((option) => (
+                                  <SelectItem key={option.id} value={option.id}>
+                                    <div className="flex flex-col items-start gap-0.5">
+                                      <span className="text-sm">{option.label}</span>
+                                      {option.description && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {option.description}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Choose a saved webhook/request/response payload from this call flow, or edit the JSON below.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
-                <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                  <div>
-                    <Textarea
-                      value={testData}
-                      onChange={(e) => setTestData(e.target.value)}
-                      placeholder={
-                        '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
-                      }
-                      rows={8}
-                      className="font-mono text-xs w-full"
-                    />
-                  </div>
+                <div className="space-y-3">
+                  {hasPreviewableTestData ? (
+                    <CodeBlock
+                      code={testData}
+                      language="json"
+                      maxHeight={220}
+                      className="max-h-[220px] overflow-auto"
+                    >
+                      <CodeBlockCopyButton type="button" />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 bg-background/90 shadow-sm backdrop-blur hover:bg-muted"
+                        onClick={() => {
+                          setSelectedPayloadId("manual-json");
+                          setIsEditingTestData(true);
+                        }}
+                      >
+                        Edit JSON
+                      </Button>
+                    </CodeBlock>
+                  ) : (
+                    <div className="rounded-md border border-zinc-800 bg-black overflow-hidden">
+                      <Textarea
+                        value={testData}
+                        onChange={(e) => {
+                          setSelectedPayloadId("manual-json");
+                          setIsEditingTestData(true);
+                          setTestData(e.target.value);
+                        }}
+                        placeholder={
+                          '{\n  "customer_data_rows": [\n    {"first_name": "John", "last_name": "Doe"}\n  ]\n}'
+                        }
+                        rows={8}
+                        spellCheck={false}
+                        aria-label="Test Data JSON code editor"
+                        className="font-mono text-xs w-full min-h-48 resize-y border-0 bg-black text-zinc-100 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-zinc-500"
+                      />
+                    </div>
+                  )}
                   <Button
                     type="button"
                     onClick={handleTestExpression}
@@ -462,18 +576,17 @@ export function ExpressionBuilderModal({
                   )}
 
                   {testResult && (
-                    <div className="flex-1 min-h-0 overflow-hidden">
+                    <div>
                       {testResult.success ? (
-                        <div className="h-full overflow-auto">
-                          <CodeBlock
-                            code={JSON.stringify(testResult.value, null, 2)}
-                            language="json"
-                          >
-                            <CodeBlockCopyButton />
-                          </CodeBlock>
-                        </div>
+                        <CodeBlock
+                          code={JSON.stringify(testResult.value, null, 2)}
+                          language="json"
+                          maxHeight={240}
+                        >
+                          <CodeBlockCopyButton />
+                        </CodeBlock>
                       ) : (
-                        <div className="h-full border rounded-md bg-destructive/10 overflow-auto">
+                        <div className="max-h-60 border rounded-md bg-destructive/10 overflow-auto">
                           <div className="text-xs font-mono break-all p-3 text-destructive">
                             {testResult.error}
                           </div>

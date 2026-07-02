@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { PgDb } from "@/lib/pgdb";
 import { generateCallSummary } from "@/lib/contact-center/call-summary.js";
+import { voiceRuntimePayload, recordingsLogger } from "@/lib/voice/logging.mjs";
+import {
+  extractSpeakerTurns,
+  extractTranscriptionConfidence,
+} from "@/lib/voice-transcription-utils.mjs";
+import {
+  TRANSCRIPTION_MODELS,
+  DEFAULT_TRANSCRIPTION_MODEL,
+  buildTranscriptionModelConfig,
+} from "@/config/transcription-models";
 
 function getApiKey() {
   const apiKey = process.env.TELNYX_API_KEY;
@@ -26,7 +36,12 @@ export async function POST(request, { params }) {
     }
 
     const body = await request.json();
-    const { interactionId } = body;
+    const {
+      interactionId,
+      model: requestedModel,
+      language: requestedLanguage,
+      options: requestedOptions,
+    } = body;
 
     if (!interactionId) {
       return NextResponse.json(
@@ -34,6 +49,20 @@ export async function POST(request, { params }) {
         { status: 400 }
       );
     }
+
+    // Validate the requested model against the allowlist; default to Nova 3.
+    const model = TRANSCRIPTION_MODELS.some((m) => m.value === requestedModel)
+      ? requestedModel
+      : DEFAULT_TRANSCRIPTION_MODEL;
+    const modelMeta = TRANSCRIPTION_MODELS.find((m) => m.value === model);
+    const language =
+      requestedLanguage && modelMeta?.languages?.includes(requestedLanguage)
+        ? requestedLanguage
+        : "auto";
+    const options =
+      requestedOptions && typeof requestedOptions === "object" && !Array.isArray(requestedOptions)
+        ? requestedOptions
+        : {};
 
     // Get interaction to find recording URL
     const interaction = await PgDb.findInteractionById(interactionId);
@@ -58,7 +87,7 @@ export async function POST(request, { params }) {
 
     if (!recordingInfoResponse.ok) {
       const errorText = await recordingInfoResponse.text();
-      console.error("[TranscribeRecording] Failed to fetch recording info:", errorText);
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: "Failed to fetch recording information" },
         { status: recordingInfoResponse.status }
@@ -98,7 +127,7 @@ export async function POST(request, { params }) {
     const recordingResponse = await fetch(audioUrl);
     if (!recordingResponse.ok) {
       const errorText = await recordingResponse.text();
-      console.error("[TranscribeRecording] Failed to download recording:", errorText);
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         { ok: false, error: "Failed to download recording" },
         { status: 500 }
@@ -110,13 +139,21 @@ export async function POST(request, { params }) {
     // Create FormData for multipart/form-data request
     const formData = new FormData();
     formData.append("file", audioBlob, `recording-${recordingId}.${fileExtension}`);
-    formData.append("model", "distil-whisper/distil-large-v2");
+    formData.append("model", model);
     formData.append("response_format", "verbose_json");
     formData.append("timestamp_granularities[]", "segment");
+    if (language && language !== "auto") {
+      formData.append("language", language);
+    }
+    const modelConfig = buildTranscriptionModelConfig(model, options, language);
+    if (modelConfig) {
+      formData.append("model_config", JSON.stringify(modelConfig));
+    }
 
     // Call Telnyx transcription API
     const url = buildTelnyxV2Url("/ai/audio/transcriptions");
 
+    const startedAt = Date.now();
     const transcriptionResponse = await fetch(url, {
       method: "POST",
       headers: {
@@ -127,10 +164,7 @@ export async function POST(request, { params }) {
 
     if (!transcriptionResponse.ok) {
       const errorData = await transcriptionResponse.json().catch(() => ({}));
-      console.error(
-        "[TranscribeRecording] Telnyx API error:",
-        errorData
-      );
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return NextResponse.json(
         {
           ok: false,
@@ -144,8 +178,13 @@ export async function POST(request, { params }) {
     }
 
     const transcriptionData = await transcriptionResponse.json();
+    const processingTimeMs = Date.now() - startedAt;
     const transcriptionText = transcriptionData?.text || null;
     const segments = transcriptionData?.segments || null;
+    const speakerTurns = extractSpeakerTurns(transcriptionData);
+    const confidence = extractTranscriptionConfidence(transcriptionData);
+    const detectedLanguage = transcriptionData?.language || null;
+    const audioDuration = transcriptionData?.duration || null;
 
     if (!transcriptionText) {
       return NextResponse.json(
@@ -159,24 +198,31 @@ export async function POST(request, { params }) {
     try {
       summary = await generateCallSummary(transcriptionText);
       if (summary) {
-        console.log(
-          `[TranscribeRecording] Generated call summary for interaction ${interactionId}`
-        );
+        recordingsLogger.debug("recording_transcribe_transcriberecording", voiceRuntimePayload({ eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     } catch (summaryError) {
-      console.error(
-        "[TranscribeRecording] Error generating call summary:",
-        summaryError
-      );
+      recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       // Continue even if summary generation fails
     }
 
-    // Save transcription to interaction metadata (include both text, segments, and summary)
+    // Save transcription to interaction metadata (include text, segments,
+    // speaker turns, model details, and summary)
     const updatedMetadata = {
       ...(interaction.metadata || {}),
       transcription_text: transcriptionText,
       transcription_segments: segments,
       transcription_summary: summary,
+      transcription_speaker_turns: speakerTurns,
+      transcription_details: {
+        model,
+        language,
+        detected_language: detectedLanguage,
+        confidence,
+        duration: audioDuration,
+        diarize: Boolean(modelConfig?.diarize),
+        processing_time_ms: processingTimeMs,
+        transcribed_at: new Date().toISOString(),
+      },
     };
 
     await PgDb.updateInteractionById(interactionId, {
@@ -188,9 +234,11 @@ export async function POST(request, { params }) {
       transcription_text: transcriptionText,
       transcription_segments: segments,
       transcription_summary: summary,
+      transcription_speaker_turns: speakerTurns,
+      transcription_details: updatedMetadata.transcription_details,
     });
   } catch (error) {
-    console.error("[TranscribeRecording] Error:", error);
+    recordingsLogger.error("recording_transcribe_transcriberecording", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 }

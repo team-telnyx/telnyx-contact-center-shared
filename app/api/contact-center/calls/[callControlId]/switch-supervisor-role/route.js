@@ -1,3 +1,4 @@
+import { supervisionLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 /**
  * API endpoint to switch supervisor role
  * POST /api/contact-center/calls/[callControlId]/switch-supervisor-role
@@ -42,11 +43,7 @@ export async function POST(request, { params }) {
       );
     }
 
-    console.log("[SwitchSupervisorRole] Switching role for supervisor call:", {
-      supervisorCallControlId: callControlId,
-      supervisorId: user.id,
-      supervisorUsername: user.username,
-    });
+    supervisionLogger.debug("supervision_diagnostic_0", {});
 
     const body = await request.json();
     // Accept both 'role' and 'supervisor_role' for backward compatibility
@@ -81,10 +78,7 @@ export async function POST(request, { params }) {
       role: role,
     };
 
-    console.log("[SwitchSupervisorRole] Telnyx API request:", {
-      url,
-      payload: JSON.stringify(payload, null, 2),
-    });
+    supervisionLogger.debug("supervision_diagnostic_1", {});
 
     const response = await fetch(url, {
       method: "POST",
@@ -106,12 +100,7 @@ export async function POST(request, { params }) {
     }
 
     if (!response.ok) {
-      console.error("[SwitchSupervisorRole] Telnyx API error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorData: data,
-        supervisorCallControlId: callControlId,
-      });
+      supervisionLogger.error("supervision_error_2", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       
       const errorMsg =
         data?.errors?.[0]?.detail ||
@@ -121,10 +110,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: errorMsg }, { status: response.status });
     }
 
-    console.log("[SwitchSupervisorRole] ✅ Supervisor role switched successfully:", {
-      supervisorCallControlId: callControlId,
-      newRole: role,
-    });
+    supervisionLogger.debug("supervision_diagnostic_3", {});
 
     return NextResponse.json({
       ok: true,
@@ -132,7 +118,7 @@ export async function POST(request, { params }) {
       message: `Supervisor role switched to ${role}`,
     });
   } catch (error) {
-    console.error("[SwitchSupervisorRole] Error:", error);
+    supervisionLogger.error("supervision_error_4", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { error: error.message || "Failed to switch supervisor role" },
       { status: 500 }

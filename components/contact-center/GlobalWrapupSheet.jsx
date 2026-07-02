@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import WrapupCodesSheet from "./WrapupCodesSheet";
 import useWrapupSheetStore from "@/lib/stores/wrapup-sheet-store";
 import useActiveCallStore from "@/lib/stores/active-call-store";
+import {
+  subscribeStatusStream,
+  subscribeStatusStreamState,
+} from "@/lib/status-stream-client";
 
 /**
  * Global Wrapup Sheet Component
@@ -25,10 +29,101 @@ export function GlobalWrapupSheet() {
     (state) => state.disconnectedTime,
   );
   const [interactions, setInteractions] = useState([]);
+  const [agentStatus, setAgentStatus] = useState(null);
   const lastWrapupInteractionRef = useRef(null);
   const lastInteractionSnapshotRef = useRef(null);
   const lastStatusRef = useRef(null);
   const lastDisconnectedTimeRef = useRef(null);
+  const latestTranscriptionsRef = useRef([]);
+
+  const hasAnsweredEvidence = useCallback((interaction) => {
+    const metadata = interaction?.metadata || {};
+    const routingMetadata = metadata.routing_metadata || metadata.routingMetadata || {};
+    const timeline = Array.isArray(routingMetadata.timeline)
+      ? routingMetadata.timeline
+      : [];
+    return Boolean(interaction?.answered_at || interaction?.answeredAt) ||
+      timeline.some((event) =>
+        ["answered", "connected", "bridged"].includes(event?.type),
+      );
+  }, []);
+
+  const isEligibleWrapupInteraction = useCallback(
+    (interaction) => {
+      if (!interaction || interaction.state !== "completed") return false;
+      const metadata = interaction.metadata || {};
+      if (metadata.timeout_re_enqueued === true) return false;
+      if (metadata.is_consult_call === true) return false;
+      if (metadata.is_transfer_leg === true) return false;
+      return hasAnsweredEvidence(interaction);
+    },
+    [hasAnsweredEvidence],
+  );
+
+  const loadInteractions = useCallback(async () => {
+    try {
+      const res = await fetch(
+        "/api/contact-center/agent/interactions?limit=50&activeOnly=false",
+        { cache: "no-store" },
+      );
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.interactions)) {
+        setInteractions(data.interactions);
+        return data.interactions;
+      }
+    } catch (err) {
+      // Failed to load interactions
+    }
+    return [];
+  }, []);
+
+  const recoverWrapupFromInteractions = useCallback(
+    async (candidateInteractions = null) => {
+      if (useWrapupSheetStore.getState().open) return false;
+      const sourceInteractions = Array.isArray(candidateInteractions)
+        ? candidateInteractions
+        : await loadInteractions();
+      const candidate = sourceInteractions.find(
+        (interaction) =>
+          isEligibleWrapupInteraction(interaction) &&
+          interaction.id !== lastWrapupInteractionRef.current,
+      );
+      if (!candidate) return false;
+
+      lastWrapupInteractionRef.current = candidate.id;
+      useWrapupSheetStore
+        .getState()
+        .openWrapup(candidate.id, latestTranscriptionsRef.current || []);
+      return true;
+    },
+    [isEligibleWrapupInteraction, loadInteractions],
+  );
+
+  const loadAgentStatusForWrapupRecovery = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/profile", { cache: "no-store" });
+      const data = await res.json();
+      const profileStatus = data?.data?.status;
+      if (!profileStatus) return null;
+
+      setAgentStatus(profileStatus);
+      if (profileStatus === "Wrapup") {
+        const latestInteractions = await loadInteractions();
+        await recoverWrapupFromInteractions(latestInteractions);
+      }
+      return profileStatus;
+    } catch (err) {
+      console.error(
+        "[GlobalWrapupSheet] Failed to load profile status for wrapup recovery:",
+        err,
+      );
+      return null;
+    }
+  }, [loadInteractions, recoverWrapupFromInteractions]);
+
+  useEffect(() => {
+    latestTranscriptionsRef.current = callTranscriptions || [];
+  }, [callTranscriptions]);
 
   // Track interaction ID and transcriptions
   useEffect(() => {
@@ -40,23 +135,9 @@ export function GlobalWrapupSheet() {
     }
   }, [callInteractionId, callTranscriptions]);
 
-  // Load interactions to check if call was answered
-  // No polling - SSE handles all real-time updates
+  // Load interactions to check if call was answered. SSE/status events refresh,
+  // and Wrapup status has polling safety nets below.
   useEffect(() => {
-    const loadInteractions = async () => {
-      try {
-        const res = await fetch(
-          "/api/contact-center/agent/interactions?limit=50&activeOnly=false",
-        );
-        const data = await res.json();
-        if (data.ok && Array.isArray(data.interactions)) {
-          setInteractions(data.interactions);
-        }
-      } catch (err) {
-        // Failed to load interactions
-      }
-    };
-
     // Initial load on mount
     loadInteractions();
 
@@ -74,6 +155,108 @@ export function GlobalWrapupSheet() {
         "contact-center:refresh-interactions",
         handleSSEEvent,
       );
+    };
+  }, [loadInteractions]);
+
+  // Mirror the header's DB-authoritative profile polling. If the page is
+  // mounted after the status_changed event already fired, or the SSE event is
+  // lost, this still sees Wrapup and recovers the disposition sheet.
+  useEffect(() => {
+    // Initial reconciliation, then poll ONLY while the shared SSE stream is
+    // down. The Wrapup recovery itself is primarily driven by the SSE
+    // status_changed handler below; this poll is just a safety-net for the
+    // window where the stream is unavailable.
+    loadAgentStatusForWrapupRecovery();
+    let timer = null;
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const unsubscribeState = subscribeStatusStreamState((connected) => {
+      if (connected) {
+        stop();
+      } else if (!timer) {
+        timer = setInterval(() => {
+          loadAgentStatusForWrapupRecovery();
+        }, 5000);
+      }
+    });
+    return () => {
+      stop();
+      unsubscribeState();
+    };
+  }, [loadAgentStatusForWrapupRecovery]);
+
+  // Customer-first hangups can leave the browser without a local WebRTC
+  // disconnect event. The header still moves to the DB-authoritative Wrapup
+  // status through /api/user/status-stream; use that as a recovery trigger to
+  // open the disposition sheet from recent completed answered interactions.
+  useEffect(() => {
+    const handleStatusChanged = async (data) => {
+      try {
+        const status = data?.status;
+        if (!status) return;
+        setAgentStatus(status);
+        if (status === "Wrapup") {
+          const latestInteractions = await loadInteractions();
+          await recoverWrapupFromInteractions(latestInteractions);
+        }
+      } catch (err) {
+        console.error("[GlobalWrapupSheet] Failed to process status_changed:", err);
+      }
+    };
+
+    return subscribeStatusStream("status_changed", handleStatusChanged);
+  }, [loadInteractions, recoverWrapupFromInteractions]);
+
+  useEffect(() => {
+    if (agentStatus !== "Wrapup" || open) return;
+    const timer = setInterval(() => {
+      recoverWrapupFromInteractions();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [agentStatus, open, recoverWrapupFromInteractions]);
+
+  // Listen for explicit server-side wrapup requests from the authoritative
+  // webhook lifecycle. This path does not depend on WebRTC local call state,
+  // so it still opens wrapup when the browser store missed the hangup event.
+  useEffect(() => {
+    let eventSource = null;
+    const handleAgentMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data || "{}");
+        if (data?.type === "wrapup_required" && data.interactionId) {
+          if (lastWrapupInteractionRef.current === data.interactionId) return;
+          lastWrapupInteractionRef.current = data.interactionId;
+          useWrapupSheetStore
+            .getState()
+            .openWrapup(data.interactionId, latestTranscriptionsRef.current || []);
+          return;
+        }
+        if (
+          data?.type === "interaction_updated" ||
+          data?.type === "interaction_ended"
+        ) {
+          window.dispatchEvent(
+            new CustomEvent("contact-center:refresh-interactions"),
+          );
+        }
+      } catch (err) {
+        console.error("[GlobalWrapupSheet] Failed to parse agent SSE event:", err);
+      }
+    };
+
+    try {
+      eventSource = new EventSource("/api/contact-center/agent/stream");
+      eventSource.onmessage = handleAgentMessage;
+    } catch (err) {
+      console.error("[GlobalWrapupSheet] Failed to connect agent SSE:", err);
+    }
+
+    return () => {
+      if (eventSource) eventSource.close();
     };
   }, []);
 
@@ -163,7 +346,7 @@ export function GlobalWrapupSheet() {
           return checkAndOpenWrapup(1);
         }
 
-        // If still no interaction found after retry, check timeout again before defaulting
+        // If still no interaction found after retry, check timeout once more, then skip wrapup
         if (!interaction) {
           try {
             const timeoutCheckRes = await fetch(
@@ -183,11 +366,11 @@ export function GlobalWrapupSheet() {
             // Continue if check fails
           }
 
-          // Default to opening wrapup sheet only if not timeout
-          lastWrapupInteractionRef.current = interactionId;
-          useWrapupSheetStore
-            .getState()
-            .openWrapup(interactionId, callTranscriptions || []);
+          // No interaction evidence; not opening wrapup. Wrapup requires positive
+          // evidence that the interaction was answered/connected.
+          console.log(
+            `[GlobalWrapupSheet] No interaction evidence; not opening wrapup for ${interactionId}`,
+          );
           return;
         }
 
@@ -225,6 +408,13 @@ export function GlobalWrapupSheet() {
         // - Timeout re-enqueued (agent didn't answer)
         // - Abandoned and never answered
         // - Still queued when ended
+        if (!wasAnswered) {
+          console.log(
+            `[GlobalWrapupSheet] Skipping wrapup for interaction ${interactionId} - call was never answered`,
+          );
+          return;
+        }
+
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
@@ -327,8 +517,16 @@ export function GlobalWrapupSheet() {
       const {
         interactionId: eventInteractionId,
         transcriptions: eventTranscriptions,
+        rejectedBeforeAnswer,
+        wasAnswered: eventWasAnswered,
       } = event.detail || {};
       if (!eventInteractionId) return;
+      if (rejectedBeforeAnswer === true || eventWasAnswered === false) {
+        console.log(
+          `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - disconnected before answer`,
+        );
+        return;
+      }
 
       // Check if we've already shown wrapup for this interaction
       if (lastWrapupInteractionRef.current === eventInteractionId) {
@@ -393,6 +591,13 @@ export function GlobalWrapupSheet() {
         // - Abandoned and never answered
         // - Still queued when ended
         // - Consult call (consultant call leg, not the parked call)
+        if (!wasAnswered) {
+          console.log(
+            `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - call was never answered`,
+          );
+          return;
+        }
+
         const shouldSkip =
           wasTimeoutReEnqueued ||
           wasQueuedWhenEnded ||
@@ -406,30 +611,12 @@ export function GlobalWrapupSheet() {
             .openWrapup(eventInteractionId, eventTranscriptions);
         }
       } else {
-        // If interaction not found, check timeout again before defaulting
-        try {
-          const timeoutCheckRes = await fetch(
-            `/api/contact-center/interactions/${encodeURIComponent(eventInteractionId)}/timeout-check`,
-            { cache: "no-store" },
-          );
-          if (timeoutCheckRes.ok) {
-            const timeoutData = await timeoutCheckRes.json();
-            if (timeoutData.timeoutReEnqueued === true) {
-              console.log(
-                `[GlobalWrapupSheet] Skipping wrapup for interaction ${eventInteractionId} - timeout re-enqueued (no interaction found)`,
-              );
-              return;
-            }
-          }
-        } catch (timeoutCheckErr) {
-          // Continue if check fails
-        }
-
-        // Default to opening wrapup sheet only if not timeout
-        lastWrapupInteractionRef.current = eventInteractionId;
-        useWrapupSheetStore
-          .getState()
-          .openWrapup(eventInteractionId, eventTranscriptions);
+        // No interaction evidence; not opening wrapup. Wrapup requires positive
+        // evidence that the interaction was answered/connected.
+        console.log(
+          `[GlobalWrapupSheet] No interaction evidence; not opening wrapup for ${eventInteractionId}`,
+        );
+        return;
       }
     };
 

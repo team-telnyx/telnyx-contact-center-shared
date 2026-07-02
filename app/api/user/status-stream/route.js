@@ -1,6 +1,61 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
-import { addSseClient, removeSseClient, broadcastToKey } from "@/lib/sse";
+import { addSseClient, removeSseClient } from "@/lib/sse";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { setUserStatus } from "@/lib/contact-center/user-status";
+import {
+  hasActiveSessionPresence,
+  registerSessionPresence,
+  removeSessionPresence,
+  touchSessionPresence,
+} from "@/lib/contact-center/session-presence";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
+
+const globalAny = globalThis;
+if (!globalAny.__session_presence_offline_timers) {
+  globalAny.__session_presence_offline_timers = new Map();
+}
+const presenceOfflineTimers = globalAny.__session_presence_offline_timers;
+const PRESENCE_OFFLINE_GRACE_MS = 30000;
+
+async function getCurrentAgentStatus(userId) {
+  try {
+    const pool = getPostgresPool();
+    if (!pool || !userId) return null;
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearPresenceOfflineTimer(userId) {
+  const existing = presenceOfflineTimers.get(String(userId));
+  if (existing) {
+    clearTimeout(existing);
+    presenceOfflineTimers.delete(String(userId));
+  }
+}
+
+function schedulePresenceOffline({ userId, username, statusKey }) {
+  clearPresenceOfflineTimer(userId);
+  const timer = setTimeout(async function markOfflineAfterDisconnect() {
+    presenceOfflineTimers.delete(String(userId));
+    if (await hasActiveSessionPresence({ userId, fallbackKey: statusKey })) return;
+    const previousStatus = await getCurrentAgentStatus(userId);
+    if (previousStatus === "Offline") return;
+    await setUserStatus({
+      userId: String(userId),
+      username,
+      status: "Offline",
+      previousStatus,
+    });
+  }, PRESENCE_OFFLINE_GRACE_MS);
+  presenceOfflineTimers.set(String(userId), timer);
+}
 
 // Disable timeout for SSE streams (they should stay open indefinitely)
 export const maxDuration = 300; // 5 minutes (max allowed by Vercel, but effectively unlimited for SSE)
@@ -15,6 +70,7 @@ export async function GET(request) {
   const userId = String(user.id);
   const statusKey = `user:status:${userId}`;
   const queueKey = `user:queues:${userId}`;
+  clearPresenceOfflineTimer(userId);
 
   // Create a readable stream for SSE
   const encoder = new TextEncoder();
@@ -26,7 +82,7 @@ export async function GET(request) {
           try {
             controller.enqueue(data);
           } catch (error) {
-            console.error("[SSE] Failed to enqueue event:", error);
+            platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
             throw error;
           }
         },
@@ -40,6 +96,16 @@ export async function GET(request) {
       // Register this client for status and queue updates
       addSseClient(statusKey, writer);
       addSseClient(queueKey, writer);
+      let presenceConnectionId = null;
+      try {
+        const registeredPresence = await registerSessionPresence({
+          userId,
+          username: user.username,
+        });
+        presenceConnectionId = registeredPresence?.connectionId || null;
+      } catch (error) {
+        platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+      }
 
       // Send initial connection event
       const sendEvent = async (event, data) => {
@@ -47,12 +113,25 @@ export async function GET(request) {
         try {
           await writer.write(encoder.encode(message));
         } catch (error) {
-          console.error("[SSE] Failed to write event:", error);
+          platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
+          throw error;
         }
       };
 
       // Send connected event
       await sendEvent("connected", { timestamp: new Date().toISOString() });
+      const currentStatus = await getCurrentAgentStatus(userId);
+      if (currentStatus) {
+        await sendEvent("status_changed", {
+          type: "status_changed",
+          status: currentStatus,
+          previousStatus: null,
+          userId,
+          username: user.username,
+          snapshot: true,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       // Track last successful ping to detect stale connections
       let lastPingSuccess = Date.now();
@@ -60,7 +139,9 @@ export async function GET(request) {
       let pingInterval = null;
       let disconnectHandled = false;
 
-      // Handle client disconnect - set status to offline only if no other connections exist
+      // Handle client disconnect. This user session stream is the server-side
+      // presence signal: when all streams for the user are gone for the grace
+      // period, the agent is no longer connected and must be marked Offline.
       const handleDisconnect = async () => {
         // Prevent multiple calls
         if (disconnectHandled) {
@@ -74,49 +155,18 @@ export async function GET(request) {
         removeSseClient(statusKey, writer);
         removeSseClient(queueKey, writer);
         try {
+          await removeSessionPresence({ userId, connectionId: presenceConnectionId });
+        } catch (error) {
+          platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+        }
+        try {
           await writer.close();
         } catch (_) {}
-
-        // Wait a bit to see if connection reconnects or if other connections exist
-        // This prevents setting offline during temporary reconnects
-        await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 second delay
-
-        // Check if there are still active connections for this user
-        const { hasActiveClients } = await import("@/lib/sse");
-        const stillHasStatusConnection = hasActiveClients(statusKey);
-        const stillHasQueueConnection = hasActiveClients(queueKey);
-
-        // Also check contact center agent stream
-        const agentStreamKey = `contact-center:agent:${user.username}`;
-        const stillHasAgentConnection = hasActiveClients(agentStreamKey);
-
-        // Only set to offline if no active connections remain
-        if (
-          !stillHasStatusConnection &&
-          !stillHasQueueConnection &&
-          !stillHasAgentConnection
-        ) {
-          try {
-            const { PgDb } = await import("@/lib/pgdb");
-            const { setUserStatus } = await import(
-              "@/lib/contact-center/user-status"
-            );
-            const currentUser = await PgDb.findUserById(userId);
-            if (currentUser && currentUser.status !== "Offline") {
-              await setUserStatus({
-                userId,
-                username: user.username,
-                status: "Offline",
-                previousStatus: currentUser.status,
-              });
-            }
-          } catch (error) {
-            console.error(
-              "[SSE] Failed to set status to offline on disconnect:",
-              error
-            );
-          }
-        }
+        schedulePresenceOffline({
+          userId,
+          username: user.username,
+          statusKey,
+        });
       };
 
       // Send periodic ping to keep connection alive
@@ -124,6 +174,11 @@ export async function GET(request) {
       pingInterval = setInterval(async () => {
         try {
           await sendEvent("ping", { timestamp: new Date().toISOString() });
+          try {
+            await touchSessionPresence({ userId, connectionId: presenceConnectionId });
+          } catch (error) {
+            platformApiLogger.warn("runtime_warning", { ...runtimePayload({ error }) });
+          }
           lastPingSuccess = Date.now();
           consecutiveFailures = 0;
         } catch (error) {

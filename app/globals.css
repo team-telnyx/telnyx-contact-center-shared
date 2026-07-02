@@ -142,6 +142,30 @@
   --telnyx-green: oklch(81.25% 0.167 166.68);
 }
 
+.form-preview-light {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --brand-primary: oklch(81.25% 0.167 166.68);
+  --brand-secondary: oklch(90.63% 0.008 90.09);
+  --brand-background: oklch(1 0 0);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -163,6 +187,47 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+}
+
+@keyframes stageBlink {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.696 0.17 162.48 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 0 3px oklch(0.696 0.17 162.48 / 65%);
+  }
+}
+
+/* React Flow controls should inherit the app theme instead of the library's light defaults. */
+.call-flow-controls {
+  background: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 10px 30px oklch(0 0 0 / 25%) !important;
+  overflow: hidden;
+}
+
+.call-flow-controls .react-flow__controls-button {
+  width: 2rem;
+  height: 2rem;
+  background: var(--card) !important;
+  border-bottom-color: var(--border) !important;
+  color: var(--card-foreground) !important;
+  fill: currentColor !important;
+}
+
+.call-flow-controls .react-flow__controls-button:hover {
+  background: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.call-flow-controls .react-flow__controls-button svg {
+  fill: currentColor !important;
+}
+
+.call-flow-canvas .react-flow__attribution {
+  display: none !important;
 }
 
 /* Recharts tooltip and bar hover styles for dark mode */

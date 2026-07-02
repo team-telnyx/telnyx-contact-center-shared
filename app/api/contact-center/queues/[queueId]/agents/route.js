@@ -3,6 +3,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { getRealtimeAgentMetrics } from "@/lib/contact-center/state-manager.js";
+import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * GET /api/contact-center/queues/[queueId]/agents
@@ -49,7 +50,7 @@ export async function GET(request, { params }) {
         u.username,
         u.first_name,
         u.last_name,
-        u.agent_status,
+        ast.agent_status AS agent_status,
         u.skills,
         u.max_concurrent_calls,
         u.available_for_routing,
@@ -64,10 +65,10 @@ export async function GET(request, { params }) {
       WHERE qa.queue_id = $1
         AND qa.enabled = true
         AND (qa.activated_at IS NOT NULL AND qa.deactivated_at IS NULL)
-      GROUP BY u.id, u.username, u.first_name, u.last_name, u.agent_status, u.skills, u.max_concurrent_calls, 
+      GROUP BY u.id, u.username, u.first_name, u.last_name, ast.agent_status, u.skills, u.max_concurrent_calls,
                u.available_for_routing, ast.is_available_for_routing, qa.priority, 
                qa.enabled, qa.activated_at, qa.deactivated_at
-      ORDER BY qa.priority DESC, u.agent_status ASC
+      ORDER BY qa.priority DESC, ast.agent_status ASC
     `;
 
     const result = await pool.query(query, [queueId]);
@@ -142,7 +143,7 @@ export async function GET(request, { params }) {
       agents: availableAgents,
     });
   } catch (error) {
-    console.error("[QueueAgents] Error fetching queue agents:", error);
+    queuesLogger.error("queueagents", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch queue agents" },
       { status: 500 }

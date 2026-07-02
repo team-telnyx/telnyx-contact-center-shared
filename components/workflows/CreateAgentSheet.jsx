@@ -50,7 +50,12 @@ import {
   IconCircleX,
   IconPhoneCall,
 } from "@tabler/icons-react";
-import { TRANSCRIPTION_PROVIDERS, AZURE_REGIONS } from "@/config/voice";
+import {
+  TRANSCRIPTION_PROVIDERS,
+  NOISE_SUPPRESSION_PROVIDERS,
+  getDefaultTranscriptionLanguage,
+  getNoiseSuppressionConfigDefaults,
+} from "@/config/voice";
 
 // Helper functions for language filtering
 function normalizeLocaleCode(code) {
@@ -103,16 +108,22 @@ const DEFAULT_REGION_MAP = {
   hr: "HR", sr: "RS", sl: "SI", mt: "MT", is: "IS", ga: "IE", cy: "GB",
   eu: "ES", ca: "ES", gl: "ES", af: "ZA", sw: "KE", ha: "NG", yo: "NG",
   ig: "NG", zu: "ZA", xh: "ZA", am: "ET", so: "SO", mg: "MG", ht: "HT",
-  mi: "NZ", yue: "HK", auto: null,
+  mi: "NZ", yue: "HK", auto: null, multi: null,
 };
 
 function getLanguageDisplayInfo(langCode) {
   const normalized = normalizeLocaleCode(langCode);
   if (!normalized) return { value: langCode, label: langCode, flag: "🌐" };
   
-  // Handle auto-detect variants
-  if (normalized === "auto" || normalized === "auto_detect") {
-    return { value: langCode, label: "Auto-detect", flag: "🌐" };
+  // Handle special Flux/Telnyx language modes
+  if (normalized === "auto") {
+    return { value: langCode, label: "Auto (experimental)", flag: "🌐" };
+  }
+  if (normalized === "multi") {
+    return { value: langCode, label: "Multilingual (No audio hint)", flag: "🌐" };
+  }
+  if (normalized === "auto_detect") {
+    return { value: langCode, label: "Auto Detect", flag: "🌐" };
   }
   
   const parts = normalized.split("-");
@@ -183,11 +194,10 @@ export default function CreateAgentSheet({
   const [elevenLabsApiKeyRef, setElevenLabsApiKeyRef] = useState("");
   
   // STT settings - using TRANSCRIPTION_PROVIDERS from config
-  const [sttModel, setSttModel] = useState("deepgram/nova-2");
+  const [sttModel, setSttModel] = useState("deepgram/flux");
   const [sttLanguage, setSttLanguage] = useState("auto");
   const [sttLanguageSearch, setSttLanguageSearch] = useState("");
   const [sttLanguagePopoverOpen, setSttLanguagePopoverOpen] = useState(false);
-  const [sttAzureRegion, setSttAzureRegion] = useState("westeurope");
   
   // Noise suppression
   const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
@@ -207,17 +217,12 @@ export default function CreateAgentSheet({
   const [loadingCallFlows, setLoadingCallFlows] = useState(false);
   const [selectedCallFlowId, setSelectedCallFlowId] = useState("");
   
-  const NOISE_SUPPRESSION_ENGINES = [
-    { value: "krisp", label: "Krisp (Recommended)" },
-    { value: "deepfilternet", label: "DeepFilterNet" },
-  ];
-
   // Check if ElevenLabs is selected
   const isElevenLabs = ttsProvider?.toLowerCase() === "elevenlabs";
   
-  // Check if selected STT model requires Azure region
-  const selectedSttProvider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
-  const sttRequiresRegion = selectedSttProvider?.requiresRegion === true;
+  const assistantNoiseSuppressionProviders = NOISE_SUPPRESSION_PROVIDERS.filter((engine) =>
+    ["krisp", "deepfilternet"].includes(engine.value)
+  );
 
   // Reset state when sheet opens
   useEffect(() => {
@@ -230,9 +235,9 @@ export default function CreateAgentSheet({
       setTtsModel("NaturalHD");
       setTtsVoice(DEFAULT_TTS_VOICE);
       setTtsLanguageFilter("");
-      setSttModel("deepgram/nova-2");
-      setSttLanguage("auto");
-      setSttAzureRegion("westeurope");
+      setSttModel("deepgram/flux");
+      setSttLanguage(getDefaultTranscriptionLanguage("deepgram/flux"));
+      setNoiseSuppressionEngine("krisp");
       setSelectedCallFlowId("");
       setCreationSteps([
         { id: "assistant", label: "Create AI Assistant", status: "pending" },
@@ -450,16 +455,9 @@ export default function CreateAgentSheet({
     const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === sttModel);
     if (!provider?.languages?.length) return [];
     
-    return provider.languages
-      .map(lang => getLanguageDisplayInfo(lang))
-      .sort((a, b) => {
-        // Put "auto" and "auto_detect" first
-        const aIsAuto = a.value === "auto" || a.value === "auto_detect";
-        const bIsAuto = b.value === "auto" || b.value === "auto_detect";
-        if (aIsAuto && !bIsAuto) return -1;
-        if (!aIsAuto && bIsAuto) return 1;
-        return a.label.localeCompare(b.label);
-      });
+    // Preserve the OpenAPI/config order so Flux appears consistently as:
+    // Auto (experimental), Multilingual (No audio hint), English, Spanish, ...
+    return provider.languages.map(lang => getLanguageDisplayInfo(lang));
   }, [sttModel]);
 
   const filteredSttLanguageOptions = useMemo(() => {
@@ -649,11 +647,11 @@ export default function CreateAgentSheet({
         model: sttModel,
         language: sttLanguage,
       };
-      
-      // Add region for Azure
-      if (sttRequiresRegion && sttAzureRegion) {
-        transcriptionConfig.region = sttAzureRegion;
-      }
+
+
+      const noiseSuppressionConfig = noiseSuppressionEnabled
+        ? getNoiseSuppressionConfigDefaults(noiseSuppressionEngine)
+        : undefined;
 
       // Generate a professional greeting based on workflow name
       const workflowTitle = workflow?.name || "AI Assistant";
@@ -671,6 +669,9 @@ export default function CreateAgentSheet({
           supports_unauthenticated_web_calls: true,
           recording_settings: { channels: "dual", format: "mp3" },
           noise_suppression: noiseSuppressionEnabled ? noiseSuppressionEngine : "disabled",
+          ...(noiseSuppressionConfig && {
+            noise_suppression_config: noiseSuppressionConfig,
+          }),
         },
         silence_timeout_ms: 500,
         max_silence_count: 2,
@@ -1173,23 +1174,14 @@ export default function CreateAgentSheet({
                     </div>
                     
                     <div className="space-y-3">
-                      {/* Row 1: Model + Region (if Azure) */}
-                      <div className={`grid gap-3 ${sttRequiresRegion ? "grid-cols-2" : "grid-cols-1"}`}>
+                      <div className="grid gap-3 grid-cols-1">
                         <div className="space-y-2">
                           <Label>Model</Label>
                           <Select 
                             value={sttModel} 
                             onValueChange={(v) => {
                               setSttModel(v);
-                              // Reset language to auto if available, else first language
-                              const provider = TRANSCRIPTION_PROVIDERS.find(p => p.model_name === v);
-                              if (provider?.languages?.includes("auto") || provider?.languages?.includes("auto_detect")) {
-                                setSttLanguage(provider.languages.includes("auto") ? "auto" : "auto_detect");
-                              } else if (provider?.languages?.length > 0) {
-                                setSttLanguage(provider.languages[0]);
-                              } else {
-                                setSttLanguage("");
-                              }
+                              setSttLanguage(getDefaultTranscriptionLanguage(v, ""));
                             }}
                           >
                             <SelectTrigger>
@@ -1204,25 +1196,6 @@ export default function CreateAgentSheet({
                             </SelectContent>
                           </Select>
                         </div>
-                        
-                        {/* Azure Region selector */}
-                        {sttRequiresRegion && (
-                          <div className="space-y-2">
-                            <Label>Azure Region</Label>
-                            <Select value={sttAzureRegion} onValueChange={setSttAzureRegion}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select region" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {AZURE_REGIONS.map((region) => (
-                                  <SelectItem key={region.value} value={region.value}>
-                                    {region.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
                       </div>
                       
                       {/* Row 2: Language (with searchable popover like TTS) */}
@@ -1329,7 +1302,7 @@ export default function CreateAgentSheet({
                             <SelectValue placeholder="Select engine" />
                           </SelectTrigger>
                           <SelectContent>
-                            {NOISE_SUPPRESSION_ENGINES.map((engine) => (
+                            {assistantNoiseSuppressionProviders.map((engine) => (
                               <SelectItem key={engine.value} value={engine.value}>
                                 {engine.label}
                               </SelectItem>

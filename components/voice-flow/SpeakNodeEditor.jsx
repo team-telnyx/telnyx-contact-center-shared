@@ -32,23 +32,37 @@ import {
 import { notify } from "@/components/ToastNotify";
 import { VariableTextarea } from "./VariableTextarea";
 
-function parseVoiceString(value) {
+function parseVoiceString(value, availableProviders = []) {
   const safe = String(value || "").trim();
   const parts = safe.split(".");
   const provider = parts[0] || "";
+  if (!safe || !provider) return { provider, model: "", voiceName: safe };
+
+  const selectedProvider = availableProviders.find(
+    (candidate) =>
+      candidate?.id === provider ||
+      candidate?.provider === provider ||
+      candidate?.name === provider
+  );
+  const remainder = parts.slice(1).join(".");
+  const modelIds = (selectedProvider?.models || [])
+    .map((modelEntry) =>
+      typeof modelEntry === "object" ? modelEntry.id || modelEntry.name : modelEntry
+    )
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  const matchedModel = modelIds.find(
+    (modelId) => remainder === modelId || remainder.startsWith(`${modelId}.`)
+  );
+
+  if (matchedModel) {
+    return { provider, model: matchedModel, voiceName: safe };
+  }
   if (parts.length >= 3) {
-    return {
-      provider,
-      model: parts[1] || "",
-      voiceName: safe,
-    };
+    return { provider, model: parts[1] || "", voiceName: safe };
   }
   if (parts.length === 2) {
-    return {
-      provider,
-      model: "",
-      voiceName: safe,
-    };
+    return { provider, model: "", voiceName: safe };
   }
   return { provider, model: "", voiceName: safe };
 }
@@ -102,8 +116,8 @@ export default function SpeakNodeEditor({
     model: mInit,
     voiceName: vInit,
   } = useMemo(
-    () => parseVoiceString(config.voice || "AWS.Polly.Joanna"),
-    [config.voice]
+    () => parseVoiceString(config.voice || "AWS.Polly.Joanna", providers),
+    [config.voice, providers]
   );
 
   const [provider, setProvider] = useState(pInit);
@@ -534,7 +548,7 @@ export default function SpeakNodeEditor({
       )}
 
       {/* Language Filter (only show if languages are available) */}
-      {languageOptions.length > 0 && (
+      {(languageOptions.length > 0 || languageFilter) && (
         <div>
           <Label>Language Filter</Label>
           <Popover

@@ -9,11 +9,13 @@ import {
   IconChecklist,
   IconWorld,
   IconDatabase,
+  IconFileText,
 } from "@tabler/icons-react";
 import { AgentContactsView } from "./AgentContactsView";
 import { AgentTasksView } from "./AgentTasksView";
 import { AgentKbArticlesView } from "./AgentKbArticlesView";
 import { AgentWebPagesView } from "./AgentWebPagesView";
+import { AgentFormsView } from "./AgentFormsView";
 
 const tiles = [
   {
@@ -40,6 +42,12 @@ const tiles = [
     icon: IconWorld,
     description: "External portals",
   },
+  {
+    id: "forms",
+    title: "Forms",
+    icon: IconFileText,
+    description: "Queue forms",
+  },
 ];
 
 /**
@@ -52,11 +60,15 @@ export function AgentDataSources({
   activeView,
   onTileClick,
   onBackToInteraction,
+  selectedFormId,
+  onSelectedFormIdChange,
+  onFormsLoaded,
+  hideFormsHeader = false,
 }) {
   // If view is null, show tiles
   if (view === null) {
     return (
-      <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col h-full min-h-0 overflow-hidden">
         <div className="px-4 py-3 bg-muted/50 border-b rounded-t-lg">
           <div className="flex items-center gap-2">
             <IconDatabase className="h-4 w-4 text-muted-foreground" />
@@ -65,7 +77,7 @@ export function AgentDataSources({
             </h3>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
           {tiles.map((tile) => {
             const Icon = tile.icon;
             const isSelected = activeView === tile.id;
@@ -117,7 +129,7 @@ export function AgentDataSources({
 
   // Show specific view
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
       {view === "contacts" && (
         <AgentContactsView
           selectedInteraction={selectedInteraction}
@@ -140,6 +152,17 @@ export function AgentDataSources({
         <AgentWebPagesView
           selectedInteraction={selectedInteraction}
           onBackToInteraction={onBackToInteraction}
+        />
+      )}
+      {view === "forms" && (
+        <AgentFormsView
+          selectedInteraction={selectedInteraction}
+          onBackToInteraction={onBackToInteraction}
+          selectedFormId={selectedFormId}
+          onSelectedFormIdChange={onSelectedFormIdChange}
+          onFormsLoaded={onFormsLoaded}
+          hideHeader={hideFormsHeader}
+          showCards={!hideFormsHeader}
         />
       )}
     </div>

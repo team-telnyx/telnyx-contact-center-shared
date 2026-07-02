@@ -1,0 +1,147 @@
+import { NextResponse } from "next/server";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import {
+  resolveProvisioningRequest,
+  buildConfigForPhone,
+  yealinkCommonConfig,
+  vendorFromUserAgent,
+} from "@/lib/hardphones/config-generators.mjs";
+import { recordProvisioningEvent, phoneProvisioningLogger } from "@/lib/hardphones/logging.mjs";
+
+export const dynamic = "force-dynamic";
+
+function requestOriginBaseUrl(request) {
+  try {
+    const url = new URL(request.url);
+    const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const host = forwardedHost || request.headers.get("host") || url.host;
+    const protocol = forwardedProto || url.protocol.replace(/:$/, "");
+    return `${protocol}://${host}`;
+  } catch {
+    return "";
+  }
+}
+
+function resolveBaseUrl(request) {
+  const candidates = [
+    process.env.TELNYX_WEBHOOK_BASE_URL,
+    process.env.NEXTAUTH_URL,
+    process.env.APP_BASE_URL,
+    process.env.NEXT_PUBLIC_BASE_URL,
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate || "").trim();
+    if (value) return value.replace(/\/$/, "");
+  }
+  return requestOriginBaseUrl(request);
+}
+
+function resolveProvisioningBaseUrl(request) {
+  return requestOriginBaseUrl(request);
+}
+
+function requestSourceIp(request) {
+  const fwd = request.headers.get("x-forwarded-for") || "";
+  return fwd.split(",")[0].trim() || request.headers.get("x-real-ip") || null;
+}
+
+function isPrivatePhoneIp(value) {
+  const parts = String(value || "").split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = parts;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+function isLikelyGatewayIp(value) {
+  const parts = String(value || "").split(".").map((part) => Number(part));
+  return parts.length === 4 && (parts[3] === 1 || parts[3] === 254);
+}
+
+function trustedPhoneSourceIp(request) {
+  const sourceIp = requestSourceIp(request);
+  return isPrivatePhoneIp(sourceIp) && !isLikelyGatewayIp(sourceIp) ? sourceIp : null;
+}
+
+// GET /api/provisioning/[filename] — public zero-touch provisioning endpoint.
+// Phones fetch their config files here at boot (DHCP option 66/160 or vendor
+// redirect service points at https://<host>/api/provisioning/). Unknown MACs
+// get 404 and are logged — only inventoried phones are served credentials.
+export async function GET(request, { params }) {
+  const pool = getPostgresPool();
+  if (!pool) return new NextResponse("Server not ready", { status: 500 });
+
+  const { filename } = await params;
+  const resolved = resolveProvisioningRequest(filename);
+  const userAgent = request.headers.get("user-agent") || "";
+  const uaVendor = vendorFromUserAgent(userAgent);
+
+  if (!resolved) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  // Yealink common config — static fleet defaults, no credentials inside.
+  if (resolved.kind === "common") {
+    await recordProvisioningEvent(pool, { eventType: "common_config_fetch", detail: { filename, userAgent } });
+    return new NextResponse(yealinkCommonConfig({ baseUrl: resolveProvisioningBaseUrl(request) }), {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
+  // Polycom default master config — intentionally not served (unknown phones
+  // must be added to inventory first).
+  if (resolved.kind === "default-master") {
+    await recordProvisioningEvent(pool, { eventType: "unknown_phone_request", detail: { filename, userAgent } });
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  const mac = resolved.mac;
+  const { rows } = await pool.query(
+    `SELECT id, mac, vendor, model, label, assigned_phone_number_id, assigned_phone_number, sip_username, sip_password, admin_password, settings, provisioning_state
+     FROM hp_phones WHERE mac = $1`,
+    [mac],
+  );
+  const phone = rows[0];
+
+  if (!phone) {
+    await recordProvisioningEvent(pool, { mac, eventType: "unknown_phone_request", detail: { filename, userAgent, uaVendor } });
+    return new NextResponse("Not found", { status: 404 });
+  }
+  if (phone.provisioning_state === "disabled") {
+    await recordProvisioningEvent(pool, { phoneId: phone.id, mac, eventType: "disabled_phone_request", detail: { filename } });
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  // Preserve the resolved file kind so Polycom <mac>-phone.cfg receives the
+  // registration/device XML while <mac>.cfg still receives the master file.
+  const kind = resolved.kind;
+  const baseUrl = resolveBaseUrl(request);
+  const config = buildConfigForPhone(phone, kind, { baseUrl });
+  if (!config) {
+    phoneProvisioningLogger.warn("hardphone_config_generation_failed", { operation: "hp_serve", phoneId: phone.id, mac, detail: { vendor: phone.vendor, kind } });
+    return new NextResponse("Not found", { status: 404 });
+  }
+
+  const sourceIp = requestSourceIp(request);
+  const phoneSourceIp = trustedPhoneSourceIp(request);
+  await pool.query(
+    `UPDATE hp_phones SET last_seen_at = NOW(), last_user_agent = $2,
+       last_ip = COALESCE($3, last_ip),
+       ip_address = COALESCE(NULLIF(ip_address, ''), $3, ip_address),
+       provisioning_state = CASE WHEN provisioning_state = 'pending' THEN 'provisioned' ELSE provisioning_state END
+     WHERE id = $1`,
+    [phone.id, userAgent.slice(0, 300) || null, phoneSourceIp],
+  );
+  await recordProvisioningEvent(pool, {
+    phoneId: phone.id,
+    mac,
+    eventType: "config_served",
+    detail: { filename, kind, vendor: phone.vendor, userAgent, sourceIp, detectedIp: phoneSourceIp, uaVendorMismatch: Boolean(uaVendor && uaVendor !== phone.vendor) },
+  });
+
+  return new NextResponse(config.body, {
+    status: 200,
+    headers: { "Content-Type": `${config.contentType}; charset=utf-8`, "Cache-Control": "no-store" },
+  });
+}

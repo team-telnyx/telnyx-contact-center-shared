@@ -314,9 +314,11 @@ Transcript: "{transcript_text}"
 
 ### 4.3 Confidence Thresholds
 
-- **Auto-complete threshold**: confidence >= 0.85
-- **Suggested completion**: confidence >= 0.60 (show suggestion to agent)
-- **Ignore**: confidence < 0.60
+- The LLM returns only an evidence-based `confidence` score from `0.0` to `1.0`.
+- The application compares that score with the workflow's configured `llm_confidence_threshold`.
+- `confidence >= llm_confidence_threshold`: mark the item `completed` and fill trusted slot values.
+- `confidence < llm_confidence_threshold`: persist the value as `suggested` so the agent can confirm or correct it.
+- Do not hardcode model-specific confidence ranges in prompts or runtime logic.
 
 ---
 

@@ -1,3 +1,4 @@
+import { supervisionLogger, callPayload, agentPayload, contactCenterErrorPayload } from "@/lib/contact-center/logging.mjs";
 /**
  * API endpoint to initiate supervisor call
  * POST /api/contact-center/calls/supervise
@@ -35,12 +36,7 @@ export async function POST(request) {
     const body = await request.json();
     const { supervise_call_control_id, supervisor_role } = body;
 
-    console.log("[Supervise] Received supervision request:", {
-      supervise_call_control_id,
-      supervisor_role,
-      supervisorId: user.id,
-      supervisorUsername: user.username,
-    });
+    supervisionLogger.debug("supervision_diagnostic_0", {});
 
     if (!supervise_call_control_id || !supervisor_role) {
       return NextResponse.json(
@@ -74,13 +70,7 @@ export async function POST(request) {
 
     // Get supervisor's telephony_user_name for 'to' field (SIP URI format)
     // This is the username used for WebRTC login - where to call the supervisor
-    console.log("[Supervise] User object fields:", {
-      hasTelephonyUserName: !!user.telephony_user_name,
-      hasTelephonyUserNameCamel: !!user.telephonyUserName,
-      hasUsername: !!user.username,
-      userId: user.id,
-      username: user.username,
-    });
+    supervisionLogger.debug("supervision_diagnostic_1", {});
 
     const telephonyUserName =
       user.telephony_user_name ||
@@ -89,11 +79,7 @@ export async function POST(request) {
       null;
 
     if (!telephonyUserName) {
-      console.error("[Supervise] Missing telephony_user_name for user:", {
-        userId: user.id,
-        username: user.username,
-        availableFields: Object.keys(user),
-      });
+      supervisionLogger.error("supervision_error_2", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
       return NextResponse.json(
         {
           error:
@@ -125,17 +111,8 @@ export async function POST(request) {
       custom_headers: [{ name: "X-Supervisor-Call", value: "true" }],
     };
 
-    console.log(
-      "[Supervise] Dial command payload:",
-      JSON.stringify(payload, null, 2),
-    );
-    console.log("[Supervise] Supervisor credentials:", {
-      connectionId: connectionId,
-      telephonyUserName: telephonyUserName,
-      supervisorSipUri: supervisorSipUri,
-      fromNumber: fromNumber,
-      fromDisplayName: fromDisplayName,
-    });
+    supervisionLogger.debug("supervision_diagnostic_3", {});
+    supervisionLogger.debug("supervision_diagnostic_4", {});
 
     const response = await fetch(url, {
       method: "POST",
@@ -157,17 +134,25 @@ export async function POST(request) {
     }
 
     if (!response.ok) {
-      console.error("[Supervise] Telnyx API error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        errorData: data,
-        payload: payload,
+      const telnyxError = data?.errors?.[0] || {};
+      const telnyxErrorMessage =
+        telnyxError.detail ||
+        telnyxError.message ||
+        data?.message ||
+        null;
+
+      supervisionLogger.error("supervision_error_5", {
+        telnyxStatus: response.status,
+        telnyxStatusText: response.statusText,
+        telnyxErrorCode: telnyxError.code,
+        telnyxErrorTitle: telnyxError.title,
+        telnyxErrorMessage,
+        superviseCallControlId: supervise_call_control_id,
+        supervisorRole: role,
       });
 
       const errorMsg =
-        data?.errors?.[0]?.detail ||
-        data?.errors?.[0]?.message ||
-        data?.message ||
+        telnyxErrorMessage ||
         `HTTP ${response.status}: Failed to create supervisor call`;
       return NextResponse.json(
         { error: errorMsg },
@@ -175,10 +160,7 @@ export async function POST(request) {
       );
     }
 
-    console.log("[Supervise] ✅ Supervisor call created successfully:", {
-      supervisorCallControlId: data?.data?.call_control_id,
-      role,
-    });
+    supervisionLogger.debug("supervision_diagnostic_6", {});
 
     const supervisorCall = data?.data;
     if (!supervisorCall || !supervisorCall.call_control_id) {
@@ -195,7 +177,7 @@ export async function POST(request) {
       message: `Supervisor call initiated in ${role} mode`,
     });
   } catch (error) {
-    console.error("[Supervise] Error:", error);
+    supervisionLogger.error("supervision_error_7", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof hangupError !== "undefined" ? hangupError : typeof e !== "undefined" ? e : undefined) });
     return NextResponse.json(
       { error: error.message || "Failed to initiate supervisor call" },
       { status: 500 },

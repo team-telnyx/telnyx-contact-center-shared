@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 function getTelnyxBaseUrl() {
   return process.env.TELNYX_BASE_PATH || "https://api.telnyx.com";
@@ -64,7 +65,7 @@ export async function GET(request, context) {
 
     if (!callRes.ok) {
       const errorText = await callRes.text();
-      console.error("[CallSession] Telnyx call error:", errorText);
+      contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch call details from Telnyx" },
         { status: callRes.status }
@@ -73,7 +74,7 @@ export async function GET(request, context) {
 
     if (!eventsRes.ok) {
       const errorText = await eventsRes.text();
-      console.error("[CallSession] Telnyx events error:", errorText);
+      contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch call events from Telnyx" },
         { status: eventsRes.status }
@@ -89,7 +90,7 @@ export async function GET(request, context) {
       events: eventsData?.data || [],
     });
   } catch (error) {
-    console.error("[CallSession] Error:", error);
+    contactCenterRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: "Failed to fetch call session details" },
       { status: 500 }

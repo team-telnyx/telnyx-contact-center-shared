@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,8 @@ export async function GET(request) {
     const elevenLabsRef =
       url.searchParams.get("elevenlabs_api_key_ref") ||
       process.env.ELEVENLABS_API_KEY_REF ||
+      process.env.ELEVENLABS_API_KEY ||
       null;
-
-    console.log("[TTS Voices] elevenLabsRef:", elevenLabsRef, "env:", process.env.ELEVENLABS_API_KEY_REF);
 
     const sp = new URLSearchParams();
     if (provider) sp.set("provider", provider);
@@ -53,12 +53,13 @@ export async function GET(request) {
     const byProviderModel = new Map();
     for (const v of voices) {
       const providerName = String(v?.provider || "").trim();
-      // Try to extract model and voiceName from id or name
-      // Expect formats like Provider.Model.VoiceId
+      // Try to extract model and voiceName from id or name.
+      // Expect formats like Provider.Model.VoiceId.
+      // Model can contain dots, e.g. Minimax.speech-2.6-turbo.VoiceName.
       const idStr = String(v?.id || v?.name || "");
       const parts = idStr.split(".");
       const inferredProvider = (parts[0] || providerName || "").trim();
-      const model = parts.length >= 3 ? parts[1] : "";
+      const model = parts.length >= 3 ? parts.slice(1, -1).join(".") : "";
       const groupKey = `${inferredProvider}::${model}`;
       if (!byProviderModel.has(groupKey)) {
         byProviderModel.set(groupKey, {
@@ -86,7 +87,7 @@ export async function GET(request) {
           models: [],
         });
       }
-      // Use "default" for empty model IDs (e.g., Azure)
+      // Use "default" for empty model IDs.
       const modelId = model || "default";
       const modelName = model || "Default";
       providersMap.get(prov).models.push({ id: modelId, name: modelName, voices: list });
@@ -105,7 +106,7 @@ export async function GET(request) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
-    console.error("[TTS Voices] Error:", err);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: err?.message || String(err) },
       { status: 500, headers: { "Cache-Control": "no-store" } }

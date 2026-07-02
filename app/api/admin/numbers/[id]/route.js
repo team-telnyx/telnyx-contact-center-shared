@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { PgDb } from "@/lib/pgdb";
+import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isAdmin } from "@/lib/role-utils";
+import { syncHardphonePhoneNumberAssignment } from "@/lib/hardphones/number-sync.mjs";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -47,10 +50,7 @@ export async function PATCH(request, { params }) {
 
       if (!res.ok) {
         const errorText = await res.text();
-        console.error(
-          "[Numbers API] Telnyx error (voice settings):",
-          errorText
-        );
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         return NextResponse.json(
           { error: "Failed to update phone number voice settings" },
           { status: res.status }
@@ -77,7 +77,7 @@ export async function PATCH(request, { params }) {
 
       if (!messagingRes.ok) {
         const errorText = await messagingRes.text();
-        console.error("[Numbers API] Telnyx error (messaging):", errorText);
+        adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
         return NextResponse.json(
           { error: "Failed to update messaging profile" },
           { status: messagingRes.status }
@@ -89,9 +89,18 @@ export async function PATCH(request, { params }) {
       result = { ...result, ...messagingData.data };
     }
 
+    if (result?.id && (voiceSettings.connection_id !== undefined || voiceSettings.voice?.connection_id !== undefined)) {
+      const pool = getPostgresPool();
+      if (pool) {
+        await syncHardphonePhoneNumberAssignment(pool, result).catch((err) => {
+          adminRuntimeLogger.warn("hardphone_number_assignment_sync_failed", runtimePayload({ error: err, operation: "numbers_hp_assignment_sync", phone_number_id: result.id }));
+        });
+      }
+    }
+
     return NextResponse.json({ data: result });
   } catch (error) {
-    console.error("[Numbers API] Error:", error);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }
@@ -121,7 +130,7 @@ export async function DELETE(request, { params }) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      console.error("[Numbers API] Telnyx error:", errorText);
+      adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { error: "Failed to delete phone number" },
         { status: res.status }
@@ -132,7 +141,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ data: data.data });
   } catch (error) {
-    console.error("[Numbers API] Error:", error);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: error.message || "Internal server error" },
       { status: 500 }

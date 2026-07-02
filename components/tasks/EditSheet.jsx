@@ -23,6 +23,7 @@ import {
 import { IconEdit, IconChecklist } from "@tabler/icons-react";
 import { notify } from "@/components/ToastNotify";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatCustomDataText, parseCustomDataText } from "@/lib/custom-data-utils";
 
 const PREDEFINED_TASK_TYPES = [
   "incident",
@@ -80,6 +81,7 @@ export default function TaskEditSheet({
   const [assignedTo, setAssignedTo] = React.useState("");
   const [dueDate, setDueDate] = React.useState("");
   const [tags, setTags] = React.useState("");
+  const [customDataText, setCustomDataText] = React.useState("{}");
   const [saving, setSaving] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [loadingContacts, setLoadingContacts] = React.useState(false);
@@ -148,6 +150,7 @@ export default function TaskEditSheet({
           setAssignedTo("");
           setDueDate("");
           setTags("");
+          setCustomDataText("{}");
         }
         return;
       }
@@ -178,6 +181,7 @@ export default function TaskEditSheet({
           setAssignedTo(d.assigned_to || "");
           setDueDate(d.due_date ? d.due_date.split("T")[0] : "");
           setTags(Array.isArray(d.tags) ? d.tags.join(", ") : "");
+          setCustomDataText(formatCustomDataText(d.custom_data));
         } else {
           notify({
             title: "Load failed",
@@ -221,6 +225,18 @@ export default function TaskEditSheet({
       return;
     }
 
+    let customData;
+    try {
+      customData = parseCustomDataText(customDataText);
+    } catch (err) {
+      notify({
+        title: "Validation error",
+        description: err?.message || "Custom Data must be a valid JSON object",
+        variant: "error",
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const tagsArray = tags
@@ -241,6 +257,7 @@ export default function TaskEditSheet({
         assigned_to: assignedTo || null,
         due_date: dueDate || null,
         tags: tagsArray,
+        custom_data: customData,
       };
 
       const url = taskId
@@ -547,6 +564,19 @@ export default function TaskEditSheet({
                         />
                         <p className="text-xs text-muted-foreground">
                           Separate multiple tags with commas
+                        </p>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Custom Data</Label>
+                        <Textarea
+                          value={customDataText}
+                          onChange={(e) => setCustomDataText(e.target.value)}
+                          placeholder={'{"caseId":"CASE-123","source":"voice"}'}
+                          rows={6}
+                          className="font-mono text-xs"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Enter a valid JSON object. Leave empty to save an empty object.
                         </p>
                       </div>
                     </div>

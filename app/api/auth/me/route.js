@@ -2,12 +2,30 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { getPostgresPool } from "@/lib/postgres.mjs";
+import { authErrorPayload, authUserPayload, logAuthEvent } from "@/lib/auth-logging.mjs";
+
+async function getCurrentAgentStatus(userId) {
+  if (!userId) return "Available";
+  try {
+    const pool = getPostgresPool();
+    if (!pool) return "Available";
+    const result = await pool.query(
+      `SELECT agent_status FROM cc_agent_state WHERE user_id = $1`,
+      [String(userId)],
+    );
+    return result.rows?.[0]?.agent_status || "Available";
+  } catch (_) {
+    return "Available";
+  }
+}
 
 export async function GET(request) {
   try {
     const user = await getAuthenticatedUser();
 
     if (!user) {
+      logAuthEvent("debug", "auth_profile_missing", { source: "api" });
       return NextResponse.json({ isAuth: false });
     }
 
@@ -31,7 +49,7 @@ export async function GET(request) {
       user.roles && Array.isArray(user.roles) && user.roles.length > 0
         ? user.roles
         : ["agent"];
-    const status = user.status || "Available";
+    const status = await getCurrentAgentStatus(user.id || user._id);
     const language =
       user.language || session?.user?.language || session?.user?.locale || null;
 
@@ -56,7 +74,7 @@ export async function GET(request) {
       },
     });
   } catch (err) {
-    console.error("[AUTH] /me error", err);
+    logAuthEvent("warn", "auth_profile_failed", { source: "api", ...authErrorPayload(err) });
     return NextResponse.json({ isAuth: false });
   }
 }

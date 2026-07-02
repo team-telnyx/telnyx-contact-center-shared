@@ -4,6 +4,7 @@ import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { randomUUID } from "crypto";
 import { offerQueuedCallForAgent } from "@/lib/contact-center/queued-call-router";
+import { contactCenterErrorPayload, queuesLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * POST /api/contact-center/agent/queues/activate
@@ -128,10 +129,7 @@ export async function POST(request) {
           },
         });
       } catch (activityError) {
-        console.error(
-          "[Queue] Failed to log activation activity:",
-          activityError,
-        );
+        queuesLogger.error("queue", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
         // Don't fail the request if activity logging fails
       }
 
@@ -143,9 +141,12 @@ export async function POST(request) {
       try {
         const { updateAgentQueues, updateAgentStatus } =
           await import("@/lib/contact-center/state-manager");
-        // Get target user info for state manager
+        // Get target user identity and Contact Center authoritative status for state manager
         const targetUserRes = await pool.query(
-          `SELECT id, username, agent_status FROM users WHERE id = $1`,
+          `SELECT u.id, u.username, s.agent_status AS current_agent_status
+             FROM users u
+             LEFT JOIN cc_agent_state s ON s.user_id = u.id
+            WHERE u.id = $1`,
           [targetUserIdFinal],
         );
         const targetUser = targetUserRes.rows[0];
@@ -154,32 +155,29 @@ export async function POST(request) {
           updateAgentQueues(targetUserIdFinal, activated, true);
           // Ensure agent status is set if not already
           if (
-            targetUser.agent_status &&
-            targetUser.agent_status !== "Offline"
+            targetUser.current_agent_status &&
+            targetUser.current_agent_status !== "Offline"
           ) {
             await updateAgentStatus(
               targetUserIdFinal,
-              targetUser.agent_status,
+              targetUser.current_agent_status,
               targetUser.username,
             );
           }
 
-          if (targetUser.agent_status === "Available") {
+          if (targetUser.current_agent_status === "Available") {
             try {
               await offerQueuedCallForAgent({
                 userId: targetUserIdFinal,
                 queueIds: activated,
               });
             } catch (error) {
-              console.error(
-                "[Queue] Failed to offer queued calls after activation:",
-                error,
-              );
+              queuesLogger.error("queue", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
             }
           }
         }
       } catch (stateError) {
-        console.error("[Queue] Failed to update agent state:", stateError);
+        queuesLogger.error("queue", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
       }
     }
 
@@ -191,14 +189,11 @@ export async function POST(request) {
           await import("@/lib/contact-center/waiting-reason-re-evaluator.js");
         // Run asynchronously - don't wait for it to complete
         reEvaluateWaitingReasonsForQueues(activated).catch((error) => {
-          console.error("[Queue] Error re-evaluating waiting reasons:", error);
+          queuesLogger.error("queue", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
         });
       } catch (reEvalError) {
         // Log but don't fail the queue activation
-        console.error(
-          "[Queue] Failed to trigger waiting reason re-evaluation:",
-          reEvalError,
-        );
+        queuesLogger.error("queue", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
       }
     }
 
@@ -255,17 +250,14 @@ export async function POST(request) {
           );
         }
       } catch (sseError) {
-        console.error(
-          "[Queues] Failed to broadcast queue activation:",
-          sseError,
-        );
+        queuesLogger.error("queues", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
         // Don't fail the request if SSE fails
       }
     }
 
     return NextResponse.json({ ok: true, activated });
   } catch (err) {
-    console.error("[Queue Activate] Error:", err);
+    queuesLogger.error("queue_activate", { ...contactCenterErrorPayload(typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof stateError !== "undefined" ? stateError : typeof activityError !== "undefined" ? activityError : typeof sseError !== "undefined" ? sseError : typeof reEvalError !== "undefined" ? reEvalError : undefined), interactionId: typeof interactionId !== "undefined" ? interactionId : typeof interaction !== "undefined" ? interaction?.id : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof legId !== "undefined" ? legId : undefined, queueId: typeof queueId !== "undefined" ? queueId : undefined, agentUserId: typeof targetUserIdFinal !== "undefined" ? targetUserIdFinal : typeof userId !== "undefined" ? userId : typeof user !== "undefined" ? user?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined });
     return NextResponse.json(
       { ok: false, error: err.message || "Server error" },
       { status: 500 },

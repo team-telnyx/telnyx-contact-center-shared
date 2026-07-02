@@ -16,13 +16,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
-import { 
-  deleteInsight, 
+import { agentAssistRuntimePayload, workflowLogger } from "@/lib/agent-assist/logging.mjs";
+import {
+  deleteInsight,
   deleteInsightGroup,
-  unassignInsightFromGroup 
+  unassignInsightFromGroup,
 } from "@/lib/telnyx-insights";
 
-const LOG_PREFIX = "[Delete Assistant]";
 
 /**
  * Get assistant details including telephony settings
@@ -60,7 +60,7 @@ async function findPhoneNumbersByConnection(connectionId, apiKey) {
   });
 
   if (!res.ok) {
-    console.error(`${LOG_PREFIX} Failed to fetch phone numbers: ${res.status}`);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return [];
   }
 
@@ -86,7 +86,7 @@ async function unassignPhoneNumber(phoneNumberId, apiKey) {
 
   if (!res.ok) {
     const text = await res.text();
-    console.error(`${LOG_PREFIX} Failed to unassign phone number ${phoneNumberId}:`, text);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return false;
   }
 
@@ -144,7 +144,7 @@ export async function DELETE(request, { params }) {
     return handleFullDeletion(workflow, workflowId, apiKey, pool);
 
   } catch (err) {
-    console.error(`${LOG_PREFIX} Error:`, err);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: err?.message || "Failed to delete assistant" },
       { status: 500 }
@@ -182,7 +182,7 @@ async function deleteAssistantStep(workflow, apiKey) {
     return NextResponse.json({ ok: true, skipped: true, message: "No assistant to delete" });
   }
 
-  console.log(`${LOG_PREFIX} Deleting AI assistant: ${workflow.ai_assistant_id}`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   
   // Get assistant details to find TeXML app ID
   const assistantData = await getAssistantDetails(workflow.ai_assistant_id, apiKey);
@@ -191,16 +191,16 @@ async function deleteAssistantStep(workflow, apiKey) {
     const texmlAppId = assistantData.telephony_settings?.default_texml_app_id;
     
     if (texmlAppId) {
-      console.log(`${LOG_PREFIX} Checking for phone numbers on TeXML app: ${texmlAppId}`);
+      workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       
       // Find phone numbers assigned to this TeXML app
       const assignedNumbers = await findPhoneNumbersByConnection(texmlAppId, apiKey);
       
       if (assignedNumbers.length > 0) {
-        console.log(`${LOG_PREFIX} Unassigning ${assignedNumbers.length} phone number(s)`);
+        workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
         
         for (const num of assignedNumbers) {
-          console.log(`${LOG_PREFIX} Unassigning ${num.phone_number} (${num.id})`);
+          workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
           await unassignPhoneNumber(num.id, apiKey);
         }
       }
@@ -222,14 +222,14 @@ async function deleteAssistantStep(workflow, apiKey) {
 
   if (!res.ok && res.status !== 404) {
     const text = await res.text();
-    console.error(`${LOG_PREFIX} Failed to delete assistant:`, text);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: `Telnyx API error: ${res.status}` },
       { status: 502 }
     );
   }
 
-  console.log(`${LOG_PREFIX} AI assistant deleted successfully`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "AI assistant deleted" });
 }
 
@@ -247,7 +247,7 @@ async function deleteInsightsStep(workflow) {
     return NextResponse.json({ ok: true, skipped: true, message: "No insight templates to delete" });
   }
 
-  console.log(`${LOG_PREFIX} Deleting ${insightIds.length} insight templates`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   
   const errors = [];
   
@@ -270,14 +270,14 @@ async function deleteInsightsStep(workflow) {
   }
 
   if (errors.length > 0) {
-    console.error(`${LOG_PREFIX} Some insight deletions failed:`, errors);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
     return NextResponse.json(
       { error: errors.join("; ") },
       { status: 502 }
     );
   }
 
-  console.log(`${LOG_PREFIX} Insight templates deleted successfully`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "Insight templates deleted" });
 }
 
@@ -289,13 +289,13 @@ async function deleteGroupStep(workflow) {
     return NextResponse.json({ ok: true, skipped: true, message: "No insight group to delete" });
   }
 
-  console.log(`${LOG_PREFIX} Deleting insight group: ${workflow.insight_group_id}`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   
   try {
     await deleteInsightGroup(workflow.insight_group_id);
   } catch (err) {
     if (err.status !== 404) {
-      console.error(`${LOG_PREFIX} Failed to delete insight group:`, err);
+      workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
       return NextResponse.json(
         { error: err.message },
         { status: 502 }
@@ -303,7 +303,7 @@ async function deleteGroupStep(workflow) {
     }
   }
 
-  console.log(`${LOG_PREFIX} Insight group deleted successfully`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "Insight group deleted" });
 }
 
@@ -311,7 +311,7 @@ async function deleteGroupStep(workflow) {
  * Step 4: Clear workflow references in database
  */
 async function cleanupStep(workflowId, pool) {
-  console.log(`${LOG_PREFIX} Clearing workflow references`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   
   await pool.query(
     `UPDATE aa_workflows SET
@@ -325,7 +325,7 @@ async function cleanupStep(workflowId, pool) {
     [workflowId]
   );
 
-  console.log(`${LOG_PREFIX} Workflow references cleared`);
+  workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   return NextResponse.json({ ok: true, message: "Workflow references cleared" });
 }
 
@@ -353,14 +353,14 @@ async function handleFullDeletion(workflow, workflowId, apiKey, pool) {
         const assignedNumbers = await findPhoneNumbersByConnection(texmlAppId, apiKey);
         
         for (const num of assignedNumbers) {
-          console.log(`${LOG_PREFIX} Unassigning ${num.phone_number}`);
+          workflowLogger.info("admin_workflow_operation", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
           await unassignPhoneNumber(num.id, apiKey);
           results.phonesUnassigned++;
         }
       }
     }
   } catch (err) {
-    console.error(`${LOG_PREFIX} Error unassigning phone numbers:`, err.message);
+    workflowLogger.error("admin_workflow_error", { ...agentAssistRuntimePayload({ workflowId: typeof workflowId !== "undefined" ? workflowId : undefined, stageId: typeof stageId !== "undefined" ? stageId : undefined, itemId: typeof itemId !== "undefined" ? itemId : undefined, error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : typeof syncErr !== "undefined" ? syncErr : undefined }) });
   }
 
   // Delete assistant

@@ -11,7 +11,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Fragment, useEffect, useState } from "react";
-import { IconHome, IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown } from "@tabler/icons-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -50,30 +50,6 @@ export function NavMain({ groups = [], userRole = "guest", userRoles = [] }) {
 
   return (
     <div className="flex flex-col gap-0">
-      {/* Home (route navigation) */}
-      <SidebarGroup>
-        <SidebarGroupContent className="flex flex-col gap-2">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                tooltip="Home Page"
-                isActive={pathname === "/"}
-                className="rounded-md data-[active=true]:bg-brand-primary data-[active=true]:text-black"
-              >
-                <Link href="/">
-                  <span>
-                    <IconHome />
-                  </span>
-                  <span>Home Page</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-
-      <SidebarSeparator className="my-1" />
       {(() => {
         // Filter groups and items based on user role
         const visibleGroups = groups

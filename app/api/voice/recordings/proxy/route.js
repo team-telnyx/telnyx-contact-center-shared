@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/auth-server";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 /**
  * Proxy endpoint for recording URLs to avoid CORS issues
@@ -59,7 +60,7 @@ export async function GET(request) {
     const audioResponse = await fetch(audioUrl, fetchOptions);
 
     if (!audioResponse.ok) {
-      console.error("[Recording Proxy API] Failed to fetch audio:", audioResponse.status);
+      voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
       return NextResponse.json(
         { ok: false, error: "Failed to fetch audio file" },
         { status: audioResponse.status }
@@ -111,7 +112,7 @@ export async function GET(request) {
       headers,
     });
   } catch (error) {
-    console.error("[Recording Proxy API] Error:", error);
+    voiceRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 }

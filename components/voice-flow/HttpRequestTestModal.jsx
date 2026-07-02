@@ -26,7 +26,6 @@ import {
   IconVariable,
   IconEye,
   IconChevronRight,
-  IconChevronDown,
 } from "@tabler/icons-react";
 import {
   CodeBlock,
@@ -49,15 +48,14 @@ export default function HttpRequestTestModal({
   onOpenChange,
   config,
   availableVariables = [],
+  onTestSuccess,
 }) {
   const [testVariables, setTestVariables] = useState({});
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testError, setTestError] = useState(null);
-  const [expandedResponse, setExpandedResponse] = useState(false);
   const [variablesExpanded, setVariablesExpanded] = useState(true);
   const [requestExpanded, setRequestExpanded] = useState(true);
-  const [responseExpanded, setResponseExpanded] = useState(false);
 
   // Extract variables used in the configuration
   const extractUsedVariables = () => {
@@ -183,6 +181,7 @@ export default function HttpRequestTestModal({
     setIsTesting(true);
     setTestError(null);
     setTestResult(null);
+    const configAtTestStart = config;
 
     try {
       const testConfig = buildTestConfig();
@@ -195,7 +194,10 @@ export default function HttpRequestTestModal({
         body: JSON.stringify(testConfig),
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      const result = responseText.trim()
+        ? JSON.parse(responseText)
+        : { success: false, error: "Test endpoint returned an empty response" };
 
       if (!response.ok) {
         setTestError(result.error || "Test request failed");
@@ -204,7 +206,7 @@ export default function HttpRequestTestModal({
 
       if (result.success) {
         setTestResult(result.response);
-        setExpandedResponse(true);
+        onTestSuccess?.(result.response, configAtTestStart);
       } else {
         setTestError(result.error || "Request failed");
       }
@@ -385,9 +387,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-blue-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
@@ -419,9 +424,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-cyan-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
@@ -453,9 +461,12 @@ export default function HttpRequestTestModal({
                               className="p-2 bg-muted/50 rounded border"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-indigo-600 min-w-0 flex-shrink-0 text-xs">
+                                <Badge
+                                  variant="outline"
+                                  className="min-w-0 flex-shrink-0 text-telnyx-green border-telnyx-green/40 bg-telnyx-green/10 font-mono text-[11px]"
+                                >
                                   {key}:
-                                </span>
+                                </Badge>
                                 <code className="text-xs text-muted-foreground break-all">
                                   {substituteVariables(value)}
                                 </code>
@@ -509,48 +520,30 @@ export default function HttpRequestTestModal({
           {/* Response Display */}
           {testResult && (
             <Card className="border border-border bg-card">
-              <Collapsible
-                open={responseExpanded}
-                onOpenChange={setResponseExpanded}
-              >
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors p-3">
-                    <div className="flex items-center gap-2">
-                      <IconCode className="h-3 w-3 text-green-600" />
-                      <CardTitle className="text-sm font-semibold">
-                        Response
-                      </CardTitle>
-                      <div className="ml-auto flex items-center gap-2">
-                        {getStatusBadge(testResult.status)}
-                        <IconChevronRight
-                          className={`h-3 w-3 transition-transform ${
-                            responseExpanded ? "rotate-90" : ""
-                          }`}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Response data from the test request
-                    </p>
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent className="px-3 pb-3 space-y-4">
-                    <div>
-                      <Label className="text-xs font-medium flex items-center gap-2 mb-2">
-                        <IconCode className="h-3 w-3" />
-                        Response Body
-                      </Label>
-                      <CodeBlock
-                        code={JSON.stringify(testResult.body, null, 2)}
-                        language="json"
-                      >
-                        <CodeBlockCopyButton />
-                      </CodeBlock>
-                    </div>
-                  </CardContent>
-                </CollapsibleContent>
-              </Collapsible>
+              <CardHeader className="p-3">
+                <div className="flex items-center gap-2">
+                  <IconCode className="h-3 w-3 text-green-600" />
+                  <CardTitle className="text-sm font-semibold">Response</CardTitle>
+                  <div className="ml-auto">{getStatusBadge(testResult.status)}</div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Response data from the test request
+                </p>
+              </CardHeader>
+              <CardContent className="px-3 pb-3 space-y-4">
+                <div>
+                  <Label className="text-xs font-medium flex items-center gap-2 mb-2">
+                    <IconCode className="h-3 w-3" />
+                    Response Body
+                  </Label>
+                  <CodeBlock
+                    code={JSON.stringify(testResult.body, null, 2)}
+                    language="json"
+                  >
+                    <CodeBlockCopyButton />
+                  </CodeBlock>
+                </div>
+              </CardContent>
             </Card>
           )}
         </div>

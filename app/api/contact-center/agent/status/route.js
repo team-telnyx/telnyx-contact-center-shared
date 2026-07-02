@@ -3,6 +3,7 @@ import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { isSupervisorOrAdmin } from "@/lib/role-utils";
 import { setUserStatus } from "@/lib/contact-center/user-status";
+import { agentPayload, contactCenterErrorPayload, statusLogger } from "@/lib/contact-center/logging.mjs";
 
 /**
  * PUT /api/contact-center/agent/status
@@ -21,6 +22,12 @@ export async function PUT(request) {
 
     const body = await request.json();
     const { status, userId: targetUserId } = body;
+    statusLogger.debug("status_update_requested", {
+      requesterUserId: String(user.id),
+      requesterUsername: user.username || user.email || null,
+      requestedStatus: status || null,
+      targetUserId: targetUserId ? String(targetUserId) : null,
+    });
 
     if (!status || typeof status !== "string") {
       return NextResponse.json(
@@ -70,7 +77,7 @@ export async function PUT(request) {
         validStatuses = statusResult.rows.map((row) => row.name);
       }
     } catch (error) {
-      console.error("[AgentStatus] Error fetching statuses:", error);
+      statusLogger.error("status_catalog_fetch_failed", contactCenterErrorPayload(error));
       // Use fallback statuses (Offline is not user-selectable)
     }
 
@@ -84,9 +91,12 @@ export async function PUT(request) {
       );
     }
 
-    // Get target user info
+    // Get target user info and Contact Center authoritative status
     const targetUserRes = await pool.query(
-      `SELECT id, username, status, agent_status FROM users WHERE id = $1`,
+      `SELECT u.id, u.username, s.agent_status AS current_agent_status
+         FROM users u
+         LEFT JOIN cc_agent_state s ON s.user_id = u.id
+        WHERE u.id = $1`,
       [targetUserIdFinal],
     );
 
@@ -98,15 +108,23 @@ export async function PUT(request) {
     }
 
     const targetUser = targetUserRes.rows[0];
-    const previousStatus =
-      targetUser.status || targetUser.agent_status || "Unknown";
+    const previousStatus = targetUser.current_agent_status || "Unknown";
 
     // Update status using the setUserStatus function which handles all the necessary updates
-    await setUserStatus({
+    const statusUpdateStartedAt = Date.now();
+    const effectiveStatus = await setUserStatus({
       userId: String(targetUserIdFinal),
       username: targetUser.username,
       status,
       previousStatus,
+    });
+    statusLogger.info("status_update_completed", {
+      ...agentPayload({ agentUserId: targetUserIdFinal, agentUsername: targetUser.username }),
+      requestedStatus: status,
+      effectiveStatus: effectiveStatus || status,
+      previousStatus,
+      durationMs: Date.now() - statusUpdateStartedAt,
+      reason: targetUserIdFinal !== user.id ? "supervisor_action" : "self_update",
     });
 
     // Log activity for supervisor/admin actions
@@ -127,17 +145,19 @@ export async function PUT(request) {
           },
         });
       } catch (activityError) {
-        console.error(
-          "[AgentStatus] Failed to log supervisor activity:",
-          activityError,
-        );
+        statusLogger.error("supervisor_activity_log_failed", {
+          ...agentPayload({ agentUserId: targetUserIdFinal, agentUsername: targetUser.username }),
+          ...contactCenterErrorPayload(activityError),
+          reason: "supervisor_status_change",
+        });
         // Don't fail the request if activity logging fails
       }
     }
 
     return NextResponse.json({
       ok: true,
-      status,
+      status: effectiveStatus || status,
+      requestedStatus: status,
       userId: String(targetUserIdFinal),
       previousStatus,
     });

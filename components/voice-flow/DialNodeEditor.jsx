@@ -457,6 +457,14 @@ export default function DialNodeEditor({
     onChange?.(newConfig);
   };
 
+  const buildConfigWithTranscription = (nextTranscriptionConfig) => ({
+    ...buildConfig(),
+    transcription_engine: nextTranscriptionConfig.transcription_engine,
+    transcription_engine_config:
+      nextTranscriptionConfig.transcription_engine_config,
+    transcription_tracks: nextTranscriptionConfig.transcription_tracks,
+  });
+
   const handleSipHeaderChange = (index, field, value) => {
     if (field === "name") {
       // Check if this header type is already used by another header
@@ -1811,12 +1819,21 @@ export default function DialNodeEditor({
               id="transcription_enabled"
               checked={transcriptionEnabled}
               onCheckedChange={(checked) => {
-                setTranscriptionEnabled(checked);
-                if (!checked) {
+                const enabled = checked === true;
+                setTranscriptionEnabled(enabled);
+                if (!enabled) {
                   setTranscriptionEngine("Google");
                   setTranscriptionEngineConfig({});
                   setTranscriptionTracks("inbound");
                 }
+                onChange?.({
+                  ...buildConfig(),
+                  transcription_engine: enabled ? transcriptionEngine : undefined,
+                  transcription_engine_config: enabled
+                    ? transcriptionEngineConfig
+                    : undefined,
+                  transcription_tracks: enabled ? transcriptionTracks : undefined,
+                });
               }}
             />
             <Label
@@ -1847,6 +1864,7 @@ export default function DialNodeEditor({
                 setTranscriptionTracks(
                   newConfig.transcription_tracks || "inbound"
                 );
+                onChange?.(buildConfigWithTranscription(newConfig));
               }}
             />
           )}

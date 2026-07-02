@@ -1,22 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  IconPlayerPlay,
-  IconPlayerPause,
-  IconPlayerSkipBack,
-  IconPlayerSkipForward,
+  IconPlayerPlayFilled,
+  IconPlayerPauseFilled,
+  IconRewindBackward10,
+  IconRewindForward10,
   IconVolume,
   IconVolumeOff,
-  IconFileText,
   IconLoader2,
+  IconWaveSine,
 } from "@tabler/icons-react";
 import WaveSurfer from "wavesurfer.js";
-import TranscriptionSheet from "./TranscriptionSheet";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 
 function formatDuration(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return "00:00";
@@ -26,31 +25,96 @@ function formatDuration(seconds) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export default function RecordingPlayer({
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 2];
+
+// Telnyx green vertical gradient builders (WaveSurfer v7 accepts CanvasGradient
+// for waveColor/progressColor). Falls back to a solid color if the canvas 2D
+// context is unavailable (e.g. SSR / headless).
+function buildWaveGradient(ctx, height) {
+  if (!ctx || typeof ctx.createLinearGradient !== "function") return "#10b98166";
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#34d399");      // emerald-400 (top)
+  g.addColorStop(0.5, "#10b981");    // emerald-500 (mid)
+  g.addColorStop(1, "#059669aa");    // emerald-600, faded (bottom)
+  return g;
+}
+
+function buildProgressGradient(ctx, height) {
+  if (!ctx || typeof ctx.createLinearGradient !== "function") return "#10b981";
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#6ee7b7");      // emerald-300 (top)
+  g.addColorStop(0.5, "#10b981");    // emerald-500 (mid)
+  g.addColorStop(1, "#047857");      // emerald-700 (bottom)
+  return g;
+}
+
+// Two render styles for the waveform:
+//  - "bars" (default, option B): dense thin bars with a vertical gradient
+//  - "wave" (option C): continuous filled wave (no bars), gradient fill
+const WAVE_STYLE_OPTIONS = [
+  { value: "bars", label: "Bars" },
+  { value: "wave", label: "Wave" },
+];
+
+// Bar geometry per style. Style C (wave) is a continuous fill — in WaveSurfer v7
+// that means barWidth/barGap = 0. Returned as a full object so it can be passed
+// to both WaveSurfer.create() and the live setOptions() toggle without recreating
+// the instance (avoids re-decoding the audio / blinking the card).
+function barOptionsFor(style) {
+  return style === "wave"
+    ? { barWidth: 0, barGap: 0, barRadius: 0 }
+    : { barWidth: 2, barGap: 1, barRadius: 3 };
+}
+
+const RecordingPlayer = forwardRef(function RecordingPlayer({
   src,
   recordingId,
   format,
   channels,
-  transcriptionText,
-  transcriptionSegments,
-  transcriptionSummary,
-  interactionId,
-}) {
+  // Optional playback-sync hooks (used by transcript views to highlight the
+  // turn being played, scroll to it, and seek on bubble click).
+  onTimeUpdate,
+  onPlayingChange,
+  onReady,
+}, ref) {
   const waveformRef = useRef(null);
   const wavesurferRef = useRef(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [waveReady, setWaveReady] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(0.6);
-  const [transcriptionSheetOpen, setTranscriptionSheetOpen] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [localTranscriptionText, setLocalTranscriptionText] =
-    useState(transcriptionText);
-  const [localTranscriptionSegments, setLocalTranscriptionSegments] =
-    useState(transcriptionSegments);
-  const [localTranscriptionSummary, setLocalTranscriptionSummary] =
-    useState(transcriptionSummary);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  // Waveform render style — "bars" (B, default) or "wave" (C, continuous).
+  const [waveStyle, setWaveStyle] = useState("bars");
+  // Ref mirror so the create-effect can read the current style at mount time
+  // without re-subscribing (toggling style must NOT recreate the instance).
+  const waveStyleRef = useRef(waveStyle);
+  waveStyleRef.current = waveStyle;
+
+  // Keep latest callbacks in refs so the wavesurfer event handlers (subscribed
+  // once at create time) always invoke the current callback without forcing the
+  // create-effect to re-run / recreate the instance.
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  onPlayingChangeRef.current = onPlayingChange;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+
+  // Imperative seek API for transcript bubble click-to-seek (seconds).
+  useImperativeHandle(ref, () => ({
+    seekToTime: (seconds) => {
+      const ws = wavesurferRef.current;
+      if (!ws) return;
+      const total = ws.getDuration() || 0;
+      if (total > 0) ws.seekTo(Math.max(0, Math.min(1, Number(seconds) / total)));
+    },
+    play: () => wavesurferRef.current?.play?.(),
+    pause: () => wavesurferRef.current?.pause?.(),
+    getDuration: () => wavesurferRef.current?.getDuration?.() || 0,
+  }), []);
 
   useEffect(() => {
     // Prefer recordingId over src to avoid CORS issues with direct S3 URLs
@@ -71,51 +135,66 @@ export default function RecordingPlayer({
         loadUrl = src;
       }
 
+      const WAVE_HEIGHT = 96;
+      // WaveSurfer v7 renders to a canvas; grab a 2D context to build gradients.
+      const gradientCtx = document.createElement("canvas").getContext("2d");
+      const waveColor = buildWaveGradient(gradientCtx, WAVE_HEIGHT);
+      const progressColor = buildProgressGradient(gradientCtx, WAVE_HEIGHT);
+
+      // Style B (bars): dense thin bars. Style C (wave): continuous fill.
+      // Read from the ref so a later style toggle won't recreate this instance.
+      const styleOptions = barOptionsFor(waveStyleRef.current);
+
       const wavesurfer = WaveSurfer.create({
         container: waveformRef.current,
-        waveColor: "#6b7280",
-        progressColor: "#374151",
-        cursorColor: "#111827",
-        barWidth: 2,
-        barRadius: 3,
-        responsive: true,
-        height: 80,
+        waveColor,
+        progressColor,
+        cursorColor: "#10b981",
+        cursorWidth: 2,
+        ...styleOptions,
+        height: WAVE_HEIGHT,
         normalize: true,
-        backend: "WebAudio",
         mediaControls: false,
       });
 
       wavesurferRef.current = wavesurfer;
 
       wavesurfer.on("ready", () => {
-        setDuration(wavesurfer.getDuration() || 0);
+        const d = wavesurfer.getDuration() || 0;
+        setDuration(d);
+        setWaveReady(true);
+        onReadyRef.current?.(d);
       });
 
       wavesurfer.on("play", () => {
         setPlaying(true);
+        onPlayingChangeRef.current?.(true);
       });
 
       wavesurfer.on("pause", () => {
         setPlaying(false);
+        onPlayingChangeRef.current?.(false);
       });
 
       wavesurfer.on("finish", () => {
         setPlaying(false);
+        onPlayingChangeRef.current?.(false);
       });
 
       wavesurfer.on("timeupdate", (time) => {
         setCurrentTime(time || 0);
+        onTimeUpdateRef.current?.(time || 0);
       });
 
       wavesurfer.on("error", (error) => {
         console.error("[RecordingPlayer] WaveSurfer error:", error);
         const errorMessage = error?.message || String(error) || "";
         const errorString = errorMessage.toLowerCase();
-        
+
         if (errorString.includes("failed to fetch") || errorString.includes("cors") || errorString.includes("networkerror")) {
-          toast.error("Failed to load recording. The recording may be unavailable, expired, or there was a network error.");
+          notify({ title: "Failed to load recording. The recording may be unavailable, expired, or there was a network error.", variant: "error" });
         } else {
-          toast.error(`Failed to load recording: ${errorMessage || "Unknown error"}`);
+          notify({ title: `Failed to load recording: ${errorMessage || "Unknown error"}`, variant: "error" });
         }
       });
 
@@ -123,7 +202,7 @@ export default function RecordingPlayer({
         wavesurfer.load(loadUrl);
       } catch (error) {
         console.error("[RecordingPlayer] Error loading recording:", error);
-        toast.error("Failed to initialize recording player");
+        notify({ title: "Failed to initialize recording player", variant: "error" });
       }
     }, 100);
 
@@ -136,8 +215,21 @@ export default function RecordingPlayer({
         wavesurferRef.current.destroy();
         wavesurferRef.current = null;
       }
+      setWaveReady(false);
     };
   }, [src, recordingId]);
+
+  // Toggling the waveform style repaints in place via setOptions() — no destroy /
+  // re-decode, so only the canvas updates and the rest of the card never blinks.
+  useEffect(() => {
+    const ws = wavesurferRef.current;
+    if (!ws || !waveReady) return;
+    try {
+      ws.setOptions(barOptionsFor(waveStyle));
+    } catch {
+      // setOptions is best-effort; ignore if the instance is mid-teardown.
+    }
+  }, [waveStyle, waveReady]);
 
   useEffect(() => {
     if (wavesurferRef.current) {
@@ -152,53 +244,14 @@ export default function RecordingPlayer({
   }, [muted]);
 
   useEffect(() => {
-    setLocalTranscriptionText(transcriptionText);
-    setLocalTranscriptionSegments(transcriptionSegments);
-    setLocalTranscriptionSummary(transcriptionSummary);
-  }, [transcriptionText, transcriptionSegments, transcriptionSummary]);
-
-  const handleTranscribe = async () => {
-    if (!recordingId || !interactionId) {
-      toast.error("Recording ID and Interaction ID are required");
-      return;
-    }
-
-    setIsTranscribing(true);
-    try {
-      const response = await fetch(
-        `/api/voice/recordings/${encodeURIComponent(recordingId)}/transcribe`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            interactionId,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to transcribe recording");
+    if (wavesurferRef.current && waveReady) {
+      try {
+        wavesurferRef.current.setPlaybackRate(playbackRate);
+      } catch {
+        // Playback rate is a nice-to-have; ignore unsupported backends.
       }
-
-      if (data.transcription_text) {
-        setLocalTranscriptionText(data.transcription_text);
-        setLocalTranscriptionSegments(data.transcription_segments || null);
-        setLocalTranscriptionSummary(data.transcription_summary || null);
-        toast.success("Transcription completed successfully");
-      } else {
-        throw new Error("No transcription text received");
-      }
-    } catch (error) {
-      console.error("[RecordingPlayer] Transcription error:", error);
-      toast.error(error.message || "Failed to transcribe recording");
-    } finally {
-      setIsTranscribing(false);
     }
-  };
+  }, [playbackRate, waveReady]);
 
   const togglePlay = () => {
     if (!wavesurferRef.current) return;
@@ -218,6 +271,12 @@ export default function RecordingPlayer({
     }
   };
 
+  const cyclePlaybackRate = () => {
+    const idx = PLAYBACK_RATES.indexOf(playbackRate);
+    const next = PLAYBACK_RATES[(idx + 1) % PLAYBACK_RATES.length];
+    setPlaybackRate(next);
+  };
+
   const formatLabel = format ? String(format).toUpperCase() : null;
   const channelLabel = (() => {
     if (channels === null || channels === undefined) return null;
@@ -231,150 +290,169 @@ export default function RecordingPlayer({
     return String(channels);
   })();
 
+  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
   return (
-    <Card>
-      <CardHeader className="text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 font-semibold text-base">
-            <IconPlayerPlay className="h-5 w-5 text-telnyx-green" />
-            Call Recording
+    <Card className="overflow-hidden border-border/70 bg-card shadow-sm dark:bg-zinc-950/70">
+      <CardContent className="p-0">
+        {/* Header strip */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-muted/30 px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+              <IconWaveSine className="h-5 w-5" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold leading-tight">Call Recording</div>
+              <div className="text-xs text-muted-foreground">
+                {playing ? "Playing" : waveReady ? "Ready to play" : "Loading waveform…"}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            {localTranscriptionText ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setTranscriptionSheetOpen(true)}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80"
-              >
-                <IconFileText className="h-3 w-3 mr-1" />
-                Show Transcription
-              </Button>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleTranscribe}
-                disabled={isTranscribing || !recordingId || !interactionId}
-                className="h-6 px-2 text-xs rounded-[6px] bg-muted text-foreground hover:bg-muted/80 disabled:opacity-50"
-              >
-                {isTranscribing ? (
-                  <>
-                    <IconLoader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Transcribing...
-                  </>
-                ) : (
-                  <>
-                    <IconFileText className="h-3 w-3 mr-1" />
-                    Transcribe Recording
-                  </>
-                )}
-              </Button>
-            )}
-            {formatLabel ? <span>Format:</span> : null}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Waveform style toggle: Bars (B, default) ↔ Wave (C, continuous) */}
+            <div
+              className="inline-flex items-center rounded-full border border-border/70 bg-background/60 p-0.5"
+              role="group"
+              aria-label="Waveform style"
+              data-testid="recording-wave-style-toggle"
+            >
+              {WAVE_STYLE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setWaveStyle(opt.value)}
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wide transition ${
+                    waveStyle === opt.value
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  aria-pressed={waveStyle === opt.value}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             {formatLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
+              <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {formatLabel}
               </Badge>
             ) : null}
-            {channelLabel ? <span>Channels:</span> : null}
             {channelLabel ? (
-              <Badge
-                variant="outline"
-                className="border-telnyx-green/60 text-telnyx-green"
-              >
-                {channelLabel}
+              <Badge variant="outline" className="border-border/70 bg-background/60 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {channelLabel} channel
               </Badge>
             ) : null}
-            <span>Duration:</span>
-            <Badge
-              variant="outline"
-              className="border-telnyx-green/60 text-telnyx-green"
-            >
+            <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
               {formatDuration(duration)}
             </Badge>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="w-full border border-telnyx-green rounded-xl p-3">
-          <div ref={waveformRef} className="w-full" />
-        </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>0:00</span>
-          <span>{formatDuration(duration)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => seek(-5)}>
-            <IconPlayerSkipBack className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            onClick={togglePlay}
-            className="px-6 rounded-[10px] bg-muted text-foreground hover:bg-muted/80"
-          >
-            {playing ? (
-              <>
-                <IconPlayerPause className="h-4 w-4 mr-2" />
-                Pause
-              </>
-            ) : (
-              <>
-                <IconPlayerPlay className="h-4 w-4 mr-2" />
-                Play
-              </>
+
+        {/* Waveform stage */}
+        <div className="px-5 pt-5">
+          <div className="relative rounded-2xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/10 p-4 dark:from-zinc-900/60 dark:to-zinc-950/40">
+            {!waveReady && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <IconLoader2 className="h-4 w-4 animate-spin" />
+                Loading waveform…
+              </div>
             )}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => seek(5)}>
-            <IconPlayerSkipForward className="h-4 w-4" />
-          </Button>
-          <div className="ml-auto flex items-center gap-2 w-40">
-            {muted ? (
-              <IconVolumeOff className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <IconVolume className="h-4 w-4 text-muted-foreground" />
-            )}
+            <div ref={waveformRef} className="w-full" />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-mono tabular-nums text-foreground/80" data-testid="recording-current-time">
+              {formatDuration(currentTime)}
+            </span>
+            <div className="mx-3 hidden h-1 flex-1 overflow-hidden rounded-full bg-muted sm:block">
+              <div className="h-full rounded-full bg-emerald-500/70 transition-[width]" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="font-mono tabular-nums">{formatDuration(duration)}</span>
+          </div>
+        </div>
+
+        {/* Transport controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 pb-5 pt-3">
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => seek(-10)}
+              className="h-10 w-10 rounded-full"
+              aria-label="Back 10 seconds"
+              title="Back 10s"
+            >
+              <IconRewindBackward10 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              onClick={togglePlay}
+              className="h-14 w-14 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 transition hover:scale-105 hover:bg-emerald-500"
+              aria-label={playing ? "Pause" : "Play"}
+              data-testid="recording-play-button"
+            >
+              {playing ? (
+                <IconPlayerPauseFilled className="h-6 w-6" />
+              ) : (
+                <IconPlayerPlayFilled className="ml-0.5 h-6 w-6" />
+              )}
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={() => seek(10)}
+              className="h-10 w-10 rounded-full"
+              aria-label="Forward 10 seconds"
+              title="Forward 10s"
+            >
+              <IconRewindForward10 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={cyclePlaybackRate}
+              className="ml-1 h-8 w-14 rounded-full font-mono text-xs"
+              aria-label="Playback speed"
+              title="Playback speed"
+            >
+              {playbackRate}x
+            </Button>
+          </div>
+
+          <div className="flex min-w-[200px] flex-1 items-center justify-end gap-2 sm:flex-none">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setMuted(!muted)}
+              className="h-9 w-9 rounded-full"
+              aria-label={muted ? "Unmute" : "Mute"}
+            >
+              {muted ? (
+                <IconVolumeOff className="h-4.5 w-4.5 text-muted-foreground" />
+              ) : (
+                <IconVolume className="h-4.5 w-4.5 text-muted-foreground" />
+              )}
+            </Button>
             <input
               type="range"
               min={0}
               max={100}
               step={1}
-              value={Math.round(volume * 100)}
-              onChange={(e) => setVolume(Number(e.target.value) / 100)}
-              className="h-2 w-full cursor-pointer accent-primary"
+              value={Math.round((muted ? 0 : volume) * 100)}
+              onChange={(e) => {
+                setMuted(false);
+                setVolume(Number(e.target.value) / 100);
+              }}
+              className="h-1.5 w-36 cursor-pointer accent-emerald-600"
               aria-label="Volume"
             />
+            <span className="w-9 text-right font-mono text-xs tabular-nums text-muted-foreground">
+              {muted ? 0 : Math.round(volume * 100)}%
+            </span>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setMuted(!muted)}
-            className="px-5 rounded-[10px] bg-muted text-foreground hover:bg-muted/80"
-          >
-            {muted ? (
-              <>
-                <IconVolumeOff className="h-4 w-4 mr-2" />
-                Unmute
-              </>
-            ) : (
-              <>
-                <IconVolume className="h-4 w-4 mr-2" />
-                Mute
-              </>
-            )}
-          </Button>
         </div>
       </CardContent>
-      <TranscriptionSheet
-        transcriptionText={localTranscriptionText}
-        transcriptionSegments={localTranscriptionSegments}
-        transcriptionSummary={localTranscriptionSummary}
-        open={transcriptionSheetOpen}
-        onOpenChange={setTranscriptionSheetOpen}
-      />
     </Card>
   );
-}
+});
 
+export default RecordingPlayer;

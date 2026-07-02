@@ -40,7 +40,7 @@ import {
   IconMessageCircle,
   IconCalendar,
 } from "@tabler/icons-react";
-import { toast } from "sonner";
+import { notify } from "@/components/ToastNotify";
 import { countries } from "@/lib/countries";
 
 export default function NumberEditSheet({
@@ -109,13 +109,11 @@ export default function NumberEditSheet({
         throw new Error(data?.error || "Failed to update number");
       }
 
-      toast.success("Number updated successfully");
+      notify({ title: "Number updated successfully", variant: "success" });
       onUpdate?.();
       onOpenChange(false);
     } catch (err) {
-      toast.error("Update failed", {
-        description: String(err.message || err),
-      });
+      notify({ title: "Update failed", description: String(err.message || err), variant: "error" });
     } finally {
       setLoading(false);
     }

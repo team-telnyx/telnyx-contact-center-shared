@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 } from "@tabler/icons-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { notify } from "@/components/ToastNotify";
+import { AgentDataSourcePagination } from "./AgentDataSourcePagination";
 
 export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,6 +46,9 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
   }, []);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Save search query to localStorage
   useEffect(() => {
@@ -72,49 +76,56 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
     }
   }, [expandedItem]);
 
-  // Load KB articles
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const query = new URLSearchParams();
-        if (searchQuery) {
-          query.set("q", searchQuery);
-        }
-        query.set("pageSize", "50");
-        query.set("status", "Published"); // Only show published articles
+  const loadArticles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const query = new URLSearchParams();
+      if (searchQuery) {
+        query.set("q", searchQuery);
+      }
+      query.set("page", String(page));
+      query.set("pageSize", String(pageSize));
+      query.set("status", "Published"); // Only show published articles
 
-        const res = await fetch(`/api/admin/kb-articles?${query}`, {
-          cache: "no-store",
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setItems(data.items || []);
-        } else {
-          notify({
-            title: "Load failed",
-            description: data?.error || "Failed to fetch KB articles",
-            variant: "error",
-          });
-        }
-      } catch (err) {
+      const res = await fetch(`/api/admin/kb-articles?${query}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setItems(data.items || []);
+        setTotalCount(Number(data.total || 0));
+      } else {
         notify({
           title: "Load failed",
-          description: String(err.message || err),
+          description: data?.error || "Failed to fetch KB articles",
           variant: "error",
         });
-      } finally {
-        setLoading(false);
       }
+    } catch (err) {
+      notify({
+        title: "Load failed",
+        description: String(err.message || err),
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
     }
+  }, [page, pageSize, searchQuery]);
 
-    load();
+  // Load KB articles
+  useEffect(() => {
+    loadArticles();
+  }, [loadArticles]);
+
+  useEffect(() => {
+    setPage(1);
   }, [searchQuery]);
 
   // Clear search query when call disconnects
   useEffect(() => {
     const handleCallDisconnected = () => {
       setSearchQuery("");
+      setPage(1);
     };
 
     window.addEventListener(
@@ -154,24 +165,26 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
   }, [expandedItem, items]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-2 mb-3">
-          <IconBook className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold">KB Articles</h3>
-        </div>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="shrink-0 p-4 border-b">
         <div className="relative">
           <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search articles..."
             className="pl-8 pr-8"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => setSearchQuery("")}
+              onClick={() => {
+                setSearchQuery("");
+                setPage(1);
+              }}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-sm hover:bg-muted transition-colors"
               aria-label="Clear search"
             >
@@ -181,7 +194,7 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-4">
           {loading ? (
             <div className="space-y-2">
@@ -210,8 +223,8 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
                   >
                     <AccordionTrigger className="hover:no-underline py-3">
                       <div className="flex items-center gap-3 flex-1 text-left">
-                        <div className="p-2 rounded-md bg-muted">
-                          <IconBook className="h-4 w-4" />
+                        <div className="p-2 rounded-md bg-amber-500/10">
+                          <IconBook className="h-4 w-4 text-amber-500" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm mb-1">
@@ -369,6 +382,17 @@ export function AgentKbArticlesView({ selectedInteraction, onBackToInteraction }
           )}
         </div>
       </ScrollArea>
+      <AgentDataSourcePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        loading={loading}
+        onPageChange={setPage}
+        onPageSizeChange={(nextPageSize) => {
+          setPageSize(nextPageSize);
+          setPage(1);
+        }}
+      />
     </div>
   );
 }

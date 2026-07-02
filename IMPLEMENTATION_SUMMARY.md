@@ -278,24 +278,26 @@ WHERE ist.status = 'pending'
 ```javascript
 for (const completed of analysisResult.completed_items) {
   const item = pendingItems.find(p => p.item_id === completed.item_id);
-  const speakerType = speaker === "inbound" ? "customer" : "agent";
+  const speakerType = normalizeSpeakerType(speaker);
   const completionTrigger = item.completion_trigger || "agent";
-  
-  // Check if trigger matches speaker
-  let shouldComplete = false;
-  if (completionTrigger === "either") {
-    shouldComplete = true;
-  } else if (completionTrigger === "customer" && speakerType === "customer") {
-    shouldComplete = true;
-  } else if (completionTrigger === "agent" && speakerType === "agent") {
-    shouldComplete = true;
+  const shouldComplete =
+    Boolean(speakerType) &&
+    (completionTrigger === "either" ||
+      (completionTrigger === "customer" && speakerType === "customer") ||
+      (completionTrigger === "agent" && speakerType === "agent"));
+  const hasExtractedSlotValue =
+    item.type !== "slot" || hasMeaningfulExtractedValue(completed.extracted_value);
+
+  // Ignore wrong-speaker detections and empty slot hits.
+  if (!shouldComplete || !hasExtractedSlotValue) {
+    continue;
   }
-  
-  // Only complete if confidence high AND trigger matches
-  if (shouldComplete && completed.confidence >= 0.85) {
+
+  // Complete only above the workflow's configured threshold.
+  if (completed.confidence >= confidenceThreshold) {
     // Mark as completed
   } else {
-    // Add as suggestion with completion_trigger_pending flag
+    // Add as low-confidence suggestion
   }
 }
 ```

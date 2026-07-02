@@ -7,33 +7,147 @@ import {
   determineNextNodes,
 } from "@/lib/voice-flow-engine.js";
 import { getPostgresPool } from "@/lib/postgres.mjs";
-import { addWebhookEvent } from "@/lib/call-monitor-store.js";
+import { addNodeExecutionEvent, addWebhookEvent } from "@/lib/call-monitor-store.js";
 import { logCallEvent } from "@/lib/call-logger.js";
-import { getValueByPath } from "@/lib/variable-utils.js";
+import {
+  DEFAULT_INCOMING_CALL_PAYLOAD_VARIABLE,
+  getValueByPath,
+} from "@/lib/variable-utils.js";
 import { buildTelnyxV2Url } from "@/lib/telnyx";
 import { VOICE_FLOW_NODES } from "@/config/voice-flow-nodes.js";
+import { findNextEdges, findNextNodes } from "@/lib/voice-flow-routing.js";
+import { finalizeAgentlessAttemptByWebhook, handleOutboundMachineDetection } from "@/lib/outbound-dialer/execution";
 import {
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker.js";
+import { voiceRuntimePayload, voiceWebhookLogger } from "@/lib/voice/logging.mjs";
 
-// Track executed transitions to prevent duplicate execution
-// Key: `${call_control_id}:${from_node_id}:${to_node_id}`
-// Value: timestamp
-const executedTransitions = new Map();
+// WS4-T1: transition/flow-completion dedupe is replay-safe across nodes and
+// restarts. The helper keeps the previous in-memory 5-minute TTL semantics as
+// a fast path and adds DB-backed idempotency (cc_processed_events) guarded by
+// WEBHOOK_IDEMPOTENCY_DB (default on, fail-open to memory on DB errors).
+import {
+  claimOnce as claimWebhookKeyOnce,
+  wasProcessed as webhookKeyProcessed,
+  markProcessed as markWebhookKeyProcessed,
+} from "@/lib/events/webhook-dedupe.js";
 
-// Track completed flows (flows that reached a terminal node with no outgoing edges)
-// Key: `${call_control_id}:${flowId}`
-// Value: timestamp
-const completedFlows = new Map();
+const DEDUPE_KIND_TRANSITION = "voice:transition";
+const DEDUPE_KIND_FLOW_COMPLETE = "voice:flow-complete";
 
 const AI_CALL_ID_HEADER = "X-AI-Call-ID";
+
+function canContinueAfterFailedImmediateNode(nodeType, result) {
+  const nodeDef = VOICE_FLOW_NODES[nodeType];
+  return (
+    result?.success === false &&
+    typeof result.output === "number" &&
+    result.output > 0 &&
+    (nodeDef?.outputs || 0) > 1
+  );
+}
 
 function findCustomHeader(headers, name) {
   if (!Array.isArray(headers)) return null;
   return headers.find(
     (header) =>
       String(header?.name || "").toLowerCase() === String(name).toLowerCase(),
+  );
+}
+
+function decodeClientState(clientState) {
+  if (!clientState) return null;
+  try {
+    return JSON.parse(Buffer.from(clientState, "base64").toString("utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+async function hangupVoicemailDropCall(callControlId) {
+  const apiKey = process.env.TELNYX_API_KEY;
+  if (!apiKey || !callControlId) return false;
+
+  try {
+    const response = await fetch(
+      buildTelnyxV2Url(`/calls/${encodeURIComponent(callControlId)}/actions/hangup`),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function lookupOutboundContactRecord(payload = {}) {
+  const pool = getPostgresPool();
+  if (!pool) return null;
+
+  const metadata = payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {};
+  const callControlId = payload?.call_control_id || null;
+  const ledgerId = metadata?.outbound_ledger_id || null;
+
+  try {
+    let query = `
+      SELECT r.row_data, l.contact_record_id, l.campaign_id
+      FROM outbound_attempt_ledger l
+      LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
+      WHERE l.call_control_id = $1
+      LIMIT 1`;
+    let params = [callControlId];
+
+    if (ledgerId) {
+      query = `
+        SELECT r.row_data, l.contact_record_id, l.campaign_id
+        FROM outbound_attempt_ledger l
+        LEFT JOIN outbound_contact_records r ON r.id = l.contact_record_id
+        WHERE l.id = $1
+        LIMIT 1`;
+      params = [ledgerId];
+    }
+
+    const { rows } = await pool.query(query, params);
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      contactRecord: row.row_data && typeof row.row_data === "object" ? row.row_data : {},
+      contactRecordId: row.contact_record_id || null,
+      campaignId: row.campaign_id || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function recordOutboundCampaignInitiatorMonitorEvent({ callControlId, flowId, initiatorNode, event, variables }) {
+  if (!callControlId || !flowId || initiatorNode?.data?.nodeType !== "outbound_campaign") return;
+
+  addNodeExecutionEvent(
+    callControlId,
+    "outbound_campaign",
+    initiatorNode.id,
+    initiatorNode.data?.label || "Outbound Campaign",
+    {
+      event_type: event,
+      description: "Outbound campaign initiator received a Telnyx webhook and exposed these variables to the flow.",
+      variables: {
+        ...variables,
+        call_control_id: variables?.call_control_id || callControlId,
+        contact_record: variables?.contact_record || {},
+        outbound_campaign_id: variables?.outbound_campaign_id || null,
+      },
+    },
+    true,
+    0,
+    flowId,
   );
 }
 
@@ -91,20 +205,6 @@ async function updateConversationMetadata(conversationId, metadata) {
 
 export async function POST(request, { params }) {
   try {
-    // Clean up old transitions and completed flows (older than 5 minutes)
-    const now = Date.now();
-    const fiveMinutesAgo = now - 5 * 60 * 1000;
-    for (const [key, timestamp] of executedTransitions.entries()) {
-      if (timestamp < fiveMinutesAgo) {
-        executedTransitions.delete(key);
-      }
-    }
-    for (const [key, timestamp] of completedFlows.entries()) {
-      if (timestamp < fiveMinutesAgo) {
-        completedFlows.delete(key);
-      }
-    }
-
     const { flowId } = await params;
     if (!flowId) {
       return NextResponse.json(
@@ -118,24 +218,27 @@ export async function POST(request, { params }) {
 
     // Verify Telnyx signature (optional but recommended)
     const isValid = await verifyTelnyxSignature(request, rawBody);
+    const enforceSignature = String(process.env.TELNYX_ENFORCE_WEBHOOK_SIGNATURE || "true").toLowerCase() === "true";
     if (!isValid) {
-      console.warn("Invalid Telnyx signature - proceeding anyway");
-      // Uncomment to enforce signature validation:
-      return NextResponse.json(
-        { ok: false, error: "Invalid signature" },
-        { status: 401 },
-      );
+      voiceWebhookLogger.warn("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
+      if (enforceSignature) {
+        return NextResponse.json(
+          { ok: false, error: "Invalid signature" },
+          { status: 401 },
+        );
+      }
     }
 
     // Parse the body
     const body = JSON.parse(rawBody || "{}");
     const event = body?.data?.event_type;
+    const webhookEventId = body?.data?.id || null;
 
     // Log call event to database
     try {
       await logCallEvent(body);
     } catch (err) {
-      console.error("[incoming-flow-webhook] Error logging call:", err);
+      voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     }
 
     // Store webhook in memory for monitoring
@@ -146,6 +249,62 @@ export async function POST(request, { params }) {
 
     // Extract webhook data into variables (needed for call.enqueued handling)
     const payload = body?.data?.payload || {};
+
+    if (
+      callControlId &&
+      (event === "call.answered" || event === "call.bridged" || event === "call.hangup")
+    ) {
+      try {
+        const pool = getPostgresPool();
+        if (pool) {
+          await finalizeAgentlessAttemptByWebhook(pool, {
+            callControlId,
+            eventType: event,
+            hangupCause: payload?.hangup_cause || null,
+            sipHangupCause: payload?.sip_hangup_cause || null,
+            eventId: body?.data?.id || body?.id || null,
+          });
+        }
+      } catch (err) {
+        voiceWebhookLogger.error("voice_webhook_incoming_flow_webhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
+      }
+    }
+
+    // WS5-T2: AMD result for outbound campaign calls — human → connect path,
+    // machine/beep → campaign voicemailAction (hangup / drop_message). No-op
+    // for calls that don't belong to an outbound attempt.
+    if (
+      callControlId &&
+      (event === "call.machine.detection.ended" ||
+        event === "call.machine.premium.detection.ended" ||
+        event === "call.machine.premium.greeting.ended")
+    ) {
+      try {
+        const pool = getPostgresPool();
+        if (pool) {
+          await handleOutboundMachineDetection(pool, {
+            callControlId,
+            amdResult: payload?.result || null,
+            eventId: body?.data?.id || body?.id || null,
+            eventType: event,
+          });
+        }
+      } catch (err) {
+        voiceWebhookLogger.error("voice_webhook_outbound_amd", voiceRuntimePayload({ error: err, eventType: event, callControlId, flowId }));
+      }
+    }
+
+    if (callControlId && event === "call.speak.ended") {
+      const decodedClientState = decodeClientState(payload?.client_state);
+      if (decodedClientState?.voicemailDrop) {
+        const hangupIssued = await hangupVoicemailDropCall(callControlId);
+        return NextResponse.json({
+          ok: true,
+          message: "Voicemail drop completed",
+          hangupIssued,
+        });
+      }
+    }
 
     // Get the flow (without username filter to allow any user's flow to be triggered)
     const flow = await VoiceFlowDb.getFlowById(flowId, null);
@@ -351,6 +510,12 @@ export async function POST(request, { params }) {
               metadata: {
                 flow_owner: flow?.username || null,
                 initiated_at: payload.occurred_at || new Date().toISOString(),
+                ...(payload.client_state
+                  ? {
+                      client_state: payload.client_state,
+                      call_generator_client_state: payload.client_state,
+                    }
+                  : {}),
                 ...(aiCallControlId
                   ? { ai_call_control_id: aiCallControlId }
                   : {}),
@@ -520,7 +685,7 @@ export async function POST(request, { params }) {
       try {
         const { handleContactCenterEvent } =
           await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload);
+        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
       } catch (err) {
         // Don't fail the webhook, just log the error
       }
@@ -543,31 +708,64 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Find the incoming call initiator node
+    // Find initiator nodes for this flow
     const incomingCallNode = flow.nodes?.find(
       (node) => node.data?.nodeType === "incoming_call",
     );
+    const outboundCampaignNode = flow.nodes?.find(
+      (node) => node.data?.nodeType === "outbound_campaign",
+    );
 
-    if (!incomingCallNode) {
+    if (!incomingCallNode && !outboundCampaignNode) {
       return NextResponse.json(
         {
           ok: false,
-          error: "Flow does not have an incoming call trigger",
+          error: "Flow does not have a supported trigger (incoming_call or outbound_campaign)",
         },
         { status: 400 },
       );
     }
 
-    // Verify that the voice application ID matches (if configured)
-    const configuredAppId = incomingCallNode.data?.config?.voice_application_id;
+    const outboundMetadataPresent = Boolean(
+      payload?.metadata?.outbound_campaign_id || payload?.metadata?.outbound_ledger_id,
+    );
+    const outboundContact = outboundCampaignNode
+      ? await lookupOutboundContactRecord(payload)
+      : null;
+    const isOutboundCampaignEvent = Boolean(outboundMetadataPresent || outboundContact?.campaignId);
+
+    const initiatorNode =
+      isOutboundCampaignEvent && outboundCampaignNode
+        ? outboundCampaignNode
+        : incomingCallNode;
+
+    if (!initiatorNode) {
+      return NextResponse.json({
+        ok: true,
+        message: "No matching initiator in flow for this webhook event",
+      });
+    }
+
+    // Verify that the voice application ID matches (if configured on incoming_call initiator)
+    const configuredAppId = initiatorNode.data?.config?.voice_application_id;
     const receivedAppId = body?.data?.payload?.connection_id;
 
-    if (configuredAppId && receivedAppId && configuredAppId !== receivedAppId) {
-      console.warn(
-        `Voice application mismatch: expected ${configuredAppId}, received ${receivedAppId}`,
-      );
+    if (
+      initiatorNode.data?.nodeType === "incoming_call" &&
+      configuredAppId &&
+      receivedAppId &&
+      configuredAppId !== receivedAppId
+    ) {
+      voiceWebhookLogger.warn("voice_application_mismatch_expected_configuredappid_received_receivedappid", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       // We'll still process it, but log the warning
     }
+
+    const outboundPayloadVariable =
+      initiatorNode.data?.config?.payloadVariable || "contact_record";
+    const incomingPayloadVariable =
+      initiatorNode.data?.config?.payloadVariable ||
+      initiatorNode.data?.config?.payloadVariableName ||
+      DEFAULT_INCOMING_CALL_PAYLOAD_VARIABLE;
 
     // Extract webhook data into variables (payload already extracted above)
     const variables = {
@@ -595,14 +793,34 @@ export async function POST(request, { params }) {
       payload: payload,
 
       // Metadata
-      trigger_type: "incoming_call",
+      trigger_type: initiatorNode.data?.nodeType,
       flow_id: flowId,
+      outbound_campaign_id: outboundContact?.campaignId || payload?.metadata?.outbound_campaign_id || null,
+      outbound_contact_record_id: outboundContact?.contactRecordId || null,
     };
+
+    if (initiatorNode.data?.nodeType === "outbound_campaign") {
+      const contactRecord = outboundContact?.contactRecord || {};
+      variables[outboundPayloadVariable] = contactRecord;
+      variables.contact_record = contactRecord;
+      variables.contact_data = contactRecord;
+      recordOutboundCampaignInitiatorMonitorEvent({
+        callControlId: payload.call_control_id,
+        flowId,
+        initiatorNode,
+        event,
+        variables,
+      });
+    } else if (initiatorNode.data?.nodeType === "incoming_call") {
+      variables[incomingPayloadVariable] = payload;
+    }
 
     // Handle different event types
     if (event === "call.initiated") {
-      // Only trigger for incoming calls, not outgoing calls (e.g., from transfer nodes)
-      if (payload.direction !== "incoming") {
+      if (
+        initiatorNode.data?.nodeType === "incoming_call" &&
+        payload.direction !== "incoming"
+      ) {
         return NextResponse.json({
           ok: true,
           message: `Call initiated but direction is ${payload.direction}, expected "incoming"`,
@@ -610,14 +828,25 @@ export async function POST(request, { params }) {
         });
       }
 
-      // Find all next nodes after the incoming_call initiator (supports parallel execution)
-      const nextNodes = findNextNodes(flow, incomingCallNode.id);
+      if (
+        initiatorNode.data?.nodeType === "outbound_campaign" &&
+        payload.direction !== "outgoing"
+      ) {
+        return NextResponse.json({
+          ok: true,
+          message: `Call initiated but direction is ${payload.direction}, expected "outgoing"`,
+          variables,
+        });
+      }
 
-      // Process edge variable mappings for edges from incoming_call node
-      const edges = flow.edges || [];
-      const matchingEdges = edges.filter(
-        (e) => e.source === incomingCallNode.id,
-      );
+      // Find next nodes for the actual initiation event only. This is critical for
+      // outbound campaign flows where the initiator may have a call.answered edge
+      // to an AI assistant start node; executing every outgoing edge on call.initiated
+      // attempts to start the assistant before the PSTN leg is answered.
+      const nextNodes = findNextNodes(flow, initiatorNode.id, event);
+
+      // Process edge variable mappings only for the edge(s) selected by this webhook event.
+      const matchingEdges = findNextEdges(flow, initiatorNode.id, event);
 
       // Process edge variable mappings
       matchingEdges.forEach((edge) => {
@@ -702,28 +931,35 @@ export async function POST(request, { params }) {
           for (const { node, result } of results) {
             const nodeType = node.data?.nodeType || node.type;
 
-            if (!result.success) {
-              continue;
-            }
-
             // Check if this is a logical node that should continue immediately
             const logicalNodeTypes = [
               "http_request_action",
+              "data_action",
+              "mcp_tool",
               "set_variable",
               "condition",
               "switch",
               "logic_gate",
               "flow_end",
               "set_queue_options",
+              "client_state_update",
               "agent_assist",
+              "transcription_start",
             ];
 
             const isLogical = logicalNodeTypes.includes(nodeType);
+            const shouldContinueChain =
+              result.success ||
+              (isLogical && canContinueAfterFailedImmediateNode(nodeType, result));
+
+            if (!shouldContinueChain) {
+              continue;
+            }
 
             if (isLogical) {
               // Logical nodes execute and immediately continue to next node
               // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
-              if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
+              if (["set_queue_options", "client_state_update", "agent_assist"].includes(nodeType)) {
                 await new Promise((resolve) => setTimeout(resolve, 500));
 
                 // Update body payload with the new client_state from the result
@@ -759,10 +995,7 @@ export async function POST(request, { params }) {
               execution_history: [],
             });
           } catch (error) {
-            console.error(
-              `[IncomingWebhook] Failed to store variables in database:`,
-              error,
-            );
+            voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
           }
 
           return NextResponse.json({
@@ -772,7 +1005,7 @@ export async function POST(request, { params }) {
             results: results.map((r) => r.result),
           });
         } catch (error) {
-          console.error(`[Incoming Call] Error executing node:`, error);
+          voiceWebhookLogger.error("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
           return NextResponse.json(
             {
               ok: false,
@@ -783,7 +1016,7 @@ export async function POST(request, { params }) {
           );
         }
       } else {
-        console.warn(`[Incoming Call] No next node configured after initiator`);
+        voiceWebhookLogger.warn("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
 
         // Store variables in database for persistence between webhook calls
         try {
@@ -793,14 +1026,12 @@ export async function POST(request, { params }) {
             payload.call_control_id,
           );
           await VoiceFlowDb.updateFlowExecution(payload.call_control_id, {
+            current_node_id: initiatorNode.id,
             variables,
             execution_history: [],
           });
         } catch (error) {
-          console.error(
-            `[IncomingWebhook] Failed to store variables in database:`,
-            error,
-          );
+          voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
         }
 
         return NextResponse.json({
@@ -813,7 +1044,7 @@ export async function POST(request, { params }) {
 
     // Check if this flow has already completed
     const flowCompletionKey = `${payload.call_control_id}:${flowId}`;
-    if (completedFlows.has(flowCompletionKey)) {
+    if (await webhookKeyProcessed(flowCompletionKey)) {
       return NextResponse.json({
         ok: true,
         message: "Flow already completed",
@@ -904,7 +1135,7 @@ export async function POST(request, { params }) {
       try {
         const { handleContactCenterEvent } =
           await import("@/lib/contact-center/webhook-handler.js");
-        await handleContactCenterEvent(event, payload);
+        await handleContactCenterEvent(event, payload, { eventId: webhookEventId });
       } catch (err) {
         // Error handling call.recording.saved
       }
@@ -912,16 +1143,32 @@ export async function POST(request, { params }) {
 
     // Try to decode client_state to get current execution info
     let currentNodeId = null;
+    let persistedExecution = null;
     try {
       const clientState = payload.client_state;
       if (clientState) {
-        const decoded = JSON.parse(
-          Buffer.from(clientState, "base64").toString("utf-8"),
-        );
-        currentNodeId = decoded.currentNodeId;
+        const decoded = decodeClientState(clientState);
+        currentNodeId = decoded?.currentNodeId || null;
       }
     } catch (e) {
       // Ignore client_state decode errors
+    }
+
+    // Outbound campaign webhooks are not guaranteed to carry the client_state
+    // created by the flow engine, especially when the flow is intentionally
+    // waiting on the initiator's call.answered edge. Fall back to the persisted
+    // execution cursor so call.answered can start the next node (for example an
+    // AI assistant) instead of returning "No execution context".
+    if (!currentNodeId && payload.call_control_id) {
+      persistedExecution = await VoiceFlowDb.getFlowExecution(payload.call_control_id);
+      if (persistedExecution?.current_node_id) {
+        currentNodeId = persistedExecution.current_node_id;
+      } else if (isOutboundCampaignEvent && outboundCampaignNode) {
+        currentNodeId = outboundCampaignNode.id;
+      }
+      if (persistedExecution?.variables) {
+        Object.assign(variables, persistedExecution.variables);
+      }
     }
 
     // If we have a current node, find the next one(s) and execute them
@@ -980,19 +1227,26 @@ export async function POST(request, { params }) {
         });
 
         if (nextNodes.length > 0) {
-          // Filter out nodes that have already been executed for this event
-          const nodesToExecute = nextNodes.filter((nextNode) => {
+          // Filter out nodes that have already been executed for this event.
+          // claimOnce is atomic (DB INSERT … ON CONFLICT when enabled), so two
+          // nodes processing the same replayed webhook cannot both claim it.
+          const nodesToExecute = [];
+          for (const nextNode of nextNodes) {
             const transitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:${event}`;
             const defaultTransitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:default`;
-            // Check both event-specific and default transition keys
-            if (
-              executedTransitions.has(transitionKey) ||
-              executedTransitions.has(defaultTransitionKey)
-            ) {
-              return false;
+            // Check the default transition key first (read-only), then
+            // atomically claim the event-specific key.
+            if (await webhookKeyProcessed(defaultTransitionKey)) {
+              continue;
             }
-            return true;
-          });
+            const claimed = await claimWebhookKeyOnce(
+              transitionKey,
+              DEDUPE_KIND_TRANSITION,
+            );
+            if (claimed) {
+              nodesToExecute.push(nextNode);
+            }
+          }
 
           if (nodesToExecute.length === 0) {
             return NextResponse.json({
@@ -1001,12 +1255,6 @@ export async function POST(request, { params }) {
               variables,
             });
           }
-
-          // Mark all transitions as executed
-          nodesToExecute.forEach((nextNode) => {
-            const transitionKey = `${payload.call_control_id}:${currentNode.id}:${nextNode.id}:${event}`;
-            executedTransitions.set(transitionKey, Date.now());
-          });
 
           // Execute all nodes in parallel
           try {
@@ -1030,10 +1278,7 @@ export async function POST(request, { params }) {
                     // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
                     mergedClientState = { ...payloadClientState };
                   } catch (err) {
-                    console.warn(
-                      "[FlowWebhook] Failed to decode payload client_state:",
-                      err,
-                    );
+                    voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
                   }
                 }
 
@@ -1051,10 +1296,7 @@ export async function POST(request, { params }) {
                       ...configClientState,
                     };
                   } catch (err) {
-                    console.warn(
-                      "[FlowWebhook] Failed to decode config client_state:",
-                      err,
-                    );
+                    voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
                   }
                 }
 
@@ -1110,29 +1352,36 @@ export async function POST(request, { params }) {
             for (const { node, result } of results) {
               const nodeType = node.data?.nodeType || node.type;
 
-              if (!result.success) {
-                continue;
-              }
-
               // Check if this is a logical node that should continue immediately
               const logicalNodeTypes = [
                 "http_request_action",
+                "data_action",
+                "mcp_tool",
                 "set_variable",
                 "condition",
                 "switch",
                 "logic_gate",
                 "flow_end",
                 "set_queue_options",
+                "client_state_update",
                 "agent_assist",
+                "transcription_start",
               ];
 
               const isLogical = logicalNodeTypes.includes(nodeType);
+              const shouldContinueChain =
+                result.success ||
+                (isLogical && canContinueAfterFailedImmediateNode(nodeType, result));
+
+              if (!shouldContinueChain) {
+                continue;
+              }
 
               if (isLogical) {
                 // Logical nodes execute and immediately continue to next node
                 // For set_queue_options and agent_assist, add a small delay to ensure client_state_update is processed
                 // and update body with the new client_state
-                if (nodeType === "set_queue_options" || nodeType === "agent_assist") {
+                if (["set_queue_options", "client_state_update", "agent_assist"].includes(nodeType)) {
                   await new Promise((resolve) => setTimeout(resolve, 500));
 
                   // Update body payload with the new client_state from the result
@@ -1166,10 +1415,7 @@ export async function POST(request, { params }) {
                 execution_history: [],
               });
             } catch (error) {
-              console.error(
-                `[IncomingWebhook] Failed to store variables in database:`,
-                error,
-              );
+              voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
             }
 
             return NextResponse.json({
@@ -1179,7 +1425,7 @@ export async function POST(request, { params }) {
               results: results.map((r) => r.result),
             });
           } catch (error) {
-            console.error("[Incoming Call] Error executing nodes:", error);
+            voiceWebhookLogger.error("voice_webhook_incoming_call", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
             return NextResponse.json(
               {
                 ok: false,
@@ -1196,7 +1442,10 @@ export async function POST(request, { params }) {
 
           if (!hasAnyEdges) {
             const flowCompletionKey = `${payload.call_control_id}:${flowId}`;
-            completedFlows.set(flowCompletionKey, Date.now());
+            await markWebhookKeyProcessed(
+              flowCompletionKey,
+              DEDUPE_KIND_FLOW_COMPLETE,
+            );
 
             return NextResponse.json({
               ok: true,
@@ -1226,7 +1475,7 @@ export async function POST(request, { params }) {
       });
     }
   } catch (error) {
-    console.error("Incoming call webhook error:", error);
+    voiceWebhookLogger.error("voice_webhook_incoming_call_webhook_error", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
     return NextResponse.json(
       { ok: false, error: error.message || "Internal server error" },
       { status: 500 },
@@ -1272,16 +1521,17 @@ async function executeNodeChain(
   for (const nextNode of nextNodes) {
     const nextNodeType = nextNode.data?.nodeType || nextNode.type;
 
-    // Check if this transition was already executed
+    // Atomically claim this transition; skip if already executed (replay-safe)
     const transitionKey = `${callControlId}:${currentNode.id}:${nextNode.id}:${
       currentResult.output || 0
     }`;
-    if (executedTransitions.has(transitionKey)) {
+    const claimed = await claimWebhookKeyOnce(
+      transitionKey,
+      DEDUPE_KIND_TRANSITION,
+    );
+    if (!claimed) {
       continue;
     }
-
-    // Mark this transition as executed
-    executedTransitions.set(transitionKey, Date.now());
 
     // Configure node with client_state for flow tracking
     // Merge client_state from webhook payload (set by previous nodes like Set Queue Options),
@@ -1301,10 +1551,7 @@ async function executeNodeChain(
         // Use payload client_state as base (contains queue_name, priority, required_skills from Set Queue Options)
         mergedClientState = { ...payloadClientState };
       } catch (err) {
-        console.warn(
-          "[FlowWebhook] Failed to decode payload client_state:",
-          err,
-        );
+        voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     }
 
@@ -1319,10 +1566,7 @@ async function executeNodeChain(
         // Merge config client_state into payload client_state (config takes precedence for conflicting fields)
         mergedClientState = { ...mergedClientState, ...configClientState };
       } catch (err) {
-        console.warn(
-          "[FlowWebhook] Failed to decode config client_state:",
-          err,
-        );
+        voiceWebhookLogger.warn("voice_webhook_flowwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       }
     }
 
@@ -1365,20 +1609,29 @@ async function executeNodeChain(
     // Telephony nodes send command and STOP (wait for webhook)
     const logicalNodeTypes = [
       "http_request_action",
+      "data_action",
+      "mcp_tool",
       "set_variable",
       "condition",
       "switch",
       "logic_gate",
       "flow_end",
       "set_queue_options",
+      "client_state_update",
       "agent_assist",
+      "transcription_start",
     ];
     const isLogicalNode = logicalNodeTypes.includes(nextNodeType);
 
-    if (result.success && isLogicalNode) {
+    const shouldContinueChain =
+      result.success ||
+      (isLogicalNode &&
+        canContinueAfterFailedImmediateNode(nextNodeType, result));
+
+    if (shouldContinueChain && isLogicalNode) {
       // Logical node - continue chain immediately after execution
       // For nodes that update client_state, add a small delay and update body with new client_state
-      if (nextNodeType === "set_queue_options" || nextNodeType === "agent_assist") {
+      if (["set_queue_options", "client_state_update", "agent_assist"].includes(nextNodeType)) {
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // Update body payload with the new client_state from the result
@@ -1493,62 +1746,10 @@ async function handleRecordStartNode(
 
       return true; // Handled
     } catch (error) {
-      console.error("[IncomingWebhook] Error executing output 0 chain:", error);
+      voiceWebhookLogger.error("voice_webhook_incomingwebhook", voiceRuntimePayload({ error: typeof err !== "undefined" ? err : typeof error !== "undefined" ? error : typeof e !== "undefined" ? e : undefined, eventType: typeof event !== "undefined" ? event : typeof eventType !== "undefined" ? eventType : undefined, callControlId: typeof callControlId !== "undefined" ? callControlId : typeof payload !== "undefined" ? payload?.call_control_id : undefined, callSessionId: typeof callSessionId !== "undefined" ? callSessionId : typeof payload !== "undefined" ? payload?.call_session_id : undefined, flowId: typeof flowId !== "undefined" ? flowId : typeof flow !== "undefined" ? flow?.id : undefined, nodeId: typeof nodeId !== "undefined" ? nodeId : typeof node !== "undefined" ? node?.id : undefined, reason: typeof reason !== "undefined" ? reason : undefined, provider: typeof provider !== "undefined" ? provider : undefined }));
       return false;
     }
   }
 
   return true; // Handled (no nodes on output 0)
-}
-
-/**
- * Find all next nodes connected to a given node for a specific event (supports parallel execution)
- * @param {Object} flow - The flow object containing nodes and edges
- * @param {string} nodeId - The current node ID
- * @param {string} event - The webhook event type (e.g., "call.speak.ended")
- * @returns {Array<Object>} - Array of next nodes to execute (empty if no matching edges found)
- */
-function findNextNodes(flow, nodeId, event = null) {
-  const edges = flow.edges || [];
-  const nodes = flow.nodes || [];
-
-  if (!event) {
-    const matchingEdges = edges.filter((e) => e.source === nodeId);
-    return matchingEdges
-      .map((edge) => nodes.find((n) => n.id === edge.target))
-      .filter(Boolean);
-  }
-
-  const sourceNode = nodes.find((n) => n.id === nodeId);
-  if (!sourceNode) return [];
-
-  const nodeDef = VOICE_FLOW_NODES[sourceNode.data?.nodeType];
-  // Use dynamic output events if available (for dial/switch nodes with conditional exits), otherwise use nodeDef
-  const outputEvents =
-    sourceNode.data?.dynamicOutputEvents || nodeDef?.outputEvents || [];
-
-  const matchingEdges = edges.filter((e) => {
-    if (e.source !== nodeId) return false;
-
-    if (!e.sourceHandle || e.sourceHandle === "default") return true;
-
-    if (e.sourceHandle === event) return true;
-
-    if (e.sourceHandle && e.sourceHandle.startsWith("output-")) {
-      const outputIndex = parseInt(e.sourceHandle.replace("output-", ""), 10);
-      if (!isNaN(outputIndex) && outputEvents[outputIndex] === event) {
-        return true;
-      }
-    }
-
-    return false;
-  });
-
-  if (matchingEdges.length === 0) {
-    return [];
-  }
-
-  return matchingEdges
-    .map((edge) => nodes.find((n) => n.id === edge.target))
-    .filter(Boolean);
 }

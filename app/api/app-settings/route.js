@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { seedDefaultAppSettings } from "@/lib/seed-app-settings.mjs";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 // GET app settings
 export async function GET() {
@@ -81,7 +82,7 @@ export async function GET() {
       client.release();
     }
   } catch (error) {
-    console.error("Error fetching app settings:", error);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to fetch app settings" },
       { status: 500 }
@@ -209,7 +210,7 @@ export async function PUT(request) {
       client.release();
     }
   } catch (error) {
-    console.error("Error updating app settings:", error);
+    platformApiLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to update app settings" },
       { status: 500 }

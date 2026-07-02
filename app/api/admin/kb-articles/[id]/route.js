@@ -4,6 +4,8 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { getPostgresPool } from "@/lib/postgres.mjs";
 import { PgDb } from "@/lib/pgdb";
 import { isAdmin } from "@/lib/role-utils";
+import { normalizeCustomDataValue } from "@/lib/custom-data-utils";
+import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -42,7 +44,7 @@ export async function GET(request, { params }) {
 
     return NextResponse.json(res.rows[0]);
   } catch (err) {
-    console.error("[KB Articles] GET error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to load article" },
       { status: 500 }
@@ -78,6 +80,16 @@ export async function PUT(request, { params }) {
       language,
     } = body;
 
+    let customData;
+    try {
+      customData = normalizeCustomDataValue(body.custom_data);
+    } catch (err) {
+      return NextResponse.json(
+        { error: err?.message || "Custom data must be a valid JSON object" },
+        { status: 400 }
+      );
+    }
+
     if (!title || !slug || !content || !category) {
       return NextResponse.json(
         { error: "Title, slug, content, and category are required" },
@@ -112,8 +124,8 @@ export async function PUT(request, { params }) {
 
     await pool.query(
       `UPDATE kb_articles
-       SET title = $1, slug = $2, summary = $3, content = $4, category = $5, subcategory = $6, tags = $7, keywords = $8, author_name = $9, status = $10, language = $11, published_at = $12, updated_at = NOW()
-       WHERE id = $13`,
+       SET title = $1, slug = $2, summary = $3, content = $4, category = $5, subcategory = $6, tags = $7, keywords = $8, author_name = $9, status = $10, language = $11, custom_data = $12, published_at = $13, updated_at = NOW()
+       WHERE id = $14`,
       [
         title.trim(),
         slug.trim(),
@@ -126,6 +138,7 @@ export async function PUT(request, { params }) {
         authorName?.trim() || null,
         status,
         language?.trim() || "en",
+        JSON.stringify(customData),
         publishedAt,
         id,
       ]
@@ -133,7 +146,7 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[KB Articles] PUT error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     if (err.code === "23505") {
       return NextResponse.json(
         { error: "An article with this slug already exists" },
@@ -164,7 +177,7 @@ export async function DELETE(request, { params }) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[KB Articles] DELETE error:", err);
+    adminRuntimeLogger.error("runtime_error", { ...runtimePayload({ error: typeof error !== "undefined" ? error : typeof err !== "undefined" ? err : undefined, status: typeof status !== "undefined" ? status : undefined }) });
     return NextResponse.json(
       { error: "Failed to delete article" },
       { status: 500 }
