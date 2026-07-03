@@ -359,7 +359,7 @@ describe("hardphone bridge product integration", () => {
       process.env.TELNYX_OUTBOUND_VOICE_PROFILE = "ovp123";
       delete process.env.TELNYX_HARDPHONE_WEBHOOK_URL;
       delete process.env.TELNYX_WEBHOOK_BASE_URL;
-      process.env.NEXTAUTH_URL = "https://api.tokaj.synology.me";
+      process.env.NEXTAUTH_URL = "https://cc.example.com";
       delete process.env.APP_BASE_URL;
       global.fetch = async (_url, options) => {
         requestBody = JSON.parse(options.body);
@@ -371,7 +371,7 @@ describe("hardphone bridge product integration", () => {
 
       await createPhoneSipConnection({ mac: "00:04:f2:ab:cd:ef", vendor: "audiocodes", model: "420HD", label: "Desk" });
 
-      assert.strictEqual(requestBody.webhook_event_url, "https://api.tokaj.synology.me/api/voice/webhook");
+      assert.strictEqual(requestBody.webhook_event_url, "https://cc.example.com/api/voice/webhook");
       assert.strictEqual(requestBody.webhook_api_version, "2");
       assert.strictEqual(requestBody.outbound.call_parking_enabled, true);
     } finally {

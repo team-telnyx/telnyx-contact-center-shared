@@ -5,6 +5,7 @@ import {
   addTimelineEvent,
   TimelineEventTypes,
 } from "@/lib/contact-center/call-timeline-tracker.js";
+import { interactionAgentMatches } from "@/lib/contact-center/interaction-agent-access.mjs";
 
 /**
  * POST /api/contact-center/interactions/[id]/metrics
@@ -50,9 +51,11 @@ export async function POST(request, { params }) {
       );
     }
 
-    // Verify the interaction belongs to the authenticated user (if agent_username is set)
+    // Verify the interaction belongs to the authenticated user (if agent_username is set).
+    // Accept a match against either the session username or the id-derived one to
+    // avoid false "different agent" rejections when those sources diverge.
+    let currentUsername = null;
     if (interaction.agent_username) {
-      // Get username from user ID
       const { getPostgresPool } = await import("@/lib/postgres.mjs");
       const pool = getPostgresPool();
       if (pool) {
@@ -60,17 +63,17 @@ export async function POST(request, { params }) {
           "SELECT username FROM users WHERE id = $1 LIMIT 1",
           [userId]
         );
-        const username = userResult.rows?.[0]?.username;
-        if (username && interaction.agent_username !== username) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: "Unauthorized - interaction belongs to different agent",
-            },
-            { status: 403 }
-          );
-        }
+        currentUsername = userResult.rows?.[0]?.username || null;
       }
+    }
+    if (!interactionAgentMatches(interaction, [user.username, currentUsername])) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unauthorized - interaction belongs to different agent",
+        },
+        { status: 403 }
+      );
     }
 
     // Prepare updates

@@ -136,6 +136,7 @@ export async function POST(request, { params }) {
       pendingItems,
       slotsFilled: { ...slotsFilled },
       model: llmModel,
+      confidenceThreshold,
     });
 
     // Apply completion_trigger and confidence threshold (same logic as live API)
@@ -178,6 +179,7 @@ export async function POST(request, { params }) {
           confidence: completed.confidence,
           extracted_value: completed.extracted_value,
           source_text: completed.source_text,
+          alternatives: Array.isArray(completed.alternatives) ? completed.alternatives : [],
           low_confidence: shouldComplete && completed.confidence < confidenceThreshold,
           confidence_threshold: confidenceThreshold,
         });

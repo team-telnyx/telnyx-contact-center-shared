@@ -6,13 +6,10 @@ const nextConfig = {
       bodySizeLimit: "10mb",
     },
   },
-  // Allowed dev origins - required when using a reverse proxy (e.g. api.tokaj.synology.me)
+  // Allowed dev origins - required when using a reverse proxy (e.g. your-dev-server.example.com)
   // Prevents "Blocked cross-origin request" which breaks HMR and causes ~40s page refreshes
   // Set ALLOWED_DEV_ORIGINS env var to override (comma-separated).
   allowedDevOrigins: [
-    "api.tokaj.synology.me",
-    "http://api.tokaj.synology.me",
-    "https://api.tokaj.synology.me",
     ...(process.env.ALLOWED_DEV_ORIGINS || "")
       .split(",")
       .map((s) => s.trim())

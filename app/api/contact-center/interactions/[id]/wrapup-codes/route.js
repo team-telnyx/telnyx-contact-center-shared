@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { PgDb } from "@/lib/pgdb";
 import { getAuthenticatedUser } from "@/lib/auth-server";
 import { getPostgresPool } from "@/lib/postgres.mjs";
+import { interactionAgentMatches } from "@/lib/contact-center/interaction-agent-access.mjs";
 import { adminRuntimeLogger, contactCenterRuntimeLogger, platformApiLogger, platformDbLogger, runtimePayload, voiceRuntimeLogger } from "@/lib/runtime-logging.mjs";
 
 async function getUsernameForUserId(userId) {
@@ -67,17 +68,15 @@ export async function GET(request, { params }) {
       );
     }
 
-    if (interaction.agent_username) {
-      const username = await getUsernameForUserId(user.id);
-      if (username && interaction.agent_username !== username) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Unauthorized - interaction belongs to different agent",
-          },
-          { status: 403 },
-        );
-      }
+    const currentUsername = await getUsernameForUserId(user.id);
+    if (!interactionAgentMatches(interaction, [user.username, currentUsername])) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unauthorized - interaction belongs to different agent",
+        },
+        { status: 403 },
+      );
     }
 
     if (!interaction.queue_id) {
@@ -154,17 +153,15 @@ export async function POST(request, { params }) {
       );
     }
 
-    if (interaction.agent_username) {
-      const username = await getUsernameForUserId(user.id);
-      if (username && interaction.agent_username !== username) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "Unauthorized - interaction belongs to different agent",
-          },
-          { status: 403 },
-        );
-      }
+    const currentUsername = await getUsernameForUserId(user.id);
+    if (!interactionAgentMatches(interaction, [user.username, currentUsername])) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Unauthorized - interaction belongs to different agent",
+        },
+        { status: 403 },
+      );
     }
 
     const body = await request.json();

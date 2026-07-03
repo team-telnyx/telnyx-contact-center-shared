@@ -68,6 +68,9 @@ export default function WrapupCodesSheet({
 }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Set when a save attempt fails, so the agent is never trapped in an
+  // otherwise non-dismissable modal (e.g. a persistent server error / 403).
+  const [saveFailed, setSaveFailed] = useState(false);
   const [codes, setCodes] = useState([]);
   const [selectedCodes, setSelectedCodes] = useState([]);
   const [defaultCodeId, setDefaultCodeId] = useState(null);
@@ -209,6 +212,17 @@ export default function WrapupCodesSheet({
     }
   }, [interactionId]);
 
+  // Clear save-failure state whenever the sheet closes, not just when a new
+  // interaction loads. The component stays mounted between calls
+  // (GlobalWrapupSheet), so a stale saveFailed would otherwise let the next
+  // wrap-up be dismissed without dispositioning if the sheet reopens before
+  // loadWrapupCodes runs (e.g. rapid back-to-back calls).
+  useEffect(() => {
+    if (!open) {
+      setSaveFailed(false);
+    }
+  }, [open]);
+
   async function sendWrapupEvent(action) {
     if (!interactionId) return;
     try {
@@ -285,6 +299,10 @@ export default function WrapupCodesSheet({
       setLoading(true);
       setTimeLeft(DEFAULT_COUNTDOWN_SECONDS);
       hasSubmittedRef.current = false;
+      // Clear any failure state from a previous interaction — this component
+      // stays mounted between calls (GlobalWrapupSheet), so a stale saveFailed
+      // would otherwise let the next wrap-up be dismissed without dispositioning.
+      setSaveFailed(false);
       try {
         const res = await fetch(
           `/api/contact-center/interactions/${encodeURIComponent(
@@ -391,6 +409,7 @@ export default function WrapupCodesSheet({
   async function handleSubmit(codesToSave) {
     if (!interactionId || saving || hasSubmittedRef.current) return;
     setSaving(true);
+    setSaveFailed(false);
     try {
       const res = await fetch(
         `/api/contact-center/interactions/${encodeURIComponent(
@@ -415,6 +434,7 @@ export default function WrapupCodesSheet({
       }
       onOpenChange?.(false);
     } catch (err) {
+      setSaveFailed(true);
       notify({
         title: "Failed to save wrapup codes",
         description: String(err.message || err),
@@ -454,12 +474,16 @@ export default function WrapupCodesSheet({
     <Sheet
       open={open}
       onOpenChange={(nextOpen) => {
-        // Prevent closing by clicking outside or pressing escape
-        // Only allow closing via the save button
         if (!nextOpen && open) {
-          handleAutoSubmit();
+          // A failed save must never trap the agent: once saving has failed,
+          // allow the sheet to close. Otherwise keep the "must disposition"
+          // behavior (dismiss attempts auto-submit the selected/default codes).
+          if (saveFailed) {
+            onOpenChange?.(false);
+          } else {
+            handleAutoSubmit();
+          }
         }
-        // Don't call onOpenChange to prevent external close triggers
       }}
       modal={true}
     >
@@ -468,12 +492,12 @@ export default function WrapupCodesSheet({
         className="w-full sm:max-w-xl overflow-hidden flex flex-col p-0"
         showCloseButton={false}
         onInteractOutside={(e) => {
-          // Prevent closing when clicking outside
-          e.preventDefault();
+          // Block outside-click close during normal flow; allow it once a save
+          // has failed so the agent can escape a stuck panel.
+          if (!saveFailed) e.preventDefault();
         }}
         onEscapeKeyDown={(e) => {
-          // Prevent closing when pressing escape
-          e.preventDefault();
+          if (!saveFailed) e.preventDefault();
         }}
       >
         <SheetHeader className="px-6 py-4 border-b">
@@ -564,8 +588,17 @@ export default function WrapupCodesSheet({
         </div>
 
         <SheetFooter className="px-6 py-4 border-t flex flex-row justify-end gap-2">
+          {saveFailed ? (
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange?.(false)}
+              disabled={saving}
+            >
+              Close without saving
+            </Button>
+          ) : null}
           <Button onClick={() => handleManualSubmit()} disabled={saving}>
-            {saving ? "Saving..." : "Save & Close"}
+            {saving ? "Saving..." : saveFailed ? "Retry save" : "Save & Close"}
           </Button>
         </SheetFooter>
       </SheetContent>
